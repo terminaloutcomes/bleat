@@ -1,0 +1,1382 @@
+# Audiobookshelf iOS Client — Product and Technical Specification
+
+Status: Implementation-audited draft 1.2  
+Platform: iPhone and iPad  
+UI framework: SwiftUI  
+Minimum OS: iOS 17.0  
+Language mode: Swift 6 with strict concurrency checking  
+Backend: Audiobookshelf 2.26.0 or newer  
+Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`  
+Audit date: 2026-07-28  
+
+## 1. Purpose
+
+Build a native iOS audiobook client for one or more Audiobookshelf servers. The app must:
+
+- authenticate securely with either Audiobookshelf local credentials or Audiobookshelf's OpenID Connect bridge;
+- retain multiple server/account connections without mixing credentials, cached data, downloads, or progress;
+- browse and search book libraries;
+- stream and download audiobooks;
+- play multi-file and single-file books with chapters, bookmarks, background playback, system media controls, and variable speed;
+- keep listening progress and sessions synchronized with Audiobookshelf, including after offline playback;
+- maintain lifetime listening statistics across configured accounts, with separate real-time, audiobook-time, book, chapter, and completed-runtime measures;
+- edit book metadata and cover art when the authenticated user has permission.
+
+This is an audiobook app, not a general Audiobookshelf administration client.
+
+## 2. Product defaults
+
+These decisions keep the first release bounded:
+
+| Topic | Decision |
+| --- | --- |
+| Minimum Audiobookshelf version | 2.26.0, because this introduced access/refresh tokens and managed sessions |
+| Audited server contract | Audiobookshelf v2.36.0 at commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5` |
+| Client interoperability reference | Official mobile client at commit `185cba16eb122b40e8537a7bf475632680d6fb94`; copy its server contract, not its implementation bugs or legacy token-in-URL workarounds |
+| Server selection | One active browsing context at a time; playback and downloads continue when the user browses another account |
+| Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
+| Podcasts and ebooks | Out of scope for 1.0 |
+| Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
+| Full CarPlay browsing UI | Out of scope for 1.0; Now Playing and transport controls must work through CarPlay |
+| watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
+| Server WebSocket events | Optional later enhancement; 1.0 refreshes on launch, foregrounding, pull-to-refresh, and after mutations |
+| Statistics scope | Default to all configured accounts; every screen can filter to one account. All-device metrics use imported server sessions, while rate- and chapter-aware metrics are explicitly limited to playback observed by this app |
+| Statistics retention | Structured listening history is retained through ordinary sign-out and is included in device backups; account removal asks whether to retain or delete its history |
+| Cleartext HTTP | Not supported in production builds |
+| Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
+| Third-party analytics | None by default |
+
+## 3. Important constraints
+
+### 3.1 The server implementation is the contract
+
+Audiobookshelf's public API reference explicitly says it is out of date. For this specification, authority is:
+
+1. the pinned server router, controllers, models, and playback manager;
+2. observed responses from disposable supported servers;
+3. the official mobile client as interoperability evidence;
+4. the published API reference only as a non-authoritative clue.
+
+The implementation must isolate all remote DTOs and endpoint construction behind an `AudiobookshelfAPI` layer. It must be tested against:
+
+- the minimum supported server, 2.26.x;
+- the audited v2.36.0 baseline;
+- the current stable server at development time;
+- saved request/response fixtures for each.
+
+Unknown JSON fields must be ignored. Missing nullable fields must not make otherwise valid responses fail to decode. Remote IDs remain opaque `String` values even when current servers return UUIDs.
+
+Any endpoint or payload change discovered in a newer server must be implemented behind a server-version capability or a verified shape decoder. Do not guess alternate routes.
+
+### 3.2 Current playback is session-scoped
+
+The v2.36.0 server and current official iOS client use an authenticated API call to open a playback session, followed by session-scoped media URLs:
+
+- direct play: `GET /public/session/<session-id>/track/<track-index>`;
+- transcode: the returned `audioTracks[].contentUrl`, currently `/hls/<session-id>/output.m3u8`.
+
+These media routes work only while the in-memory playback session or stream exists. The session ID is therefore a bearer-like capability and must be redacted from logs and diagnostics.
+
+Do not put access or refresh tokens in media URLs. Although the server still accepts `?token=` for compatibility, this client uses bearer headers only on authenticated API and download requests. Do not use undocumented `AVURLAssetHTTPHeaderFieldsKey`.
+
+### 3.3 Listening time is not media time
+
+At 2× speed, 30 seconds of real listening advances the book by roughly 60 seconds. Audiobookshelf session sync therefore needs two independent values:
+
+- `currentTime`: position in the book's media timeline;
+- `timeListened`: the monotonic wall-clock listening-time **delta since the previous successful online session sync**.
+
+Buffering, paused time, interruption time, and time spent seeking must not be counted as listening time.
+
+### 3.4 The server does not provide every requested statistic
+
+The pinned v2.36.0 implementation exposes persisted listening sessions and two aggregate views, but it does not persist playback rate, media-timeline distance heard, or chapter-completion events. Its historical session model also returns `chapters: null`.
+
+Consequently:
+
+- Audiobookshelf `timeListening` is the source for all-device real listening time;
+- exact audiobook-time and chapter metrics can only be guaranteed for playback observed by this app after statistics tracking begins;
+- book/file duration comes from the expanded item's canonical `media.duration`, snapshotted so later metadata edits do not rewrite history;
+- seek distance must never be treated as listened media;
+- the UI must label the source and coverage of each metric and must not manufacture historical precision the server does not contain.
+
+In statistics copy, **file length** means duration, not byte size. Downloaded byte totals remain a storage metric.
+
+## 4. Core user stories
+
+### 4.1 Accounts and instances
+
+- As a user, I can enter an Audiobookshelf server URL, including a path prefix such as `https://example.net/audiobookshelf`.
+- I can see which authentication methods the server supports.
+- I can sign in using OpenID Connect without entering identity-provider credentials into the app.
+- I can alternatively use a local Audiobookshelf username and password when the server enables local authentication.
+- I can add multiple users from the same server and users from different servers.
+- I can switch accounts without stopping current playback or unrelated background downloads.
+- I can see when an account requires reauthentication.
+- I can sign out or remove an account, with a clear choice about deleting its downloaded books.
+
+### 4.2 Library
+
+- I can browse accessible book libraries using paginated lists or grids.
+- I can see Continue Listening, Recently Added, Downloaded, and library contents.
+- I can search by title, author, narrator, and series using server-side search.
+- I can sort and filter without loading the entire library into memory.
+- Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
+- Cached summaries and downloaded-book details remain available offline.
+
+### 4.3 Playback
+
+- I can play or resume a streamed or downloaded book.
+- I can pause, seek, scrub across the whole book, skip backward and forward, and jump between chapters.
+- A multi-file book behaves as one continuous timeline.
+- Playback continues with the screen locked and while the app is in the background.
+- Lock Screen, Control Center, Bluetooth, AirPlay, and CarPlay transport controls work.
+- I can choose a playback speed between 0.5× and 3.0×.
+- My selected speed survives pause/resume, track changes, app relaunch, and switching between local and streamed media.
+- I can set a sleep timer by duration or end of chapter.
+- I can create, rename, and delete bookmarks.
+
+### 4.4 Downloads and offline use
+
+- I can download a book for offline playback.
+- I can see per-book and per-file progress, pause/cancel/retry downloads, and understand failures.
+- Downloads resume after app suspension, process termination, connectivity loss, or access-token refresh.
+- I can restrict downloads to Wi-Fi/non-expensive networks.
+- The app checks available storage before starting and never leaves a completed book pointing at partial files.
+- I can play downloaded books while the server is unavailable or the account needs reauthentication.
+- Offline listening sessions and progress synchronize after reconnection.
+
+### 4.5 Metadata editing
+
+- If my server account has update permission, I can edit supported book metadata and cover art.
+- If I lack permission, editing controls are absent rather than merely failing later.
+- Metadata edits are never silently queued while offline.
+- If the server item changed since I began editing, the app warns me and lets me reload or deliberately overwrite.
+
+### 4.6 Listening statistics
+
+- I can see lifetime totals across all configured Audiobookshelf accounts or filter to one account.
+- I can see real listening time separately from audiobook time heard at the active playback rate.
+- I can see distinct books started, distinct books completed, chapters started, chapters completed, and the combined canonical duration of completed books.
+- I can open a per-book breakdown showing sessions, real time, audiobook time, chapter progress, and completion history.
+- The current listening session updates the statistics screen live without waiting for server synchronization.
+- I can understand when a value covers all devices versus only playback observed by this app.
+- I can export and idempotently re-import my listening history.
+
+## 5. Navigation and screens
+
+Use a `TabView` with:
+
+1. **Home**
+   - Continue Listening
+   - Recently Added
+   - Downloaded
+   - Lifetime Listening summary card; tapping it opens the Statistics screen
+   - current account/server indicator
+2. **Library**
+   - library selector
+   - paginated grid/list
+   - sort and filter controls
+3. **Search**
+   - debounced server-side search
+   - grouped results by books, authors, and series where supported
+4. **Downloads**
+   - queued, active, completed, and failed items
+   - aggregate storage usage
+5. **Settings**
+   - accounts and server management
+   - playback defaults
+   - skip intervals
+   - download/network policy
+   - storage management
+   - diagnostics
+
+A persistent mini-player appears above the tab bar when a book is loaded. Tapping it opens the full player.
+
+### 5.1 Full player
+
+The full player contains:
+
+- cover art, title, author, narrator, and current chapter;
+- whole-book elapsed and remaining time;
+- accessible scrubber with chapter markers where practical;
+- play/pause;
+- configurable skip back and forward controls, defaulting to 15 and 30 seconds;
+- previous/next chapter;
+- speed picker;
+- chapter/file list;
+- sleep timer;
+- bookmarks;
+- AirPlay route picker;
+- sync/error indicator that explains pending offline state when tapped.
+
+Seeking must require an intentional drag or explicit tap target. Tiny accidental touches must not move a user hours into a book.
+
+### 5.2 Book detail
+
+The detail screen contains:
+
+- Resume/Play;
+- Download, pause, retry, or remove download;
+- progress and finished state;
+- metadata;
+- chapters with durations;
+- bookmarks;
+- Edit button gated by server permission;
+- server/account attribution when it could be ambiguous.
+
+### 5.3 Statistics
+
+Statistics is a Home destination rather than a sixth tab. Its default range is **Lifetime** and its default account filter is **All Accounts**.
+
+Top-level cards show:
+
+- Real time listened;
+- Audiobook time heard;
+- Finished runtime;
+- Books started and completed;
+- Chapters started and completed;
+- effective average speed, calculated as audiobook time divided by real time.
+
+The screen also provides year, month, and custom-range filters; per-account and per-book breakdowns; a daily listening chart; recent sessions; and an explanation of metric coverage. Values update while playback is active. A metric that is local-only or awaiting ambiguous synchronization displays a concise coverage or approximation badge rather than a false exact total.
+
+## 6. Server connection and URL handling
+
+### 6.1 Add-server flow
+
+1. Normalize the user-entered URL:
+   - require `https`;
+   - remove query and fragment;
+   - preserve any path prefix;
+   - remove only the final trailing slash;
+   - reject embedded username/password.
+2. Request `GET <base>/status`.
+3. Require `app == "audiobookshelf"` and `isInit == true`.
+4. Record:
+   - resolved base URL;
+   - server version;
+   - `authMethods`;
+   - relevant `authFormData`, including `authOpenIDButtonText`, `authOpenIDAutoLaunch`, and the sanitized custom login message.
+5. Reject versions older than 2.26.0 with a useful explanation.
+6. Present only authentication methods returned by the server.
+
+Endpoint URLs must be built relative to the normalized base URL. Never construct API URLs from an origin alone, because that drops an Audiobookshelf path prefix.
+
+Cross-origin redirects during status discovery must not be followed silently. An HTTP-to-HTTPS upgrade on the same host may be accepted; any other origin change requires the user to confirm the resulting server URL.
+
+### 6.2 Local authentication
+
+When `authMethods` contains `local`:
+
+1. Send `POST <base>/login`.
+2. Include `x-return-tokens: true`.
+3. Send username/password as JSON over HTTPS.
+4. Require `user.accessToken` and `user.refreshToken` for server 2.26.0 or newer.
+5. Call `POST <base>/api/authorize` using the access token to validate it and load user/server data.
+6. Persist tokens only after validation succeeds.
+7. Discard the password immediately; never store or log it.
+
+### 6.3 OpenID Connect authentication
+
+Audiobookshelf acts as a bridge between the native client and its configured OpenID provider. Use Authorization Code with PKCE; do not embed a web view.
+
+#### Callback URI
+
+Use a private-use callback scheme derived from the app's bundle identifier, for example:
+
+`com.example.audiobookclient:/oauth/callback`
+
+Do not reuse `audiobookshelf://oauth`, which belongs to the official client and can collide with it. The chosen URI must be documented for users to add to Audiobookshelf's exact Allowed Mobile Redirect URIs list. If the product has an Associated Domain, a claimed HTTPS universal-link callback is preferable, but it is not required for 1.0.
+
+#### Flow
+
+1. Create an in-memory `OAuthAttempt` scoped to the draft account:
+   - cryptographically random PKCE verifier of 43–128 base64url characters;
+   - `S256` challenge;
+   - random client state;
+   - callback URI;
+   - a dedicated, non-shared `HTTPCookieStorage`;
+   - an ephemeral `URLSession` configured to use that cookie store while still allowing normal browser SSO in `ASWebAuthenticationSession`.
+2. Request:
+   - `GET <base>/auth/openid`
+   - `code_challenge=<challenge>`
+   - `code_challenge_method=S256`
+   - `redirect_uri=<exact callback URI>`
+   - `response_type=code`
+   - `state=<client state>`
+   - optionally `client_id=<stable app name>` for parity with the official client; the current server ignores this native-client value and uses Audiobookshelf's configured OIDC client ID when talking to the provider.
+3. Disable automatic redirect following for this request and retain all cookies set by Audiobookshelf. The current server stores the Passport/Express authorization session and `auth_method=openid-mobile` across this boundary.
+4. Require a 3xx response with an HTTPS `Location` from the server. The provider may be on another host. Open this URL exactly as returned; do not reconstruct its query parameters as the Capacitor client does for a platform-specific workaround.
+5. Open the provider URL from `Location` with `ASWebAuthenticationSession`.
+   - Do not use `WKWebView`.
+   - Default to a non-ephemeral browser session so existing SSO can work.
+   - Cancellation returns cleanly to the account form.
+6. The provider redirects to Audiobookshelf's `/auth/openid/mobile-redirect`, not directly to the app. Audiobookshelf checks the state held in its in-memory mobile-auth map, then redirects to the registered app callback as:
+
+   `<callback-uri>?code=<authorization-code>&state=<client-state>`
+
+7. On the app callback:
+   - require the exact registered scheme/host/path;
+   - reject missing or mismatched state against the originally generated client state;
+   - handle a missing code as a failed/cancelled provider flow; the current bridge does not reliably forward every provider error field;
+   - require an authorization code.
+8. Exchange the code using the same Audiobookshelf cookie store:
+   - `GET <base>/auth/openid/callback`
+   - include `state`, `code`, and `code_verifier`.
+   - do not expect this to behave like a generic OAuth token endpoint: the current server requires the original Express session cookie and uses the earlier `auth_method=openid-mobile` cookie to return JSON containing both tokens.
+9. Require access and refresh tokens, then validate with `/api/authorize`.
+10. Atomically store the account and tokens.
+11. Clear the verifier, state, authorization code, Express session cookie, and temporary response data on success, failure, or cancellation.
+12. If 1.0 supports optional identity-provider logout, retain only the Audiobookshelf-domain `auth_method` and `openid_id_token` cookies under that `AccountID`, encrypted in Keychain. Otherwise clear all cookies and do not offer provider logout. Never share these cookies between two users on the same server.
+
+Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, or the PKCE verifier.
+
+### 6.4 Token storage and refresh
+
+- Store access and refresh tokens in Keychain, not SwiftData or `UserDefaults`.
+- Keychain accessibility must be `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so background playback/download work after the device's first unlock without syncing credentials to iCloud.
+- Use a distinct Keychain service/account key for every local `AccountID`.
+- Use the access token only in `Authorization: Bearer` headers.
+- The current server also extracts an access token from `?token=`, but this client never uses or stores token-bearing URLs.
+- Use the refresh token only in `x-refresh-token` for:
+  - `POST <base>/auth/refresh`;
+  - `POST <base>/logout`.
+- Refresh tokens rotate. Replace the old access/refresh pair atomically before retrying requests.
+- A per-account `AuthCoordinator` actor must collapse concurrent refresh attempts into one request.
+- Retry an ordinary request at most once after refresh.
+- Authentication endpoints must never recursively trigger refresh.
+- A failed refresh marks only that account as `reauthenticationRequired`; other accounts continue normally.
+- It is acceptable to decode the access-token `exp` claim only as an untrusted scheduling hint. The server remains authoritative.
+
+### 6.5 Logout and account removal
+
+Logout calls `/logout` with the refresh-token header and any retained account-scoped OIDC logout cookies, then clears local credentials and cookies even if the server is unreachable. The current response is `{ "redirect_url": String? }`. Do not open that identity-provider logout URL unexpectedly; offer a separate “also sign out of identity provider” action only when the required cookies were retained and the server returned a URL.
+
+Removing an account must:
+
+- stop or detach its active downloads;
+- close its active playback session if possible;
+- delete Keychain credentials;
+- remove its cached data and pending sync operations;
+- ask separately whether to keep its listening history; retaining history keeps only statistics, display snapshots, and an inactive account label, never credentials, cookies, server URLs, pending network operations, or local media paths;
+- default to deleting its downloaded audio, with an explicit confirmation.
+
+## 7. Account and permission isolation
+
+Every persisted or cached remote object uses a composite identity:
+
+`AccountID + RemoteObjectID`
+
+This includes libraries, items, authors, series, cover cache entries, progress, bookmarks, sessions, and downloads. A remote ID alone is never a valid local primary key.
+
+The app must honor server permissions returned for the current user:
+
+| Current response field | Behaviour |
+| --- | --- |
+| `user.permissions.download` | Show download controls only when true |
+| `user.permissions.update` | Show metadata editing only when true |
+| `user.permissions.update` and `user.permissions.upload` | Both are required for cover upload because the router and controller perform separate checks |
+| `user.permissions.accessAllLibraries` plus top-level `user.librariesAccessible` | Restrict queries and UI to accessible libraries |
+| `user.permissions.accessAllTags`, `user.permissions.selectedTagsNotAccessible`, plus top-level `user.itemTagsSelected` | Mirror the server's tag allow/deny semantics and do not reveal stale inaccessible items |
+| `user.permissions.accessExplicitContent` | Respect server filtering and do not reveal cached inaccessible items |
+
+Treat `403` as an authorization result, not an authentication failure. Do not refresh tokens in a loop for permission errors.
+
+## 8. Library and metadata requirements
+
+### 8.1 Library loading
+
+- List libraries with `GET /api/libraries`.
+- Load a page with `GET /api/libraries/<id>/items` using the current query names: `limit`, zero-based `page`, `sort`, `desc=1`, `filter`, `minified=1`, `collapseseries=1`, and comma-separated `include` where needed.
+- Load home shelves from `GET /api/libraries/<id>/personalized?limit=<n>&include=progress`.
+- Search with `GET /api/libraries/<id>/search?q=<query>&limit=<n>`.
+- Load book detail with `GET /api/items/<id>?expanded=1&include=progress`.
+- Use server pagination with an initial page size of 40–60 items.
+- Cancel superseded searches and requests when account/library changes.
+- Debounce text search by approximately 300 ms.
+- Cache summaries for offline browsing, but show their last-refresh state.
+- Refresh on app launch, foregrounding, explicit pull-to-refresh, and after a successful mutation.
+- Do not preload expanded details for every item.
+- Cache cover thumbnails separately from original cover images.
+
+### 8.2 Metadata editor
+
+The editor supports, when returned/supported by the server:
+
+- title;
+- subtitle;
+- authors;
+- narrators;
+- series and sequence;
+- genres;
+- tags;
+- publisher;
+- published year/date;
+- description;
+- language;
+- ISBN;
+- ASIN;
+- explicit flag;
+- abridged flag.
+
+Save with `PATCH /api/items/<item-id>/media` using the current old-model payload shape:
+
+```json
+{
+  "metadata": {
+    "title": "Example",
+    "subtitle": null,
+    "authors": [{ "name": "Author Name" }],
+    "narrators": ["Narrator Name"],
+    "series": [{ "name": "Series Name", "sequence": "2" }],
+    "genres": ["Science Fiction"],
+    "publishedYear": "2026",
+    "publishedDate": "2026-07-28",
+    "publisher": "Publisher",
+    "description": "<p>Server-sanitized HTML</p>",
+    "isbn": "…",
+    "asin": "…",
+    "language": "en",
+    "explicit": false,
+    "abridged": false
+  },
+  "tags": ["tag"]
+}
+```
+
+Send only changed scalar fields, but when authors, series, narrators, genres, or tags change, send the complete resulting array: the server treats those arrays as replacements. `tags` is top-level; the other editable fields are under `metadata`. Authors are name objects and series are `{name, sequence}` objects. Do not serialize display-only flattened fields such as `authorName`, `seriesName`, `narratorName`, or `descriptionPlain`.
+
+The current success response is `{ "updated": Bool, "libraryItem": <old library item> }`.
+
+Before saving:
+
+1. Fetch the latest expanded item.
+2. Compare its `updatedAt` with the version used to create the draft.
+3. If unchanged, submit the patch.
+4. If changed, show:
+   - Reload server version;
+   - Review my draft;
+   - Overwrite anyway.
+
+Metadata edits require a live connection. A draft may be retained locally, but it must not auto-submit after reconnection.
+
+The current endpoint has no `ETag`, `If-Match`, or other atomic precondition. This stale-draft check is best effort and must be described honestly; a race remains between the final fetch and patch.
+
+Descriptions received from the server are untrusted rich text. Render a sanitized attributed string or plain text; do not execute HTML or JavaScript in a web view.
+
+### 8.3 Cover art
+
+- Select a local image using `PhotosPicker`.
+- Remove unnecessary metadata, orient correctly, and resize to a documented maximum before upload.
+- Upload as `multipart/form-data` with the file field named `cover` to `POST /api/items/<item-id>/cover`.
+- Require both `permissions.update` and `permissions.upload`.
+- Treat `{ "success": true, "cover": <server cover path> }` as success.
+- Refetch the item after success because the cover response does not include the new item `updatedAt` used for cache busting.
+- Keep the previous cached cover until the server confirms success.
+- Fetch with `GET /api/items/<item-id>/cover`, optionally using `width`, `height`, `format`, and `ts=<updatedAt>`; the current server intentionally permits unauthenticated cover GETs.
+- Cache-bust with `ts=<updatedAt>` rather than appending bearer tokens to URLs.
+- Chapter editing, track reordering, provider matching, and writing embedded audio tags are deferred.
+
+## 9. Playback
+
+### 9.1 Playback engine
+
+Use Apple media frameworks:
+
+- `AVQueuePlayer` for ordered multi-track playback;
+- `AVPlayerItem` per audio track;
+- `AVAudioSession` with category `.playback` and mode `.spokenAudio`;
+- MediaPlayer for Now Playing and remote commands.
+
+There is one process-wide `PlaybackEngine`, because iOS should have one active audiobook at a time. It owns a `PlaybackContext` containing account, library item, remote session, source tracks, chapters, desired speed, and global position.
+
+The engine maps between:
+
+- whole-book time;
+- track index and track-local time;
+- chapter index and chapter-local time.
+
+All three mappings require unit tests for exact boundaries, zero-duration/missing tracks, and floating-point tolerance.
+
+### 9.2 Starting playback
+
+For streamed playback:
+
+1. Ensure a usable access token.
+2. Call `POST /api/items/<item-id>/play` with:
+   - `forceDirectPlay: Bool`;
+   - `forceTranscode: Bool`;
+   - `mediaPlayer: "AVPlayer"`;
+   - `supportedMimeTypes: [String]`;
+   - `deviceInfo` containing a stable `deviceId`, `clientName`, `clientVersion`, `manufacturer`, and `model`. The current server derives `deviceName`; the client does not need to send it.
+3. Normally send both force flags as false and allow the server to direct-play only when every included file MIME type occurs in `supportedMimeTypes`. Reserve `forceTranscode` for a user retry after a decoder failure.
+4. Decode the returned `PlaybackSession`, including `id`, `playMethod`, `startTime`, `currentTime`, `duration`, `chapters`, expanded `libraryItem`, and ordered `audioTracks`.
+5. Build session-scoped AVPlayer assets as described in section 9.3.
+6. Seek to the selected whole-book position.
+7. Start playback only when the intended item is ready.
+
+For downloaded playback:
+
+1. Load the local manifest and validate required files exist.
+2. Build local file player items.
+3. Create a local playback-session record with UUIDv4 and play method `Local`.
+4. Queue it for later `/api/session/local` or `/api/session/local-all` synchronization.
+
+If some tracks are local and later tracks are not, playback may switch to streaming when online. It must not silently stall at the boundary.
+
+### 9.3 Playback URL construction
+
+Use a `PlaybackRouteAdapter` selected by the validated server version. For every supported version from 2.26.0 onward, the current implementation contract is:
+
+#### Direct play (`playMethod == 0`)
+
+- Ignore the bearer-protected `audioTracks[].contentUrl` for AVPlayer playback.
+- Build each asset URL as:
+
+  `<base>/public/session/<session-id>/track/<audio-track-index>`
+
+- This is the route used by the official iOS client for servers 2.22.0 and newer.
+- The route resolves the track from the open in-memory session and supports normal HTTP range handling through Express `sendFile`.
+- Do not attach an access token and do not append `?token=`.
+
+#### Transcode (`playMethod == 2`)
+
+- Append the returned `audioTracks[0].contentUrl` under the normalized server base URL. The current value is `/hls/<session-id>/output.m3u8`.
+- Treat the leading slash as server-base-relative, not origin-relative. Standard URL resolution would otherwise drop a reverse-proxy path prefix such as `/audiobookshelf`; use the shared route builder's `base + returnedPath` operation.
+- Pass the HTTPS URL directly to `AVURLAsset`.
+- HLS segment URLs are relative to the manifest and are served by the current `HlsRouter` while the stream is open.
+- Do not add bearer headers using undocumented AVFoundation options and do not rewrite the manifest unless a future, separately verified server contract requires it.
+
+The playback session must remain open while either route is in use. Do not close it on ordinary backgrounding, route changes, or account-tab changes. Close it when replacing the book, explicitly stopping playback, or after the final sync at completion.
+
+Treat session IDs and the resulting public/HLS URLs as short-lived secrets: never log them, persist them beyond recovery metadata, share them, or include them in diagnostics.
+
+If a playback URL returns `404` after a server restart or lost in-memory session, open a new playback session once, rebuild the queue, and seek to the latest durable local position. Do not loop session creation.
+
+An implementation spike must prove direct-play range seeking, multi-file track transitions, HLS startup/seeking, and immediate failure after the corresponding session is closed.
+
+### 9.4 Speed control
+
+- Supported UI range: 0.5×–3.0×.
+- Store as `Float`, with 0.05 precision; present common presets plus fine adjustment.
+- Set `AVPlayerItem.audioTimePitchAlgorithm`:
+  - `.timeDomain` for 0.5×–2.0× because Apple describes it as suitable for voice;
+  - `.spectral` above 2.0× where the time-domain algorithm's supported range ends.
+- Apply speed with `AVPlayer.rate`/`playImmediately(atRate:)`.
+- Reapply the desired rate after:
+  - play following pause;
+  - item replacement;
+  - track transition;
+  - route/interruption recovery;
+  - local/stream source transition.
+- Persist a global default and an optional per-book override.
+- The Now Playing playback rate must match the actual player rate, not merely the desired setting.
+
+### 9.5 Playback state and progress
+
+Use explicit states:
+
+`idle → preparing → ready/paused → playing ↔ buffering → paused → ended`
+
+Any state can transition to `failed`. Loading a different book cancels the previous preparation and closes or persists its session.
+
+Use AVPlayer periodic and boundary observers:
+
+- approximately 0.5 seconds for visible UI updates;
+- chapter/track boundaries for transitions;
+- a slower persistence cadence for durable progress.
+
+Remove every observer deterministically when replacing the context. Do not let SwiftUI view lifetime own core playback observers.
+
+### 9.6 System integration
+
+Enable the Audio background mode.
+
+Populate `MPNowPlayingInfoCenter` manually with whole-book values:
+
+- title;
+- author/narrator;
+- current chapter;
+- cover;
+- total book duration;
+- whole-book elapsed time;
+- actual playback rate;
+- default playback rate.
+
+Update Now Playing after play/pause, seek, speed change, chapter/track change, book change, and material artwork/metadata change. It does not need per-second elapsed updates.
+
+Register `MPRemoteCommandCenter` handlers for:
+
+- play;
+- pause;
+- toggle;
+- skip backward;
+- skip forward;
+- absolute position change;
+- previous/next chapter where supported.
+
+Remote commands and Bluetooth/headset actions call the same engine methods as SwiftUI controls.
+
+Handle:
+
+- phone/Siri/system interruptions;
+- route changes;
+- headphone or Bluetooth disconnection;
+- AirPlay handoff;
+- media services reset.
+
+Headphone/output removal pauses playback. Resume after an interruption only when the system indicates resumption is appropriate and the user had been playing before the interruption.
+
+### 9.7 Sleep timer and resume rewind
+
+Sleep timer options:
+
+- 5, 10, 15, 30, 45, 60, 90, and 120 minutes;
+- end of current chapter;
+- cancel/reset.
+
+Duration timers use monotonic wall time, not book time, so speed changes do not alter their duration. End-of-chapter derives the boundary from the whole-book timeline and continues to work across track boundaries. Optionally fade audio over the final 10 seconds.
+
+Resume rewind is configurable: off, 5, 10, 15, or 30 seconds after a pause longer than five minutes. It must never cross before the start of the book.
+
+## 10. Downloads and storage
+
+### 10.1 Background download manager
+
+Use `URLSessionConfiguration.background(withIdentifier:)` and download tasks. Maintain one stable session identifier and persist task metadata so the app can reconnect to system-owned tasks after relaunch.
+
+Build the download plan from `GET /api/items/<id>?expanded=1&include=progress`. For every included `media.audioFiles[]` entry, use its `ino`, `metadata.filename`, `metadata.size`, and MIME information. Download each file with:
+
+`GET /api/items/<item-id>/file/<ino>/download`
+
+Create the background task from a `URLRequest` carrying `Authorization: Bearer <access-token>`. Never use the server's supported `?token=` compatibility path. `GET /api/items/<id>/download` is not the per-track API: for directory-backed books it streams a ZIP and is unsuitable for the atomic multi-track manifest described here.
+
+Each task description or persisted mapping identifies:
+
+- `AccountID`;
+- library item ID;
+- track ID/index;
+- expected byte length;
+- destination manifest entry.
+
+Requirements:
+
+- at most three concurrent audio-file downloads by default;
+- per-book queueing;
+- Wi-Fi/non-expensive network option;
+- cellular warning for large books;
+- pause/cancel/retry;
+- stalled/failure detection with bounded exponential retry;
+- 401 refresh and rescheduling with a newly constructed `URLRequest`, because an existing background task's authorization header cannot be rotated in place;
+- background completion-handler support;
+- progress aggregation by known bytes, with an indeterminate fallback;
+- no heavy import or indexing work on the main actor.
+
+Do not use server filenames as filesystem paths. Store media under opaque local directories such as:
+
+`Application Support/Media/<AccountID>/<LibraryItemID>/<track-index>.<safe-extension>`
+
+Derive a safe extension from a whitelist of known media types. Reject path traversal and unexpected file types.
+
+### 10.2 Atomic completion
+
+A downloaded book has a manifest with `queued`, `downloading`, `partial`, `complete`, `failed`, or `deleting` state.
+
+A book becomes `complete` only after:
+
+- every required track exists;
+- each known byte length matches;
+- the manifest and offline metadata snapshot are durably written;
+- temporary files have been atomically moved to final locations.
+
+Partial books remain inspectable and retryable. Completed files are never silently replaced by a failed retry.
+
+### 10.3 Storage policy
+
+- Preflight free space against expected bytes plus a safety margin.
+- Exclude downloaded media and regenerable covers from iCloud/iTunes backup.
+- Apply file protection compatible with playback while locked after first unlock, such as complete-until-first-user-authentication.
+- Show storage by account and book.
+- Support explicit deletion and optional auto-delete after a configurable number of days following completion.
+- Never evict the currently playing track.
+- If iOS removes or corrupts a local file, mark the download partial and offer repair instead of crashing.
+
+Offline download of a server-transcoded replacement format is deferred unless Audiobookshelf exposes a stable downloadable transcode. Original supported files remain downloadable.
+
+## 11. Progress, sessions, bookmarks, and conflicts
+
+### 11.1 Durable local progress
+
+Persist local playback position:
+
+- at least every five seconds while playing;
+- on pause;
+- before and after seek;
+- on chapter/track change;
+- on app backgrounding;
+- before replacing the current book;
+- when a sleep timer ends;
+- after an interruption.
+
+Do not rely on an app-termination callback.
+
+### 11.2 Online session sync
+
+For an open streamed session:
+
+- sync with `POST /api/session/<session-id>/sync`;
+- send `{ "currentTime": <whole-book-seconds>, "timeListened": <wall-clock-delta>, "duration": <whole-book-seconds> }`;
+- treat `timeListened` as the delta accumulated since the previous confirmed 2xx sync; the server adds it to `session.timeListening`;
+- sync approximately every 15 seconds while connected and after significant events;
+- close with `POST /api/session/<session-id>/close`, optionally carrying the same final sync body, when the book changes or playback is deliberately ended.
+
+Track `timeListened` with a monotonic clock only while AVPlayer is audibly playing, not merely because desired rate is nonzero.
+
+`/sync` is not idempotent for `timeListened`. Reset the pending delta only after a confirmed 2xx. On a transport-ambiguous failure, do not blindly replay the same delta: preserve the latest `currentTime`, mark the listening-time delta uncertain, and prefer a small stats undercount over silently double-counting it. The server exposes no idempotency key.
+
+### 11.3 Offline session sync
+
+Downloaded playback creates UUIDv4 local sessions. Persist them until acknowledged by:
+
+- `POST /api/session/local`, or
+- `POST /api/session/local-all`.
+
+Prefer the batch endpoint with:
+
+```json
+{
+  "sessions": [
+    {
+      "id": "6f0d7dd3-9b2d-4e32-819f-392d994ef334",
+      "libraryId": "server-library-id",
+      "libraryItemId": "server-library-item-id",
+      "bookId": "server-book-id",
+      "episodeId": null,
+      "mediaType": "book",
+      "mediaMetadata": { "title": "Example" },
+      "chapters": [],
+      "displayTitle": "Example",
+      "displayAuthor": "Author Name",
+      "coverPath": "/server/cover/path",
+      "duration": 36000,
+      "playMethod": 3,
+      "mediaPlayer": "AVPlayer",
+      "timeListening": 120,
+      "startTime": 600,
+      "currentTime": 720,
+      "startedAt": 1785240000000,
+      "updatedAt": 1785240120000
+    }
+  ],
+  "deviceInfo": {
+    "deviceId": "…",
+    "clientName": "…",
+    "clientVersion": "…",
+    "manufacturer": "Apple",
+    "model": "…"
+  }
+}
+```
+
+Each local playback-session object uses UUIDv4 `id`, numeric `playMethod: 3`, cumulative `timeListening`, whole-book `currentTime`, millisecond `updatedAt`, and the current library/item/book identifiers. The batch response is `{ "results": [{ "id": String, "success": Bool, "progressSynced": Bool, "error": String? }] }`.
+
+Delete a pending session only when its matching result has `success == true`. `progressSynced == false` can legitimately mean that server progress was newer; refresh progress before deciding what to show. The single `/api/session/local` endpoint returns only an HTTP success status and is less useful for a durable queue. Do not use the obsolete `/api/me/sync-local-progress` workflow.
+
+Bookmarks created offline are queued and reconciled after session/progress sync. The current bookmark API has no idempotency key, so before retrying an ambiguous create, refetch the item's bookmarks and compare item ID, time, and title. A failed mutation remains visible with a retry indicator.
+
+### 11.4 Position conflict rules
+
+The current server exposes progress `lastUpdate` in Unix milliseconds but no revision token or conditional mutation. Local-session import compares server `updatedAt` with the incoming session `updatedAt`; direct progress PATCH does not perform a conflict check.
+
+Direct progress changes use `PATCH /api/me/progress/<library-item-id>` with the relevant subset of `duration`, `currentTime`, `progress`, `isFinished`, and `hideFromContinueListening`. The endpoint returns an empty 200 response.
+
+Track a local `lastCommonServerUpdate` and position for each item.
+
+- While this device is actively playing, never jump due to remote progress.
+- If only the local position changed since the last common update, upload it.
+- If only the server position changed, adopt it while idle.
+- If both changed, show a non-destructive conflict prompt with:
+  - Continue from this device at `<time>`;
+  - Continue from server at `<time>`.
+- Choosing one creates a new common checkpoint and syncs deliberately.
+- Before uploading queued local progress, fetch `GET /api/me/progress/<library-item-id>`. Use `lastUpdate` to determine whether the server moved after the common checkpoint.
+- Timestamps are the only concurrency signal the current server provides. Account for clock skew and never claim this is atomic conflict prevention.
+
+Marking a book finished or unfinished is an explicit progress mutation and follows the same conflict rules.
+
+## 12. Lifetime listening statistics
+
+### 12.1 Metric definitions
+
+Statistics use seconds internally as `Double` values and format only at the UI boundary. Every book key is `(AccountID, LibraryItemID)`; identical editions on different servers are distinct unless a future explicit merge feature says otherwise.
+
+| Metric | Normative definition | Coverage |
+| --- | --- | --- |
+| Real time listened | Monotonic wall-clock seconds during confirmed forward, audible playback. Excludes pause, buffering, interruption, route loss, and seek handling | All devices from imported Audiobookshelf `timeListening`, with unsynchronized local time overlaid; exact local value is also retained |
+| Audiobook time heard | Sum of forward media-timeline distance actually traversed while playing. A replay counts again; a seek does not | This app, from the point tracking begins |
+| Effective average speed | `audiobookTimeHeard / realTimeListened` for slices that contain both values | This app |
+| Books started | Distinct book keys with at least 30 accumulated seconds of real listening | All devices where session history remains available |
+| Books completed | Distinct book keys for which a first-finish milestone has been observed. Marking a book unfinished later does not erase the lifetime milestone | Current server progress can seed the value; exact thereafter in this app |
+| Chapters started | Distinct chapter keys with at least 10 seconds of audible forward traversal, or the whole chapter if shorter | This app |
+| Chapters completed | Distinct chapter keys for which at least 90% of the chapter's timeline has been audibly traversed and the end boundary has been crossed without a seek | This app |
+| Finished runtime | Sum of the canonical duration snapshot for each distinct completed book | Same coverage as Books completed |
+| Listening sessions | Distinct playback-session IDs | All devices where server history remains available |
+
+The primary count cards show distinct books and chapters. Per-book detail may additionally show total completion events, including rereads, but must not mix that value into the distinct lifetime total.
+
+`media.duration` from the expanded item is the canonical finished-runtime snapshot. If it is absent, the app may sum valid `audioFiles[].duration` values and mark the result estimated. File byte length is not part of listening statistics.
+
+### 12.2 Local measurement algorithm
+
+The `PlaybackEngine` emits a statistics sample approximately every 0.5 seconds and immediately on state, rate, track, chapter, app-lifecycle, and seek transitions. Measurement uses `ContinuousClock`; persisted UTC timestamps are for reporting, never for measuring elapsed time.
+
+For two consecutive samples in the same uninterrupted playback generation:
+
+1. Require `AVPlayer.timeControlStatus == .playing`, an active audio session, a ready item, and no seek, interruption, route-loss, or buffering transition.
+2. Compute positive whole-book position advancement. Discard negative advancement.
+3. Record real time only when the position is advancing; this avoids counting a player that claims to be playing while stalled.
+4. Record audiobook time as the observed positive advancement, capped at `realDelta × actualPlayerRate + 0.5 seconds` to reject an unmarked jump.
+5. Split the resulting slice at chapter boundaries, local-midnight boundaries, and rate changes.
+
+Every explicit or automatic seek increments a playback-generation counter and discards the interval spanning the seek. A seamless track transition keeps the generation because the whole-book timeline remains continuous. Replay through an already heard range creates new audiobook time but does not create another distinct chapter or book.
+
+Persist accumulated slices with the same five-second durability target as playback position. The live Statistics screen combines durable slices with the uncommitted in-memory slice so its counters move without waiting for a server sync.
+
+### 12.3 Server history and implementation limits
+
+Use the current implementation as follows:
+
+- `GET /api/me/listening-stats` returns `{totalTime, items, days, dayOfWeek, today, recentSessions}`. `totalTime` and the item/day buckets sum persisted session `timeListening`.
+- `GET /api/me/listening-sessions?itemsPerPage=<n>&page=<n>` returns `{total, numPages, page, itemsPerPage, sessions}` in descending `updatedAt` order.
+- `GET /api/me/stats/year/<year>` returns yearly listening totals, top authors/genres/narrator/month, `numBooksFinished`, `numBooksListened`, and cover samples.
+- `GET /api/me/progress` supplies current progress records that can seed first-known finished-book milestones.
+
+Do not treat those endpoints as richer than they are:
+
+- session `timeListening` is real time supplied by clients;
+- persisted session reads do not contain chapters or playback rate;
+- a server session's entire time is assigned to its stored date rather than split across midnight;
+- yearly sessions are selected by `createdAt`, and `numBooksListened` is currently deduplicated by `displayTitle`, not by item ID;
+- a book that was finished and later reset may no longer be recoverable as a historical completion;
+- there is no incremental history cursor or immutable statistics revision.
+
+The pinned official iOS client likewise accumulates elapsed wall seconds into `timeListening`, sends that delta to the online session endpoint, and resets the local accumulator only after success. Its current Statistics screen shows server `totalTime`, distinct server day buckets, and the present `mediaProgress.isFinished` count. Those implementation choices confirm the contract but do not supply rate-aware or chapter-aware history. This specification uses a monotonic clock and a separate ledger to add that missing precision.
+
+The app may use `/api/me/listening-stats` for a fast summary, but canonical per-session import uses paginated `/api/me/listening-sessions` and deduplicates by `(AccountID, sessionID)`. The current controller loads all of a user's sessions before slicing a page, so do not poll it. Perform a full import when an account is added, on explicit refresh, and no more than once per day automatically. Use pages of 500 by default to reduce repeated server-wide scans, adapt downward after memory-pressure or response-size failures, and show progress for large histories.
+
+### 12.4 Reconciliation and multi-instance aggregation
+
+Maintain two related sources:
+
+- local `ListeningSlice` rows for exact playback observed by this app;
+- `RemoteSessionSnapshot` rows for history imported from each Audiobookshelf account.
+
+For all-device real time, aggregate remote snapshots plus local session time not yet known to be represented remotely. Associate every local slice with its online or offline UUIDv4 playback-session ID. After a confirmed online 2xx sync, advance the local expected remote total immediately. After a successful offline-session import, remove that session's pending overlay. When the corresponding remote session is later fetched, replace the expected snapshot rather than adding a second copy.
+
+An ambiguous online sync leaves the local this-app statistic exact but creates a lower/upper bound for the all-device figure. Display `≈` and expose the uncertain range until a later session import resolves it. Never resolve uncertainty by blindly resending `timeListened`.
+
+Remote snapshots are upserted when the same session ID has a newer `updatedAt`. A session disappearing from the server does not silently reduce a lifetime total already observed; deleting or rebuilding imported history is an explicit user action.
+
+The All Accounts view aggregates account-scoped results only after each account has produced a valid result. An unavailable or reauthentication-required account appears as stale with its last successful import time. One server failure must not blank totals from other servers.
+
+### 12.5 Chapter and completion identity
+
+Chapter metadata is mutable and current server history does not retain it. Create a `ChapterKey` from the book key plus a stable local chapter UUID. On first encounter, map server chapters by ordered index, normalized title, and start/end times. On later metadata refresh:
+
+- preserve the local UUID when boundaries and title still match within tolerance;
+- create a new chapter identity when one chapter is split or materially replaced;
+- never retroactively award completion merely because edited boundaries now cover previously heard time.
+
+Book completion is recorded when either:
+
+- server progress first reports `isFinished == true`; or
+- this app reaches the natural end through forward playback without seeking across it; or
+- an explicit Mark Finished mutation succeeds.
+
+Store the completion time, duration snapshot, title/author snapshot, and evidence source. A later metadata edit updates current display data but not the historical duration snapshot without an explicit “Recalculate durations” action.
+
+### 12.6 Retention, reset, and portability
+
+Listening history contains personal behavioral data. It receives the same file protection as other structured app data and is never written to logs or analytics.
+
+- Ordinary sign-out retains statistics.
+- Removing an account presents separate choices for credentials/cache/downloads and listening history.
+- “Reset listening statistics” identifies the affected account/range and is destructive only after confirmation.
+- Export produces a versioned JSON document with no tokens, cookies, server-session URLs, or local media paths. The share sheet warns that titles and listening times are personal.
+- Import validates schema and account mapping, then upserts by stable event/session ID so importing the same file twice changes nothing.
+- Structured statistics remain eligible for encrypted device backup; downloaded audio and regenerable covers remain excluded.
+
+Cross-device CloudKit synchronization is deferred. Therefore, exact audiobook-time and chapter history is lifetime for this app data set, not a claim that the Audiobookshelf server can reconstruct it after a fresh install with no backup or import.
+
+## 13. Local data model
+
+Use SwiftData for structured local state and the filesystem for audio bytes.
+
+Suggested models:
+
+- `ServerAccount`
+  - local account ID
+  - normalized base URL
+  - display name
+  - remote user ID and username
+  - server version
+  - auth capabilities
+  - connection/reauth state
+- `LibraryCache`
+- `BookSummaryCache`
+- `BookDetailCache`
+- `ProgressCheckpoint`
+- `PendingPlaybackSession`
+- `ListeningSlice`
+- `RemoteSessionSnapshot`
+- `BookCompletionMilestone`
+- `ChapterIdentity`
+- `ChapterCoverage`
+- `StatisticsImportState`
+- `PendingBookmarkOperation`
+- `DownloadManifest`
+- `DownloadTrack`
+- `MetadataDraft`
+- `PlaybackPreference`
+
+Credentials are represented only by a Keychain reference, never token text.
+
+Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, and `PlaybackSessionID` to prevent accidental identifier mixing. Remote DTOs, domain models, and SwiftData models are separate types.
+
+## 14. Architecture
+
+### 14.1 Components
+
+| Component | Responsibility |
+| --- | --- |
+| `AccountStore` | Account lifecycle and current browsing account |
+| `TokenVault` actor | Keychain reads/writes and atomic token replacement |
+| `AuthCoordinator` actor | Login state and single-flight token refresh per account |
+| `AudiobookshelfAPI` actor | Typed endpoint operations and DTO mapping |
+| `LibraryRepository` actor | Server/cache merge, pagination, search, invalidation |
+| `MetadataRepository` actor | Draft creation, best-effort `updatedAt` stale checks, and mutation |
+| `PlaybackEngine` | AVPlayer/AVAudioSession lifecycle and global playback state |
+| `ProgressCoordinator` actor | Durable checkpoints, session accounting, conflict resolution |
+| `StatisticsRepository` actor | Local slice recording, remote-session import, deduplication, metric aggregation, coverage labels, and export/import |
+| `PlaybackRouteAdapter` | Builds version-verified public-session or HLS media URLs from a playback session |
+| `DownloadCoordinator` actor | Queue and manifest state |
+| `BackgroundDownloadDelegate` | URLSession background callbacks forwarded into the coordinator |
+| `NowPlayingCoordinator` | MediaPlayer metadata and remote commands |
+
+UI feature models use Observation and are `@MainActor`. Network, persistence coordination, token refresh, and sync use actors. Avoid a general service locator and avoid exposing raw DTOs to views.
+
+### 14.2 Suggested source layout
+
+```text
+App/
+Core/
+  Accounts/
+  Auth/
+  Networking/
+  Persistence/
+  Diagnostics/
+Audiobookshelf/
+  API/
+  DTO/
+  Mapping/
+Playback/
+  Engine/
+  Routes/
+  NowPlaying/
+  Progress/
+Statistics/
+  Ledger/
+  Import/
+  Aggregation/
+  Export/
+Downloads/
+Features/
+  Home/
+  Library/
+  Search/
+  BookDetail/
+  MetadataEditor/
+  Player/
+  Statistics/
+  Downloads/
+  Settings/
+```
+
+No third-party runtime dependency is required for 1.0. Reconsider this only where an audited package substantially reduces risk.
+
+## 15. Current implementation integration map
+
+These routes and shapes are audited against the pinned v2.36.0 implementation. DTOs still require saved fixtures because the server deliberately emits its compatibility “old JSON” model to clients.
+
+| Capability | Current operation and important shape |
+| --- | --- |
+| Discover server/auth | `GET /status` → `app`, `serverVersion`, `isInit`, `language`, `authMethods`, `authFormData` |
+| Local login | `POST /login`, JSON username/password, `x-return-tokens: true` |
+| Begin mobile OIDC/PKCE | `GET /auth/openid` with challenge, S256, callback URI, `response_type=code`, client state; retain cookies and the 3xx `Location` |
+| Provider-to-app bridge | Provider returns to server `GET /auth/openid/mobile-redirect`; server redirects to the allow-listed app callback |
+| Complete mobile OIDC/PKCE | `GET /auth/openid/callback?state=…&code=…&code_verifier=…` using the initial cookie jar |
+| Refresh | `POST /auth/refresh` with `x-refresh-token`; response user contains the rotated access and refresh tokens |
+| Logout | `POST /logout` with `x-refresh-token` → `{redirect_url}` |
+| Validate token/get user | `POST /api/authorize` with bearer token |
+| List libraries | `GET /api/libraries` |
+| List library items | `GET /api/libraries/<id>/items?limit=&page=&sort=&desc=&filter=&minified=&collapseseries=&include=` |
+| Personalized shelves | `GET /api/libraries/<id>/personalized?limit=&include=progress` |
+| Search library | `GET /api/libraries/<id>/search?q=&limit=` |
+| Get expanded item/progress | `GET /api/items/<id>?expanded=1&include=progress` |
+| Start playback | `POST /api/items/<id>/play` with force flags, MIME list, media player, and device info |
+| Direct-play bytes | `GET /public/session/<session-id>/track/<track-index>` while the session is open |
+| Transcoded HLS | Returned `audioTracks[0].contentUrl`, currently `/hls/<session-id>/output.m3u8` |
+| Sync/close open session | `POST /api/session/<id>/sync`, `POST /api/session/<id>/close` |
+| Sync offline sessions | Prefer `POST /api/session/local-all` with `{sessions, deviceInfo}`; single-session fallback is `/api/session/local` |
+| Read/update progress | `GET` or `PATCH /api/me/progress/<library-item-id>` |
+| Read current user's progress list | `GET /api/me/progress` → `{mediaProgress}` |
+| Read lifetime listening summary | `GET /api/me/listening-stats` → `totalTime`, item/day/day-of-week buckets, `today`, and up to 10 recent sessions |
+| Page current user's listening sessions | `GET /api/me/listening-sessions?itemsPerPage=&page=` → `total`, `numPages`, and compatibility playback-session objects |
+| Page sessions for one item | `GET /api/me/item/listening-sessions/<library-item-id>`; the optional episode segment is out of scope for books |
+| Read yearly server statistics | `GET /api/me/stats/year/<year>`; use for presentation/cross-checking, not canonical distinct-book identity |
+| Read bookmarks | `GET /api/me/bookmarks/<library-item-id>` |
+| Create bookmark | `POST /api/me/item/<item-id>/bookmark` with `{time, title}` |
+| Rename bookmark | `PATCH /api/me/item/<item-id>/bookmark` with `{time, title}` |
+| Delete bookmark | `DELETE /api/me/item/<item-id>/bookmark/<time>` |
+| Download one source file | `GET /api/items/<item-id>/file/<ino>/download` with bearer header |
+| Read cover | `GET /api/items/<id>/cover?width=&height=&format=&ts=` |
+| Update metadata | `PATCH /api/items/<id>/media` with `{metadata, tags}` |
+| Upload cover | Multipart `POST /api/items/<id>/cover`, field `cover` |
+
+All request construction, including path-prefix handling, belongs in one route builder. Endpoint strings must not be scattered through views.
+
+### 15.1 Contract-source policy
+
+Every route adapter and non-trivial DTO must carry a source comment linking to a pinned implementation file listed in section 24. When updating the audited baseline:
+
+1. compare the relevant server router/controller/model files;
+2. regenerate captured fixtures from a disposable server;
+3. run the minimum/current compatibility matrix;
+4. update this table and the baseline commit together.
+
+Do not update a DTO merely because the published API reference says something different.
+
+## 16. Error handling and diagnostics
+
+Define user-facing error categories:
+
+- server unreachable;
+- TLS trust failure;
+- unsupported/old server;
+- authentication required;
+- permission denied;
+- item removed or unavailable;
+- media format/playback failure;
+- download/storage failure;
+- progress conflict;
+- partial, stale, or uncertain statistics coverage;
+- malformed/incompatible server response.
+
+Use `OSLog` categories for auth, API, playback, download, and sync. Logs must redact:
+
+- bearer and refresh tokens;
+- cookies;
+- passwords;
+- PKCE verifier;
+- authorization codes;
+- callback query strings;
+- playback session IDs and `/public/session/` or `/hls/` URLs;
+- custom secret headers;
+- local file paths containing user metadata.
+
+Diagnostics export should include app version, iOS version, server version, endpoint name, HTTP status, request correlation ID, player state transitions, and redacted errors. It must not include credentials or full response bodies by default.
+
+## 17. Security and privacy requirements
+
+- HTTPS and system trust validation are mandatory in production.
+- Do not implement “accept any certificate.”
+- Do not pin a public certificate; self-hosted servers legitimately rotate certificates and may use private CAs.
+- Store no secrets in SwiftData, plist files, logs, crash annotations, or URLs.
+- Treat playback session IDs as transient bearer-like capabilities even though they are not JWTs.
+- Use secure random generation from Security/CryptoKit for OAuth material.
+- Enforce exact OAuth callback matching.
+- Apply server/account scoping to every cache and file lookup.
+- Sanitize all remote filenames and rich text.
+- Do not allow remote metadata to select arbitrary local paths.
+- Treat downloaded media as private user data.
+- Treat listening slices, completion milestones, titles in exports, and daily activity as private behavioral data.
+- Provide an in-app “Delete all local data for this account” action.
+- Support local-network privacy usage text if connecting to LAN addresses triggers iOS permission.
+- Document collected data accurately in App Store privacy declarations; by default, data remains between the device and the user's configured servers.
+
+## 18. Accessibility and usability
+
+- Full Dynamic Type support without clipping essential controls.
+- VoiceOver labels include action, title, current state, and time where relevant.
+- Player actions remain usable without relying on artwork or colour.
+- Minimum 44-point interaction targets.
+- Support Bold Text, Increase Contrast, Reduce Motion, and landscape layouts.
+- Provide keyboard shortcuts on iPad for play/pause, skip, speed, and search.
+- Format times and numbers with locale-aware APIs.
+- VoiceOver labels for statistics state the metric, value, selected range, account scope, and whether coverage is all-device, this-app-only, stale, or approximate.
+- All destructive actions require clear confirmation and identify the affected server/account.
+
+## 19. Performance and reliability targets
+
+- Library browsing remains responsive with at least 10,000 cached books.
+- No full-library expanded fetch.
+- No audio file or complete HTTP response is held in memory.
+- UI work remains off the main thread except observable state publication.
+- Playback must survive SwiftUI view reconstruction and account-tab changes.
+- An app crash/relaunch loses no more than five seconds of local position.
+- A failed token refresh affects one account, not global app state.
+- Download task restoration is deterministic after relaunch.
+- Repeated play taps cannot create multiple simultaneous server sessions.
+- Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
+- Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
+- Statistics imports are resumable, deduplicated, and rate-limited so opening the Statistics screen does not repeatedly make the server scan all session history.
+
+## 20. Testing strategy
+
+### 20.1 Unit tests
+
+- URL normalization and path-prefix preservation;
+- typed ID isolation;
+- JSON decoding fixtures from minimum/current server versions;
+- PKCE verifier/challenge generation and callback validation;
+- rotating-token atomic replacement;
+- 20 concurrent 401s produce one refresh request;
+- whole-book/track/chapter time mapping;
+- speed persistence and pitch-algorithm selection;
+- wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;
+- audiobook-time integration at 0.5×, 1×, 2×, and 3×;
+- pause, stall, seek, backward replay, rate change, chapter boundary, track boundary, and midnight slice splitting;
+- one real hour at 2× produces one real hour and approximately two audiobook hours;
+- seeks add neither real time nor audiobook time, while replayed forward audio adds audiobook time again;
+- chapter-start and chapter-completion thresholds, including metadata edits and chapter splits;
+- distinct book/chapter counts across accounts with colliding remote IDs and identical titles;
+- finished-runtime snapshots remain stable after a later metadata duration edit;
+- remote-session plus pending-local aggregation never counts the same session twice;
+- ambiguous online sync produces an uncertainty bound without altering exact this-app time;
+- repeated statistics import and repeated JSON import are idempotent;
+- online `timeListened` reports contain deltas rather than cumulative session totals;
+- an ambiguous `/sync` response cannot silently resend the same listening delta;
+- progress conflict detection;
+- metadata patch generation and stale-draft detection;
+- download manifest state transitions and path sanitization.
+
+### 20.2 Network integration tests
+
+Use a disposable Audiobookshelf container with a seeded library:
+
+- local login and refresh rotation;
+- the exact mobile OIDC cookie bridge with at least Authentik or Keycloak-compatible configuration;
+- exact mobile redirect allow-list behaviour;
+- `/auth/openid/callback` fails when the initial Express session cookie is absent;
+- subdirectory deployment;
+- limited user permissions;
+- multi-file MP3 book;
+- single M4B book;
+- FLAC book;
+- a format that requires transcode;
+- metadata and cover updates;
+- stream session sync/close;
+- offline local-session synchronization;
+- `/api/me/listening-stats`, paginated `/api/me/listening-sessions`, `/api/me/progress`, and `/api/me/stats/year/<year>` fixtures from the pinned implementation;
+- large session history import, concurrent new sessions during paging, and a deleted server session;
+
+### 20.3 Media tests
+
+- range seeks through `/public/session/<id>/track/<index>` near the beginning, middle, and end of a long file;
+- repeated seeking;
+- track transitions with negligible missing/duplicate audio;
+- HLS playback from the returned `/hls/<session-id>/output.m3u8` with relative segments and no undocumented header injection;
+- public direct-play and HLS URLs fail after their session is closed;
+- local/remote source transition;
+- interruption and Bluetooth removal;
+- background and locked-screen playback;
+- AirPlay and CarPlay transport commands;
+- speed changes across track boundaries;
+- end-of-chapter sleep timer at non-1× speeds.
+
+### 20.4 Download tests
+
+- app killed and relaunched mid-download;
+- network changes from Wi-Fi to cellular under each policy;
+- access token expires mid-queue;
+- every source-file download uses `/api/items/<item-id>/file/<ino>/download` with a bearer header and never `?token=`;
+- server unavailable and later restored;
+- insufficient disk space;
+- bad byte length/truncated file;
+- hundreds of small tracks without main-thread stalls;
+- deleted local file repaired cleanly.
+
+### 20.5 UI tests
+
+- add two servers and two users on one server;
+- switch accounts without cache bleed;
+- reauthenticate one account while another remains usable;
+- VoiceOver and largest Dynamic Type;
+- permission-gated metadata/download controls;
+- offline playback and pending-sync indicators;
+- metadata conflict choice;
+- live statistics during playback, All Accounts/per-account filters, coverage labels, and approximate-state details;
+- listening-history export, repeated import, account-removal retention choice, and destructive reset confirmation;
+- accidental scrub protection.
+
+## 21. Delivery phases
+
+### Phase 0 — risk spikes
+
+Prove before building broad UI:
+
+1. Audiobookshelf's two-client OIDC/PKCE bridge: initial cookie-bearing API request, external `ASWebAuthenticationSession`, mobile redirect, and cookie-bound code exchange returning a refresh token.
+2. Single-flight refresh rotation.
+3. Session-scoped direct-file range playback through `/public/session/<id>/track/<index>`.
+4. Transcoded HLS playback through the returned `/hls/<session-id>/output.m3u8`.
+5. Bearer-authenticated background download restoration and 401 rescheduling.
+6. Real-time versus audiobook-time measurement through speed changes, seeks, buffering, and multi-file boundaries.
+7. Import and deduplication of current server listening sessions without double-counting locally synced sessions.
+
+If one of these fails, revise the architecture before proceeding.
+
+### Phase 1 — accounts and library
+
+- account store and Keychain;
+- local and OIDC login;
+- refresh/logout;
+- server/library discovery;
+- paginated browsing, search, cache;
+- book detail.
+
+### Phase 2 — playback and sync
+
+- single/multi-file playback;
+- global timeline and chapters;
+- speed control;
+- background audio;
+- Now Playing and remote commands;
+- streamed session sync;
+- local statistics ledger and live session metrics;
+- sleep timer and bookmarks.
+
+### Phase 3 — offline
+
+- background download manager;
+- manifests and storage UI;
+- local playback;
+- local-session sync and conflict UI;
+- remote history import, multi-account aggregation, chapter/book milestones, and statistics export/import;
+- network/storage policies.
+
+### Phase 4 — metadata and release polish
+
+- metadata and cover editing;
+- permission/error states;
+- accessibility;
+- diagnostics;
+- migration and integration test matrix;
+- App Store privacy and entitlement review.
+
+## 22. Release acceptance criteria
+
+The 1.0 release is acceptable only when:
+
+- [ ] Two different Audiobookshelf accounts can remain signed in concurrently.
+- [ ] No token, cookie, password, verifier, or OAuth code appears in logs or media URLs.
+- [ ] OIDC preserves the initial Audiobookshelf cookie jar, uses an external user agent, PKCE S256, the mobile-redirect bridge, exact state validation, and rotating refresh tokens.
+- [ ] Twenty concurrent expired-token requests cause one refresh and at most one retry each.
+- [ ] Server path prefixes work for API, covers, playback, and downloads.
+- [ ] A limited user cannot see edit/download actions they lack permission to use.
+- [ ] MP3, M4B/AAC, FLAC, and one transcoded format pass streaming tests.
+- [ ] Seeking a long remote file uses range requests and does not download the whole file first.
+- [ ] Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
+- [ ] Speed remains correct through pause, track change, lock, interruption, and relaunch.
+- [ ] Lock Screen/Control Center/Bluetooth/AirPlay/CarPlay controls report the whole-book position correctly.
+- [ ] Listening time is wall time and progress is media time at non-1× speeds.
+- [ ] At 2×, one uninterrupted real hour records approximately one real hour and two audiobook hours; a seek adds neither.
+- [ ] Lifetime statistics can aggregate multiple accounts without treating matching remote IDs or titles as the same book.
+- [ ] The app shows books started/completed, chapters started/completed, listening-session count, and finished runtime using the definitions in section 12.
+- [ ] All-device real-time values are deduplicated against pending local sessions, while audiobook-time and chapter values are clearly labelled as this-app-only.
+- [ ] A live session changes visible statistics before the next server sync and survives an app relaunch with no more than five seconds lost.
+- [ ] Statistics history import and export are idempotent; no secret or local media path appears in the export.
+- [ ] Ambiguous session sync displays an approximate all-device total until reconciled and never changes the exact this-app ledger.
+- [ ] Each online session sync sends only the listening-time delta since the previous confirmed sync.
+- [ ] Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
+- [ ] Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
+- [ ] Downloaded media plays while the server is offline.
+- [ ] Offline sessions synchronize once and are not duplicated.
+- [ ] Concurrent local/server progress never silently overwrites both changed positions.
+- [ ] Metadata editing performs the documented best-effort `updatedAt` stale-draft check and does not claim atomic conflict prevention.
+- [ ] Removing an account cannot leave credentials or cross-account cache records behind.
+- [ ] The app remains usable with VoiceOver and the largest Dynamic Type size.
+
+## 23. Deferred enhancements
+
+- full CarPlay browse/search templates;
+- Apple Watch remote and offline transfer;
+- widgets and Live Activities;
+- Siri/App Intents;
+- podcasts and ebooks;
+- metadata provider search/matching;
+- chapter editor and audio-track reordering;
+- server WebSocket live updates;
+- configurable reverse-proxy/service-token headers;
+- Bonjour discovery;
+- silence skipping, voice boost, and equalizer;
+- series bulk download;
+- offline transcoding format selection;
+- optional private CloudKit synchronization of the local statistics ledger;
+- deliberate cross-server edition merging for statistics.
+
+## 24. References
+
+Audiobookshelf implementation baseline:
+
+- [Server v2.36.0 baseline commit](https://github.com/advplyr/audiobookshelf/commit/96d4021a3cd45f67bf374b65abafbe5d73e926b5)
+- [Server route mounting and `/status`](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/Server.js)
+- [Authentication routes and token return rules](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/Auth.js)
+- [OIDC mobile bridge and PKCE handling](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/auth/OidcAuthStrategy.js)
+- [Current API router](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/routers/ApiRouter.js)
+- [Library queries and search](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/controllers/LibraryController.js)
+- [Item detail, metadata, cover, playback, and download controllers](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/controllers/LibraryItemController.js)
+- [Playback-session manager and synchronization semantics](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/managers/PlaybackSessionManager.js)
+- [Playback-session response model](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/objects/PlaybackSession.js)
+- [Direct-play track model and content URLs](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/objects/files/AudioTrack.js)
+- [Public session-track router](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/routers/PublicRouter.js)
+- [Public session-track implementation](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/controllers/SessionController.js)
+- [HLS router](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/routers/HlsRouter.js)
+- [Book metadata request/response model](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/Book.js)
+- [User response and permission model](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/User.js)
+- [Progress update semantics](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/MediaProgress.js)
+- [Current-user session and listening-summary implementation](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/controllers/MeController.js)
+- [Yearly user-statistics query and its aggregation keys](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/utils/queries/userStats.js)
+- [Persisted playback-session schema and compatibility mapping](https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/PlaybackSession.js)
+
+Official mobile client interoperability reference:
+
+- [Current mobile-client baseline commit](https://github.com/advplyr/audiobookshelf-app/commit/185cba16eb122b40e8537a7bf475632680d6fb94)
+- [Mobile OIDC connection flow](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/components/connection/ServerConnectForm.vue)
+- [Current iOS API client and refresh handling](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/ios/App/Shared/util/ApiClient.swift)
+- [Current iOS playback URL selection](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/ios/App/Shared/player/AudioPlayer.swift)
+- [Current iOS session accounting](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/ios/App/Shared/player/PlayerProgress.swift)
+- [Current mobile statistics screen](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/pages/stats.vue)
+- [Current iOS per-file background download behaviour](https://github.com/advplyr/audiobookshelf-app/blob/185cba16eb122b40e8537a7bf475632680d6fb94/ios/App/App/plugins/AbsDownloader.swift)
+
+Supplementary Audiobookshelf material:
+
+- [New JWT authentication discussion](https://github.com/advplyr/audiobookshelf/discussions/4460)
+- [Server releases](https://github.com/advplyr/audiobookshelf/releases)
+- [Published API reference](https://api.audiobookshelf.org/) — explicitly out of date and not normative for this specification
+
+OAuth:
+
+- [RFC 7636 — Proof Key for Code Exchange](https://www.rfc-editor.org/rfc/rfc7636)
+- [RFC 8252 — OAuth 2.0 for Native Apps](https://www.rfc-editor.org/rfc/rfc8252)
+
+Apple:
+
+- [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession)
+- [AVPlayer](https://developer.apple.com/documentation/avfoundation/avplayer)
+- [AVAudioTimePitchAlgorithm](https://developer.apple.com/documentation/avfoundation/avaudiotimepitchalgorithm)
+- [AVAudioSession](https://developer.apple.com/documentation/avfaudio/avaudiosession)
+- [Handling audio interruptions](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions)
+- [Responding to audio route changes](https://developer.apple.com/documentation/avfaudio/responding-to-audio-route-changes)
+- [MPNowPlayingInfoCenter](https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter)
+- [MPRemoteCommandCenter](https://developer.apple.com/documentation/mediaplayer/mpremotecommandcenter)
+- [Downloading files in the background](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)

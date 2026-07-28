@@ -1,0 +1,20 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+swift test --enable-code-coverage
+swift build -c release
+
+if [[ "${BLEAT_SKIP_SIMULATOR:-0}" == "1" ]]; then
+    exit 0
+fi
+
+simulator_destination="${BLEAT_SIMULATOR_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro}"
+
+xcodebuild \
+    -quiet \
+    -scheme Bleat \
+    -destination "${simulator_destination}" \
+    -derivedDataPath .build/xcode-derived \
+    -enableCodeCoverage YES \
+    test

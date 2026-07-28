@@ -1,0 +1,11 @@
+.build/
+DerivedData/
+*.xcresult
+*.xcuserstate
+xcuserdata/
+.DS_Store
+
+# Live-test state and credentials
+TestSupport/ServerHarness/.env
+TestSupport/ServerHarness/artifacts/
+TestSupport/ServerHarness/state/
