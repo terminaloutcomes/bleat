@@ -20,6 +20,13 @@ let package = Package(
         ),
         .testTarget(
             name: "BleatCoreTests",
+            dependencies: ["BleatCore"],
+            resources: [
+                .process("Fixtures"),
+            ]
+        ),
+        .testTarget(
+            name: "BleatCoreLiveTests",
             dependencies: ["BleatCore"]
         ),
     ],

@@ -104,12 +104,32 @@ application.
 
 ## Run against Audiobookshelf
 
-Live-server integration is the next implementation slice. The planned Docker
-Compose harness will start seeded Audiobookshelf 2.26.x, the pinned 2.36.0
-baseline, and the current stable version for automated contract tests.
+Docker is required for live contract tests. Run the pinned Audiobookshelf
+2.36.0 root and path-prefix status suite with:
 
-Until the application and live-test harness exist, there is no supported
-command for connecting this checkout to a personal Audiobookshelf server.
+```sh
+./scripts/test-live.sh
+```
+
+The script creates fresh root and `/audiobookshelf` instances, waits for both
+services, initializes deterministic test-only root users, runs the live tests,
+and removes the containers and volumes. On failure it retains redacted
+diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
+
+Control the environment directly when developing a contract test:
+
+```sh
+./scripts/live-test-environment.sh reset
+./scripts/live-test-environment.sh status
+./scripts/live-test-environment.sh down
+```
+
+The harness currently covers the pinned 2.36.0 status contract. Seeded
+libraries/media, 2.26.x compatibility, current-stable compatibility, HTTPS, and
+OIDC profiles will be added in subsequent implementation slices.
+
+There is not yet a supported command for connecting this checkout to a
+personal Audiobookshelf server.
 
 ## Project documentation
 
