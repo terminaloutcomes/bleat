@@ -5,10 +5,10 @@ Bleat is a native iPhone and iPad client for
 and is being implemented in Swift 6 with strict concurrency checking.
 
 The repository is currently at the core-foundation and authentication stage.
-`BleatCore` builds and its URL, routing, discovery, local-login, bearer-header,
-and account-scoped Keychain behavior is tested. The SwiftUI application target
-has not been created yet, so there is not currently an app executable to
-launch.
+`BleatCore` builds and its URL, routing, discovery, local-login, OIDC/PKCE,
+bearer-header, isolated authentication-cookie, and account-scoped Keychain
+behavior is tested. The SwiftUI application target has not been created yet,
+so there is not currently an app executable to launch.
 
 ## Requirements
 
@@ -130,6 +130,20 @@ The harness currently covers the pinned 2.36.0 status, login-token, and
 authorization contracts. Seeded libraries/media, 2.26.x compatibility,
 current-stable compatibility, HTTPS, and OIDC profiles will be added in
 subsequent implementation slices.
+
+OIDC unit and transport-contract tests cover PKCE S256, strict callback and
+state validation, the external browser handoff, cookie-bound exchange,
+validation-before-persistence, concurrent-attempt rejection, and terminal
+cleanup. Run them directly with:
+
+```sh
+swift test --filter OpenIDAuthenticationTests
+swift test \
+  --filter HTTPTransportTests.testOpenIDTransportKeepsThenClearsSessionCookies
+```
+
+These tests model Audiobookshelf's two-client bridge locally. They do not
+replace the planned Docker profile with a real identity provider.
 
 There is not yet a supported command for connecting this checkout to a
 personal Audiobookshelf server.

@@ -52,9 +52,21 @@ private final class RedirectBlockingDelegate:
 public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     private let session: URLSession
 
-    public init(configuration: URLSessionConfiguration = .ephemeral) {
-        configuration.httpShouldSetCookies = false
-        configuration.httpCookieStorage = nil
+    public convenience init(
+        configuration: URLSessionConfiguration = .ephemeral
+    ) {
+        self.init(
+            configuration: configuration,
+            cookieStorage: nil
+        )
+    }
+
+    init(
+        configuration: URLSessionConfiguration,
+        cookieStorage: HTTPCookieStorage?
+    ) {
+        configuration.httpShouldSetCookies = cookieStorage != nil
+        configuration.httpCookieStorage = cookieStorage
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 15

@@ -70,11 +70,12 @@ public actor AuthCoordinator<
     Transport: HTTPTransport,
     CredentialStore: AccountCredentialStore
 > {
-    private let transport: Transport
-    private let credentialStore: CredentialStore
+    let transport: Transport
+    let credentialStore: CredentialStore
     private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
-    private let requestAuthorizer: BearerRequestAuthorizer
+    let decoder: JSONDecoder
+    let requestAuthorizer: BearerRequestAuthorizer
+    var openIDAttempt: OpenIDAttempt?
 
     public init(
         transport: Transport,
@@ -85,6 +86,7 @@ public actor AuthCoordinator<
         encoder = JSONEncoder()
         decoder = JSONDecoder()
         requestAuthorizer = BearerRequestAuthorizer()
+        openIDAttempt = nil
     }
 
     public func login(
@@ -215,11 +217,11 @@ private struct LoginRequest: Encodable {
     let password: String
 }
 
-private struct AuthenticationResponse: Decodable {
+struct AuthenticationResponse: Decodable {
     let user: AuthenticationUserPayload
 }
 
-private struct AuthenticationUserPayload: Decodable {
+struct AuthenticationUserPayload: Decodable {
     let id: UserID
     let username: String
     let type: AudiobookshelfUserType
