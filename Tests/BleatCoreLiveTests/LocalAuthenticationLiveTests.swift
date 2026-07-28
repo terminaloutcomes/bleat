@@ -40,6 +40,41 @@ final class LocalAuthenticationLiveTests: XCTestCase {
             XCTAssertTrue(account.user.permissions.accessAllLibraries)
             XCTAssertNotNil(storedCredentials)
 
+            let initialTokens = try XCTUnwrap(storedCredentials)
+            let rejectedAccessTokens = try AuthenticationTokens(
+                accessToken: "rejected-access-\(index)",
+                refreshToken: initialTokens.refreshToken
+            )
+            await store.save(rejectedAccessTokens, for: accountID)
+            var librariesRequest = URLRequest(
+                url: try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .libraries)
+            )
+            librariesRequest.httpMethod = "GET"
+
+            let librariesResponse = try await client.sendAuthenticated(
+                librariesRequest,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+            let storedRotatedTokens =
+                await store.credentials(for: accountID)
+            let rotatedTokens = try XCTUnwrap(storedRotatedTokens)
+            let requiresReauthentication =
+                await client.requiresReauthentication(for: accountID)
+
+            XCTAssertEqual(librariesResponse.statusCode, 200)
+            XCTAssertNotEqual(
+                rotatedTokens.accessToken,
+                rejectedAccessTokens.accessToken
+            )
+            XCTAssertNotEqual(
+                rotatedTokens.refreshToken,
+                initialTokens.refreshToken
+            )
+            XCTAssertFalse(requiresReauthentication)
+
             let rejectedStore = LiveCredentialStore()
             let rejectedCoordinator = AuthCoordinator(
                 transport: LocalDockerHTTPTransport(),

@@ -76,6 +76,10 @@ public actor AuthCoordinator<
     let decoder: JSONDecoder
     let requestAuthorizer: BearerRequestAuthorizer
     var openIDAttempt: OpenIDAttempt?
+    var refreshAttempts: [AccountID: RefreshAttempt]
+    var completedRefreshes: [AccountID: CompletedRefresh]
+    var nextRefreshAttemptID: UInt64
+    var reauthenticationRequiredAccounts: Set<AccountID>
 
     public init(
         transport: Transport,
@@ -87,6 +91,10 @@ public actor AuthCoordinator<
         decoder = JSONDecoder()
         requestAuthorizer = BearerRequestAuthorizer()
         openIDAttempt = nil
+        refreshAttempts = [:]
+        completedRefreshes = [:]
+        nextRefreshAttemptID = 0
+        reauthenticationRequiredAccounts = []
     }
 
     public func login(
@@ -203,6 +211,8 @@ public actor AuthCoordinator<
         } catch {
             throw LocalAuthenticationError.credentialPersistenceFailed
         }
+        completedRefreshes[accountID] = nil
+        reauthenticationRequiredAccounts.remove(accountID)
 
         return AuthenticatedAccount(
             id: accountID,

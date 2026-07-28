@@ -5,10 +5,11 @@ Bleat is a native iPhone and iPad client for
 and is being implemented in Swift 6 with strict concurrency checking.
 
 The repository is currently at the core-foundation and authentication stage.
-`BleatCore` builds and its URL, routing, discovery, local-login, OIDC/PKCE,
-bearer-header, isolated authentication-cookie, and account-scoped Keychain
-behavior is tested. The SwiftUI application target has not been created yet,
-so there is not currently an app executable to launch.
+`BleatCore` builds and its URL, routing, discovery, username/password login,
+single-flight token refresh, bearer-header, OIDC/PKCE, isolated
+authentication-cookie, and account-scoped Keychain behavior is tested. The
+SwiftUI application target has not been created yet, so there is not currently
+an app executable to launch.
 
 ## Requirements
 
@@ -113,9 +114,10 @@ Docker is required for live contract tests. Run the pinned Audiobookshelf
 ```
 
 The script creates fresh root and `/audiobookshelf` instances, waits for both
-services, initializes deterministic test-only root users, validates login and
-bearer authorization, and removes the containers and volumes. On failure it
-retains redacted diagnostic artifacts beneath
+services, initializes deterministic test-only root users, validates
+username/password login, bearer authorization, and rotating-token recovery
+after a 401, then removes the containers and volumes. On failure it retains
+redacted diagnostic artifacts beneath
 `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
@@ -126,10 +128,18 @@ Control the environment directly when developing a contract test:
 ./scripts/live-test-environment.sh down
 ```
 
-The harness currently covers the pinned 2.36.0 status, login-token, and
-authorization contracts. Seeded libraries/media, 2.26.x compatibility,
-current-stable compatibility, HTTPS, and OIDC profiles will be added in
-subsequent implementation slices.
+The harness currently covers the pinned 2.36.0 status, login-token,
+authorization, and refresh-rotation contracts. Seeded libraries/media, 2.26.x
+compatibility, current-stable compatibility, and HTTPS profiles will be added
+in subsequent implementation slices.
+
+The deterministic refresh suite exercises 20 simultaneous 401 responses,
+single-flight rotation, retry limits, 403 behavior, typed failures, and
+account isolation:
+
+```sh
+swift test --filter AuthenticatedRequestTests
+```
 
 OIDC unit and transport-contract tests cover PKCE S256, strict callback and
 state validation, the external browser handoff, cookie-bound exchange,

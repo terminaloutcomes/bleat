@@ -255,6 +255,9 @@ Prove:
 
 Implement `TokenVault` and a per-account `AuthCoordinator`.
 
+Status: verified against deterministic actor tests and fresh pinned 2.36.0
+root and path-prefixed Docker instances.
+
 Prove:
 
 - atomic rotating token replacement;
