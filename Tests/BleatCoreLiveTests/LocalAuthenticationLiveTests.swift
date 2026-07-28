@@ -75,6 +75,33 @@ final class LocalAuthenticationLiveTests: XCTestCase {
             )
             XCTAssertFalse(requiresReauthentication)
 
+            let logoutResult = try await client.logout(
+                accountID: accountID,
+                server: server
+            )
+            let credentialsAfterLogout =
+                await store.credentials(for: accountID)
+            let requiresReauthenticationAfterLogout =
+                await client.requiresReauthentication(for: accountID)
+            var rejectedRefreshRequest = URLRequest(
+                url: try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .refresh)
+            )
+            rejectedRefreshRequest.httpMethod = "POST"
+            rejectedRefreshRequest.setValue(
+                rotatedTokens.refreshToken,
+                forHTTPHeaderField: "x-refresh-token"
+            )
+            let rejectedRefreshResponse =
+                try await LocalDockerHTTPTransport().send(
+                    rejectedRefreshRequest
+                )
+
+            XCTAssertEqual(logoutResult.remoteStatus, .completed)
+            XCTAssertNil(credentialsAfterLogout)
+            XCTAssertFalse(requiresReauthenticationAfterLogout)
+            XCTAssertEqual(rejectedRefreshResponse.statusCode, 401)
+
             let rejectedStore = LiveCredentialStore()
             let rejectedCoordinator = AuthCoordinator(
                 transport: LocalDockerHTTPTransport(),

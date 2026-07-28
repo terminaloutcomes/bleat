@@ -2,6 +2,7 @@ import Foundation
 
 public enum AuthenticatedRequestError: Error, Equatable, Sendable {
     case invalidAccountID
+    case accountOperationInProgress
     case authenticationEndpoint
     case requestDoesNotMatchRoute
     case credentialsReadFailed
@@ -10,6 +11,7 @@ public enum AuthenticatedRequestError: Error, Equatable, Sendable {
     case requestTransportFailed
     case refreshRequestConstructionFailed
     case refreshTransportFailed
+    case refreshCancelled
     case refreshRejected
     case unexpectedRefreshStatus(Int)
     case malformedRefreshResponse
@@ -45,6 +47,9 @@ extension AuthCoordinator {
         guard !accountID.rawValue.isEmpty else {
             throw AuthenticatedRequestError.invalidAccountID
         }
+        guard !accountsSigningOut.contains(accountID) else {
+            throw AuthenticatedRequestError.accountOperationInProgress
+        }
         guard !route.isAuthenticationEndpoint else {
             throw AuthenticatedRequestError.authenticationEndpoint
         }
@@ -70,6 +75,9 @@ extension AuthCoordinator {
             server: server,
             rejectedAccessToken: initialTokens.accessToken
         )
+        guard !accountsSigningOut.contains(accountID) else {
+            throw AuthenticatedRequestError.accountOperationInProgress
+        }
         let retriedResponse = try await send(
             request,
             accessToken: refreshedTokens.accessToken
@@ -155,6 +163,9 @@ extension AuthCoordinator {
         rejectedAccessToken: String
     ) async throws -> AuthenticationTokens {
         let currentTokens = try await storedCredentials(for: accountID)
+        guard !accountsSigningOut.contains(accountID) else {
+            throw AuthenticatedRequestError.accountOperationInProgress
+        }
         if currentTokens.accessToken != rejectedAccessToken {
             return currentTokens
         }
@@ -265,7 +276,13 @@ extension AuthCoordinator {
         do {
             response = try await transport.send(request)
         } catch {
+            if Task.isCancelled {
+                throw AuthenticatedRequestError.refreshCancelled
+            }
             throw AuthenticatedRequestError.refreshTransportFailed
+        }
+        guard !Task.isCancelled else {
+            throw AuthenticatedRequestError.refreshCancelled
         }
         switch response.statusCode {
         case 200:
@@ -310,7 +327,12 @@ extension AuthCoordinator {
         }
 
         do {
+            guard !Task.isCancelled else {
+                throw AuthenticatedRequestError.refreshCancelled
+            }
             try await credentialStore.save(tokens, for: accountID)
+        } catch let error as AuthenticatedRequestError {
+            throw error
         } catch {
             throw AuthenticatedRequestError.credentialPersistenceFailed
         }

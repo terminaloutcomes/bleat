@@ -39,7 +39,7 @@ These decisions keep the implementation direct and consistent with the
 specification:
 
 - Product and target name: `Bleat`.
-- Deployment target: iOS 17.0.
+- Deployment target: iOS 26 and above.
 - Language mode: Swift 6 with complete strict concurrency checking.
 - UI: SwiftUI with Observation-based, `@MainActor` feature models.
 - Persistence: versioned SwiftData schemas for structured state and opaque
@@ -61,7 +61,6 @@ team, app-group decision if any, and local-network usage copy in a short
 decision record. The callback URI must be registered exactly in Audiobookshelf.
 
 ## 3. Repository and target layout
-
 Create one Xcode project with checked-in shared schemes:
 
 ```text

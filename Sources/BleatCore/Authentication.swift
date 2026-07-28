@@ -54,6 +54,7 @@ public struct BearerRequestAuthorizer: Sendable {
 
 public enum LocalAuthenticationError: Error, Equatable, Sendable {
     case invalidAccountID
+    case accountOperationInProgress
     case invalidCredentials
     case unexpectedLoginStatus(Int)
     case malformedLoginResponse
@@ -80,6 +81,8 @@ public actor AuthCoordinator<
     var completedRefreshes: [AccountID: CompletedRefresh]
     var nextRefreshAttemptID: UInt64
     var reauthenticationRequiredAccounts: Set<AccountID>
+    var accountsLoggingIn: Set<AccountID>
+    var accountsSigningOut: Set<AccountID>
 
     public init(
         transport: Transport,
@@ -95,6 +98,8 @@ public actor AuthCoordinator<
         completedRefreshes = [:]
         nextRefreshAttemptID = 0
         reauthenticationRequiredAccounts = []
+        accountsLoggingIn = []
+        accountsSigningOut = []
     }
 
     public func login(
@@ -105,6 +110,15 @@ public actor AuthCoordinator<
     ) async throws -> AuthenticatedAccount {
         guard !accountID.rawValue.isEmpty else {
             throw LocalAuthenticationError.invalidAccountID
+        }
+        guard !accountsLoggingIn.contains(accountID),
+              !accountsSigningOut.contains(accountID)
+        else {
+            throw LocalAuthenticationError.accountOperationInProgress
+        }
+        accountsLoggingIn.insert(accountID)
+        defer {
+            accountsLoggingIn.remove(accountID)
         }
 
         let routeBuilder = AudiobookshelfRouteBuilder(server: server)
