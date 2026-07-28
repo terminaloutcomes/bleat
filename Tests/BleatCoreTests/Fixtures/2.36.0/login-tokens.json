@@ -1,0 +1,35 @@
+{
+  "user": {
+    "id": "fixture-user",
+    "username": "fixture-root",
+    "email": null,
+    "type": "root",
+    "token": "ignored-legacy-token",
+    "mediaProgress": [],
+    "seriesHideFromContinueListening": [],
+    "bookmarks": [],
+    "isActive": true,
+    "isLocked": false,
+    "lastSeen": null,
+    "createdAt": 1785245457610,
+    "permissions": {
+      "download": true,
+      "update": true,
+      "delete": true,
+      "upload": true,
+      "createEreader": true,
+      "accessAllLibraries": true,
+      "accessAllTags": true,
+      "accessExplicitContent": true,
+      "selectedTagsNotAccessible": false
+    },
+    "librariesAccessible": [],
+    "itemTagsSelected": [],
+    "hasOpenIDLink": false,
+    "refreshToken": "fixture-refresh-token",
+    "accessToken": "fixture-access-token"
+  },
+  "userDefaultLibraryId": null,
+  "ereaderDevices": [],
+  "Source": "docker"
+}

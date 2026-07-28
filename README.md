@@ -4,10 +4,11 @@ Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 17 and newer
 and is being implemented in Swift 6 with strict concurrency checking.
 
-The repository is currently at the core-foundation stage. `BleatCore` builds
-and its URL, identifier, and Audiobookshelf route behavior is tested. The
-SwiftUI application target has not been created yet, so there is not currently
-an app executable to launch.
+The repository is currently at the core-foundation and authentication stage.
+`BleatCore` builds and its URL, routing, discovery, local-login, bearer-header,
+and account-scoped Keychain behavior is tested. The SwiftUI application target
+has not been created yet, so there is not currently an app executable to
+launch.
 
 ## Requirements
 
@@ -105,16 +106,17 @@ application.
 ## Run against Audiobookshelf
 
 Docker is required for live contract tests. Run the pinned Audiobookshelf
-2.36.0 root and path-prefix status suite with:
+2.36.0 root and path-prefix status and local-authentication suite with:
 
 ```sh
 ./scripts/test-live.sh
 ```
 
 The script creates fresh root and `/audiobookshelf` instances, waits for both
-services, initializes deterministic test-only root users, runs the live tests,
-and removes the containers and volumes. On failure it retains redacted
-diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
+services, initializes deterministic test-only root users, validates login and
+bearer authorization, and removes the containers and volumes. On failure it
+retains redacted diagnostic artifacts beneath
+`TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
 
@@ -124,9 +126,10 @@ Control the environment directly when developing a contract test:
 ./scripts/live-test-environment.sh down
 ```
 
-The harness currently covers the pinned 2.36.0 status contract. Seeded
-libraries/media, 2.26.x compatibility, current-stable compatibility, HTTPS, and
-OIDC profiles will be added in subsequent implementation slices.
+The harness currently covers the pinned 2.36.0 status, login-token, and
+authorization contracts. Seeded libraries/media, 2.26.x compatibility,
+current-stable compatibility, HTTPS, and OIDC profiles will be added in
+subsequent implementation slices.
 
 There is not yet a supported command for connecting this checkout to a
 personal Audiobookshelf server.
