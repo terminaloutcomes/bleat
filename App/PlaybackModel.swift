@@ -33,6 +33,7 @@ final class PlaybackModel {
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
     private var activeAccount: ServerAccount?
     private var preparation: AppPlaybackPreparation?
+    private var sleepTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
 
@@ -45,6 +46,7 @@ final class PlaybackModel {
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
+    private(set) var sleepTimerEnd: Date?
 
     var hasActiveBook: Bool {
         state != .idle
@@ -120,10 +122,12 @@ final class PlaybackModel {
                 deviceInfo: deviceInfo
             )
             guard generation == operationGeneration else {
-                try? await service.closePlayback(
-                    for: account,
-                    sessionID: prepared.sessionID
-                )
+                if let sessionID = prepared.sessionID {
+                    try? await service.closePlayback(
+                        for: account,
+                        sessionID: sessionID
+                    )
+                }
                 return
             }
 
@@ -162,6 +166,91 @@ final class PlaybackModel {
         }
     }
 
+    func startDownloaded(
+        detail: LibraryBookDetail,
+        trackURLs: [URL]
+    ) async {
+        guard !trackURLs.isEmpty else {
+            state = .failed(.mediaUnavailable)
+            return
+        }
+        generation &+= 1
+        let operationGeneration = generation
+        await syncProgress()
+        guard generation == operationGeneration else {
+            return
+        }
+        await closeActiveSession()
+        guard generation == operationGeneration else {
+            return
+        }
+        activeAccount = nil
+        preparation = nil
+        resetPlayer()
+        state = .preparing
+        itemID = detail.id
+        title = detail.title
+        author = detail.authors.map(\.name).joined(separator: ", ")
+        coverURL = nil
+        currentTime = detail.progress?.currentTime ?? 0
+        syncState = .idle
+
+        do {
+            var offset: Double = 0
+            var tracks: [AppPlaybackTrack] = []
+            for (index, url) in trackURLs.enumerated() {
+                let asset = AVURLAsset(url: url)
+                let loadedDuration = try await asset.load(.duration)
+                let seconds = loadedDuration.seconds
+                guard seconds.isFinite, seconds > 0 else {
+                    throw AppPlaybackBuildError.missingTracks
+                }
+                tracks.append(
+                    AppPlaybackTrack(
+                        url: url,
+                        startOffset: offset,
+                        duration: seconds,
+                        title: "Track \(index + 1)"
+                    )
+                )
+                offset += seconds
+            }
+            guard generation == operationGeneration else {
+                return
+            }
+            let prepared = AppPlaybackPreparation(
+                sessionID: nil,
+                itemID: detail.id,
+                title: detail.title,
+                duration: offset,
+                currentTime: min(
+                    max(detail.progress?.currentTime ?? 0, 0),
+                    offset
+                ),
+                chapters: detail.chapters,
+                source: .direct(tracks)
+            )
+            try configureAudioSession()
+            preparation = prepared
+            duration = prepared.duration
+            currentTime = prepared.currentTime
+            lastAttemptedSyncTime = currentTime
+            try await rebuildQueue(at: currentTime)
+            guard generation == operationGeneration else {
+                return
+            }
+            state = .ready
+            play()
+        } catch {
+            guard generation == operationGeneration else {
+                return
+            }
+            preparation = nil
+            resetPlayer()
+            state = .failed(.mediaUnavailable)
+        }
+    }
+
     func play() {
         guard let player,
             preparation != nil,
@@ -191,6 +280,34 @@ final class PlaybackModel {
             pause()
         } else {
             play()
+        }
+    }
+
+    func fail(_ failure: AppFailure) {
+        state = .failed(failure)
+    }
+
+    func setSleepTimer(minutes: Int?) {
+        sleepTask?.cancel()
+        sleepTask = nil
+        guard let minutes else {
+            sleepTimerEnd = nil
+            return
+        }
+        let seconds = max(minutes, 1) * 60
+        sleepTimerEnd = Date().addingTimeInterval(
+            TimeInterval(seconds)
+        )
+        sleepTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(
+                for: .seconds(Double(seconds))
+            )
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.pause()
+            self?.sleepTimerEnd = nil
+            self?.sleepTask = nil
         }
     }
 
@@ -291,6 +408,7 @@ final class PlaybackModel {
         currentTime = 0
         duration = 0
         lastAttemptedSyncTime = 0
+        setSleepTimer(minutes: nil)
         state = .idle
         syncState = .idle
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -577,11 +695,11 @@ final class PlaybackModel {
     private func syncProgress() async {
         guard syncState != .syncing,
             let activeAccount,
-            let preparation
+            let preparation,
+            let sessionID = preparation.sessionID
         else {
             return
         }
-        let sessionID = preparation.sessionID
         let position = min(max(currentTime, 0), preparation.duration)
         syncState = .syncing
         do {

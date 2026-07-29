@@ -670,7 +670,27 @@ private struct BookDetailView: View {
             )
             switch availability.access {
             case .allowed:
-                if availability.visibleActions.contains(.play),
+                if let account = model.account,
+                    let downloaded = model.downloads.record(
+                        accountID: account.id,
+                        itemID: detail.id
+                    ),
+                    downloaded.manifest.state == .complete
+                {
+                    Button {
+                        Task {
+                            await model.playDownloaded(downloaded)
+                        }
+                    } label: {
+                        Label(
+                            "Play Offline",
+                            systemImage: "iphone.and.arrow.forward"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("book.detail.play")
+                } else if availability.visibleActions.contains(.play),
                     let account = model.account
                 {
                     Button {
@@ -827,6 +847,33 @@ private struct DownloadsView: View {
                             Text(record.manifest.state.rawValue.capitalized)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                            if record.manifest.state == .complete {
+                                Button("Play Offline") {
+                                    Task {
+                                        await model.playDownloaded(record)
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else if record.manifest.state == .failed,
+                                let account = model.account,
+                                account.id == record.manifest.accountID
+                            {
+                                Button("Retry") {
+                                    Task {
+                                        await model.downloads.retry(
+                                            record,
+                                            account: account
+                                        )
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else {
+                                Button("Cancel", role: .destructive) {
+                                    Task {
+                                        await model.downloads.cancel(record)
+                                    }
+                                }
+                            }
                         }
                         .swipeActions {
                             Button("Delete", role: .destructive) {

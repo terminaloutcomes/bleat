@@ -139,6 +139,42 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    func cancel(_ record: DownloadedBookRecord) async {
+        let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID
+            else {
+                continue
+            }
+            task.cancel()
+            if let storage {
+                _ = try? await storage.markFailed(identity)
+            }
+        }
+        failure = .transferFailed
+        await refresh()
+    }
+
+    func retry(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        guard record.manifest.accountID == account.id else {
+            failure = .permissionDenied
+            return
+        }
+        failure = nil
+        await remove(record)
+        guard failure == nil else {
+            return
+        }
+        await download(detail: record.detail, account: account)
+    }
+
     func removeAll(for accountID: AccountID) async {
         let tasks = await session.allTasks
         for task in tasks {
@@ -168,6 +204,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         records.first {
             $0.manifest.accountID == accountID
                 && $0.manifest.itemID == itemID
+        }
+    }
+
+    func localTrackURLs(
+        for record: DownloadedBookRecord
+    ) async throws(DownloadModelFailure) -> [URL] {
+        guard let storage else {
+            throw .storageUnavailable
+        }
+        do {
+            return try await storage.localTrackURLs(for: record)
+        } catch {
+            throw .transferFailed
         }
     }
 

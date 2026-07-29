@@ -160,21 +160,47 @@ struct PlayerView: View {
                     .disabled(playback.state == .preparing)
                 }
 
-                Menu {
-                    ForEach(
-                        [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3],
-                        id: \.self
-                    ) { speed in
-                        Button(formatRate(speed)) {
-                            playback.setRate(Float(speed))
+                HStack(spacing: 24) {
+                    Menu {
+                        ForEach(
+                            [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3],
+                            id: \.self
+                        ) { speed in
+                            Button(formatRate(speed)) {
+                                playback.setRate(Float(speed))
+                            }
                         }
+                    } label: {
+                        Text(formatRate(Double(playback.rate)))
+                            .font(.headline)
+                            .frame(minWidth: 72)
                     }
-                } label: {
-                    Text(formatRate(Double(playback.rate)))
-                        .font(.headline)
-                        .frame(minWidth: 72)
+                    .accessibilityIdentifier("player.rate")
+
+                    Menu {
+                        ForEach([15, 30, 45, 60], id: \.self) {
+                            minutes in
+                            Button("\(minutes) minutes") {
+                                playback.setSleepTimer(
+                                    minutes: minutes
+                                )
+                            }
+                        }
+                        if playback.sleepTimerEnd != nil {
+                            Button("Cancel Timer", role: .destructive) {
+                                playback.setSleepTimer(minutes: nil)
+                            }
+                        }
+                    } label: {
+                        Label(
+                            playback.sleepTimerEnd == nil
+                                ? "Sleep Timer"
+                                : "Timer Set",
+                            systemImage: "moon.zzz"
+                        )
+                    }
+                    .accessibilityIdentifier("player.sleepTimer")
                 }
-                .accessibilityIdentifier("player.rate")
 
                 Spacer()
             }

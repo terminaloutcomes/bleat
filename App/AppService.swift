@@ -42,7 +42,7 @@ enum AppPlaybackSource: Equatable, Sendable {
 }
 
 struct AppPlaybackPreparation: Equatable, Sendable {
-    let sessionID: PlaybackSessionID
+    let sessionID: PlaybackSessionID?
     let itemID: LibraryItemID
     let title: String
     let duration: Double

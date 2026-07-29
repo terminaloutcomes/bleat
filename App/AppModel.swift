@@ -421,6 +421,20 @@ final class AppModel {
         metadataSaveState = .idle
     }
 
+    func playDownloaded(_ record: DownloadedBookRecord) async {
+        do {
+            let urls = try await downloads.localTrackURLs(
+                for: record
+            )
+            await playback.startDownloaded(
+                detail: record.detail,
+                trackURLs: urls
+            )
+        } catch {
+            playback.fail(.mediaUnavailable)
+        }
+    }
+
     func removeAccount() async {
         guard let account else {
             accountActionStatus = .failed(.accountUnavailable)
