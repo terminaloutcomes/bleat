@@ -385,16 +385,18 @@ The native API also loads validated audiobook-only personalized shelves, which
 persist by exact account, library, limit, and progress request with typed
 online-first/cache-fallback behavior. Expanded audiobook details, chapters,
 metadata, and progress now use the same policy with cache keys scoped to the
-account, remote user, library, and item. The runnable root `TabView` now has
-Home, Library, Search, Downloads, and Settings destinations; Home and Library
-render the first cached/live audiobook page with loading, empty, and failure
-states. Search now performs debounced, cancellable, cache-backed server queries
-against the selected native account and library. Personalized Home, expanded
-detail, bookmarks, bounded cover requests, the persistent mini-player, account
-context, and actionable download state now have runnable UI. Home also exposes
-completed active-account downloads independently of the remote shelf state and
-starts their local playback directly. Large-library performance validation and
-the remaining release polish still remain.
+account, remote user, library, and item. Detail renders series and sequence,
+audio-file and chapter counts, and chapter durations. The runnable root
+`TabView` now has Home, Library, Search, Downloads, and Settings destinations;
+Home and Library render the first cached/live audiobook page with loading,
+empty, and failure states. Search now performs debounced, cancellable,
+cache-backed server queries against the selected native account and library.
+Personalized Home, expanded detail, bookmarks, bounded cover requests, the
+persistent mini-player, account context, and actionable download state now have
+runnable UI. Home also exposes completed active-account downloads independently
+of the remote shelf state and starts their local playback directly.
+Large-library performance validation and the remaining release polish still
+remain.
 
 Deliver:
 

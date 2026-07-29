@@ -188,7 +188,13 @@
                     )
                 ],
                 narrators: ["Test Narrator"],
-                series: [],
+                series: [
+                    LibraryBookSeries(
+                        id: "series-1",
+                        name: "Test Series",
+                        sequence: "1"
+                    )
+                ],
                 genres: ["Fiction"],
                 tags: [],
                 publishedYear: "2026",
@@ -202,7 +208,14 @@
                 duration: 3_600,
                 trackCount: 1,
                 audioFileCount: 1,
-                chapters: [],
+                chapters: [
+                    PlaybackChapter(
+                        id: 0,
+                        start: 0,
+                        end: 3_600,
+                        title: "Chapter One"
+                    )
+                ],
                 addedAtMilliseconds: 1,
                 updatedAtMilliseconds: 1,
                 isExplicit: false,

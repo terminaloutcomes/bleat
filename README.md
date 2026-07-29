@@ -240,14 +240,15 @@ expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.
 
 Book detail keeps Play, Download, and finished-state actions above long
-description and metadata content. Existing downloads show status, stored and
-expected bytes, and the relevant Pause, Resume, Retry, Repair, or Remove action
-there as well as in Downloads. Completed books play directly from their verified
-local files without opening a server playback session. Bleat audits completed
-files when restoring downloads and before playback; a missing or byte-corrupt
-track changes the book to Partial and exposes Repair. Repair preserves verified
-tracks, downloads only damaged entries, and refuses to mix files when the
-server's plan changed.
+description and metadata content. It shows series and sequence, audio-file and
+chapter counts, and a duration beside every chapter. Existing downloads show
+status, stored and expected bytes, and the relevant Pause, Resume, Retry,
+Repair, or Remove action there as well as in Downloads. Completed books play
+directly from their verified local files without opening a server playback
+session. Bleat audits completed files when restoring downloads and before
+playback; a missing or byte-corrupt track changes the book to Partial and
+exposes Repair. Repair preserves verified tracks, downloads only damaged
+entries, and refuses to mix files when the server's plan changed.
 Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and
 stop, then resumes from that durable position after relaunch. Position updates

@@ -1244,6 +1244,12 @@ private struct BookDetailView: View {
                         Text(detail.authors.map(\.name).joined(separator: ", "))
                             .font(.headline)
                     }
+                    if !detail.series.isEmpty {
+                        Text(seriesText(detail.series))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("book.detail.series")
+                    }
                     if !detail.narrators.isEmpty {
                         Text(
                             "Narrated by "
@@ -1320,10 +1326,19 @@ private struct BookDetailView: View {
                         Text("Chapters")
                             .font(.headline)
                         ForEach(
-                            Array(detail.chapters.enumerated()),
-                            id: \.offset
-                        ) { _, chapter in
-                            Text(chapter.title)
+                            detail.chapters,
+                            id: \.id
+                        ) { chapter in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(chapter.title)
+                                Spacer()
+                                Text(chapterDurationText(chapter))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier(
+                                "book.detail.chapter.\(chapter.id)"
+                            )
                         }
                     }
                 }
@@ -1339,6 +1354,14 @@ private struct BookDetailView: View {
             Text("Details")
                 .font(.headline)
             LabeledContent("Duration", value: durationText(detail.duration))
+            LabeledContent(
+                "Audio Files",
+                value: String(detail.audioFileCount)
+            )
+            LabeledContent(
+                "Chapters",
+                value: String(detail.chapters.count)
+            )
             if let publishedYear = detail.publishedYear {
                 LabeledContent("Published", value: publishedYear)
             }
@@ -1644,6 +1667,40 @@ private struct BookDetailView: View {
             return "\(minutes) min"
         }
         return "\(hours) hr \(minutes) min"
+    }
+
+    private func chapterDurationText(
+        _ chapter: PlaybackChapter
+    ) -> String {
+        let seconds = max(
+            0,
+            Int((chapter.end - chapter.start).rounded())
+        )
+        if seconds < 60 {
+            return "\(seconds) sec"
+        }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes) min"
+        }
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+        if remainingMinutes == 0 {
+            return "\(hours) hr"
+        }
+        return "\(hours) hr \(remainingMinutes) min"
+    }
+
+    private func seriesText(
+        _ series: [LibraryBookSeries]
+    ) -> String {
+        series.map {
+            guard let sequence = $0.sequence, !sequence.isEmpty else {
+                return $0.name
+            }
+            return "\($0.name) #\(sequence)"
+        }
+        .joined(separator: ", ")
     }
 }
 
