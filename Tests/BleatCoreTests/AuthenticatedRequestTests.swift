@@ -300,6 +300,107 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertFalse(requiresReauthentication)
     }
 
+    func testRefreshContractFailuresUseSavedPasswordAndRetryRequest()
+        async throws
+    {
+        let scenarios:
+            [(
+                name: String,
+                refreshResult: Result<HTTPResponse, RequestTestError>,
+                saveFailures: Int
+            )] = [
+                ("rejected", Self.response(statusCode: 401), 0),
+                ("not found", Self.response(statusCode: 404), 0),
+                ("server error", Self.response(statusCode: 503), 0),
+                (
+                    "malformed response",
+                    .success(.json(Data("not-json".utf8))),
+                    0
+                ),
+                (
+                    "missing access token",
+                    Self.authenticationResponse(
+                        refreshToken: "rotated-refresh"
+                    ),
+                    0
+                ),
+                (
+                    "missing refresh token",
+                    Self.authenticationResponse(
+                        accessToken: "rotated-access"
+                    ),
+                    0
+                ),
+                (
+                    "invalid access token",
+                    Self.authenticationResponse(
+                        accessToken: "bad token",
+                        refreshToken: "rotated-refresh"
+                    ),
+                    0
+                ),
+                (
+                    "invalid refresh token",
+                    Self.authenticationResponse(
+                        accessToken: "rotated-access",
+                        refreshToken: "bad token"
+                    ),
+                    0
+                ),
+                (
+                    "rotated token persistence",
+                    Self.authenticationResponse(
+                        accessToken: "discarded-access",
+                        refreshToken: "discarded-refresh"
+                    ),
+                    1
+                ),
+            ]
+
+        for scenario in scenarios {
+            let fixture = try SavedLoginRecoveryFixture(
+                name: "contract-\(scenario.name)",
+                responsesBeforeSuccessfulRecovery: [
+                    .success(.init(data: Data(), statusCode: 401)),
+                    scenario.refreshResult,
+                ],
+                saveFailuresRemaining: scenario.saveFailures
+            )
+
+            let response = try await fixture.send()
+            let requests = await fixture.transport.recordedRequests()
+            let storedTokens = try await fixture.store.credentials(
+                for: fixture.accountID
+            )
+            let storedNativeLogin =
+                try await fixture.store.nativeLoginCredentials(
+                    for: fixture.accountID
+                )
+            let requiresReauthentication =
+                await fixture.coordinator.requiresReauthentication(
+                    for: fixture.accountID
+                )
+
+            XCTAssertEqual(response.statusCode, 200, scenario.name)
+            XCTAssertEqual(
+                requests.map(\.url?.path),
+                SavedLoginRecoveryFixture.successfulRequestPaths,
+                scenario.name
+            )
+            XCTAssertEqual(
+                storedTokens,
+                fixture.recoveredTokens,
+                scenario.name
+            )
+            XCTAssertEqual(
+                storedNativeLogin,
+                fixture.nativeLogin,
+                scenario.name
+            )
+            XCTAssertFalse(requiresReauthentication, scenario.name)
+        }
+    }
+
     func testSavedPasswordRejectionRemainsTyped() async throws {
         let accountID = AccountID(rawValue: "rejected-saved-login")
         let server = try NormalizedServerURL("https://example.net")
@@ -317,6 +418,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             nativeLogins: [accountID: nativeLogin]
         )
         let transport = ScriptedRequestTransport(responses: [
+            .success(.init(data: Data(), statusCode: 401)),
             .success(.init(data: Data(), statusCode: 401)),
             .success(.init(data: Data(), statusCode: 401)),
             .success(.init(data: Data(), statusCode: 401)),
@@ -339,15 +441,37 @@ final class AuthenticatedRequestTests: XCTestCase {
                 .automaticReauthenticationFailed(.invalidCredentials)
             )
         }
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.sendAuthenticated(
+                try Self.request(for: .libraries, server: server),
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .automaticReauthenticationFailed(.invalidCredentials)
+            )
+        }
         let savedTokens = try await store.credentials(for: accountID)
         let savedNativeLogin = try await store.nativeLoginCredentials(
             for: accountID
         )
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
+        let refreshCount = await transport.refreshCount()
+        let requests = await transport.recordedRequests()
         XCTAssertEqual(savedTokens, oldTokens)
         XCTAssertEqual(savedNativeLogin, nativeLogin)
         XCTAssertTrue(requiresReauthentication)
+        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(
+            requests.filter {
+                $0.url?.path == "/login"
+            }.count,
+            1
+        )
     }
 
     func testSavedLoginCannotChangeRemoteUserIdentity() async throws {
@@ -402,7 +526,67 @@ final class AuthenticatedRequestTests: XCTestCase {
             )
         }
         let retainedTokens = try await store.credentials(for: accountID)
+        let requiresReauthentication =
+            await coordinator.requiresReauthentication(for: accountID)
         XCTAssertEqual(retainedTokens, tokens)
+        XCTAssertTrue(requiresReauthentication)
+    }
+
+    func testSavedLoginAuthorizationRejectionRequiresReauthentication()
+        async throws
+    {
+        let accountID = AccountID(rawValue: "authorization-rejection")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ScriptedRequestTransport(responses: [
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "new-access",
+                        refreshToken: "new-refresh"
+                    )
+                )
+            ),
+            .success(.init(data: Data(), statusCode: 401)),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.sendAuthenticated(
+                try Self.request(for: .libraries, server: server),
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .automaticReauthenticationFailed(.tokenValidationFailed)
+            )
+        }
+        let retainedTokens = try await store.credentials(for: accountID)
+        let requiresReauthentication =
+            await coordinator.requiresReauthentication(for: accountID)
+
+        XCTAssertEqual(retainedTokens, oldTokens)
+        XCTAssertTrue(requiresReauthentication)
     }
 
     func testForbiddenResponseDoesNotRefresh() async throws {
@@ -497,23 +681,28 @@ final class AuthenticatedRequestTests: XCTestCase {
         let scenarios:
             [(
                 Result<HTTPResponse, RequestTestError>,
-                AuthenticatedRequestError
+                AuthenticatedRequestError,
+                Bool
             )] = [
                 (
                     .failure(.transport),
-                    .refreshTransportFailed
+                    .refreshTransportFailed,
+                    false
                 ),
                 (
                     .success(.init(data: Data(), statusCode: 401)),
-                    .refreshRejected
+                    .refreshRejected,
+                    true
                 ),
                 (
                     .success(.init(data: Data(), statusCode: 503)),
-                    .unexpectedRefreshStatus(503)
+                    .unexpectedRefreshStatus(503),
+                    true
                 ),
                 (
                     .success(.json(Data("not-json".utf8))),
-                    .malformedRefreshResponse
+                    .malformedRefreshResponse,
+                    true
                 ),
                 (
                     .success(
@@ -521,7 +710,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                             Self.authenticationJSON(
                                 refreshToken: "refresh"
                             ))),
-                    .missingAccessToken
+                    .missingAccessToken,
+                    true
                 ),
                 (
                     .success(
@@ -529,7 +719,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                             Self.authenticationJSON(
                                 accessToken: "access"
                             ))),
-                    .missingRefreshToken
+                    .missingRefreshToken,
+                    true
                 ),
                 (
                     .success(
@@ -538,7 +729,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                                 accessToken: "bad token",
                                 refreshToken: "refresh"
                             ))),
-                    .missingAccessToken
+                    .missingAccessToken,
+                    true
                 ),
                 (
                     .success(
@@ -547,11 +739,16 @@ final class AuthenticatedRequestTests: XCTestCase {
                                 accessToken: "access",
                                 refreshToken: "bad token"
                             ))),
-                    .missingRefreshToken
+                    .missingRefreshToken,
+                    true
                 ),
             ]
 
-        for (refreshResult, expectedError) in scenarios {
+        for (
+            refreshResult,
+            expectedError,
+            expectedReauthentication
+        ) in scenarios {
             let fixture = try Fixture(
                 responses: [
                     .success(.init(data: Data(), statusCode: 401)),
@@ -570,7 +767,201 @@ final class AuthenticatedRequestTests: XCTestCase {
                 await fixture.coordinator.requiresReauthentication(
                     for: fixture.accountID
                 )
-            XCTAssertTrue(requiresReauthentication)
+            XCTAssertEqual(
+                requiresReauthentication,
+                expectedReauthentication
+            )
+        }
+    }
+
+    func testRefreshTransportFailureIsNotCachedAndRetries() async throws {
+        let fixture = try Fixture(
+            responses: [
+                .success(.init(data: Data(), statusCode: 401)),
+                .failure(.transport),
+                .success(.init(data: Data(), statusCode: 401)),
+                .success(
+                    .json(
+                        Self.authenticationJSON(
+                            accessToken: "new-access",
+                            refreshToken: "new-refresh"
+                        )
+                    )
+                ),
+                .success(.init(data: Data(), statusCode: 200)),
+            ]
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.send()
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshTransportFailed
+            )
+        }
+        let requiresReauthenticationAfterFailure =
+            await fixture.coordinator.requiresReauthentication(
+                for: fixture.accountID
+            )
+        let response = try await fixture.send()
+        let requests = await fixture.transport.recordedRequests()
+        let requiresReauthenticationAfterRetry =
+            await fixture.coordinator.requiresReauthentication(
+                for: fixture.accountID
+            )
+
+        XCTAssertFalse(requiresReauthenticationAfterFailure)
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(
+            requests.map(\.url?.path),
+            [
+                "/api/libraries",
+                "/auth/refresh",
+                "/api/libraries",
+                "/auth/refresh",
+                "/api/libraries",
+            ]
+        )
+        XCTAssertFalse(requiresReauthenticationAfterRetry)
+    }
+
+    func testMissingSavedCredentialsMemoizesConclusiveFailure() async throws {
+        let fixture = try Fixture(
+            responses: [
+                .success(.init(data: Data(), statusCode: 401)),
+                .success(.init(data: Data(), statusCode: 503)),
+                .success(.init(data: Data(), statusCode: 401)),
+            ]
+        )
+
+        for _ in 0..<2 {
+            await XCTAssertThrowsErrorAsync(
+                try await fixture.send()
+            ) { error in
+                XCTAssertEqual(
+                    error as? AuthenticatedRequestError,
+                    .unexpectedRefreshStatus(503)
+                )
+            }
+        }
+        let requests = await fixture.transport.recordedRequests()
+        let requiresReauthentication =
+            await fixture.coordinator.requiresReauthentication(
+                for: fixture.accountID
+            )
+
+        XCTAssertEqual(
+            requests.map(\.url?.path),
+            [
+                "/api/libraries",
+                "/auth/refresh",
+                "/api/libraries",
+            ]
+        )
+        XCTAssertTrue(requiresReauthentication)
+    }
+
+    func testTransientSavedLoginFailuresAreNotCachedAndRetry()
+        async throws
+    {
+        let scenarios:
+            [(
+                name: String,
+                firstRecoveryResponses:
+                    [Result<HTTPResponse, RequestTestError>],
+                expectedError: AuthenticatedRequestError,
+                saveFailures: Int
+            )] = [
+                (
+                    "transport",
+                    [.failure(.transport)],
+                    .automaticReauthenticationTransportFailed,
+                    0
+                ),
+                (
+                    "contract",
+                    [Self.response(statusCode: 503)],
+                    .automaticReauthenticationFailed(
+                        .unexpectedLoginStatus(503)
+                    ),
+                    0
+                ),
+                (
+                    "persistence",
+                    [
+                        Self.authenticationResponse(
+                            accessToken: "first-access",
+                            refreshToken: "first-refresh"
+                        ),
+                        Self.authenticationResponse(),
+                    ],
+                    .automaticReauthenticationFailed(
+                        .credentialPersistenceFailed
+                    ),
+                    1
+                ),
+            ]
+
+        for scenario in scenarios {
+            let fixture = try SavedLoginRecoveryFixture(
+                name: "retryable-\(scenario.name)",
+                responsesBeforeSuccessfulRecovery: [
+                    .success(.init(data: Data(), statusCode: 401)),
+                    .success(.init(data: Data(), statusCode: 503)),
+                ]
+                    + scenario.firstRecoveryResponses
+                    + [
+                        .success(.init(data: Data(), statusCode: 401)),
+                        .success(.init(data: Data(), statusCode: 503)),
+                    ],
+                saveFailuresRemaining: scenario.saveFailures
+            )
+
+            await XCTAssertThrowsErrorAsync(
+                try await fixture.send()
+            ) { error in
+                XCTAssertEqual(
+                    error as? AuthenticatedRequestError,
+                    scenario.expectedError,
+                    scenario.name
+                )
+            }
+            let requiresReauthenticationAfterFailure =
+                await fixture.coordinator.requiresReauthentication(
+                    for: fixture.accountID
+                )
+            let response = try await fixture.send()
+            let requests = await fixture.transport.recordedRequests()
+            let storedTokens = try await fixture.store.credentials(
+                for: fixture.accountID
+            )
+            let requiresReauthenticationAfterRetry =
+                await fixture.coordinator.requiresReauthentication(
+                    for: fixture.accountID
+                )
+
+            XCTAssertFalse(
+                requiresReauthenticationAfterFailure,
+                scenario.name
+            )
+            XCTAssertEqual(response.statusCode, 200, scenario.name)
+            XCTAssertEqual(
+                requests.filter {
+                    $0.url?.path == "/auth/refresh"
+                }.count,
+                2,
+                scenario.name
+            )
+            XCTAssertEqual(
+                storedTokens,
+                fixture.recoveredTokens,
+                scenario.name
+            )
+            XCTAssertFalse(
+                requiresReauthenticationAfterRetry,
+                scenario.name
+            )
         }
     }
 
@@ -896,6 +1287,26 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
     }
 
+    private static func response(
+        statusCode: Int
+    ) -> Result<HTTPResponse, RequestTestError> {
+        .success(.init(data: Data(), statusCode: statusCode))
+    }
+
+    private static func authenticationResponse(
+        accessToken: String? = nil,
+        refreshToken: String? = nil
+    ) -> Result<HTTPResponse, RequestTestError> {
+        .success(
+            .json(
+                authenticationJSON(
+                    accessToken: accessToken,
+                    refreshToken: refreshToken
+                )
+            )
+        )
+    }
+
     fileprivate static func authenticationJSON(
         userID: String = "user-id",
         accessToken: String? = nil,
@@ -932,6 +1343,93 @@ final class AuthenticatedRequestTests: XCTestCase {
               }
             }
             """.utf8
+        )
+    }
+}
+
+private struct SavedLoginRecoveryFixture {
+    static let successfulRequestPaths = [
+        "/api/libraries",
+        "/auth/refresh",
+        "/login",
+        "/api/authorize",
+        "/api/libraries",
+    ]
+
+    let accountID: AccountID
+    let server: NormalizedServerURL
+    let recoveredTokens: AuthenticationTokens
+    let nativeLogin: NativeLoginCredentials
+    let store: RequestCredentialStore
+    let transport: ScriptedRequestTransport
+    let coordinator:
+        AuthCoordinator<
+            ScriptedRequestTransport,
+            RequestCredentialStore
+        >
+
+    init(
+        name: String,
+        responsesBeforeSuccessfulRecovery:
+            [Result<HTTPResponse, RequestTestError>],
+        saveFailuresRemaining: Int
+    ) throws {
+        accountID = AccountID(rawValue: name)
+        server = try NormalizedServerURL("https://example.net")
+        recoveredTokens = try AuthenticationTokens(
+            accessToken: "recovered-access",
+            refreshToken: "recovered-refresh"
+        )
+        nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        store = RequestCredentialStore(
+            credentials: [
+                accountID: try AuthenticationTokens(
+                    accessToken: "old-access",
+                    refreshToken: "old-refresh"
+                )
+            ],
+            nativeLogins: [accountID: nativeLogin],
+            saveFailuresRemaining: saveFailuresRemaining
+        )
+        transport = ScriptedRequestTransport(
+            responses:
+                responsesBeforeSuccessfulRecovery
+                + [
+                    .success(
+                        .json(
+                            AuthenticatedRequestTests.authenticationJSON(
+                                accessToken: recoveredTokens.accessToken,
+                                refreshToken: recoveredTokens.refreshToken
+                            )
+                        )
+                    ),
+                    .success(
+                        .json(
+                            AuthenticatedRequestTests.authenticationJSON()
+                        )
+                    ),
+                    .success(.init(data: Data(), statusCode: 200)),
+                ]
+        )
+        coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+    }
+
+    func send() async throws -> HTTPResponse {
+        try await coordinator.sendAuthenticated(
+            URLRequest(
+                url: try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .libraries)
+            ),
+            route: .libraries,
+            accountID: accountID,
+            server: server
         )
     }
 }
@@ -990,17 +1488,20 @@ private actor RequestCredentialStore: AccountCredentialStore {
     private var saves = 0
     private let readFails: Bool
     private let saveFails: Bool
+    private var saveFailuresRemaining: Int
 
     init(
         credentials: [AccountID: AuthenticationTokens],
         nativeLogins: [AccountID: NativeLoginCredentials] = [:],
         readFails: Bool = false,
-        saveFails: Bool = false
+        saveFails: Bool = false,
+        saveFailuresRemaining: Int = 0
     ) {
         stored = credentials
         self.nativeLogins = nativeLogins
         self.readFails = readFails
         self.saveFails = saveFails
+        self.saveFailuresRemaining = saveFailuresRemaining
     }
 
     func credentials(
@@ -1016,7 +1517,8 @@ private actor RequestCredentialStore: AccountCredentialStore {
         _ credentials: AuthenticationTokens,
         for accountID: AccountID
     ) throws {
-        if saveFails {
+        if saveFails || saveFailuresRemaining > 0 {
+            saveFailuresRemaining = max(0, saveFailuresRemaining - 1)
             throw RequestTestError.store
         }
         stored[accountID] = credentials
@@ -1028,7 +1530,8 @@ private actor RequestCredentialStore: AccountCredentialStore {
         nativeLogin: NativeLoginCredentials,
         for accountID: AccountID
     ) async throws {
-        if saveFails {
+        if saveFails || saveFailuresRemaining > 0 {
+            saveFailuresRemaining = max(0, saveFailuresRemaining - 1)
             throw RequestTestError.store
         }
         stored[accountID] = credentials

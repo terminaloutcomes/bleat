@@ -276,6 +276,10 @@ Prove:
 - each ordinary request retries at most once;
 - auth endpoints never recurse into refresh;
 - a 403 never refreshes;
+- reachable refresh status, payload, rotated-token, and persistence failures
+  share one saved-password recovery;
+- transport and transient recovery failures are retryable and are not cached
+  against the rejected access token;
 - one account's refresh failure does not affect another.
 
 #### 1E. Playback-route spike

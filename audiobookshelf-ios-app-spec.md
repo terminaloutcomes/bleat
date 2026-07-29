@@ -375,13 +375,24 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
   - `POST <base>/logout`.
 - Refresh tokens rotate. Replace the old access/refresh pair atomically before retrying requests.
 - A per-account `AuthCoordinator` actor must collapse concurrent refresh attempts into one request.
-- If the server rejects a refresh token, perform one native login using the
-  saved Keychain credential, require the same remote user ID, atomically replace
-  the token pair, and retry the original request without prompting.
+- If a reachable refresh endpoint rejects the token, returns an unexpected
+  status or malformed response, omits or returns invalid rotated tokens, or the
+  rotated pair cannot be persisted, perform one native login using the saved
+  Keychain credential. Require the same remote user ID, atomically replace the
+  token pair, and retry the original request without prompting.
+- Refresh request-construction, transport, and cancellation failures do not use
+  the saved login. They remain retryable and must not be memoized against the
+  rejected access token.
+- Memoize successful recovery and conclusive authentication failure only.
+  Transient saved-login transport, server-contract, credential-read, and
+  persistence failures remain retryable. Late waiters from an older recovery
+  attempt must not overwrite a newer attempt's state.
 - Retry an ordinary request at most once after refresh.
 - Authentication endpoints must never recursively trigger refresh.
-- A rejected saved password or failed automatic login marks only that account
-  as `reauthenticationRequired`; other accounts continue normally.
+- Missing saved credentials, a rejected saved password, a rejected replacement
+  token, a changed remote user ID, or the retried request's second `401` marks
+  only that account as `reauthenticationRequired`; other accounts continue
+  normally.
 - It is acceptable to decode the access-token `exp` claim only as an untrusted scheduling hint. The server remains authoritative.
 
 ### 6.5 Logout and account removal

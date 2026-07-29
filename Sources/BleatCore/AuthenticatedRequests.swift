@@ -29,9 +29,19 @@ struct RefreshAttempt: Sendable {
     let id: UInt64
     let task:
         Task<
-            Result<AuthenticationTokens, AuthenticatedRequestError>,
+            Result<AuthenticationTokens, AuthenticationRecoveryFailure>,
             Never
         >
+}
+
+enum AuthenticationRecoveryDisposition: Sendable {
+    case retryable
+    case reauthenticationRequired
+}
+
+struct AuthenticationRecoveryFailure: Error, Sendable {
+    let error: AuthenticatedRequestError
+    let disposition: AuthenticationRecoveryDisposition
 }
 
 struct CompletedRefresh: Sendable {
@@ -256,7 +266,7 @@ extension AuthCoordinator {
         let credentialStore = credentialStore
         let task:
             Task<
-                Result<AuthenticationTokens, AuthenticatedRequestError>,
+                Result<AuthenticationTokens, AuthenticationRecoveryFailure>,
                 Never
             > = Task {
                 do {
@@ -269,10 +279,15 @@ extension AuthCoordinator {
                             credentialStore: credentialStore
                         )
                     )
-                } catch let error as AuthenticatedRequestError {
-                    return .failure(error)
+                } catch let failure as AuthenticationRecoveryFailure {
+                    return .failure(failure)
                 } catch {
-                    return .failure(.refreshTransportFailed)
+                    return .failure(
+                        AuthenticationRecoveryFailure(
+                            error: .refreshTransportFailed,
+                            disposition: .retryable
+                        )
+                    )
                 }
             }
         let attempt = RefreshAttempt(id: attemptID, task: task)
@@ -307,23 +322,36 @@ extension AuthCoordinator {
         accountID: AccountID,
         rejectedAccessToken: String
     ) async throws -> AuthenticationTokens {
-        switch await attempt.task.value {
+        let result = await attempt.task.value
+        let isCurrentAttempt =
+            refreshAttempts[accountID]?.id == attempt.id
+
+        switch result {
         case .success(let tokens):
-            completedRefreshes[accountID] = CompletedRefresh(
-                rejectedAccessToken: rejectedAccessToken,
-                result: .success(tokens)
-            )
-            clearRefreshAttempt(attempt, accountID: accountID)
-            reauthenticationRequiredAccounts.remove(accountID)
+            if isCurrentAttempt {
+                completedRefreshes[accountID] = CompletedRefresh(
+                    rejectedAccessToken: rejectedAccessToken,
+                    result: .success(tokens)
+                )
+                clearRefreshAttempt(attempt, accountID: accountID)
+                reauthenticationRequiredAccounts.remove(accountID)
+            }
             return tokens
-        case .failure(let error):
-            completedRefreshes[accountID] = CompletedRefresh(
-                rejectedAccessToken: rejectedAccessToken,
-                result: .failure(error)
-            )
-            clearRefreshAttempt(attempt, accountID: accountID)
-            reauthenticationRequiredAccounts.insert(accountID)
-            throw error
+        case .failure(let failure):
+            if isCurrentAttempt {
+                switch failure.disposition {
+                case .retryable:
+                    completedRefreshes[accountID] = nil
+                case .reauthenticationRequired:
+                    completedRefreshes[accountID] = CompletedRefresh(
+                        rejectedAccessToken: rejectedAccessToken,
+                        result: .failure(failure.error)
+                    )
+                    reauthenticationRequiredAccounts.insert(accountID)
+                }
+                clearRefreshAttempt(attempt, accountID: accountID)
+            }
+            throw failure.error
         }
     }
 
@@ -343,7 +371,8 @@ extension AuthCoordinator {
         refreshToken: String,
         transport: Transport,
         credentialStore: CredentialStore
-    ) async throws(AuthenticatedRequestError) -> AuthenticationTokens {
+    ) async throws(AuthenticationRecoveryFailure) -> AuthenticationTokens {
+        let refreshError: AuthenticatedRequestError
         do {
             return try await refresh(
                 accountID: accountID,
@@ -353,9 +382,13 @@ extension AuthCoordinator {
                 credentialStore: credentialStore
             )
         } catch let error {
-            guard error == .refreshRejected else {
-                throw error
+            guard error.usesSavedLoginRecovery else {
+                throw AuthenticationRecoveryFailure(
+                    error: error,
+                    disposition: .retryable
+                )
             }
+            refreshError = error
         }
 
         let nativeLogin: NativeLoginCredentials?
@@ -364,10 +397,16 @@ extension AuthCoordinator {
                 for: accountID
             )
         } catch {
-            throw .savedLoginCredentialsReadFailed
+            throw AuthenticationRecoveryFailure(
+                error: .savedLoginCredentialsReadFailed,
+                disposition: .retryable
+            )
         }
         guard let nativeLogin else {
-            throw .refreshRejected
+            throw AuthenticationRecoveryFailure(
+                error: refreshError,
+                disposition: .reauthenticationRequired
+            )
         }
 
         do {
@@ -381,9 +420,15 @@ extension AuthCoordinator {
                 credentialStore: credentialStore
             ).tokens
         } catch let error as LocalAuthenticationError {
-            throw .automaticReauthenticationFailed(error)
+            throw AuthenticationRecoveryFailure(
+                error: .automaticReauthenticationFailed(error),
+                disposition: error.recoveryDisposition
+            )
         } catch {
-            throw .automaticReauthenticationTransportFailed
+            throw AuthenticationRecoveryFailure(
+                error: .automaticReauthenticationTransportFailed,
+                disposition: .retryable
+            )
         }
     }
 
@@ -478,6 +523,31 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.credentialPersistenceFailed
         }
         return tokens
+    }
+}
+
+extension AuthenticatedRequestError {
+    fileprivate var usesSavedLoginRecovery: Bool {
+        switch self {
+        case .refreshRejected, .unexpectedRefreshStatus,
+            .malformedRefreshResponse, .missingAccessToken,
+            .missingRefreshToken, .credentialPersistenceFailed:
+            true
+        default:
+            false
+        }
+    }
+}
+
+extension LocalAuthenticationError {
+    fileprivate var recoveryDisposition: AuthenticationRecoveryDisposition {
+        switch self {
+        case .invalidCredentials, .tokenValidationFailed,
+            .authorizedUserMismatch:
+            .reauthenticationRequired
+        default:
+            .retryable
+        }
     }
 }
 
