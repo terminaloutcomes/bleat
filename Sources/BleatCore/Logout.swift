@@ -23,6 +23,10 @@ public enum LogoutError: Error, Equatable, Sendable {
 }
 
 extension AuthCoordinator {
+    func isSigningOut(accountID: AccountID) -> Bool {
+        accountsSigningOut.contains(accountID)
+    }
+
     public func logout(
         accountID: AccountID,
         server: NormalizedServerURL

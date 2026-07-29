@@ -118,7 +118,7 @@ extension AuthCoordinator {
         return requestComponents.url == expectedURL
     }
 
-    private func storedCredentials(
+    func storedCredentials(
         for accountID: AccountID
     ) async throws -> AuthenticationTokens {
         let credentials: AuthenticationTokens?
@@ -157,7 +157,7 @@ extension AuthCoordinator {
         }
     }
 
-    private func credentialsAfterUnauthorizedResponse(
+    func credentialsAfterUnauthorizedResponse(
         accountID: AccountID,
         server: NormalizedServerURL,
         rejectedAccessToken: String

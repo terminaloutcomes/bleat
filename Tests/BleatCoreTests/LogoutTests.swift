@@ -337,7 +337,16 @@ final class LogoutTests: XCTestCase {
                 server: server
             )
         }
-        await Task.yield()
+        for _ in 0 ..< 1_000 {
+            if await coordinator.isSigningOut(accountID: accountID) {
+                break
+            }
+            await Task.yield()
+        }
+        let logoutStarted = await coordinator.isSigningOut(
+            accountID: accountID
+        )
+        XCTAssertTrue(logoutStarted)
         await transport.completeRefresh()
 
         let logoutResult = try await logout.value

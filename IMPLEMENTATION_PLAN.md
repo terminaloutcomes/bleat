@@ -282,6 +282,11 @@ Open real server sessions and prove:
 
 #### 1F. Background-download spike
 
+Status: verified against deterministic restoration, authorization, and
+manifest tests plus fresh pinned 2.36.0 root and path-prefixed Docker
+instances. The full background delegate, queue controls, storage policy, and
+offline playback integration remain Phase 7 work.
+
 Prove:
 
 - bearer header on every file request;
