@@ -56,6 +56,7 @@ enum AppFailure: Equatable, Sendable {
     case mediaUnavailable
     case invalidMetadata
     case metadataUnavailable
+    case bookmarkUnavailable
     case accountRemovalFailed
 
     var message: String {
@@ -98,6 +99,8 @@ enum AppFailure: Equatable, Sendable {
             "Review the metadata fields and enter a title."
         case .metadataUnavailable:
             "Bleat could not save metadata to the server."
+        case .bookmarkUnavailable:
+            "Bleat could not update bookmarks."
         case .accountRemovalFailed:
             "Bleat could not remove the account."
         }
@@ -151,6 +154,8 @@ enum AppFailure: Equatable, Sendable {
             self = .invalidMetadata
         case .metadataUpdate, .coverUpdate:
             self = .metadataUnavailable
+        case .bookmark:
+            self = .bookmarkUnavailable
         case .downloadPlan, .downloadAuthorization:
             self = .mediaUnavailable
         case .accountRemoval, .libraryCache:
@@ -443,13 +448,18 @@ final class AppModel {
     }
 
     func playDownloaded(_ record: DownloadedBookRecord) async {
+        guard let account else {
+            playback.fail(.accountUnavailable)
+            return
+        }
         do {
             let urls = try await downloads.localTrackURLs(
                 for: record
             )
             await playback.startDownloaded(
                 detail: record.detail,
-                trackURLs: urls
+                trackURLs: urls,
+                account: account
             )
         } catch {
             playback.fail(.mediaUnavailable)

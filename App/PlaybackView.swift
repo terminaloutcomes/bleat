@@ -1,3 +1,4 @@
+import BleatCore
 import SwiftUI
 
 struct MiniPlayerView: View {
@@ -54,6 +55,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scrubTime: Double = 0
     @State private var isScrubbing = false
+    @State private var bookmarkDraft: BookmarkDraft?
 
     var body: some View {
         NavigationStack {
@@ -200,6 +202,63 @@ struct PlayerView: View {
                         )
                     }
                     .accessibilityIdentifier("player.sleepTimer")
+
+                    Menu {
+                        Button("Add at \(playbackTime(playback.currentTime))") {
+                            bookmarkDraft = BookmarkDraft(
+                                bookmark: nil,
+                                title: "Bookmark at "
+                                    + playbackTime(playback.currentTime)
+                            )
+                        }
+                        if !playback.bookmarks.isEmpty {
+                            Divider()
+                        }
+                        ForEach(playback.bookmarks) { bookmark in
+                            Menu {
+                                Button("Rename") {
+                                    bookmarkDraft = BookmarkDraft(
+                                        bookmark: bookmark,
+                                        title: bookmark.title
+                                    )
+                                }
+                                Button("Delete", role: .destructive) {
+                                    Task {
+                                        await playback.deleteBookmark(
+                                            bookmark
+                                        )
+                                    }
+                                }
+                            } label: {
+                                Text(
+                                    playbackTime(bookmark.time)
+                                        + "  " + bookmark.title
+                                )
+                            }
+                        }
+                        if case .failed = playback.bookmarkState {
+                            Divider()
+                            Button("Retry Loading") {
+                                Task {
+                                    await playback.loadBookmarks()
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Bookmarks", systemImage: "bookmark")
+                    }
+                    .disabled(
+                        playback.bookmarkState == .loading
+                            || playback.bookmarkState == .saving
+                    )
+                    .accessibilityIdentifier("player.bookmarks")
+                }
+
+                if case .failed(let failure) = playback.bookmarkState {
+                    Text(failure.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("player.bookmarkError")
                 }
 
                 Spacer()
@@ -230,6 +289,12 @@ struct PlayerView: View {
                     scrubTime = newValue
                 }
             }
+            .sheet(item: $bookmarkDraft) { draft in
+                BookmarkEditorView(
+                    playback: playback,
+                    draft: draft
+                )
+            }
         }
         .accessibilityIdentifier("player.screen")
     }
@@ -259,5 +324,78 @@ struct PlayerView: View {
             .number
                 .precision(.fractionLength(value.rounded() == value ? 0 : 2))
         ) + "×"
+    }
+}
+
+private struct BookmarkDraft: Identifiable {
+    let id = UUID()
+    let bookmark: AudioBookmark?
+    let title: String
+}
+
+private struct BookmarkEditorView: View {
+    @Bindable var playback: PlaybackModel
+    @Environment(\.dismiss) private var dismiss
+    let bookmark: AudioBookmark?
+    @State private var title: String
+
+    init(
+        playback: PlaybackModel,
+        draft: BookmarkDraft
+    ) {
+        self.playback = playback
+        bookmark = draft.bookmark
+        _title = State(initialValue: draft.title)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title)
+                    .accessibilityIdentifier("bookmark.title")
+                if let bookmark {
+                    LabeledContent(
+                        "Position",
+                        value: bookmark.time.formatted(
+                            .number.precision(.fractionLength(0...1))
+                        ) + " seconds"
+                    )
+                }
+            }
+            .navigationTitle(bookmark == nil ? "New Bookmark" : "Rename")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            let saved: Bool
+                            if let bookmark {
+                                saved = await playback.renameBookmark(
+                                    bookmark,
+                                    title: title
+                                )
+                            } else {
+                                saved = await playback.createBookmark(
+                                    title: title
+                                )
+                            }
+                            if saved {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(
+                        title.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        ).isEmpty || playback.bookmarkState == .saving
+                    )
+                    .accessibilityIdentifier("bookmark.save")
+                }
+            }
+        }
     }
 }

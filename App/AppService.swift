@@ -24,6 +24,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case metadataPatch(BookMetadataPatchError)
     case metadataUpdate(BookMetadataUpdateError)
     case coverUpdate(BookCoverUploadError)
+    case bookmark(BookmarkError)
     case downloadPlan(DownloadPlanRequestError)
     case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
@@ -139,6 +140,29 @@ protocol AppServicing: Sendable {
         detail: LibraryBookDetail,
         jpegData: Data
     ) async throws(AppServiceError) -> LibraryBookDetail
+
+    func bookmarks(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [AudioBookmark]
+
+    func createBookmark(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        time: Double,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark
+
+    func renameBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark
+
+    func deleteBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark
+    ) async throws(AppServiceError)
 
     func removeAccount(
         _ account: ServerAccount
@@ -577,6 +601,76 @@ actor LiveAppService: AppServicing {
             ).value
         } catch let error {
             throw .bookDetail(error)
+        }
+    }
+
+    func bookmarks(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [AudioBookmark] {
+        do {
+            return try await coordinator.bookmarks(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .bookmark(error)
+        }
+    }
+
+    func createBookmark(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        time: Double,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark {
+        do {
+            return try await coordinator.mutateBookmark(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID,
+                time: time,
+                title: title,
+                mutation: .create
+            )
+        } catch let error {
+            throw .bookmark(error)
+        }
+    }
+
+    func renameBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark {
+        do {
+            return try await coordinator.mutateBookmark(
+                accountID: account.id,
+                server: account.server,
+                itemID: bookmark.libraryItemID,
+                time: bookmark.time,
+                title: title,
+                mutation: .rename
+            )
+        } catch let error {
+            throw .bookmark(error)
+        }
+    }
+
+    func deleteBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark
+    ) async throws(AppServiceError) {
+        do {
+            try await coordinator.deleteBookmark(
+                accountID: account.id,
+                server: account.server,
+                itemID: bookmark.libraryItemID,
+                time: bookmark.time
+            )
+        } catch let error {
+            throw .bookmark(error)
         }
     }
 

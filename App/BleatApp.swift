@@ -167,6 +167,37 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func bookmarks(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [AudioBookmark] {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func createBookmark(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        time: Double,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func renameBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark,
+        title: String
+    ) async throws(AppServiceError) -> AudioBookmark {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func deleteBookmark(
+        for account: ServerAccount,
+        bookmark: AudioBookmark
+    ) async throws(AppServiceError) {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {

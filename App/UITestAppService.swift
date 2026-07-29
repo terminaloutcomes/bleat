@@ -246,6 +246,45 @@
             detail
         }
 
+        func bookmarks(
+            for account: ServerAccount,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> [AudioBookmark] {
+            []
+        }
+
+        func createBookmark(
+            for account: ServerAccount,
+            itemID: LibraryItemID,
+            time: Double,
+            title: String
+        ) async throws(AppServiceError) -> AudioBookmark {
+            AudioBookmark(
+                libraryItemID: itemID,
+                time: time,
+                title: title,
+                createdAtMilliseconds: 1
+            )
+        }
+
+        func renameBookmark(
+            for account: ServerAccount,
+            bookmark: AudioBookmark,
+            title: String
+        ) async throws(AppServiceError) -> AudioBookmark {
+            AudioBookmark(
+                libraryItemID: bookmark.libraryItemID,
+                time: bookmark.time,
+                title: title,
+                createdAtMilliseconds: bookmark.createdAtMilliseconds
+            )
+        }
+
+        func deleteBookmark(
+            for account: ServerAccount,
+            bookmark: AudioBookmark
+        ) async throws(AppServiceError) {}
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

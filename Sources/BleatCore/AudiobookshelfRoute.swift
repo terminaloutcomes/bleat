@@ -26,6 +26,7 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
     case itemListeningSessions(LibraryItemID)
     case yearlyStats(Int)
     case bookmarks(LibraryItemID)
+    case bookmark(LibraryItemID)
     case deleteBookmark(itemID: LibraryItemID, time: Double)
     case downloadFile(itemID: LibraryItemID, inode: String)
     case cover(LibraryItemID)
@@ -49,27 +50,30 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
             ["api", "authorize"]
         case .libraries:
             ["api", "libraries"]
-        case let .libraryItems(libraryID):
+        case .libraryItems(let libraryID):
             ["api", "libraries", libraryID.rawValue, "items"]
-        case let .personalized(libraryID):
+        case .personalized(let libraryID):
             ["api", "libraries", libraryID.rawValue, "personalized"]
-        case let .search(libraryID):
+        case .search(let libraryID):
             ["api", "libraries", libraryID.rawValue, "search"]
-        case let .item(itemID):
+        case .item(let itemID):
             ["api", "items", itemID.rawValue]
-        case let .play(itemID):
+        case .play(let itemID):
             ["api", "items", itemID.rawValue, "play"]
-        case let .directPlay(sessionID, trackIndex):
-            ["public", "session", sessionID.rawValue, "track", String(trackIndex)]
-        case let .syncSession(sessionID):
+        case .directPlay(let sessionID, let trackIndex):
+            [
+                "public", "session", sessionID.rawValue, "track",
+                String(trackIndex),
+            ]
+        case .syncSession(let sessionID):
             ["api", "session", sessionID.rawValue, "sync"]
-        case let .closeSession(sessionID):
+        case .closeSession(let sessionID):
             ["api", "session", sessionID.rawValue, "close"]
         case .syncLocalSession:
             ["api", "session", "local"]
         case .syncLocalSessions:
             ["api", "session", "local-all"]
-        case let .progress(itemID):
+        case .progress(let itemID):
             ["api", "me", "progress", itemID.rawValue]
         case .allProgress:
             ["api", "me", "progress"]
@@ -77,19 +81,24 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
             ["api", "me", "listening-stats"]
         case .listeningSessions:
             ["api", "me", "listening-sessions"]
-        case let .itemListeningSessions(itemID):
+        case .itemListeningSessions(let itemID):
             ["api", "me", "item", "listening-sessions", itemID.rawValue]
-        case let .yearlyStats(year):
+        case .yearlyStats(let year):
             ["api", "me", "stats", "year", String(year)]
-        case let .bookmarks(itemID):
+        case .bookmarks(let itemID):
             ["api", "me", "bookmarks", itemID.rawValue]
-        case let .deleteBookmark(itemID, time):
-            ["api", "me", "item", itemID.rawValue, "bookmark", Self.secondsPathComponent(time)]
-        case let .downloadFile(itemID, inode):
+        case .bookmark(let itemID):
+            ["api", "me", "item", itemID.rawValue, "bookmark"]
+        case .deleteBookmark(let itemID, let time):
+            [
+                "api", "me", "item", itemID.rawValue, "bookmark",
+                Self.secondsPathComponent(time),
+            ]
+        case .downloadFile(let itemID, let inode):
             ["api", "items", itemID.rawValue, "file", inode, "download"]
-        case let .cover(itemID):
+        case .cover(let itemID):
             ["api", "items", itemID.rawValue, "cover"]
-        case let .metadata(itemID):
+        case .metadata(let itemID):
             ["api", "items", itemID.rawValue, "media"]
         }
     }
@@ -130,9 +139,9 @@ public struct AudiobookshelfRouteBuilder: Sendable {
         queryItems: [URLQueryItem] = []
     ) throws(RouteConstructionError) -> URL {
         switch route {
-        case let .directPlay(_, trackIndex) where trackIndex < 0:
+        case .directPlay(_, let trackIndex) where trackIndex < 0:
             throw .invalidTrackIndex(trackIndex)
-        case let .deleteBookmark(_, time) where !time.isFinite || time < 0:
+        case .deleteBookmark(_, let time) where !time.isFinite || time < 0:
             throw .invalidBookmarkTime(time)
         default:
             break
@@ -149,18 +158,21 @@ public struct AudiobookshelfRouteBuilder: Sendable {
         guard var returned = URLComponents(string: returnedPath) else {
             throw .invalidReturnedPath
         }
-        guard returned.scheme == nil, returned.host == nil, returned.user == nil,
-              returned.password == nil
+        guard returned.scheme == nil, returned.host == nil,
+            returned.user == nil,
+            returned.password == nil
         else {
             throw .returnedAbsoluteURL
         }
         guard returned.fragment == nil else {
             throw .invalidReturnedPath
         }
-        guard returned.queryItems?.contains(where: {
-            let name = $0.name.lowercased()
-            return name == "token" || name == "access_token"
-        }) != true else {
+        guard
+            returned.queryItems?.contains(where: {
+                let name = $0.name.lowercased()
+                return name == "token" || name == "access_token"
+            }) != true
+        else {
             throw .tokenBearingURL
         }
 
@@ -168,7 +180,7 @@ public struct AudiobookshelfRouteBuilder: Sendable {
             .split(separator: "/", omittingEmptySubsequences: true)
             .map(String.init)
         guard !returnedPath.isEmpty,
-              !returnedPath.contains(where: Self.isTraversalComponent)
+            !returnedPath.contains(where: Self.isTraversalComponent)
         else {
             throw .invalidReturnedPath
         }
@@ -199,10 +211,12 @@ public struct AudiobookshelfRouteBuilder: Sendable {
         guard !Self.containsToken(queryItems) else {
             throw .tokenBearingURL
         }
-        guard var result = URLComponents(
-            url: server.url,
-            resolvingAgainstBaseURL: false
-        ) else {
+        guard
+            var result = URLComponents(
+                url: server.url,
+                resolvingAgainstBaseURL: false
+            )
+        else {
             throw .invalidBaseURL
         }
 
@@ -237,9 +251,11 @@ public struct AudiobookshelfRouteBuilder: Sendable {
 
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/?#%")
-        guard let encoded = component.addingPercentEncoding(
-            withAllowedCharacters: allowed
-        ) else {
+        guard
+            let encoded = component.addingPercentEncoding(
+                withAllowedCharacters: allowed
+            )
+        else {
             throw .invalidPathComponent(component)
         }
         return encoded

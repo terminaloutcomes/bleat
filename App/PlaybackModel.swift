@@ -20,6 +20,14 @@ enum PlaybackSyncState: Equatable, Sendable {
     case failed
 }
 
+enum BookmarkState: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case saving
+    case failed(AppFailure)
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -47,6 +55,8 @@ final class PlaybackModel {
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
     private(set) var sleepTimerEnd: Date?
+    private(set) var bookmarks: [AudioBookmark] = []
+    private(set) var bookmarkState: BookmarkState = .idle
 
     var hasActiveBook: Bool {
         state != .idle
@@ -103,6 +113,8 @@ final class PlaybackModel {
         currentTime = detail.progress?.currentTime ?? 0
         lastAttemptedSyncTime = currentTime
         syncState = .idle
+        bookmarks = []
+        bookmarkState = .idle
 
         let deviceInfo = PlaybackDeviceInfo(
             deviceID: UIDevice.current.identifierForVendor?
@@ -146,6 +158,7 @@ final class PlaybackModel {
             }
             state = .ready
             play()
+            await loadBookmarks()
         } catch let error as AppServiceError {
             guard generation == operationGeneration else {
                 return
@@ -168,7 +181,8 @@ final class PlaybackModel {
 
     func startDownloaded(
         detail: LibraryBookDetail,
-        trackURLs: [URL]
+        trackURLs: [URL],
+        account: ServerAccount
     ) async {
         guard !trackURLs.isEmpty else {
             state = .failed(.mediaUnavailable)
@@ -194,6 +208,8 @@ final class PlaybackModel {
         coverURL = nil
         currentTime = detail.progress?.currentTime ?? 0
         syncState = .idle
+        bookmarks = []
+        bookmarkState = .idle
 
         do {
             var offset: Double = 0
@@ -231,6 +247,7 @@ final class PlaybackModel {
                 source: .direct(tracks)
             )
             try configureAudioSession()
+            activeAccount = account
             preparation = prepared
             duration = prepared.duration
             currentTime = prepared.currentTime
@@ -241,6 +258,7 @@ final class PlaybackModel {
             }
             state = .ready
             play()
+            await loadBookmarks()
         } catch {
             guard generation == operationGeneration else {
                 return
@@ -249,6 +267,94 @@ final class PlaybackModel {
             resetPlayer()
             state = .failed(.mediaUnavailable)
         }
+    }
+
+    func loadBookmarks() async {
+        guard let activeAccount, let itemID else {
+            bookmarks = []
+            bookmarkState = .idle
+            return
+        }
+        bookmarkState = .loading
+        do {
+            bookmarks = try await service.bookmarks(
+                for: activeAccount,
+                itemID: itemID
+            )
+            bookmarkState = .ready
+        } catch let error {
+            bookmarkState = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func createBookmark(title: String) async -> Bool {
+        guard let activeAccount, let itemID else {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return false
+        }
+        bookmarkState = .saving
+        do {
+            let bookmark = try await service.createBookmark(
+                for: activeAccount,
+                itemID: itemID,
+                time: currentTime,
+                title: title
+            )
+            replaceBookmark(bookmark)
+            bookmarkState = .ready
+            return true
+        } catch let error {
+            bookmarkState = .failed(AppFailure(serviceError: error))
+            return false
+        }
+    }
+
+    func renameBookmark(
+        _ bookmark: AudioBookmark,
+        title: String
+    ) async -> Bool {
+        guard let activeAccount else {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return false
+        }
+        bookmarkState = .saving
+        do {
+            let updated = try await service.renameBookmark(
+                for: activeAccount,
+                bookmark: bookmark,
+                title: title
+            )
+            replaceBookmark(updated)
+            bookmarkState = .ready
+            return true
+        } catch let error {
+            bookmarkState = .failed(AppFailure(serviceError: error))
+            return false
+        }
+    }
+
+    func deleteBookmark(_ bookmark: AudioBookmark) async {
+        guard let activeAccount else {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return
+        }
+        bookmarkState = .saving
+        do {
+            try await service.deleteBookmark(
+                for: activeAccount,
+                bookmark: bookmark
+            )
+            bookmarks.removeAll { $0.id == bookmark.id }
+            bookmarkState = .ready
+        } catch let error {
+            bookmarkState = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    private func replaceBookmark(_ bookmark: AudioBookmark) {
+        bookmarks.removeAll { $0.id == bookmark.id }
+        bookmarks.append(bookmark)
+        bookmarks.sort { $0.time < $1.time }
     }
 
     func play() {

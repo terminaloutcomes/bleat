@@ -157,6 +157,10 @@ Bluetooth controls can play, pause, seek, skip, and move between chapters.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
 The full player includes 15, 30, 45, and 60-minute sleep timers.
+Its Bookmarks menu loads the current book's server bookmarks, creates a
+bookmark at the current whole-book position, and supports rename and delete.
+The same controls remain available during local-file playback when the server
+is reachable.
 While streaming, Bleat sends the whole-book position to Audiobookshelf every
 15 seconds and after pause, seek, backgrounding, interruption, and completion.
 The MVP deliberately reports zero additional listening time.

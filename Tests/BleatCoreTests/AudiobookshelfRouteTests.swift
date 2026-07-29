@@ -51,6 +51,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
             ),
             (.yearlyStats(2026), "/api/me/stats/year/2026"),
             (.bookmarks(itemID), "/api/me/bookmarks/item"),
+            (.bookmark(itemID), "/api/me/item/item/bookmark"),
             (
                 .deleteBookmark(itemID: itemID, time: 12.5),
                 "/api/me/item/item/bookmark/12.5"
