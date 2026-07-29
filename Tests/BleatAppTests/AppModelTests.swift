@@ -588,6 +588,10 @@ final class AppModelTests: XCTestCase {
                 .playbackUnavailable
             ),
             (
+                .playbackSync(.unexpectedStatus(503)),
+                .playbackUnavailable
+            ),
+            (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
             ),
@@ -894,6 +898,13 @@ private actor TestAppService: AppServicing {
     func closePlayback(
         for account: ServerAccount,
         sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {}
+
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double
     ) async throws(AppServiceError) {}
 
     func bookDetail(

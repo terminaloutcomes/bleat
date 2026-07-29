@@ -6,10 +6,12 @@ import XCTest
 final class PlaybackSessionTests: XCTestCase {
     func testOpensDirectSessionWithExactNativeAccountContract() async throws {
         let fixture = try Fixture(
-            responses: [.init(
-                data: Self.sessionJSON(),
-                statusCode: 200
-            )]
+            responses: [
+                .init(
+                    data: Self.sessionJSON(),
+                    statusCode: 200
+                )
+            ]
         )
 
         let session = try await fixture.coordinator.openPlaybackSession(
@@ -76,7 +78,7 @@ final class PlaybackSessionTests: XCTestCase {
         XCTAssertEqual(session.audioTracks.map(\.startOffset), [0, 12])
 
         let source = try session.source(for: fixture.server)
-        guard case let .direct(tracks) = source else {
+        guard case .direct(let tracks) = source else {
             return XCTFail("Expected direct playback tracks")
         }
         XCTAssertEqual(tracks.map(\.track.index), [2, 4])
@@ -99,10 +101,12 @@ final class PlaybackSessionTests: XCTestCase {
 
         for (preference, forceDirectPlay, forceTranscode) in cases {
             let fixture = try Fixture(
-                responses: [.init(
-                    data: Self.sessionJSON(),
-                    statusCode: 200
-                )]
+                responses: [
+                    .init(
+                        data: Self.sessionJSON(),
+                        statusCode: 200
+                    )
+                ]
             )
 
             _ = try await fixture.coordinator.openPlaybackSession(
@@ -342,8 +346,9 @@ final class PlaybackSessionTests: XCTestCase {
                 )
             )
             XCTAssertThrowsError(try session.source(for: server)) { error in
-                guard case .routeConstructionFailed =
-                    error as? PlaybackSourceError
+                guard
+                    case .routeConstructionFailed =
+                        error as? PlaybackSourceError
                 else {
                     return XCTFail("Expected route construction failure")
                 }
@@ -476,6 +481,138 @@ final class PlaybackSessionTests: XCTestCase {
             request.value(forHTTPHeaderField: "Authorization"),
             "Bearer access-token"
         )
+    }
+
+    func testSyncPostsExactMVPPositionContract() async throws {
+        let fixture = try Fixture(
+            responses: [.init(data: Data(), statusCode: 200)]
+        )
+
+        try await fixture.coordinator.syncPlaybackSession(
+            accountID: fixture.accountID,
+            server: fixture.server,
+            sessionID: PlaybackSessionID(rawValue: "session"),
+            currentTime: 12.5,
+            duration: 30
+        )
+        let requests = await fixture.transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        let body = try XCTUnwrap(request.httpBody)
+        let payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Double]
+        )
+
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://example.net/audiobookshelf/api/session/session/sync"
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer access-token"
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Content-Type"),
+            "application/json"
+        )
+        XCTAssertEqual(
+            payload,
+            [
+                "currentTime": 12.5,
+                "timeListened": 0,
+                "duration": 30,
+            ]
+        )
+    }
+
+    func testSyncValidationAndFailuresRemainTyped() async throws {
+        let invalidCases:
+            [(
+                PlaybackSessionID,
+                Double,
+                Double,
+                PlaybackSyncError
+            )] = [
+                (
+                    PlaybackSessionID(rawValue: ""),
+                    0,
+                    30,
+                    .invalidSessionID
+                ),
+                (
+                    PlaybackSessionID(rawValue: "session"),
+                    -.infinity,
+                    30,
+                    .invalidPosition
+                ),
+                (
+                    PlaybackSessionID(rawValue: "session"),
+                    0,
+                    .nan,
+                    .invalidDuration
+                ),
+                (
+                    PlaybackSessionID(rawValue: "session"),
+                    31,
+                    30,
+                    .positionExceedsDuration
+                ),
+            ]
+        for (sessionID, currentTime, duration, expected) in invalidCases {
+            let fixture = try Fixture(responses: [])
+            await XCTAssertThrowsErrorAsync(
+                try await fixture.coordinator.syncPlaybackSession(
+                    accountID: fixture.accountID,
+                    server: fixture.server,
+                    sessionID: sessionID,
+                    currentTime: currentTime,
+                    duration: duration
+                )
+            ) { error in
+                XCTAssertEqual(error as? PlaybackSyncError, expected)
+            }
+            let requests = await fixture.transport.recordedRequests()
+            XCTAssertTrue(requests.isEmpty)
+        }
+
+        let rejectedFixture = try Fixture(
+            responses: [.init(data: Data(), statusCode: 404)]
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await rejectedFixture.coordinator.syncPlaybackSession(
+                accountID: rejectedFixture.accountID,
+                server: rejectedFixture.server,
+                sessionID: PlaybackSessionID(rawValue: "missing"),
+                currentTime: 1,
+                duration: 30
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? PlaybackSyncError,
+                .unexpectedStatus(404)
+            )
+        }
+
+        let unauthenticatedFixture = try Fixture(
+            responses: [],
+            includeCredentials: false
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await unauthenticatedFixture.coordinator
+                .syncPlaybackSession(
+                    accountID: unauthenticatedFixture.accountID,
+                    server: unauthenticatedFixture.server,
+                    sessionID: PlaybackSessionID(rawValue: "session"),
+                    currentTime: 1,
+                    duration: 30
+                )
+        ) { error in
+            XCTAssertEqual(
+                error as? PlaybackSyncError,
+                .authenticationFailed(.missingCredentials)
+            )
+        }
     }
 
     func testCloseFailuresRemainTyped() async throws {
@@ -626,10 +763,11 @@ private struct Fixture {
     let itemID = LibraryItemID(rawValue: "item")
     let server: NormalizedServerURL
     let transport: PlaybackTestTransport
-    let coordinator: AuthCoordinator<
-        PlaybackTestTransport,
-        PlaybackTestCredentialStore
-    >
+    let coordinator:
+        AuthCoordinator<
+            PlaybackTestTransport,
+            PlaybackTestCredentialStore
+        >
 
     init(
         responses: [HTTPResponse],
@@ -639,7 +777,8 @@ private struct Fixture {
             "https://example.net/audiobookshelf"
         )
         transport = PlaybackTestTransport(responses: responses)
-        let credentials = includeCredentials
+        let credentials =
+            includeCredentials
             ? try AuthenticationTokens(
                 accessToken: "access-token",
                 refreshToken: "refresh-token"

@@ -22,8 +22,8 @@ action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active
 authentication scope; the earlier isolated OIDC spike is deferred. The MVP
 also defers local time tracking, lifetime statistics, and listening-history
-import/export. Playback progress synchronization, downloads, and editing
-remain under active development.
+import/export. Durable offline position recovery, downloads, and editing remain
+under active development.
 
 ## Requirements
 
@@ -155,6 +155,9 @@ Audio continues in the background. Lock-screen, Control Center, headset, and
 Bluetooth controls can play, pause, seek, skip, and move between chapters.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
+While streaming, Bleat sends the whole-book position to Audiobookshelf every
+15 seconds and after pause, seek, backgrounding, interruption, and completion.
+The MVP deliberately reports zero additional listening time.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual

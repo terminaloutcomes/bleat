@@ -19,6 +19,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case bookDetail(LibraryRepositoryError)
     case playbackSession(PlaybackSessionError)
     case playbackSource(PlaybackSourceError)
+    case playbackSync(PlaybackSyncError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
 }
@@ -85,6 +86,13 @@ protocol AppServicing: Sendable {
     func closePlayback(
         for account: ServerAccount,
         sessionID: PlaybackSessionID
+    ) async throws(AppServiceError)
+
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double
     ) async throws(AppServiceError)
 
     func removeAccount(
@@ -347,6 +355,25 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .playbackSession(error)
+        }
+    }
+
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double
+    ) async throws(AppServiceError) {
+        do {
+            try await coordinator.syncPlaybackSession(
+                accountID: account.id,
+                server: account.server,
+                sessionID: sessionID,
+                currentTime: currentTime,
+                duration: duration
+            )
+        } catch let error {
+            throw .playbackSync(error)
         }
     }
 

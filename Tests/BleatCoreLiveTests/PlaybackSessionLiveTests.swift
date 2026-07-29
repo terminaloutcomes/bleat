@@ -192,6 +192,13 @@ final class PlaybackSessionLiveTests: XCTestCase {
             )
         }
 
+        try await coordinator.syncPlaybackSession(
+            accountID: accountID,
+            server: server,
+            sessionID: session.id,
+            currentTime: min(1, session.duration),
+            duration: session.duration
+        )
         try await coordinator.closePlaybackSession(
             accountID: accountID,
             server: server,

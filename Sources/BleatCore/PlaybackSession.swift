@@ -14,7 +14,7 @@ public enum PlaybackMethod: Codable, Hashable, Sendable {
             2
         case .local:
             3
-        case let .unknown(value):
+        case .unknown(let value):
             value
         }
     }
@@ -220,12 +220,30 @@ public enum PlaybackSessionError: Error, Equatable, Sendable {
     case unexpectedCloseStatus(Int)
 }
 
+public enum PlaybackSyncError: Error, Equatable, Sendable {
+    case invalidSessionID
+    case invalidPosition
+    case invalidDuration
+    case positionExceedsDuration
+    case requestConstructionFailed(RouteConstructionError)
+    case requestEncodingFailed
+    case authenticationFailed(AuthenticatedRequestError)
+    case requestFailed
+    case unexpectedStatus(Int)
+}
+
 private struct PlaybackStartRequest: Encodable {
     let forceDirectPlay: Bool
     let forceTranscode: Bool
     let mediaPlayer: String
     let supportedMimeTypes: [String]
     let deviceInfo: PlaybackDeviceInfo
+}
+
+private struct PlaybackSyncRequest: Encodable {
+    let currentTime: Double
+    let timeListened: Double
+    let duration: Double
 }
 
 private struct PlaybackSessionPayload: Decodable {
@@ -273,17 +291,17 @@ private struct PlaybackSessionPayload: Decodable {
             )
         }
         guard !id.rawValue.isEmpty,
-              !libraryID.rawValue.isEmpty,
-              !libraryItemID.rawValue.isEmpty,
-              !mediaType.isEmpty,
-              duration.isFinite,
-              duration >= 0,
-              startTime.isFinite,
-              startTime >= 0,
-              currentTime.isFinite,
-              currentTime >= 0,
-              !audioTracks.isEmpty,
-              audioTracks.allSatisfy(Self.isValid)
+            !libraryID.rawValue.isEmpty,
+            !libraryItemID.rawValue.isEmpty,
+            !mediaType.isEmpty,
+            duration.isFinite,
+            duration >= 0,
+            startTime.isFinite,
+            startTime >= 0,
+            currentTime.isFinite,
+            currentTime >= 0,
+            !audioTracks.isEmpty,
+            audioTracks.allSatisfy(Self.isValid)
         else {
             throw .invalidSessionResponse
         }
@@ -426,6 +444,70 @@ extension AuthCoordinator {
         }
         guard response.statusCode == 200 else {
             throw .unexpectedCloseStatus(response.statusCode)
+        }
+    }
+
+    public func syncPlaybackSession(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double
+    ) async throws(PlaybackSyncError) {
+        guard !sessionID.rawValue.isEmpty else {
+            throw .invalidSessionID
+        }
+        guard currentTime.isFinite, currentTime >= 0 else {
+            throw .invalidPosition
+        }
+        guard duration.isFinite, duration >= 0 else {
+            throw .invalidDuration
+        }
+        guard currentTime <= duration else {
+            throw .positionExceedsDuration
+        }
+
+        let route = AudiobookshelfRoute.syncSession(sessionID)
+        let requestURL: URL
+        do {
+            requestURL = try AudiobookshelfRouteBuilder(server: server)
+                .url(for: route)
+        } catch let error {
+            throw .requestConstructionFailed(error)
+        }
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "POST"
+        request.setValue(
+            "application/json",
+            forHTTPHeaderField: "Content-Type"
+        )
+        do {
+            request.httpBody = try JSONEncoder().encode(
+                PlaybackSyncRequest(
+                    currentTime: currentTime,
+                    timeListened: 0,
+                    duration: duration
+                )
+            )
+        } catch {
+            throw .requestEncodingFailed
+        }
+
+        let response: HTTPResponse
+        do {
+            response = try await sendAuthenticated(
+                request,
+                route: route,
+                accountID: accountID,
+                server: server
+            )
+        } catch let error as AuthenticatedRequestError {
+            throw .authenticationFailed(error)
+        } catch {
+            throw .requestFailed
+        }
+        guard response.statusCode == 200 else {
+            throw .unexpectedStatus(response.statusCode)
         }
     }
 

@@ -165,6 +165,13 @@
             sessionID: PlaybackSessionID
         ) async throws(AppServiceError) {}
 
+        func syncPlayback(
+            for account: ServerAccount,
+            sessionID: PlaybackSessionID,
+            currentTime: Double,
+            duration: Double
+        ) async throws(AppServiceError) {}
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

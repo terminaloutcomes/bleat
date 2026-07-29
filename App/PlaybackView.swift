@@ -109,6 +109,15 @@ struct PlayerView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("player.error")
                 }
+                if playback.syncState == .failed {
+                    Label(
+                        "Position has not synced",
+                        systemImage: "icloud.slash"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("player.syncError")
+                }
 
                 HStack(spacing: 40) {
                     Button {

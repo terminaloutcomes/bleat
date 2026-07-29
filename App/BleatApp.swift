@@ -92,6 +92,15 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double
+    ) async throws(AppServiceError) {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {

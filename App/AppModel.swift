@@ -126,7 +126,7 @@ enum AppFailure: Equatable, Sendable {
             self = .searchUnavailable
         case .bookDetail:
             self = .bookUnavailable
-        case .playbackSession, .playbackSource:
+        case .playbackSession, .playbackSource, .playbackSync:
             self = .playbackUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed

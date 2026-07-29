@@ -14,6 +14,12 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum PlaybackSyncState: Equatable, Sendable {
+    case idle
+    case syncing
+    case failed
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -28,8 +34,10 @@ final class PlaybackModel {
     private var activeAccount: ServerAccount?
     private var preparation: AppPlaybackPreparation?
     private var resumeAfterInterruption = false
+    private var lastAttemptedSyncTime: Double = 0
 
     private(set) var state: PlaybackState = .idle
+    private(set) var syncState: PlaybackSyncState = .idle
     private(set) var itemID: LibraryItemID?
     private(set) var title = ""
     private(set) var author = ""
@@ -66,7 +74,14 @@ final class PlaybackModel {
 
         generation &+= 1
         let operationGeneration = generation
+        await syncProgress()
+        guard generation == operationGeneration else {
+            return
+        }
         await closeActiveSession()
+        guard generation == operationGeneration else {
+            return
+        }
         activeAccount = nil
         preparation = nil
         resetPlayer()
@@ -76,6 +91,8 @@ final class PlaybackModel {
         author = detail.authors.map(\.name).joined(separator: ", ")
         duration = detail.duration
         currentTime = detail.progress?.currentTime ?? 0
+        lastAttemptedSyncTime = currentTime
+        syncState = .idle
 
         let deviceInfo = PlaybackDeviceInfo(
             deviceID: UIDevice.current.identifierForVendor?
@@ -156,6 +173,9 @@ final class PlaybackModel {
         player.pause()
         state = .paused
         updateNowPlaying()
+        Task { @MainActor [weak self] in
+            await self?.syncProgress()
+        }
     }
 
     func togglePlayback() {
@@ -182,6 +202,10 @@ final class PlaybackModel {
         }
         generation &+= 1
         let operationGeneration = generation
+        await syncProgress()
+        guard generation == operationGeneration else {
+            return
+        }
         let target = min(max(requestedTime, 0), preparation.duration)
         let shouldResume = isPlaying
         state = .preparing
@@ -196,6 +220,7 @@ final class PlaybackModel {
                 player?.playImmediately(atRate: rate)
             }
             updateNowPlaying()
+            await syncProgress()
         } catch {
             guard generation == operationGeneration else {
                 return
@@ -239,8 +264,16 @@ final class PlaybackModel {
 
     func stop() async {
         generation &+= 1
+        let operationGeneration = generation
+        await syncProgress()
+        guard generation == operationGeneration else {
+            return
+        }
         resetPlayer()
         await closeActiveSession()
+        guard generation == operationGeneration else {
+            return
+        }
         activeAccount = nil
         preparation = nil
         itemID = nil
@@ -248,7 +281,9 @@ final class PlaybackModel {
         author = ""
         currentTime = 0
         duration = 0
+        lastAttemptedSyncTime = 0
         state = .idle
+        syncState = .idle
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(
             false,
@@ -411,6 +446,17 @@ final class PlaybackModel {
         )
         audioSessionObservers.append(
             center.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.syncProgress()
+                }
+            }
+        )
+        audioSessionObservers.append(
+            center.addObserver(
                 forName: AVAudioSession.routeChangeNotification,
                 object: nil,
                 queue: .main
@@ -500,12 +546,53 @@ final class PlaybackModel {
             return
         }
         currentTime = min(max(offset + itemTime, 0), duration)
+        if isPlaying,
+            currentTime - lastAttemptedSyncTime >= 15
+        {
+            lastAttemptedSyncTime = currentTime
+            Task { @MainActor [weak self] in
+                await self?.syncProgress()
+            }
+        }
     }
 
     private func playbackEnded() {
         currentTime = duration
         state = .ended
         updateNowPlaying()
+        Task { @MainActor [weak self] in
+            await self?.syncProgress()
+        }
+    }
+
+    private func syncProgress() async {
+        guard syncState != .syncing,
+            let activeAccount,
+            let preparation
+        else {
+            return
+        }
+        let sessionID = preparation.sessionID
+        let position = min(max(currentTime, 0), preparation.duration)
+        syncState = .syncing
+        do {
+            try await service.syncPlayback(
+                for: activeAccount,
+                sessionID: sessionID,
+                currentTime: position,
+                duration: preparation.duration
+            )
+            guard self.preparation?.sessionID == sessionID else {
+                return
+            }
+            lastAttemptedSyncTime = position
+            syncState = .idle
+        } catch {
+            guard self.preparation?.sessionID == sessionID else {
+                return
+            }
+            syncState = .failed
+        }
     }
 
     private func handleInterruption(
