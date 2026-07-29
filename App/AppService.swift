@@ -217,7 +217,10 @@ actor LiveAppService: AppServicing {
     private let libraryCache: LibraryCache
     private let searchCoordinator = LibrarySearchCoordinator()
 
-    init() throws(AppBootstrapError) {
+    init(
+        diagnostics: any DiagnosticRecording =
+            SystemDiagnosticRecorder.shared
+    ) throws(AppBootstrapError) {
         let schema = Schema([
             ServerAccountRecord.self,
             CachedLibraryCollectionRecord.self,
@@ -241,7 +244,7 @@ actor LiveAppService: AppServicing {
             throw .persistenceUnavailable
         }
 
-        transport = URLSessionHTTPTransport()
+        transport = URLSessionHTTPTransport(diagnostics: diagnostics)
         let credentialStore = TokenVault(
             service: "com.yaleman.Bleat.credentials"
         )

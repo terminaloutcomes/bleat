@@ -111,6 +111,73 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
     }
 }
 
+extension AudiobookshelfRoute {
+    public var diagnosticEndpoint: DiagnosticEndpoint {
+        switch self {
+        case .status:
+            .status
+        case .login:
+            .login
+        case .beginOpenID:
+            .beginOpenID
+        case .completeOpenID:
+            .completeOpenID
+        case .refresh:
+            .refresh
+        case .logout:
+            .logout
+        case .authorize:
+            .authorize
+        case .libraries:
+            .libraries
+        case .libraryItems:
+            .libraryItems
+        case .personalized:
+            .personalized
+        case .search:
+            .search
+        case .item:
+            .item
+        case .play:
+            .play
+        case .directPlay:
+            .directPlay
+        case .syncSession:
+            .syncSession
+        case .closeSession:
+            .closeSession
+        case .syncLocalSession:
+            .syncLocalSession
+        case .syncLocalSessions:
+            .syncLocalSessions
+        case .progress:
+            .progress
+        case .allProgress:
+            .allProgress
+        case .listeningStats:
+            .listeningStats
+        case .listeningSessions:
+            .listeningSessions
+        case .itemListeningSessions:
+            .itemListeningSessions
+        case .yearlyStats:
+            .yearlyStats
+        case .bookmarks:
+            .bookmarks
+        case .bookmark:
+            .bookmark
+        case .deleteBookmark:
+            .deleteBookmark
+        case .downloadFile:
+            .downloadFile
+        case .cover:
+            .cover
+        case .metadata:
+            .metadata
+        }
+    }
+}
+
 public enum RouteConstructionError: Error, Equatable, Sendable {
     case invalidBaseURL
     case invalidPathComponent(String)

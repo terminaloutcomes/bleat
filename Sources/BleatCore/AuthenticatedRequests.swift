@@ -76,8 +76,15 @@ extension AuthCoordinator {
         }
 
         let initialTokens = try await storedCredentials(for: accountID)
+        let tracedRequest = TracedHTTPRequest(
+            request: request,
+            endpoint: route.diagnosticEndpoint,
+            correlationID:
+                request.value(forHTTPHeaderField: "X-Bleat-Request-ID")
+                .flatMap(UUID.init(uuidString:)) ?? UUID()
+        )
         let initialResponse = try await send(
-            request,
+            tracedRequest,
             accessToken: initialTokens.accessToken
         )
         guard
@@ -106,7 +113,7 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         let retriedResponse = try await send(
-            request,
+            tracedRequest,
             accessToken: refreshedTokens.accessToken
         )
         guard retriedResponse.statusCode != 401 else {
@@ -165,13 +172,13 @@ extension AuthCoordinator {
     }
 
     private func send(
-        _ request: URLRequest,
+        _ tracedRequest: TracedHTTPRequest,
         accessToken: String
     ) async throws -> HTTPResponse {
         let authorizedRequest: URLRequest
         do {
             authorizedRequest = try requestAuthorizer.authorize(
-                request,
+                tracedRequest.request,
                 accessToken: accessToken
             )
         } catch let error {
@@ -179,7 +186,9 @@ extension AuthCoordinator {
         }
 
         do {
-            return try await transport.send(authorizedRequest)
+            return try await transport.send(
+                tracedRequest.replacingRequest(authorizedRequest)
+            )
         } catch {
             if Task.isCancelled {
                 throw AuthenticatedRequestError.requestCancelled
@@ -401,7 +410,12 @@ extension AuthCoordinator {
 
         let response: HTTPResponse
         do {
-            response = try await transport.send(request)
+            response = try await transport.send(
+                TracedHTTPRequest(
+                    request: request,
+                    endpoint: .refresh
+                )
+            )
         } catch {
             if Task.isCancelled {
                 throw AuthenticatedRequestError.refreshCancelled

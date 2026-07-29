@@ -6,6 +6,96 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
+    {
+        var gate = AutomaticDownloadPlaybackGate()
+
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: false,
+                timeControlStatus: .paused,
+                now: 0
+            ),
+            .allowAutomaticDownloads
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .waitingToPlayAtSpecifiedRate,
+                now: 1
+            ),
+            .reserveForPlayback
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .playing,
+                now: 2
+            ),
+            .reserveForPlayback
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .playing,
+                now: 11
+            ),
+            .reserveForPlayback
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .playing,
+                now: 12
+            ),
+            .allowAutomaticDownloads
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .waitingToPlayAtSpecifiedRate,
+                now: 13
+            ),
+            .reserveForPlayback
+        )
+        XCTAssertEqual(
+            gate.decision(
+                isPlayingIntent: true,
+                timeControlStatus: .playing,
+                now: 14
+            ),
+            .reserveForPlayback
+        )
+    }
+
+    func testDisplayedDownloadBytesIncludeInflightTransferAndClampToExpected()
+    {
+        XCTAssertEqual(
+            DownloadModel.combinedDownloadedByteLength(
+                storedByteLength: 100,
+                transferredByteLengths: [20, 30],
+                expectedByteLength: 200
+            ),
+            150
+        )
+        XCTAssertEqual(
+            DownloadModel.combinedDownloadedByteLength(
+                storedByteLength: 100,
+                transferredByteLengths: [Int64.max],
+                expectedByteLength: 200
+            ),
+            200
+        )
+        XCTAssertEqual(
+            DownloadModel.combinedDownloadedByteLength(
+                storedByteLength: -1,
+                transferredByteLengths: [25],
+                expectedByteLength: 200
+            ),
+            25
+        )
+    }
+
     func testCoverURLRetainsPrefixAndUsesCacheDimensionsWithoutToken()
         throws
     {

@@ -109,7 +109,12 @@ extension AuthCoordinator {
 
         let response: HTTPResponse
         do {
-            response = try await transport.send(request)
+            response = try await transport.send(
+                TracedHTTPRequest(
+                    request: request,
+                    endpoint: .logout
+                )
+            )
         } catch {
             return .requestFailed
         }

@@ -248,7 +248,12 @@ public struct ServerDiscoveryClient<Transport: HTTPTransport>: Sendable {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
 
-        let response = try await transport.send(request)
+        let response = try await transport.send(
+            TracedHTTPRequest(
+                request: request,
+                endpoint: .status
+            )
+        )
         guard Self.isRedirect(response.statusCode) else {
             return (response, response.url ?? url)
         }

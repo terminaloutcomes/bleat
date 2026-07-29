@@ -192,6 +192,7 @@ enum AppFailure: Equatable, Sendable {
 @Observable
 final class AppModel {
     private let service: any AppServicing
+    private let diagnostics: any DiagnosticRecording
     private var hasStarted = false
     private var libraryPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
@@ -219,19 +220,34 @@ final class AppModel {
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     let playback: PlaybackModel
     let downloads: DownloadModel
+    #if DEBUG
+        let diagnosticLogStore: PersistentDiagnosticLogStore?
+    #endif
 
     init(
         service: any AppServicing,
-        downloadsStorageRootURL: URL? = nil
+        downloadsStorageRootURL: URL? = nil,
+        diagnostics: any DiagnosticRecording =
+            SystemDiagnosticRecorder.shared,
+        diagnosticLogStore: (any DiagnosticRecording)? = nil
     ) {
         self.service = service
-        let playback = PlaybackModel(service: service)
+        self.diagnostics = diagnostics
+        let playback = PlaybackModel(
+            service: service,
+            diagnostics: diagnostics
+        )
         let downloads = DownloadModel(
             service: service,
-            storageRootURL: downloadsStorageRootURL
+            storageRootURL: downloadsStorageRootURL,
+            diagnostics: diagnostics
         )
         self.playback = playback
         self.downloads = downloads
+        #if DEBUG
+            self.diagnosticLogStore =
+                diagnosticLogStore as? PersistentDiagnosticLogStore
+        #endif
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
         }
@@ -240,13 +256,27 @@ final class AppModel {
 
     init(
         service: any AppServicing,
-        bootstrapError: AppBootstrapError
+        bootstrapError: AppBootstrapError,
+        diagnostics: any DiagnosticRecording =
+            SystemDiagnosticRecorder.shared,
+        diagnosticLogStore: (any DiagnosticRecording)? = nil
     ) {
         self.service = service
-        let playback = PlaybackModel(service: service)
-        let downloads = DownloadModel(service: service)
+        self.diagnostics = diagnostics
+        let playback = PlaybackModel(
+            service: service,
+            diagnostics: diagnostics
+        )
+        let downloads = DownloadModel(
+            service: service,
+            diagnostics: diagnostics
+        )
         self.playback = playback
         self.downloads = downloads
+        #if DEBUG
+            self.diagnosticLogStore =
+                diagnosticLogStore as? PersistentDiagnosticLogStore
+        #endif
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
         }
@@ -262,9 +292,22 @@ final class AppModel {
             return
         }
         hasStarted = true
+        await diagnostics.record(
+            .started(.appStart, category: .app)
+        )
 
         do {
+            await diagnostics.record(
+                .started(.restoreAccounts, category: .auth)
+            )
             accounts = try await service.accounts()
+            await diagnostics.record(
+                .completed(
+                    .restoreAccounts,
+                    category: .auth,
+                    count: accounts.count
+                )
+            )
             await downloads.start(account: nil)
             for storedAccount in accounts {
                 await downloads.start(account: storedAccount)
@@ -275,13 +318,48 @@ final class AppModel {
             guard let restoredAccount = try await service.activeAccount()
             else {
                 phase = .signedOut
+                await diagnostics.record(
+                    .transition(
+                        category: .app,
+                        from: .launching,
+                        to: .signedOut
+                    )
+                )
+                await diagnostics.record(
+                    .completed(.appStart, category: .app)
+                )
                 return
             }
             account = restoredAccount
             phase = .signedIn
+            await diagnostics.record(
+                .transition(
+                    category: .app,
+                    from: .launching,
+                    to: .signedIn
+                )
+            )
             await loadLibraries()
+            await diagnostics.record(
+                .completed(.appStart, category: .app)
+            )
         } catch let error {
-            phase = .unavailable(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            phase = .unavailable(failure)
+            await diagnostics.record(
+                .failed(
+                    .appStart,
+                    category: .app,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+            await diagnostics.record(
+                .transition(
+                    category: .app,
+                    from: .launching,
+                    to: .unavailable
+                )
+            )
         }
     }
 
@@ -295,6 +373,9 @@ final class AppModel {
             return false
         }
         loginStatus = .submitting
+        await diagnostics.record(
+            .started(.login, category: .auth)
+        )
 
         do {
             let authenticatedAccount = try await service.login(
@@ -308,6 +389,16 @@ final class AppModel {
             accounts.sort(by: Self.sortAccounts)
             phase = .signedIn
             loginStatus = .idle
+            await diagnostics.record(
+                .completed(.login, category: .auth)
+            )
+            await diagnostics.record(
+                .transition(
+                    category: .app,
+                    from: .signedOut,
+                    to: .signedIn
+                )
+            )
             await downloads.start(account: authenticatedAccount)
             await playback.syncPendingLocalSessions(
                 for: authenticatedAccount
@@ -315,7 +406,15 @@ final class AppModel {
             await loadLibraries()
             return true
         } catch let error {
-            loginStatus = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            loginStatus = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .login,
+                    category: .auth,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
             return false
         }
     }
@@ -334,6 +433,9 @@ final class AppModel {
             return false
         }
         loginStatus = .submitting
+        await diagnostics.record(
+            .started(.reauthenticate, category: .auth)
+        )
 
         do {
             let authenticatedAccount = try await service.reauthenticate(
@@ -345,6 +447,9 @@ final class AppModel {
             accounts.append(authenticatedAccount)
             accounts.sort(by: Self.sortAccounts)
             loginStatus = .idle
+            await diagnostics.record(
+                .completed(.reauthenticate, category: .auth)
+            )
             await downloads.start(account: authenticatedAccount)
             await playback.syncPendingLocalSessions(
                 for: authenticatedAccount
@@ -352,7 +457,15 @@ final class AppModel {
             await loadLibraries()
             return true
         } catch let error {
-            loginStatus = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            loginStatus = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .reauthenticate,
+                    category: .auth,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
             return false
         }
     }
@@ -365,6 +478,9 @@ final class AppModel {
             return
         }
         accountActionStatus = .switching
+        await diagnostics.record(
+            .started(.switchAccount, category: .auth)
+        )
         do {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
@@ -372,9 +488,20 @@ final class AppModel {
             await playback.syncPendingLocalSessions(for: selectedAccount)
             await loadLibraries()
             accountActionStatus = .idle
+            await diagnostics.record(
+                .completed(.switchAccount, category: .auth)
+            )
         } catch let error {
+            let failure = AppFailure(serviceError: error)
             accountActionStatus = .failed(
-                AppFailure(serviceError: error)
+                failure
+            )
+            await diagnostics.record(
+                .failed(
+                    .switchAccount,
+                    category: .auth,
+                    failureCode: failure.diagnosticFailureCode
+                )
             )
         }
     }
@@ -384,6 +511,9 @@ final class AppModel {
             libraries = .failed(.accountUnavailable)
             return
         }
+        await diagnostics.record(
+            .started(.loadLibraries, category: .api)
+        )
         libraries = .loading
         selectedLibrary = nil
         libraryPageGeneration &+= 1
@@ -399,12 +529,27 @@ final class AppModel {
                     library.mediaType == .book
                 }
             libraries = .loaded(loadedLibraries)
+            await diagnostics.record(
+                .completed(
+                    .loadLibraries,
+                    category: .api,
+                    count: loadedLibraries.count
+                )
+            )
             guard let firstLibrary = loadedLibraries.first else {
                 return
             }
             await selectLibrary(firstLibrary)
         } catch let error {
-            libraries = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            libraries = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadLibraries,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
         }
     }
 
@@ -420,6 +565,9 @@ final class AppModel {
         }
         selectedLibrary = library
         homeShelves = .loading
+        await diagnostics.record(
+            .started(.loadHome, category: .api)
+        )
 
         await reloadBooks()
         guard self.account?.id == account.id,
@@ -434,8 +582,28 @@ final class AppModel {
                     libraryID: library.id
                 )
             )
+            let count: Int
+            if case .loaded(let shelves) = homeShelves {
+                count = shelves.count
+            } else {
+                count = 0
+            }
+            await diagnostics.record(
+                .completed(
+                    .loadHome,
+                    category: .api,
+                    count: count
+                )
+            )
         } catch {
             homeShelves = .failed(.homeUnavailable)
+            await diagnostics.record(
+                .failed(
+                    .loadHome,
+                    category: .api,
+                    failureCode: .homeUnavailable
+                )
+            )
         }
     }
 
@@ -474,6 +642,9 @@ final class AppModel {
         }
         books = .loading
         libraryPaginationState = .idle
+        await diagnostics.record(
+            .started(.loadLibraryPage, category: .api)
+        )
 
         do {
             let page = try await service.page(
@@ -493,6 +664,13 @@ final class AppModel {
                 return
             }
             books = .loaded(page)
+            await diagnostics.record(
+                .completed(
+                    .loadLibraryPage,
+                    category: .api,
+                    count: page.items.count
+                )
+            )
         } catch let error {
             guard operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
@@ -500,7 +678,15 @@ final class AppModel {
             else {
                 return
             }
-            books = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            books = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadLibraryPage,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
         }
     }
 
@@ -579,6 +765,9 @@ final class AppModel {
             return
         }
         searchResults = .loading
+        await diagnostics.record(
+            .started(.search, category: .api)
+        )
 
         do {
             let results = try await service.search(
@@ -590,13 +779,28 @@ final class AppModel {
                 return
             }
             searchResults = .loaded(results)
+            await diagnostics.record(
+                .completed(
+                    .search,
+                    category: .api,
+                    count: results.count
+                )
+            )
         } catch let error {
             guard searchGeneration == operationGeneration,
                 !Task.isCancelled
             else {
                 return
             }
-            searchResults = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            searchResults = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .search,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
         }
     }
 
@@ -612,6 +816,9 @@ final class AppModel {
             return
         }
         bookDetail = .loading
+        await diagnostics.record(
+            .started(.loadBook, category: .api)
+        )
 
         do {
             let detail = try await service.bookDetail(
@@ -623,6 +830,9 @@ final class AppModel {
                 return
             }
             bookDetail = .loaded(detail)
+            await diagnostics.record(
+                .completed(.loadBook, category: .api)
+            )
             await loadBookBookmarks()
         } catch let error {
             guard bookDetailGeneration == operationGeneration,
@@ -630,7 +840,15 @@ final class AppModel {
             else {
                 return
             }
-            bookDetail = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            bookDetail = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadBook,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
         }
     }
 
@@ -785,6 +1003,9 @@ final class AppModel {
             return
         }
         accountActionStatus = .removing
+        await diagnostics.record(
+            .started(.removeAccount, category: .auth)
+        )
         await playback.stop()
 
         do {
@@ -818,9 +1039,24 @@ final class AppModel {
             } else {
                 phase = .signedOut
             }
+            await diagnostics.record(
+                .completed(
+                    .removeAccount,
+                    category: .auth,
+                    count: accounts.count
+                )
+            )
         } catch let error {
+            let failure = AppFailure(serviceError: error)
             accountActionStatus = .failed(
-                AppFailure(serviceError: error)
+                failure
+            )
+            await diagnostics.record(
+                .failed(
+                    .removeAccount,
+                    category: .auth,
+                    failureCode: failure.diagnosticFailureCode
+                )
             )
         }
     }

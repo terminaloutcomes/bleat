@@ -27,20 +27,48 @@ struct BleatApp: App {
 
     init() {
         #if DEBUG
+            let diagnosticLogStore = PersistentDiagnosticLogStore()
+            let diagnostics: any DiagnosticRecording =
+                CompositeDiagnosticRecorder([
+                    SystemDiagnosticRecorder.shared,
+                    diagnosticLogStore,
+                ])
+        #else
+            let diagnostics: any DiagnosticRecording =
+                SystemDiagnosticRecorder.shared
+            let diagnosticLogStore: (any DiagnosticRecording)? = nil
+        #endif
+
+        #if DEBUG
             if let testService = UITestAppService.current() {
-                _model = State(initialValue: AppModel(service: testService))
+                _model = State(
+                    initialValue: AppModel(
+                        service: testService,
+                        diagnostics: diagnostics,
+                        diagnosticLogStore: diagnosticLogStore
+                    )
+                )
                 return
             }
         #endif
 
         do {
             _model = State(
-                initialValue: AppModel(service: try LiveAppService()))
+                initialValue: AppModel(
+                    service: try LiveAppService(
+                        diagnostics: diagnostics
+                    ),
+                    diagnostics: diagnostics,
+                    diagnosticLogStore: diagnosticLogStore
+                )
+            )
         } catch let error {
             _model = State(
                 initialValue: AppModel(
                     service: UnavailableAppService(),
-                    bootstrapError: error
+                    bootstrapError: error,
+                    diagnostics: diagnostics,
+                    diagnosticLogStore: diagnosticLogStore
                 )
             )
         }

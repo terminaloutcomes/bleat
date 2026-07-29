@@ -160,7 +160,12 @@ public actor AuthCoordinator<
             LoginRequest(username: username, password: password)
         )
 
-        let loginResponse = try await transport.send(loginRequest)
+        let loginResponse = try await transport.send(
+            TracedHTTPRequest(
+                request: loginRequest,
+                endpoint: .login
+            )
+        )
         loginRequest.httpBody = nil
         switch loginResponse.statusCode {
         case 200:
@@ -217,7 +222,12 @@ public actor AuthCoordinator<
             accessToken: tokens.accessToken
         )
 
-        let authorizeResponse = try await transport.send(authorizeRequest)
+        let authorizeResponse = try await transport.send(
+            TracedHTTPRequest(
+                request: authorizeRequest,
+                endpoint: .authorize
+            )
+        )
         switch authorizeResponse.statusCode {
         case 200:
             break

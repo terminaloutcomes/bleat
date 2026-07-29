@@ -14,6 +14,27 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+private extension PlaybackState {
+    var diagnosticState: DiagnosticState {
+        switch self {
+        case .idle:
+            .idle
+        case .preparing:
+            .preparing
+        case .ready:
+            .ready
+        case .playing:
+            .playing
+        case .paused:
+            .paused
+        case .ended:
+            .ended
+        case .failed:
+            .failed
+        }
+    }
+}
+
 enum PlaybackSyncState: Equatable, Sendable {
     case idle
     case syncing
@@ -59,10 +80,48 @@ private struct AutomaticDownloadSignal: Equatable {
     let fileIndex: Int?
 }
 
+enum AutomaticDownloadBandwidthDecision: Equatable {
+    case reserveForPlayback
+    case allowAutomaticDownloads
+}
+
+struct AutomaticDownloadPlaybackGate {
+    static let stablePlaybackDelay: TimeInterval = 10
+
+    private var stablePlaybackStartedAt: TimeInterval?
+
+    mutating func decision(
+        isPlayingIntent: Bool,
+        timeControlStatus: AVPlayer.TimeControlStatus,
+        now: TimeInterval
+    ) -> AutomaticDownloadBandwidthDecision {
+        guard isPlayingIntent else {
+            stablePlaybackStartedAt = nil
+            return .allowAutomaticDownloads
+        }
+        guard timeControlStatus == .playing else {
+            stablePlaybackStartedAt = nil
+            return .reserveForPlayback
+        }
+        if stablePlaybackStartedAt == nil {
+            stablePlaybackStartedAt = now
+        }
+        guard
+            let stablePlaybackStartedAt,
+            now - stablePlaybackStartedAt
+                >= Self.stablePlaybackDelay
+        else {
+            return .reserveForPlayback
+        }
+        return .allowAutomaticDownloads
+    }
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
     private let service: any AppServicing
+    private let diagnostics: any DiagnosticRecording
     private let positionStore: PlaybackPositionStore
     private let localSessionStore: LocalPlaybackSessionStore
     private let bookmarkMutationStore: BookmarkMutationStore
@@ -76,6 +135,7 @@ final class PlaybackModel {
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
+    private var timeControlStatusObserver: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var audioSessionObservers: [NSObjectProtocol] = []
     private var remoteCommandTargets: [(MPRemoteCommand, Any)] = []
@@ -91,6 +151,10 @@ final class PlaybackModel {
     private var lastPersistedLocalTime: Double = 0
     private var activeDownloadDetail: LibraryBookDetail?
     private var lastAutomaticDownloadSignal: AutomaticDownloadSignal?
+    private var automaticDownloadPlaybackGate =
+        AutomaticDownloadPlaybackGate()
+    private var automaticDownloadBandwidthDecision:
+        AutomaticDownloadBandwidthDecision?
     @ObservationIgnored
     private var automaticDownloadHandler:
         (@MainActor @Sendable (AutomaticDownloadActivity) async -> Void)?
@@ -190,11 +254,14 @@ final class PlaybackModel {
                     preparation: $0,
                     wholeBookTime: $1
                 )
-            }
+            },
+        diagnostics: any DiagnosticRecording =
+            SystemDiagnosticRecorder.shared
     ) {
         let skipBackwardInterval = preferencesStore.skipBackward()
         let skipForwardInterval = preferencesStore.skipForward()
         self.service = service
+        self.diagnostics = diagnostics
         self.positionStore = positionStore
         self.localSessionStore = localSessionStore
         self.bookmarkMutationStore = bookmarkMutationStore
@@ -218,16 +285,32 @@ final class PlaybackModel {
         automaticDownloadHandler = handler
     }
 
+    private func record(_ event: DiagnosticEvent) {
+        Task {
+            await diagnostics.record(event)
+        }
+    }
+
     func start(
         detail: LibraryBookDetail,
         account: ServerAccount
     ) async {
+        await diagnostics.record(
+            .started(.openPlayback, category: .playback)
+        )
         let availability = BookActionAvailability(
             user: account.user,
             detail: detail
         )
         guard availability.visibleActions.contains(.play) else {
             state = .failed(.playbackDenied)
+            await diagnostics.record(
+                .failed(
+                    .openPlayback,
+                    category: .playback,
+                    failureCode: .playbackDenied
+                )
+            )
             return
         }
 
@@ -241,16 +324,27 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        notifyAutomaticDownloadBandwidthReleased()
         activeAccount = nil
         localAccountID = nil
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
+        automaticDownloadPlaybackGate =
+            AutomaticDownloadPlaybackGate()
+        automaticDownloadBandwidthDecision = nil
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
         pausedAt = nil
         state = .preparing
+        await diagnostics.record(
+            .transition(
+                category: .playback,
+                from: .idle,
+                to: .preparing
+            )
+        )
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
@@ -302,8 +396,17 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            await diagnostics.record(
+                .transition(
+                    category: .playback,
+                    from: .preparing,
+                    to: .ready
+                )
+            )
+            await diagnostics.record(
+                .completed(.openPlayback, category: .playback)
+            )
             play()
-            notifyAutomaticDownloadProgress(force: true)
             await loadBookmarks()
         } catch let error as AppServiceError {
             guard generation == operationGeneration else {
@@ -313,7 +416,15 @@ final class PlaybackModel {
             preparation = nil
             activeDownloadDetail = nil
             resetPlayer()
-            state = .failed(AppFailure(serviceError: error))
+            let failure = AppFailure(serviceError: error)
+            state = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .openPlayback,
+                    category: .playback,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
         } catch {
             guard generation == operationGeneration else {
                 return
@@ -324,6 +435,13 @@ final class PlaybackModel {
             activeDownloadDetail = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            await diagnostics.record(
+                .failed(
+                    .openPlayback,
+                    category: .playback,
+                    failureCode: .mediaUnavailable
+                )
+            )
         }
     }
 
@@ -333,8 +451,22 @@ final class PlaybackModel {
         accountID: AccountID,
         account: ServerAccount?
     ) async {
+        await diagnostics.record(
+            .started(
+                .openPlayback,
+                category: .playback,
+                count: trackURLs.count
+            )
+        )
         guard !trackURLs.isEmpty else {
             state = .failed(.mediaUnavailable)
+            await diagnostics.record(
+                .failed(
+                    .openPlayback,
+                    category: .playback,
+                    failureCode: .mediaUnavailable
+                )
+            )
             return
         }
         generation &+= 1
@@ -347,11 +479,15 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        notifyAutomaticDownloadBandwidthReleased()
         activeAccount = nil
         localAccountID = nil
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
+        automaticDownloadPlaybackGate =
+            AutomaticDownloadPlaybackGate()
+        automaticDownloadBandwidthDecision = nil
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
@@ -439,6 +575,9 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            await diagnostics.record(
+                .completed(.openPlayback, category: .playback)
+            )
             if positionConflict == nil {
                 play()
                 await syncProgress()
@@ -455,6 +594,13 @@ final class PlaybackModel {
             preparation = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            await diagnostics.record(
+                .failed(
+                    .openPlayback,
+                    category: .playback,
+                    failureCode: .mediaUnavailable
+                )
+            )
         }
     }
 
@@ -718,7 +864,17 @@ final class PlaybackModel {
         }
         pausedAt = nil
         player.playImmediately(atRate: rate)
+        let previousState = state.diagnosticState
         state = .playing
+        record(
+            .transition(
+                category: .playback,
+                from: previousState,
+                to: .playing
+            )
+        )
+        record(.completed(.play, category: .playback))
+        updateAutomaticDownloadBandwidth()
         updateNowPlaying()
     }
 
@@ -728,7 +884,17 @@ final class PlaybackModel {
         }
         let wasPlaying = isPlaying
         player.pause()
+        let previousState = state.diagnosticState
         state = .paused
+        record(
+            .transition(
+                category: .playback,
+                from: previousState,
+                to: .paused
+            )
+        )
+        record(.completed(.pause, category: .playback))
+        updateAutomaticDownloadBandwidth()
         if wasPlaying {
             pausedAt = Date()
         }
@@ -825,6 +991,9 @@ final class PlaybackModel {
         guard let preparation else {
             return
         }
+        await diagnostics.record(
+            .started(.seek, category: .playback)
+        )
         generation &+= 1
         let operationGeneration = generation
         await syncProgress()
@@ -849,14 +1018,24 @@ final class PlaybackModel {
                 player?.playImmediately(atRate: rate)
             }
             updateNowPlaying()
-            notifyAutomaticDownloadProgress(force: true)
+            updateAutomaticDownloadBandwidth()
             await syncProgress()
+            await diagnostics.record(
+                .completed(.seek, category: .playback)
+            )
         } catch {
             guard generation == operationGeneration else {
                 return
             }
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            await diagnostics.record(
+                .failed(
+                    .seek,
+                    category: .playback,
+                    failureCode: .mediaUnavailable
+                )
+            )
         }
     }
 
@@ -897,12 +1076,16 @@ final class PlaybackModel {
     }
 
     func stop() async {
+        await diagnostics.record(
+            .started(.closePlayback, category: .playback)
+        )
         generation &+= 1
         let operationGeneration = generation
         await syncProgress()
         guard generation == operationGeneration else {
             return
         }
+        notifyAutomaticDownloadBandwidthReleased()
         resetPlayer()
         await closeActiveSession()
         guard generation == operationGeneration else {
@@ -913,6 +1096,9 @@ final class PlaybackModel {
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
+        automaticDownloadPlaybackGate =
+            AutomaticDownloadPlaybackGate()
+        automaticDownloadBandwidthDecision = nil
         localPlaybackSession = nil
         itemID = nil
         title = ""
@@ -931,6 +1117,9 @@ final class PlaybackModel {
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation
+        )
+        await diagnostics.record(
+            .completed(.closePlayback, category: .playback)
         )
     }
 
@@ -1130,6 +1319,14 @@ final class PlaybackModel {
                 self?.refreshCurrentTime()
             }
         }
+        timeControlStatusObserver = player.observe(
+            \.timeControlStatus,
+            options: [.new]
+        ) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                self?.updateAutomaticDownloadBandwidth()
+            }
+        }
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: lastItem,
@@ -1146,6 +1343,8 @@ final class PlaybackModel {
             player.removeTimeObserver(timeObserver)
         }
         timeObserver = nil
+        timeControlStatusObserver?.invalidate()
+        timeControlStatusObserver = nil
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }
@@ -1181,6 +1380,7 @@ final class PlaybackModel {
     }
 
     private func refreshCurrentTime() {
+        updateAutomaticDownloadBandwidth()
         guard let player,
             let currentItem = player.currentItem,
             let offset = offsetsByItem[ObjectIdentifier(currentItem)]
@@ -1215,6 +1415,8 @@ final class PlaybackModel {
 
     private func notifyAutomaticDownloadProgress(force: Bool = false) {
         guard
+            automaticDownloadBandwidthDecision
+                == .allowAutomaticDownloads,
             let automaticDownloadHandler,
             let detail = activeDownloadDetail,
             let account = activeAccount,
@@ -1250,6 +1452,69 @@ final class PlaybackModel {
             currentTime: currentTime,
             chapters: preparation.chapters,
             fileRanges: ranges
+        )
+        Task { @MainActor in
+            await automaticDownloadHandler(activity)
+        }
+    }
+
+    private func updateAutomaticDownloadBandwidth(
+        now: TimeInterval = Date().timeIntervalSinceReferenceDate
+    ) {
+        guard let player,
+            activeAccount != nil,
+            activeDownloadDetail != nil,
+            preparation != nil
+        else {
+            return
+        }
+        let decision = automaticDownloadPlaybackGate.decision(
+            isPlayingIntent: isPlaying,
+            timeControlStatus: player.timeControlStatus,
+            now: now
+        )
+        guard decision != automaticDownloadBandwidthDecision else {
+            return
+        }
+        automaticDownloadBandwidthDecision = decision
+        switch decision {
+        case .reserveForPlayback:
+            notifyAutomaticDownloadActivity(
+                kind: .playbackNeedsBandwidth
+            )
+        case .allowAutomaticDownloads:
+            if isPlaying {
+                notifyAutomaticDownloadProgress(force: true)
+            } else {
+                notifyAutomaticDownloadBandwidthReleased()
+            }
+        }
+    }
+
+    private func notifyAutomaticDownloadBandwidthReleased() {
+        notifyAutomaticDownloadActivity(
+            kind: .playbackReleasedBandwidth
+        )
+    }
+
+    private func notifyAutomaticDownloadActivity(
+        kind: AutomaticDownloadActivityKind
+    ) {
+        guard
+            let automaticDownloadHandler,
+            let detail = activeDownloadDetail,
+            let account = activeAccount,
+            let preparation
+        else {
+            return
+        }
+        let activity = AutomaticDownloadActivity(
+            kind: kind,
+            detail: detail,
+            account: account,
+            currentTime: currentTime,
+            chapters: preparation.chapters,
+            fileRanges: []
         )
         Task { @MainActor in
             await automaticDownloadHandler(activity)
@@ -1327,6 +1592,9 @@ final class PlaybackModel {
         else {
             return
         }
+        await diagnostics.record(
+            .started(.syncPlayback, category: .sync)
+        )
         let position = min(max(currentTime, 0), preparation.duration)
         if preparation.sessionID == nil {
             guard let localAccountID else {
@@ -1340,6 +1608,9 @@ final class PlaybackModel {
             guard let activeAccount else {
                 lastAttemptedSyncTime = position
                 syncState = .idle
+                await diagnostics.record(
+                    .completed(.syncPlayback, category: .sync)
+                )
                 return
             }
             do {
@@ -1348,6 +1619,13 @@ final class PlaybackModel {
                 )
                 guard !pending.isEmpty else {
                     syncState = .idle
+                    await diagnostics.record(
+                        .completed(
+                            .syncPlayback,
+                            category: .sync,
+                            count: 0
+                        )
+                    )
                     return
                 }
                 let results = try await service.syncLocalPlaybackSessions(
@@ -1370,6 +1648,23 @@ final class PlaybackModel {
                 lastAttemptedSyncTime = position
                 syncState =
                     results.allSatisfy(\.success) ? .idle : .failed
+                if results.allSatisfy(\.success) {
+                    await diagnostics.record(
+                        .completed(
+                            .syncPlayback,
+                            category: .sync,
+                            count: results.count
+                        )
+                    )
+                } else {
+                    await diagnostics.record(
+                        .failed(
+                            .syncPlayback,
+                            category: .sync,
+                            failureCode: .progressUnavailable
+                        )
+                    )
+                }
                 if let localPlaybackSession,
                     let currentResult = results.first(where: {
                         $0.id == localPlaybackSession.id
@@ -1389,6 +1684,13 @@ final class PlaybackModel {
                     return
                 }
                 syncState = .failed
+                await diagnostics.record(
+                    .failed(
+                        .syncPlayback,
+                        category: .sync,
+                        failureCode: .progressUnavailable
+                    )
+                )
             }
             return
         }
@@ -1410,11 +1712,21 @@ final class PlaybackModel {
             }
             lastAttemptedSyncTime = position
             syncState = .idle
+            await diagnostics.record(
+                .completed(.syncPlayback, category: .sync)
+            )
         } catch {
             guard self.preparation?.sessionID == sessionID else {
                 return
             }
             syncState = .failed
+            await diagnostics.record(
+                .failed(
+                    .syncPlayback,
+                    category: .sync,
+                    failureCode: .progressUnavailable
+                )
+            )
         }
     }
 
@@ -1470,6 +1782,9 @@ final class PlaybackModel {
     }
 
     func syncPendingLocalSessions(for account: ServerAccount) async {
+        await diagnostics.record(
+            .started(.syncLocalSessions, category: .sync)
+        )
         do {
             let pending = try localSessionStore.pending(
                 accountID: account.id
@@ -1484,9 +1799,31 @@ final class PlaybackModel {
                     accountID: account.id,
                     sessionIDs: Set(results.filter(\.success).map(\.id))
                 )
+                await diagnostics.record(
+                    .completed(
+                        .syncLocalSessions,
+                        category: .sync,
+                        count: results.count
+                    )
+                )
+            } else {
+                await diagnostics.record(
+                    .completed(
+                        .syncLocalSessions,
+                        category: .sync,
+                        count: 0
+                    )
+                )
             }
         } catch {
             // The durable outbox remains intact for the next retry.
+            await diagnostics.record(
+                .failed(
+                    .syncLocalSessions,
+                    category: .sync,
+                    failureCode: .progressUnavailable
+                )
+            )
             return
         }
         await syncPendingBookmarks(for: account)
@@ -1700,6 +2037,7 @@ final class PlaybackModel {
             case .pause:
                 state = .paused
             }
+            updateAutomaticDownloadBandwidth()
             updateNowPlaying()
         } catch {
             guard generation == operationGeneration else {

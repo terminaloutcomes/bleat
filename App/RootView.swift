@@ -251,6 +251,19 @@ private struct ReauthenticationView: View {
 
 private struct DiagnosticsView: View {
     let report: DiagnosticsReport
+    #if DEBUG
+        @State private var recentLogExport: RecentLogExportModel?
+
+        init(
+            report: DiagnosticsReport,
+            logStore: PersistentDiagnosticLogStore?
+        ) {
+            self.report = report
+            _recentLogExport = State(
+                initialValue: logStore.map(RecentLogExportModel.init)
+            )
+        }
+    #endif
 
     var body: some View {
         List {
@@ -308,24 +321,103 @@ private struct DiagnosticsView: View {
                 }
             }
 
-            Section {
-                ShareLink(
-                    item: report.text,
-                    subject: Text("Bleat Diagnostics")
-                ) {
-                    Label(
-                        "Export Diagnostics",
-                        systemImage: "square.and.arrow.up"
+            #if DEBUG
+                Section {
+                    ShareLink(
+                        item: report.text,
+                        subject: Text("Bleat Diagnostics")
+                    ) {
+                        Label(
+                            "Export Diagnostics",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                    .accessibilityIdentifier("diagnostics.export")
+
+                    Button {
+                        guard let recentLogExport else {
+                            return
+                        }
+                        Task {
+                            await recentLogExport.prepare(
+                                environment: report.environment
+                            )
+                        }
+                    } label: {
+                        if recentLogExport?.state == .preparing {
+                            Label(
+                                "Preparing Recent Logs",
+                                systemImage: "hourglass"
+                            )
+                        } else {
+                            Label(
+                                "Export Recent Logs",
+                                systemImage: "doc.text"
+                            )
+                        }
+                    }
+                    .disabled(
+                        recentLogExport == nil
+                            || recentLogExport?.state == .preparing
+                    )
+                    .accessibilityIdentifier(
+                        "diagnostics.exportRecentLogs"
+                    )
+                } footer: {
+                    Text(
+                        "Exports exclude account names, server addresses, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
                     )
                 }
-                .accessibilityIdentifier("diagnostics.export")
-            } footer: {
-                Text(
-                    "The export excludes account names, server addresses, credentials, tokens, response bodies, media URLs, session IDs, and local file paths."
-                )
-            }
+            #endif
         }
         .navigationTitle("Diagnostics")
+        #if DEBUG
+            .sheet(
+                isPresented: Binding(
+                    get: {
+                        recentLogExport?.sharingURL != nil
+                    },
+                    set: { isPresented in
+                        if !isPresented {
+                            recentLogExport?.finishSharing()
+                        }
+                    }
+                )
+            ) {
+                if let url = recentLogExport?.sharingURL {
+                    DiagnosticActivityView(fileURL: url) {
+                        recentLogExport?.finishSharing()
+                    }
+                    .accessibilityIdentifier(
+                        "diagnostics.activityView"
+                    )
+                }
+            }
+            .alert(
+                "Unable to Export Logs",
+                isPresented: Binding(
+                    get: {
+                        recentLogExport?.failure != nil
+                    },
+                    set: { isPresented in
+                        if !isPresented {
+                            recentLogExport?.dismissFailure()
+                        }
+                    }
+                )
+            ) {
+                Button("OK") {
+                    recentLogExport?.dismissFailure()
+                }
+            } message: {
+                if let failure = recentLogExport?.failure {
+                    Text(failure.message)
+                }
+            }
+            .onDisappear {
+                recentLogExport?.finishSharing()
+            }
+        #endif
     }
 }
 
@@ -525,10 +617,13 @@ private struct HomeContent: View {
     ) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
+                ForEach(shelves.prefix(2), id: \.id) { shelf in
+                    shelfContent(shelf)
+                }
                 if !downloadedRecords.isEmpty {
                     downloadedShelf
                 }
-                ForEach(shelves, id: \.id) { shelf in
+                ForEach(shelves.dropFirst(2), id: \.id) { shelf in
                     shelfContent(shelf)
                 }
                 trailing()
@@ -1486,8 +1581,10 @@ private struct BookDetailView: View {
                         }
                     } label: {
                         Label(
-                            "Play Offline",
-                            systemImage: "iphone.and.arrow.forward"
+                            model.playback.itemID == detail.id
+                                ? "Play Again"
+                                : "Play",
+                            systemImage: "play.fill"
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -1630,20 +1727,6 @@ private struct BookDetailView: View {
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) -> some View {
-        if record.manifest.purpose == .automaticCache {
-            Button("Keep Full Book", systemImage: "pin") {
-                Task {
-                    await model.downloads.keepFullBook(
-                        record,
-                        account: account
-                    )
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier(
-                "book.detail.download.keepFullBook"
-            )
-        }
         if [
             DownloadManifestState.complete,
             .deleting,
@@ -1751,7 +1834,9 @@ private struct BookDetailView: View {
         _ record: DownloadedBookRecord
     ) -> String {
         let stored = ByteCountFormatter.string(
-            fromByteCount: max(record.manifest.storedByteLength, 0),
+            fromByteCount: model.downloads.downloadedByteLength(
+                for: record
+            ),
             countStyle: .file
         )
         let expected = ByteCountFormatter.string(
@@ -1994,9 +2079,16 @@ private struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        DiagnosticsView(
-                            report: model.diagnosticsReport()
-                        )
+                        #if DEBUG
+                            DiagnosticsView(
+                                report: model.diagnosticsReport(),
+                                logStore: model.diagnosticLogStore
+                            )
+                        #else
+                            DiagnosticsView(
+                                report: model.diagnosticsReport()
+                            )
+                        #endif
                     } label: {
                         Label(
                             "Diagnostics",
@@ -2289,7 +2381,7 @@ private struct DownloadStorageView: View {
                 )
                 Spacer()
                 Text(
-                    "\(byteCount(record.manifest.storedByteLength)) of \(byteCount(record.manifest.expectedByteLength))"
+                    "\(byteCount(model.downloads.downloadedByteLength(for: record))) of \(byteCount(record.manifest.expectedByteLength))"
                 )
             }
             .font(.caption)
@@ -2299,14 +2391,7 @@ private struct DownloadStorageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if record.manifest.state == .complete {
-                Button("Play Offline") {
-                    Task {
-                        await model.playDownloaded(record)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            } else if [
+            if [
                 DownloadManifestState.failed,
                 .partial,
             ].contains(record.manifest.state) {
@@ -2330,7 +2415,7 @@ private struct DownloadStorageView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            } else {
+            } else if record.manifest.state != .complete {
                 HStack {
                     if model.downloads.pausedDownloadIDs.contains(
                         record.manifest.downloadID

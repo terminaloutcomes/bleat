@@ -472,7 +472,7 @@ final class BleatUITests: XCTestCase {
 
 final class BleatLiveUITests: XCTestCase {
     @MainActor
-    func testLiveOnlineLoginPlaybackAndDownload() throws {
+    func testLiveOnlineLoginPlaybackAndDownload() async throws {
         let environment = try liveEnvironment()
         let app = XCUIApplication()
         app.launch()
@@ -529,6 +529,7 @@ final class BleatLiveUITests: XCTestCase {
         let secondFile = app.buttons["player.audioFile.1"]
         XCTAssertTrue(secondFile.waitForExistence(timeout: 10))
         secondFile.tap()
+        try await Task.sleep(for: .seconds(12))
         app.buttons["Stop"].tap()
 
         XCTAssertTrue(
@@ -537,13 +538,6 @@ final class BleatLiveUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.staticTexts["Cached"].waitForExistence(timeout: 60)
-        )
-        let keepFullBook =
-            app.buttons["book.detail.download.keepFullBook"]
-        XCTAssertTrue(keepFullBook.waitForExistence(timeout: 10))
-        keepFullBook.tap()
-        XCTAssertTrue(
-            app.staticTexts["Downloaded"].waitForExistence(timeout: 60)
         )
         app.terminate()
     }
@@ -564,10 +558,10 @@ final class BleatLiveUITests: XCTestCase {
             app.staticTexts["multi-track"].waitForExistence(timeout: 20)
         )
         app.staticTexts["multi-track"].tap()
-        let playOffline = app.buttons["book.detail.play"]
-        XCTAssertTrue(playOffline.waitForExistence(timeout: 20))
-        XCTAssertEqual(playOffline.label, "Play Offline")
-        playOffline.tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 20))
+        XCTAssertEqual(play.label, "Play")
+        play.tap()
 
         let miniPlayer = app.buttons["multi-track"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
@@ -588,7 +582,7 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["multi-track"].waitForExistence(timeout: 10)
         )
-        XCTAssertTrue(app.buttons["Play Offline"].exists)
+        XCTAssertFalse(app.buttons["Play Offline"].exists)
         app.terminate()
     }
 

@@ -25,8 +25,50 @@ public struct HTTPResponse: Sendable {
     }
 }
 
+public struct TracedHTTPRequest: Sendable {
+    public let request: URLRequest
+    public let endpoint: DiagnosticEndpoint
+    public let correlationID: UUID
+
+    public init(
+        request: URLRequest,
+        endpoint: DiagnosticEndpoint,
+        correlationID: UUID = UUID()
+    ) {
+        self.request = request
+        self.endpoint = endpoint
+        self.correlationID = correlationID
+    }
+
+    public func replacingRequest(_ request: URLRequest) -> TracedHTTPRequest {
+        TracedHTTPRequest(
+            request: request,
+            endpoint: endpoint,
+            correlationID: correlationID
+        )
+    }
+}
+
 public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> HTTPResponse
+    func send(_ request: TracedHTTPRequest) async throws -> HTTPResponse
+}
+
+extension HTTPTransport {
+    public func send(_ request: URLRequest) async throws -> HTTPResponse {
+        try await send(
+            TracedHTTPRequest(
+                request: request,
+                endpoint: .status
+            )
+        )
+    }
+
+    public func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        try await send(tracedRequest.request)
+    }
 }
 
 public enum HTTPTransportError: Error, Equatable, Sendable {
@@ -51,19 +93,23 @@ private final class RedirectBlockingDelegate:
 
 public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     private let session: URLSession
+    private let diagnostics: any DiagnosticRecording
 
     public convenience init(
-        configuration: URLSessionConfiguration = .ephemeral
+        configuration: URLSessionConfiguration = .ephemeral,
+        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
     ) {
         self.init(
             configuration: configuration,
-            cookieStorage: nil
+            cookieStorage: nil,
+            diagnostics: diagnostics
         )
     }
 
     init(
         configuration: URLSessionConfiguration,
-        cookieStorage: HTTPCookieStorage?
+        cookieStorage: HTTPCookieStorage?,
+        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
     ) {
         configuration.httpShouldSetCookies = cookieStorage != nil
         configuration.httpCookieStorage = cookieStorage
@@ -76,11 +122,62 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             delegate: RedirectBlockingDelegate(),
             delegateQueue: nil
         )
+        self.diagnostics = diagnostics
     }
 
-    public func send(_ request: URLRequest) async throws -> HTTPResponse {
-        let (data, response) = try await session.data(for: request)
+    public func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
+        let method = DiagnosticHTTPMethod(request.httpMethod)
+        await diagnostics.record(
+            .started(
+                .httpRequest,
+                category: .api,
+                endpoint: tracedRequest.endpoint,
+                method: method,
+                correlationID: tracedRequest.correlationID
+            )
+        )
+        let clock = ContinuousClock()
+        let start = clock.now
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            await diagnostics.record(
+                .failed(
+                    .httpRequest,
+                    category: .api,
+                    failureCode:
+                        error is CancellationError
+                        ? .requestCancelled
+                        : .requestTransportFailed,
+                    endpoint: tracedRequest.endpoint,
+                    method: method,
+                    correlationID: tracedRequest.correlationID,
+                    durationMilliseconds: Self.milliseconds(
+                        clock.now - start
+                    )
+                )
+            )
+            throw error
+        }
         guard let response = response as? HTTPURLResponse else {
+            await diagnostics.record(
+                .failed(
+                    .httpRequest,
+                    category: .api,
+                    failureCode: .nonHTTPResponse,
+                    endpoint: tracedRequest.endpoint,
+                    method: method,
+                    correlationID: tracedRequest.correlationID,
+                    durationMilliseconds: Self.milliseconds(
+                        clock.now - start
+                    )
+                )
+            )
             throw HTTPTransportError.nonHTTPResponse
         }
 
@@ -93,11 +190,32 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             result[name] = String(describing: header.value)
         }
 
-        return HTTPResponse(
+        let result = HTTPResponse(
             data: data,
             statusCode: response.statusCode,
             headers: headers,
             url: response.url
         )
+        await diagnostics.record(
+            .completed(
+                .httpRequest,
+                category: .api,
+                endpoint: tracedRequest.endpoint,
+                method: method,
+                correlationID: tracedRequest.correlationID,
+                statusCode: response.statusCode,
+                durationMilliseconds: Self.milliseconds(clock.now - start)
+            )
+        )
+        return result
+    }
+
+    private static func milliseconds(
+        _ duration: ContinuousClock.Duration
+    ) -> Int {
+        let components = duration.components
+        let seconds = components.seconds * 1_000
+        let attoseconds = components.attoseconds / 1_000_000_000_000_000
+        return Int(clamping: seconds + attoseconds)
     }
 }

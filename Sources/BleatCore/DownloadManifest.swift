@@ -157,11 +157,6 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         updateIncompleteState()
     }
 
-    public mutating func promoteToManual() {
-        purpose = .manual
-        bookFinishedAt = nil
-    }
-
     public mutating func markBookFinished(at date: Date?) {
         guard purpose == .automaticCache else {
             return

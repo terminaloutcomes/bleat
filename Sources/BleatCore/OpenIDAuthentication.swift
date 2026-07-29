@@ -325,8 +325,10 @@ public final class URLSessionOpenIDTransport:
         )
     }
 
-    public func send(_ request: URLRequest) async throws -> HTTPResponse {
-        var sessionRequest = request
+    public func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        var sessionRequest = tracedRequest.request
         if sessionRequest.value(forHTTPHeaderField: "Cookie") == nil,
             let url = sessionRequest.url
         {
@@ -341,7 +343,9 @@ public final class URLSessionOpenIDTransport:
             }
         }
 
-        let response = try await transport.send(sessionRequest)
+        let response = try await transport.send(
+            tracedRequest.replacingRequest(sessionRequest)
+        )
         if let responseURL = response.url ?? sessionRequest.url {
             for cookie in HTTPCookie.cookies(
                 withResponseHeaderFields: response.headers,
@@ -567,7 +571,12 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
 
-        let response = try await transport.send(request)
+        let response = try await transport.send(
+            TracedHTTPRequest(
+                request: request,
+                endpoint: .beginOpenID
+            )
+        )
         guard (300..<400).contains(response.statusCode) else {
             throw
                 OpenIDAuthenticationError
@@ -616,7 +625,12 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
         var exchangeRequest = URLRequest(url: exchangeURL)
         exchangeRequest.httpMethod = "GET"
 
-        let exchangeResponse = try await transport.send(exchangeRequest)
+        let exchangeResponse = try await transport.send(
+            TracedHTTPRequest(
+                request: exchangeRequest,
+                endpoint: .completeOpenID
+            )
+        )
         guard exchangeResponse.statusCode == 200 else {
             throw OpenIDAuthenticationError.unexpectedExchangeStatus(
                 exchangeResponse.statusCode
@@ -667,7 +681,12 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             accessToken: tokens.accessToken
         )
 
-        let authorizeResponse = try await transport.send(authorizeRequest)
+        let authorizeResponse = try await transport.send(
+            TracedHTTPRequest(
+                request: authorizeRequest,
+                endpoint: .authorize
+            )
+        )
         switch authorizeResponse.statusCode {
         case 200:
             break

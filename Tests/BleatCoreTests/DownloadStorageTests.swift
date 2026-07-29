@@ -340,9 +340,6 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertEqual(record.manifest.entries[1].state, .complete)
         XCTAssertEqual(record.manifest.storedByteLength, 2)
 
-        record = try await fixture.storage.promoteToManual(record)
-        XCTAssertEqual(record.manifest.purpose, .manual)
-        XCTAssertNil(record.manifest.bookFinishedAt)
         let records = try await fixture.storage.records()
         XCTAssertEqual(records, [record])
     }

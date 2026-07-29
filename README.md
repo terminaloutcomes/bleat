@@ -140,12 +140,18 @@ Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 unit and UI suites. Core package tests run through `swift test` or
 `scripts/test-core.sh`.
 
+The equivalent command-line simulator workflow is:
+
+```sh
+mise run iphone
+```
+
 ## Archive a beta
 
 Validate a Release archive without signing:
 
 ```sh
-./scripts/archive-beta.sh
+mise run archive
 ```
 
 The archive is written to `.build/Bleat.xcarchive` and is checked for a valid
@@ -160,13 +166,37 @@ The team identifier is not stored in the repository:
 ```sh
 BLEAT_DEVELOPMENT_TEAM=YOURTEAMID \
   BLEAT_ALLOW_PROVISIONING_UPDATES=1 \
-  ./scripts/archive-beta.sh
+  mise run archive
 ```
 
 Open `.build/Bleat.xcarchive` in Xcode Organizer, choose **Distribute App**,
 then **TestFlight & App Store** to upload build `0.1.0 (1)`. Upload requires a
 paid Apple Developer team, a matching App Store Connect application, and an
 account permitted to distribute it.
+
+## Install on a personal iPhone
+
+The iPhone must run iOS 26 or newer, trust the Mac, and have Developer Mode
+enabled. Xcode must have a Personal Team or paid development team available.
+Inspect the current signing and device state:
+
+```sh
+mise run device:status
+```
+
+Set the team ID and connected iPhone UDID without storing either value in the
+repository, then build, install, and launch the Release app:
+
+```sh
+export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
+export BLEAT_DEVICE_ID="YOUR_IPHONE_UDID"
+mise run device
+```
+
+The individual stages are also available as `device:build`, `device:install`,
+and `device:launch`. If Apple reports that `com.yaleman.Bleat` is unavailable
+for the selected team, set a stable alternative such as
+`BLEAT_BUNDLE_ID=com.yaleman.Bleat.personal` before running the tasks.
 
 ## Sign in
 
@@ -193,9 +223,11 @@ to migrate that account; subsequent refresh-session failures recover silently.
 ## Browse the library
 
 Home identifies the active username, server host, and audiobook library above
-the server's personalized shelves. Completed books for that account appear
-first in a local **Downloaded** shelf and start offline playback directly. That
-shelf remains usable while personalized shelves are loading or unavailable.
+the server's personalized shelves. Completed books for that account appear in
+a local **Downloaded** shelf after **Continue Listening** and
+**Recently Added**, before the remaining personalized shelves, and start
+offline playback directly. That shelf remains usable while personalized
+shelves are loading or unavailable.
 Shelf cards are compact enough to scan several books without losing title and
 author context. Pull down on Home to refresh the current library page and its
 personalized shelves.
@@ -292,10 +324,12 @@ Starting streamed playback also creates an automatic whole-file cache. Bleat
 keeps the current file plus enough following files to cover the next configured
 chapter window when file timing is available, and otherwise keeps the
 configured number of files ahead. The default is five files ahead; a single
-M4B is downloaded once in full. Settings can delete automatic cache files after
-each completed chapter, when the book finishes, or—by default—24 hours after
-the book finishes. Cleanup never applies to an explicit download. Choose
-**Keep Full Book** on an automatic cache to retain it as a normal download.
+M4B is downloaded once in full. Automatic transfers wait for stable playback,
+run at background priority, and suspend whenever the player needs bandwidth.
+Their displayed byte count advances during the transfer. Settings can delete
+automatic cache files after each completed chapter, when the book finishes,
+or—by default—24 hours after the book finishes. Cleanup never applies to an
+explicit download.
 
 Book detail keeps Play, Download, and finished-state actions above long
 description and metadata content. It shows series and sequence, audio-file and

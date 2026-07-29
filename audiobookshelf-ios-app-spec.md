@@ -148,8 +148,6 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   ahead; a single-file book caches that complete file.
 - I can choose whether automatic cache files are deleted after each completed
   chapter, when the book finishes, or 24 hours after the book finishes.
-- I can promote an automatic cache to an explicit full-book download that is
-  exempt from automatic cleanup.
 - The app checks available storage before starting and never leaves a completed book pointing at partial files.
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
 - Offline listening sessions and progress synchronize after reconnection.
@@ -697,8 +695,10 @@ Requirements:
   the current file plus the configured number of following files;
 - default automatic lookahead of five, with a single-file book downloading the
   complete file once;
-- distinguish automatic cache records from explicit downloads and allow an
-  automatic cache to be promoted to an explicit full-book download;
+- automatic cache transfers wait for stable streamed playback, use background
+  network priority, and suspend whenever the player needs bandwidth;
+- distinguish automatic cache records from explicit downloads so automatic
+  cleanup never applies to an explicit download;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
 - pause/cancel/retry;
@@ -1205,8 +1205,9 @@ MVP unit coverage continues with:
 - progress conflict detection;
 - metadata patch generation and stale-draft detection;
 - download manifest state transitions and path sanitization.
-- automatic whole-file lookahead selection, cache/manual ownership,
-  chapter-boundary eviction, and delayed book-completion cleanup.
+- automatic whole-file lookahead selection, playback-bandwidth gating,
+  cache/manual ownership, live byte aggregation, chapter-boundary eviction,
+  and delayed book-completion cleanup.
 
 ### 20.2 Network integration tests
 

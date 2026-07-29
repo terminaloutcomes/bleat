@@ -302,15 +302,6 @@ public actor DownloadStorage {
         return record
     }
 
-    public func promoteToManual(
-        _ storedRecord: DownloadedBookRecord
-    ) throws(DownloadStorageError) -> DownloadedBookRecord {
-        var record = try load(storedRecord)
-        record.manifest.promoteToManual()
-        try persist(record)
-        return record
-    }
-
     public func markBookFinished(
         _ storedRecord: DownloadedBookRecord,
         at date: Date?

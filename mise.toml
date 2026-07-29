@@ -1,10 +1,84 @@
 [tasks.iphone]
+description = "Build and launch Bleat on the default iPhone simulator"
 run = [
     """xcodebuild \
   -project Bleat.xcodeproj \
-  -scheme Bleat -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcode-derived build""",
+  -scheme Bleat \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath .build/xcode-derived \
+  build""",
     """xcrun simctl install booted \
-  .build/xcode-derived/Build/Products/Debug-iphonesimulator/Bleat.app build""",
-    """xcrun simctl install booted .build/xcode-derived/Build/Products/Debug-iphonesimulator/Bleat.app""",
-    """xcrun simctl launch --terminate-running-process booted com.yaleman.Bleat""",
+  .build/xcode-derived/Build/Products/Debug-iphonesimulator/Bleat.app""",
+    "xcrun simctl launch --terminate-running-process booted com.yaleman.Bleat",
+]
+
+[tasks.archive]
+description = "Create and validate the Release archive"
+run = "./scripts/archive-beta.sh"
+
+[tasks."device:status"]
+description = "List signing identities and connected Apple devices"
+run = [
+    "security find-identity -v -p codesigning",
+    "xcrun devicectl list devices",
+]
+
+[tasks."device:build"]
+description = "Build a development-signed Release app for a physical iPhone"
+run = """
+#!/usr/bin/env zsh
+set -euo pipefail
+
+: "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
+: "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.yaleman.Bleat}"
+
+xcodebuild \
+  -project Bleat.xcodeproj \
+  -scheme Bleat \
+  -configuration Release \
+  -destination "platform=iOS,id=${BLEAT_DEVICE_ID}" \
+  -derivedDataPath .build/device-release \
+  -allowProvisioningUpdates \
+  -allowProvisioningDeviceRegistration \
+  DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \
+  CODE_SIGN_STYLE=Automatic \
+  PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
+  build
+"""
+
+[tasks."device:install"]
+description = "Install the signed Release app on a physical iPhone"
+run = """
+#!/usr/bin/env zsh
+set -euo pipefail
+
+: "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
+
+xcrun devicectl device install app \
+  --device "${BLEAT_DEVICE_ID}" \
+  .build/device-release/Build/Products/Release-iphoneos/Bleat.app
+"""
+
+[tasks."device:launch"]
+description = "Launch Bleat on a physical iPhone"
+run = """
+#!/usr/bin/env zsh
+set -euo pipefail
+
+: "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.yaleman.Bleat}"
+
+xcrun devicectl device process launch \
+  --device "${BLEAT_DEVICE_ID}" \
+  "${bleat_bundle_id}"
+"""
+
+[tasks.device]
+description = "Build, install, and launch Bleat on a physical iPhone"
+run = [
+    "mise run device:build",
+    "mise run device:install",
+    "mise run device:launch",
 ]

@@ -217,52 +217,56 @@ extension PlaybackSyncState {
 }
 
 extension AppFailure {
-    fileprivate var diagnosticsCode: String {
+    var diagnosticFailureCode: DiagnosticFailureCode {
         switch self {
         case .persistenceUnavailable:
-            "persistence_unavailable"
+            .persistenceUnavailable
         case .invalidServerAddress:
-            "invalid_server_address"
+            .invalidServerAddress
         case .serverUnavailable:
-            "server_unavailable"
+            .serverUnavailable
         case .serverRequiresHTTPS:
-            "server_requires_https"
+            .serverRequiresHTTPS
         case .serverNotReady:
-            "server_not_ready"
+            .serverNotReady
         case .serverUnsupported:
-            "server_unsupported"
+            .serverUnsupported
         case .localLoginUnavailable:
-            "local_login_unavailable"
+            .localLoginUnavailable
         case .invalidCredentials:
-            "invalid_credentials"
+            .invalidCredentials
         case .loginFailed:
-            "login_failed"
+            .loginFailed
         case .accountUnavailable:
-            "account_unavailable"
+            .accountUnavailable
         case .libraryUnavailable:
-            "library_unavailable"
+            .libraryUnavailable
         case .homeUnavailable:
-            "home_unavailable"
+            .homeUnavailable
         case .searchUnavailable:
-            "search_unavailable"
+            .searchUnavailable
         case .bookUnavailable:
-            "book_unavailable"
+            .bookUnavailable
         case .playbackDenied:
-            "playback_denied"
+            .playbackDenied
         case .playbackUnavailable:
-            "playback_unavailable"
+            .playbackUnavailable
         case .progressUnavailable:
-            "progress_unavailable"
+            .progressUnavailable
         case .mediaUnavailable:
-            "media_unavailable"
+            .mediaUnavailable
         case .invalidMetadata:
-            "invalid_metadata"
+            .invalidMetadata
         case .metadataUnavailable:
-            "metadata_unavailable"
+            .metadataUnavailable
         case .bookmarkUnavailable:
-            "bookmark_unavailable"
+            .bookmarkUnavailable
         case .accountRemovalFailed:
-            "account_removal_failed"
+            .accountRemovalFailed
         }
+    }
+
+    fileprivate var diagnosticsCode: String {
+        diagnosticFailureCode.rawValue
     }
 }
