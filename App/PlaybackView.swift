@@ -290,6 +290,22 @@ struct PlayerView: View {
                                 }
                             }
                         }
+                        if !playback.pendingBookmarkMutations.isEmpty {
+                            Divider()
+                            Text(
+                                "\(playback.pendingBookmarkMutations.count) stored locally"
+                            )
+                            if playback.pendingBookmarkMutations.contains(
+                                where: { $0.status == .failed }
+                            ), playback.canSyncBookmarks {
+                                Button("Retry Pending Changes") {
+                                    Task {
+                                        await playback
+                                            .retryPendingBookmarks()
+                                    }
+                                }
+                            }
+                        }
                     } label: {
                         Label("Bookmarks", systemImage: "bookmark")
                     }
@@ -305,6 +321,20 @@ struct PlayerView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("player.bookmarkError")
+                }
+                if !playback.pendingBookmarkMutations.isEmpty {
+                    let failedCount =
+                        playback.pendingBookmarkMutations.filter {
+                            $0.status == .failed
+                        }.count
+                    Text(
+                        failedCount == 0
+                            ? "Bookmark changes are stored on this device."
+                            : "\(failedCount) bookmark change \(failedCount == 1 ? "has" : "have") not synced."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("player.bookmarkPending")
                 }
 
                 Spacer()

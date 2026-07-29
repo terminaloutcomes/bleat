@@ -25,8 +25,8 @@ Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
 tracking, lifetime statistics, and listening-history import/export. Downloaded
 playback uses a durable UUIDv4 local-session outbox while reporting zero
-listening time. Durable offline bookmark reconciliation remains under active
-development.
+listening time. Bookmark creates, renames, and deletes also use a durable local
+outbox when the server is unavailable.
 
 ## Requirements
 
@@ -174,8 +174,11 @@ optional 5, 10, 15, or 30-second rewind when resuming after a pause longer than
 five minutes.
 Its Bookmarks menu loads the current book's server bookmarks, creates a
 bookmark at the current whole-book position, and supports rename and delete.
-The same controls remain available during local-file playback when the server
-is reachable.
+The same controls remain available during local-file playback. Changes appear
+immediately, survive relaunch, and reconcile in order when the playback
+account can reach the server. Ambiguous create retries refetch first and do not
+duplicate an already-created bookmark. Failed synchronization remains visible
+in Now Playing with an explicit retry action.
 While streaming, Bleat sends the whole-book position to Audiobookshelf every
 15 seconds and after pause, seek, backgrounding, interruption, and completion.
 The MVP deliberately reports zero additional listening time.
@@ -248,8 +251,9 @@ stop current playback or unrelated background downloads.
 books, choose whether to keep or delete them. Keeping them cancels unfinished
 transfers but preserves local files, metadata, and device progress. When no
 account remains, **Offline Downloads** on the sign-in screen still opens and
-plays those books; server bookmarks and synchronization remain unavailable
-for that retained account-free copy.
+plays those books. Bookmark changes made to that retained account-free copy are
+stored on the device, but server bookmarks and synchronization remain
+unavailable.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual

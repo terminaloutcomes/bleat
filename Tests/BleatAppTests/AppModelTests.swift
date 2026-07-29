@@ -280,6 +280,95 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(restored.playbackRate(), 1)
     }
 
+    func testBookmarkMutationStorePersistsAndAppliesOptimisticChanges()
+        throws
+    {
+        let suite = "BookmarkMutationStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let accountID = AccountID(rawValue: "account")
+        let itemID = LibraryItemID(rawValue: "item")
+        let bookmark = AudioBookmark(
+            libraryItemID: itemID,
+            time: 42,
+            title: "Queued",
+            createdAtMilliseconds: 1
+        )
+        let store = BookmarkMutationStore(defaults: defaults)
+        let mutation = try store.enqueue(
+            accountID: accountID,
+            bookmark: bookmark,
+            kind: .create,
+            status: .failed
+        )
+
+        let restored = BookmarkMutationStore(defaults: defaults)
+        XCTAssertEqual(
+            try restored.mutations(accountID: accountID),
+            [mutation]
+        )
+        XCTAssertEqual(
+            restored.applying([mutation], to: []),
+            [bookmark]
+        )
+        XCTAssertEqual(
+            BookmarkReconciliationDecision.decide(
+                mutation: mutation,
+                remote: [bookmark]
+            ),
+            .complete
+        )
+        XCTAssertEqual(
+            BookmarkReconciliationDecision.decide(
+                mutation: mutation,
+                remote: []
+            ),
+            .create(title: "Queued")
+        )
+        let renamed = try store.enqueue(
+            accountID: accountID,
+            bookmark: bookmark,
+            kind: .rename,
+            title: "Renamed",
+            status: .pending
+        )
+        XCTAssertEqual(
+            BookmarkReconciliationDecision.decide(
+                mutation: renamed,
+                remote: [bookmark]
+            ),
+            .rename(bookmark, title: "Renamed")
+        )
+        let deleted = try store.enqueue(
+            accountID: accountID,
+            bookmark: bookmark,
+            kind: .delete,
+            status: .pending
+        )
+        XCTAssertEqual(
+            BookmarkReconciliationDecision.decide(
+                mutation: deleted,
+                remote: []
+            ),
+            .complete
+        )
+
+        try restored.markPending(accountID: accountID)
+        XCTAssertEqual(
+            try restored.mutations(accountID: accountID)[0].status,
+            .pending
+        )
+        try restored.remove(mutation.id)
+        XCTAssertEqual(
+            try restored.mutations(accountID: accountID),
+            [renamed, deleted]
+        )
+        try restored.removeAll(accountID: accountID)
+        XCTAssertTrue(try restored.mutations(accountID: accountID).isEmpty)
+    }
+
     func testResumeRewindRequiresFiveMinutePauseAndClampsAtBookStart() {
         let pausedAt = Date(timeIntervalSince1970: 1_000)
 

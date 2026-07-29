@@ -25,6 +25,7 @@
 		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
 		B87F1CC629E7094C9B063DA6 /* LocalPlaybackSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D22D9E035F6E4DE28DE0B5 /* LocalPlaybackSessionStore.swift */; };
 		C1224783D3F9B1CC7057759A /* AppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12995342C7E6318A5F929A2 /* AppService.swift */; };
+		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
 		FF6591E97BE41B688DA71F70 /* BleatUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E1797402B69FE6551AC02B /* BleatUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -65,6 +66,7 @@
 		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
+		F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMutationStore.swift; sourceTree = "<group>"; };
 		F2675018070436D35F6FC0FF /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
 		F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAppService.swift; sourceTree = "<group>"; };
 		F8D22D9E035F6E4DE28DE0B5 /* LocalPlaybackSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPlaybackSessionStore.swift; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
 				A9F16612F5D186DFAED140F6 /* BookCoverView.swift */,
+				F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */,
 				9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */,
 				6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */,
 				A7BFAE347AEDFB9E315AD92C /* Info.plist */,
@@ -294,6 +297,7 @@
 				C1224783D3F9B1CC7057759A /* AppService.swift in Sources */,
 				071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */,
 				297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */,
+				E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */,
 				212CB9A152C459B1BFDFBBCF /* CoverImageProcessor.swift in Sources */,
 				9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */,
 				B87F1CC629E7094C9B063DA6 /* LocalPlaybackSessionStore.swift in Sources */,

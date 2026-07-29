@@ -44,6 +44,7 @@ final class PlaybackModel {
     private let service: any AppServicing
     private let positionStore: PlaybackPositionStore
     private let localSessionStore: LocalPlaybackSessionStore
+    private let bookmarkMutationStore: BookmarkMutationStore
     private let preferencesStore: PlaybackPreferencesStore
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
@@ -74,8 +75,13 @@ final class PlaybackModel {
     private(set) var sleepTimer: PlaybackSleepTimer?
     private(set) var resumeRewind: ResumeRewind
     private(set) var bookmarks: [AudioBookmark] = []
+    private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
     private(set) var positionConflict: PlaybackPositionConflict?
+
+    var canSyncBookmarks: Bool {
+        activeAccount != nil
+    }
 
     var hasActiveBook: Bool {
         state != .idle
@@ -93,11 +99,13 @@ final class PlaybackModel {
         service: any AppServicing,
         positionStore: PlaybackPositionStore = .shared,
         localSessionStore: LocalPlaybackSessionStore = .shared,
+        bookmarkMutationStore: BookmarkMutationStore = .shared,
         preferencesStore: PlaybackPreferencesStore = .shared
     ) {
         self.service = service
         self.positionStore = positionStore
         self.localSessionStore = localSessionStore
+        self.bookmarkMutationStore = bookmarkMutationStore
         self.preferencesStore = preferencesStore
         rate = preferencesStore.playbackRate()
         resumeRewind = preferencesStore.resumeRewind()
@@ -151,6 +159,7 @@ final class PlaybackModel {
         lastAttemptedSyncTime = currentTime
         syncState = .idle
         bookmarks = []
+        pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
 
@@ -241,6 +250,7 @@ final class PlaybackModel {
         currentTime = detail.progress?.currentTime ?? 0
         syncState = .idle
         bookmarks = []
+        pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
 
@@ -360,84 +370,208 @@ final class PlaybackModel {
     }
 
     func loadBookmarks() async {
-        guard let activeAccount, let itemID else {
+        guard let accountID = bookmarkAccountID, let itemID else {
             bookmarks = []
+            pendingBookmarkMutations = []
             bookmarkState = .idle
             return
         }
         bookmarkState = .loading
+        if let activeAccount {
+            await syncPendingBookmarks(for: activeAccount)
+        }
         do {
-            bookmarks = try await service.bookmarks(
-                for: activeAccount,
+            let queued = try bookmarkMutationStore.mutations(
+                accountID: accountID,
                 itemID: itemID
             )
+            pendingBookmarkMutations = queued
+            let remote: [AudioBookmark]
+            if let activeAccount {
+                remote = try await service.bookmarks(
+                    for: activeAccount,
+                    itemID: itemID
+                )
+            } else {
+                remote = []
+            }
+            bookmarks = bookmarkMutationStore.applying(queued, to: remote)
             bookmarkState = .ready
         } catch let error {
-            bookmarkState = .failed(AppFailure(serviceError: error))
+            if let serviceError = error as? AppServiceError {
+                bookmarkState = .failed(
+                    AppFailure(serviceError: serviceError)
+                )
+            } else {
+                bookmarkState = .failed(.bookmarkUnavailable)
+            }
         }
     }
 
     func createBookmark(title: String) async -> Bool {
-        guard let activeAccount, let itemID else {
+        guard let accountID = bookmarkAccountID, let itemID else {
             bookmarkState = .failed(.bookmarkUnavailable)
             return false
         }
+        let bookmark = AudioBookmark(
+            libraryItemID: itemID,
+            time: currentTime,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            createdAtMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
+        )
         bookmarkState = .saving
-        do {
-            let bookmark = try await service.createBookmark(
-                for: activeAccount,
-                itemID: itemID,
-                time: currentTime,
-                title: title
+        if let activeAccount {
+            do {
+                let saved = try await service.createBookmark(
+                    for: activeAccount,
+                    itemID: itemID,
+                    time: currentTime,
+                    title: title
+                )
+                replaceBookmark(saved)
+                bookmarkState = .ready
+                return true
+            } catch {
+                return queueBookmarkMutation(
+                    accountID: accountID,
+                    bookmark: bookmark,
+                    kind: .create,
+                    title: title,
+                    status: .failed
+                )
+            }
+        } else {
+            return queueBookmarkMutation(
+                accountID: accountID,
+                bookmark: bookmark,
+                kind: .create,
+                title: title,
+                status: .pending
             )
-            replaceBookmark(bookmark)
-            bookmarkState = .ready
-            return true
-        } catch let error {
-            bookmarkState = .failed(AppFailure(serviceError: error))
-            return false
         }
+    }
+
+    func retryPendingBookmarks() async {
+        guard let accountID = activeAccount?.id else {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return
+        }
+        do {
+            try bookmarkMutationStore.markPending(
+                accountID: accountID
+            )
+        } catch {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return
+        }
+        await loadBookmarks()
     }
 
     func renameBookmark(
         _ bookmark: AudioBookmark,
         title: String
     ) async -> Bool {
-        guard let activeAccount else {
+        guard let accountID = bookmarkAccountID else {
             bookmarkState = .failed(.bookmarkUnavailable)
             return false
         }
         bookmarkState = .saving
-        do {
-            let updated = try await service.renameBookmark(
-                for: activeAccount,
+        if let activeAccount {
+            do {
+                let updated = try await service.renameBookmark(
+                    for: activeAccount,
+                    bookmark: bookmark,
+                    title: title
+                )
+                replaceBookmark(updated)
+                bookmarkState = .ready
+                return true
+            } catch {
+                return queueBookmarkMutation(
+                    accountID: accountID,
+                    bookmark: bookmark,
+                    kind: .rename,
+                    title: title,
+                    status: .failed
+                )
+            }
+        } else {
+            return queueBookmarkMutation(
+                accountID: accountID,
                 bookmark: bookmark,
-                title: title
+                kind: .rename,
+                title: title,
+                status: .pending
             )
-            replaceBookmark(updated)
-            bookmarkState = .ready
-            return true
-        } catch let error {
-            bookmarkState = .failed(AppFailure(serviceError: error))
-            return false
         }
     }
 
     func deleteBookmark(_ bookmark: AudioBookmark) async {
-        guard let activeAccount else {
+        guard let accountID = bookmarkAccountID else {
             bookmarkState = .failed(.bookmarkUnavailable)
             return
         }
         bookmarkState = .saving
+        if let activeAccount {
+            do {
+                try await service.deleteBookmark(
+                    for: activeAccount,
+                    bookmark: bookmark
+                )
+                bookmarks.removeAll { $0.id == bookmark.id }
+                bookmarkState = .ready
+                return
+            } catch {
+                _ = queueBookmarkMutation(
+                    accountID: accountID,
+                    bookmark: bookmark,
+                    kind: .delete,
+                    status: .failed
+                )
+                return
+            }
+        }
+        _ = queueBookmarkMutation(
+            accountID: accountID,
+            bookmark: bookmark,
+            kind: .delete,
+            status: .pending
+        )
+    }
+
+    private var bookmarkAccountID: AccountID? {
+        localAccountID ?? activeAccount?.id
+    }
+
+    private func queueBookmarkMutation(
+        accountID: AccountID,
+        bookmark: AudioBookmark,
+        kind: QueuedBookmarkMutationKind,
+        title: String? = nil,
+        status: QueuedBookmarkMutationStatus
+    ) -> Bool {
         do {
-            try await service.deleteBookmark(
-                for: activeAccount,
-                bookmark: bookmark
+            _ = try bookmarkMutationStore.enqueue(
+                accountID: accountID,
+                bookmark: bookmark,
+                kind: kind,
+                title: title,
+                status: status
             )
-            bookmarks.removeAll { $0.id == bookmark.id }
+            let queued = try bookmarkMutationStore.mutations(
+                accountID: accountID,
+                itemID: bookmark.libraryItemID
+            )
+            pendingBookmarkMutations = queued
+            bookmarks = bookmarkMutationStore.applying(
+                queued,
+                to: bookmarks
+            )
             bookmarkState = .ready
-        } catch let error {
-            bookmarkState = .failed(AppFailure(serviceError: error))
+            return true
+        } catch {
+            bookmarkState = .failed(.bookmarkUnavailable)
+            return false
         }
     }
 
@@ -1128,25 +1262,100 @@ final class PlaybackModel {
             let pending = try localSessionStore.pending(
                 accountID: account.id
             )
-            guard !pending.isEmpty else {
-                return
+            if !pending.isEmpty {
+                let results = try await service.syncLocalPlaybackSessions(
+                    for: account,
+                    sessions: pending,
+                    deviceInfo: Self.deviceInfo()
+                )
+                try localSessionStore.removeAcknowledged(
+                    accountID: account.id,
+                    sessionIDs: Set(results.filter(\.success).map(\.id))
+                )
             }
-            let results = try await service.syncLocalPlaybackSessions(
-                for: account,
-                sessions: pending,
-                deviceInfo: Self.deviceInfo()
-            )
-            try localSessionStore.removeAcknowledged(
-                accountID: account.id,
-                sessionIDs: Set(results.filter(\.success).map(\.id))
-            )
         } catch {
             // The durable outbox remains intact for the next retry.
+            return
         }
+        await syncPendingBookmarks(for: account)
     }
 
-    func removeLocalSessions(for accountID: AccountID) {
+    func removeLocalData(for accountID: AccountID) {
         try? localSessionStore.removeAll(accountID: accountID)
+        try? bookmarkMutationStore.removeAll(accountID: accountID)
+    }
+
+    private func syncPendingBookmarks(for account: ServerAccount) async {
+        let queued: [QueuedBookmarkMutation]
+        do {
+            queued = try bookmarkMutationStore.mutations(
+                accountID: account.id
+            )
+        } catch {
+            return
+        }
+        for mutation in queued {
+            guard
+                await reconcileBookmarkMutation(
+                    mutation,
+                    account: account
+                )
+            else {
+                try? bookmarkMutationStore.markFailed(mutation.id)
+                break
+            }
+            try? bookmarkMutationStore.remove(mutation.id)
+        }
+        guard bookmarkAccountID == account.id, let itemID else {
+            return
+        }
+        pendingBookmarkMutations =
+            (try? bookmarkMutationStore.mutations(
+                accountID: account.id,
+                itemID: itemID
+            )) ?? []
+    }
+
+    private func reconcileBookmarkMutation(
+        _ mutation: QueuedBookmarkMutation,
+        account: ServerAccount
+    ) async -> Bool {
+        do {
+            let remote = try await service.bookmarks(
+                for: account,
+                itemID: mutation.itemID
+            )
+            switch BookmarkReconciliationDecision.decide(
+                mutation: mutation,
+                remote: remote
+            ) {
+            case .complete:
+                return true
+            case .create(let title):
+                _ = try await service.createBookmark(
+                    for: account,
+                    itemID: mutation.itemID,
+                    time: mutation.time,
+                    title: title
+                )
+            case .rename(let existing, let title):
+                _ = try await service.renameBookmark(
+                    for: account,
+                    bookmark: existing,
+                    title: title
+                )
+            case .delete(let existing):
+                try await service.deleteBookmark(
+                    for: account,
+                    bookmark: existing
+                )
+            case .invalid:
+                return false
+            }
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func beginLocalPlaybackSession(
