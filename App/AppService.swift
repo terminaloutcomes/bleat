@@ -16,6 +16,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case pageRequest(LibraryPageRequestError)
     case searchRequest(LibrarySearchRequestError)
     case searchCoordinator(LibrarySearchCoordinatorError)
+    case bookDetail(LibraryRepositoryError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
 }
@@ -44,6 +45,12 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID,
         query: String
     ) async throws(AppServiceError) -> [LibraryBookSummary]
+
+    func bookDetail(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookDetail
 
     func removeAccount(
         _ account: ServerAccount
@@ -212,6 +219,22 @@ actor LiveAppService: AppServicing {
             ).value
         } catch let error {
             throw .searchCoordinator(error)
+        }
+    }
+
+    func bookDetail(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        let repository = repository(for: account)
+        do {
+            return try await repository.bookDetail(
+                for: itemID,
+                in: libraryID
+            ).value
+        } catch let error {
+            throw .bookDetail(error)
         }
     }
 

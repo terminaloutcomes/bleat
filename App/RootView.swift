@@ -239,6 +239,9 @@ private struct BookListContent: View {
                 }
             }
         }
+        .navigationDestination(for: LibraryBookSummary.self) { book in
+            BookDetailView(model: model, book: book)
+        }
     }
 
     @ViewBuilder
@@ -257,7 +260,9 @@ private struct BookListContent: View {
                 )
             } else {
                 List(page.items, id: \.id.rawValue) { book in
-                    BookSummaryRow(book: book)
+                    NavigationLink(value: book) {
+                        BookSummaryRow(book: book)
+                    }
                 }
                 .accessibilityIdentifier("books.list")
             }
@@ -288,6 +293,9 @@ private struct SearchView: View {
         NavigationStack {
             content
                 .navigationTitle("Search")
+                .navigationDestination(for: LibraryBookSummary.self) { book in
+                    BookDetailView(model: model, book: book)
+                }
         }
         .searchable(
             text: $query,
@@ -323,7 +331,9 @@ private struct SearchView: View {
                     .accessibilityIdentifier("search.empty")
             } else {
                 List(results, id: \.id.rawValue) { book in
-                    BookSummaryRow(book: book)
+                    NavigationLink(value: book) {
+                        BookSummaryRow(book: book)
+                    }
                 }
                 .accessibilityIdentifier("search.results")
             }
@@ -348,6 +358,164 @@ private struct BookSummaryRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct BookDetailView: View {
+    @Bindable var model: AppModel
+    let book: LibraryBookSummary
+
+    var body: some View {
+        Group {
+            if model.selectedBookID != book.id {
+                ProgressView()
+                    .accessibilityIdentifier("book.detail.loading")
+            } else {
+                switch model.bookDetail {
+                case .idle, .loading:
+                    ProgressView()
+                        .accessibilityIdentifier("book.detail.loading")
+                case .failed(let failure):
+                    ContentUnavailableView(
+                        "Audiobook unavailable",
+                        systemImage: "wifi.exclamationmark",
+                        description: Text(failure.message)
+                    )
+                    .accessibilityIdentifier("book.detail.error")
+                case .loaded(let detail):
+                    detailContent(detail)
+                }
+            }
+        }
+        .navigationTitle(book.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: book.id.rawValue) {
+            await model.loadBookDetail(book)
+        }
+    }
+
+    private func detailContent(_ detail: LibraryBookDetail) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(detail.title)
+                        .font(.title.bold())
+                        .accessibilityIdentifier("book.detail.title")
+                    if let subtitle = detail.subtitle {
+                        Text(subtitle)
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !detail.authors.isEmpty {
+                        Text(detail.authors.map(\.name).joined(separator: ", "))
+                            .font(.headline)
+                    }
+                    if !detail.narrators.isEmpty {
+                        Text(
+                            "Narrated by "
+                                + detail.narrators.joined(separator: ", ")
+                        )
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let progress = detail.progress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: progress.progress)
+                        Text(
+                            progress.isFinished
+                                ? "Finished"
+                                : "\(Int(progress.progress * 100))% complete"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let description = detail.descriptionPlain,
+                    !description.isEmpty
+                {
+                    Text(description)
+                        .accessibilityIdentifier("book.detail.description")
+                }
+
+                detailsGrid(detail)
+
+                if !detail.chapters.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Chapters")
+                            .font(.headline)
+                        ForEach(
+                            Array(detail.chapters.enumerated()),
+                            id: \.offset
+                        ) { _, chapter in
+                            Text(chapter.title)
+                        }
+                    }
+                }
+
+                accessMessage(detail)
+            }
+            .padding()
+        }
+        .accessibilityIdentifier("book.detail")
+    }
+
+    @ViewBuilder
+    private func detailsGrid(_ detail: LibraryBookDetail) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Details")
+                .font(.headline)
+            LabeledContent("Duration", value: durationText(detail.duration))
+            if let publishedYear = detail.publishedYear {
+                LabeledContent("Published", value: publishedYear)
+            }
+            if let publisher = detail.publisher {
+                LabeledContent("Publisher", value: publisher)
+            }
+            if let language = detail.language {
+                LabeledContent("Language", value: language)
+            }
+            if !detail.genres.isEmpty {
+                LabeledContent(
+                    "Genres",
+                    value: detail.genres.joined(separator: ", ")
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func accessMessage(_ detail: LibraryBookDetail) -> some View {
+        if let user = model.account?.user {
+            let availability = BookActionAvailability(
+                user: user,
+                detail: detail
+            )
+            switch availability.access {
+            case .allowed:
+                EmptyView()
+            case .inaccessibleLibrary:
+                Text("This account cannot access the audiobook's library.")
+                    .foregroundStyle(.secondary)
+            case .inaccessibleTags:
+                Text("This account cannot access the audiobook's tags.")
+                    .foregroundStyle(.secondary)
+            case .explicitContentDenied:
+                Text("This account cannot access explicit audiobooks.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func durationText(_ duration: Double) -> String {
+        let totalMinutes = max(0, Int(duration) / 60)
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours == 0 {
+            return "\(minutes) min"
+        }
+        return "\(hours) hr \(minutes) min"
     }
 }
 

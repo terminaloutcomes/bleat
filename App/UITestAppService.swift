@@ -109,6 +109,49 @@
             return firstPageItem(libraryID: libraryID)
         }
 
+        func bookDetail(
+            for account: ServerAccount,
+            libraryID: LibraryID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> LibraryBookDetail {
+            LibraryBookDetail(
+                id: itemID,
+                libraryID: libraryID,
+                bookID: BookID(rawValue: "ui-book"),
+                title: itemID.rawValue == "ui-search-book"
+                    ? "The Search Result"
+                    : "The Test Audiobook",
+                subtitle: "A complete test story",
+                authors: [
+                    LibraryBookContributor(
+                        id: "author-1",
+                        name: "Test Author"
+                    )
+                ],
+                narrators: ["Test Narrator"],
+                series: [],
+                genres: ["Fiction"],
+                tags: [],
+                publishedYear: "2026",
+                publishedDate: nil,
+                publisher: "Test Press",
+                descriptionPlain:
+                    "An expanded audiobook loaded from the server.",
+                isbn: nil,
+                asin: nil,
+                language: "English",
+                duration: 3_600,
+                trackCount: 1,
+                audioFileCount: 1,
+                chapters: [],
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false,
+                progress: nil
+            )
+        }
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

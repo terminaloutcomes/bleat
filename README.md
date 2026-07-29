@@ -7,8 +7,10 @@ and is being implemented in Swift 6 with strict concurrency checking.
 The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
 an Audiobookshelf username and password, loads cached or live audiobook
-libraries and their first pages, presents the five-tab root shell, and removes
-accounts. The core implements URL, routing, discovery, username/password login,
+libraries and their first pages, searches the selected library, opens expanded
+book details with progress and chapters, presents the five-tab root shell, and
+removes accounts. The core implements URL, routing, discovery,
+username/password login,
 single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
@@ -19,8 +21,8 @@ action visibility, playback-session, and background-download contract behavior
 is tested. Native Audiobookshelf username/password is the active
 authentication scope; the earlier isolated OIDC spike is deferred. The MVP
 also defers local time tracking, lifetime statistics, and listening-history
-import/export. Server-side audiobook search is available in the Search tab;
-playback, downloads, and editing remain under active development.
+import/export. Playback, downloads, and editing remain under active
+development.
 
 ## Requirements
 

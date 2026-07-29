@@ -41,6 +41,7 @@ enum AppFailure: Equatable, Sendable {
     case accountUnavailable
     case libraryUnavailable
     case searchUnavailable
+    case bookUnavailable
     case accountRemovalFailed
 
     var message: String {
@@ -69,6 +70,8 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not load the audiobook library."
         case .searchUnavailable:
             "Bleat could not search the audiobook library."
+        case .bookUnavailable:
+            "Bleat could not load that audiobook."
         case .accountRemovalFailed:
             "Bleat could not remove the account."
         }
@@ -112,6 +115,8 @@ enum AppFailure: Equatable, Sendable {
             self = .libraryUnavailable
         case .searchRequest, .searchCoordinator:
             self = .searchUnavailable
+        case .bookDetail:
+            self = .bookUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed
         }
@@ -124,6 +129,7 @@ final class AppModel {
     private let service: any AppServicing
     private var hasStarted = false
     private var searchGeneration: UInt64 = 0
+    private var bookDetailGeneration: UInt64 = 0
 
     private(set) var phase: AppPhase
     private(set) var loginStatus: LoginStatus = .idle
@@ -134,6 +140,8 @@ final class AppModel {
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
+    private(set) var selectedBookID: LibraryItemID?
+    private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
 
     init(service: any AppServicing) {
         self.service = service
@@ -206,6 +214,7 @@ final class AppModel {
         selectedLibrary = nil
         books = .idle
         resetSearch()
+        resetBookDetail()
 
         do {
             let loadedLibraries = try await service.libraries(for: account)
@@ -229,6 +238,7 @@ final class AppModel {
         }
         if selectedLibrary?.id != library.id {
             resetSearch()
+            resetBookDetail()
         }
         selectedLibrary = library
         books = .loading
@@ -283,6 +293,37 @@ final class AppModel {
         }
     }
 
+    func loadBookDetail(_ book: LibraryBookSummary) async {
+        bookDetailGeneration &+= 1
+        let operationGeneration = bookDetailGeneration
+        selectedBookID = book.id
+
+        guard let account else {
+            bookDetail = .failed(.accountUnavailable)
+            return
+        }
+        bookDetail = .loading
+
+        do {
+            let detail = try await service.bookDetail(
+                for: account,
+                libraryID: book.libraryID,
+                itemID: book.id
+            )
+            guard bookDetailGeneration == operationGeneration else {
+                return
+            }
+            bookDetail = .loaded(detail)
+        } catch let error {
+            guard bookDetailGeneration == operationGeneration,
+                !Task.isCancelled
+            else {
+                return
+            }
+            bookDetail = .failed(AppFailure(serviceError: error))
+        }
+    }
+
     func removeAccount() async {
         guard let account else {
             accountActionStatus = .failed(.accountUnavailable)
@@ -300,6 +341,7 @@ final class AppModel {
             libraries = .idle
             books = .idle
             resetSearch()
+            resetBookDetail()
             accountActionStatus = .idle
             loginStatus = .idle
             phase = .signedOut
@@ -314,5 +356,11 @@ final class AppModel {
         searchGeneration &+= 1
         searchQuery = ""
         searchResults = .idle
+    }
+
+    private func resetBookDetail() {
+        bookDetailGeneration &+= 1
+        selectedBookID = nil
+        bookDetail = .idle
     }
 }

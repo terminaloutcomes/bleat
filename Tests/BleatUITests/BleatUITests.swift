@@ -33,6 +33,15 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Settings"].exists)
         XCTAssertTrue(app.staticTexts["The Test Audiobook"].exists)
 
+        app.staticTexts["The Test Audiobook"].tap()
+        let description = app.staticTexts["book.detail.description"]
+        XCTAssertTrue(description.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            description.label,
+            "An expanded audiobook loaded from the server."
+        )
+        app.navigationBars.buttons.firstMatch.tap()
+
         app.buttons["Search"].tap()
         let searchField = app.searchFields.firstMatch
         XCTAssertTrue(searchField.waitForExistence(timeout: 3))
