@@ -23,8 +23,7 @@ action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
 tracking, lifetime statistics, and listening-history import/export. Durable
-download pause/resume controls and cover editing remain under active
-development.
+cover editing remains under active development.
 
 ## Requirements
 
@@ -190,7 +189,8 @@ native account's rotating refresh token without placing tokens in URLs.
 
 Completed books play directly from their verified local files without opening a
 server playback session. Failed or cancelled books expose Retry, active books
-expose Cancel, and completed books can be removed from the Downloads tab.
+expose Pause and Cancel, paused books expose Resume, and completed books can be
+removed from the Downloads tab.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual

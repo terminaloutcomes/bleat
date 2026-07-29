@@ -844,9 +844,15 @@ private struct DownloadsView: View {
                                     ?? (record.manifest.state == .complete
                                         ? 1 : 0)
                             )
-                            Text(record.manifest.state.rawValue.capitalized)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(
+                                model.downloads.pausedDownloadIDs.contains(
+                                    record.manifest.downloadID
+                                )
+                                    ? "Paused"
+                                    : record.manifest.state.rawValue.capitalized
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             if record.manifest.state == .complete {
                                 Button("Play Offline") {
                                     Task {
@@ -868,9 +874,34 @@ private struct DownloadsView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                             } else {
-                                Button("Cancel", role: .destructive) {
-                                    Task {
-                                        await model.downloads.cancel(record)
+                                HStack {
+                                    if model.downloads.pausedDownloadIDs
+                                        .contains(
+                                            record.manifest.downloadID
+                                        )
+                                    {
+                                        Button("Resume") {
+                                            Task {
+                                                await model.downloads.resume(
+                                                    record
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Button("Pause") {
+                                            Task {
+                                                await model.downloads.pause(
+                                                    record
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Button("Cancel", role: .destructive) {
+                                        Task {
+                                            await model.downloads.cancel(
+                                                record
+                                            )
+                                        }
                                     }
                                 }
                             }

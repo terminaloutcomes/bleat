@@ -34,6 +34,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     private(set) var records: [DownloadedBookRecord] = []
     private(set) var progress: [DownloadID: Double] = [:]
+    private(set) var pausedDownloadIDs: Set<DownloadID> = []
     private(set) var failure: DownloadModelFailure?
 
     init(service: any AppServicing) {
@@ -67,6 +68,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             accounts[account.id] = account
         }
         _ = session
+        let tasks = await session.allTasks
+        for task in tasks where task.state == .suspended {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description)
+            else {
+                continue
+            }
+            pausedDownloadIDs.insert(identity.downloadID)
+        }
         await refresh()
     }
 
@@ -156,7 +168,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
         }
         failure = .transferFailed
+        pausedDownloadIDs.remove(record.manifest.downloadID)
         await refresh()
+    }
+
+    func pause(_ record: DownloadedBookRecord) async {
+        await setSuspended(true, record: record)
+    }
+
+    func resume(_ record: DownloadedBookRecord) async {
+        await setSuspended(false, record: record)
     }
 
     func retry(
@@ -173,6 +194,38 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         await download(detail: record.detail, account: account)
+    }
+
+    private func setSuspended(
+        _ suspended: Bool,
+        record: DownloadedBookRecord
+    ) async {
+        let tasks = await session.allTasks
+        var matched = false
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID
+            else {
+                continue
+            }
+            matched = true
+            if suspended {
+                task.suspend()
+            } else {
+                task.resume()
+            }
+        }
+        guard matched else {
+            return
+        }
+        if suspended {
+            pausedDownloadIDs.insert(record.manifest.downloadID)
+        } else {
+            pausedDownloadIDs.remove(record.manifest.downloadID)
+        }
     }
 
     func removeAll(for accountID: AccountID) async {
