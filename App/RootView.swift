@@ -1005,6 +1005,7 @@ private struct BookDetailView: View {
                         await model.downloads.remove(record)
                     }
                 }
+                .disabled(isDownloadedRecordPlaying)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -1351,6 +1352,7 @@ private struct BookDetailView: View {
                                 }
                                 .disabled(
                                     record.manifest.state == .deleting
+                                        || isDownloadedRecordPlaying
                                 )
                             }
                         }
@@ -1433,6 +1435,14 @@ private struct BookDetailView: View {
             accountID: account.id,
             itemID: book.id
         )
+    }
+
+    private var isDownloadedRecordPlaying: Bool {
+        guard let record = downloadedRecord else {
+            return false
+        }
+        return model.playback.accountID == record.manifest.accountID
+            && model.playback.itemID == record.manifest.itemID
     }
 
     private func downloadStatus(
@@ -1578,6 +1588,18 @@ private struct SettingsView: View {
                     )
                     .accessibilityIdentifier(
                         "settings.downloads.wifiOnly"
+                    )
+
+                    NavigationLink {
+                        DownloadStorageView(model: model)
+                    } label: {
+                        LabeledContent(
+                            "Manage Downloads",
+                            value: downloadStorageText
+                        )
+                    }
+                    .accessibilityIdentifier(
+                        "settings.downloads.manage"
                     )
                 }
 
@@ -1734,12 +1756,14 @@ private struct SettingsView: View {
     }
 
     private var activeAccountDownloadBytes: Int64 {
-        activeAccountDownloads.reduce(0) { total, record in
-            let (sum, overflow) = total.addingReportingOverflow(
-                record.manifest.storedByteLength
-            )
-            return overflow ? Int64.max : sum
-        }
+        storedDownloadBytes(activeAccountDownloads)
+    }
+
+    private var downloadStorageText: String {
+        ByteCountFormatter.string(
+            fromByteCount: storedDownloadBytes(model.downloads.records),
+            countStyle: .file
+        )
     }
 
     private func removeAccount(
@@ -1756,48 +1780,107 @@ private struct DownloadsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if model.downloads.records.isEmpty {
-                    ContentUnavailableView(
-                        "No Downloads",
-                        systemImage: "arrow.down.circle"
-                    )
-                } else {
-                    List {
-                        ForEach(accountGroups, id: \.accountID) { group in
-                            Section {
-                                ForEach(
-                                    group.records,
-                                    id: \.manifest.downloadID
-                                ) { record in
-                                    downloadRow(record)
-                                }
-                            } header: {
-                                Text(accountLabel(group.accountID))
-                            } footer: {
-                                Text(
-                                    "\(byteCount(group.storedBytes)) stored"
-                                )
+            DownloadStorageView(model: model)
+        }
+    }
+}
+
+private struct DownloadStorageView: View {
+    @Bindable var model: AppModel
+    @State private var showRemoveAllConfirmation = false
+
+    var body: some View {
+        Group {
+            if model.downloads.records.isEmpty {
+                ContentUnavailableView(
+                    "No Downloads",
+                    systemImage: "arrow.down.circle"
+                )
+            } else {
+                List {
+                    storageSummary
+                    ForEach(accountGroups, id: \.accountID) { group in
+                        Section {
+                            ForEach(
+                                group.records,
+                                id: \.manifest.downloadID
+                            ) { record in
+                                downloadRow(record)
                             }
+                        } header: {
+                            Text(accountLabel(group.accountID))
+                        } footer: {
+                            Text(
+                                "\(byteCount(group.storedBytes)) stored"
+                            )
                         }
                     }
                 }
             }
-            .safeAreaInset(edge: .top) {
-                if let failure = model.downloads.failure {
-                    Label(
-                        failure.message,
-                        systemImage: "externaldrive.badge.exclamationmark"
+        }
+        .safeAreaInset(edge: .top) {
+            if let failure = model.downloads.failure {
+                Label(
+                    failure.message,
+                    systemImage: "externaldrive.badge.exclamationmark"
+                )
+                .font(.callout)
+                .foregroundStyle(.red)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.regularMaterial)
+                .accessibilityIdentifier("downloads.error")
+            }
+        }
+        .navigationTitle("Downloads")
+        .confirmationDialog(
+            "Remove Downloads?",
+            isPresented: $showRemoveAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Downloads", role: .destructive) {
+                Task {
+                    await model.downloads.removeAll(
+                        excluding: protectedDownloadID
                     )
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.regularMaterial)
-                    .accessibilityIdentifier("downloads.error")
                 }
             }
-            .navigationTitle("Downloads")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if protectedDownloadID == nil {
+                Text(
+                    "This removes all audiobook files stored on this device."
+                )
+            } else {
+                Text(
+                    "This removes every downloaded audiobook except the one currently playing."
+                )
+            }
+        }
+    }
+
+    private var storageSummary: some View {
+        Section("Storage") {
+            LabeledContent(
+                "Audiobooks",
+                value: String(model.downloads.records.count)
+            )
+            LabeledContent("Stored", value: byteCount(totalStoredBytes))
+            LabeledContent(
+                "Available Offline",
+                value: String(completeDownloadCount)
+            )
+            Button(
+                protectedDownloadID == nil
+                    ? "Remove All Downloads"
+                    : "Remove Other Downloads",
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                showRemoveAllConfirmation = true
+            }
+            .disabled(removableDownloadCount == 0)
+            .accessibilityIdentifier("downloads.removeAll")
         }
     }
 
@@ -1816,6 +1899,34 @@ private struct DownloadsView: View {
             accountLabel($0.accountID).localizedStandardCompare(
                 accountLabel($1.accountID)
             ) == .orderedAscending
+        }
+    }
+
+    private var totalStoredBytes: Int64 {
+        storedDownloadBytes(model.downloads.records)
+    }
+
+    private var completeDownloadCount: Int {
+        model.downloads.records.count {
+            $0.manifest.state == .complete
+        }
+    }
+
+    private var protectedDownloadID: DownloadID? {
+        guard let accountID = model.playback.accountID,
+            let itemID = model.playback.itemID
+        else {
+            return nil
+        }
+        return model.downloads.record(
+            accountID: accountID,
+            itemID: itemID
+        )?.manifest.downloadID
+    }
+
+    private var removableDownloadCount: Int {
+        model.downloads.records.count {
+            $0.manifest.downloadID != protectedDownloadID
         }
     }
 
@@ -1845,6 +1956,11 @@ private struct DownloadsView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            if record.manifest.downloadID == protectedDownloadID {
+                Label("Playing", systemImage: "speaker.wave.2.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if record.manifest.state == .complete {
                 Button("Play Offline") {
                     Task {
@@ -1902,9 +2018,11 @@ private struct DownloadsView: View {
             }
         }
         .swipeActions {
-            Button("Delete", role: .destructive) {
-                Task {
-                    await model.downloads.remove(record)
+            if record.manifest.downloadID != protectedDownloadID {
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await model.downloads.remove(record)
+                    }
                 }
             }
         }
@@ -1935,11 +2053,17 @@ private struct DownloadAccountGroup {
     let records: [DownloadedBookRecord]
 
     var storedBytes: Int64 {
-        records.reduce(0) { total, record in
-            let (sum, overflow) = total.addingReportingOverflow(
-                record.manifest.storedByteLength
-            )
-            return overflow ? Int64.max : sum
-        }
+        storedDownloadBytes(records)
+    }
+}
+
+private func storedDownloadBytes(
+    _ records: [DownloadedBookRecord]
+) -> Int64 {
+    records.reduce(0) { total, record in
+        let (sum, overflow) = total.addingReportingOverflow(
+            record.manifest.storedByteLength
+        )
+        return overflow ? Int64.max : sum
     }
 }

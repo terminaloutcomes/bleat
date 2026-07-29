@@ -223,11 +223,15 @@ detail. Bleat schedules every original audio file through a stable background
 URL session with bearer headers, limits each host to three concurrent transfers,
 persists an offline metadata snapshot and byte-exact manifest, and restores
 system-owned tasks after relaunch. The Downloads tab shows durable state and
-supports book-scoped deletion. Before scheduling, Bleat requires the expected
-audio bytes plus the larger of 10% or 256 MB to be available. Downloads are
-grouped by account and show stored versus expected bytes for each book and the
-stored total for that account. A 401 transfer response is replaced using the
-native account's rotating refresh token without placing tokens in URLs.
+supports book-scoped deletion. Its storage section shows the total number of
+books, device storage used, and books ready offline. Confirmed bulk removal
+cancels matching transfers but preserves the currently playing download;
+Settings links to the same management screen and storage total. Before
+scheduling, Bleat requires the expected audio bytes plus the larger of 10% or
+256 MB to be available. Downloads are grouped by account and show stored versus
+expected bytes for each book and the stored total for that account. A 401
+transfer response is replaced using the native account's rotating refresh token
+without placing tokens in URLs.
 Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
 expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.

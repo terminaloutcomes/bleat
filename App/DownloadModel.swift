@@ -119,6 +119,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private nonisolated let layout: DownloadStorageLayout?
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
+    private var deletingDownloadIDs: Set<DownloadID> = []
     @ObservationIgnored
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(
@@ -334,12 +335,37 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         failure = nil
+        deletingDownloadIDs.insert(record.manifest.downloadID)
+        let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID
+            else {
+                continue
+            }
+            task.cancel()
+        }
         do {
             try await storage.remove(record)
             progress[record.manifest.downloadID] = nil
+            pausedDownloadIDs.remove(record.manifest.downloadID)
             await refresh()
         } catch {
             failure = .transferFailed
+        }
+    }
+
+    func removeAll(
+        excluding protectedDownloadID: DownloadID? = nil
+    ) async {
+        let removableRecords = records.filter {
+            $0.manifest.downloadID != protectedDownloadID
+        }
+        for record in removableRecords {
+            await remove(record)
         }
     }
 
@@ -605,6 +631,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         else {
             return
         }
+        guard !deletingDownloadIDs.contains(identity.downloadID) else {
+            return
+        }
         if (200..<300).contains(response.statusCode), error == nil {
             return
         }
@@ -705,6 +734,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             1
         )
         Task { @MainActor [weak self] in
+            guard
+                self?.deletingDownloadIDs.contains(
+                    identity.downloadID
+                ) == false
+            else {
+                return
+            }
             self?.progress[identity.downloadID] = value
         }
     }

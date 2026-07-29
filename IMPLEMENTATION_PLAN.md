@@ -581,6 +581,13 @@ Test before exit:
 Exit gate: a downloaded book remains atomically valid, private, recoverable,
 and playable offline across process and network failure.
 
+Current status: background per-file transfers, restoration, network policy,
+storage preflight, durable manifests, repair, offline playback, per-account and
+aggregate storage summaries, and confirmed single/bulk deletion are
+implemented. Storage removal cancels matching transfers and bulk management
+preserves the currently playing download. Simulator transfer lifecycle and the
+remaining process/network failure matrix still need release-level evidence.
+
 ### Phase 8 — metadata and cover editing
 
 Deliver:

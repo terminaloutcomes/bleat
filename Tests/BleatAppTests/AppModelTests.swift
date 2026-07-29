@@ -175,6 +175,75 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testBulkDownloadRemovalKeepsProtectedPlaybackRecord()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatBulkRemoval-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let account = try fixtureAccount()
+        let firstPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8).utf8
+            )
+        )
+        let secondPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8)
+                    .replacingOccurrences(
+                        of: "\"item-1\"",
+                        with: "\"item-2\""
+                    )
+                    .utf8
+            )
+        )
+        let protectedID = DownloadID(rawValue: "protected-download")
+        _ = try await storage.create(
+            downloadID: protectedID,
+            accountID: account.id,
+            plan: firstPlan,
+            detail: fixtureBookDetail(
+                item: fixtureBook(
+                    id: firstPlan.itemID.rawValue,
+                    title: "Playing",
+                    libraryID: fixtureLibrary().id
+                )
+            )
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "removable-download"),
+            accountID: account.id,
+            plan: secondPlan,
+            detail: fixtureBookDetail(
+                item: fixtureBook(
+                    id: secondPlan.itemID.rawValue,
+                    title: "Remove Me",
+                    libraryID: fixtureLibrary().id
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root
+        )
+        await model.start(account: nil)
+
+        await model.removeAll(excluding: protectedID)
+
+        XCTAssertEqual(model.records.count, 1)
+        XCTAssertEqual(
+            model.records.first?.manifest.downloadID,
+            protectedID
+        )
+    }
+
     func testDownloadFailuresHaveDistinctMessages() {
         let failures: [DownloadModelFailure] = [
             .storageUnavailable,

@@ -86,6 +86,10 @@ final class PlaybackModel {
         activeAccount != nil
     }
 
+    var accountID: AccountID? {
+        localAccountID ?? activeAccount?.id
+    }
+
     var hasActiveBook: Bool {
         state != .idle
     }
@@ -573,7 +577,7 @@ final class PlaybackModel {
     }
 
     private var bookmarkAccountID: AccountID? {
-        localAccountID ?? activeAccount?.id
+        accountID
     }
 
     private func queueBookmarkMutation(
