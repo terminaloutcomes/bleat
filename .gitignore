@@ -11,3 +11,4 @@ xcuserdata/
 TestSupport/ServerHarness/.env
 TestSupport/ServerHarness/artifacts/
 TestSupport/ServerHarness/state/
+TestSupport/ServerHarness/app-live-artifacts/
