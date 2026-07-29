@@ -148,6 +148,10 @@ part of the app.
 
 ## Browse the library
 
+Home identifies the active username, server host, and audiobook library above
+the server's personalized shelves. Shelf cards are compact enough to scan
+several books without losing title and author context.
+
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
 direction. The progress filter shows all, finished, in-progress, not-started,
@@ -222,13 +226,15 @@ Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
 expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.
 
-Completed books play directly from their verified local files without opening a
-server playback session. Failed or cancelled books expose Retry, active books
-expose Pause and Cancel, paused books expose Resume, and completed books can be
-removed from the Downloads tab. Bleat audits completed files when restoring
-downloads and before playback; a missing or byte-corrupt track changes the book
-to Partial and exposes Repair. Repair preserves verified tracks, downloads only
-damaged entries, and refuses to mix files when the server's plan changed.
+Book detail keeps Play, Download, and finished-state actions above long
+description and metadata content. Existing downloads show status, stored and
+expected bytes, and the relevant Pause, Resume, Retry, Repair, or Remove action
+there as well as in Downloads. Completed books play directly from their verified
+local files without opening a server playback session. Bleat audits completed
+files when restoring downloads and before playback; a missing or byte-corrupt
+track changes the book to Partial and exposes Repair. Repair preserves verified
+tracks, downloads only damaged entries, and refuses to mix files when the
+server's plan changed.
 Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and
 stop, then resumes from that durable position after relaunch. Position updates

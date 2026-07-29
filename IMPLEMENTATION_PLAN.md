@@ -389,10 +389,10 @@ account, remote user, library, and item. The runnable root `TabView` now has
 Home, Library, Search, Downloads, and Settings destinations; Home and Library
 render the first cached/live audiobook page with loading, empty, and failure
 states. Search now performs debounced, cancellable, cache-backed server queries
-against the selected native account and library. Personalized-home, detail,
-bookmarks, cover caching, persistent mini-player, performance validation, and
-the remaining feature UI still remain. Permission-derived action visibility is
-ready for those screens.
+against the selected native account and library. Personalized Home, expanded
+detail, bookmarks, bounded cover requests, the persistent mini-player, account
+context, and actionable download state now have runnable UI. Large-library
+performance validation and the remaining release polish still remain.
 
 Deliver:
 

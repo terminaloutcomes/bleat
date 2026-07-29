@@ -396,6 +396,9 @@ private struct HomeView: View {
         NavigationStack {
             HomeContent(model: model)
                 // .navigationTitle("Home")
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    homeContext
+                }
                 .navigationDestination(for: LibraryBookSummary.self) { book in
                     BookDetailView(model: model, book: book)
                 }
@@ -412,6 +415,37 @@ private struct HomeView: View {
                         .accessibilityIdentifier("home.reload")
                     }
                 }
+        }
+    }
+
+    @ViewBuilder
+    private var homeContext: some View {
+        if let account = model.account {
+            HStack(spacing: 8) {
+                Image(systemName: "person.crop.circle")
+                Text(account.user.username)
+                    .lineLimit(1)
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(
+                    account.server.url.host
+                        ?? account.server.url.absoluteString
+                )
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let library = model.selectedLibrary {
+                    Text(library.name)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.bar)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("home.account")
         }
     }
 }
@@ -473,7 +507,7 @@ private struct HomeContent: View {
                                     height: 360,
                                     cornerRadius: 10
                                 )
-                                .frame(width: 180, height: 180)
+                                .frame(width: 148, height: 148)
                                 Text(book.title)
                                     .font(.headline)
                                     .lineLimit(2)
@@ -484,12 +518,7 @@ private struct HomeContent: View {
                                         .lineLimit(1)
                                 }
                             }
-                            .frame(width: 180, alignment: .leading)
-                            .padding()
-                            .background(
-                                .quaternary,
-                                in: RoundedRectangle(cornerRadius: 12)
-                            )
+                            .frame(width: 148, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                     }
@@ -899,6 +928,7 @@ private struct BookDetailView: View {
     @State private var selectedCoverItem: PhotosPickerItem?
     @State private var isUploadingCover = false
     @State private var coverError: String?
+    @State private var showRemoveDownloadConfirmation = false
 
     var body: some View {
         Group {
@@ -963,6 +993,24 @@ private struct BookDetailView: View {
             Task {
                 await uploadCover(item)
             }
+        }
+        .confirmationDialog(
+            "Remove Download?",
+            isPresented: $showRemoveDownloadConfirmation,
+            titleVisibility: .visible
+        ) {
+            if let record = downloadedRecord {
+                Button("Remove Download", role: .destructive) {
+                    Task {
+                        await model.downloads.remove(record)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This removes the audiobook files stored on this device."
+            )
         }
     }
 
@@ -1042,7 +1090,7 @@ private struct BookDetailView: View {
                     cornerRadius: 14
                 )
                 .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 300)
+                .frame(maxWidth: 220)
                 .frame(maxWidth: .infinity)
 
                 if let coverError {
@@ -1073,6 +1121,18 @@ private struct BookDetailView: View {
                     }
                 }
 
+                if model.accounts.count > 1,
+                    let account = model.account
+                {
+                    Label(
+                        "\(account.user.username) · \(account.server.url.host ?? account.server.url.absoluteString)",
+                        systemImage: "person.crop.circle"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("book.detail.account")
+                }
+
                 if let progress = detail.progress {
                     VStack(alignment: .leading, spacing: 6) {
                         ProgressView(value: progress.progress)
@@ -1085,19 +1145,25 @@ private struct BookDetailView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
-                Button(
-                    detail.progress?.isFinished == true
-                        ? "Mark Unfinished" : "Mark Finished"
-                ) {
-                    Task {
-                        await model.setFinished(
-                            detail.progress?.isFinished != true,
-                            detail: detail
-                        )
+
+                VStack(spacing: 12) {
+                    playbackAction(detail)
+                    downloadAction(detail)
+                    Button(
+                        detail.progress?.isFinished == true
+                            ? "Mark Unfinished" : "Mark Finished"
+                    ) {
+                        Task {
+                            await model.setFinished(
+                                detail.progress?.isFinished != true,
+                                detail: detail
+                            )
+                        }
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(model.bookProgressUpdateState == .saving)
+                    .accessibilityIdentifier("book.detail.finished")
                 }
-                .disabled(model.bookProgressUpdateState == .saving)
-                .accessibilityIdentifier("book.detail.finished")
                 if case .failed(let failure) =
                     model.bookProgressUpdateState
                 {
@@ -1129,9 +1195,6 @@ private struct BookDetailView: View {
                         }
                     }
                 }
-
-                playbackAction(detail)
-                downloadAction(detail)
             }
             .padding()
         }
@@ -1242,12 +1305,62 @@ private struct BookDetailView: View {
                     accountID: account.id,
                     itemID: detail.id
                 ) {
-                    LabeledContent(
-                        "Offline",
-                        value: record.manifest.state == .complete
-                            ? "Downloaded"
-                            : "Downloading"
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label(
+                                downloadStatus(record),
+                                systemImage: downloadStatusIcon(record)
+                            )
+                            Spacer()
+                            Text(downloadBytes(record))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+
+                        if record.manifest.state != .complete {
+                            ProgressView(
+                                value: model.downloads.progress[
+                                    record.manifest.downloadID
+                                ] ?? 0
+                            )
+                        }
+
+                        HStack {
+                            downloadControls(record, account: account)
+                            Spacer()
+                            if [
+                                DownloadManifestState.queued,
+                                .downloading,
+                            ].contains(record.manifest.state) {
+                                Button(
+                                    "Cancel",
+                                    systemImage: "xmark",
+                                    role: .destructive
+                                ) {
+                                    Task {
+                                        await model.downloads.cancel(record)
+                                    }
+                                }
+                            } else {
+                                Button(
+                                    "Remove",
+                                    systemImage: "trash",
+                                    role: .destructive
+                                ) {
+                                    showRemoveDownloadConfirmation = true
+                                }
+                                .disabled(
+                                    record.manifest.state == .deleting
+                                )
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(
+                        .quaternary,
+                        in: RoundedRectangle(cornerRadius: 12)
                     )
+                    .accessibilityIdentifier("book.detail.downloadStatus")
                 } else {
                     Button {
                         Task {
@@ -1268,6 +1381,118 @@ private struct BookDetailView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func downloadControls(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) -> some View {
+        if [
+            DownloadManifestState.complete,
+            .deleting,
+        ].contains(record.manifest.state) {
+            EmptyView()
+        } else if [
+            DownloadManifestState.failed,
+            .partial,
+        ].contains(record.manifest.state) {
+            Button(
+                record.manifest.state == .partial ? "Repair" : "Retry"
+            ) {
+                Task {
+                    await model.downloads.repair(
+                        record,
+                        account: account
+                    )
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        } else if model.downloads.pausedDownloadIDs.contains(
+            record.manifest.downloadID
+        ) {
+            Button("Resume", systemImage: "play.fill") {
+                Task {
+                    await model.downloads.resume(record)
+                }
+            }
+        } else {
+            Button("Pause", systemImage: "pause.fill") {
+                Task {
+                    await model.downloads.pause(record)
+                }
+            }
+        }
+    }
+
+    private var downloadedRecord: DownloadedBookRecord? {
+        guard let account = model.account else {
+            return nil
+        }
+        return model.downloads.record(
+            accountID: account.id,
+            itemID: book.id
+        )
+    }
+
+    private func downloadStatus(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        if model.downloads.pausedDownloadIDs.contains(
+            record.manifest.downloadID
+        ) {
+            return "Paused"
+        }
+        switch record.manifest.state {
+        case .queued:
+            return "Queued"
+        case .downloading:
+            return "Downloading"
+        case .partial:
+            return "Repair needed"
+        case .complete:
+            return "Downloaded"
+        case .failed:
+            return "Download failed"
+        case .deleting:
+            return "Removing"
+        }
+    }
+
+    private func downloadStatusIcon(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        if model.downloads.pausedDownloadIDs.contains(
+            record.manifest.downloadID
+        ) {
+            return "pause.circle"
+        }
+        switch record.manifest.state {
+        case .queued:
+            return "clock"
+        case .downloading:
+            return "arrow.down.circle"
+        case .partial, .failed:
+            return "exclamationmark.circle"
+        case .complete:
+            return "checkmark.circle.fill"
+        case .deleting:
+            return "trash"
+        }
+    }
+
+    private func downloadBytes(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        let stored = ByteCountFormatter.string(
+            fromByteCount: max(record.manifest.storedByteLength, 0),
+            countStyle: .file
+        )
+        let expected = ByteCountFormatter.string(
+            fromByteCount: max(record.manifest.expectedByteLength, 0),
+            countStyle: .file
+        )
+        return "\(stored) of \(expected)"
     }
 
     private func durationText(_ duration: Double) -> String {
