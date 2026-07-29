@@ -238,6 +238,14 @@
             throw .downloadAuthorization(.invalidAccountID)
         }
 
+        func replaceCover(
+            for account: ServerAccount,
+            detail: LibraryBookDetail,
+            jpegData: Data
+        ) async throws(AppServiceError) -> LibraryBookDetail {
+            detail
+        }
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

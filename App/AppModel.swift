@@ -149,7 +149,7 @@ enum AppFailure: Equatable, Sendable {
             self = .playbackUnavailable
         case .metadataPatch:
             self = .invalidMetadata
-        case .metadataUpdate:
+        case .metadataUpdate, .coverUpdate:
             self = .metadataUnavailable
         case .downloadPlan, .downloadAuthorization:
             self = .mediaUnavailable
@@ -419,6 +419,27 @@ final class AppModel {
 
     func resetMetadataSaveState() {
         metadataSaveState = .idle
+    }
+
+    func replaceCover(
+        jpegData: Data,
+        detail: LibraryBookDetail
+    ) async -> Bool {
+        guard let account else {
+            return false
+        }
+        do {
+            let updated = try await service.replaceCover(
+                for: account,
+                detail: detail,
+                jpegData: jpegData
+            )
+            selectedBookID = updated.id
+            bookDetail = .loaded(updated)
+            return true
+        } catch {
+            return false
+        }
     }
 
     func playDownloaded(_ record: DownloadedBookRecord) async {

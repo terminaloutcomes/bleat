@@ -1,4 +1,5 @@
 import BleatCore
+import PhotosUI
 import SwiftUI
 
 struct RootView: View {
@@ -491,6 +492,9 @@ private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
     @State private var showMetadataEditor = false
+    @State private var selectedCoverItem: PhotosPickerItem?
+    @State private var isUploadingCover = false
+    @State private var coverError: String?
 
     var body: some View {
         Group {
@@ -520,20 +524,40 @@ private struct BookDetailView: View {
             await model.loadBookDetail(book)
         }
         .toolbar {
-            if let detail = loadedDetail,
-                canEditMetadata(detail)
-            {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit") {
-                        showMetadataEditor = true
+            if let detail = loadedDetail {
+                if canEditMetadata(detail) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Edit") {
+                            showMetadataEditor = true
+                        }
+                        .accessibilityIdentifier("book.detail.edit")
                     }
-                    .accessibilityIdentifier("book.detail.edit")
+                }
+                if canEditCover(detail) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        PhotosPicker(
+                            selection: $selectedCoverItem,
+                            matching: .images
+                        ) {
+                            Text("Cover")
+                        }
+                        .disabled(isUploadingCover)
+                        .accessibilityIdentifier("book.detail.cover")
+                    }
                 }
             }
         }
         .sheet(isPresented: $showMetadataEditor) {
             if let detail = loadedDetail {
                 MetadataEditorView(model: model, detail: detail)
+            }
+        }
+        .onChange(of: selectedCoverItem) { _, item in
+            guard let item else {
+                return
+            }
+            Task {
+                await uploadCover(item)
             }
         }
     }
@@ -557,6 +581,51 @@ private struct BookDetailView: View {
         ).visibleActions.contains(.editMetadata)
     }
 
+    private func canEditCover(_ detail: LibraryBookDetail) -> Bool {
+        guard let user = model.account?.user else {
+            return false
+        }
+        return BookActionAvailability(
+            user: user,
+            detail: detail
+        ).visibleActions.contains(.editCover)
+    }
+
+    private func uploadCover(_ item: PhotosPickerItem) async {
+        guard let detail = loadedDetail else {
+            return
+        }
+        isUploadingCover = true
+        coverError = nil
+        defer {
+            isUploadingCover = false
+            selectedCoverItem = nil
+        }
+        do {
+            guard
+                let sourceData = try await item.loadTransferable(
+                    type: Data.self
+                )
+            else {
+                throw CoverImageProcessingError.invalidImage
+            }
+            let jpegData = try await Task.detached {
+                try CoverImageProcessor.jpegData(from: sourceData)
+            }.value
+            guard
+                await model.replaceCover(
+                    jpegData: jpegData,
+                    detail: detail
+                )
+            else {
+                coverError = "Bleat could not upload that cover."
+                return
+            }
+        } catch {
+            coverError = "Choose a valid image and try again."
+        }
+    }
+
     private func detailContent(_ detail: LibraryBookDetail) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -571,6 +640,12 @@ private struct BookDetailView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 300)
                 .frame(maxWidth: .infinity)
+
+                if let coverError {
+                    Text(coverError)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("book.detail.coverError")
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(detail.title)

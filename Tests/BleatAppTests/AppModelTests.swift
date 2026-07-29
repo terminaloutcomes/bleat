@@ -692,6 +692,7 @@ final class AppModelTests: XCTestCase {
                 .downloadAuthorization(.invalidAccountID),
                 .mediaUnavailable
             ),
+            (.coverUpdate(.uploadRejected), .metadataUnavailable),
             (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
@@ -1103,6 +1104,14 @@ private actor TestAppService: AppServicing {
         rejectedRequest: URLRequest
     ) async throws(AppServiceError) -> URLRequest {
         throw .downloadAuthorization(.invalidAccountID)
+    }
+
+    func replaceCover(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        jpegData: Data
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        detail
     }
 
     func removeAccount(

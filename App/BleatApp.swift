@@ -159,6 +159,14 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func replaceCover(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        jpegData: Data
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {

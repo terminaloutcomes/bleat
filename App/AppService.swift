@@ -23,6 +23,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case playbackSync(PlaybackSyncError)
     case metadataPatch(BookMetadataPatchError)
     case metadataUpdate(BookMetadataUpdateError)
+    case coverUpdate(BookCoverUploadError)
     case downloadPlan(DownloadPlanRequestError)
     case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
@@ -132,6 +133,12 @@ protocol AppServicing: Sendable {
         identity: DownloadTaskIdentity,
         rejectedRequest: URLRequest
     ) async throws(AppServiceError) -> URLRequest
+
+    func replaceCover(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        jpegData: Data
+    ) async throws(AppServiceError) -> LibraryBookDetail
 
     func removeAccount(
         _ account: ServerAccount
@@ -544,6 +551,32 @@ actor LiveAppService: AppServicing {
             throw .downloadAuthorization(
                 .authenticatedRequest(.requestTransportFailed)
             )
+        }
+    }
+
+    func replaceCover(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        jpegData: Data
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        do {
+            try await coordinator.updateBookCover(
+                accountID: account.id,
+                server: account.server,
+                itemID: detail.id,
+                jpegData: jpegData
+            )
+        } catch let error {
+            throw .coverUpdate(error)
+        }
+        do {
+            return try await repository(for: account).bookDetail(
+                for: detail.id,
+                in: detail.libraryID,
+                policy: .remoteOnly
+            ).value
+        } catch let error {
+            throw .bookDetail(error)
         }
     }
 

@@ -23,7 +23,8 @@ action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
 tracking, lifetime statistics, and listening-history import/export. Durable
-cover editing remains under active development.
+bookmark reconciliation and multi-account switching remain under active
+development.
 
 ## Requirements
 
@@ -176,6 +177,12 @@ Bleat refetches the item immediately before saving. If the server's `updatedAt`
 value changed since the editor opened, Bleat offers to load the server version,
 review the current draft, or overwrite it. This is a best-effort conflict check
 because Audiobookshelf does not expose an atomic metadata precondition.
+
+Accounts with both update and upload permissions also see **Cover** on book
+detail. Bleat uses the system photo picker, applies orientation, strips source
+metadata by redrawing the image, limits the longest edge to 1600 pixels, encodes
+JPEG, uploads it as the server's `cover` multipart field, and refetches the book
+before replacing the displayed cached cover.
 
 ## Download an audiobook
 

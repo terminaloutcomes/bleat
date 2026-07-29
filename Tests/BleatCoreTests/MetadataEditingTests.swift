@@ -147,6 +147,69 @@ final class MetadataEditingTests: XCTestCase {
         )
     }
 
+    func testCoverUploadUsesAuthenticatedMultipartContract() async throws {
+        let accountID = AccountID(rawValue: "account")
+        let transport = MetadataTestTransport(
+            response: HTTPResponse(
+                data: Data(
+                    #"{"success":true,"cover":"/cover.jpg"}"#.utf8
+                ),
+                statusCode: 200
+            )
+        )
+        let store = MetadataTestCredentialStore(
+            accountID: accountID,
+            credentials: try AuthenticationTokens(
+                accessToken: "access-token",
+                refreshToken: "refresh-token"
+            )
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let jpeg = Data([0xFF, 0xD8, 0x01, 0xFF, 0xD9])
+
+        try await coordinator.updateBookCover(
+            accountID: accountID,
+            server: NormalizedServerURL(
+                "https://books.example/audiobookshelf"
+            ),
+            itemID: LibraryItemID(rawValue: "item-1"),
+            jpegData: jpeg
+        )
+
+        let recordedRequest = await transport.recordedRequest()
+        let request = try XCTUnwrap(recordedRequest)
+        let contentType = try XCTUnwrap(
+            request.value(forHTTPHeaderField: "Content-Type")
+        )
+        let body = try XCTUnwrap(request.httpBody)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://books.example/audiobookshelf/api/items/item-1/cover"
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer access-token"
+        )
+        XCTAssertTrue(
+            contentType.hasPrefix(
+                "multipart/form-data; boundary=Bleat-"
+            ))
+        XCTAssertNotNil(
+            body.range(
+                of: Data(
+                    ("Content-Disposition: form-data; "
+                        + "name=\"cover\"; filename=\"cover.jpg\"\r\n"
+                        + "Content-Type: image/jpeg\r\n\r\n").utf8
+                )
+            )
+        )
+        XCTAssertNotNil(body.range(of: jpeg))
+    }
+
     private func fixtureDetail() -> LibraryBookDetail {
         LibraryBookDetail(
             id: LibraryItemID(rawValue: "item-1"),
