@@ -64,6 +64,30 @@ public final class CachedLibraryPageRecord {
     }
 }
 
+@Model
+public final class CachedLibrarySearchRecord {
+    @Attribute(.unique)
+    var cacheKey: String
+    var accountID: String
+    var libraryID: String
+    var payload: Data
+    var refreshedAt: Date
+
+    init(
+        cacheKey: String,
+        accountID: String,
+        libraryID: String,
+        payload: Data,
+        refreshedAt: Date
+    ) {
+        self.cacheKey = cacheKey
+        self.accountID = accountID
+        self.libraryID = libraryID
+        self.payload = payload
+        self.refreshedAt = refreshedAt
+    }
+}
+
 public struct CachedLibrariesSnapshot: Equatable, Sendable {
     public let libraries: [LibrarySummary]
     public let refreshedAt: Date
@@ -71,6 +95,11 @@ public struct CachedLibrariesSnapshot: Equatable, Sendable {
 
 public struct CachedLibraryPageSnapshot: Equatable, Sendable {
     public let page: LibraryItemsPage
+    public let refreshedAt: Date
+}
+
+public struct CachedLibrarySearchSnapshot: Equatable, Sendable {
+    public let items: [LibraryBookSummary]
     public let refreshedAt: Date
 }
 
@@ -82,6 +111,8 @@ public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidPage
     case invalidStoredLibrary(LibraryID)
     case invalidStoredPage
+    case invalidSearchResults
+    case invalidStoredSearchResults
     case encodingFailed
     case persistenceFailed
 }
@@ -125,6 +156,13 @@ public actor LibraryCache {
                 && !retainedIDs.contains(page.libraryID)
         {
             modelContext.delete(page)
+        }
+        let searches = try searchRecords()
+        for search in searches
+            where search.accountID == accountID.rawValue
+                && !retainedIDs.contains(search.libraryID)
+        {
+            modelContext.delete(search)
         }
 
         for (position, library) in libraries.enumerated() {
@@ -289,6 +327,91 @@ public actor LibraryCache {
         )
     }
 
+    public func saveSearchResults(
+        _ items: [LibraryBookSummary],
+        request: LibrarySearchRequest,
+        libraryID: LibraryID,
+        accountID: AccountID,
+        refreshedAt: Date = Date()
+    ) throws(LibraryCacheError) {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        guard items.count <= request.limit,
+              items.allSatisfy({
+                  $0.isValidForStorage(in: libraryID)
+              })
+        else {
+            throw .invalidSearchResults
+        }
+        let key = Self.searchKey(
+            accountID: accountID,
+            libraryID: libraryID,
+            request: request
+        )
+        let payload = try encode(items)
+        let records = try searchRecords()
+        if let record = records.first(where: { $0.cacheKey == key }) {
+            record.payload = payload
+            record.refreshedAt = refreshedAt
+        } else {
+            modelContext.insert(CachedLibrarySearchRecord(
+                cacheKey: key,
+                accountID: accountID.rawValue,
+                libraryID: libraryID.rawValue,
+                payload: payload,
+                refreshedAt: refreshedAt
+            ))
+        }
+        try save()
+    }
+
+    public func searchResults(
+        request: LibrarySearchRequest,
+        libraryID: LibraryID,
+        accountID: AccountID
+    ) throws(LibraryCacheError) -> CachedLibrarySearchSnapshot? {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        let key = Self.searchKey(
+            accountID: accountID,
+            libraryID: libraryID,
+            request: request
+        )
+        guard let record = try searchRecords().first(where: {
+            $0.cacheKey == key
+        }) else {
+            return nil
+        }
+        let items: [LibraryBookSummary]
+        do {
+            items = try JSONDecoder().decode(
+                [LibraryBookSummary].self,
+                from: record.payload
+            )
+        } catch {
+            throw .invalidStoredSearchResults
+        }
+        guard items.count <= request.limit,
+              items.allSatisfy({
+                  $0.isValidForStorage(in: libraryID)
+              })
+        else {
+            throw .invalidStoredSearchResults
+        }
+        return CachedLibrarySearchSnapshot(
+            items: items,
+            refreshedAt: record.refreshedAt
+        )
+    }
+
     public func invalidateLibrary(
         _ libraryID: LibraryID,
         for accountID: AccountID
@@ -300,6 +423,12 @@ public actor LibraryCache {
             throw .invalidLibraryID
         }
         for record in try pageRecords()
+            where record.accountID == accountID.rawValue
+                && record.libraryID == libraryID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try searchRecords()
             where record.accountID == accountID.rawValue
                 && record.libraryID == libraryID.rawValue
         {
@@ -325,6 +454,11 @@ public actor LibraryCache {
             modelContext.delete(record)
         }
         for record in try pageRecords()
+            where record.accountID == accountID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try searchRecords()
             where record.accountID == accountID.rawValue
         {
             modelContext.delete(record)
@@ -368,6 +502,18 @@ public actor LibraryCache {
         }
     }
 
+    private func searchRecords() throws(LibraryCacheError)
+        -> [CachedLibrarySearchRecord]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<CachedLibrarySearchRecord>()
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     private func encode<Value: Encodable>(
         _ value: Value
     ) throws(LibraryCacheError) -> Data {
@@ -403,6 +549,19 @@ public actor LibraryCache {
             request.filter?.rawValue ?? "",
             request.includeProgress ? "1" : "0",
             request.collapseSeries ? "1" : "0",
+        ])
+    }
+
+    private static func searchKey(
+        accountID: AccountID,
+        libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) -> String {
+        key([
+            accountID.rawValue,
+            libraryID.rawValue,
+            request.query,
+            String(request.limit),
         ])
     }
 

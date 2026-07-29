@@ -197,6 +197,112 @@ final class LibraryRepositoryTests: XCTestCase {
         }
     }
 
+    func testSearchPersistsExactQueryAndFallsBackAfterRelaunch()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let request = try LibrarySearchRequest(
+            query: "  book  ",
+            limit: 1
+        )
+        let pageRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1
+        )
+        let items = Self.page(request: pageRequest).items
+        let correlationID = APICorrelationID()
+        let online = RepositoryRemote(
+            searches: [.success(items, correlationID)]
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            remote: online,
+            cache: fixture.cache
+        )
+
+        let remote = try await repository.search(
+            in: libraryID,
+            request: request,
+            policy: .remoteOnly
+        )
+        XCTAssertEqual(remote.value, items)
+        XCTAssertEqual(remote.source, .remote)
+        XCTAssertEqual(remote.correlationID, correlationID)
+
+        let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
+        let offline = RepositoryRemote(
+            searches: [.failure(offlineError), .failure(offlineError)]
+        )
+        let relaunched = LibraryRepository(
+            accountID: accountID,
+            remote: offline,
+            cache: LibraryCache(modelContainer: fixture.container)
+        )
+        let fallback = try await relaunched.search(
+            in: libraryID,
+            request: request
+        )
+        XCTAssertEqual(fallback.value, items)
+        XCTAssertEqual(fallback.source, .cache)
+        XCTAssertNil(fallback.correlationID)
+        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
+
+        let widerRequest = try LibrarySearchRequest(
+            query: "book",
+            limit: 2
+        )
+        do {
+            _ = try await relaunched.search(
+                in: libraryID,
+                request: widerRequest
+            )
+            XCTFail("Expected exact-query cache miss")
+        } catch {
+            XCTAssertEqual(error, .remote(offlineError))
+        }
+    }
+
+    func testSearchCancellationNeverReturnsCachedResults()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let request = try LibrarySearchRequest(
+            query: "book",
+            limit: 1
+        )
+        let pageRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1
+        )
+        try await fixture.cache.saveSearchResults(
+            Self.page(request: pageRequest).items,
+            request: request,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            remote: RepositoryRemote(
+                searches: [.failure(.cancelled)]
+            ),
+            cache: fixture.cache
+        )
+
+        do {
+            _ = try await repository.search(
+                in: libraryID,
+                request: request
+            )
+            XCTFail("Expected search cancellation")
+        } catch {
+            XCTAssertEqual(error, .cancelled)
+        }
+    }
+
     func testInvalidRemoteValueAndCorruptFallbackRemainTyped()
         async throws
     {
@@ -313,15 +419,23 @@ private enum RepositoryRemoteStep<Value: Sendable>: Sendable {
 private actor RepositoryRemote: LibraryRemoteDataSource {
     private var librarySteps: [RepositoryRemoteStep<[LibrarySummary]>]
     private var pageSteps: [RepositoryRemoteStep<LibraryItemsPage>]
+    private var searchSteps: [
+        RepositoryRemoteStep<[LibraryBookSummary]>
+    ]
     private var libraryCallCount = 0
     private var pageCallCount = 0
+    private var searchCallCount = 0
 
     init(
         libraries: [RepositoryRemoteStep<[LibrarySummary]>] = [],
-        pages: [RepositoryRemoteStep<LibraryItemsPage>] = []
+        pages: [RepositoryRemoteStep<LibraryItemsPage>] = [],
+        searches: [
+            RepositoryRemoteStep<[LibraryBookSummary]>
+        ] = []
     ) {
         librarySteps = libraries
         pageSteps = pages
+        searchSteps = searches
     }
 
     func libraries() async throws(AudiobookshelfAPIError)
@@ -341,8 +455,22 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         return try Self.result(from: next(&pageSteps))
     }
 
-    func callCounts() -> (libraries: Int, pages: Int) {
-        (libraryCallCount, pageCallCount)
+    func search(
+        in libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+    {
+        searchCallCount += 1
+        return try Self.result(from: next(&searchSteps))
+    }
+
+    func callCounts() -> (
+        libraries: Int,
+        pages: Int,
+        searches: Int
+    ) {
+        (libraryCallCount, pageCallCount, searchCallCount)
     }
 
     private func next<Value>(
@@ -380,6 +508,7 @@ private struct LibraryRepositoryFixture {
             CachedLibraryCollectionRecord.self,
             CachedLibraryRecord.self,
             CachedLibraryPageRecord.self,
+            CachedLibrarySearchRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

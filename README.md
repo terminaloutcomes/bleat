@@ -9,9 +9,9 @@ stage. `BleatCore` builds and its URL, routing, discovery, username/password
 login, single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
-library listing and pagination, account-scoped SwiftData library caching,
-online-first/cache-fallback repository behavior, playback-session, and
-background-download contract behavior is tested. Native Audiobookshelf
+library listing, pagination, and search, account-scoped SwiftData library
+caching, online-first/cache-fallback repository behavior, playback-session,
+and background-download contract behavior is tested. Native Audiobookshelf
 username/password is the active authentication scope; the earlier isolated
 OIDC spike is deferred. The MVP also defers local time tracking, lifetime
 statistics, and listening-history import/export. The SwiftUI application
@@ -126,8 +126,9 @@ library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
 downloads, and verifies that native-login account profiles survive store
 recreation, fetch typed libraries, and load their first paginated audiobook
-summaries. It then removes the containers and volumes. On failure it retains
-redacted diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
+summaries and a matching search result. It then removes the containers and
+volumes. On failure it retains redacted diagnostic artifacts beneath
+`TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
 
@@ -155,8 +156,8 @@ swift test --filter AudiobookshelfAPITests
 
 The library persistence and repository suites cover relaunch, empty snapshots,
 account/library/query isolation, replacement and invalidation, corrupt stored
-records, exact-page offline reads, online persistence, fallback, cancellation,
-and typed cache/remote failures:
+records, exact-page and exact-search offline reads, online persistence,
+fallback, cancellation, and typed cache/remote failures:
 
 ```sh
 swift test --filter LibraryCacheTests

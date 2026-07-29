@@ -88,6 +88,13 @@ final class AccountStoreLiveTests: XCTestCase {
                 sort: .title
             )
         )
+        let search = try await api.search(
+            in: seededLibrary.id,
+            request: try LibrarySearchRequest(
+                query: "direct",
+                limit: 12
+            )
+        )
 
         XCTAssertEqual(account.server, discovered.baseURL)
         XCTAssertEqual(account.user.username, username)
@@ -103,6 +110,12 @@ final class AccountStoreLiveTests: XCTestCase {
                     && !$0.title.isEmpty
                     && $0.duration > 0
             }
+        )
+        XCTAssertEqual(search.value.count, 1)
+        XCTAssertEqual(search.value.first?.title, "direct")
+        XCTAssertEqual(
+            search.value.first?.libraryID,
+            seededLibrary.id
         )
     }
 }

@@ -179,6 +179,45 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
     }
 }
 
+public enum LibrarySearchRequestError: Error, Equatable, Sendable {
+    case invalidQuery
+    case invalidLimit
+}
+
+public struct LibrarySearchRequest: Hashable, Sendable {
+    public let query: String
+    public let limit: Int
+
+    public init(
+        query: String,
+        limit: Int = 50
+    ) throws(LibrarySearchRequestError) {
+        let normalized = query.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !normalized.isEmpty,
+              normalized.count <= 200,
+              normalized.rangeOfCharacter(
+                  from: .controlCharacters
+              ) == nil
+        else {
+            throw .invalidQuery
+        }
+        guard (1 ... 100).contains(limit) else {
+            throw .invalidLimit
+        }
+        self.query = normalized
+        self.limit = limit
+    }
+
+    var queryItems: [URLQueryItem] {
+        [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+    }
+}
+
 public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let id: LibraryItemID
     public let libraryID: LibraryID

@@ -4,6 +4,145 @@ import XCTest
 @testable import BleatCore
 
 final class AudiobookshelfAPITests: XCTestCase {
+    func testSearchRequestValidationAndExactQueryContract() throws {
+        for query in ["", " \n ", "bad\nquery", String(repeating: "a", count: 201)] {
+            XCTAssertThrowsError(
+                try LibrarySearchRequest(query: query)
+            ) { error in
+                XCTAssertEqual(
+                    error as? LibrarySearchRequestError,
+                    .invalidQuery
+                )
+            }
+        }
+        for limit in [0, 101] {
+            XCTAssertThrowsError(
+                try LibrarySearchRequest(
+                    query: "book",
+                    limit: limit
+                )
+            ) { error in
+                XCTAssertEqual(
+                    error as? LibrarySearchRequestError,
+                    .invalidLimit
+                )
+            }
+        }
+
+        let request = try LibrarySearchRequest(
+            query: "  one & two  ",
+            limit: 12
+        )
+        XCTAssertEqual(request.query, "one & two")
+        XCTAssertEqual(request.queryItems, [
+            URLQueryItem(name: "q", value: "one & two"),
+            URLQueryItem(name: "limit", value: "12"),
+        ])
+    }
+
+    func testSearchMapsExpandedBookMatchesAndExactRoute() async throws {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Self.searchJSON(
+                        itemLibraryID: "library",
+                        bookCount: 1
+                    ),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let request = try LibrarySearchRequest(
+            query: "First Book",
+            limit: 12
+        )
+
+        let result = try await fixture.api.search(
+            in: LibraryID(rawValue: "library"),
+            request: request
+        )
+        let requests = await fixture.transport.recordedRequests()
+        let sent = try XCTUnwrap(requests.first)
+        let queryItems = try XCTUnwrap(
+            URLComponents(
+                url: try XCTUnwrap(sent.url),
+                resolvingAgainstBaseURL: false
+            )?.queryItems
+        )
+
+        XCTAssertEqual(result.value.count, 1)
+        XCTAssertEqual(
+            result.value.first?.id,
+            LibraryItemID(rawValue: "search-item-0")
+        )
+        XCTAssertEqual(result.value.first?.title, "Search Book 0")
+        XCTAssertEqual(
+            result.value.first?.libraryID,
+            LibraryID(rawValue: "library")
+        )
+        XCTAssertEqual(
+            sent.url?.path,
+            "/audiobookshelf/api/libraries/library/search"
+        )
+        XCTAssertEqual(queryItems, request.queryItems)
+    }
+
+    func testSearchFailuresRemainTyped() async throws {
+        let request = try LibrarySearchRequest(
+            query: "book",
+            limit: 1
+        )
+        let cases: [(Data, AudiobookshelfAPIError)] = [
+            (
+                Data("{\"authors\":[]}".utf8),
+                .malformedResponse
+            ),
+            (
+                Self.searchJSON(
+                    itemLibraryID: "library",
+                    bookCount: 2
+                ),
+                .invalidSearchResults
+            ),
+            (
+                Self.searchJSON(
+                    itemLibraryID: "other",
+                    bookCount: 1
+                ),
+                .invalidLibraryItem
+            ),
+        ]
+        for (data, expectedError) in cases {
+            let fixture = try APIFixture(
+                responses: [
+                    HTTPResponse(data: data, statusCode: 200),
+                ]
+            )
+            do {
+                _ = try await fixture.api.search(
+                    in: LibraryID(rawValue: "library"),
+                    request: request
+                )
+                XCTFail("Expected typed search failure")
+            } catch {
+                XCTAssertEqual(error, expectedError)
+            }
+        }
+
+        let fixture = try APIFixture(responses: [])
+        do {
+            _ = try await fixture.api.search(
+                in: LibraryID(rawValue: ""),
+                request: request
+            )
+            XCTFail("Expected invalid library")
+        } catch {
+            XCTAssertEqual(error, .invalidLibrary)
+        }
+        let sent = await fixture.transport.recordedRequests()
+        XCTAssertTrue(sent.isEmpty)
+    }
+
     func testPageRequestValidationAndExactQueryContract() throws {
         XCTAssertThrowsError(
             try LibraryItemsPageRequest(page: -1)
@@ -427,6 +566,54 @@ final class AudiobookshelfAPITests: XCTestCase {
               "total": \(total),
               "limit": \(limit),
               "page": \(page)
+            }
+            """.utf8
+        )
+    }
+
+    private static func searchJSON(
+        itemLibraryID: String,
+        bookCount: Int
+    ) -> Data {
+        let matches = (0 ..< bookCount).map { index in
+            """
+            {
+              "libraryItem": {
+                "id": "search-item-\(index)",
+                "libraryId": "\(itemLibraryID)",
+                "addedAt": 1,
+                "updatedAt": 2,
+                "mediaType": "book",
+                "media": {
+                  "metadata": {
+                    "title": "Search Book \(index)",
+                    "authorName": "",
+                    "narratorName": "",
+                    "seriesName": "",
+                    "genres": [],
+                    "explicit": false,
+                    "abridged": false
+                  },
+                  "numTracks": 1,
+                  "numChapters": 0,
+                  "duration": 60,
+                  "futureExpandedField": true
+                },
+                "futureExpandedField": true
+              }
+            }
+            """
+        }.joined(separator: ",")
+        return Data(
+            """
+            {
+              "book": [\(matches)],
+              "narrators": [],
+              "tags": [],
+              "genres": [],
+              "series": [],
+              "authors": [],
+              "futureCategory": []
             }
             """.utf8
         )

@@ -31,6 +31,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidLibrary
     case invalidPage
     case invalidLibraryItem
+    case invalidSearchResults
 }
 
 public actor AudiobookshelfAPI<
@@ -120,6 +121,39 @@ public actor AudiobookshelfAPI<
                 page: result.value.page,
                 limit: result.value.limit
             ),
+            correlationID: result.correlationID
+        )
+    }
+
+    public func search(
+        in libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+    {
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibrary
+        }
+        let result: AudiobookshelfAPIResult<LibrarySearchResponseDTO> =
+            try await get(
+                .search(libraryID),
+                queryItems: request.queryItems,
+                as: LibrarySearchResponseDTO.self
+            )
+        guard result.value.book.count <= request.limit else {
+            throw .invalidSearchResults
+        }
+        var items: [LibraryBookSummary] = []
+        items.reserveCapacity(result.value.book.count)
+        for match in result.value.book {
+            items.append(
+                try match.libraryItem.domainValue(
+                    expectedLibraryID: libraryID
+                )
+            )
+        }
+        return AudiobookshelfAPIResult(
+            value: items,
             correlationID: result.correlationID
         )
     }
@@ -235,6 +269,14 @@ private struct LibraryItemsPageDTO: Decodable, Sendable {
     let total: Int
     let limit: Int
     let page: Int
+}
+
+private struct LibrarySearchResponseDTO: Decodable, Sendable {
+    let book: [LibrarySearchBookMatchDTO]
+}
+
+private struct LibrarySearchBookMatchDTO: Decodable, Sendable {
+    let libraryItem: LibraryItemDTO
 }
 
 private struct LibraryItemDTO: Decodable, Sendable {

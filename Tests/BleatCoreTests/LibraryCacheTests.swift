@@ -44,6 +44,20 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let searchRequest = try LibrarySearchRequest(
+            query: "second",
+            limit: 1
+        )
+        try await fixture.cache.saveSearchResults(
+            Self.page(
+                libraryID: second.id,
+                request: request,
+                itemID: "second-item"
+            ).items,
+            request: searchRequest,
+            libraryID: second.id,
+            accountID: accountID
+        )
 
         try await fixture.cache.replaceLibraries(
             [first],
@@ -56,8 +70,14 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let deletedSearch = try await fixture.cache.searchResults(
+            request: searchRequest,
+            libraryID: second.id,
+            accountID: accountID
+        )
         XCTAssertEqual(libraries?.libraries, [first])
         XCTAssertNil(deletedPage)
+        XCTAssertNil(deletedSearch)
     }
 
     func testPageCacheIsAccountLibraryAndQueryScopedAcrossRelaunch()
@@ -188,6 +208,110 @@ final class LibraryCacheTests: XCTestCase {
         XCTAssertEqual(snapshot?.refreshedAt, newRefresh)
     }
 
+    func testSearchCacheIsExactScopedAndPersistsEmptyResults()
+        async throws
+    {
+        let fixture = try LibraryCacheFixture()
+        let accountA = AccountID(rawValue: "a")
+        let accountB = AccountID(rawValue: "b")
+        let libraryA = LibraryID(rawValue: "library-a")
+        let libraryB = LibraryID(rawValue: "library-b")
+        let firstRequest = try LibrarySearchRequest(
+            query: "  first  ",
+            limit: 1
+        )
+        let widerRequest = try LibrarySearchRequest(
+            query: "first",
+            limit: 2
+        )
+        let emptyRequest = try LibrarySearchRequest(
+            query: "missing",
+            limit: 1
+        )
+        let pageRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1
+        )
+        func item(
+            libraryID: LibraryID,
+            itemID: String
+        ) -> LibraryBookSummary {
+            Self.page(
+                libraryID: libraryID,
+                request: pageRequest,
+                itemID: itemID
+            ).items[0]
+        }
+        try await fixture.cache.saveSearchResults(
+            [item(libraryID: libraryA, itemID: "a-first")],
+            request: firstRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        try await fixture.cache.saveSearchResults(
+            [item(libraryID: libraryA, itemID: "a-wide")],
+            request: widerRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        try await fixture.cache.saveSearchResults(
+            [item(libraryID: libraryA, itemID: "b-first")],
+            request: firstRequest,
+            libraryID: libraryA,
+            accountID: accountB
+        )
+        try await fixture.cache.saveSearchResults(
+            [item(libraryID: libraryB, itemID: "other-library")],
+            request: firstRequest,
+            libraryID: libraryB,
+            accountID: accountA
+        )
+        try await fixture.cache.saveSearchResults(
+            [],
+            request: emptyRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+
+        let relaunched = LibraryCache(
+            modelContainer: fixture.container
+        )
+        let aFirst = try await relaunched.searchResults(
+            request: firstRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        let aWide = try await relaunched.searchResults(
+            request: widerRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        let bFirst = try await relaunched.searchResults(
+            request: firstRequest,
+            libraryID: libraryA,
+            accountID: accountB
+        )
+        let otherLibrary = try await relaunched.searchResults(
+            request: firstRequest,
+            libraryID: libraryB,
+            accountID: accountA
+        )
+        let empty = try await relaunched.searchResults(
+            request: emptyRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+
+        XCTAssertEqual(aFirst?.items.first?.id.rawValue, "a-first")
+        XCTAssertEqual(aWide?.items.first?.id.rawValue, "a-wide")
+        XCTAssertEqual(bFirst?.items.first?.id.rawValue, "b-first")
+        XCTAssertEqual(
+            otherLibrary?.items.first?.id.rawValue,
+            "other-library"
+        )
+        XCTAssertEqual(empty?.items, [])
+    }
+
     func testInvalidInputsAndPagesRemainTyped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -226,6 +350,26 @@ final class LibraryCacheTests: XCTestCase {
             XCTFail("Expected mismatched page rejection")
         } catch {
             XCTAssertEqual(error, .invalidPage)
+        }
+
+        let searchRequest = try LibrarySearchRequest(
+            query: "book",
+            limit: 1
+        )
+        do {
+            try await fixture.cache.saveSearchResults(
+                Self.page(
+                    libraryID: LibraryID(rawValue: "other"),
+                    request: request,
+                    itemID: "item"
+                ).items,
+                request: searchRequest,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+            XCTFail("Expected invalid search result rejection")
+        } catch {
+            XCTAssertEqual(error, .invalidSearchResults)
         }
 
         do {
@@ -316,6 +460,42 @@ final class LibraryCacheTests: XCTestCase {
         } catch {
             XCTAssertEqual(error, .invalidStoredPage)
         }
+
+        let searchRequest = try LibrarySearchRequest(
+            query: "book",
+            limit: 1
+        )
+        try await fixture.cache.saveSearchResults(
+            Self.page(
+                libraryID: LibraryID(rawValue: "library"),
+                request: request,
+                itemID: "item"
+            ).items,
+            request: searchRequest,
+            libraryID: LibraryID(rawValue: "library"),
+            accountID: AccountID(rawValue: "search-account")
+        )
+        let searchContext = ModelContext(fixture.container)
+        let searchRecords = try searchContext.fetch(
+            FetchDescriptor<CachedLibrarySearchRecord>()
+        )
+        try XCTUnwrap(searchRecords.first {
+            $0.accountID == "search-account"
+        }).payload = Data("not-json".utf8)
+        try searchContext.save()
+        let relaunched = LibraryCache(
+            modelContainer: fixture.container
+        )
+        do {
+            _ = try await relaunched.searchResults(
+                request: searchRequest,
+                libraryID: LibraryID(rawValue: "library"),
+                accountID: AccountID(rawValue: "search-account")
+            )
+            XCTFail("Expected corrupt search payload")
+        } catch {
+            XCTAssertEqual(error, .invalidStoredSearchResults)
+        }
     }
 
     func testInvalidationAndAccountRemovalAreScoped() async throws {
@@ -324,6 +504,10 @@ final class LibraryCacheTests: XCTestCase {
         let accountB = AccountID(rawValue: "b")
         let libraryID = LibraryID(rawValue: "library")
         let request = try LibraryItemsPageRequest(page: 0, limit: 1)
+        let searchRequest = try LibrarySearchRequest(
+            query: "book",
+            limit: 1
+        )
         for accountID in [accountA, accountB] {
             try await fixture.cache.replaceLibraries(
                 [Self.library(id: "library", name: "Books")],
@@ -336,6 +520,16 @@ final class LibraryCacheTests: XCTestCase {
                     itemID: accountID.rawValue
                 ),
                 request: request,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+            try await fixture.cache.saveSearchResults(
+                Self.page(
+                    libraryID: libraryID,
+                    request: request,
+                    itemID: accountID.rawValue
+                ).items,
+                request: searchRequest,
                 libraryID: libraryID,
                 accountID: accountID
             )
@@ -355,14 +549,42 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountB
         )
+        let invalidatedSearch = try await fixture.cache.searchResults(
+            request: searchRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
+        let retainedSearch = try await fixture.cache.searchResults(
+            request: searchRequest,
+            libraryID: libraryID,
+            accountID: accountB
+        )
         XCTAssertNil(invalidatedPage)
         XCTAssertNotNil(retainedPage)
+        XCTAssertNil(invalidatedSearch)
+        XCTAssertNotNil(retainedSearch)
 
+        try await fixture.cache.saveSearchResults(
+            Self.page(
+                libraryID: libraryID,
+                request: request,
+                itemID: "restored-a"
+            ).items,
+            request: searchRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
         try await fixture.cache.removeAccount(accountA)
         let removedLibraries = try await fixture.cache.libraries(for: accountA)
         let retainedLibraries = try await fixture.cache.libraries(for: accountB)
+        let removedSearch = try await fixture.cache.searchResults(
+            request: searchRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
         XCTAssertNil(removedLibraries)
         XCTAssertNotNil(retainedLibraries)
+        XCTAssertNil(removedSearch)
     }
 
     private static func library(
@@ -420,6 +642,7 @@ private struct LibraryCacheFixture {
             CachedLibraryCollectionRecord.self,
             CachedLibraryRecord.self,
             CachedLibraryPageRecord.self,
+            CachedLibrarySearchRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

@@ -323,8 +323,9 @@ sign-out/removal are verified with unit tests and fresh pinned root and
 path-prefixed servers. The typed API actor now performs cancellable,
 correlated, authenticated library listing with isolated DTO mapping. Paginated
 book-summary DTOs and exact query construction are also verified against a
-pinned fixture and live root/path-prefixed servers. Expanded item DTOs,
-permissions, diagnostics, and application UI remain.
+pinned fixture and live root/path-prefixed servers. Authenticated book search
+now validates and maps expanded matches without exposing DTOs. Expanded item
+detail DTOs, permissions, diagnostics, and application UI remain.
 
 Deliver:
 
@@ -360,8 +361,10 @@ paginated-query snapshots now survive relaunch, preserve fetched-empty state,
 replace atomically, and invalidate removed libraries without cross-account
 bleed. The `LibraryRepository` persists successful authenticated API reads and
 supports typed remote-only, cache-only, and remote-else-cache policies without
-turning cancellation into stale data. Search, home shelves, expanded details,
-cover caching, performance validation, and SwiftUI remain.
+turning cancellation into stale data. Exact normalized search queries use the
+same account-scoped persistence and cancellation rules. Debounced Search UI,
+home shelves, expanded details, cover caching, performance validation, and
+SwiftUI remain.
 
 Deliver:
 

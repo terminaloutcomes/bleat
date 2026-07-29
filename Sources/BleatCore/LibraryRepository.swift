@@ -9,6 +9,12 @@ public protocol LibraryRemoteDataSource: Sendable {
         request: LibraryItemsPageRequest
     ) async throws(AudiobookshelfAPIError)
         -> AudiobookshelfAPIResult<LibraryItemsPage>
+
+    func search(
+        in libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
 }
 
 extension AudiobookshelfAPI: LibraryRemoteDataSource {}
@@ -153,6 +159,54 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    public func search(
+        in libraryID: LibraryID,
+        request: LibrarySearchRequest,
+        policy: LibraryFetchPolicy = .remoteElseCache
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookSummary]>
+    {
+        if policy == .cacheOnly {
+            return try await cachedSearch(
+                request: request,
+                libraryID: libraryID
+            )
+        }
+
+        let result: AudiobookshelfAPIResult<[LibraryBookSummary]>
+        do {
+            result = try await remote.search(
+                in: libraryID,
+                request: request
+            )
+        } catch let error {
+            return try await fallbackSearch(
+                request: request,
+                libraryID: libraryID,
+                after: error,
+                policy: policy
+            )
+        }
+        let refreshedAt = Date()
+        do {
+            try await cache.saveSearchResults(
+                result.value,
+                request: request,
+                libraryID: libraryID,
+                accountID: accountID,
+                refreshedAt: refreshedAt
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        return LibraryRepositoryResult(
+            value: result.value,
+            source: .remote,
+            refreshedAt: refreshedAt,
+            correlationID: result.correlationID
+        )
+    }
+
     private func cachedLibraries()
         async throws(LibraryRepositoryError)
         -> LibraryRepositoryResult<[LibrarySummary]>
@@ -201,6 +255,33 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    private func cachedSearch(
+        request: LibrarySearchRequest,
+        libraryID: LibraryID
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookSummary]>
+    {
+        let cached: CachedLibrarySearchSnapshot?
+        do {
+            cached = try await cache.searchResults(
+                request: request,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        guard let snapshot = cached else {
+            throw .noCachedValue
+        }
+        return LibraryRepositoryResult(
+            value: snapshot.items,
+            source: .cache,
+            refreshedAt: snapshot.refreshedAt,
+            correlationID: nil
+        )
+    }
+
     private func fallbackLibraries(
         after remoteError: AudiobookshelfAPIError,
         policy: LibraryFetchPolicy
@@ -239,6 +320,33 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         }
         do {
             return try await cachedPage(
+                request: request,
+                libraryID: libraryID
+            )
+        } catch let cacheError {
+            throw fallbackError(
+                remote: remoteError,
+                cache: cacheError
+            )
+        }
+    }
+
+    private func fallbackSearch(
+        request: LibrarySearchRequest,
+        libraryID: LibraryID,
+        after remoteError: AudiobookshelfAPIError,
+        policy: LibraryFetchPolicy
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookSummary]>
+    {
+        if remoteError == .cancelled || Task.isCancelled {
+            throw .cancelled
+        }
+        guard policy == .remoteElseCache else {
+            throw .remote(remoteError)
+        }
+        do {
+            return try await cachedSearch(
                 request: request,
                 libraryID: libraryID
             )
