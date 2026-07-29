@@ -11,13 +11,13 @@ account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
 library listing, pagination, and search, account-scoped SwiftData library
 caching including personalized shelves and expanded book details,
-online-first/cache-fallback repository behavior, playback-session, and
-background-download contract behavior is tested. Native Audiobookshelf
-username/password is the active authentication scope; the earlier isolated
-OIDC spike is deferred. The MVP also defers local time tracking, lifetime
-statistics, and listening-history import/export. The SwiftUI application
-target has not been created yet, so there is not currently an app executable
-to launch.
+online-first/cache-fallback repository behavior, permission-derived book
+action visibility, playback-session, and background-download contract behavior
+is tested. Native Audiobookshelf username/password is the active
+authentication scope; the earlier isolated OIDC spike is deferred. The MVP
+also defers local time tracking, lifetime statistics, and listening-history
+import/export. The SwiftUI application target has not been created yet, so
+there is not currently an app executable to launch.
 
 ## Requirements
 
@@ -166,6 +166,7 @@ fallback, cancellation, and typed cache/remote failures:
 swift test --filter LibraryCacheTests
 swift test --filter LibraryRepositoryTests
 swift test --filter LibrarySearchCoordinatorTests
+swift test --filter BookActionPolicyTests
 ```
 
 The playback unit suite covers exact request fields, typed session decoding,

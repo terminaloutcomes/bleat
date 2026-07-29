@@ -326,8 +326,10 @@ book-summary DTOs and exact query construction are also verified against a
 pinned fixture and live root/path-prefixed servers. Authenticated book search
 now validates and maps expanded matches without exposing DTOs. Expanded
 audiobook detail DTOs, chapters, and authenticated-user progress are also
-verified against unit fixtures and live root/path-prefixed servers.
-Permissions, diagnostics, and application UI remain.
+verified against unit fixtures and live root/path-prefixed servers. A typed
+policy derives visible book actions from native-account permissions and
+mirrors the server's library, tag, and explicit-content access rules.
+Diagnostics and application UI remain.
 
 Deliver:
 
@@ -372,6 +374,7 @@ online-first/cache-fallback behavior. Expanded audiobook details, chapters,
 metadata, and progress now use the same policy with cache keys scoped to the
 account, remote user, library, and item. Search, home, and detail presentation,
 bookmarks, cover caching, performance validation, and SwiftUI remain.
+Permission-derived action visibility is ready for those screens.
 
 Deliver:
 
