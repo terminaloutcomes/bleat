@@ -40,6 +40,7 @@ final class BleatUITests: XCTestCase {
             description.label,
             "An expanded audiobook loaded from the server."
         )
+        XCTAssertTrue(app.buttons["book.detail.play"].exists)
         app.navigationBars.buttons.firstMatch.tap()
 
         app.buttons["Search"].tap()

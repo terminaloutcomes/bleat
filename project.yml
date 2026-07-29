@@ -24,13 +24,17 @@ targets:
     dependencies:
       - package: BleatPackage
         product: BleatCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Bleat
+        NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
+        UIBackgroundModes:
+          - audio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
         PRODUCT_NAME: Bleat
-        GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_CFBundleDisplayName: Bleat
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
 

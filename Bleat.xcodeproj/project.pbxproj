@@ -10,6 +10,8 @@
 		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
 		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
 		63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */; };
+		66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */; };
+		732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
 		81AC77653B52F97E7610C957 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0639281D9850EC68335644F /* RootView.swift */; };
 		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
@@ -41,11 +43,14 @@
 		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		70E1797402B69FE6551AC02B /* BleatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatUITests.swift; sourceTree = "<group>"; };
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C9A985B3A620C132DA9B6307 /* BleatApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BleatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
 		F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAppService.swift; sourceTree = "<group>"; };
+		FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +106,9 @@
 				73719E4CDB73EE2DD988C5E3 /* AppModel.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
+				A7BFAE347AEDFB9E315AD92C /* Info.plist */,
+				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
+				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
 			);
@@ -245,6 +253,8 @@
 				818AF28EBFB119999506CACA /* AppModel.swift in Sources */,
 				C1224783D3F9B1CC7057759A /* AppService.swift in Sources */,
 				071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */,
+				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
+				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,
 			);
@@ -410,9 +420,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Bleat connects to your Audiobookshelf server on the local network.";
+				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -447,9 +455,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Bleat connects to your Audiobookshelf server on the local network.";
+				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

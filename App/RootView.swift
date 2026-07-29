@@ -120,6 +120,7 @@ private struct NativeLoginView: View {
 
 private struct SignedInView: View {
     @Bindable var model: AppModel
+    @State private var showPlayer = false
 
     var body: some View {
         TabView {
@@ -141,6 +142,16 @@ private struct SignedInView: View {
             Tab("Settings", systemImage: "gearshape") {
                 SettingsView(model: model)
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.playback.hasActiveBook {
+                MiniPlayerView(playback: model.playback) {
+                    showPlayer = true
+                }
+            }
+        }
+        .sheet(isPresented: $showPlayer) {
+            PlayerView(playback: model.playback)
         }
         .accessibilityIdentifier("app.signedIn")
     }
@@ -454,7 +465,7 @@ private struct BookDetailView: View {
                     }
                 }
 
-                accessMessage(detail)
+                playbackAction(detail)
             }
             .padding()
         }
@@ -486,7 +497,7 @@ private struct BookDetailView: View {
     }
 
     @ViewBuilder
-    private func accessMessage(_ detail: LibraryBookDetail) -> some View {
+    private func playbackAction(_ detail: LibraryBookDetail) -> some View {
         if let user = model.account?.user {
             let availability = BookActionAvailability(
                 user: user,
@@ -494,7 +505,32 @@ private struct BookDetailView: View {
             )
             switch availability.access {
             case .allowed:
-                EmptyView()
+                if availability.visibleActions.contains(.play),
+                    let account = model.account
+                {
+                    Button {
+                        Task {
+                            await model.playback.start(
+                                detail: detail,
+                                account: account
+                            )
+                        }
+                    } label: {
+                        Label(
+                            model.playback.itemID == detail.id
+                                ? "Play Again"
+                                : "Play",
+                            systemImage: "play.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        model.playback.state == .preparing
+                            && model.playback.itemID == detail.id
+                    )
+                    .accessibilityIdentifier("book.detail.play")
+                }
             case .inaccessibleLibrary:
                 Text("This account cannot access the audiobook's library.")
                     .foregroundStyle(.secondary)

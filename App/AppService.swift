@@ -17,8 +17,32 @@ enum AppServiceError: Error, Equatable, Sendable {
     case searchRequest(LibrarySearchRequestError)
     case searchCoordinator(LibrarySearchCoordinatorError)
     case bookDetail(LibraryRepositoryError)
+    case playbackSession(PlaybackSessionError)
+    case playbackSource(PlaybackSourceError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
+}
+
+struct AppPlaybackTrack: Equatable, Sendable {
+    let url: URL
+    let startOffset: Double
+    let duration: Double
+    let title: String
+}
+
+enum AppPlaybackSource: Equatable, Sendable {
+    case direct([AppPlaybackTrack])
+    case hls(URL)
+}
+
+struct AppPlaybackPreparation: Equatable, Sendable {
+    let sessionID: PlaybackSessionID
+    let itemID: LibraryItemID
+    let title: String
+    let duration: Double
+    let currentTime: Double
+    let chapters: [PlaybackChapter]
+    let source: AppPlaybackSource
 }
 
 protocol AppServicing: Sendable {
@@ -51,6 +75,17 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookDetail
+
+    func openPlayback(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> AppPlaybackPreparation
+
+    func closePlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError)
 
     func removeAccount(
         _ account: ServerAccount
@@ -235,6 +270,83 @@ actor LiveAppService: AppServicing {
             ).value
         } catch let error {
             throw .bookDetail(error)
+        }
+    }
+
+    func openPlayback(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> AppPlaybackPreparation {
+        let session: PlaybackSession
+        do {
+            session = try await coordinator.openPlaybackSession(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID,
+                supportedMimeTypes: [
+                    "audio/aac",
+                    "audio/flac",
+                    "audio/mp4",
+                    "audio/mpeg",
+                    "audio/x-m4a",
+                    "audio/x-wav",
+                ],
+                deviceInfo: deviceInfo
+            )
+        } catch let error {
+            throw .playbackSession(error)
+        }
+
+        let source: AppPlaybackSource
+        do {
+            switch try session.source(for: account.server) {
+            case .direct(let tracks):
+                source = .direct(
+                    tracks.map { track in
+                        AppPlaybackTrack(
+                            url: track.url,
+                            startOffset: track.track.startOffset,
+                            duration: track.track.duration,
+                            title: track.track.title
+                        )
+                    }
+                )
+            case .hls(let url):
+                source = .hls(url)
+            }
+        } catch let error {
+            try? await coordinator.closePlaybackSession(
+                accountID: account.id,
+                server: account.server,
+                sessionID: session.id
+            )
+            throw .playbackSource(error)
+        }
+
+        return AppPlaybackPreparation(
+            sessionID: session.id,
+            itemID: session.libraryItemID,
+            title: session.libraryItem.media.metadata.title,
+            duration: session.duration,
+            currentTime: session.currentTime,
+            chapters: session.chapters,
+            source: source
+        )
+    }
+
+    func closePlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {
+        do {
+            try await coordinator.closePlaybackSession(
+                accountID: account.id,
+                server: account.server,
+                sessionID: sessionID
+            )
+        } catch let error {
+            throw .playbackSession(error)
         }
     }
 

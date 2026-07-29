@@ -435,6 +435,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.bookDetail, .failed(.bookUnavailable))
     }
 
+    func testPlaybackSessionFailureRemainsTyped() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.playback.start(detail: detail, account: account)
+
+        XCTAssertEqual(
+            model.playback.state,
+            .failed(.playbackUnavailable)
+        )
+        XCTAssertEqual(model.playback.itemID, detail.id)
+    }
+
     func testRemoveAccountClearsSignedInState() async throws {
         let account = try fixtureAccount()
         let service = TestAppService(
@@ -557,6 +580,14 @@ final class AppModelTests: XCTestCase {
             ),
             (.bookDetail(.noCachedValue), .bookUnavailable),
             (
+                .playbackSession(.requestFailed),
+                .playbackUnavailable
+            ),
+            (
+                .playbackSource(.missingAudioTracks),
+                .playbackUnavailable
+            ),
+            (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
             ),
@@ -590,6 +621,9 @@ final class AppModelTests: XCTestCase {
             .libraryUnavailable,
             .searchUnavailable,
             .bookUnavailable,
+            .playbackDenied,
+            .playbackUnavailable,
+            .mediaUnavailable,
             .accountRemovalFailed,
         ]
 
@@ -848,6 +882,19 @@ private actor TestAppService: AppServicing {
         }
         return try value(from: result)
     }
+
+    func openPlayback(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> AppPlaybackPreparation {
+        throw .playbackSession(.requestFailed)
+    }
+
+    func closePlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {}
 
     func bookDetail(
         for account: ServerAccount,

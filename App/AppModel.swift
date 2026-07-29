@@ -42,6 +42,9 @@ enum AppFailure: Equatable, Sendable {
     case libraryUnavailable
     case searchUnavailable
     case bookUnavailable
+    case playbackDenied
+    case playbackUnavailable
+    case mediaUnavailable
     case accountRemovalFailed
 
     var message: String {
@@ -72,6 +75,12 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not search the audiobook library."
         case .bookUnavailable:
             "Bleat could not load that audiobook."
+        case .playbackDenied:
+            "This account is not allowed to play that audiobook."
+        case .playbackUnavailable:
+            "Bleat could not start playback from the server."
+        case .mediaUnavailable:
+            "This audiobook could not be prepared for playback."
         case .accountRemovalFailed:
             "Bleat could not remove the account."
         }
@@ -117,6 +126,8 @@ enum AppFailure: Equatable, Sendable {
             self = .searchUnavailable
         case .bookDetail:
             self = .bookUnavailable
+        case .playbackSession, .playbackSource:
+            self = .playbackUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed
         }
@@ -142,9 +153,11 @@ final class AppModel {
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
+    let playback: PlaybackModel
 
     init(service: any AppServicing) {
         self.service = service
+        playback = PlaybackModel(service: service)
         phase = .launching
     }
 
@@ -153,6 +166,7 @@ final class AppModel {
         bootstrapError: AppBootstrapError
     ) {
         self.service = service
+        playback = PlaybackModel(service: service)
         hasStarted = true
         switch bootstrapError {
         case .persistenceUnavailable:
@@ -333,6 +347,7 @@ final class AppModel {
             return
         }
         accountActionStatus = .removing
+        await playback.stop()
 
         do {
             try await service.removeAccount(account)

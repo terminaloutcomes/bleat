@@ -152,6 +152,19 @@
             )
         }
 
+        func openPlayback(
+            for account: ServerAccount,
+            itemID: LibraryItemID,
+            deviceInfo: PlaybackDeviceInfo
+        ) async throws(AppServiceError) -> AppPlaybackPreparation {
+            throw .playbackSession(.requestFailed)
+        }
+
+        func closePlayback(
+            for account: ServerAccount,
+            sessionID: PlaybackSessionID
+        ) async throws(AppServiceError) {}
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

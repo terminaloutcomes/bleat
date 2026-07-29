@@ -8,7 +8,8 @@ The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
 an Audiobookshelf username and password, loads cached or live audiobook
 libraries and their first pages, searches the selected library, opens expanded
-book details with progress and chapters, presents the five-tab root shell, and
+book details with progress and chapters, and streams direct-play or HLS audio
+through a background-capable player. It presents the five-tab root shell and
 removes accounts. The core implements URL, routing, discovery,
 username/password login,
 single-flight token refresh, local logout, bearer-header,
@@ -17,12 +18,12 @@ transactional native onboarding, account lifecycle, typed authenticated
 library listing, pagination, and search, account-scoped SwiftData library
 caching including personalized shelves and expanded book details,
 online-first/cache-fallback repository behavior, permission-derived book
-action visibility, playback-session, and background-download contract behavior
-is tested. Native Audiobookshelf username/password is the active
+action visibility, playback sessions, and background-download contracts.
+Native Audiobookshelf username/password is the active
 authentication scope; the earlier isolated OIDC spike is deferred. The MVP
 also defers local time tracking, lifetime statistics, and listening-history
-import/export. Playback, downloads, and editing remain under active
-development.
+import/export. Playback progress synchronization, downloads, and editing
+remain under active development.
 
 ## Requirements
 
@@ -141,6 +142,19 @@ the server's native username/password login. The password is cleared before the
 request starts and is never stored. Access and refresh tokens are stored in the
 device Keychain. OIDC and third-party identity-provider configuration are not
 part of the app.
+
+## Play an audiobook
+
+Open a book from Home, Library, or Search and tap **Play**. Bleat opens a native
+Audiobookshelf playback session and uses its session-scoped direct-play or HLS
+URL without putting access tokens in media URLs. The mini-player remains above
+the tab bar; tap its title for whole-book seeking, 15-second rewind, 30-second
+forward, speed control from 0.5× to 3×, and Stop.
+
+Audio continues in the background. Lock-screen, Control Center, headset, and
+Bluetooth controls can play, pause, seek, skip, and move between chapters.
+Removing headphones pauses playback. Removing the signed-in account stops
+playback and closes its server session before credentials are deleted.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual
