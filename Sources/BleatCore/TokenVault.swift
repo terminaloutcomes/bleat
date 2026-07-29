@@ -20,7 +20,7 @@ extension TokenVaultError: LocalizedError {
             "The stored Keychain credentials are invalid."
         case .interactionNotAllowed:
             "Keychain interaction is not currently allowed."
-        case let .unexpectedStatus(status):
+        case .unexpectedStatus(let status):
             "Keychain returned status \(status)."
         }
     }
@@ -36,6 +36,46 @@ public actor TokenVault: AccountCredentialStore {
     public func credentials(
         for accountID: AccountID
     ) async throws -> AuthenticationTokens? {
+        try storedCredentials(for: accountID)?.tokens
+    }
+
+    public func save(
+        _ credentials: AuthenticationTokens,
+        for accountID: AccountID
+    ) async throws {
+        let nativeLogin = try storedCredentials(for: accountID)?.nativeLogin
+        try save(
+            StoredAccountCredentials(
+                tokens: credentials,
+                nativeLogin: nativeLogin
+            ),
+            for: accountID
+        )
+    }
+
+    public func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async throws {
+        try save(
+            StoredAccountCredentials(
+                tokens: credentials,
+                nativeLogin: nativeLogin
+            ),
+            for: accountID
+        )
+    }
+
+    public func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async throws -> NativeLoginCredentials? {
+        try storedCredentials(for: accountID)?.nativeLogin
+    }
+
+    private func storedCredentials(
+        for accountID: AccountID
+    ) throws -> StoredAccountCredentials? {
         let query = try baseQuery(for: accountID).merging([
             kSecReturnData: kCFBooleanTrue as Any,
             kSecMatchLimit: kSecMatchLimitOne,
@@ -51,21 +91,31 @@ public actor TokenVault: AccountCredentialStore {
         }
         try Self.check(status)
 
-        guard let data = result as? Data,
-              let credentials = try? JSONDecoder().decode(
-                  AuthenticationTokens.self,
-                  from: data
-              )
-        else {
+        guard let data = result as? Data else {
             throw TokenVaultError.invalidStoredCredentials
         }
-        return credentials
+        if let stored = try? JSONDecoder().decode(
+            StoredAccountCredentials.self,
+            from: data
+        ) {
+            return stored
+        }
+        if let tokens = try? JSONDecoder().decode(
+            AuthenticationTokens.self,
+            from: data
+        ) {
+            return StoredAccountCredentials(
+                tokens: tokens,
+                nativeLogin: nil
+            )
+        }
+        throw TokenVaultError.invalidStoredCredentials
     }
 
-    public func save(
-        _ credentials: AuthenticationTokens,
+    private func save(
+        _ credentials: StoredAccountCredentials,
         for accountID: AccountID
-    ) async throws {
+    ) throws {
         let data = try JSONEncoder().encode(credentials)
         let query = try baseQuery(for: accountID)
         let updateValues: [CFString: Any] = [
@@ -146,4 +196,9 @@ public actor TokenVault: AccountCredentialStore {
             throw .unexpectedStatus(status)
         }
     }
+}
+
+private struct StoredAccountCredentials: Codable {
+    let tokens: AuthenticationTokens
+    let nativeLogin: NativeLoginCredentials?
 }

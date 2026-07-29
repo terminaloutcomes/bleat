@@ -4,58 +4,79 @@ import XCTest
 @testable import BleatCore
 
 final class TokenVaultTests: XCTestCase {
-    func testRoundTripReplacementIsolationAccessibilityAndDeletion() async throws {
+    func testRoundTripReplacementIsolationAccessibilityAndDeletion()
+        async throws
+    {
         #if targetEnvironment(simulator)
-        throw XCTSkip(
-            "Requires the future app test host's Keychain entitlement"
-        )
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
+            )
         #else
-        let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
-        let store = TokenVault(service: service)
-        let firstAccount = AccountID(rawValue: "first")
-        let secondAccount = AccountID(rawValue: "second")
-        let firstTokens = try AuthenticationTokens(
-            accessToken: "first-access",
-            refreshToken: "first-refresh"
-        )
-        let replacementTokens = try AuthenticationTokens(
-            accessToken: "replacement-access",
-            refreshToken: "replacement-refresh"
-        )
-        let secondTokens = try AuthenticationTokens(
-            accessToken: "second-access",
-            refreshToken: "second-refresh"
-        )
-        addTeardownBlock {
+            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let store = TokenVault(service: service)
+            let firstAccount = AccountID(rawValue: "first")
+            let secondAccount = AccountID(rawValue: "second")
+            let firstTokens = try AuthenticationTokens(
+                accessToken: "first-access",
+                refreshToken: "first-refresh"
+            )
+            let replacementTokens = try AuthenticationTokens(
+                accessToken: "replacement-access",
+                refreshToken: "replacement-refresh"
+            )
+            let secondTokens = try AuthenticationTokens(
+                accessToken: "second-access",
+                refreshToken: "second-refresh"
+            )
+            let firstNativeLogin = try NativeLoginCredentials(
+                userID: UserID(rawValue: "first-user"),
+                username: "reader",
+                password: "saved-password"
+            )
+            addTeardownBlock {
+                try await store.deleteCredentials(for: firstAccount)
+                try await store.deleteCredentials(for: secondAccount)
+            }
+
+            let initiallyStored = try await store.credentials(for: firstAccount)
+            XCTAssertNil(initiallyStored)
+
+            try await store.save(
+                firstTokens,
+                nativeLogin: firstNativeLogin,
+                for: firstAccount
+            )
+            try await store.save(secondTokens, for: secondAccount)
+            let loadedFirst = try await store.credentials(for: firstAccount)
+            let loadedSecond = try await store.credentials(for: secondAccount)
+            let loadedFirstNativeLogin =
+                try await store.nativeLoginCredentials(for: firstAccount)
+            XCTAssertEqual(loadedFirst, firstTokens)
+            XCTAssertEqual(loadedSecond, secondTokens)
+            XCTAssertEqual(loadedFirstNativeLogin, firstNativeLogin)
+
+            try await store.save(replacementTokens, for: firstAccount)
+            let loadedReplacement = try await store.credentials(
+                for: firstAccount)
+            let retainedNativeLogin =
+                try await store.nativeLoginCredentials(for: firstAccount)
+            let hasExpectedAccessibility = try hasExpectedAccessibility(
+                service: service,
+                account: firstAccount.rawValue
+            )
+            XCTAssertEqual(loadedReplacement, replacementTokens)
+            XCTAssertEqual(retainedNativeLogin, firstNativeLogin)
+            XCTAssertTrue(hasExpectedAccessibility)
+
             try await store.deleteCredentials(for: firstAccount)
-            try await store.deleteCredentials(for: secondAccount)
-        }
-
-        let initiallyStored = try await store.credentials(for: firstAccount)
-        XCTAssertNil(initiallyStored)
-
-        try await store.save(firstTokens, for: firstAccount)
-        try await store.save(secondTokens, for: secondAccount)
-        let loadedFirst = try await store.credentials(for: firstAccount)
-        let loadedSecond = try await store.credentials(for: secondAccount)
-        XCTAssertEqual(loadedFirst, firstTokens)
-        XCTAssertEqual(loadedSecond, secondTokens)
-
-        try await store.save(replacementTokens, for: firstAccount)
-        let loadedReplacement = try await store.credentials(for: firstAccount)
-        let hasExpectedAccessibility = try hasExpectedAccessibility(
-            service: service,
-            account: firstAccount.rawValue
-        )
-        XCTAssertEqual(loadedReplacement, replacementTokens)
-        XCTAssertTrue(hasExpectedAccessibility)
-
-        try await store.deleteCredentials(for: firstAccount)
-        try await store.deleteCredentials(for: firstAccount)
-        let deletedFirst = try await store.credentials(for: firstAccount)
-        let retainedSecond = try await store.credentials(for: secondAccount)
-        XCTAssertNil(deletedFirst)
-        XCTAssertEqual(retainedSecond, secondTokens)
+            try await store.deleteCredentials(for: firstAccount)
+            let deletedFirst = try await store.credentials(for: firstAccount)
+            let deletedNativeLogin =
+                try await store.nativeLoginCredentials(for: firstAccount)
+            let retainedSecond = try await store.credentials(for: secondAccount)
+            XCTAssertNil(deletedFirst)
+            XCTAssertNil(deletedNativeLogin)
+            XCTAssertEqual(retainedSecond, secondTokens)
         #endif
     }
 
@@ -114,36 +135,74 @@ final class TokenVaultTests: XCTestCase {
 
     func testRejectsMalformedStoredCredentials() async throws {
         #if targetEnvironment(simulator)
-        throw XCTSkip(
-            "Requires the future app test host's Keychain entitlement"
-        )
-        #else
-        let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
-        let accountID = AccountID(rawValue: "malformed")
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: accountID.rawValue,
-            kSecAttrSynchronizable: kCFBooleanFalse as Any,
-            kSecAttrAccessible:
-                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecValueData: Data("not-json".utf8),
-        ]
-        let addStatus = SecItemAdd(query as CFDictionary, nil)
-        XCTAssertEqual(addStatus, errSecSuccess)
-        addTeardownBlock {
-            SecItemDelete(query as CFDictionary)
-        }
-
-        let store = TokenVault(service: service)
-        await XCTAssertThrowsErrorAsync(
-            try await store.credentials(for: accountID)
-        ) { error in
-            XCTAssertEqual(
-                error as? TokenVaultError,
-                .invalidStoredCredentials
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
             )
-        }
+        #else
+            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let accountID = AccountID(rawValue: "malformed")
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: accountID.rawValue,
+                kSecAttrSynchronizable: kCFBooleanFalse as Any,
+                kSecAttrAccessible:
+                    kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecValueData: Data("not-json".utf8),
+            ]
+            let addStatus = SecItemAdd(query as CFDictionary, nil)
+            XCTAssertEqual(addStatus, errSecSuccess)
+            addTeardownBlock {
+                SecItemDelete(query as CFDictionary)
+            }
+
+            let store = TokenVault(service: service)
+            await XCTAssertThrowsErrorAsync(
+                try await store.credentials(for: accountID)
+            ) { error in
+                XCTAssertEqual(
+                    error as? TokenVaultError,
+                    .invalidStoredCredentials
+                )
+            }
+        #endif
+    }
+
+    func testReadsLegacyTokenOnlyItemWithoutInventingPassword() async throws {
+        #if targetEnvironment(simulator)
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
+            )
+        #else
+            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let accountID = AccountID(rawValue: "legacy")
+            let tokens = try AuthenticationTokens(
+                accessToken: "legacy-access",
+                refreshToken: "legacy-refresh"
+            )
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: accountID.rawValue,
+                kSecAttrSynchronizable: kCFBooleanFalse as Any,
+                kSecAttrAccessible:
+                    kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecValueData: try JSONEncoder().encode(tokens),
+            ]
+            XCTAssertEqual(
+                SecItemAdd(query as CFDictionary, nil),
+                errSecSuccess
+            )
+            addTeardownBlock {
+                SecItemDelete(query as CFDictionary)
+            }
+
+            let store = TokenVault(service: service)
+            let loadedTokens = try await store.credentials(for: accountID)
+            let nativeLogin =
+                try await store.nativeLoginCredentials(for: accountID)
+            XCTAssertEqual(loadedTokens, tokens)
+            XCTAssertNil(nativeLogin)
         #endif
     }
 

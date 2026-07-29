@@ -7,9 +7,9 @@ final class LocalAuthenticationLiveTests: XCTestCase {
     func testPinnedRootAndPrefixLocalAuthenticationContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
-              let username = environment["BLEAT_LIVE_USERNAME"],
-              let password = environment["BLEAT_LIVE_PASSWORD"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live authentication data"
@@ -101,6 +101,77 @@ final class LocalAuthenticationLiveTests: XCTestCase {
             XCTAssertNil(credentialsAfterLogout)
             XCTAssertFalse(requiresReauthenticationAfterLogout)
             XCTAssertEqual(rejectedRefreshResponse.statusCode, 401)
+
+            let recoveryAccountID = AccountID(
+                rawValue: "live-recovery-\(index)"
+            )
+            let recoveryStore = LiveCredentialStore()
+            let recoveryTransport = LocalDockerHTTPTransport()
+            let recoveryCoordinator = AuthCoordinator(
+                transport: recoveryTransport,
+                credentialStore: recoveryStore
+            )
+            _ = try await recoveryCoordinator.login(
+                accountID: recoveryAccountID,
+                server: server,
+                username: username,
+                password: password
+            )
+            let storedRecoveryTokens =
+                await recoveryStore.credentials(for: recoveryAccountID)
+            let recoveryTokens = try XCTUnwrap(storedRecoveryTokens)
+            var invalidateRefreshRequest = URLRequest(
+                url: try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .logout)
+            )
+            invalidateRefreshRequest.httpMethod = "POST"
+            invalidateRefreshRequest.setValue(
+                recoveryTokens.refreshToken,
+                forHTTPHeaderField: "x-refresh-token"
+            )
+            let invalidationResponse = try await recoveryTransport.send(
+                invalidateRefreshRequest
+            )
+            XCTAssertEqual(invalidationResponse.statusCode, 200)
+
+            let rejectedRecoveryTokens = try AuthenticationTokens(
+                accessToken: "rejected-recovery-access-\(index)",
+                refreshToken: recoveryTokens.refreshToken
+            )
+            await recoveryStore.save(
+                rejectedRecoveryTokens,
+                for: recoveryAccountID
+            )
+            let recoveredResponse =
+                try await recoveryCoordinator.sendAuthenticated(
+                    librariesRequest,
+                    route: .libraries,
+                    accountID: recoveryAccountID,
+                    server: server
+                )
+            let storedAutomaticallyRecoveredTokens =
+                await recoveryStore.credentials(for: recoveryAccountID)
+            let automaticallyRecoveredTokens = try XCTUnwrap(
+                storedAutomaticallyRecoveredTokens
+            )
+            let retainedNativeLogin =
+                await recoveryStore
+                .nativeLoginCredentials(for: recoveryAccountID)
+
+            XCTAssertEqual(recoveredResponse.statusCode, 200)
+            XCTAssertNotEqual(
+                automaticallyRecoveredTokens.accessToken,
+                rejectedRecoveryTokens.accessToken
+            )
+            XCTAssertNotEqual(
+                automaticallyRecoveredTokens.refreshToken,
+                rejectedRecoveryTokens.refreshToken
+            )
+            XCTAssertEqual(retainedNativeLogin?.username, username)
+            _ = try await recoveryCoordinator.logout(
+                accountID: recoveryAccountID,
+                server: server
+            )
 
             let rejectedStore = LiveCredentialStore()
             let rejectedCoordinator = AuthCoordinator(

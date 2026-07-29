@@ -25,6 +25,9 @@ final class AuthenticationTests: XCTestCase {
             password: "test-password"
         )
         let storedCredentials = await store.credentials(for: accountID)
+        let storedNativeLogin = await store.nativeLoginCredentials(
+            for: accountID
+        )
 
         XCTAssertEqual(
             account.user.id,
@@ -37,6 +40,14 @@ final class AuthenticationTests: XCTestCase {
             try AuthenticationTokens(
                 accessToken: "fixture-access-token",
                 refreshToken: "fixture-refresh-token"
+            )
+        )
+        XCTAssertEqual(
+            storedNativeLogin,
+            try NativeLoginCredentials(
+                userID: UserID(rawValue: "fixture-user"),
+                username: "fixture-root",
+                password: "test-password"
             )
         )
     }
@@ -131,44 +142,47 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(saveCount, 1)
     }
 
-    func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting() async throws {
-        let scenarios: [(
-            HTTPResponse,
-            LocalAuthenticationError
-        )] = [
-            (.init(data: Data(), statusCode: 401), .invalidCredentials),
-            (
-                .init(data: Data(), statusCode: 429),
-                .unexpectedLoginStatus(429)
-            ),
-            (.json(Data("not-json".utf8)), .malformedLoginResponse),
-            (
-                .json(Self.authenticationJSON(refreshToken: "refresh")),
-                .missingAccessToken
-            ),
-            (
-                .json(Self.authenticationJSON(accessToken: "access")),
-                .missingRefreshToken
-            ),
-            (
-                .json(
-                    Self.authenticationJSON(
-                        accessToken: "bad token",
-                        refreshToken: "refresh"
-                    )
+    func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting()
+        async throws
+    {
+        let scenarios:
+            [(
+                HTTPResponse,
+                LocalAuthenticationError
+            )] = [
+                (.init(data: Data(), statusCode: 401), .invalidCredentials),
+                (
+                    .init(data: Data(), statusCode: 429),
+                    .unexpectedLoginStatus(429)
                 ),
-                .missingAccessToken
-            ),
-            (
-                .json(
-                    Self.authenticationJSON(
-                        accessToken: "access",
-                        refreshToken: "bad token"
-                    )
+                (.json(Data("not-json".utf8)), .malformedLoginResponse),
+                (
+                    .json(Self.authenticationJSON(refreshToken: "refresh")),
+                    .missingAccessToken
                 ),
-                .missingRefreshToken
-            ),
-        ]
+                (
+                    .json(Self.authenticationJSON(accessToken: "access")),
+                    .missingRefreshToken
+                ),
+                (
+                    .json(
+                        Self.authenticationJSON(
+                            accessToken: "bad token",
+                            refreshToken: "refresh"
+                        )
+                    ),
+                    .missingAccessToken
+                ),
+                (
+                    .json(
+                        Self.authenticationJSON(
+                            accessToken: "access",
+                            refreshToken: "bad token"
+                        )
+                    ),
+                    .missingRefreshToken
+                ),
+            ]
 
         for (response, expectedError) in scenarios {
             let transport = AuthenticationHTTPTransport(
@@ -198,37 +212,40 @@ final class AuthenticationTests: XCTestCase {
         }
     }
 
-    func testLocalLoginRejectsInvalidAuthorizationWithoutPersisting() async throws {
+    func testLocalLoginRejectsInvalidAuthorizationWithoutPersisting()
+        async throws
+    {
         let loginResponse = HTTPResponse.json(
             Self.authenticationJSON(
                 accessToken: "access",
                 refreshToken: "refresh"
             )
         )
-        let scenarios: [(
-            HTTPResponse,
-            LocalAuthenticationError
-        )] = [
-            (
-                .init(data: Data(), statusCode: 401),
-                .tokenValidationFailed
-            ),
-            (
-                .init(data: Data(), statusCode: 403),
-                .unexpectedAuthorizationStatus(403)
-            ),
-            (
-                .json(Data("not-json".utf8)),
-                .malformedAuthorizationResponse
-            ),
-            (
-                .json(Self.authenticationJSON(userID: "other-user")),
-                .authorizedUserMismatch(
-                    expected: "user-id",
-                    actual: "other-user"
-                )
-            ),
-        ]
+        let scenarios:
+            [(
+                HTTPResponse,
+                LocalAuthenticationError
+            )] = [
+                (
+                    .init(data: Data(), statusCode: 401),
+                    .tokenValidationFailed
+                ),
+                (
+                    .init(data: Data(), statusCode: 403),
+                    .unexpectedAuthorizationStatus(403)
+                ),
+                (
+                    .json(Data("not-json".utf8)),
+                    .malformedAuthorizationResponse
+                ),
+                (
+                    .json(Self.authenticationJSON(userID: "other-user")),
+                    .authorizedUserMismatch(
+                        expected: "user-id",
+                        actual: "other-user"
+                    )
+                ),
+            ]
 
         for (response, expectedError) in scenarios {
             let transport = AuthenticationHTTPTransport(
@@ -567,6 +584,7 @@ private actor AuthenticationHTTPTransport: HTTPTransport {
 
 private actor RecordingCredentialStore: AccountCredentialStore {
     private var stored: [AccountID: AuthenticationTokens] = [:]
+    private var nativeLogins: [AccountID: NativeLoginCredentials] = [:]
     private var saves = 0
     private let shouldFailSave: Bool
 
@@ -591,8 +609,28 @@ private actor RecordingCredentialStore: AccountCredentialStore {
         saves += 1
     }
 
+    func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async throws {
+        if shouldFailSave {
+            throw AuthenticationTestError.storeFailure
+        }
+        stored[accountID] = credentials
+        nativeLogins[accountID] = nativeLogin
+        saves += 1
+    }
+
+    func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async -> NativeLoginCredentials? {
+        nativeLogins[accountID]
+    }
+
     func deleteCredentials(for accountID: AccountID) {
         stored[accountID] = nil
+        nativeLogins[accountID] = nil
     }
 
     func saveCount() -> Int {
@@ -605,8 +643,8 @@ private enum AuthenticationTestError: Error {
     case storeFailure
 }
 
-private extension HTTPResponse {
-    static func json(_ data: Data) -> HTTPResponse {
+extension HTTPResponse {
+    fileprivate static func json(_ data: Data) -> HTTPResponse {
         HTTPResponse(
             data: data,
             statusCode: 200,

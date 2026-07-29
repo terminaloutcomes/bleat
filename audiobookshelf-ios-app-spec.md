@@ -278,7 +278,10 @@ When `authMethods` contains `local`:
 4. Require `user.accessToken` and `user.refreshToken` for server 2.26.0 or newer.
 5. Call `POST <base>/api/authorize` using the access token to validate it and load user/server data.
 6. Persist tokens only after validation succeeds.
-7. Discard the password immediately; never store or log it.
+7. Clear the password from view state immediately after submission. After
+   validation succeeds, store the username, remote user ID, and password only in
+   the same non-synchronizing, device-only Keychain credential item as the
+   rotating token pair. Never store it elsewhere or log it.
 
 ### 6.3 OpenID Connect authentication — deferred research contract
 
@@ -339,9 +342,13 @@ Do not reuse `audiobookshelf://oauth`, which belongs to the official client and 
 
 Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, or the PKCE verifier.
 
-### 6.4 Token storage and refresh
+### 6.4 Credential storage and refresh
 
-- Store access and refresh tokens in Keychain, not SwiftData or `UserDefaults`.
+- Store the native username/password credential and access/refresh tokens in
+  Keychain, not SwiftData or `UserDefaults`.
+- Treat an existing token-only Keychain item as a legacy account. It remains
+  readable, but requires one explicit native login before automatic recovery is
+  available because a previously discarded password cannot be reconstructed.
 - Keychain accessibility must be `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so background playback/download work after the device's first unlock without syncing credentials to iCloud.
 - Use a distinct Keychain service/account key for every local `AccountID`.
 - Use the access token only in `Authorization: Bearer` headers.
@@ -351,9 +358,13 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
   - `POST <base>/logout`.
 - Refresh tokens rotate. Replace the old access/refresh pair atomically before retrying requests.
 - A per-account `AuthCoordinator` actor must collapse concurrent refresh attempts into one request.
+- If the server rejects a refresh token, perform one native login using the
+  saved Keychain credential, require the same remote user ID, atomically replace
+  the token pair, and retry the original request without prompting.
 - Retry an ordinary request at most once after refresh.
 - Authentication endpoints must never recursively trigger refresh.
-- A failed refresh marks only that account as `reauthenticationRequired`; other accounts continue normally.
+- A rejected saved password or failed automatic login marks only that account
+  as `reauthenticationRequired`; other accounts continue normally.
 - It is acceptable to decode the access-token `exp` claim only as an untrusted scheduling hint. The server remains authoritative.
 
 ### 6.5 Logout and account removal

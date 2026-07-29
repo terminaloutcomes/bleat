@@ -19,23 +19,28 @@ public enum AuthenticatedRequestError: Error, Equatable, Sendable {
     case missingAccessToken
     case missingRefreshToken
     case credentialPersistenceFailed
+    case savedLoginCredentialsReadFailed
+    case automaticReauthenticationFailed(LocalAuthenticationError)
+    case automaticReauthenticationTransportFailed
     case retriedRequestUnauthorized
 }
 
 struct RefreshAttempt: Sendable {
     let id: UInt64
-    let task: Task<
-        Result<AuthenticationTokens, AuthenticatedRequestError>,
-        Never
-    >
+    let task:
+        Task<
+            Result<AuthenticationTokens, AuthenticatedRequestError>,
+            Never
+        >
 }
 
 struct CompletedRefresh: Sendable {
     let rejectedAccessToken: String
-    let result: Result<
-        AuthenticationTokens,
-        AuthenticatedRequestError
-    >
+    let result:
+        Result<
+            AuthenticationTokens,
+            AuthenticatedRequestError
+        >
 }
 
 extension AuthCoordinator {
@@ -49,7 +54,7 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.invalidAccountID
         }
         guard !accountsLoggingIn.contains(accountID),
-              !accountsSigningOut.contains(accountID)
+            !accountsSigningOut.contains(accountID)
         else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
@@ -60,11 +65,13 @@ extension AuthCoordinator {
         guard !route.isAuthenticationEndpoint else {
             throw AuthenticatedRequestError.authenticationEndpoint
         }
-        guard requestMatchesRoute(
-            request,
-            route: route,
-            server: server
-        ) else {
+        guard
+            requestMatchesRoute(
+                request,
+                route: route,
+                server: server
+            )
+        else {
             throw AuthenticatedRequestError.requestDoesNotMatchRoute
         }
 
@@ -73,10 +80,12 @@ extension AuthCoordinator {
             request,
             accessToken: initialTokens.accessToken
         )
-        guard accountOperationIsCurrent(
-            accountID,
-            generation: operationGeneration
-        ) else {
+        guard
+            accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            )
+        else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         guard initialResponse.statusCode == 401 else {
@@ -88,10 +97,12 @@ extension AuthCoordinator {
             server: server,
             rejectedAccessToken: initialTokens.accessToken
         )
-        guard accountOperationIsCurrent(
-            accountID,
-            generation: operationGeneration
-        ) else {
+        guard
+            accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            )
+        else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         let retriedResponse = try await send(
@@ -117,16 +128,17 @@ extension AuthCoordinator {
         server: NormalizedServerURL
     ) -> Bool {
         guard let requestURL = request.url,
-              var requestComponents = URLComponents(
-                  url: requestURL,
-                  resolvingAgainstBaseURL: false
-              )
+            var requestComponents = URLComponents(
+                url: requestURL,
+                resolvingAgainstBaseURL: false
+            )
         else {
             return false
         }
 
-        guard let expectedURL = try? AudiobookshelfRouteBuilder(server: server)
-            .url(for: route)
+        guard
+            let expectedURL = try? AudiobookshelfRouteBuilder(server: server)
+                .url(for: route)
         else {
             return false
         }
@@ -186,23 +198,27 @@ extension AuthCoordinator {
             default: 0
         ]
         let currentTokens = try await storedCredentials(for: accountID)
-        guard accountOperationIsCurrent(
-            accountID,
-            generation: operationGeneration
-        ) else {
+        guard
+            accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            )
+        else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         if currentTokens.accessToken != rejectedAccessToken {
             return currentTokens
         }
         if let completed = completedRefreshes[accountID],
-           completed.rejectedAccessToken == rejectedAccessToken
+            completed.rejectedAccessToken == rejectedAccessToken
         {
             let tokens = try completed.result.get()
-            guard accountOperationIsCurrent(
-                accountID,
-                generation: operationGeneration
-            ) else {
+            guard
+                accountOperationIsCurrent(
+                    accountID,
+                    generation: operationGeneration
+                )
+            else {
                 throw AuthenticatedRequestError.accountOperationInProgress
             }
             return tokens
@@ -214,10 +230,12 @@ extension AuthCoordinator {
                 accountID: accountID,
                 rejectedAccessToken: rejectedAccessToken
             )
-            guard accountOperationIsCurrent(
-                accountID,
-                generation: operationGeneration
-            ) else {
+            guard
+                accountOperationIsCurrent(
+                    accountID,
+                    generation: operationGeneration
+                )
+            else {
                 throw AuthenticatedRequestError.accountOperationInProgress
             }
             return tokens
@@ -227,26 +245,27 @@ extension AuthCoordinator {
         let attemptID = nextRefreshAttemptID
         let transport = transport
         let credentialStore = credentialStore
-        let task: Task<
-            Result<AuthenticationTokens, AuthenticatedRequestError>,
-            Never
-        > = Task {
-            do {
-                return .success(
-                    try await Self.refresh(
-                        accountID: accountID,
-                        server: server,
-                        refreshToken: currentTokens.refreshToken,
-                        transport: transport,
-                        credentialStore: credentialStore
+        let task:
+            Task<
+                Result<AuthenticationTokens, AuthenticatedRequestError>,
+                Never
+            > = Task {
+                do {
+                    return .success(
+                        try await Self.refreshOrReauthenticate(
+                            accountID: accountID,
+                            server: server,
+                            refreshToken: currentTokens.refreshToken,
+                            transport: transport,
+                            credentialStore: credentialStore
+                        )
                     )
-                )
-            } catch let error as AuthenticatedRequestError {
-                return .failure(error)
-            } catch {
-                return .failure(.refreshTransportFailed)
+                } catch let error as AuthenticatedRequestError {
+                    return .failure(error)
+                } catch {
+                    return .failure(.refreshTransportFailed)
+                }
             }
-        }
         let attempt = RefreshAttempt(id: attemptID, task: task)
         refreshAttempts[accountID] = attempt
         let tokens = try await finishRefresh(
@@ -254,10 +273,12 @@ extension AuthCoordinator {
             accountID: accountID,
             rejectedAccessToken: rejectedAccessToken
         )
-        guard accountOperationIsCurrent(
-            accountID,
-            generation: operationGeneration
-        ) else {
+        guard
+            accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            )
+        else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         return tokens
@@ -278,7 +299,7 @@ extension AuthCoordinator {
         rejectedAccessToken: String
     ) async throws -> AuthenticationTokens {
         switch await attempt.task.value {
-        case let .success(tokens):
+        case .success(let tokens):
             completedRefreshes[accountID] = CompletedRefresh(
                 rejectedAccessToken: rejectedAccessToken,
                 result: .success(tokens)
@@ -286,7 +307,7 @@ extension AuthCoordinator {
             clearRefreshAttempt(attempt, accountID: accountID)
             reauthenticationRequiredAccounts.remove(accountID)
             return tokens
-        case let .failure(error):
+        case .failure(let error):
             completedRefreshes[accountID] = CompletedRefresh(
                 rejectedAccessToken: rejectedAccessToken,
                 result: .failure(error)
@@ -305,6 +326,56 @@ extension AuthCoordinator {
             return
         }
         refreshAttempts[accountID] = nil
+    }
+
+    private static func refreshOrReauthenticate(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        refreshToken: String,
+        transport: Transport,
+        credentialStore: CredentialStore
+    ) async throws(AuthenticatedRequestError) -> AuthenticationTokens {
+        do {
+            return try await refresh(
+                accountID: accountID,
+                server: server,
+                refreshToken: refreshToken,
+                transport: transport,
+                credentialStore: credentialStore
+            )
+        } catch let error {
+            guard error == .refreshRejected else {
+                throw error
+            }
+        }
+
+        let nativeLogin: NativeLoginCredentials?
+        do {
+            nativeLogin = try await credentialStore.nativeLoginCredentials(
+                for: accountID
+            )
+        } catch {
+            throw .savedLoginCredentialsReadFailed
+        }
+        guard let nativeLogin else {
+            throw .refreshRejected
+        }
+
+        do {
+            return try await authenticateLocally(
+                accountID: accountID,
+                server: server,
+                username: nativeLogin.username,
+                password: nativeLogin.password,
+                expectedUserID: nativeLogin.userID,
+                transport: transport,
+                credentialStore: credentialStore
+            ).tokens
+        } catch let error as LocalAuthenticationError {
+            throw .automaticReauthenticationFailed(error)
+        } catch {
+            throw .automaticReauthenticationTransportFailed
+        }
     }
 
     private static func refresh(
@@ -396,11 +467,11 @@ extension AuthCoordinator {
     }
 }
 
-private extension AudiobookshelfRoute {
-    var isAuthenticationEndpoint: Bool {
+extension AudiobookshelfRoute {
+    fileprivate var isAuthenticationEndpoint: Bool {
         switch self {
         case .login, .beginOpenID, .completeOpenID, .refresh, .logout,
-             .authorize:
+            .authorize:
             true
         default:
             false

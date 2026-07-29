@@ -16,10 +16,10 @@ public struct BearerRequestAuthorizer: Sendable {
         accessToken: String
     ) throws(BearerAuthorizationError) -> URLRequest {
         guard let url = request.url,
-              let components = URLComponents(
-                  url: url,
-                  resolvingAgainstBaseURL: false
-              )
+            let components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            )
         else {
             throw .missingURL
         }
@@ -29,16 +29,18 @@ public struct BearerRequestAuthorizer: Sendable {
         guard components.user == nil, components.password == nil else {
             throw .embeddedCredentials
         }
-        guard components.queryItems?.contains(where: {
-            let name = $0.name.lowercased()
-            return name == "token" || name == "access_token"
-        }) != true else {
+        guard
+            components.queryItems?.contains(where: {
+                let name = $0.name.lowercased()
+                return name == "token" || name == "access_token"
+            }) != true
+        else {
             throw .tokenBearingURL
         }
         guard !accessToken.isEmpty,
-              accessToken.rangeOfCharacter(
-                  from: .whitespacesAndNewlines.union(.controlCharacters)
-              ) == nil
+            accessToken.rangeOfCharacter(
+                from: .whitespacesAndNewlines.union(.controlCharacters)
+            ) == nil
         else {
             throw .invalidAccessToken
         }
@@ -73,7 +75,6 @@ public actor AuthCoordinator<
 > {
     let transport: Transport
     let credentialStore: CredentialStore
-    private let encoder: JSONEncoder
     let decoder: JSONDecoder
     let requestAuthorizer: BearerRequestAuthorizer
     var openIDAttempt: OpenIDAttempt?
@@ -91,7 +92,6 @@ public actor AuthCoordinator<
     ) {
         self.transport = transport
         self.credentialStore = credentialStore
-        encoder = JSONEncoder()
         decoder = JSONDecoder()
         requestAuthorizer = BearerRequestAuthorizer()
         openIDAttempt = nil
@@ -114,7 +114,7 @@ public actor AuthCoordinator<
             throw LocalAuthenticationError.invalidAccountID
         }
         guard !accountsLoggingIn.contains(accountID),
-              !accountsSigningOut.contains(accountID)
+            !accountsSigningOut.contains(accountID)
         else {
             throw LocalAuthenticationError.accountOperationInProgress
         }
@@ -124,6 +124,29 @@ public actor AuthCoordinator<
             accountsLoggingIn.remove(accountID)
         }
 
+        let result = try await Self.authenticateLocally(
+            accountID: accountID,
+            server: server,
+            username: username,
+            password: password,
+            expectedUserID: nil,
+            transport: transport,
+            credentialStore: credentialStore
+        )
+        completedRefreshes[accountID] = nil
+        reauthenticationRequiredAccounts.remove(accountID)
+        return result.account
+    }
+
+    static func authenticateLocally(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        username: String,
+        password: String,
+        expectedUserID: UserID?,
+        transport: Transport,
+        credentialStore: CredentialStore
+    ) async throws -> LocalAuthenticationResult {
         let routeBuilder = AudiobookshelfRouteBuilder(server: server)
         let loginURL = try routeBuilder.url(for: .login)
         var loginRequest = URLRequest(url: loginURL)
@@ -133,7 +156,7 @@ public actor AuthCoordinator<
             forHTTPHeaderField: "Content-Type"
         )
         loginRequest.setValue("true", forHTTPHeaderField: "x-return-tokens")
-        loginRequest.httpBody = try encoder.encode(
+        loginRequest.httpBody = try JSONEncoder().encode(
             LoginRequest(username: username, password: password)
         )
 
@@ -152,7 +175,7 @@ public actor AuthCoordinator<
 
         let loginPayload: AuthenticationResponse
         do {
-            loginPayload = try decoder.decode(
+            loginPayload = try JSONDecoder().decode(
                 AuthenticationResponse.self,
                 from: loginResponse.data
             )
@@ -161,12 +184,12 @@ public actor AuthCoordinator<
         }
 
         guard let accessToken = loginPayload.user.accessToken,
-              !accessToken.isEmpty
+            !accessToken.isEmpty
         else {
             throw LocalAuthenticationError.missingAccessToken
         }
         guard let refreshToken = loginPayload.user.refreshToken,
-              !refreshToken.isEmpty
+            !refreshToken.isEmpty
         else {
             throw LocalAuthenticationError.missingRefreshToken
         }
@@ -189,7 +212,7 @@ public actor AuthCoordinator<
         let authorizeURL = try routeBuilder.url(for: .authorize)
         var authorizeRequest = URLRequest(url: authorizeURL)
         authorizeRequest.httpMethod = "POST"
-        authorizeRequest = try requestAuthorizer.authorize(
+        authorizeRequest = try BearerRequestAuthorizer().authorize(
             authorizeRequest,
             accessToken: tokens.accessToken
         )
@@ -208,7 +231,7 @@ public actor AuthCoordinator<
 
         let authorizationPayload: AuthenticationResponse
         do {
-            authorizationPayload = try decoder.decode(
+            authorizationPayload = try JSONDecoder().decode(
                 AuthenticationResponse.self,
                 from: authorizeResponse.data
             )
@@ -222,21 +245,45 @@ public actor AuthCoordinator<
                 actual: authorizationPayload.user.id.rawValue
             )
         }
+        if let expectedUserID,
+            authorizationPayload.user.id != expectedUserID
+        {
+            throw LocalAuthenticationError.authorizedUserMismatch(
+                expected: expectedUserID.rawValue,
+                actual: authorizationPayload.user.id.rawValue
+            )
+        }
 
+        let nativeLogin: NativeLoginCredentials
         do {
-            try await credentialStore.save(tokens, for: accountID)
+            nativeLogin = try NativeLoginCredentials(
+                userID: authorizationPayload.user.id,
+                username: username,
+                password: password
+            )
+            try await credentialStore.save(
+                tokens,
+                nativeLogin: nativeLogin,
+                for: accountID
+            )
         } catch {
             throw LocalAuthenticationError.credentialPersistenceFailed
         }
-        completedRefreshes[accountID] = nil
-        reauthenticationRequiredAccounts.remove(accountID)
 
-        return AuthenticatedAccount(
-            id: accountID,
-            server: server,
-            user: authorizationPayload.user.authenticatedUser
+        return LocalAuthenticationResult(
+            account: AuthenticatedAccount(
+                id: accountID,
+                server: server,
+                user: authorizationPayload.user.authenticatedUser
+            ),
+            tokens: tokens
         )
     }
+}
+
+struct LocalAuthenticationResult: Sendable {
+    let account: AuthenticatedAccount
+    let tokens: AuthenticationTokens
 }
 
 private struct LoginRequest: Encodable {

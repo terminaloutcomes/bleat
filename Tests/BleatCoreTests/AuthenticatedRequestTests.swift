@@ -32,7 +32,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         let responses = try await withThrowingTaskGroup(
             of: HTTPResponse.self
         ) { group in
-            for _ in 0 ..< 20 {
+            for _ in 0..<20 {
                 group.addTask {
                     try await coordinator.sendAuthenticated(
                         request,
@@ -105,7 +105,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         let errors = await withTaskGroup(
             of: AuthenticatedRequestError?.self
         ) { group in
-            for _ in 0 ..< 20 {
+            for _ in 0..<20 {
                 group.addTask {
                     do {
                         _ = try await coordinator.sendAuthenticated(
@@ -138,6 +138,265 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertEqual(counts.ordinaryRequests, 20)
         XCTAssertEqual(counts.refreshRequests, 1)
         XCTAssertTrue(requiresReauthentication)
+    }
+
+    func testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery()
+        async throws
+    {
+        let accountID = AccountID(rawValue: "concurrent-saved-login")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let newTokens = try AuthenticationTokens(
+            accessToken: "new-access",
+            refreshToken: "new-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ConcurrentSavedLoginRecoveryTransport(
+            unauthorizedRequestCount: 20,
+            oldTokens: oldTokens,
+            newTokens: newTokens
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let request = try Self.request(for: .libraries, server: server)
+
+        let responses = try await withThrowingTaskGroup(
+            of: HTTPResponse.self
+        ) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    try await coordinator.sendAuthenticated(
+                        request,
+                        route: .libraries,
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            var responses: [HTTPResponse] = []
+            for try await response in group {
+                responses.append(response)
+            }
+            return responses
+        }
+        let counts = await transport.counts()
+        let storedTokens = try await store.credentials(for: accountID)
+
+        XCTAssertEqual(
+            responses.map(\.statusCode),
+            Array(repeating: 200, count: 20)
+        )
+        XCTAssertEqual(counts.oldAccessRequests, 20)
+        XCTAssertEqual(counts.refreshRequests, 1)
+        XCTAssertEqual(counts.loginRequests, 1)
+        XCTAssertEqual(counts.authorizationRequests, 1)
+        XCTAssertEqual(counts.newAccessRequests, 20)
+        XCTAssertEqual(storedTokens, newTokens)
+    }
+
+    func testRejectedRefreshUsesSavedPasswordAndRetriesRequest() async throws {
+        let accountID = AccountID(rawValue: "saved-login")
+        let server = try NormalizedServerURL("https://example.net/prefix")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let newTokens = try AuthenticationTokens(
+            accessToken: "new-access",
+            refreshToken: "new-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ScriptedRequestTransport(responses: [
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: newTokens.accessToken,
+                        refreshToken: newTokens.refreshToken
+                    ))),
+            .success(.json(Self.authenticationJSON())),
+            .success(.init(data: Data(), statusCode: 200)),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        let response = try await coordinator.sendAuthenticated(
+            try Self.request(for: .libraries, server: server),
+            route: .libraries,
+            accountID: accountID,
+            server: server
+        )
+        let requests = await transport.recordedRequests()
+        let savedTokens = try await store.credentials(for: accountID)
+        let savedNativeLogin = try await store.nativeLoginCredentials(
+            for: accountID
+        )
+        let requiresReauthentication =
+            await coordinator.requiresReauthentication(for: accountID)
+
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(
+            requests.map(\.url?.path),
+            [
+                "/prefix/api/libraries",
+                "/prefix/auth/refresh",
+                "/prefix/login",
+                "/prefix/api/authorize",
+                "/prefix/api/libraries",
+            ]
+        )
+        let loginBody = try XCTUnwrap(requests[2].httpBody)
+        let loginObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: loginBody)
+                as? [String: String]
+        )
+        XCTAssertEqual(
+            loginObject,
+            [
+                "username": "reader",
+                "password": "saved-password",
+            ]
+        )
+        XCTAssertEqual(
+            requests[3].value(forHTTPHeaderField: "Authorization"),
+            "Bearer new-access"
+        )
+        XCTAssertEqual(
+            requests[4].value(forHTTPHeaderField: "Authorization"),
+            "Bearer new-access"
+        )
+        XCTAssertEqual(savedTokens, newTokens)
+        XCTAssertEqual(savedNativeLogin, nativeLogin)
+        XCTAssertFalse(requiresReauthentication)
+    }
+
+    func testSavedPasswordRejectionRemainsTyped() async throws {
+        let accountID = AccountID(rawValue: "rejected-saved-login")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "old-password"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ScriptedRequestTransport(responses: [
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(.init(data: Data(), statusCode: 401)),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.sendAuthenticated(
+                try Self.request(for: .libraries, server: server),
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .automaticReauthenticationFailed(.invalidCredentials)
+            )
+        }
+        let savedTokens = try await store.credentials(for: accountID)
+        let savedNativeLogin = try await store.nativeLoginCredentials(
+            for: accountID
+        )
+        let requiresReauthentication =
+            await coordinator.requiresReauthentication(for: accountID)
+        XCTAssertEqual(savedTokens, oldTokens)
+        XCTAssertEqual(savedNativeLogin, nativeLogin)
+        XCTAssertTrue(requiresReauthentication)
+    }
+
+    func testSavedLoginCannotChangeRemoteUserIdentity() async throws {
+        let accountID = AccountID(rawValue: "identity-change")
+        let server = try NormalizedServerURL("https://example.net")
+        let tokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: tokens],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ScriptedRequestTransport(responses: [
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(.init(data: Data(), statusCode: 401)),
+            .success(
+                .json(
+                    Self.authenticationJSON(
+                        userID: "other-user",
+                        accessToken: "new-access",
+                        refreshToken: "new-refresh"
+                    ))),
+            .success(.json(Self.authenticationJSON(userID: "other-user"))),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.sendAuthenticated(
+                try Self.request(for: .libraries, server: server),
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .automaticReauthenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: "user-id",
+                        actual: "other-user"
+                    )
+                )
+            )
+        }
+        let retainedTokens = try await store.credentials(for: accountID)
+        XCTAssertEqual(retainedTokens, tokens)
     }
 
     func testForbiddenResponseDoesNotRefresh() async throws {
@@ -198,10 +457,12 @@ final class AuthenticatedRequestTests: XCTestCase {
         let fixture = try Fixture(
             responses: [
                 .success(.init(data: Data(), statusCode: 401)),
-                .success(.json(Self.authenticationJSON(
-                    accessToken: "rotated-access",
-                    refreshToken: "rotated-refresh"
-                ))),
+                .success(
+                    .json(
+                        Self.authenticationJSON(
+                            accessToken: "rotated-access",
+                            refreshToken: "rotated-refresh"
+                        ))),
                 .success(.init(data: Data(), statusCode: 401)),
             ]
         )
@@ -227,53 +488,62 @@ final class AuthenticatedRequestTests: XCTestCase {
     }
 
     func testRefreshFailuresAreTypedAndAccountScoped() async throws {
-        let scenarios: [(
-            Result<HTTPResponse, RequestTestError>,
-            AuthenticatedRequestError
-        )] = [
-            (
-                .failure(.transport),
-                .refreshTransportFailed
-            ),
-            (
-                .success(.init(data: Data(), statusCode: 401)),
-                .refreshRejected
-            ),
-            (
-                .success(.init(data: Data(), statusCode: 503)),
-                .unexpectedRefreshStatus(503)
-            ),
-            (
-                .success(.json(Data("not-json".utf8))),
-                .malformedRefreshResponse
-            ),
-            (
-                .success(.json(Self.authenticationJSON(
-                    refreshToken: "refresh"
-                ))),
-                .missingAccessToken
-            ),
-            (
-                .success(.json(Self.authenticationJSON(
-                    accessToken: "access"
-                ))),
-                .missingRefreshToken
-            ),
-            (
-                .success(.json(Self.authenticationJSON(
-                    accessToken: "bad token",
-                    refreshToken: "refresh"
-                ))),
-                .missingAccessToken
-            ),
-            (
-                .success(.json(Self.authenticationJSON(
-                    accessToken: "access",
-                    refreshToken: "bad token"
-                ))),
-                .missingRefreshToken
-            ),
-        ]
+        let scenarios:
+            [(
+                Result<HTTPResponse, RequestTestError>,
+                AuthenticatedRequestError
+            )] = [
+                (
+                    .failure(.transport),
+                    .refreshTransportFailed
+                ),
+                (
+                    .success(.init(data: Data(), statusCode: 401)),
+                    .refreshRejected
+                ),
+                (
+                    .success(.init(data: Data(), statusCode: 503)),
+                    .unexpectedRefreshStatus(503)
+                ),
+                (
+                    .success(.json(Data("not-json".utf8))),
+                    .malformedRefreshResponse
+                ),
+                (
+                    .success(
+                        .json(
+                            Self.authenticationJSON(
+                                refreshToken: "refresh"
+                            ))),
+                    .missingAccessToken
+                ),
+                (
+                    .success(
+                        .json(
+                            Self.authenticationJSON(
+                                accessToken: "access"
+                            ))),
+                    .missingRefreshToken
+                ),
+                (
+                    .success(
+                        .json(
+                            Self.authenticationJSON(
+                                accessToken: "bad token",
+                                refreshToken: "refresh"
+                            ))),
+                    .missingAccessToken
+                ),
+                (
+                    .success(
+                        .json(
+                            Self.authenticationJSON(
+                                accessToken: "access",
+                                refreshToken: "bad token"
+                            ))),
+                    .missingRefreshToken
+                ),
+            ]
 
         for (refreshResult, expectedError) in scenarios {
             let fixture = try Fixture(
@@ -338,10 +608,12 @@ final class AuthenticatedRequestTests: XCTestCase {
         let saveFailureFixture = try Fixture(
             responses: [
                 .success(.init(data: Data(), statusCode: 401)),
-                .success(.json(Self.authenticationJSON(
-                    accessToken: "new-access",
-                    refreshToken: "new-refresh"
-                ))),
+                .success(
+                    .json(
+                        Self.authenticationJSON(
+                            accessToken: "new-access",
+                            refreshToken: "new-refresh"
+                        ))),
             ],
             credentialSaveFails: true
         )
@@ -515,10 +787,12 @@ final class AuthenticatedRequestTests: XCTestCase {
         let store = StaleReadCredentialStore(credentials: oldTokens)
         let transport = ScriptedRequestTransport(responses: [
             .success(.init(data: Data(), statusCode: 401)),
-            .success(.json(Self.authenticationJSON(
-                accessToken: "new-access",
-                refreshToken: "new-refresh"
-            ))),
+            .success(
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "new-access",
+                        refreshToken: "new-refresh"
+                    ))),
             .success(.init(data: Data(), statusCode: 200)),
             .success(.init(data: Data(), statusCode: 401)),
             .success(.init(data: Data(), statusCode: 200)),
@@ -617,6 +891,7 @@ final class AuthenticatedRequestTests: XCTestCase {
     }
 
     fileprivate static func authenticationJSON(
+        userID: String = "user-id",
         accessToken: String? = nil,
         refreshToken: String? = nil
     ) -> Data {
@@ -631,7 +906,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             """
             {
               "user": {
-                "id": "user-id",
+                "id": "\(userID)",
                 "username": "reader",
                 "type": "root",
                 "permissions": {
@@ -660,10 +935,11 @@ private struct Fixture {
     let server: NormalizedServerURL
     let store: RequestCredentialStore
     let transport: ScriptedRequestTransport
-    let coordinator: AuthCoordinator<
-        ScriptedRequestTransport,
-        RequestCredentialStore
-    >
+    let coordinator:
+        AuthCoordinator<
+            ScriptedRequestTransport,
+            RequestCredentialStore
+        >
 
     init(
         responses: [Result<HTTPResponse, RequestTestError>],
@@ -704,16 +980,19 @@ private struct Fixture {
 
 private actor RequestCredentialStore: AccountCredentialStore {
     private var stored: [AccountID: AuthenticationTokens]
+    private var nativeLogins: [AccountID: NativeLoginCredentials]
     private var saves = 0
     private let readFails: Bool
     private let saveFails: Bool
 
     init(
         credentials: [AccountID: AuthenticationTokens],
+        nativeLogins: [AccountID: NativeLoginCredentials] = [:],
         readFails: Bool = false,
         saveFails: Bool = false
     ) {
         stored = credentials
+        self.nativeLogins = nativeLogins
         self.readFails = readFails
         self.saveFails = saveFails
     }
@@ -738,8 +1017,31 @@ private actor RequestCredentialStore: AccountCredentialStore {
         saves += 1
     }
 
+    func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async throws {
+        if saveFails {
+            throw RequestTestError.store
+        }
+        stored[accountID] = credentials
+        nativeLogins[accountID] = nativeLogin
+        saves += 1
+    }
+
+    func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async throws -> NativeLoginCredentials? {
+        if readFails {
+            throw RequestTestError.store
+        }
+        return nativeLogins[accountID]
+    }
+
     func deleteCredentials(for accountID: AccountID) {
         stored[accountID] = nil
+        nativeLogins[accountID] = nil
     }
 
     func saveCount() -> Int {
@@ -771,6 +1073,10 @@ private actor ScriptedRequestTransport: HTTPTransport {
         requests.filter {
             $0.url?.path.hasSuffix("/auth/refresh") == true
         }.count
+    }
+
+    func recordedRequests() -> [URLRequest] {
+        requests
     }
 }
 
@@ -811,9 +1117,8 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     private var oldAccessRequests = 0
     private var newAccessRequests = 0
     private var refreshRequests: [URLRequest] = []
-    private var unauthorizedWaiters: [
-        CheckedContinuation<HTTPResponse, Never>
-    ] = []
+    private var unauthorizedWaiters:
+        [CheckedContinuation<HTTPResponse, Never>] = []
 
     init(
         unauthorizedRequestCount: Int,
@@ -828,10 +1133,11 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     func send(_ request: URLRequest) async throws -> HTTPResponse {
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests.append(request)
-            return .json(AuthenticatedRequestTests.authenticationJSON(
-                accessToken: newTokens.accessToken,
-                refreshToken: newTokens.refreshToken
-            ))
+            return .json(
+                AuthenticatedRequestTests.authenticationJSON(
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken
+                ))
         }
 
         switch request.value(forHTTPHeaderField: "Authorization") {
@@ -839,8 +1145,9 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
             oldAccessRequests += 1
             return await withCheckedContinuation { continuation in
                 unauthorizedWaiters.append(continuation)
-                guard unauthorizedWaiters.count
-                    == unauthorizedRequestCount
+                guard
+                    unauthorizedWaiters.count
+                        == unauthorizedRequestCount
                 else {
                     return
                 }
@@ -885,9 +1192,8 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
     private let accessToken: String
     private var ordinaryRequests = 0
     private var refreshRequests = 0
-    private var unauthorizedWaiters: [
-        CheckedContinuation<HTTPResponse, Never>
-    ] = []
+    private var unauthorizedWaiters:
+        [CheckedContinuation<HTTPResponse, Never>] = []
 
     init(
         unauthorizedRequestCount: Int,
@@ -902,8 +1208,9 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
             refreshRequests += 1
             return .init(data: Data(), statusCode: 401)
         }
-        guard request.value(forHTTPHeaderField: "Authorization")
-            == "Bearer \(accessToken)"
+        guard
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer \(accessToken)"
         else {
             throw RequestTestError.unexpectedAuthorization
         }
@@ -929,6 +1236,102 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         refreshRequests: Int
     ) {
         (ordinaryRequests, refreshRequests)
+    }
+}
+
+private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
+    private let unauthorizedRequestCount: Int
+    private let oldTokens: AuthenticationTokens
+    private let newTokens: AuthenticationTokens
+    private var oldAccessRequests = 0
+    private var refreshRequests = 0
+    private var loginRequests = 0
+    private var authorizationRequests = 0
+    private var newAccessRequests = 0
+    private var unauthorizedWaiters:
+        [CheckedContinuation<HTTPResponse, Never>] = []
+
+    init(
+        unauthorizedRequestCount: Int,
+        oldTokens: AuthenticationTokens,
+        newTokens: AuthenticationTokens
+    ) {
+        self.unauthorizedRequestCount = unauthorizedRequestCount
+        self.oldTokens = oldTokens
+        self.newTokens = newTokens
+    }
+
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        switch request.url?.path {
+        case "/auth/refresh":
+            refreshRequests += 1
+            return .init(data: Data(), statusCode: 401)
+        case "/login":
+            loginRequests += 1
+            return .json(
+                AuthenticatedRequestTests.authenticationJSON(
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken
+                ))
+        case "/api/authorize":
+            guard
+                request.value(forHTTPHeaderField: "Authorization")
+                    == "Bearer \(newTokens.accessToken)"
+            else {
+                throw RequestTestError.unexpectedAuthorization
+            }
+            authorizationRequests += 1
+            return .json(
+                AuthenticatedRequestTests.authenticationJSON()
+            )
+        default:
+            break
+        }
+
+        switch request.value(forHTTPHeaderField: "Authorization") {
+        case "Bearer \(oldTokens.accessToken)":
+            oldAccessRequests += 1
+            return await withCheckedContinuation { continuation in
+                unauthorizedWaiters.append(continuation)
+                guard
+                    unauthorizedWaiters.count
+                        == unauthorizedRequestCount
+                else {
+                    return
+                }
+                let waiters = unauthorizedWaiters
+                unauthorizedWaiters.removeAll()
+                for waiter in waiters {
+                    waiter.resume(
+                        returning: .init(
+                            data: Data(),
+                            statusCode: 401
+                        )
+                    )
+                }
+            }
+        case "Bearer \(newTokens.accessToken)":
+            newAccessRequests += 1
+            return .init(data: Data(), statusCode: 200)
+        default:
+            throw RequestTestError.unexpectedAuthorization
+        }
+    }
+
+    func counts() -> (
+        oldAccessRequests: Int,
+        refreshRequests: Int,
+        loginRequests: Int,
+        authorizationRequests: Int,
+        newAccessRequests: Int
+    ) {
+        (
+            oldAccessRequests,
+            refreshRequests,
+            loginRequests,
+            authorizationRequests,
+            newAccessRequests
+        )
     }
 }
 
@@ -1008,8 +1411,8 @@ private enum RequestTestError: Error {
     case unexpectedAuthorization
 }
 
-private extension HTTPResponse {
-    static func json(_ data: Data) -> HTTPResponse {
+extension HTTPResponse {
+    fileprivate static func json(_ data: Data) -> HTTPResponse {
         HTTPResponse(
             data: data,
             statusCode: 200,

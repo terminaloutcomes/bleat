@@ -178,10 +178,17 @@ Launch Bleat, then enter:
 - that user's password.
 
 Bleat discovers the server, requires Audiobookshelf 2.26.0 or newer, and uses
-the server's native username/password login. The password is cleared before the
-request starts and is never stored. Access and refresh tokens are stored in the
-device Keychain. OIDC and third-party identity-provider configuration are not
-part of the app.
+the server's native username/password login. The password is cleared from the
+screen before the request starts. The username/password credential and rotating
+access/refresh tokens are stored only in a non-synchronizing, device-only
+Keychain item. If refresh-token recovery is rejected, Bleat silently performs
+one native login, verifies that the same server user was returned, and retries
+the request. OIDC and third-party identity-provider configuration are not part
+of the app.
+
+Accounts created by an older Bleat build contain only tokens because those
+builds discarded the password. Enter the password once with **Sign In Again**
+to migrate that account; subsequent refresh-session failures recover silently.
 
 ## Browse the library
 

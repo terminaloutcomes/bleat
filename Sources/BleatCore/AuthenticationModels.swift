@@ -17,7 +17,7 @@ public enum AudiobookshelfUserType: Hashable, Sendable {
             "user"
         case .guest:
             "guest"
-        case let .unknown(value):
+        case .unknown(let value):
             value
         }
     }
@@ -188,6 +188,39 @@ public enum AuthenticationTokenError: Error, Equatable, Sendable {
     case invalidRefreshToken
 }
 
+public struct NativeLoginCredentials: Codable, Equatable, Sendable {
+    public let userID: UserID
+    public let username: String
+    public let password: String
+
+    public init(
+        userID: UserID,
+        username: String,
+        password: String
+    ) throws(NativeLoginCredentialError) {
+        guard !userID.rawValue.isEmpty else {
+            throw .invalidUserID
+        }
+        guard !username.isEmpty,
+            username.rangeOfCharacter(from: .controlCharacters) == nil
+        else {
+            throw .invalidUsername
+        }
+        guard !password.isEmpty else {
+            throw .invalidPassword
+        }
+        self.userID = userID
+        self.username = username
+        self.password = password
+    }
+}
+
+public enum NativeLoginCredentialError: Error, Equatable, Sendable {
+    case invalidUserID
+    case invalidUsername
+    case invalidPassword
+}
+
 public struct AuthenticatedAccount: Hashable, Sendable {
     public let id: AccountID
     public let server: NormalizedServerURL
@@ -214,5 +247,31 @@ public protocol AccountCredentialStore: Sendable {
         for accountID: AccountID
     ) async throws
 
+    func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async throws
+
+    func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async throws -> NativeLoginCredentials?
+
     func deleteCredentials(for accountID: AccountID) async throws
+}
+
+extension AccountCredentialStore {
+    public func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async throws {
+        try await save(credentials, for: accountID)
+    }
+
+    public func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async throws -> NativeLoginCredentials? {
+        nil
+    }
 }

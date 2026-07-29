@@ -18,12 +18,12 @@ struct LocalDockerHTTPTransport: HTTPTransport {
 
     func send(_ request: URLRequest) async throws -> HTTPResponse {
         guard let requestURL = request.url,
-              var components = URLComponents(
-                  url: requestURL,
-                  resolvingAgainstBaseURL: false
-              ),
-              components.host == "127.0.0.1",
-              components.scheme == "https"
+            var components = URLComponents(
+                url: requestURL,
+                resolvingAgainstBaseURL: false
+            ),
+            components.host == "127.0.0.1",
+            components.scheme == "https"
         else {
             throw LocalDockerTransportError.invalidRequest
         }
@@ -37,14 +37,16 @@ struct LocalDockerHTTPTransport: HTTPTransport {
         }
         var restoredHeaders = response.headers
         if let location = response.header(named: "Location"),
-           let locationURL = URL(string: location),
-           locationURL.host == "127.0.0.1",
-           locationURL.scheme == "http"
+            let locationURL = URL(string: location),
+            locationURL.host == "127.0.0.1",
+            locationURL.scheme == "http"
         {
-            let headerName = restoredHeaders.keys.first {
-                $0.caseInsensitiveCompare("Location") == .orderedSame
-            } ?? "Location"
-            restoredHeaders[headerName] = try Self
+            let headerName =
+                restoredHeaders.keys.first {
+                    $0.caseInsensitiveCompare("Location") == .orderedSame
+                } ?? "Location"
+            restoredHeaders[headerName] =
+                try Self
                 .restoringSecureLoopbackURL(locationURL)
                 .absoluteString
         }
@@ -59,10 +61,12 @@ struct LocalDockerHTTPTransport: HTTPTransport {
     private static func restoringSecureLoopbackURL(
         _ url: URL
     ) throws -> URL {
-        guard var components = URLComponents(
-            url: url,
-            resolvingAgainstBaseURL: false
-        ), components.host == "127.0.0.1" else {
+        guard
+            var components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ), components.host == "127.0.0.1"
+        else {
             return url
         }
         components.scheme = "https"
@@ -72,6 +76,7 @@ struct LocalDockerHTTPTransport: HTTPTransport {
 
 actor LiveCredentialStore: AccountCredentialStore {
     private var stored: [AccountID: AuthenticationTokens] = [:]
+    private var nativeLogins: [AccountID: NativeLoginCredentials] = [:]
 
     func credentials(
         for accountID: AccountID
@@ -86,8 +91,24 @@ actor LiveCredentialStore: AccountCredentialStore {
         stored[accountID] = credentials
     }
 
+    func save(
+        _ credentials: AuthenticationTokens,
+        nativeLogin: NativeLoginCredentials,
+        for accountID: AccountID
+    ) async {
+        stored[accountID] = credentials
+        nativeLogins[accountID] = nativeLogin
+    }
+
+    func nativeLoginCredentials(
+        for accountID: AccountID
+    ) async -> NativeLoginCredentials? {
+        nativeLogins[accountID]
+    }
+
     func deleteCredentials(for accountID: AccountID) {
         stored[accountID] = nil
+        nativeLogins[accountID] = nil
     }
 }
 
