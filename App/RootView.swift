@@ -173,6 +173,82 @@ private struct OfflineDownloadsSheet: View {
     }
 }
 
+private struct ReauthenticationView: View {
+    @Bindable var model: AppModel
+    let account: ServerAccount
+    let onSignedIn: () -> Void
+    let onCancel: () -> Void
+    @State private var password = ""
+
+    private var isSubmitting: Bool {
+        model.loginStatus == .submitting
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Account") {
+                    LabeledContent("Username", value: account.user.username)
+                    LabeledContent(
+                        "Server",
+                        value: account.server.url.absoluteString
+                    )
+                }
+
+                Section {
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                        .accessibilityIdentifier(
+                            "reauthentication.password"
+                        )
+                }
+
+                if case .failed(let failure) = model.loginStatus {
+                    Section {
+                        Text(failure.message)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier(
+                                "reauthentication.error"
+                            )
+                    }
+                }
+
+                Section {
+                    Button {
+                        submit()
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Sign In")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(password.isEmpty || isSubmitting)
+                    .accessibilityIdentifier("reauthentication.submit")
+                }
+            }
+            .navigationTitle("Sign In Again")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        let submittedPassword = password
+        password = ""
+        Task {
+            if await model.reauthenticate(password: submittedPassword) {
+                onSignedIn()
+            }
+        }
+    }
+}
+
 private struct SignedInView: View {
     @Bindable var model: AppModel
     @State private var showPlayer = false
@@ -239,7 +315,7 @@ private struct HomeView: View {
     var body: some View {
         NavigationStack {
             HomeContent(model: model)
-//                .navigationTitle("Home")
+                // .navigationTitle("Home")
                 .navigationDestination(for: LibraryBookSummary.self) { book in
                     BookDetailView(model: model, book: book)
                 }
@@ -1128,6 +1204,7 @@ private struct BookDetailView: View {
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var showAddAccount = false
+    @State private var showReauthentication = false
     @State private var showRemoveAccountConfirmation = false
 
     var body: some View {
@@ -1164,6 +1241,13 @@ private struct SettingsView: View {
                         showAddAccount = true
                     }
                     .accessibilityIdentifier("settings.addAccount")
+                    Button("Sign In Again", systemImage: "key") {
+                        model.prepareAccountLogin()
+                        showReauthentication = true
+                    }
+                    .accessibilityIdentifier(
+                        "settings.reauthenticate"
+                    )
                 }
 
                 if case .failed(let failure) = model.accountActionStatus {
@@ -1231,6 +1315,18 @@ private struct SettingsView: View {
                     showAddAccount = false
                 } onCancel: {
                     showAddAccount = false
+                }
+            }
+            .sheet(isPresented: $showReauthentication) {
+                if let account = model.account {
+                    ReauthenticationView(
+                        model: model,
+                        account: account
+                    ) {
+                        showReauthentication = false
+                    } onCancel: {
+                        showReauthentication = false
+                    }
                 }
             }
             .confirmationDialog(

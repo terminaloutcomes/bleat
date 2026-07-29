@@ -67,6 +67,13 @@
             return try account()
         }
 
+        func reauthenticate(
+            _ account: ServerAccount,
+            password: String
+        ) async throws(AppServiceError) -> ServerAccount {
+            try self.account()
+        }
+
         func libraries(
             for account: ServerAccount
         ) async throws(AppServiceError) -> [LibrarySummary] {

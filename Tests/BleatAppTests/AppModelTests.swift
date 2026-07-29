@@ -694,6 +694,41 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.account)
     }
 
+    func testReauthenticationUsesSavedAccountAndReloadsLibrary()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let authenticated = await model.reauthenticate(
+            password: "new password"
+        )
+
+        XCTAssertTrue(authenticated)
+        let requests = await service.reauthenticationRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                ReauthenticationRequest(
+                    accountID: account.id,
+                    password: "new password"
+                )
+            ]
+        )
+        XCTAssertEqual(model.loginStatus, .idle)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(model.books, .loaded(page))
+    }
+
     func testConcurrentLoginIsIgnoredWhileSubmissionIsActive() async throws {
         let account = try fixtureAccount()
         let gate = AsyncGate()
@@ -1691,6 +1726,11 @@ private struct LoginRequest: Equatable, Sendable {
     let password: String
 }
 
+private struct ReauthenticationRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let password: String
+}
+
 private struct SearchRequest: Equatable, Sendable {
     let accountID: AccountID
     let libraryID: LibraryID
@@ -1778,6 +1818,7 @@ private actor TestAppService: AppServicing {
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
+    private var recordedReauthentications: [ReauthenticationRequest] = []
     private var recordedPageRequests: [LibraryID] = []
     private var recordedPageSelections: [PageSelection] = []
     private var recordedHomeRequests: [LibraryID] = []
@@ -1880,6 +1921,19 @@ private actor TestAppService: AppServicing {
         if let loginGate {
             await loginGate.enterAndWait()
         }
+        return try value(from: loginResult)
+    }
+
+    func reauthenticate(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        recordedReauthentications.append(
+            ReauthenticationRequest(
+                accountID: account.id,
+                password: password
+            )
+        )
         return try value(from: loginResult)
     }
 
@@ -2137,6 +2191,10 @@ private actor TestAppService: AppServicing {
 
     func loginRequests() -> [LoginRequest] {
         recordedLogins
+    }
+
+    func reauthenticationRequests() -> [ReauthenticationRequest] {
+        recordedReauthentications
     }
 
     func pageRequests() -> [LibraryID] {

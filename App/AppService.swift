@@ -77,6 +77,11 @@ protocol AppServicing: Sendable {
         password: String
     ) async throws(AppServiceError) -> ServerAccount
 
+    func reauthenticate(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount
+
     func libraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary]
@@ -290,16 +295,7 @@ actor LiveAppService: AppServicing {
             throw .invalidServerURL(error)
         }
 
-        let discoveredServer: DiscoveredServer
-        do {
-            discoveredServer = try await ServerDiscoveryClient(
-                transport: transport
-            ).discover(server)
-        } catch let error as ServerDiscoveryError {
-            throw .discovery(error)
-        } catch {
-            throw .discoveryRequestFailed
-        }
+        let discoveredServer = try await discover(server)
 
         do {
             return try await coordinator.loginAndPersistAccount(
@@ -310,6 +306,25 @@ actor LiveAppService: AppServicing {
                 username: username,
                 password: password,
                 accountStore: accountStore
+            )
+        } catch let error {
+            throw .onboarding(error)
+        }
+    }
+
+    func reauthenticate(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        let discoveredServer = try await discover(account.server)
+        do {
+            return try await coordinator.loginAndPersistAccount(
+                accountID: account.id,
+                discoveredServer: discoveredServer,
+                username: account.user.username,
+                password: password,
+                accountStore: accountStore,
+                makeActive: false
             )
         } catch let error {
             throw .onboarding(error)
@@ -798,6 +813,20 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .accountRemoval(error)
+        }
+    }
+
+    private func discover(
+        _ server: NormalizedServerURL
+    ) async throws(AppServiceError) -> DiscoveredServer {
+        do {
+            return try await ServerDiscoveryClient(
+                transport: transport
+            ).discover(server)
+        } catch let error as ServerDiscoveryError {
+            throw .discovery(error)
+        } catch {
+            throw .discoveryRequestFailed
         }
     }
 

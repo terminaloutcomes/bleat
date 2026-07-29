@@ -313,6 +313,39 @@ final class AppModel {
         loginStatus = .idle
     }
 
+    @discardableResult
+    func reauthenticate(password: String) async -> Bool {
+        guard let account else {
+            loginStatus = .failed(.accountUnavailable)
+            return false
+        }
+        guard loginStatus != .submitting else {
+            return false
+        }
+        loginStatus = .submitting
+
+        do {
+            let authenticatedAccount = try await service.reauthenticate(
+                account,
+                password: password
+            )
+            self.account = authenticatedAccount
+            accounts.removeAll { $0.id == authenticatedAccount.id }
+            accounts.append(authenticatedAccount)
+            accounts.sort(by: Self.sortAccounts)
+            loginStatus = .idle
+            await downloads.start(account: authenticatedAccount)
+            await playback.syncPendingLocalSessions(
+                for: authenticatedAccount
+            )
+            await loadLibraries()
+            return true
+        } catch let error {
+            loginStatus = .failed(AppFailure(serviceError: error))
+            return false
+        }
+    }
+
     func switchAccount(to selectedAccount: ServerAccount) async {
         guard selectedAccount.id != account?.id else {
             return

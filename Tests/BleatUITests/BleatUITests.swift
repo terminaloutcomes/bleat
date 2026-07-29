@@ -115,6 +115,17 @@ final class BleatUITests: XCTestCase {
         let wifiOnly = app.switches["settings.downloads.wifiOnly"]
         XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
         XCTAssertEqual(wifiOnly.value as? String, "1")
+        let reauthenticate = app.buttons["settings.reauthenticate"]
+        XCTAssertTrue(reauthenticate.waitForExistence(timeout: 3))
+        reauthenticate.tap()
+        XCTAssertTrue(
+            app.secureTextFields["reauthentication.password"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.staticTexts["reader"].exists)
+        XCTAssertTrue(app.staticTexts["https://books.example"].exists)
+        app.buttons["Cancel"].tap()
+
         let addAccount = app.buttons["settings.addAccount"]
         XCTAssertTrue(addAccount.waitForExistence(timeout: 3))
         addAccount.tap()

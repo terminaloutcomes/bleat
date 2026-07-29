@@ -80,6 +80,13 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func reauthenticate(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func libraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {

@@ -244,8 +244,10 @@ supports explicit **Mark Finished** and **Mark Unfinished** actions.
 Settings lists every saved username/server pair and marks the active browsing
 account. Choose another account to reload Home, Library, and Search in that
 account's isolated context, or use **Add Account** for another standard
-Audiobookshelf username/password login. Switching the browsing account does not
-stop current playback or unrelated background downloads.
+Audiobookshelf username/password login. **Sign In Again** replaces credentials
+for the active saved account using only its password while preserving its
+downloads and local state. Switching the browsing account does not stop current
+playback or unrelated background downloads.
 
 **Remove Account** always asks for confirmation. If that account owns local
 books, choose whether to keep or delete them. Keeping them cancels unfinished
