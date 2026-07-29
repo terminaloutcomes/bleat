@@ -254,12 +254,14 @@ and the exact update route:
 swift test --filter MetadataEditingTests
 ```
 
-The background-download spike covers expanded-item plan decoding, safe file
-identities, stable task restoration, bearer-only per-file requests, 401
-replacement, and the finalized-file manifest completion invariant:
+The background-download foundation covers expanded-item plan decoding, safe
+file identities, stable task restoration, bearer-only per-file requests, 401
+replacement, opaque account/book storage paths, protected atomic records,
+byte-exact final placement, relaunch recovery, and scoped deletion:
 
 ```sh
 swift test --filter BackgroundDownloadTests
+swift test --filter DownloadStorageTests
 ```
 
 The earlier OIDC spike remains in the repository as isolated research code, but

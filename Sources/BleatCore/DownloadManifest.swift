@@ -119,6 +119,18 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         state = .partial
     }
 
+    public mutating func markFailed(
+        trackIndex: Int
+    ) throws(DownloadManifestError) {
+        let index = try entryIndex(for: trackIndex)
+        entries[index].state = .failed
+        state = .failed
+    }
+
+    public mutating func markDeleting() {
+        state = .deleting
+    }
+
     public mutating func finish() throws(DownloadManifestError) {
         guard !entries.isEmpty else {
             throw .noTracks
@@ -162,21 +174,22 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
 
         let trackIndexes = entries.map(\.trackIndex)
         guard !downloadID.rawValue.isEmpty,
-              !accountID.rawValue.isEmpty,
-              !itemID.rawValue.isEmpty,
-              entries.allSatisfy({
-                  $0.trackIndex >= 0
-                      && $0.expectedByteLength >= 0
-                      && DownloadTaskIdentity.isValidDestinationEntry(
-                          $0.destinationEntry
-                      )
-              }),
-              Set(trackIndexes).count == trackIndexes.count
+            !accountID.rawValue.isEmpty,
+            !itemID.rawValue.isEmpty,
+            entries.allSatisfy({
+                $0.trackIndex >= 0
+                    && $0.expectedByteLength >= 0
+                    && DownloadTaskIdentity.isValidDestinationEntry(
+                        $0.destinationEntry
+                    )
+            }),
+            Set(trackIndexes).count == trackIndexes.count
         else {
             throw DecodingError.dataCorruptedError(
                 forKey: .entries,
                 in: container,
-                debugDescription: "Manifest identity or track metadata is invalid"
+                debugDescription:
+                    "Manifest identity or track metadata is invalid"
             )
         }
         guard state != .complete || isCompleteAndFinalized else {
@@ -199,19 +212,22 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     }
 
     private var isCompleteAndFinalized: Bool {
-        !entries.isEmpty && entries.allSatisfy {
-            $0.state == .complete
-                && $0.placement == .finalized
-                && $0.observedByteLength == $0.expectedByteLength
-        }
+        !entries.isEmpty
+            && entries.allSatisfy {
+                $0.state == .complete
+                    && $0.placement == .finalized
+                    && $0.observedByteLength == $0.expectedByteLength
+            }
     }
 
     private func entryIndex(
         for trackIndex: Int
     ) throws(DownloadManifestError) -> Int {
-        guard let index = entries.firstIndex(where: {
-            $0.trackIndex == trackIndex
-        }) else {
+        guard
+            let index = entries.firstIndex(where: {
+                $0.trackIndex == trackIndex
+            })
+        else {
             throw .trackNotFound(trackIndex)
         }
         return index
