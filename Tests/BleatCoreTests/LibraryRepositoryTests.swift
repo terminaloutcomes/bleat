@@ -303,6 +303,95 @@ final class LibraryRepositoryTests: XCTestCase {
         }
     }
 
+    func testHomeShelvesPersistExactRequestAndFallbackAfterRelaunch()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let request = try LibraryHomeRequest(limit: 1)
+        let shelves = try Self.shelves(request: request)
+        let correlationID = APICorrelationID()
+        let online = RepositoryRemote(
+            homes: [.success(shelves, correlationID)]
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            remote: online,
+            cache: fixture.cache
+        )
+
+        let remote = try await repository.personalizedShelves(
+            in: libraryID,
+            request: request,
+            policy: .remoteOnly
+        )
+        XCTAssertEqual(remote.value, shelves)
+        XCTAssertEqual(remote.source, .remote)
+        XCTAssertEqual(remote.correlationID, correlationID)
+
+        let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
+        let offline = RepositoryRemote(
+            homes: [.failure(offlineError), .failure(offlineError)]
+        )
+        let relaunched = LibraryRepository(
+            accountID: accountID,
+            remote: offline,
+            cache: LibraryCache(modelContainer: fixture.container)
+        )
+        let fallback = try await relaunched.personalizedShelves(
+            in: libraryID,
+            request: request
+        )
+        XCTAssertEqual(fallback.value, shelves)
+        XCTAssertEqual(fallback.source, .cache)
+        XCTAssertNil(fallback.correlationID)
+        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
+
+        let widerRequest = try LibraryHomeRequest(limit: 2)
+        do {
+            _ = try await relaunched.personalizedShelves(
+                in: libraryID,
+                request: widerRequest
+            )
+            XCTFail("Expected exact home-request cache miss")
+        } catch {
+            XCTAssertEqual(error, .remote(offlineError))
+        }
+    }
+
+    func testHomeCancellationNeverReturnsCachedShelves()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let request = try LibraryHomeRequest(limit: 1)
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(request: request),
+            request: request,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            remote: RepositoryRemote(
+                homes: [.failure(.cancelled)]
+            ),
+            cache: fixture.cache
+        )
+
+        do {
+            _ = try await repository.personalizedShelves(
+                in: libraryID,
+                request: request
+            )
+            XCTFail("Expected home cancellation")
+        } catch {
+            XCTAssertEqual(error, .cancelled)
+        }
+    }
+
     func testInvalidRemoteValueAndCorruptFallbackRemainTyped()
         async throws
     {
@@ -409,6 +498,25 @@ final class LibraryRepositoryTests: XCTestCase {
             limit: request.limit
         )
     }
+
+    private static func shelves(
+        request: LibraryHomeRequest
+    ) throws -> [LibraryBookShelf] {
+        [
+            LibraryBookShelf(
+                id: "recently-added",
+                label: "Recently Added",
+                labelLocalizationKey: "LabelRecentlyAdded",
+                items: page(
+                    request: try LibraryItemsPageRequest(
+                        page: 0,
+                        limit: request.limit
+                    )
+                ).items,
+                total: 3
+            ),
+        ]
+    }
 }
 
 private enum RepositoryRemoteStep<Value: Sendable>: Sendable {
@@ -422,20 +530,28 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
     private var searchSteps: [
         RepositoryRemoteStep<[LibraryBookSummary]>
     ]
+    private var homeSteps: [
+        RepositoryRemoteStep<[LibraryBookShelf]>
+    ]
     private var libraryCallCount = 0
     private var pageCallCount = 0
     private var searchCallCount = 0
+    private var homeCallCount = 0
 
     init(
         libraries: [RepositoryRemoteStep<[LibrarySummary]>] = [],
         pages: [RepositoryRemoteStep<LibraryItemsPage>] = [],
         searches: [
             RepositoryRemoteStep<[LibraryBookSummary]>
+        ] = [],
+        homes: [
+            RepositoryRemoteStep<[LibraryBookShelf]>
         ] = []
     ) {
         librarySteps = libraries
         pageSteps = pages
         searchSteps = searches
+        homeSteps = homes
     }
 
     func libraries() async throws(AudiobookshelfAPIError)
@@ -465,12 +581,28 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         return try Self.result(from: next(&searchSteps))
     }
 
+    func personalizedShelves(
+        in libraryID: LibraryID,
+        request: LibraryHomeRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookShelf]>
+    {
+        homeCallCount += 1
+        return try Self.result(from: next(&homeSteps))
+    }
+
     func callCounts() -> (
         libraries: Int,
         pages: Int,
-        searches: Int
+        searches: Int,
+        homes: Int
     ) {
-        (libraryCallCount, pageCallCount, searchCallCount)
+        (
+            libraryCallCount,
+            pageCallCount,
+            searchCallCount,
+            homeCallCount
+        )
     }
 
     private func next<Value>(
@@ -509,6 +641,7 @@ private struct LibraryRepositoryFixture {
             CachedLibraryRecord.self,
             CachedLibraryPageRecord.self,
             CachedLibrarySearchRecord.self,
+            CachedLibraryHomeRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

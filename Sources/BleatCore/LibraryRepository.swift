@@ -15,6 +15,12 @@ public protocol LibraryRemoteDataSource: Sendable {
         request: LibrarySearchRequest
     ) async throws(AudiobookshelfAPIError)
         -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+
+    func personalizedShelves(
+        in libraryID: LibraryID,
+        request: LibraryHomeRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookShelf]>
 }
 
 extension AudiobookshelfAPI: LibraryRemoteDataSource {}
@@ -207,6 +213,54 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    public func personalizedShelves(
+        in libraryID: LibraryID,
+        request: LibraryHomeRequest,
+        policy: LibraryFetchPolicy = .remoteElseCache
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookShelf]>
+    {
+        if policy == .cacheOnly {
+            return try await cachedHomeShelves(
+                request: request,
+                libraryID: libraryID
+            )
+        }
+
+        let result: AudiobookshelfAPIResult<[LibraryBookShelf]>
+        do {
+            result = try await remote.personalizedShelves(
+                in: libraryID,
+                request: request
+            )
+        } catch let error {
+            return try await fallbackHomeShelves(
+                request: request,
+                libraryID: libraryID,
+                after: error,
+                policy: policy
+            )
+        }
+        let refreshedAt = Date()
+        do {
+            try await cache.saveHomeShelves(
+                result.value,
+                request: request,
+                libraryID: libraryID,
+                accountID: accountID,
+                refreshedAt: refreshedAt
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        return LibraryRepositoryResult(
+            value: result.value,
+            source: .remote,
+            refreshedAt: refreshedAt,
+            correlationID: result.correlationID
+        )
+    }
+
     private func cachedLibraries()
         async throws(LibraryRepositoryError)
         -> LibraryRepositoryResult<[LibrarySummary]>
@@ -282,6 +336,33 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    private func cachedHomeShelves(
+        request: LibraryHomeRequest,
+        libraryID: LibraryID
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookShelf]>
+    {
+        let cached: CachedLibraryHomeSnapshot?
+        do {
+            cached = try await cache.homeShelves(
+                request: request,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        guard let snapshot = cached else {
+            throw .noCachedValue
+        }
+        return LibraryRepositoryResult(
+            value: snapshot.shelves,
+            source: .cache,
+            refreshedAt: snapshot.refreshedAt,
+            correlationID: nil
+        )
+    }
+
     private func fallbackLibraries(
         after remoteError: AudiobookshelfAPIError,
         policy: LibraryFetchPolicy
@@ -347,6 +428,33 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         }
         do {
             return try await cachedSearch(
+                request: request,
+                libraryID: libraryID
+            )
+        } catch let cacheError {
+            throw fallbackError(
+                remote: remoteError,
+                cache: cacheError
+            )
+        }
+    }
+
+    private func fallbackHomeShelves(
+        request: LibraryHomeRequest,
+        libraryID: LibraryID,
+        after remoteError: AudiobookshelfAPIError,
+        policy: LibraryFetchPolicy
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<[LibraryBookShelf]>
+    {
+        if remoteError == .cancelled || Task.isCancelled {
+            throw .cancelled
+        }
+        guard policy == .remoteElseCache else {
+            throw .remote(remoteError)
+        }
+        do {
+            return try await cachedHomeShelves(
                 request: request,
                 libraryID: libraryID
             )

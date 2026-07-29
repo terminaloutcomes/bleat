@@ -10,13 +10,13 @@ login, single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
 library listing, pagination, and search, account-scoped SwiftData library
-caching, online-first/cache-fallback repository behavior, playback-session,
-and background-download contract behavior is tested. Native Audiobookshelf
-username/password is the active authentication scope; the earlier isolated
-OIDC spike is deferred. The MVP also defers local time tracking, lifetime
-statistics, and listening-history import/export. The SwiftUI application
-target has not been created yet, so there is not currently an app executable
-to launch.
+caching including personalized shelves, online-first/cache-fallback repository
+behavior, playback-session, and background-download contract behavior is
+tested. Native Audiobookshelf username/password is the active authentication
+scope; the earlier isolated OIDC spike is deferred. The MVP also defers local
+time tracking, lifetime statistics, and listening-history import/export. The
+SwiftUI application target has not been created yet, so there is not currently
+an app executable to launch.
 
 ## Requirements
 
@@ -156,8 +156,8 @@ swift test --filter AudiobookshelfAPITests
 
 The library persistence and repository suites cover relaunch, empty snapshots,
 account/library/query isolation, replacement and invalidation, corrupt stored
-records, exact-page and exact-search offline reads, online persistence,
-fallback, cancellation, and typed cache/remote failures:
+records, exact-page, exact-search, and exact-personalized-shelf offline reads,
+online persistence, fallback, cancellation, and typed cache/remote failures:
 
 ```sh
 swift test --filter LibraryCacheTests

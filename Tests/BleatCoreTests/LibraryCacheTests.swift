@@ -58,6 +58,17 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let homeRequest = try LibraryHomeRequest(limit: 1)
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: second.id,
+                request: homeRequest,
+                suffix: "second"
+            ),
+            request: homeRequest,
+            libraryID: second.id,
+            accountID: accountID
+        )
 
         try await fixture.cache.replaceLibraries(
             [first],
@@ -75,9 +86,15 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let deletedHome = try await fixture.cache.homeShelves(
+            request: homeRequest,
+            libraryID: second.id,
+            accountID: accountID
+        )
         XCTAssertEqual(libraries?.libraries, [first])
         XCTAssertNil(deletedPage)
         XCTAssertNil(deletedSearch)
+        XCTAssertNil(deletedHome)
     }
 
     func testPageCacheIsAccountLibraryAndQueryScopedAcrossRelaunch()
@@ -312,6 +329,131 @@ final class LibraryCacheTests: XCTestCase {
         XCTAssertEqual(empty?.items, [])
     }
 
+    func testHomeShelvesAreExactScopedAndPersistEmptyResults()
+        async throws
+    {
+        let fixture = try LibraryCacheFixture()
+        let accountA = AccountID(rawValue: "a")
+        let accountB = AccountID(rawValue: "b")
+        let accountEmpty = AccountID(rawValue: "empty")
+        let libraryA = LibraryID(rawValue: "library-a")
+        let libraryB = LibraryID(rawValue: "library-b")
+        let request = try LibraryHomeRequest(limit: 1)
+        let widerRequest = try LibraryHomeRequest(limit: 2)
+        let noProgressRequest = try LibraryHomeRequest(
+            limit: 1,
+            includeProgress: false
+        )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryA,
+                request: request,
+                suffix: "a"
+            ),
+            request: request,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryA,
+                request: request,
+                suffix: "b"
+            ),
+            request: request,
+            libraryID: libraryA,
+            accountID: accountB
+        )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryB,
+                request: request,
+                suffix: "library-b"
+            ),
+            request: request,
+            libraryID: libraryB,
+            accountID: accountA
+        )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryA,
+                request: widerRequest,
+                suffix: "wide"
+            ),
+            request: widerRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryA,
+                request: noProgressRequest,
+                suffix: "no-progress"
+            ),
+            request: noProgressRequest,
+            libraryID: libraryA,
+            accountID: accountA
+        )
+        try await fixture.cache.saveHomeShelves(
+            [],
+            request: request,
+            libraryID: libraryA,
+            accountID: accountEmpty
+        )
+
+        let relaunched = LibraryCache(
+            modelContainer: fixture.container
+        )
+        func firstItemID(
+            accountID: AccountID,
+            libraryID: LibraryID,
+            request: LibraryHomeRequest
+        ) async throws -> String? {
+            try await relaunched.homeShelves(
+                request: request,
+                libraryID: libraryID,
+                accountID: accountID
+            )?.shelves.first?.items.first?.id.rawValue
+        }
+
+        let a = try await firstItemID(
+            accountID: accountA,
+            libraryID: libraryA,
+            request: request
+        )
+        let b = try await firstItemID(
+            accountID: accountB,
+            libraryID: libraryA,
+            request: request
+        )
+        let otherLibrary = try await firstItemID(
+            accountID: accountA,
+            libraryID: libraryB,
+            request: request
+        )
+        let wide = try await firstItemID(
+            accountID: accountA,
+            libraryID: libraryA,
+            request: widerRequest
+        )
+        let noProgress = try await firstItemID(
+            accountID: accountA,
+            libraryID: libraryA,
+            request: noProgressRequest
+        )
+        XCTAssertEqual(a, "item-a")
+        XCTAssertEqual(b, "item-b")
+        XCTAssertEqual(otherLibrary, "item-library-b")
+        XCTAssertEqual(wide, "item-wide")
+        XCTAssertEqual(noProgress, "item-no-progress")
+        let empty = try await relaunched.homeShelves(
+            request: request,
+            libraryID: libraryA,
+            accountID: accountEmpty
+        )
+        XCTAssertEqual(empty?.shelves, [])
+    }
+
     func testInvalidInputsAndPagesRemainTyped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -370,6 +512,30 @@ final class LibraryCacheTests: XCTestCase {
             XCTFail("Expected invalid search result rejection")
         } catch {
             XCTAssertEqual(error, .invalidSearchResults)
+        }
+
+        let homeRequest = try LibraryHomeRequest(limit: 1)
+        let invalidShelf = LibraryBookShelf(
+            id: "recent",
+            label: "Recent",
+            labelLocalizationKey: nil,
+            items: Self.page(
+                libraryID: LibraryID(rawValue: "other"),
+                request: request,
+                itemID: "item"
+            ).items,
+            total: 1
+        )
+        do {
+            try await fixture.cache.saveHomeShelves(
+                [invalidShelf],
+                request: homeRequest,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+            XCTFail("Expected invalid home shelf rejection")
+        } catch {
+            XCTAssertEqual(error, .invalidHomeShelves)
         }
 
         do {
@@ -496,6 +662,36 @@ final class LibraryCacheTests: XCTestCase {
         } catch {
             XCTAssertEqual(error, .invalidStoredSearchResults)
         }
+
+        let homeRequest = try LibraryHomeRequest(limit: 1)
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: LibraryID(rawValue: "library"),
+                request: homeRequest,
+                suffix: "corrupt"
+            ),
+            request: homeRequest,
+            libraryID: LibraryID(rawValue: "library"),
+            accountID: AccountID(rawValue: "home-account")
+        )
+        let homeContext = ModelContext(fixture.container)
+        let homeRecords = try homeContext.fetch(
+            FetchDescriptor<CachedLibraryHomeRecord>()
+        )
+        try XCTUnwrap(homeRecords.first {
+            $0.accountID == "home-account"
+        }).payload = Data("not-json".utf8)
+        try homeContext.save()
+        do {
+            _ = try await relaunched.homeShelves(
+                request: homeRequest,
+                libraryID: LibraryID(rawValue: "library"),
+                accountID: AccountID(rawValue: "home-account")
+            )
+            XCTFail("Expected corrupt home payload")
+        } catch {
+            XCTAssertEqual(error, .invalidStoredHomeShelves)
+        }
     }
 
     func testInvalidationAndAccountRemovalAreScoped() async throws {
@@ -508,6 +704,7 @@ final class LibraryCacheTests: XCTestCase {
             query: "book",
             limit: 1
         )
+        let homeRequest = try LibraryHomeRequest(limit: 1)
         for accountID in [accountA, accountB] {
             try await fixture.cache.replaceLibraries(
                 [Self.library(id: "library", name: "Books")],
@@ -530,6 +727,16 @@ final class LibraryCacheTests: XCTestCase {
                     itemID: accountID.rawValue
                 ).items,
                 request: searchRequest,
+                libraryID: libraryID,
+                accountID: accountID
+            )
+            try await fixture.cache.saveHomeShelves(
+                Self.shelves(
+                    libraryID: libraryID,
+                    request: homeRequest,
+                    suffix: accountID.rawValue
+                ),
+                request: homeRequest,
                 libraryID: libraryID,
                 accountID: accountID
             )
@@ -559,10 +766,22 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountB
         )
+        let invalidatedHome = try await fixture.cache.homeShelves(
+            request: homeRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
+        let retainedHome = try await fixture.cache.homeShelves(
+            request: homeRequest,
+            libraryID: libraryID,
+            accountID: accountB
+        )
         XCTAssertNil(invalidatedPage)
         XCTAssertNotNil(retainedPage)
         XCTAssertNil(invalidatedSearch)
         XCTAssertNotNil(retainedSearch)
+        XCTAssertNil(invalidatedHome)
+        XCTAssertNotNil(retainedHome)
 
         try await fixture.cache.saveSearchResults(
             Self.page(
@@ -574,6 +793,16 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountA
         )
+        try await fixture.cache.saveHomeShelves(
+            Self.shelves(
+                libraryID: libraryID,
+                request: homeRequest,
+                suffix: "restored-a"
+            ),
+            request: homeRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
         try await fixture.cache.removeAccount(accountA)
         let removedLibraries = try await fixture.cache.libraries(for: accountA)
         let retainedLibraries = try await fixture.cache.libraries(for: accountB)
@@ -582,9 +811,15 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountA
         )
+        let removedHome = try await fixture.cache.homeShelves(
+            request: homeRequest,
+            libraryID: libraryID,
+            accountID: accountA
+        )
         XCTAssertNil(removedLibraries)
         XCTAssertNotNil(retainedLibraries)
         XCTAssertNil(removedSearch)
+        XCTAssertNil(removedHome)
     }
 
     private static func library(
@@ -631,6 +866,30 @@ final class LibraryCacheTests: XCTestCase {
             limit: request.limit
         )
     }
+
+    private static func shelves(
+        libraryID: LibraryID,
+        request: LibraryHomeRequest,
+        suffix: String
+    ) throws -> [LibraryBookShelf] {
+        let pageRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: request.limit
+        )
+        return [
+            LibraryBookShelf(
+                id: "shelf-\(suffix)",
+                label: "Shelf \(suffix)",
+                labelLocalizationKey: "LabelShelf",
+                items: page(
+                    libraryID: libraryID,
+                    request: pageRequest,
+                    itemID: "item-\(suffix)"
+                ).items,
+                total: 1
+            ),
+        ]
+    }
 }
 
 private struct LibraryCacheFixture {
@@ -643,6 +902,7 @@ private struct LibraryCacheFixture {
             CachedLibraryRecord.self,
             CachedLibraryPageRecord.self,
             CachedLibrarySearchRecord.self,
+            CachedLibraryHomeRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

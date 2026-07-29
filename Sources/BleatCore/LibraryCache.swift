@@ -88,6 +88,30 @@ public final class CachedLibrarySearchRecord {
     }
 }
 
+@Model
+public final class CachedLibraryHomeRecord {
+    @Attribute(.unique)
+    var cacheKey: String
+    var accountID: String
+    var libraryID: String
+    var payload: Data
+    var refreshedAt: Date
+
+    init(
+        cacheKey: String,
+        accountID: String,
+        libraryID: String,
+        payload: Data,
+        refreshedAt: Date
+    ) {
+        self.cacheKey = cacheKey
+        self.accountID = accountID
+        self.libraryID = libraryID
+        self.payload = payload
+        self.refreshedAt = refreshedAt
+    }
+}
+
 public struct CachedLibrariesSnapshot: Equatable, Sendable {
     public let libraries: [LibrarySummary]
     public let refreshedAt: Date
@@ -103,6 +127,11 @@ public struct CachedLibrarySearchSnapshot: Equatable, Sendable {
     public let refreshedAt: Date
 }
 
+public struct CachedLibraryHomeSnapshot: Equatable, Sendable {
+    public let shelves: [LibraryBookShelf]
+    public let refreshedAt: Date
+}
+
 public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidAccountID
     case invalidLibraryID
@@ -113,6 +142,8 @@ public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidStoredPage
     case invalidSearchResults
     case invalidStoredSearchResults
+    case invalidHomeShelves
+    case invalidStoredHomeShelves
     case encodingFailed
     case persistenceFailed
 }
@@ -163,6 +194,13 @@ public actor LibraryCache {
                 && !retainedIDs.contains(search.libraryID)
         {
             modelContext.delete(search)
+        }
+        let homes = try homeRecords()
+        for home in homes
+            where home.accountID == accountID.rawValue
+                && !retainedIDs.contains(home.libraryID)
+        {
+            modelContext.delete(home)
         }
 
         for (position, library) in libraries.enumerated() {
@@ -412,6 +450,97 @@ public actor LibraryCache {
         )
     }
 
+    public func saveHomeShelves(
+        _ shelves: [LibraryBookShelf],
+        request: LibraryHomeRequest,
+        libraryID: LibraryID,
+        accountID: AccountID,
+        refreshedAt: Date = Date()
+    ) throws(LibraryCacheError) {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        var seenShelfIDs: Set<String> = []
+        guard shelves.allSatisfy({
+            seenShelfIDs.insert($0.id).inserted
+                && $0.isValidForStorage(
+                    request: request,
+                    libraryID: libraryID
+                )
+        }) else {
+            throw .invalidHomeShelves
+        }
+        let key = Self.homeKey(
+            accountID: accountID,
+            libraryID: libraryID,
+            request: request
+        )
+        let payload = try encode(shelves)
+        let records = try homeRecords()
+        if let record = records.first(where: { $0.cacheKey == key }) {
+            record.payload = payload
+            record.refreshedAt = refreshedAt
+        } else {
+            modelContext.insert(CachedLibraryHomeRecord(
+                cacheKey: key,
+                accountID: accountID.rawValue,
+                libraryID: libraryID.rawValue,
+                payload: payload,
+                refreshedAt: refreshedAt
+            ))
+        }
+        try save()
+    }
+
+    public func homeShelves(
+        request: LibraryHomeRequest,
+        libraryID: LibraryID,
+        accountID: AccountID
+    ) throws(LibraryCacheError) -> CachedLibraryHomeSnapshot? {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        let key = Self.homeKey(
+            accountID: accountID,
+            libraryID: libraryID,
+            request: request
+        )
+        guard let record = try homeRecords().first(where: {
+            $0.cacheKey == key
+        }) else {
+            return nil
+        }
+        let shelves: [LibraryBookShelf]
+        do {
+            shelves = try JSONDecoder().decode(
+                [LibraryBookShelf].self,
+                from: record.payload
+            )
+        } catch {
+            throw .invalidStoredHomeShelves
+        }
+        var seenShelfIDs: Set<String> = []
+        guard shelves.allSatisfy({
+            seenShelfIDs.insert($0.id).inserted
+                && $0.isValidForStorage(
+                    request: request,
+                    libraryID: libraryID
+                )
+        }) else {
+            throw .invalidStoredHomeShelves
+        }
+        return CachedLibraryHomeSnapshot(
+            shelves: shelves,
+            refreshedAt: record.refreshedAt
+        )
+    }
+
     public func invalidateLibrary(
         _ libraryID: LibraryID,
         for accountID: AccountID
@@ -429,6 +558,12 @@ public actor LibraryCache {
             modelContext.delete(record)
         }
         for record in try searchRecords()
+            where record.accountID == accountID.rawValue
+                && record.libraryID == libraryID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try homeRecords()
             where record.accountID == accountID.rawValue
                 && record.libraryID == libraryID.rawValue
         {
@@ -459,6 +594,11 @@ public actor LibraryCache {
             modelContext.delete(record)
         }
         for record in try searchRecords()
+            where record.accountID == accountID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try homeRecords()
             where record.accountID == accountID.rawValue
         {
             modelContext.delete(record)
@@ -514,6 +654,18 @@ public actor LibraryCache {
         }
     }
 
+    private func homeRecords() throws(LibraryCacheError)
+        -> [CachedLibraryHomeRecord]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<CachedLibraryHomeRecord>()
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     private func encode<Value: Encodable>(
         _ value: Value
     ) throws(LibraryCacheError) -> Data {
@@ -562,6 +714,19 @@ public actor LibraryCache {
             libraryID.rawValue,
             request.query,
             String(request.limit),
+        ])
+    }
+
+    private static func homeKey(
+        accountID: AccountID,
+        libraryID: LibraryID,
+        request: LibraryHomeRequest
+    ) -> String {
+        key([
+            accountID.rawValue,
+            libraryID.rawValue,
+            String(request.limit),
+            request.includeProgress ? "1" : "0",
         ])
     }
 
