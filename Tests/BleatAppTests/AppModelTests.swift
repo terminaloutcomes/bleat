@@ -648,8 +648,103 @@ final class AppModelTests: XCTestCase {
             )
         )
         XCTAssertEqual(model.libraryPaginationState, .idle)
-        let pageNumbers = await service.pageNumbers()
-        XCTAssertEqual(pageNumbers, [0, 1])
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections,
+            [
+                PageSelection(
+                    page: 0,
+                    sort: .title,
+                    descending: false,
+                    filter: nil
+                ),
+                PageSelection(
+                    page: 1,
+                    sort: .title,
+                    descending: false,
+                    filter: nil
+                ),
+            ]
+        )
+    }
+
+    func testLibrarySortAndProgressFilterReloadFromFirstPage()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstBook = fixturePage(libraryID: library.id).items[0]
+        let firstPage = LibraryItemsPage(
+            items: [firstBook],
+            total: 2,
+            page: 0,
+            limit: 1
+        )
+        let nextPage = LibraryItemsPage(
+            items: [
+                fixtureBook(
+                    id: "item-2",
+                    title: "Second",
+                    libraryID: library.id
+                )
+            ],
+            total: 2,
+            page: 1,
+            limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(firstPage),
+            nextPage: .success(nextPage)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setLibrarySort(.addedAt)
+        await model.setLibrarySortDescending(true)
+        await model.setLibraryProgressFilter(.inProgress)
+        await model.loadNextBooksPage()
+
+        XCTAssertEqual(model.librarySort, .addedAt)
+        XCTAssertTrue(model.librarySortDescending)
+        XCTAssertEqual(model.libraryProgressFilter, .inProgress)
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections,
+            [
+                PageSelection(
+                    page: 0,
+                    sort: .title,
+                    descending: false,
+                    filter: nil
+                ),
+                PageSelection(
+                    page: 0,
+                    sort: .addedAt,
+                    descending: false,
+                    filter: nil
+                ),
+                PageSelection(
+                    page: 0,
+                    sort: .addedAt,
+                    descending: true,
+                    filter: nil
+                ),
+                PageSelection(
+                    page: 0,
+                    sort: .addedAt,
+                    descending: true,
+                    filter: LibraryItemFilter(progress: .inProgress)
+                ),
+                PageSelection(
+                    page: 1,
+                    sort: .addedAt,
+                    descending: true,
+                    filter: LibraryItemFilter(progress: .inProgress)
+                ),
+            ]
+        )
     }
 
     func testLoadingNextLibraryPageFailureKeepsExistingBooks()
@@ -1436,6 +1531,13 @@ private struct SearchRequest: Equatable, Sendable {
     let query: String
 }
 
+private struct PageSelection: Equatable, Sendable {
+    let page: Int
+    let sort: LibraryItemSort
+    let descending: Bool
+    let filter: LibraryItemFilter?
+}
+
 private struct BookDetailRequest: Equatable, Sendable {
     let accountID: AccountID
     let libraryID: LibraryID
@@ -1511,7 +1613,7 @@ private actor TestAppService: AppServicing {
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
     private var recordedPageRequests: [LibraryID] = []
-    private var recordedPageNumbers: [Int] = []
+    private var recordedPageSelections: [PageSelection] = []
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
@@ -1624,10 +1726,20 @@ private actor TestAppService: AppServicing {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int
+        page: Int,
+        sort: LibraryItemSort,
+        descending: Bool,
+        filter: LibraryItemFilter?
     ) async throws(AppServiceError) -> LibraryItemsPage {
         recordedPageRequests.append(libraryID)
-        recordedPageNumbers.append(page)
+        recordedPageSelections.append(
+            PageSelection(
+                page: page,
+                sort: sort,
+                descending: descending,
+                filter: filter
+            )
+        )
         if page == 0 {
             return try value(from: firstPageResult)
         }
@@ -1865,8 +1977,8 @@ private actor TestAppService: AppServicing {
         recordedPageRequests
     }
 
-    func pageNumbers() -> [Int] {
-        recordedPageNumbers
+    func pageSelections() -> [PageSelection] {
+        recordedPageSelections
     }
 
     func homeRequests() -> [LibraryID] {

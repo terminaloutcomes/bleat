@@ -139,7 +139,20 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
-        app.buttons["Library"].tap()
+        app.tabBars.buttons["Library"].tap()
+        XCTAssertTrue(
+            app.staticTexts["The Test Audiobook"].waitForExistence(
+                timeout: 3
+            )
+        )
+        let sort = app.buttons["library.sort"]
+        XCTAssertTrue(sort.waitForExistence(timeout: 3))
+        sort.tap()
+        app.buttons["Recently Added"].tap()
+        let filter = app.buttons["library.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 3))
+        filter.tap()
+        app.buttons["In Progress"].tap()
         XCTAssertTrue(
             app.staticTexts["The Test Audiobook"].waitForExistence(
                 timeout: 3

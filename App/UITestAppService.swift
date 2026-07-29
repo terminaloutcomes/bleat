@@ -82,7 +82,10 @@
         func page(
             for account: ServerAccount,
             libraryID: LibraryID,
-            page: Int
+            page: Int,
+            sort: LibraryItemSort,
+            descending: Bool,
+            filter: LibraryItemFilter?
         ) async throws(AppServiceError) -> LibraryItemsPage {
             if page == 1 {
                 return LibraryItemsPage(

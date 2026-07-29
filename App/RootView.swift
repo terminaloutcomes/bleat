@@ -312,6 +312,7 @@ private struct LibraryView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 libraryPicker
+                libraryControls
                 BookListContent(model: model)
             }
             .navigationTitle("Library")
@@ -325,6 +326,109 @@ private struct LibraryView: View {
                     .accessibilityIdentifier("library.reload")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var libraryControls: some View {
+        if model.selectedLibrary != nil {
+            HStack {
+                Menu {
+                    ForEach(
+                        [
+                            LibraryItemSort.title,
+                            .author,
+                            .addedAt,
+                            .updatedAt,
+                            .duration,
+                        ],
+                        id: \.self
+                    ) { sort in
+                        Button {
+                            Task {
+                                await model.setLibrarySort(sort)
+                            }
+                        } label: {
+                            if model.librarySort == sort {
+                                Label(
+                                    sort.label,
+                                    systemImage: "checkmark"
+                                )
+                            } else {
+                                Text(sort.label)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(
+                        model.librarySort.label,
+                        systemImage: "arrow.up.arrow.down"
+                    )
+                }
+                .accessibilityIdentifier("library.sort")
+
+                Button {
+                    Task {
+                        await model.setLibrarySortDescending(
+                            !model.librarySortDescending
+                        )
+                    }
+                } label: {
+                    Image(
+                        systemName: model.librarySortDescending
+                            ? "arrow.down" : "arrow.up"
+                    )
+                }
+                .accessibilityLabel(
+                    model.librarySortDescending
+                        ? "Descending" : "Ascending"
+                )
+                .accessibilityIdentifier("library.sortDirection")
+
+                Spacer()
+
+                Menu {
+                    Button {
+                        Task {
+                            await model.setLibraryProgressFilter(nil)
+                        }
+                    } label: {
+                        if model.libraryProgressFilter == nil {
+                            Label("All Books", systemImage: "checkmark")
+                        } else {
+                            Text("All Books")
+                        }
+                    }
+                    Divider()
+                    ForEach(LibraryProgressFilter.allCases, id: \.self) {
+                        filter in
+                        Button {
+                            Task {
+                                await model.setLibraryProgressFilter(
+                                    filter
+                                )
+                            }
+                        } label: {
+                            if model.libraryProgressFilter == filter {
+                                Label(
+                                    filter.label,
+                                    systemImage: "checkmark"
+                                )
+                            } else {
+                                Text(filter.label)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(
+                        model.libraryProgressFilter?.label ?? "All Books",
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                }
+                .accessibilityIdentifier("library.filter")
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
         }
     }
 
@@ -361,6 +465,38 @@ private struct LibraryView: View {
             .pickerStyle(.menu)
             .padding(.horizontal)
             .accessibilityIdentifier("library.picker")
+        }
+    }
+}
+
+extension LibraryItemSort {
+    fileprivate var label: String {
+        switch self {
+        case .title:
+            "Title"
+        case .author:
+            "Author"
+        case .addedAt:
+            "Recently Added"
+        case .updatedAt:
+            "Recently Updated"
+        case .duration:
+            "Duration"
+        }
+    }
+}
+
+extension LibraryProgressFilter {
+    fileprivate var label: String {
+        switch self {
+        case .finished:
+            "Finished"
+        case .inProgress:
+            "In Progress"
+        case .notStarted:
+            "Not Started"
+        case .notFinished:
+            "Not Finished"
         }
     }
 }

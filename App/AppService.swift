@@ -84,7 +84,10 @@ protocol AppServicing: Sendable {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int
+        page: Int,
+        sort: LibraryItemSort,
+        descending: Bool,
+        filter: LibraryItemFilter?
     ) async throws(AppServiceError) -> LibraryItemsPage
 
     func homeShelves(
@@ -327,11 +330,19 @@ actor LiveAppService: AppServicing {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int
+        page: Int,
+        sort: LibraryItemSort,
+        descending: Bool,
+        filter: LibraryItemFilter?
     ) async throws(AppServiceError) -> LibraryItemsPage {
         let request: LibraryItemsPageRequest
         do {
-            request = try LibraryItemsPageRequest(page: page)
+            request = try LibraryItemsPageRequest(
+                page: page,
+                sort: sort,
+                descending: descending,
+                filter: filter
+            )
         } catch let error {
             throw .pageRequest(error)
         }

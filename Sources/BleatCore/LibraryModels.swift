@@ -101,6 +101,11 @@ public enum LibraryItemSort: Hashable, Sendable {
 public struct LibraryItemFilter: Hashable, Sendable {
     public let rawValue: String
 
+    public init(progress: LibraryProgressFilter) {
+        let encoded = Data(progress.rawValue.utf8).base64EncodedString()
+        rawValue = "progress.\(encoded)"
+    }
+
     public init(_ rawValue: String) throws(LibraryPageRequestError) {
         guard !rawValue.isEmpty,
               rawValue.rangeOfCharacter(
@@ -111,6 +116,13 @@ public struct LibraryItemFilter: Hashable, Sendable {
         }
         self.rawValue = rawValue
     }
+}
+
+public enum LibraryProgressFilter: String, CaseIterable, Hashable, Sendable {
+    case finished
+    case inProgress = "in-progress"
+    case notStarted = "not-started"
+    case notFinished = "not-finished"
 }
 
 public enum LibraryPageRequestError: Error, Equatable, Sendable {

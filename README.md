@@ -7,9 +7,9 @@ and is being implemented in Swift 6 with strict concurrency checking.
 The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
 an Audiobookshelf username and password, loads cached or live audiobook
-libraries and their first pages, searches the selected library, opens expanded
-book details with progress and chapters, loads additional library pages on
-demand, renders personalized Home shelves, and
+libraries as bounded pages, searches the selected library, opens expanded book
+details with progress and chapters, loads additional library pages on demand,
+renders personalized Home shelves, and
 streams direct-play or HLS audio through a background-capable player. It
 allows update-permitted accounts to edit supported book metadata, presents the
 five-tab root shell, and removes accounts. The core implements URL, routing,
@@ -145,6 +145,14 @@ the server's native username/password login. The password is cleared before the
 request starts and is never stored. Access and refresh tokens are stored in the
 device Keychain. OIDC and third-party identity-provider configuration are not
 part of the app.
+
+## Browse the library
+
+The Library tab loads 50 books at a time. Its controls sort server-side by
+title, author, recently added, recently updated, or duration in either
+direction. The progress filter shows all, finished, in-progress, not-started,
+or not-finished books without downloading the entire library first. **Load
+More** fetches the next page using the active sort and filter.
 
 ## Play an audiobook
 

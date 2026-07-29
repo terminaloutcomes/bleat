@@ -561,6 +561,17 @@ final class AudiobookshelfAPITests: XCTestCase {
             "updatedAt",
             "media.duration",
         ])
+        XCTAssertEqual(
+            LibraryProgressFilter.allCases.map {
+                LibraryItemFilter(progress: $0).rawValue
+            },
+            [
+                "progress.ZmluaXNoZWQ=",
+                "progress.aW4tcHJvZ3Jlc3M=",
+                "progress.bm90LXN0YXJ0ZWQ=",
+                "progress.bm90LWZpbmlzaGVk",
+            ]
+        )
     }
 
     func testLibraryItemsMapsPinnedFixtureAndPagination() async throws {
