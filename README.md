@@ -275,6 +275,13 @@ downloaded books. Selecting a file seeks to its whole-book start position. The
 player also includes the native AirPlay route picker. Player content and
 secondary controls scroll when the screen or text size is too small to show
 them at once.
+Bleat reports playback as active only after AVPlayer has a ready item and the
+whole-book playhead is advancing. Initial loading and later stalls show as
+buffering while Pause remains available. A stream that makes no progress for
+12 seconds is rebuilt at its last confirmed position. Bleat can replace one
+lost server session automatically, and a typed direct-play decoder failure
+opens one forced-transcode session instead; exhausted recovery becomes a
+visible playback failure rather than continuing to appear active.
 The selected global speed persists across relaunches and can be adjusted in
 0.05× steps.
 

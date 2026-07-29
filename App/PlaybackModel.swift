@@ -8,6 +8,7 @@ enum PlaybackState: Equatable, Sendable {
     case idle
     case preparing
     case ready
+    case buffering
     case playing
     case paused
     case ended
@@ -23,6 +24,8 @@ private extension PlaybackState {
             .preparing
         case .ready:
             .ready
+        case .buffering:
+            .buffering
         case .playing:
             .playing
         case .paused:
@@ -60,7 +63,7 @@ enum PlaybackMediaServicesResetIntent: Equatable, Sendable {
 
     static func decide(for state: PlaybackState) -> Self? {
         switch state {
-        case .playing:
+        case .playing, .buffering:
             .play
         case .ready, .paused:
             .pause
@@ -73,6 +76,170 @@ enum PlaybackMediaServicesResetIntent: Equatable, Sendable {
 struct PlaybackPositionConflict: Equatable, Sendable {
     let localTime: Double
     let serverTime: Double
+}
+
+enum PlaybackObservationDecision: Equatable, Sendable {
+    case buffering
+    case playing
+    case paused
+
+    static func decide(
+        isPlaybackRequested: Bool,
+        itemStatus: AVPlayerItem.Status,
+        timeControlStatus: AVPlayer.TimeControlStatus,
+        hasConfirmedAdvance: Bool
+    ) -> Self {
+        guard isPlaybackRequested else {
+            return .paused
+        }
+        guard itemStatus == .readyToPlay,
+            timeControlStatus == .playing,
+            hasConfirmedAdvance
+        else {
+            return .buffering
+        }
+        return .playing
+    }
+}
+
+enum PlaybackWatchdogDecision: Equatable, Sendable {
+    case none
+    case showBuffering
+    case recover
+
+    static let bufferingDelay: TimeInterval = 2
+    static let recoveryDelay: TimeInterval = 12
+
+    static func decide(
+        isPlaybackRequested: Bool,
+        lastConfirmedAdvanceAt: TimeInterval?,
+        now: TimeInterval
+    ) -> Self {
+        guard isPlaybackRequested, let lastConfirmedAdvanceAt else {
+            return .none
+        }
+        let elapsed = now - lastConfirmedAdvanceAt
+        if elapsed >= recoveryDelay {
+            return .recover
+        }
+        if elapsed >= bufferingDelay {
+            return .showBuffering
+        }
+        return .none
+    }
+}
+
+enum PlaybackRecoveryFault: Equatable, Sendable {
+    case decoderFailure
+    case missingSession
+    case stalled
+    case itemFailure
+}
+
+enum PlaybackRecoveryAction: Equatable, Sendable {
+    case rebuildCurrentSource
+    case reopenSession(PlaybackPreference)
+    case fail
+}
+
+struct PlaybackRecoveryPolicy: Equatable, Sendable {
+    static let sustainedPlaybackDelay: TimeInterval = 10
+
+    private(set) var rebuiltCurrentSource = false
+    private(set) var reopenedSession = false
+    private(set) var forcedTranscode = false
+
+    mutating func action(
+        for fault: PlaybackRecoveryFault,
+        isStreaming: Bool,
+        isTranscoded: Bool
+    ) -> PlaybackRecoveryAction {
+        switch fault {
+        case .decoderFailure:
+            guard isStreaming, !isTranscoded, !forcedTranscode else {
+                return .fail
+            }
+            forcedTranscode = true
+            return .reopenSession(.transcode)
+        case .missingSession:
+            guard isStreaming, !reopenedSession else {
+                return .fail
+            }
+            reopenedSession = true
+            return .reopenSession(.automatic)
+        case .stalled, .itemFailure:
+            if !rebuiltCurrentSource {
+                rebuiltCurrentSource = true
+                return .rebuildCurrentSource
+            }
+            guard isStreaming, !reopenedSession else {
+                return .fail
+            }
+            reopenedSession = true
+            return .reopenSession(.automatic)
+        }
+    }
+
+    mutating func sustainedPlaybackConfirmed() {
+        rebuiltCurrentSource = false
+    }
+}
+
+enum PlaybackItemFailureClassifier {
+    static func classify(
+        error: Error?,
+        errorLogStatusCodes: [Int]
+    ) -> PlaybackRecoveryFault {
+        if errorLogStatusCodes.contains(404)
+            || containsHTTPStatus(404, in: error)
+        {
+            return .missingSession
+        }
+        if containsDecoderFailure(in: error) {
+            return .decoderFailure
+        }
+        return .itemFailure
+    }
+
+    private static func containsHTTPStatus(
+        _ statusCode: Int,
+        in error: Error?
+    ) -> Bool {
+        errorChain(startingAt: error).contains { error in
+            return error.code == statusCode
+                && error.domain == NSURLErrorDomain
+        }
+    }
+
+    private static func containsDecoderFailure(
+        in error: Error?
+    ) -> Bool {
+        let decoderCodes: Set<Int> = [
+            AVError.Code.decodeFailed.rawValue,
+            AVError.Code.decoderNotFound.rawValue,
+            AVError.Code.decoderTemporarilyUnavailable.rawValue,
+            AVError.Code.fileFormatNotRecognized.rawValue,
+            AVError.Code.fileFailedToParse.rawValue,
+            AVError.Code.undecodableMediaData.rawValue,
+            AVError.Code.invalidSourceMedia.rawValue,
+        ]
+        return errorChain(startingAt: error).contains { error in
+            error.domain == AVFoundationErrorDomain
+                && decoderCodes.contains(error.code)
+        }
+    }
+
+    private static func errorChain(
+        startingAt error: Error?
+    ) -> [NSError] {
+        var errors: [NSError] = []
+        var current = error as NSError?
+        while let error = current, errors.count < 8 {
+            errors.append(error)
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return errors
+    }
 }
 
 private struct AutomaticDownloadSignal: Equatable {
@@ -136,7 +303,11 @@ final class PlaybackModel {
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
     private var timeControlStatusObserver: NSKeyValueObservation?
+    private var playerStatusObserver: NSKeyValueObservation?
+    private var currentItemObserver: NSKeyValueObservation?
+    private var currentItemStatusObserver: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
+    private var currentItemObservers: [NSObjectProtocol] = []
     private var audioSessionObservers: [NSObjectProtocol] = []
     private var remoteCommandTargets: [(MPRemoteCommand, Any)] = []
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
@@ -145,6 +316,8 @@ final class PlaybackModel {
     private var preparation: AppPlaybackPreparation?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
+    private var playbackWatchdogTask: Task<Void, Never>?
+    private var playbackRecoveryTask: Task<Void, Never>?
     private var pausedAt: Date?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
@@ -155,6 +328,13 @@ final class PlaybackModel {
         AutomaticDownloadPlaybackGate()
     private var automaticDownloadBandwidthDecision:
         AutomaticDownloadBandwidthDecision?
+    private var playbackRequested = false
+    private var hasConfirmedPlaybackAdvance = false
+    private var lastObservedWholeBookTime: Double?
+    private var lastConfirmedAdvanceAt: TimeInterval?
+    private var stablePlaybackStartedAt: TimeInterval?
+    private var playbackRecoveryPolicy = PlaybackRecoveryPolicy()
+    private let monotonicNow: @MainActor @Sendable () -> TimeInterval
     @ObservationIgnored
     private var automaticDownloadHandler:
         (@MainActor @Sendable (AutomaticDownloadActivity) async -> Void)?
@@ -192,6 +372,10 @@ final class PlaybackModel {
 
     var isPlaying: Bool {
         state == .playing
+    }
+
+    var isPlaybackRequested: Bool {
+        playbackRequested
     }
 
     var canSetEndOfChapterSleepTimer: Bool {
@@ -255,6 +439,10 @@ final class PlaybackModel {
                     wholeBookTime: $1
                 )
             },
+        monotonicNow:
+            @escaping @MainActor @Sendable () -> TimeInterval = {
+                ProcessInfo.processInfo.systemUptime
+            },
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared
     ) {
@@ -268,6 +456,7 @@ final class PlaybackModel {
         self.preferencesStore = preferencesStore
         self.audioSessionActivation = audioSessionActivation
         self.queuePlanning = queuePlanning
+        self.monotonicNow = monotonicNow
         rate = preferencesStore.playbackRate()
         resumeRewind = preferencesStore.resumeRewind()
         self.skipBackwardInterval = skipBackwardInterval
@@ -316,6 +505,11 @@ final class PlaybackModel {
 
         generation &+= 1
         let operationGeneration = generation
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        player?.pause()
         await syncProgress()
         guard generation == operationGeneration else {
             return
@@ -333,6 +527,7 @@ final class PlaybackModel {
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
         automaticDownloadBandwidthDecision = nil
+        resetPlaybackRecoveryState()
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
@@ -369,6 +564,7 @@ final class PlaybackModel {
             let prepared = try await service.openPlayback(
                 for: account,
                 itemID: detail.id,
+                preference: .automatic,
                 deviceInfo: Self.deviceInfo()
             )
             guard generation == operationGeneration else {
@@ -471,6 +667,11 @@ final class PlaybackModel {
         }
         generation &+= 1
         let operationGeneration = generation
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        player?.pause()
         await syncProgress()
         guard generation == operationGeneration else {
             return
@@ -488,6 +689,7 @@ final class PlaybackModel {
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
         automaticDownloadBandwidthDecision = nil
+        resetPlaybackRecoveryState()
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
@@ -845,7 +1047,8 @@ final class PlaybackModel {
     func play() {
         guard let player,
             preparation != nil,
-            state != .preparing
+            state != .preparing,
+            state != .ended
         else {
             return
         }
@@ -863,14 +1066,36 @@ final class PlaybackModel {
             return
         }
         pausedAt = nil
+        playbackRequested = true
+        hasConfirmedPlaybackAdvance = false
+        stablePlaybackStartedAt = nil
+        lastObservedWholeBookTime = currentTime
+        lastConfirmedAdvanceAt = monotonicNow()
+        startPlaybackWatchdog()
+        if player.status == .failed {
+            handleItemFailure(
+                error: player.error,
+                item: player.currentItem
+            )
+            return
+        }
+        if let currentItem = player.currentItem,
+            currentItem.status == .failed
+        {
+            handleItemFailure(
+                error: currentItem.error,
+                item: currentItem
+            )
+            return
+        }
         player.playImmediately(atRate: rate)
         let previousState = state.diagnosticState
-        state = .playing
+        state = .buffering
         record(
             .transition(
                 category: .playback,
                 from: previousState,
-                to: .playing
+                to: .buffering
             )
         )
         record(.completed(.play, category: .playback))
@@ -882,7 +1107,12 @@ final class PlaybackModel {
         guard let player, hasActiveBook else {
             return
         }
-        let wasPlaying = isPlaying
+        let wasPlaying = isPlaybackRequested
+        generation &+= 1
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
         player.pause()
         let previousState = state.diagnosticState
         state = .paused
@@ -906,7 +1136,7 @@ final class PlaybackModel {
     }
 
     func togglePlayback() {
-        if isPlaying {
+        if isPlaybackRequested {
             pause()
         } else {
             play()
@@ -922,7 +1152,13 @@ final class PlaybackModel {
     }
 
     func fail(_ failure: AppFailure) {
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        player?.pause()
         state = .failed(failure)
+        updateNowPlaying()
     }
 
     func setSleepTimer(minutes: Int?) {
@@ -964,7 +1200,7 @@ final class PlaybackModel {
         preferencesStore.savePlaybackRate(newRate)
         rate = preferencesStore.playbackRate()
         updateTimePitchAlgorithm()
-        if isPlaying {
+        if isPlaybackRequested {
             player?.playImmediately(atRate: rate)
         }
         updateNowPlaying()
@@ -994,14 +1230,19 @@ final class PlaybackModel {
         await diagnostics.record(
             .started(.seek, category: .playback)
         )
+        let shouldResume = isPlaybackRequested
         generation &+= 1
         let operationGeneration = generation
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        player?.pause()
         await syncProgress()
         guard generation == operationGeneration else {
             return
         }
         let target = min(max(requestedTime, 0), preparation.duration)
-        let shouldResume = isPlaying
         if !shouldResume {
             pausedAt = nil
         }
@@ -1013,9 +1254,11 @@ final class PlaybackModel {
             }
             currentTime = target
             persistLocalPosition()
-            state = shouldResume ? .playing : .paused
             if shouldResume {
-                player?.playImmediately(atRate: rate)
+                state = .ready
+                play()
+            } else {
+                state = .paused
             }
             updateNowPlaying()
             updateAutomaticDownloadBandwidth()
@@ -1081,6 +1324,11 @@ final class PlaybackModel {
         )
         generation &+= 1
         let operationGeneration = generation
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        player?.pause()
         await syncProgress()
         guard generation == operationGeneration else {
             return
@@ -1099,6 +1347,7 @@ final class PlaybackModel {
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
         automaticDownloadBandwidthDecision = nil
+        resetPlaybackRecoveryState()
         localPlaybackSession = nil
         itemID = nil
         title = ""
@@ -1148,9 +1397,13 @@ final class PlaybackModel {
         let queue = AVQueuePlayer(items: items)
         player = queue
         updateTimePitchAlgorithm()
-        installObservers(on: queue, lastItem: lastItem)
+        installObservers(
+            on: queue,
+            lastItem: lastItem
+        )
 
         await seek(queue, to: plan.localTime)
+        lastObservedWholeBookTime = wholeBookTime
     }
 
     private func configureAudioSession() throws {
@@ -1324,7 +1577,29 @@ final class PlaybackModel {
             options: [.new]
         ) { [weak self] _, _ in
             Task { @MainActor [weak self] in
-                self?.updateAutomaticDownloadBandwidth()
+                self?.handleTimeControlStatusChange()
+            }
+        }
+        playerStatusObserver = player.observe(
+            \.status,
+            options: [.new]
+        ) { [weak self] player, _ in
+            guard player.status == .failed else {
+                return
+            }
+            Task { @MainActor [weak self] in
+                self?.handleItemFailure(
+                    error: player.error,
+                    item: player.currentItem
+                )
+            }
+        }
+        currentItemObserver = player.observe(
+            \.currentItem,
+            options: [.initial, .new]
+        ) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                self?.observeCurrentItem(player.currentItem)
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -1345,6 +1620,11 @@ final class PlaybackModel {
         timeObserver = nil
         timeControlStatusObserver?.invalidate()
         timeControlStatusObserver = nil
+        playerStatusObserver?.invalidate()
+        playerStatusObserver = nil
+        currentItemObserver?.invalidate()
+        currentItemObserver = nil
+        removeCurrentItemObservers()
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }
@@ -1357,6 +1637,8 @@ final class PlaybackModel {
         player?.removeAllItems()
         player = nil
         offsetsByItem = [:]
+        lastObservedWholeBookTime = nil
+        hasConfirmedPlaybackAdvance = false
     }
 
     private func closeActiveSession() async {
@@ -1391,7 +1673,16 @@ final class PlaybackModel {
         guard itemTime.isFinite else {
             return
         }
-        currentTime = min(max(offset + itemTime, 0), duration)
+        let refreshedTime = min(max(offset + itemTime, 0), duration)
+        let previousObservedTime = lastObservedWholeBookTime
+        currentTime = refreshedTime
+        lastObservedWholeBookTime = refreshedTime
+        if let previousObservedTime,
+            refreshedTime - previousObservedTime > 0.01,
+            isPlaybackRequested
+        {
+            confirmPlaybackAdvance(at: monotonicNow())
+        }
         notifyAutomaticDownloadProgress()
         if case .endOfChapter(let chapterEnd) = sleepTimer,
             currentTime >= chapterEnd
@@ -1411,6 +1702,454 @@ final class PlaybackModel {
                 await self?.syncProgress()
             }
         }
+    }
+
+    private func observeCurrentItem(_ item: AVPlayerItem?) {
+        removeCurrentItemObservers()
+        guard let item else {
+            if isPlaybackRequested, state != .ended {
+                transitionPlaybackState(to: .buffering)
+            }
+            return
+        }
+        currentItemStatusObserver = item.observe(
+            \.status,
+            options: [.initial, .new]
+        ) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                self?.handleCurrentItemStatus(item)
+            }
+        }
+        let center = NotificationCenter.default
+        currentItemObservers.append(
+            center.addObserver(
+                forName: AVPlayerItem.playbackStalledNotification,
+                object: item,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handlePlaybackStall()
+                }
+            }
+        )
+        currentItemObservers.append(
+            center.addObserver(
+                forName: AVPlayerItem.failedToPlayToEndTimeNotification,
+                object: item,
+                queue: .main
+            ) { [weak self] notification in
+                let error =
+                    notification.userInfo?[
+                        AVPlayerItemFailedToPlayToEndTimeErrorKey
+                    ] as? Error
+                Task { @MainActor [weak self] in
+                    self?.handleItemFailure(error: error, item: item)
+                }
+            }
+        )
+        hasConfirmedPlaybackAdvance = false
+        stablePlaybackStartedAt = nil
+        lastObservedWholeBookTime = currentTime
+        if isPlaybackRequested {
+            lastConfirmedAdvanceAt = monotonicNow()
+            player?.playImmediately(atRate: rate)
+        }
+        applyObservedPlaybackState()
+    }
+
+    private func removeCurrentItemObservers() {
+        currentItemStatusObserver?.invalidate()
+        currentItemStatusObserver = nil
+        for observer in currentItemObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        currentItemObservers = []
+    }
+
+    private func handleCurrentItemStatus(_ item: AVPlayerItem) {
+        guard item === player?.currentItem else {
+            return
+        }
+        switch item.status {
+        case .unknown, .readyToPlay:
+            applyObservedPlaybackState()
+        case .failed:
+            handleItemFailure(error: item.error, item: item)
+        @unknown default:
+            handleItemFailure(error: item.error, item: item)
+        }
+    }
+
+    private func handleTimeControlStatusChange() {
+        updateAutomaticDownloadBandwidth()
+        if player?.timeControlStatus != .playing {
+            hasConfirmedPlaybackAdvance = false
+            stablePlaybackStartedAt = nil
+        }
+        applyObservedPlaybackState()
+    }
+
+    private func handlePlaybackStall() {
+        guard isPlaybackRequested else {
+            return
+        }
+        hasConfirmedPlaybackAdvance = false
+        stablePlaybackStartedAt = nil
+        transitionPlaybackState(to: .buffering)
+        updateNowPlaying()
+    }
+
+    private func handleItemFailure(
+        error: Error?,
+        item: AVPlayerItem?
+    ) {
+        guard isPlaybackRequested else {
+            return
+        }
+        let statusCodes =
+            item?.errorLog()?.events.map(\.errorStatusCode) ?? []
+        let fault = PlaybackItemFailureClassifier.classify(
+            error: error ?? item?.error,
+            errorLogStatusCodes: statusCodes
+        )
+        beginPlaybackRecovery(for: fault)
+    }
+
+    private func applyObservedPlaybackState() {
+        guard let player,
+            let item = player.currentItem,
+            state != .idle,
+            state != .ended,
+            !isPlaybackFailed
+        else {
+            return
+        }
+        let decision = PlaybackObservationDecision.decide(
+            isPlaybackRequested: isPlaybackRequested,
+            itemStatus: item.status,
+            timeControlStatus: player.timeControlStatus,
+            hasConfirmedAdvance: hasConfirmedPlaybackAdvance
+        )
+        switch decision {
+        case .buffering:
+            transitionPlaybackState(to: .buffering)
+        case .playing:
+            transitionPlaybackState(to: .playing)
+        case .paused:
+            transitionPlaybackState(to: .paused)
+        }
+        updateNowPlaying()
+    }
+
+    private var isPlaybackFailed: Bool {
+        if case .failed = state {
+            return true
+        }
+        return false
+    }
+
+    private func transitionPlaybackState(to newState: PlaybackState) {
+        guard state != newState else {
+            return
+        }
+        let previousState = state.diagnosticState
+        state = newState
+        record(
+            .transition(
+                category: .playback,
+                from: previousState,
+                to: newState.diagnosticState
+            )
+        )
+    }
+
+    private func confirmPlaybackAdvance(at now: TimeInterval) {
+        hasConfirmedPlaybackAdvance = true
+        lastConfirmedAdvanceAt = now
+        if stablePlaybackStartedAt == nil {
+            stablePlaybackStartedAt = now
+        }
+        if let stablePlaybackStartedAt,
+            now - stablePlaybackStartedAt
+                >= PlaybackRecoveryPolicy.sustainedPlaybackDelay
+        {
+            playbackRecoveryPolicy.sustainedPlaybackConfirmed()
+        }
+        applyObservedPlaybackState()
+    }
+
+    private func resetPlaybackRecoveryState() {
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        hasConfirmedPlaybackAdvance = false
+        lastObservedWholeBookTime = nil
+        lastConfirmedAdvanceAt = nil
+        stablePlaybackStartedAt = nil
+        playbackRecoveryPolicy = PlaybackRecoveryPolicy()
+    }
+
+    private func startPlaybackWatchdog() {
+        guard playbackWatchdogTask == nil else {
+            return
+        }
+        playbackWatchdogTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self else {
+                    return
+                }
+                self.evaluatePlaybackWatchdog()
+            }
+        }
+    }
+
+    private func cancelPlaybackWatchdog() {
+        playbackWatchdogTask?.cancel()
+        playbackWatchdogTask = nil
+    }
+
+    private func evaluatePlaybackWatchdog() {
+        guard playbackRecoveryTask == nil else {
+            return
+        }
+        switch PlaybackWatchdogDecision.decide(
+            isPlaybackRequested: isPlaybackRequested,
+            lastConfirmedAdvanceAt: lastConfirmedAdvanceAt,
+            now: monotonicNow()
+        ) {
+        case .none:
+            return
+        case .showBuffering:
+            hasConfirmedPlaybackAdvance = false
+            stablePlaybackStartedAt = nil
+            transitionPlaybackState(to: .buffering)
+            updateNowPlaying()
+        case .recover:
+            beginPlaybackRecovery(for: .stalled)
+        }
+    }
+
+    private func beginPlaybackRecovery(
+        for fault: PlaybackRecoveryFault
+    ) {
+        guard isPlaybackRequested,
+            playbackRecoveryTask == nil,
+            let preparation
+        else {
+            return
+        }
+        let isStreaming =
+            preparation.sessionID != nil && activeAccount != nil
+        let isTranscoded: Bool
+        switch preparation.source {
+        case .direct:
+            isTranscoded = false
+        case .hls:
+            isTranscoded = true
+        }
+        let action = playbackRecoveryPolicy.action(
+            for: fault,
+            isStreaming: isStreaming,
+            isTranscoded: isTranscoded
+        )
+        guard action != .fail else {
+            failPlaybackRecovery()
+            return
+        }
+
+        transitionPlaybackState(to: .buffering)
+        updateNowPlaying()
+        record(.started(.recoverPlayback, category: .playback))
+        let operationGeneration = generation
+        playbackRecoveryTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            await self.performPlaybackRecovery(
+                action,
+                operationGeneration: operationGeneration
+            )
+            guard self.generation == operationGeneration else {
+                return
+            }
+            self.playbackRecoveryTask = nil
+        }
+    }
+
+    private func performPlaybackRecovery(
+        _ action: PlaybackRecoveryAction,
+        operationGeneration: UInt64
+    ) async {
+        let recoveryTime = currentTime
+        switch action {
+        case .rebuildCurrentSource:
+            do {
+                try await rebuildQueue(at: recoveryTime)
+                guard generation == operationGeneration,
+                    !Task.isCancelled,
+                    isPlaybackRequested
+                else {
+                    return
+                }
+                currentTime = recoveryTime
+                resumeAfterPlaybackRecovery()
+                record(.completed(.recoverPlayback, category: .playback))
+            } catch {
+                guard generation == operationGeneration,
+                    !Task.isCancelled
+                else {
+                    return
+                }
+                let isStreaming =
+                    preparation?.sessionID != nil && activeAccount != nil
+                let isTranscoded: Bool
+                switch preparation?.source {
+                case .hls:
+                    isTranscoded = true
+                case .direct, .none:
+                    isTranscoded = false
+                }
+                let fallback = playbackRecoveryPolicy.action(
+                    for: .itemFailure,
+                    isStreaming: isStreaming,
+                    isTranscoded: isTranscoded
+                )
+                await performPlaybackRecovery(
+                    fallback,
+                    operationGeneration: operationGeneration
+                )
+            }
+        case .reopenSession(let preference):
+            await reopenPlaybackSession(
+                preference: preference,
+                recoveryTime: recoveryTime,
+                operationGeneration: operationGeneration
+            )
+        case .fail:
+            failPlaybackRecovery()
+        }
+    }
+
+    private func reopenPlaybackSession(
+        preference: PlaybackPreference,
+        recoveryTime: Double,
+        operationGeneration: UInt64
+    ) async {
+        guard let account = activeAccount,
+            let itemID,
+            let previousPreparation = preparation,
+            let previousSessionID = previousPreparation.sessionID
+        else {
+            failPlaybackRecovery()
+            return
+        }
+
+        do {
+            let replacement = try await service.openPlayback(
+                for: account,
+                itemID: itemID,
+                preference: preference,
+                deviceInfo: Self.deviceInfo()
+            )
+            guard generation == operationGeneration,
+                !Task.isCancelled,
+                isPlaybackRequested
+            else {
+                if let replacementSessionID = replacement.sessionID {
+                    try? await service.closePlayback(
+                        for: account,
+                        sessionID: replacementSessionID
+                    )
+                }
+                return
+            }
+
+            preparation = replacement
+            title = replacement.title
+            duration = replacement.duration
+            let clampedRecoveryTime = min(
+                max(recoveryTime, 0),
+                replacement.duration
+            )
+            currentTime = clampedRecoveryTime
+            do {
+                try await rebuildQueue(at: clampedRecoveryTime)
+            } catch {
+                if let replacementSessionID = replacement.sessionID {
+                    try? await service.closePlayback(
+                        for: account,
+                        sessionID: replacementSessionID
+                    )
+                }
+                preparation = previousPreparation
+                throw error
+            }
+            guard generation == operationGeneration,
+                !Task.isCancelled,
+                isPlaybackRequested
+            else {
+                if let replacementSessionID = replacement.sessionID {
+                    try? await service.closePlayback(
+                        for: account,
+                        sessionID: replacementSessionID
+                    )
+                }
+                return
+            }
+            if replacement.sessionID != previousSessionID {
+                try? await service.closePlayback(
+                    for: account,
+                    sessionID: previousSessionID
+                )
+            }
+            resumeAfterPlaybackRecovery()
+            record(.completed(.recoverPlayback, category: .playback))
+        } catch let error as AppServiceError {
+            guard generation == operationGeneration,
+                !Task.isCancelled
+            else {
+                return
+            }
+            failPlaybackRecovery(AppFailure(serviceError: error))
+        } catch {
+            guard generation == operationGeneration,
+                !Task.isCancelled
+            else {
+                return
+            }
+            failPlaybackRecovery()
+        }
+    }
+
+    private func resumeAfterPlaybackRecovery() {
+        hasConfirmedPlaybackAdvance = false
+        stablePlaybackStartedAt = nil
+        lastObservedWholeBookTime = currentTime
+        lastConfirmedAdvanceAt = monotonicNow()
+        transitionPlaybackState(to: .buffering)
+        player?.playImmediately(atRate: rate)
+        updateAutomaticDownloadBandwidth()
+        updateNowPlaying()
+    }
+
+    private func failPlaybackRecovery(
+        _ failure: AppFailure = .mediaUnavailable
+    ) {
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        player?.pause()
+        transitionPlaybackState(to: .failed(failure))
+        updateAutomaticDownloadBandwidth()
+        updateNowPlaying()
+        record(
+            .failed(
+                .recoverPlayback,
+                category: .playback,
+                failureCode: .playbackRecoveryExhausted
+            )
+        )
     }
 
     private func notifyAutomaticDownloadProgress(force: Bool = false) {
@@ -1469,7 +2208,7 @@ final class PlaybackModel {
             return
         }
         let decision = automaticDownloadPlaybackGate.decision(
-            isPlayingIntent: isPlaying,
+            isPlayingIntent: isPlaybackRequested,
             timeControlStatus: player.timeControlStatus,
             now: now
         )
@@ -1483,7 +2222,7 @@ final class PlaybackModel {
                 kind: .playbackNeedsBandwidth
             )
         case .allowAutomaticDownloads:
-            if isPlaying {
+            if isPlaybackRequested {
                 notifyAutomaticDownloadProgress(force: true)
             } else {
                 notifyAutomaticDownloadBandwidthReleased()
@@ -1544,6 +2283,10 @@ final class PlaybackModel {
     }
 
     private func playbackEnded() {
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
         currentTime = duration
         setSleepTimer(minutes: nil)
         persistLocalPosition()
@@ -1951,6 +2694,10 @@ final class PlaybackModel {
             return
         }
         player?.pause()
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
         state = .paused
         positionConflict = PlaybackPositionConflict(
             localTime: session.currentTime,
@@ -1982,7 +2729,7 @@ final class PlaybackModel {
         }
         switch type {
         case .began:
-            resumeAfterInterruption = isPlaying
+            resumeAfterInterruption = isPlaybackRequested
             pause()
         case .ended:
             let options = AVAudioSession.InterruptionOptions(
@@ -2021,6 +2768,10 @@ final class PlaybackModel {
         generation &+= 1
         let operationGeneration = generation
         let recoveryTime = currentTime
+        playbackRequested = false
+        cancelPlaybackWatchdog()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
         player?.pause()
         state = .preparing
         do {
@@ -2032,8 +2783,10 @@ final class PlaybackModel {
             currentTime = recoveryTime
             switch intent {
             case .play:
-                state = .playing
-                player?.playImmediately(atRate: rate)
+                state = .ready
+                playbackRequested = true
+                startPlaybackWatchdog()
+                resumeAfterPlaybackRecovery()
             case .pause:
                 state = .paused
             }

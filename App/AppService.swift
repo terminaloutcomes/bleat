@@ -121,6 +121,7 @@ protocol AppServicing: Sendable {
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
+        preference: PlaybackPreference,
         deviceInfo: PlaybackDeviceInfo
     ) async throws(AppServiceError) -> AppPlaybackPreparation
 
@@ -463,6 +464,7 @@ actor LiveAppService: AppServicing {
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
+        preference: PlaybackPreference,
         deviceInfo: PlaybackDeviceInfo
     ) async throws(AppServiceError) -> AppPlaybackPreparation {
         let session: PlaybackSession
@@ -471,6 +473,7 @@ actor LiveAppService: AppServicing {
                 accountID: account.id,
                 server: account.server,
                 itemID: itemID,
+                preference: preference,
                 supportedMimeTypes: [
                     "audio/aac",
                     "audio/flac",

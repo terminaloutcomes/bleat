@@ -492,7 +492,13 @@ controls.
 Current status: the MVP player, whole-book, chapter, and multi-file navigation,
 native AirPlay route picker, background audio, Now Playing metadata, remote
 commands, configurable skip intervals, sleep timers, resume rewind, streaming,
-and downloaded playback are implemented. Media-services reset recovery
+and downloaded playback are implemented. Playback now separates requested
+play/pause intent from observed AVPlayer state, requires a ready item and
+advancing playhead before publishing `playing`, renders `buffering`, and uses a
+12-second monotonic no-progress watchdog. Recovery rebuilds the current source,
+replaces one lost server session, and retries one typed direct-play decoder
+failure through forced transcoding while preserving the whole-book position
+and desired rate. Media-services reset recovery
 reactivates audio and rebuilds the queue at the whole-book position while
 preserving play/pause intent, with typed failure if recovery is impossible.
 The disposable HTTPS simulator journey covers live streaming, chapters,

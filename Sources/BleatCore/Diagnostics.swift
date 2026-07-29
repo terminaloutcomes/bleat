@@ -51,6 +51,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case replaceCover = "replace_cover"
     case openPlayback = "open_playback"
     case closePlayback = "close_playback"
+    case recoverPlayback = "recover_playback"
     case play
     case pause
     case seek
@@ -78,6 +79,7 @@ public enum DiagnosticState: String, Codable, Sendable {
     case loading
     case preparing
     case ready
+    case buffering
     case playing
     case paused
     case ended
@@ -106,6 +108,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case bookUnavailable = "book_unavailable"
     case playbackDenied = "playback_denied"
     case playbackUnavailable = "playback_unavailable"
+    case playbackRecoveryExhausted = "playback_recovery_exhausted"
     case progressUnavailable = "progress_unavailable"
     case mediaUnavailable = "media_unavailable"
     case invalidMetadata = "invalid_metadata"

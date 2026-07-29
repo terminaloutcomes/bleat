@@ -203,6 +203,8 @@ extension PlaybackState {
             "Preparing"
         case .ready:
             "Ready"
+        case .buffering:
+            "Buffering"
         case .playing:
             "Playing"
         case .paused:

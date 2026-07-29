@@ -231,6 +231,7 @@
         func openPlayback(
             for account: ServerAccount,
             itemID: LibraryItemID,
+            preference: PlaybackPreference,
             deviceInfo: PlaybackDeviceInfo
         ) async throws(AppServiceError) -> AppPlaybackPreparation {
             throw .playbackSession(.requestFailed)

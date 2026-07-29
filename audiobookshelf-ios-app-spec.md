@@ -575,7 +575,7 @@ For streamed playback:
    - `mediaPlayer: "AVPlayer"`;
    - `supportedMimeTypes: [String]`;
    - `deviceInfo` containing a stable `deviceId`, `clientName`, `clientVersion`, `manufacturer`, and `model`. The current server derives `deviceName`; the client does not need to send it.
-3. Normally send both force flags as false and allow the server to direct-play only when every included file MIME type occurs in `supportedMimeTypes`. Reserve `forceTranscode` for a user retry after a decoder failure.
+3. Normally send both force flags as false and allow the server to direct-play only when every included file MIME type occurs in `supportedMimeTypes`. Reserve `forceTranscode` for one automatic retry after a typed direct-play decoder failure.
 4. Decode the returned `PlaybackSession`, including `id`, `playMethod`, `startTime`, `currentTime`, `duration`, `chapters`, expanded `libraryItem`, and ordered `audioTracks`.
 5. Build session-scoped AVPlayer assets as described in section 9.3.
 6. Seek to the selected whole-book position.
@@ -617,7 +617,7 @@ The playback session must remain open while either route is in use. Do not close
 
 Treat session IDs and the resulting public/HLS URLs as short-lived secrets: never log them, persist them beyond recovery metadata, share them, or include them in diagnostics.
 
-If a playback URL returns `404` after a server restart or lost in-memory session, open a new playback session once, rebuild the queue, and seek to the latest durable local position. Do not loop session creation.
+If a playback URL returns `404` after a server restart or lost in-memory session, open a new playback session once, rebuild the queue, and seek to the latest confirmed whole-book position. Do not loop session creation.
 
 An implementation spike must prove direct-play range seeking, multi-file track transitions, HLS startup/seeking, and immediate failure after the corresponding session is closed.
 
@@ -645,6 +645,15 @@ Use explicit states:
 `idle → preparing → ready/paused → playing ↔ buffering → paused → ended`
 
 Any state can transition to `failed`. Loading a different book cancels the previous preparation and closes or persists its session.
+
+Treat play and pause requests as intent, not proof of audible playback. Publish
+`playing` only after the current item is ready, AVPlayer reports that it is
+playing, and the whole-book position advances. Show `buffering` while waiting
+or stalled, keep Pause available, and report a zero Now Playing rate. If no
+advance occurs for 12 monotonic seconds, rebuild once at the last confirmed
+position. Ten continuous seconds of advancing playback starts a new transient
+stall incident; lost-session and forced-transcode recovery remain one-time for
+the started book.
 
 Use AVPlayer periodic and boundary observers:
 

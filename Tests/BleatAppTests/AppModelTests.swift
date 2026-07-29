@@ -820,9 +820,250 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPlaybackObservationRequiresReadyAdvancingPlayback() {
+        XCTAssertEqual(
+            PlaybackObservationDecision.decide(
+                isPlaybackRequested: true,
+                itemStatus: .unknown,
+                timeControlStatus: .playing,
+                hasConfirmedAdvance: true
+            ),
+            .buffering
+        )
+        XCTAssertEqual(
+            PlaybackObservationDecision.decide(
+                isPlaybackRequested: true,
+                itemStatus: .readyToPlay,
+                timeControlStatus: .waitingToPlayAtSpecifiedRate,
+                hasConfirmedAdvance: true
+            ),
+            .buffering
+        )
+        XCTAssertEqual(
+            PlaybackObservationDecision.decide(
+                isPlaybackRequested: true,
+                itemStatus: .readyToPlay,
+                timeControlStatus: .playing,
+                hasConfirmedAdvance: false
+            ),
+            .buffering
+        )
+        XCTAssertEqual(
+            PlaybackObservationDecision.decide(
+                isPlaybackRequested: true,
+                itemStatus: .readyToPlay,
+                timeControlStatus: .playing,
+                hasConfirmedAdvance: true
+            ),
+            .playing
+        )
+        XCTAssertEqual(
+            PlaybackObservationDecision.decide(
+                isPlaybackRequested: false,
+                itemStatus: .readyToPlay,
+                timeControlStatus: .playing,
+                hasConfirmedAdvance: true
+            ),
+            .paused
+        )
+    }
+
+    func testPlaybackWatchdogBuffersThenRecoversAtExactDeadlines() {
+        XCTAssertEqual(
+            PlaybackWatchdogDecision.decide(
+                isPlaybackRequested: true,
+                lastConfirmedAdvanceAt: 100,
+                now: 101.99
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            PlaybackWatchdogDecision.decide(
+                isPlaybackRequested: true,
+                lastConfirmedAdvanceAt: 100,
+                now: 102
+            ),
+            .showBuffering
+        )
+        XCTAssertEqual(
+            PlaybackWatchdogDecision.decide(
+                isPlaybackRequested: true,
+                lastConfirmedAdvanceAt: 100,
+                now: 112
+            ),
+            .recover
+        )
+        XCTAssertEqual(
+            PlaybackWatchdogDecision.decide(
+                isPlaybackRequested: false,
+                lastConfirmedAdvanceAt: 100,
+                now: 200
+            ),
+            .none
+        )
+    }
+
+    func testPlaybackRecoveryPolicyBoundsRebuildAndSessionReplacement() {
+        var streamingPolicy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            streamingPolicy.action(
+                for: .stalled,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .rebuildCurrentSource
+        )
+        XCTAssertEqual(
+            streamingPolicy.action(
+                for: .itemFailure,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .reopenSession(.automatic)
+        )
+        XCTAssertEqual(
+            streamingPolicy.action(
+                for: .missingSession,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .fail
+        )
+
+        var hlsPolicy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            hlsPolicy.action(
+                for: .itemFailure,
+                isStreaming: true,
+                isTranscoded: true
+            ),
+            .rebuildCurrentSource
+        )
+        XCTAssertEqual(
+            hlsPolicy.action(
+                for: .itemFailure,
+                isStreaming: true,
+                isTranscoded: true
+            ),
+            .reopenSession(.automatic)
+        )
+        XCTAssertEqual(
+            hlsPolicy.action(
+                for: .itemFailure,
+                isStreaming: true,
+                isTranscoded: true
+            ),
+            .fail
+        )
+
+        var localPolicy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            localPolicy.action(
+                for: .stalled,
+                isStreaming: false,
+                isTranscoded: false
+            ),
+            .rebuildCurrentSource
+        )
+        XCTAssertEqual(
+            localPolicy.action(
+                for: .itemFailure,
+                isStreaming: false,
+                isTranscoded: false
+            ),
+            .fail
+        )
+        localPolicy.sustainedPlaybackConfirmed()
+        XCTAssertEqual(
+            localPolicy.action(
+                for: .stalled,
+                isStreaming: false,
+                isTranscoded: false
+            ),
+            .rebuildCurrentSource
+        )
+    }
+
+    func testPlaybackRecoveryPolicyForcesTranscodeOnceForDecoderFailure() {
+        var policy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            policy.action(
+                for: .decoderFailure,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .reopenSession(.transcode)
+        )
+        XCTAssertEqual(
+            policy.action(
+                for: .decoderFailure,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .fail
+        )
+        XCTAssertEqual(
+            policy.action(
+                for: .missingSession,
+                isStreaming: true,
+                isTranscoded: true
+            ),
+            .reopenSession(.automatic)
+        )
+
+        var transcodedPolicy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            transcodedPolicy.action(
+                for: .decoderFailure,
+                isStreaming: true,
+                isTranscoded: true
+            ),
+            .fail
+        )
+    }
+
+    func testPlaybackItemFailureClassificationUsesTypedCodesOnly() {
+        let decoderError = NSError(
+            domain: AVFoundationErrorDomain,
+            code: AVError.Code.decoderNotFound.rawValue
+        )
+        XCTAssertEqual(
+            PlaybackItemFailureClassifier.classify(
+                error: decoderError,
+                errorLogStatusCodes: []
+            ),
+            .decoderFailure
+        )
+        XCTAssertEqual(
+            PlaybackItemFailureClassifier.classify(
+                error: nil,
+                errorLogStatusCodes: [404]
+            ),
+            .missingSession
+        )
+        XCTAssertEqual(
+            PlaybackItemFailureClassifier.classify(
+                error: NSError(
+                    domain: "TestError",
+                    code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "decoder failed after a 404"
+                    ]
+                ),
+                errorLogStatusCodes: []
+            ),
+            .itemFailure
+        )
+    }
+
     func testMediaServicesResetIntentOnlyRecoversStablePlaybackStates() {
         XCTAssertEqual(
             PlaybackMediaServicesResetIntent.decide(for: .playing),
+            .play
+        )
+        XCTAssertEqual(
+            PlaybackMediaServicesResetIntent.decide(for: .buffering),
             .play
         )
         XCTAssertEqual(
@@ -907,7 +1148,10 @@ final class AppModelTests: XCTestCase {
                 accountID: fixture.accountID,
                 account: nil
             )
-            XCTAssertEqual(playback.state, .playing)
+            XCTAssertTrue(playback.isPlaybackRequested)
+            XCTAssertTrue(
+                playback.state == .buffering || playback.state == .playing
+            )
             playback.setRate(1.35)
             if !shouldPlay {
                 playback.pause()
@@ -916,10 +1160,15 @@ final class AppModelTests: XCTestCase {
 
             await playback.handleMediaServicesReset()
 
-            XCTAssertEqual(
-                playback.state,
-                shouldPlay ? .playing : .paused
-            )
+            XCTAssertEqual(playback.isPlaybackRequested, shouldPlay)
+            if shouldPlay {
+                XCTAssertTrue(
+                    playback.state == .buffering
+                        || playback.state == .playing
+                )
+            } else {
+                XCTAssertEqual(playback.state, .paused)
+            }
             XCTAssertEqual(playback.rate, 1.35, accuracy: 0.001)
             XCTAssertEqual(activation.callCount, 2)
         }
@@ -949,7 +1198,10 @@ final class AppModelTests: XCTestCase {
 
         await playback.handleMediaServicesReset()
 
-        XCTAssertEqual(playback.state, .playing)
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertTrue(
+            playback.state == .buffering || playback.state == .playing
+        )
         XCTAssertEqual(playback.currentAudioFileIndex, 1)
         XCTAssertEqual(playback.currentTime, boundary, accuracy: 0.1)
     }
@@ -977,7 +1229,10 @@ final class AppModelTests: XCTestCase {
             accountID: fixture.accountID,
             account: nil
         )
-        XCTAssertEqual(playback.state, .playing)
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertTrue(
+            playback.state == .buffering || playback.state == .playing
+        )
 
         await playback.handleMediaServicesReset()
 
@@ -2167,6 +2422,53 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(detailRequests.isEmpty)
     }
 
+    func testPlaybackStartRequestsAutomaticServerPreference() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let account = try fixtureAccount()
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "session"),
+            itemID: fixture.detail.id,
+            title: fixture.detail.title,
+            duration: 1,
+            currentTime: 0,
+            chapters: fixture.detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: fixture.audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(preparation)]
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+
+        await playback.start(detail: fixture.detail, account: account)
+
+        let requests = await service.playbackOpenRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                PlaybackOpenRequest(
+                    accountID: account.id,
+                    itemID: fixture.detail.id,
+                    preference: .automatic
+                )
+            ]
+        )
+        await playback.stop()
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -2664,6 +2966,7 @@ private struct PlaybackRecoveryFixture {
 
     func model(
         activation: TestAudioSessionActivation,
+        service: TestAppService? = nil,
         queuePlanning:
             @escaping @MainActor @Sendable (
                 AppPlaybackPreparation,
@@ -2676,7 +2979,7 @@ private struct PlaybackRecoveryFixture {
             }
     ) -> PlaybackModel {
         PlaybackModel(
-            service: service,
+            service: service ?? self.service,
             positionStore: PlaybackPositionStore(defaults: defaults),
             localSessionStore: LocalPlaybackSessionStore(defaults: defaults),
             bookmarkMutationStore: BookmarkMutationStore(
@@ -2705,6 +3008,12 @@ private struct LoginRequest: Equatable, Sendable {
 private struct ReauthenticationRequest: Equatable, Sendable {
     let accountID: AccountID
     let password: String
+}
+
+private struct PlaybackOpenRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
+    let preference: PlaybackPreference
 }
 
 private struct SearchRequest: Equatable, Sendable {
@@ -2814,6 +3123,8 @@ private actor TestAppService: AppServicing {
     private var progressUpdateResult: Result<Void, AppServiceError>
     private var localSessionSyncResult:
         Result<[LocalPlaybackSessionSyncResult], AppServiceError>
+    private var playbackResults:
+        [Result<AppPlaybackPreparation, AppServiceError>]
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -2828,6 +3139,7 @@ private actor TestAppService: AppServicing {
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
+    private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedCoverReplacementRequests:
@@ -2874,6 +3186,8 @@ private actor TestAppService: AppServicing {
                 [LocalPlaybackSessionSyncResult],
                 AppServiceError
             > = .success([]),
+        playback:
+            [Result<AppPlaybackPreparation, AppServiceError>] = [],
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -2894,6 +3208,7 @@ private actor TestAppService: AppServicing {
         bookDeletionResult = bookDeletion
         progressUpdateResult = progressUpdate
         localSessionSyncResult = localSessionSync
+        playbackResults = playback
         removeAccountResult = removeAccount
         self.loginGate = loginGate
         self.removeGate = removeGate
@@ -3019,9 +3334,20 @@ private actor TestAppService: AppServicing {
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
+        preference: PlaybackPreference,
         deviceInfo: PlaybackDeviceInfo
     ) async throws(AppServiceError) -> AppPlaybackPreparation {
-        throw .playbackSession(.requestFailed)
+        recordedPlaybackOpenRequests.append(
+            PlaybackOpenRequest(
+                accountID: account.id,
+                itemID: itemID,
+                preference: preference
+            )
+        )
+        guard !playbackResults.isEmpty else {
+            throw .playbackSession(.requestFailed)
+        }
+        return try value(from: playbackResults.removeFirst())
     }
 
     func closePlayback(
@@ -3270,6 +3596,10 @@ private actor TestAppService: AppServicing {
 
     func bookDetailRequests() -> [BookDetailRequest] {
         recordedBookDetailRequests
+    }
+
+    func playbackOpenRequests() -> [PlaybackOpenRequest] {
+        recordedPlaybackOpenRequests
     }
 
     func bookmarkRequests() -> [BookmarkRequest] {

@@ -28,18 +28,24 @@ struct MiniPlayerView: View {
                 ProgressView()
                     .accessibilityIdentifier("player.preparing")
             } else {
+                if playback.state == .buffering {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Buffering")
+                        .accessibilityIdentifier("player.buffering")
+                }
                 Button {
                     playback.togglePlayback()
                 } label: {
                     Image(
-                        systemName: playback.isPlaying
+                        systemName: playback.isPlaybackRequested
                             ? "pause.fill"
                             : "play.fill"
                     )
                     .font(.title2)
                 }
                 .accessibilityLabel(
-                    playback.isPlaying ? "Pause" : "Play"
+                    playback.isPlaybackRequested ? "Pause" : "Play"
                 )
                 .accessibilityIdentifier("player.mini.toggle")
             }
@@ -202,16 +208,27 @@ struct PlayerView: View {
                         Button {
                             playback.togglePlayback()
                         } label: {
-                            Image(
-                                systemName: playback.isPlaying
-                                    ? "pause.circle.fill"
-                                    : "play.circle.fill"
-                            )
-                            .font(.system(size: 64))
+                            ZStack(alignment: .topTrailing) {
+                                Image(
+                                    systemName:
+                                        playback.isPlaybackRequested
+                                        ? "pause.circle.fill"
+                                        : "play.circle.fill"
+                                )
+                                .font(.system(size: 64))
+                                if playback.state == .buffering {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .accessibilityLabel("Buffering")
+                                        .accessibilityIdentifier(
+                                            "player.full.buffering"
+                                        )
+                                }
+                            }
                         }
                         .disabled(playback.state == .preparing)
                         .accessibilityLabel(
-                            playback.isPlaying ? "Pause" : "Play"
+                            playback.isPlaybackRequested ? "Pause" : "Play"
                         )
                         .accessibilityIdentifier("player.toggle")
 

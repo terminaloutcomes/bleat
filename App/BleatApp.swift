@@ -158,6 +158,7 @@ private struct UnavailableAppService: AppServicing {
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
+        preference: PlaybackPreference,
         deviceInfo: PlaybackDeviceInfo
     ) async throws(AppServiceError) -> AppPlaybackPreparation {
         throw .accountStore(.persistenceFailed)

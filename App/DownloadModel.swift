@@ -542,6 +542,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         case .playbackReleasedBandwidth:
             await setAutomaticDownloadsBlocked(false, for: key)
+            if let latest = latestAutomaticProgress[key] {
+                await handleAutomaticPlaybackActivity(latest)
+            }
             return
         case .progress:
             latestAutomaticProgress[key] = activity
