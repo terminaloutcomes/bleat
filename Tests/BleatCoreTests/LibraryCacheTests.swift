@@ -69,6 +69,17 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let userID = UserID(rawValue: "user")
+        let detail = Self.detail(
+            libraryID: second.id,
+            itemID: "second-item",
+            userID: userID
+        )
+        try await fixture.cache.saveBookDetail(
+            detail,
+            userID: userID,
+            accountID: accountID
+        )
 
         try await fixture.cache.replaceLibraries(
             [first],
@@ -91,10 +102,17 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: second.id,
             accountID: accountID
         )
+        let deletedDetail = try await fixture.cache.bookDetail(
+            for: detail.id,
+            in: second.id,
+            userID: userID,
+            accountID: accountID
+        )
         XCTAssertEqual(libraries?.libraries, [first])
         XCTAssertNil(deletedPage)
         XCTAssertNil(deletedSearch)
         XCTAssertNil(deletedHome)
+        XCTAssertNil(deletedDetail)
     }
 
     func testPageCacheIsAccountLibraryAndQueryScopedAcrossRelaunch()
@@ -564,6 +582,33 @@ final class LibraryCacheTests: XCTestCase {
         } catch {
             XCTAssertEqual(error, .invalidPage)
         }
+
+        let detail = Self.detail(
+            libraryID: libraryID,
+            itemID: "item",
+            userID: UserID(rawValue: "user")
+        )
+        do {
+            try await fixture.cache.saveBookDetail(
+                detail,
+                userID: UserID(rawValue: "other-user"),
+                accountID: accountID
+            )
+            XCTFail("Expected mismatched detail user rejection")
+        } catch {
+            XCTAssertEqual(error, .invalidBookDetail)
+        }
+        do {
+            _ = try await fixture.cache.bookDetail(
+                for: detail.id,
+                in: libraryID,
+                userID: UserID(rawValue: ""),
+                accountID: accountID
+            )
+            XCTFail("Expected empty detail user rejection")
+        } catch {
+            XCTAssertEqual(error, .invalidUserID)
+        }
     }
 
     func testCorruptedStoredRecordsRemainTyped() async throws {
@@ -692,6 +737,123 @@ final class LibraryCacheTests: XCTestCase {
         } catch {
             XCTAssertEqual(error, .invalidStoredHomeShelves)
         }
+
+        let detail = Self.detail(
+            libraryID: LibraryID(rawValue: "library"),
+            itemID: "item",
+            userID: UserID(rawValue: "user")
+        )
+        try await fixture.cache.saveBookDetail(
+            detail,
+            userID: UserID(rawValue: "user"),
+            accountID: AccountID(rawValue: "detail-account")
+        )
+        let detailContext = ModelContext(fixture.container)
+        let detailRecords = try detailContext.fetch(
+            FetchDescriptor<CachedLibraryBookDetailRecord>()
+        )
+        try XCTUnwrap(detailRecords.first {
+            $0.accountID == "detail-account"
+        }).payload = Data("not-json".utf8)
+        try detailContext.save()
+        do {
+            _ = try await relaunched.bookDetail(
+                for: detail.id,
+                in: detail.libraryID,
+                userID: UserID(rawValue: "user"),
+                accountID: AccountID(rawValue: "detail-account")
+            )
+            XCTFail("Expected corrupt detail payload")
+        } catch {
+            XCTAssertEqual(error, .invalidStoredBookDetail)
+        }
+    }
+
+    func testBookDetailCacheIsAccountUserLibraryAndItemScoped()
+        async throws
+    {
+        let fixture = try LibraryCacheFixture()
+        let libraryID = LibraryID(rawValue: "library")
+        let itemID = LibraryItemID(rawValue: "item")
+        let accountA = AccountID(rawValue: "account-a")
+        let accountB = AccountID(rawValue: "account-b")
+        let userA = UserID(rawValue: "user-a")
+        let userB = UserID(rawValue: "user-b")
+        let refreshA = Date(timeIntervalSince1970: 10)
+        let detailA = Self.detail(
+            libraryID: libraryID,
+            itemID: itemID.rawValue,
+            userID: userA,
+            title: "Account A"
+        )
+        let detailB = Self.detail(
+            libraryID: libraryID,
+            itemID: itemID.rawValue,
+            userID: userB,
+            title: "Account B"
+        )
+        try await fixture.cache.saveBookDetail(
+            detailA,
+            userID: userA,
+            accountID: accountA,
+            refreshedAt: refreshA
+        )
+        try await fixture.cache.saveBookDetail(
+            detailB,
+            userID: userB,
+            accountID: accountB
+        )
+
+        let relaunched = LibraryCache(modelContainer: fixture.container)
+        let cachedA = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID,
+            userID: userA,
+            accountID: accountA
+        )
+        let wrongUser = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID,
+            userID: userB,
+            accountID: accountA
+        )
+        let wrongLibrary = try await relaunched.bookDetail(
+            for: itemID,
+            in: LibraryID(rawValue: "other"),
+            userID: userA,
+            accountID: accountA
+        )
+        XCTAssertEqual(cachedA?.detail, detailA)
+        XCTAssertEqual(cachedA?.refreshedAt, refreshA)
+        XCTAssertNil(wrongUser)
+        XCTAssertNil(wrongLibrary)
+
+        try await relaunched.invalidateLibrary(
+            libraryID,
+            for: accountA
+        )
+        let invalidatedA = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID,
+            userID: userA,
+            accountID: accountA
+        )
+        let retainedB = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID,
+            userID: userB,
+            accountID: accountB
+        )
+        XCTAssertNil(invalidatedA)
+        XCTAssertEqual(retainedB?.detail, detailB)
+        try await relaunched.removeAccount(accountB)
+        let removedB = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID,
+            userID: userB,
+            accountID: accountB
+        )
+        XCTAssertNil(removedB)
     }
 
     func testInvalidationAndAccountRemovalAreScoped() async throws {
@@ -890,6 +1052,66 @@ final class LibraryCacheTests: XCTestCase {
             ),
         ]
     }
+
+    private static func detail(
+        libraryID: LibraryID,
+        itemID: String,
+        userID: UserID,
+        title: String = "Book"
+    ) -> LibraryBookDetail {
+        let typedItemID = LibraryItemID(rawValue: itemID)
+        let bookID = BookID(rawValue: "book-\(itemID)")
+        return LibraryBookDetail(
+            id: typedItemID,
+            libraryID: libraryID,
+            bookID: bookID,
+            title: title,
+            subtitle: nil,
+            authors: [
+                LibraryBookContributor(id: "author", name: "Author"),
+            ],
+            narrators: ["Narrator"],
+            series: [],
+            genres: ["Fiction"],
+            tags: [],
+            publishedYear: "2024",
+            publishedDate: nil,
+            publisher: nil,
+            descriptionPlain: "Description",
+            isbn: nil,
+            asin: nil,
+            language: "English",
+            duration: 60,
+            trackCount: 1,
+            audioFileCount: 1,
+            chapters: [
+                PlaybackChapter(
+                    id: 0,
+                    start: 0,
+                    end: 60,
+                    title: "Chapter"
+                ),
+            ],
+            addedAtMilliseconds: 1,
+            updatedAtMilliseconds: 2,
+            isExplicit: false,
+            isAbridged: false,
+            progress: LibraryBookProgress(
+                id: "progress-\(userID.rawValue)",
+                userID: userID,
+                libraryItemID: typedItemID,
+                bookID: bookID,
+                duration: 60,
+                progress: 0.5,
+                currentTime: 30,
+                isFinished: false,
+                hideFromContinueListening: false,
+                lastUpdateMilliseconds: 2,
+                startedAtMilliseconds: 1,
+                finishedAtMilliseconds: nil
+            )
+        )
+    }
 }
 
 private struct LibraryCacheFixture {
@@ -903,6 +1125,7 @@ private struct LibraryCacheFixture {
             CachedLibraryPageRecord.self,
             CachedLibrarySearchRecord.self,
             CachedLibraryHomeRecord.self,
+            CachedLibraryBookDetailRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

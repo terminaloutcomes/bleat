@@ -4,6 +4,153 @@ import XCTest
 @testable import BleatCore
 
 final class AudiobookshelfAPITests: XCTestCase {
+    func testBookDetailUsesNativeAccountAndMapsExpandedContract()
+        async throws
+    {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Self.expandedBookDetailJSON(),
+                    statusCode: 200
+                ),
+            ]
+        )
+
+        let result = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        )
+        let requests = await fixture.transport.recordedRequests()
+        let sent = try XCTUnwrap(requests.first)
+        let components = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(sent.url),
+            resolvingAgainstBaseURL: false
+        ))
+        let detail = result.value
+
+        XCTAssertEqual(
+            components.path,
+            "/audiobookshelf/api/items/item"
+        )
+        XCTAssertEqual(components.queryItems, [
+            URLQueryItem(name: "expanded", value: "1"),
+            URLQueryItem(name: "include", value: "progress"),
+        ])
+        XCTAssertEqual(
+            sent.value(forHTTPHeaderField: "Authorization"),
+            "Bearer access-token"
+        )
+        XCTAssertEqual(detail.id, LibraryItemID(rawValue: "item"))
+        XCTAssertEqual(detail.libraryID, LibraryID(rawValue: "library"))
+        XCTAssertEqual(detail.bookID, BookID(rawValue: "book"))
+        XCTAssertEqual(detail.title, "Expanded Book")
+        XCTAssertEqual(detail.subtitle, "A Subtitle")
+        XCTAssertEqual(detail.authors, [
+            LibraryBookContributor(id: "author", name: "An Author"),
+        ])
+        XCTAssertEqual(detail.narrators, ["A Narrator"])
+        XCTAssertEqual(detail.series, [
+            LibraryBookSeries(
+                id: "series",
+                name: "A Series",
+                sequence: "2"
+            ),
+        ])
+        XCTAssertEqual(detail.genres, ["Fiction"])
+        XCTAssertEqual(detail.tags, ["Favourite"])
+        XCTAssertEqual(detail.descriptionPlain, "Safe description")
+        XCTAssertEqual(detail.duration, 120)
+        XCTAssertEqual(detail.trackCount, 1)
+        XCTAssertEqual(detail.audioFileCount, 1)
+        XCTAssertEqual(detail.chapters.count, 2)
+        XCTAssertEqual(detail.chapters[1].title, "Second")
+        XCTAssertEqual(detail.progress?.userID, UserID(rawValue: "user"))
+        XCTAssertEqual(detail.progress?.bookID, BookID(rawValue: "book"))
+        XCTAssertEqual(detail.progress?.currentTime, 30)
+        XCTAssertEqual(detail.progress?.progress, 0.25)
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testBookDetailFailuresRemainTyped() async throws {
+        let invalidCases: [(String, String)] = [
+            ("\"id\": \"item\"", "\"id\": \"other\""),
+            (
+                "\"libraryId\": \"library\"",
+                "\"libraryId\": \"other\""
+            ),
+            ("\"mediaType\": \"book\"", "\"mediaType\": \"podcast\""),
+            (
+                "\"libraryItemId\": \"item\"",
+                "\"libraryItemId\": \"other\""
+            ),
+            ("\"userId\": \"user\"", "\"userId\": \"other\""),
+            ("\"mediaItemId\": \"book\"", "\"mediaItemId\": \"other\""),
+            ("\"numChapters\": 2", "\"numChapters\": 3"),
+            ("\"progress\": 0.25", "\"progress\": 1.25"),
+            ("\"numTracks\": 1", "\"numTracks\": 0"),
+        ]
+        let valid = try XCTUnwrap(String(
+            data: Self.expandedBookDetailJSON(),
+            encoding: .utf8
+        ))
+
+        for (target, replacement) in invalidCases {
+            let fixture = try APIFixture(
+                responses: [
+                    HTTPResponse(
+                        data: Data(
+                            valid.replacingOccurrences(
+                                of: target,
+                                with: replacement
+                            ).utf8
+                        ),
+                        statusCode: 200
+                    ),
+                ]
+            )
+            do {
+                _ = try await fixture.api.bookDetail(
+                    for: LibraryItemID(rawValue: "item"),
+                    in: LibraryID(rawValue: "library")
+                )
+                XCTFail("Expected invalid expanded book detail")
+            } catch {
+                XCTAssertEqual(error, .invalidBookDetail)
+            }
+        }
+
+        let malformed = try APIFixture(responses: [
+            HTTPResponse(data: Data("{".utf8), statusCode: 200),
+        ])
+        do {
+            _ = try await malformed.api.bookDetail(
+                for: LibraryItemID(rawValue: "item"),
+                in: LibraryID(rawValue: "library")
+            )
+            XCTFail("Expected malformed expanded book detail")
+        } catch {
+            XCTAssertEqual(error, .malformedResponse)
+        }
+
+        for (itemID, libraryID, expected) in [
+            ("", "library", AudiobookshelfAPIError.invalidLibraryItem),
+            ("item", "", AudiobookshelfAPIError.invalidLibrary),
+        ] {
+            let fixture = try APIFixture(responses: [])
+            do {
+                _ = try await fixture.api.bookDetail(
+                    for: LibraryItemID(rawValue: itemID),
+                    in: LibraryID(rawValue: libraryID)
+                )
+                XCTFail("Expected invalid request identity")
+            } catch {
+                XCTAssertEqual(error, expected)
+            }
+            let requests = await fixture.transport.recordedRequests()
+            XCTAssertTrue(requests.isEmpty)
+        }
+    }
+
     func testHomeRequestValidationAndExactQueryContract() throws {
         for limit in [0, 101] {
             XCTAssertThrowsError(
@@ -840,6 +987,84 @@ final class AudiobookshelfAPITests: XCTestCase {
           }
         }
         """
+    }
+
+    private static func expandedBookDetailJSON() -> Data {
+        Data(
+            """
+            {
+              "id": "item",
+              "libraryId": "library",
+              "addedAt": 1000,
+              "updatedAt": 2000,
+              "mediaType": "book",
+              "media": {
+                "id": "book",
+                "libraryItemId": "item",
+                "metadata": {
+                  "title": "Expanded Book",
+                  "subtitle": "A Subtitle",
+                  "authors": [{"id": "author", "name": "An Author"}],
+                  "narrators": ["A Narrator"],
+                  "series": [{
+                    "id": "series",
+                    "name": "A Series",
+                    "sequence": "2"
+                  }],
+                  "genres": ["Fiction"],
+                  "publishedYear": "2024",
+                  "publishedDate": "2024-01-02",
+                  "publisher": "A Publisher",
+                  "description": "<p>Safe description</p>",
+                  "descriptionPlain": "Safe description",
+                  "isbn": "9780000000000",
+                  "asin": "B000000000",
+                  "language": "English",
+                  "explicit": false,
+                  "abridged": false,
+                  "futureMetadataField": true
+                },
+                "tags": ["Favourite"],
+                "numTracks": 1,
+                "numAudioFiles": 1,
+                "numChapters": 2,
+                "duration": 120,
+                "chapters": [
+                  {"id": 0, "start": 0, "end": 60, "title": "First"},
+                  {"id": 1, "start": 60, "end": 120, "title": "Second"}
+                ],
+                "tracks": [{
+                  "index": 1,
+                  "startOffset": 0,
+                  "duration": 120,
+                  "title": "book.m4b",
+                  "contentUrl": "/api/items/item/file/inode",
+                  "mimeType": "audio/mp4"
+                }],
+                "futureMediaField": true
+              },
+              "userMediaProgress": {
+                "id": "progress",
+                "userId": "user",
+                "libraryItemId": "item",
+                "episodeId": null,
+                "mediaItemId": "book",
+                "mediaItemType": "book",
+                "duration": 120,
+                "progress": 0.25,
+                "currentTime": 30,
+                "isFinished": false,
+                "hideFromContinueListening": false,
+                "ebookLocation": null,
+                "ebookProgress": 0,
+                "lastUpdate": 3000,
+                "startedAt": 1000,
+                "finishedAt": null
+              },
+              "futureItemField": true
+            }
+            """.utf8
+        )
     }
 }
 

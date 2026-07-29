@@ -21,6 +21,12 @@ public protocol LibraryRemoteDataSource: Sendable {
         request: LibraryHomeRequest
     ) async throws(AudiobookshelfAPIError)
         -> AudiobookshelfAPIResult<[LibraryBookShelf]>
+
+    func bookDetail(
+        for itemID: LibraryItemID,
+        in libraryID: LibraryID
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<LibraryBookDetail>
 }
 
 extension AudiobookshelfAPI: LibraryRemoteDataSource {}
@@ -68,15 +74,18 @@ public enum LibraryRepositoryError: Error, Equatable, Sendable {
 
 public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
     private let accountID: AccountID
+    private let userID: UserID
     private let remote: Remote
     private let cache: LibraryCache
 
     public init(
         accountID: AccountID,
+        userID: UserID,
         remote: Remote,
         cache: LibraryCache
     ) {
         self.accountID = accountID
+        self.userID = userID
         self.remote = remote
         self.cache = cache
     }
@@ -261,6 +270,53 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    public func bookDetail(
+        for itemID: LibraryItemID,
+        in libraryID: LibraryID,
+        policy: LibraryFetchPolicy = .remoteElseCache
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+    {
+        if policy == .cacheOnly {
+            return try await cachedBookDetail(
+                itemID: itemID,
+                libraryID: libraryID
+            )
+        }
+
+        let result: AudiobookshelfAPIResult<LibraryBookDetail>
+        do {
+            result = try await remote.bookDetail(
+                for: itemID,
+                in: libraryID
+            )
+        } catch let error {
+            return try await fallbackBookDetail(
+                itemID: itemID,
+                libraryID: libraryID,
+                after: error,
+                policy: policy
+            )
+        }
+        let refreshedAt = Date()
+        do {
+            try await cache.saveBookDetail(
+                result.value,
+                userID: userID,
+                accountID: accountID,
+                refreshedAt: refreshedAt
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        return LibraryRepositoryResult(
+            value: result.value,
+            source: .remote,
+            refreshedAt: refreshedAt,
+            correlationID: result.correlationID
+        )
+    }
+
     private func cachedLibraries()
         async throws(LibraryRepositoryError)
         -> LibraryRepositoryResult<[LibrarySummary]>
@@ -363,6 +419,34 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         )
     }
 
+    private func cachedBookDetail(
+        itemID: LibraryItemID,
+        libraryID: LibraryID
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+    {
+        let cached: CachedLibraryBookDetailSnapshot?
+        do {
+            cached = try await cache.bookDetail(
+                for: itemID,
+                in: libraryID,
+                userID: userID,
+                accountID: accountID
+            )
+        } catch let error {
+            throw .cache(error)
+        }
+        guard let snapshot = cached else {
+            throw .noCachedValue
+        }
+        return LibraryRepositoryResult(
+            value: snapshot.detail,
+            source: .cache,
+            refreshedAt: snapshot.refreshedAt,
+            correlationID: nil
+        )
+    }
+
     private func fallbackLibraries(
         after remoteError: AudiobookshelfAPIError,
         policy: LibraryFetchPolicy
@@ -456,6 +540,33 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         do {
             return try await cachedHomeShelves(
                 request: request,
+                libraryID: libraryID
+            )
+        } catch let cacheError {
+            throw fallbackError(
+                remote: remoteError,
+                cache: cacheError
+            )
+        }
+    }
+
+    private func fallbackBookDetail(
+        itemID: LibraryItemID,
+        libraryID: LibraryID,
+        after remoteError: AudiobookshelfAPIError,
+        policy: LibraryFetchPolicy
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+    {
+        if remoteError == .cancelled || Task.isCancelled {
+            throw .cancelled
+        }
+        guard policy == .remoteElseCache else {
+            throw .remote(remoteError)
+        }
+        do {
+            return try await cachedBookDetail(
+                itemID: itemID,
                 libraryID: libraryID
             )
         } catch let cacheError {

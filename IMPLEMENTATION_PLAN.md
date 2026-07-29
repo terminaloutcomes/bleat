@@ -324,8 +324,10 @@ path-prefixed servers. The typed API actor now performs cancellable,
 correlated, authenticated library listing with isolated DTO mapping. Paginated
 book-summary DTOs and exact query construction are also verified against a
 pinned fixture and live root/path-prefixed servers. Authenticated book search
-now validates and maps expanded matches without exposing DTOs. Expanded item
-detail DTOs, permissions, diagnostics, and application UI remain.
+now validates and maps expanded matches without exposing DTOs. Expanded
+audiobook detail DTOs, chapters, and authenticated-user progress are also
+verified against unit fixtures and live root/path-prefixed servers.
+Permissions, diagnostics, and application UI remain.
 
 Deliver:
 
@@ -366,8 +368,10 @@ same account-scoped persistence and cancellation rules. A deterministic 300 ms
 coordinator cancels and suppresses superseded query, account, and library work.
 The native API also loads validated audiobook-only personalized shelves, which
 persist by exact account, library, limit, and progress request with typed
-online-first/cache-fallback behavior. Search and home presentation, expanded
-details, cover caching, performance validation, and SwiftUI remain.
+online-first/cache-fallback behavior. Expanded audiobook details, chapters,
+metadata, and progress now use the same policy with cache keys scoped to the
+account, remote user, library, and item. Search, home, and detail presentation,
+bookmarks, cover caching, performance validation, and SwiftUI remain.
 
 Deliver:
 

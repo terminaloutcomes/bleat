@@ -112,6 +112,36 @@ public final class CachedLibraryHomeRecord {
     }
 }
 
+@Model
+public final class CachedLibraryBookDetailRecord {
+    @Attribute(.unique)
+    var cacheKey: String
+    var accountID: String
+    var userID: String
+    var libraryID: String
+    var libraryItemID: String
+    var payload: Data
+    var refreshedAt: Date
+
+    init(
+        cacheKey: String,
+        accountID: String,
+        userID: String,
+        libraryID: String,
+        libraryItemID: String,
+        payload: Data,
+        refreshedAt: Date
+    ) {
+        self.cacheKey = cacheKey
+        self.accountID = accountID
+        self.userID = userID
+        self.libraryID = libraryID
+        self.libraryItemID = libraryItemID
+        self.payload = payload
+        self.refreshedAt = refreshedAt
+    }
+}
+
 public struct CachedLibrariesSnapshot: Equatable, Sendable {
     public let libraries: [LibrarySummary]
     public let refreshedAt: Date
@@ -132,8 +162,14 @@ public struct CachedLibraryHomeSnapshot: Equatable, Sendable {
     public let refreshedAt: Date
 }
 
+public struct CachedLibraryBookDetailSnapshot: Equatable, Sendable {
+    public let detail: LibraryBookDetail
+    public let refreshedAt: Date
+}
+
 public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidAccountID
+    case invalidUserID
     case invalidLibraryID
     case invalidLibrary
     case duplicateLibraryID(LibraryID)
@@ -144,6 +180,8 @@ public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidStoredSearchResults
     case invalidHomeShelves
     case invalidStoredHomeShelves
+    case invalidBookDetail
+    case invalidStoredBookDetail
     case encodingFailed
     case persistenceFailed
 }
@@ -201,6 +239,13 @@ public actor LibraryCache {
                 && !retainedIDs.contains(home.libraryID)
         {
             modelContext.delete(home)
+        }
+        let details = try detailRecords()
+        for detail in details
+            where detail.accountID == accountID.rawValue
+                && !retainedIDs.contains(detail.libraryID)
+        {
+            modelContext.delete(detail)
         }
 
         for (position, library) in libraries.enumerated() {
@@ -541,6 +586,106 @@ public actor LibraryCache {
         )
     }
 
+    public func saveBookDetail(
+        _ detail: LibraryBookDetail,
+        userID: UserID,
+        accountID: AccountID,
+        refreshedAt: Date = Date()
+    ) throws(LibraryCacheError) {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !userID.rawValue.isEmpty else {
+            throw .invalidUserID
+        }
+        guard !detail.libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        guard detail.isValidForStorage(
+            in: detail.libraryID,
+            for: userID
+        ) else {
+            throw .invalidBookDetail
+        }
+        let key = Self.detailKey(
+            accountID: accountID,
+            userID: userID,
+            libraryID: detail.libraryID,
+            itemID: detail.id
+        )
+        let payload = try encode(detail)
+        let records = try detailRecords()
+        if let record = records.first(where: { $0.cacheKey == key }) {
+            record.payload = payload
+            record.refreshedAt = refreshedAt
+        } else {
+            modelContext.insert(CachedLibraryBookDetailRecord(
+                cacheKey: key,
+                accountID: accountID.rawValue,
+                userID: userID.rawValue,
+                libraryID: detail.libraryID.rawValue,
+                libraryItemID: detail.id.rawValue,
+                payload: payload,
+                refreshedAt: refreshedAt
+            ))
+        }
+        try save()
+    }
+
+    public func bookDetail(
+        for itemID: LibraryItemID,
+        in libraryID: LibraryID,
+        userID: UserID,
+        accountID: AccountID
+    ) throws(LibraryCacheError) -> CachedLibraryBookDetailSnapshot? {
+        guard !accountID.rawValue.isEmpty else {
+            throw .invalidAccountID
+        }
+        guard !userID.rawValue.isEmpty else {
+            throw .invalidUserID
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibraryID
+        }
+        guard !itemID.rawValue.isEmpty else {
+            throw .invalidBookDetail
+        }
+        let key = Self.detailKey(
+            accountID: accountID,
+            userID: userID,
+            libraryID: libraryID,
+            itemID: itemID
+        )
+        guard let record = try detailRecords().first(where: {
+            $0.cacheKey == key
+        }) else {
+            return nil
+        }
+        let detail: LibraryBookDetail
+        do {
+            detail = try JSONDecoder().decode(
+                LibraryBookDetail.self,
+                from: record.payload
+            )
+        } catch {
+            throw .invalidStoredBookDetail
+        }
+        guard detail.id == itemID,
+              detail.libraryID == libraryID,
+              record.accountID == accountID.rawValue,
+              record.userID == userID.rawValue,
+              record.libraryID == libraryID.rawValue,
+              record.libraryItemID == itemID.rawValue,
+              detail.isValidForStorage(in: libraryID, for: userID)
+        else {
+            throw .invalidStoredBookDetail
+        }
+        return CachedLibraryBookDetailSnapshot(
+            detail: detail,
+            refreshedAt: record.refreshedAt
+        )
+    }
+
     public func invalidateLibrary(
         _ libraryID: LibraryID,
         for accountID: AccountID
@@ -564,6 +709,12 @@ public actor LibraryCache {
             modelContext.delete(record)
         }
         for record in try homeRecords()
+            where record.accountID == accountID.rawValue
+                && record.libraryID == libraryID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try detailRecords()
             where record.accountID == accountID.rawValue
                 && record.libraryID == libraryID.rawValue
         {
@@ -599,6 +750,11 @@ public actor LibraryCache {
             modelContext.delete(record)
         }
         for record in try homeRecords()
+            where record.accountID == accountID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try detailRecords()
             where record.accountID == accountID.rawValue
         {
             modelContext.delete(record)
@@ -666,6 +822,18 @@ public actor LibraryCache {
         }
     }
 
+    private func detailRecords() throws(LibraryCacheError)
+        -> [CachedLibraryBookDetailRecord]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<CachedLibraryBookDetailRecord>()
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     private func encode<Value: Encodable>(
         _ value: Value
     ) throws(LibraryCacheError) -> Data {
@@ -727,6 +895,20 @@ public actor LibraryCache {
             libraryID.rawValue,
             String(request.limit),
             request.includeProgress ? "1" : "0",
+        ])
+    }
+
+    private static func detailKey(
+        accountID: AccountID,
+        userID: UserID,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) -> String {
+        key([
+            accountID.rawValue,
+            userID.rawValue,
+            libraryID.rawValue,
+            itemID.rawValue,
         ])
     }
 

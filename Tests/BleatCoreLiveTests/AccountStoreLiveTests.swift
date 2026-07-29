@@ -88,6 +88,11 @@ final class AccountStoreLiveTests: XCTestCase {
                 sort: .title
             )
         )
+        let firstItem = try XCTUnwrap(firstPage.value.items.first)
+        let detail = try await api.bookDetail(
+            for: firstItem.id,
+            in: seededLibrary.id
+        )
         let search = try await api.search(
             in: seededLibrary.id,
             request: try LibrarySearchRequest(
@@ -115,6 +120,11 @@ final class AccountStoreLiveTests: XCTestCase {
                     && $0.duration > 0
             }
         )
+        XCTAssertEqual(detail.value.id, firstItem.id)
+        XCTAssertEqual(detail.value.libraryID, seededLibrary.id)
+        XCTAssertEqual(detail.value.title, firstItem.title)
+        XCTAssertGreaterThan(detail.value.trackCount, 0)
+        XCTAssertGreaterThan(detail.value.duration, 0)
         XCTAssertEqual(search.value.count, 1)
         XCTAssertEqual(search.value.first?.title, "direct")
         XCTAssertEqual(

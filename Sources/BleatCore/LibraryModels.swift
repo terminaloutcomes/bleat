@@ -270,6 +270,253 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let isAbridged: Bool
 }
 
+public struct LibraryBookContributor: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+public struct LibraryBookSeries: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let sequence: String?
+
+    public init(id: String, name: String, sequence: String?) {
+        self.id = id
+        self.name = name
+        self.sequence = sequence
+    }
+}
+
+public struct LibraryBookProgress: Codable, Hashable, Sendable {
+    public let id: String
+    public let userID: UserID
+    public let libraryItemID: LibraryItemID
+    public let bookID: BookID
+    public let duration: Double
+    public let progress: Double
+    public let currentTime: Double
+    public let isFinished: Bool
+    public let hideFromContinueListening: Bool
+    public let lastUpdateMilliseconds: Int64
+    public let startedAtMilliseconds: Int64
+    public let finishedAtMilliseconds: Int64?
+
+    public init(
+        id: String,
+        userID: UserID,
+        libraryItemID: LibraryItemID,
+        bookID: BookID,
+        duration: Double,
+        progress: Double,
+        currentTime: Double,
+        isFinished: Bool,
+        hideFromContinueListening: Bool,
+        lastUpdateMilliseconds: Int64,
+        startedAtMilliseconds: Int64,
+        finishedAtMilliseconds: Int64?
+    ) {
+        self.id = id
+        self.userID = userID
+        self.libraryItemID = libraryItemID
+        self.bookID = bookID
+        self.duration = duration
+        self.progress = progress
+        self.currentTime = currentTime
+        self.isFinished = isFinished
+        self.hideFromContinueListening = hideFromContinueListening
+        self.lastUpdateMilliseconds = lastUpdateMilliseconds
+        self.startedAtMilliseconds = startedAtMilliseconds
+        self.finishedAtMilliseconds = finishedAtMilliseconds
+    }
+}
+
+public struct LibraryBookDetail: Codable, Hashable, Sendable {
+    public let id: LibraryItemID
+    public let libraryID: LibraryID
+    public let bookID: BookID
+    public let title: String
+    public let subtitle: String?
+    public let authors: [LibraryBookContributor]
+    public let narrators: [String]
+    public let series: [LibraryBookSeries]
+    public let genres: [String]
+    public let tags: [String]
+    public let publishedYear: String?
+    public let publishedDate: String?
+    public let publisher: String?
+    public let descriptionPlain: String?
+    public let isbn: String?
+    public let asin: String?
+    public let language: String?
+    public let duration: Double
+    public let trackCount: Int
+    public let audioFileCount: Int
+    public let chapters: [PlaybackChapter]
+    public let addedAtMilliseconds: Int64
+    public let updatedAtMilliseconds: Int64
+    public let isExplicit: Bool
+    public let isAbridged: Bool
+    public let progress: LibraryBookProgress?
+
+    public init(
+        id: LibraryItemID,
+        libraryID: LibraryID,
+        bookID: BookID,
+        title: String,
+        subtitle: String?,
+        authors: [LibraryBookContributor],
+        narrators: [String],
+        series: [LibraryBookSeries],
+        genres: [String],
+        tags: [String],
+        publishedYear: String?,
+        publishedDate: String?,
+        publisher: String?,
+        descriptionPlain: String?,
+        isbn: String?,
+        asin: String?,
+        language: String?,
+        duration: Double,
+        trackCount: Int,
+        audioFileCount: Int,
+        chapters: [PlaybackChapter],
+        addedAtMilliseconds: Int64,
+        updatedAtMilliseconds: Int64,
+        isExplicit: Bool,
+        isAbridged: Bool,
+        progress: LibraryBookProgress?
+    ) {
+        self.id = id
+        self.libraryID = libraryID
+        self.bookID = bookID
+        self.title = title
+        self.subtitle = subtitle
+        self.authors = authors
+        self.narrators = narrators
+        self.series = series
+        self.genres = genres
+        self.tags = tags
+        self.publishedYear = publishedYear
+        self.publishedDate = publishedDate
+        self.publisher = publisher
+        self.descriptionPlain = descriptionPlain
+        self.isbn = isbn
+        self.asin = asin
+        self.language = language
+        self.duration = duration
+        self.trackCount = trackCount
+        self.audioFileCount = audioFileCount
+        self.chapters = chapters
+        self.addedAtMilliseconds = addedAtMilliseconds
+        self.updatedAtMilliseconds = updatedAtMilliseconds
+        self.isExplicit = isExplicit
+        self.isAbridged = isAbridged
+        self.progress = progress
+    }
+}
+
+extension LibraryBookDetail {
+    func isValidForStorage(
+        in libraryID: LibraryID,
+        for userID: UserID
+    ) -> Bool {
+        !id.rawValue.isEmpty
+            && self.libraryID == libraryID
+            && !bookID.rawValue.isEmpty
+            && Self.isValidDisplayString(title)
+            && Self.isValidOptionalString(subtitle)
+            && authors.allSatisfy {
+                Self.isValidDisplayString($0.id)
+                    && Self.isValidDisplayString($0.name)
+            }
+            && narrators.allSatisfy(Self.isValidDisplayString)
+            && series.allSatisfy {
+                Self.isValidDisplayString($0.id)
+                    && Self.isValidDisplayString($0.name)
+                    && Self.isValidOptionalString($0.sequence)
+            }
+            && genres.allSatisfy(Self.isValidDisplayString)
+            && tags.allSatisfy(Self.isValidDisplayString)
+            && Self.isValidOptionalString(publishedYear)
+            && Self.isValidOptionalString(publishedDate)
+            && Self.isValidOptionalString(publisher)
+            && Self.isValidOptionalString(descriptionPlain)
+            && Self.isValidOptionalString(isbn)
+            && Self.isValidOptionalString(asin)
+            && Self.isValidOptionalString(language)
+            && duration.isFinite
+            && duration > 0
+            && trackCount > 0
+            && audioFileCount >= trackCount
+            && addedAtMilliseconds >= 0
+            && updatedAtMilliseconds >= 0
+            && Self.areValid(chapters: chapters, duration: duration)
+            && Self.isValid(
+                progress: progress,
+                itemID: id,
+                bookID: bookID,
+                userID: userID
+            )
+    }
+
+    private static func areValid(
+        chapters: [PlaybackChapter],
+        duration: Double
+    ) -> Bool {
+        var chapterIDs: Set<Int> = []
+        return chapters.allSatisfy { chapter in
+            chapterIDs.insert(chapter.id).inserted
+                && chapter.start.isFinite
+                && chapter.start >= 0
+                && chapter.start <= duration
+                && chapter.end.isFinite
+                && chapter.end >= chapter.start
+                && isValidOptionalString(chapter.title)
+        }
+    }
+
+    private static func isValid(
+        progress: LibraryBookProgress?,
+        itemID: LibraryItemID,
+        bookID: BookID,
+        userID: UserID
+    ) -> Bool {
+        guard let progress else {
+            return true
+        }
+        return isValidDisplayString(progress.id)
+            && progress.userID == userID
+            && progress.libraryItemID == itemID
+            && progress.bookID == bookID
+            && progress.duration.isFinite
+            && progress.duration >= 0
+            && progress.progress.isFinite
+            && (0 ... 1).contains(progress.progress)
+            && progress.currentTime.isFinite
+            && progress.currentTime >= 0
+            && progress.lastUpdateMilliseconds >= 0
+            && progress.startedAtMilliseconds >= 0
+            && (progress.finishedAtMilliseconds ?? 0) >= 0
+    }
+
+    private static func isValidDisplayString(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isValidOptionalString(_ value: String?) -> Bool {
+        guard let value else {
+            return true
+        }
+        return value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
 extension LibraryBookSummary {
     func isValidForStorage(in libraryID: LibraryID) -> Bool {
         !id.rawValue.isEmpty

@@ -19,6 +19,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: remote,
             cache: fixture.cache
         )
@@ -51,6 +52,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let relaunched = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: offline,
             cache: relaunchedCache
         )
@@ -105,6 +107,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: remote,
             cache: fixture.cache
         )
@@ -131,6 +134,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: AccountID(rawValue: "account"),
+            userID: UserID(rawValue: "user"),
             remote: remote,
             cache: fixture.cache
         )
@@ -160,6 +164,7 @@ final class LibraryRepositoryTests: XCTestCase {
         let remoteError = AudiobookshelfAPIError.unexpectedStatus(500)
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 libraries: [.failure(remoteError)]
             ),
@@ -183,6 +188,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 libraries: [.failure(.cancelled)]
             ),
@@ -218,6 +224,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: online,
             cache: fixture.cache
         )
@@ -237,6 +244,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let relaunched = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: offline,
             cache: LibraryCache(modelContainer: fixture.container)
         )
@@ -286,6 +294,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 searches: [.failure(.cancelled)]
             ),
@@ -317,6 +326,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: online,
             cache: fixture.cache
         )
@@ -336,6 +346,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let relaunched = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: offline,
             cache: LibraryCache(modelContainer: fixture.container)
         )
@@ -375,6 +386,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let repository = LibraryRepository(
             accountID: accountID,
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 homes: [.failure(.cancelled)]
             ),
@@ -392,6 +404,101 @@ final class LibraryRepositoryTests: XCTestCase {
         }
     }
 
+    func testBookDetailPersistsUserScopedAndFallsBackAfterRelaunch()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let userID = UserID(rawValue: "user")
+        let libraryID = LibraryID(rawValue: "library")
+        let itemID = LibraryItemID(rawValue: "item")
+        let detail = Self.detail(userID: userID)
+        let correlationID = APICorrelationID()
+        let online = RepositoryRemote(
+            details: [.success(detail, correlationID)]
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            userID: userID,
+            remote: online,
+            cache: fixture.cache
+        )
+
+        let remote = try await repository.bookDetail(
+            for: itemID,
+            in: libraryID,
+            policy: .remoteOnly
+        )
+        XCTAssertEqual(remote.value, detail)
+        XCTAssertEqual(remote.source, .remote)
+        XCTAssertEqual(remote.correlationID, correlationID)
+
+        let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
+        let relaunched = LibraryRepository(
+            accountID: accountID,
+            userID: userID,
+            remote: RepositoryRemote(
+                details: [.failure(offlineError)]
+            ),
+            cache: LibraryCache(modelContainer: fixture.container)
+        )
+        let fallback = try await relaunched.bookDetail(
+            for: itemID,
+            in: libraryID
+        )
+        XCTAssertEqual(fallback.value, detail)
+        XCTAssertEqual(fallback.source, .cache)
+        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
+        XCTAssertNil(fallback.correlationID)
+
+        let otherUser = LibraryRepository(
+            accountID: accountID,
+            userID: UserID(rawValue: "other-user"),
+            remote: RepositoryRemote(),
+            cache: LibraryCache(modelContainer: fixture.container)
+        )
+        do {
+            _ = try await otherUser.bookDetail(
+                for: itemID,
+                in: libraryID,
+                policy: .cacheOnly
+            )
+            XCTFail("Expected user-scoped detail cache miss")
+        } catch {
+            XCTAssertEqual(error, .noCachedValue)
+        }
+    }
+
+    func testBookDetailCancellationNeverReturnsCachedProgress()
+        async throws
+    {
+        let fixture = try LibraryRepositoryFixture()
+        let accountID = AccountID(rawValue: "account")
+        let userID = UserID(rawValue: "user")
+        let detail = Self.detail(userID: userID)
+        try await fixture.cache.saveBookDetail(
+            detail,
+            userID: userID,
+            accountID: accountID
+        )
+        let repository = LibraryRepository(
+            accountID: accountID,
+            userID: userID,
+            remote: RepositoryRemote(details: [.failure(.cancelled)]),
+            cache: fixture.cache
+        )
+
+        do {
+            _ = try await repository.bookDetail(
+                for: detail.id,
+                in: detail.libraryID
+            )
+            XCTFail("Expected detail cancellation")
+        } catch {
+            XCTAssertEqual(error, .cancelled)
+        }
+    }
+
     func testInvalidRemoteValueAndCorruptFallbackRemainTyped()
         async throws
     {
@@ -403,6 +510,7 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         let invalidRepository = LibraryRepository(
             accountID: AccountID(rawValue: "invalid"),
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 libraries: [
                     .success(
@@ -439,6 +547,7 @@ final class LibraryRepositoryTests: XCTestCase {
         let remoteError = AudiobookshelfAPIError.unexpectedStatus(503)
         let corruptRepository = LibraryRepository(
             accountID: AccountID(rawValue: "corrupt"),
+            userID: UserID(rawValue: "user"),
             remote: RepositoryRemote(
                 libraries: [.failure(remoteError)]
             ),
@@ -517,6 +626,61 @@ final class LibraryRepositoryTests: XCTestCase {
             ),
         ]
     }
+
+    private static func detail(userID: UserID) -> LibraryBookDetail {
+        let itemID = LibraryItemID(rawValue: "item")
+        let bookID = BookID(rawValue: "book")
+        return LibraryBookDetail(
+            id: itemID,
+            libraryID: LibraryID(rawValue: "library"),
+            bookID: bookID,
+            title: "Book",
+            subtitle: nil,
+            authors: [
+                LibraryBookContributor(id: "author", name: "Author"),
+            ],
+            narrators: ["Narrator"],
+            series: [],
+            genres: ["Fiction"],
+            tags: [],
+            publishedYear: "2024",
+            publishedDate: nil,
+            publisher: nil,
+            descriptionPlain: "Description",
+            isbn: nil,
+            asin: nil,
+            language: "English",
+            duration: 60,
+            trackCount: 1,
+            audioFileCount: 1,
+            chapters: [
+                PlaybackChapter(
+                    id: 0,
+                    start: 0,
+                    end: 60,
+                    title: "Chapter"
+                ),
+            ],
+            addedAtMilliseconds: 1,
+            updatedAtMilliseconds: 2,
+            isExplicit: false,
+            isAbridged: false,
+            progress: LibraryBookProgress(
+                id: "progress",
+                userID: userID,
+                libraryItemID: itemID,
+                bookID: bookID,
+                duration: 60,
+                progress: 0.5,
+                currentTime: 30,
+                isFinished: false,
+                hideFromContinueListening: false,
+                lastUpdateMilliseconds: 2,
+                startedAtMilliseconds: 1,
+                finishedAtMilliseconds: nil
+            )
+        )
+    }
 }
 
 private enum RepositoryRemoteStep<Value: Sendable>: Sendable {
@@ -533,10 +697,14 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
     private var homeSteps: [
         RepositoryRemoteStep<[LibraryBookShelf]>
     ]
+    private var detailSteps: [
+        RepositoryRemoteStep<LibraryBookDetail>
+    ]
     private var libraryCallCount = 0
     private var pageCallCount = 0
     private var searchCallCount = 0
     private var homeCallCount = 0
+    private var detailCallCount = 0
 
     init(
         libraries: [RepositoryRemoteStep<[LibrarySummary]>] = [],
@@ -546,12 +714,16 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         ] = [],
         homes: [
             RepositoryRemoteStep<[LibraryBookShelf]>
+        ] = [],
+        details: [
+            RepositoryRemoteStep<LibraryBookDetail>
         ] = []
     ) {
         librarySteps = libraries
         pageSteps = pages
         searchSteps = searches
         homeSteps = homes
+        detailSteps = details
     }
 
     func libraries() async throws(AudiobookshelfAPIError)
@@ -591,17 +763,29 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         return try Self.result(from: next(&homeSteps))
     }
 
+    func bookDetail(
+        for itemID: LibraryItemID,
+        in libraryID: LibraryID
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<LibraryBookDetail>
+    {
+        detailCallCount += 1
+        return try Self.result(from: next(&detailSteps))
+    }
+
     func callCounts() -> (
         libraries: Int,
         pages: Int,
         searches: Int,
-        homes: Int
+        homes: Int,
+        details: Int
     ) {
         (
             libraryCallCount,
             pageCallCount,
             searchCallCount,
-            homeCallCount
+            homeCallCount,
+            detailCallCount
         )
     }
 
@@ -642,6 +826,7 @@ private struct LibraryRepositoryFixture {
             CachedLibraryPageRecord.self,
             CachedLibrarySearchRecord.self,
             CachedLibraryHomeRecord.self,
+            CachedLibraryBookDetailRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

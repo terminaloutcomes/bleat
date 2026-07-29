@@ -31,6 +31,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidLibrary
     case invalidPage
     case invalidLibraryItem
+    case invalidBookDetail
     case invalidSearchResults
     case invalidPersonalizedShelves
 }
@@ -40,6 +41,7 @@ public actor AudiobookshelfAPI<
     CredentialStore: AccountCredentialStore
 > {
     private let accountID: AccountID
+    private let userID: UserID
     private let server: NormalizedServerURL
     private let authCoordinator: AuthCoordinator<Transport, CredentialStore>
     private let decoder: JSONDecoder
@@ -49,6 +51,7 @@ public actor AudiobookshelfAPI<
         authCoordinator: AuthCoordinator<Transport, CredentialStore>
     ) {
         accountID = account.id
+        userID = account.user.id
         server = account.server
         self.authCoordinator = authCoordinator
         decoder = JSONDecoder()
@@ -226,6 +229,38 @@ public actor AudiobookshelfAPI<
         }
         return AudiobookshelfAPIResult(
             value: shelves,
+            correlationID: result.correlationID
+        )
+    }
+
+    public func bookDetail(
+        for itemID: LibraryItemID,
+        in libraryID: LibraryID
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<LibraryBookDetail>
+    {
+        guard !itemID.rawValue.isEmpty else {
+            throw .invalidLibraryItem
+        }
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibrary
+        }
+        let result: AudiobookshelfAPIResult<LibraryBookDetailDTO> =
+            try await get(
+                .item(itemID),
+                queryItems: [
+                    URLQueryItem(name: "expanded", value: "1"),
+                    URLQueryItem(name: "include", value: "progress"),
+                ],
+                as: LibraryBookDetailDTO.self
+            )
+        let detail = try result.value.domainValue(
+            expectedItemID: itemID,
+            expectedLibraryID: libraryID,
+            expectedUserID: userID
+        )
+        return AudiobookshelfAPIResult(
+            value: detail,
             correlationID: result.correlationID
         )
     }
@@ -497,4 +532,215 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
     let publisher: String?
     let explicit: Bool
     let abridged: Bool
+}
+
+private struct LibraryBookDetailDTO: Decodable, Sendable {
+    let id: LibraryItemID
+    let libraryID: LibraryID
+    let addedAt: Int64
+    let updatedAt: Int64
+    let mediaType: String
+    let media: ExpandedLibraryBookDTO
+    let userMediaProgress: LibraryBookProgressDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case libraryID = "libraryId"
+        case addedAt
+        case updatedAt
+        case mediaType
+        case media
+        case userMediaProgress
+    }
+
+    func domainValue(
+        expectedItemID: LibraryItemID,
+        expectedLibraryID: LibraryID,
+        expectedUserID: UserID
+    ) throws(AudiobookshelfAPIError) -> LibraryBookDetail {
+        guard id == expectedItemID,
+              libraryID == expectedLibraryID,
+              mediaType == "book",
+              media.libraryItemID == expectedItemID,
+              !media.id.rawValue.isEmpty,
+              media.numChapters == media.chapters.count
+        else {
+            throw .invalidBookDetail
+        }
+        let progress: LibraryBookProgress?
+        if let userMediaProgress {
+            progress = try userMediaProgress.domainValue(
+                expectedItemID: expectedItemID,
+                expectedBookID: media.id,
+                expectedUserID: expectedUserID
+            )
+        } else {
+            progress = nil
+        }
+        let detail = LibraryBookDetail(
+            id: id,
+            libraryID: libraryID,
+            bookID: media.id,
+            title: media.metadata.title,
+            subtitle: Self.nonEmpty(media.metadata.subtitle),
+            authors: media.metadata.authors,
+            narrators: media.metadata.narrators,
+            series: media.metadata.series.map {
+                LibraryBookSeries(
+                    id: $0.id,
+                    name: $0.name,
+                    sequence: Self.nonEmpty($0.sequence)
+                )
+            },
+            genres: media.metadata.genres,
+            tags: media.tags,
+            publishedYear: Self.nonEmpty(media.metadata.publishedYear),
+            publishedDate: Self.nonEmpty(media.metadata.publishedDate),
+            publisher: Self.nonEmpty(media.metadata.publisher),
+            descriptionPlain: Self.nonEmpty(
+                media.metadata.descriptionPlain
+            ),
+            isbn: Self.nonEmpty(media.metadata.isbn),
+            asin: Self.nonEmpty(media.metadata.asin),
+            language: Self.nonEmpty(media.metadata.language),
+            duration: media.duration,
+            trackCount: media.numTracks,
+            audioFileCount: media.numAudioFiles,
+            chapters: media.chapters,
+            addedAtMilliseconds: addedAt,
+            updatedAtMilliseconds: updatedAt,
+            isExplicit: media.metadata.explicit,
+            isAbridged: media.metadata.abridged,
+            progress: progress
+        )
+        guard detail.isValidForStorage(
+            in: expectedLibraryID,
+            for: expectedUserID
+        ) else {
+            throw .invalidBookDetail
+        }
+        return detail
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value,
+              !value.trimmingCharacters(
+                  in: .whitespacesAndNewlines
+              ).isEmpty
+        else {
+            return nil
+        }
+        return value
+    }
+}
+
+private struct ExpandedLibraryBookDTO: Decodable, Sendable {
+    let id: BookID
+    let libraryItemID: LibraryItemID
+    let metadata: ExpandedLibraryBookMetadataDTO
+    let tags: [String]
+    let numTracks: Int
+    let numAudioFiles: Int
+    let numChapters: Int
+    let duration: Double
+    let chapters: [PlaybackChapter]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case libraryItemID = "libraryItemId"
+        case metadata
+        case tags
+        case numTracks
+        case numAudioFiles
+        case numChapters
+        case duration
+        case chapters
+    }
+}
+
+private struct ExpandedLibraryBookMetadataDTO: Decodable, Sendable {
+    let title: String
+    let subtitle: String?
+    let authors: [LibraryBookContributor]
+    let narrators: [String]
+    let series: [ExpandedLibraryBookSeriesDTO]
+    let genres: [String]
+    let publishedYear: String?
+    let publishedDate: String?
+    let publisher: String?
+    let descriptionPlain: String?
+    let isbn: String?
+    let asin: String?
+    let language: String?
+    let explicit: Bool
+    let abridged: Bool
+}
+
+private struct ExpandedLibraryBookSeriesDTO: Decodable, Sendable {
+    let id: String
+    let name: String
+    let sequence: String?
+}
+
+private struct LibraryBookProgressDTO: Decodable, Sendable {
+    let id: String
+    let userID: UserID
+    let libraryItemID: LibraryItemID
+    let episodeID: String?
+    let mediaItemID: BookID
+    let mediaItemType: String
+    let duration: Double
+    let progress: Double
+    let currentTime: Double
+    let isFinished: Bool
+    let hideFromContinueListening: Bool
+    let lastUpdate: Int64
+    let startedAt: Int64
+    let finishedAt: Int64?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "userId"
+        case libraryItemID = "libraryItemId"
+        case episodeID = "episodeId"
+        case mediaItemID = "mediaItemId"
+        case mediaItemType
+        case duration
+        case progress
+        case currentTime
+        case isFinished
+        case hideFromContinueListening
+        case lastUpdate
+        case startedAt
+        case finishedAt
+    }
+
+    func domainValue(
+        expectedItemID: LibraryItemID,
+        expectedBookID: BookID,
+        expectedUserID: UserID
+    ) throws(AudiobookshelfAPIError) -> LibraryBookProgress {
+        guard libraryItemID == expectedItemID,
+              mediaItemID == expectedBookID,
+              userID == expectedUserID,
+              episodeID == nil,
+              mediaItemType == "book"
+        else {
+            throw .invalidBookDetail
+        }
+        return LibraryBookProgress(
+            id: id,
+            userID: userID,
+            libraryItemID: libraryItemID,
+            bookID: mediaItemID,
+            duration: duration,
+            progress: progress,
+            currentTime: currentTime,
+            isFinished: isFinished,
+            hideFromContinueListening: hideFromContinueListening,
+            lastUpdateMilliseconds: lastUpdate,
+            startedAtMilliseconds: startedAt,
+            finishedAtMilliseconds: finishedAt
+        )
+    }
 }
