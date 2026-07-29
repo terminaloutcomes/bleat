@@ -1,3 +1,4 @@
+import AVFoundation
 import BleatCore
 import XCTest
 
@@ -495,6 +496,172 @@ final class AppModelTests: XCTestCase {
                 duration: 130
             )
         )
+    }
+
+    func testMediaServicesResetIntentOnlyRecoversStablePlaybackStates() {
+        XCTAssertEqual(
+            PlaybackMediaServicesResetIntent.decide(for: .playing),
+            .play
+        )
+        XCTAssertEqual(
+            PlaybackMediaServicesResetIntent.decide(for: .paused),
+            .pause
+        )
+        XCTAssertEqual(
+            PlaybackMediaServicesResetIntent.decide(for: .ready),
+            .pause
+        )
+        XCTAssertNil(
+            PlaybackMediaServicesResetIntent.decide(for: .preparing)
+        )
+        XCTAssertNil(
+            PlaybackMediaServicesResetIntent.decide(for: .ended)
+        )
+        XCTAssertNil(
+            PlaybackMediaServicesResetIntent.decide(
+                for: .failed(.mediaUnavailable)
+            )
+        )
+    }
+
+    func testQueueRecoverySelectsTrackAtWholeBookBoundary() throws {
+        let tracks = [
+            AppPlaybackTrack(
+                url: URL(fileURLWithPath: "/one.m4b"),
+                startOffset: 0,
+                duration: 10,
+                title: "One"
+            ),
+            AppPlaybackTrack(
+                url: URL(fileURLWithPath: "/two.m4b"),
+                startOffset: 10,
+                duration: 10,
+                title: "Two"
+            ),
+            AppPlaybackTrack(
+                url: URL(fileURLWithPath: "/three.m4b"),
+                startOffset: 20,
+                duration: 10,
+                title: "Three"
+            ),
+        ]
+        let preparation = AppPlaybackPreparation(
+            sessionID: nil,
+            itemID: LibraryItemID(rawValue: "item"),
+            title: "Book",
+            duration: 30,
+            currentTime: 0,
+            chapters: [],
+            source: .direct(tracks)
+        )
+
+        let beforeBoundary = try AppPlaybackQueuePlanner.make(
+            preparation: preparation,
+            wholeBookTime: 19.5
+        )
+        XCTAssertEqual(beforeBoundary.tracks, Array(tracks[1...]))
+        XCTAssertEqual(beforeBoundary.localTime, 9.5)
+
+        let atBoundary = try AppPlaybackQueuePlanner.make(
+            preparation: preparation,
+            wholeBookTime: 20
+        )
+        XCTAssertEqual(atBoundary.tracks, [tracks[2]])
+        XCTAssertEqual(atBoundary.localTime, 0)
+    }
+
+    func testMediaServicesResetRestoresPlayingAndPausedIntent() async throws {
+        for shouldPlay in [true, false] {
+            let fixture = try playbackRecoveryFixture()
+            defer {
+                fixture.cleanUp()
+            }
+            let activation = TestAudioSessionActivation()
+            let playback = fixture.model(activation: activation)
+
+            await playback.startDownloaded(
+                detail: fixture.detail,
+                trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID,
+                account: nil
+            )
+            XCTAssertEqual(playback.state, .playing)
+            playback.setRate(1.35)
+            if !shouldPlay {
+                playback.pause()
+                XCTAssertEqual(playback.state, .paused)
+            }
+
+            await playback.handleMediaServicesReset()
+
+            XCTAssertEqual(
+                playback.state,
+                shouldPlay ? .playing : .paused
+            )
+            XCTAssertEqual(playback.rate, 1.35, accuracy: 0.001)
+            XCTAssertEqual(activation.callCount, 2)
+        }
+    }
+
+    func testMediaServicesResetRebuildsAcrossAudioFileBoundary()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let activation = TestAudioSessionActivation()
+        let playback = fixture.model(activation: activation)
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL, fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        let boundary = try XCTUnwrap(
+            playback.audioFiles.last?.startOffset
+        )
+        await playback.seek(to: boundary)
+        XCTAssertEqual(playback.currentAudioFileIndex, 1)
+
+        await playback.handleMediaServicesReset()
+
+        XCTAssertEqual(playback.state, .playing)
+        XCTAssertEqual(playback.currentAudioFileIndex, 1)
+        XCTAssertEqual(playback.currentTime, boundary, accuracy: 0.1)
+    }
+
+    func testMediaServicesResetRebuildFailureIsTyped() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let activation = TestAudioSessionActivation()
+        let planning = TestPlaybackQueuePlanning(failingCall: 2)
+        let playback = fixture.model(
+            activation: activation,
+            queuePlanning: {
+                try planning.make(
+                    preparation: $0,
+                    wholeBookTime: $1
+                )
+            }
+        )
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        XCTAssertEqual(playback.state, .playing)
+
+        await playback.handleMediaServicesReset()
+
+        XCTAssertEqual(playback.state, .failed(.mediaUnavailable))
+        XCTAssertEqual(activation.callCount, 2)
+        XCTAssertEqual(planning.callCount, 2)
     }
 
     func testLocalSessionStorePersistsAndRemovesOnlyAcknowledgedIDs()
@@ -1911,6 +2078,129 @@ final class AppModelTests: XCTestCase {
             startedAtMilliseconds: 1_000,
             updatedAtMilliseconds: 2_000
         )
+    }
+
+    private func playbackRecoveryFixture() throws -> PlaybackRecoveryFixture {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatPlaybackRecovery-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent("silence.caf")
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                standardFormatWithSampleRate: 8_000,
+                channels: 1
+            )
+        )
+        let audioFile = try AVAudioFile(
+            forWriting: audioURL,
+            settings: format.settings
+        )
+        let buffer = try XCTUnwrap(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: 8_000
+            )
+        )
+        buffer.frameLength = 8_000
+        try audioFile.write(from: buffer)
+
+        let defaultsSuite = "PlaybackRecoveryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(
+            UserDefaults(suiteName: defaultsSuite)
+        )
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        return PlaybackRecoveryFixture(
+            root: root,
+            defaultsSuite: defaultsSuite,
+            defaults: defaults,
+            audioURL: audioURL,
+            accountID: AccountID(rawValue: "recovery-account"),
+            detail: fixtureBookDetail(item: item),
+            service: TestAppService(activeAccount: .success(nil))
+        )
+    }
+}
+
+@MainActor
+private final class TestAudioSessionActivation: @unchecked Sendable {
+    private(set) var callCount = 0
+
+    func activate() {
+        callCount += 1
+    }
+}
+
+@MainActor
+private final class TestPlaybackQueuePlanning: @unchecked Sendable {
+    private let failingCall: Int?
+    private(set) var callCount = 0
+
+    init(failingCall: Int? = nil) {
+        self.failingCall = failingCall
+    }
+
+    func make(
+        preparation: AppPlaybackPreparation,
+        wholeBookTime: Double
+    ) throws -> AppPlaybackQueuePlan {
+        callCount += 1
+        if callCount == failingCall {
+            throw AppPlaybackBuildError.missingTracks
+        }
+        return try AppPlaybackQueuePlanner.make(
+            preparation: preparation,
+            wholeBookTime: wholeBookTime
+        )
+    }
+}
+
+@MainActor
+private struct PlaybackRecoveryFixture {
+    let root: URL
+    let defaultsSuite: String
+    let defaults: UserDefaults
+    let audioURL: URL
+    let accountID: AccountID
+    let detail: LibraryBookDetail
+    let service: TestAppService
+
+    func model(
+        activation: TestAudioSessionActivation,
+        queuePlanning:
+            @escaping @MainActor @Sendable (
+                AppPlaybackPreparation,
+                Double
+            ) throws -> AppPlaybackQueuePlan = {
+                try AppPlaybackQueuePlanner.make(
+                    preparation: $0,
+                    wholeBookTime: $1
+                )
+            }
+    ) -> PlaybackModel {
+        PlaybackModel(
+            service: service,
+            positionStore: PlaybackPositionStore(defaults: defaults),
+            localSessionStore: LocalPlaybackSessionStore(defaults: defaults),
+            bookmarkMutationStore: BookmarkMutationStore(
+                defaults: defaults
+            ),
+            preferencesStore: PlaybackPreferencesStore(defaults: defaults),
+            audioSessionActivation: {
+                activation.activate()
+            },
+            queuePlanning: queuePlanning
+        )
+    }
+
+    func cleanUp() {
+        defaults.removePersistentDomain(forName: defaultsSuite)
+        try? FileManager.default.removeItem(at: root)
     }
 }
 

@@ -33,6 +33,22 @@ enum PlaybackSleepTimer: Equatable, Sendable {
     case endOfChapter(Double)
 }
 
+enum PlaybackMediaServicesResetIntent: Equatable, Sendable {
+    case play
+    case pause
+
+    static func decide(for state: PlaybackState) -> Self? {
+        switch state {
+        case .playing:
+            .play
+        case .ready, .paused:
+            .pause
+        case .idle, .preparing, .ended, .failed:
+            nil
+        }
+    }
+}
+
 struct PlaybackPositionConflict: Equatable, Sendable {
     let localTime: Double
     let serverTime: Double
@@ -46,6 +62,13 @@ final class PlaybackModel {
     private let localSessionStore: LocalPlaybackSessionStore
     private let bookmarkMutationStore: BookmarkMutationStore
     private let preferencesStore: PlaybackPreferencesStore
+    private let audioSessionActivation:
+        @MainActor @Sendable () throws -> Void
+    private let queuePlanning:
+        @MainActor @Sendable (
+            AppPlaybackPreparation,
+            Double
+        ) throws -> AppPlaybackQueuePlan
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
@@ -144,7 +167,21 @@ final class PlaybackModel {
         positionStore: PlaybackPositionStore = .shared,
         localSessionStore: LocalPlaybackSessionStore = .shared,
         bookmarkMutationStore: BookmarkMutationStore = .shared,
-        preferencesStore: PlaybackPreferencesStore = .shared
+        preferencesStore: PlaybackPreferencesStore = .shared,
+        audioSessionActivation:
+            @escaping @MainActor @Sendable () throws -> Void = {
+                try PlaybackModel.activateAudioSession()
+            },
+        queuePlanning:
+            @escaping @MainActor @Sendable (
+                AppPlaybackPreparation,
+                Double
+            ) throws -> AppPlaybackQueuePlan = {
+                try AppPlaybackQueuePlanner.make(
+                    preparation: $0,
+                    wholeBookTime: $1
+                )
+            }
     ) {
         let skipBackwardInterval = preferencesStore.skipBackward()
         let skipForwardInterval = preferencesStore.skipForward()
@@ -153,6 +190,8 @@ final class PlaybackModel {
         self.localSessionStore = localSessionStore
         self.bookmarkMutationStore = bookmarkMutationStore
         self.preferencesStore = preferencesStore
+        self.audioSessionActivation = audioSessionActivation
+        self.queuePlanning = queuePlanning
         rate = preferencesStore.playbackRate()
         resumeRewind = preferencesStore.resumeRewind()
         self.skipBackwardInterval = skipBackwardInterval
@@ -877,29 +916,9 @@ final class PlaybackModel {
         player?.pause()
         offsetsByItem = [:]
 
-        let tracks: [AppPlaybackTrack]
-        switch preparation.source {
-        case .direct(let directTracks):
-            guard !directTracks.isEmpty else {
-                throw AppPlaybackBuildError.missingTracks
-            }
-            let selectedIndex =
-                directTracks.lastIndex(where: {
-                    $0.startOffset <= wholeBookTime
-                }) ?? directTracks.startIndex
-            tracks = Array(directTracks[selectedIndex...])
-        case .hls(let url):
-            tracks = [
-                AppPlaybackTrack(
-                    url: url,
-                    startOffset: 0,
-                    duration: preparation.duration,
-                    title: preparation.title
-                )
-            ]
-        }
+        let plan = try queuePlanning(preparation, wholeBookTime)
 
-        let items = tracks.map { track in
+        let items = plan.tracks.map { track in
             let item = AVPlayerItem(url: track.url)
             offsetsByItem[ObjectIdentifier(item)] = track.startOffset
             return item
@@ -913,12 +932,14 @@ final class PlaybackModel {
         updateTimePitchAlgorithm()
         installObservers(on: queue, lastItem: lastItem)
 
-        let firstOffset = tracks[0].startOffset
-        let localTime = max(0, wholeBookTime - firstOffset)
-        await seek(queue, to: localTime)
+        await seek(queue, to: plan.localTime)
     }
 
     private func configureAudioSession() throws {
+        try audioSessionActivation()
+    }
+
+    static func activateAudioSession() throws {
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playback, mode: .spokenAudio)
         try audioSession.setActive(true)
@@ -1052,6 +1073,17 @@ final class PlaybackModel {
                     ] as? UInt
                 Task { @MainActor [weak self] in
                     self?.handleRouteChange(reasonValue: reasonValue)
+                }
+            }
+        )
+        audioSessionObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.mediaServicesWereResetNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.handleMediaServicesReset()
                 }
             }
         )
@@ -1547,6 +1579,42 @@ final class PlaybackModel {
         pause()
     }
 
+    func handleMediaServicesReset() async {
+        guard preparation != nil,
+            let intent = PlaybackMediaServicesResetIntent.decide(for: state)
+        else {
+            return
+        }
+        generation &+= 1
+        let operationGeneration = generation
+        let recoveryTime = currentTime
+        player?.pause()
+        state = .preparing
+        do {
+            try configureAudioSession()
+            try await rebuildQueue(at: recoveryTime)
+            guard generation == operationGeneration else {
+                return
+            }
+            currentTime = recoveryTime
+            switch intent {
+            case .play:
+                state = .playing
+                player?.playImmediately(atRate: rate)
+            case .pause:
+                state = .paused
+            }
+            updateNowPlaying()
+        } catch {
+            guard generation == operationGeneration else {
+                return
+            }
+            resetPlayer()
+            state = .failed(.mediaUnavailable)
+            updateNowPlaying()
+        }
+    }
+
     private func updateNowPlaying() {
         guard hasActiveBook else {
             return
@@ -1580,7 +1648,50 @@ final class PlaybackModel {
     }
 }
 
-private enum AppPlaybackBuildError: Error {
+enum AppPlaybackBuildError: Error, Equatable {
     case missingPreparation
     case missingTracks
+}
+
+struct AppPlaybackQueuePlan: Equatable, Sendable {
+    let tracks: [AppPlaybackTrack]
+    let localTime: Double
+}
+
+enum AppPlaybackQueuePlanner {
+    static func make(
+        preparation: AppPlaybackPreparation,
+        wholeBookTime: Double
+    ) throws(AppPlaybackBuildError) -> AppPlaybackQueuePlan {
+        switch preparation.source {
+        case .direct(let directTracks):
+            guard !directTracks.isEmpty else {
+                throw .missingTracks
+            }
+            let selectedIndex =
+                directTracks.lastIndex(where: {
+                    $0.startOffset <= wholeBookTime
+                }) ?? directTracks.startIndex
+            let tracks = Array(directTracks[selectedIndex...])
+            return AppPlaybackQueuePlan(
+                tracks: tracks,
+                localTime: max(
+                    0,
+                    wholeBookTime - tracks[0].startOffset
+                )
+            )
+        case .hls(let url):
+            return AppPlaybackQueuePlan(
+                tracks: [
+                    AppPlaybackTrack(
+                        url: url,
+                        startOffset: 0,
+                        duration: preparation.duration,
+                        title: preparation.title
+                    )
+                ],
+                localTime: max(0, wholeBookTime)
+            )
+        }
+    }
 }
