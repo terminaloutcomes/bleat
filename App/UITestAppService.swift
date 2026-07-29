@@ -220,6 +220,14 @@
             duration: Double
         ) async throws(AppServiceError) {}
 
+        func syncLocalPlaybackSessions(
+            for account: ServerAccount,
+            sessions: [LocalPlaybackSession],
+            deviceInfo: PlaybackDeviceInfo
+        ) async throws(AppServiceError) -> [LocalPlaybackSessionSyncResult] {
+            []
+        }
+
         func saveMetadata(
             for account: ServerAccount,
             baseline: LibraryBookDetail,

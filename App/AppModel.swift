@@ -161,7 +161,7 @@ enum AppFailure: Equatable, Sendable {
             self = .bookUnavailable
         case .playbackSession, .playbackSource, .playbackSync:
             self = .playbackUnavailable
-        case .progress:
+        case .progress, .localPlaybackSession:
             self = .progressUnavailable
         case .metadataPatch:
             self = .invalidMetadata
@@ -241,6 +241,9 @@ final class AppModel {
             phase = .signedIn
             for storedAccount in accounts {
                 await downloads.start(account: storedAccount)
+                await playback.syncPendingLocalSessions(
+                    for: storedAccount
+                )
             }
             await loadLibraries()
         } catch let error {
@@ -272,6 +275,9 @@ final class AppModel {
             phase = .signedIn
             loginStatus = .idle
             await downloads.start(account: authenticatedAccount)
+            await playback.syncPendingLocalSessions(
+                for: authenticatedAccount
+            )
             await loadLibraries()
             return true
         } catch let error {
@@ -296,6 +302,7 @@ final class AppModel {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
             await downloads.start(account: selectedAccount)
+            await playback.syncPendingLocalSessions(for: selectedAccount)
             await loadLibraries()
             accountActionStatus = .idle
         } catch let error {
@@ -563,6 +570,7 @@ final class AppModel {
         do {
             try await service.removeAccount(account)
             await downloads.removeAll(for: account.id)
+            playback.removeLocalSessions(for: account.id)
             accounts.removeAll { $0.id == account.id }
             self.account = accounts.first
             selectedLibrary = nil

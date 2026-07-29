@@ -177,6 +177,114 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testLocalSessionStorePersistsAndRemovesOnlyAcknowledgedIDs()
+        throws
+    {
+        let suite = "LocalPlaybackSessionStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let accountID = AccountID(rawValue: "account")
+        let first = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169",
+            itemID: "item-1"
+        )
+        let second = try localSession(
+            id: "5eef37df-6838-4dd5-9875-266ae49db169",
+            itemID: "item-2"
+        )
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(first, accountID: accountID)
+        try store.save(second, accountID: accountID)
+
+        let restored = LocalPlaybackSessionStore(defaults: defaults)
+        XCTAssertEqual(
+            try restored.pending(accountID: accountID).map(\.id),
+            [first.id, second.id]
+        )
+        try restored.removeAcknowledged(
+            accountID: accountID,
+            sessionIDs: [first.id]
+        )
+
+        XCTAssertEqual(
+            try restored.pending(accountID: accountID).map(\.id),
+            [second.id]
+        )
+    }
+
+    func testPendingLocalSessionsRetryWithSameIDUntilAcknowledged()
+        async throws
+    {
+        let suite = "LocalPlaybackSessionRetryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let account = try fixtureAccount()
+        let first = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169",
+            itemID: "item-1"
+        )
+        let second = try localSession(
+            id: "5eef37df-6838-4dd5-9875-266ae49db169",
+            itemID: "item-2"
+        )
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(first, accountID: account.id)
+        try store.save(second, accountID: account.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            localSessionSync: .success([
+                LocalPlaybackSessionSyncResult(
+                    id: first.id,
+                    success: true,
+                    progressSynced: true,
+                    error: nil
+                ),
+                LocalPlaybackSessionSyncResult(
+                    id: second.id,
+                    success: false,
+                    progressSynced: false,
+                    error: "retry"
+                ),
+            ])
+        )
+        let playback = PlaybackModel(
+            service: service,
+            localSessionStore: store
+        )
+
+        await playback.syncPendingLocalSessions(for: account)
+
+        XCTAssertEqual(
+            try store.pending(accountID: account.id).map(\.id),
+            [second.id]
+        )
+        await service.setLocalSessionSync(
+            .success([
+                LocalPlaybackSessionSyncResult(
+                    id: second.id,
+                    success: true,
+                    progressSynced: true,
+                    error: nil
+                )
+            ])
+        )
+        await playback.syncPendingLocalSessions(for: account)
+
+        XCTAssertTrue(try store.pending(accountID: account.id).isEmpty)
+        let requests = await service.localSessionSyncRequests()
+        XCTAssertEqual(
+            requests.map { $0.sessions.map(\.id) },
+            [
+                [first.id, second.id],
+                [second.id],
+            ]
+        )
+    }
+
     func testStartWithoutSavedAccountShowsLogin() async {
         let service = TestAppService(activeAccount: .success(nil))
         let model = AppModel(service: service)
@@ -901,6 +1009,10 @@ final class AppModelTests: XCTestCase {
                 .playbackUnavailable
             ),
             (
+                .localPlaybackSession(.unexpectedStatus(503)),
+                .progressUnavailable
+            ),
+            (
                 .progress(.unexpectedStatus(503)),
                 .progressUnavailable
             ),
@@ -1109,6 +1221,27 @@ final class AppModelTests: XCTestCase {
         }
         """
     }
+
+    private func localSession(
+        id: String,
+        itemID: String
+    ) throws -> LocalPlaybackSession {
+        try LocalPlaybackSession(
+            id: PlaybackSessionID(rawValue: id),
+            libraryID: LibraryID(rawValue: "library"),
+            libraryItemID: LibraryItemID(rawValue: itemID),
+            bookID: BookID(rawValue: "book-\(itemID)"),
+            mediaMetadata: LocalPlaybackMediaMetadata(title: itemID),
+            chapters: [],
+            displayTitle: itemID,
+            displayAuthor: "Author",
+            duration: 100,
+            startTime: 10,
+            currentTime: 20,
+            startedAtMilliseconds: 1_000,
+            updatedAtMilliseconds: 2_000
+        )
+    }
 }
 
 private struct LoginRequest: Equatable, Sendable {
@@ -1140,6 +1273,12 @@ private struct ProgressUpdateRequest: Equatable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
     let update: BookProgressUpdate
+}
+
+private struct LocalSessionSyncRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let sessions: [LocalPlaybackSession]
+    let deviceInfo: PlaybackDeviceInfo
 }
 
 private actor TestAppService: AppServicing {
@@ -1176,6 +1315,8 @@ private actor TestAppService: AppServicing {
             AppServiceError
         >
     private var progressUpdateResult: Result<Void, AppServiceError>
+    private var localSessionSyncResult:
+        Result<[LocalPlaybackSessionSyncResult], AppServiceError>
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -1190,6 +1331,7 @@ private actor TestAppService: AppServicing {
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
+    private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
 
     init(
@@ -1212,6 +1354,11 @@ private actor TestAppService: AppServicing {
             .bookDetail(.noCachedValue)
         ),
         progressUpdate: Result<Void, AppServiceError> = .success(()),
+        localSessionSync:
+            Result<
+                [LocalPlaybackSessionSyncResult],
+                AppServiceError
+            > = .success([]),
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -1226,6 +1373,7 @@ private actor TestAppService: AppServicing {
         searchResult = search
         bookDetailResult = bookDetail
         progressUpdateResult = progressUpdate
+        localSessionSyncResult = localSessionSync
         removeAccountResult = removeAccount
         self.loginGate = loginGate
         self.removeGate = removeGate
@@ -1339,6 +1487,21 @@ private actor TestAppService: AppServicing {
         currentTime: Double,
         duration: Double
     ) async throws(AppServiceError) {}
+
+    func syncLocalPlaybackSessions(
+        for account: ServerAccount,
+        sessions: [LocalPlaybackSession],
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> [LocalPlaybackSessionSyncResult] {
+        recordedLocalSessionSyncRequests.append(
+            LocalSessionSyncRequest(
+                accountID: account.id,
+                sessions: sessions,
+                deviceInfo: deviceInfo
+            )
+        )
+        return try value(from: localSessionSyncResult)
+    }
 
     func bookDetail(
         for account: ServerAccount,
@@ -1525,6 +1688,20 @@ private actor TestAppService: AppServicing {
 
     func progressUpdateRequests() -> [ProgressUpdateRequest] {
         recordedProgressUpdateRequests
+    }
+
+    func setLocalSessionSync(
+        _ result:
+            Result<
+                [LocalPlaybackSessionSyncResult],
+                AppServiceError
+            >
+    ) {
+        localSessionSyncResult = result
+    }
+
+    func localSessionSyncRequests() -> [LocalSessionSyncRequest] {
+        recordedLocalSessionSyncRequests
     }
 
     func removedAccounts() -> [ServerAccount] {

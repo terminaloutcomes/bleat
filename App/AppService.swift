@@ -21,6 +21,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case playbackSession(PlaybackSessionError)
     case playbackSource(PlaybackSourceError)
     case playbackSync(PlaybackSyncError)
+    case localPlaybackSession(LocalPlaybackSessionError)
     case metadataPatch(BookMetadataPatchError)
     case metadataUpdate(BookMetadataUpdateError)
     case coverUpdate(BookCoverUploadError)
@@ -119,6 +120,12 @@ protocol AppServicing: Sendable {
         currentTime: Double,
         duration: Double
     ) async throws(AppServiceError)
+
+    func syncLocalPlaybackSessions(
+        for account: ServerAccount,
+        sessions: [LocalPlaybackSession],
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> [LocalPlaybackSessionSyncResult]
 
     func saveMetadata(
         for account: ServerAccount,
@@ -503,6 +510,23 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .playbackSync(error)
+        }
+    }
+
+    func syncLocalPlaybackSessions(
+        for account: ServerAccount,
+        sessions: [LocalPlaybackSession],
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> [LocalPlaybackSessionSyncResult] {
+        do {
+            return try await coordinator.syncLocalPlaybackSessions(
+                accountID: account.id,
+                server: account.server,
+                sessions: sessions,
+                deviceInfo: deviceInfo
+            )
+        } catch let error {
+            throw .localPlaybackSession(error)
         }
     }
 

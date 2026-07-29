@@ -38,6 +38,7 @@ struct PlaybackPositionConflict: Equatable, Sendable {
 final class PlaybackModel {
     private let service: any AppServicing
     private let positionStore: PlaybackPositionStore
+    private let localSessionStore: LocalPlaybackSessionStore
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
@@ -47,6 +48,7 @@ final class PlaybackModel {
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
     private var activeAccount: ServerAccount?
     private var preparation: AppPlaybackPreparation?
+    private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
@@ -76,10 +78,12 @@ final class PlaybackModel {
 
     init(
         service: any AppServicing,
-        positionStore: PlaybackPositionStore = .shared
+        positionStore: PlaybackPositionStore = .shared,
+        localSessionStore: LocalPlaybackSessionStore = .shared
     ) {
         self.service = service
         self.positionStore = positionStore
+        self.localSessionStore = localSessionStore
         configureRemoteCommands()
         observeAudioSession()
     }
@@ -109,6 +113,7 @@ final class PlaybackModel {
         }
         activeAccount = nil
         preparation = nil
+        localPlaybackSession = nil
         resetPlayer()
         state = .preparing
         itemID = detail.id
@@ -129,22 +134,11 @@ final class PlaybackModel {
         bookmarkState = .idle
         positionConflict = nil
 
-        let deviceInfo = PlaybackDeviceInfo(
-            deviceID: UIDevice.current.identifierForVendor?
-                .uuidString.lowercased() ?? "bleat-ios-device",
-            clientName: "Bleat",
-            clientVersion: Bundle.main.object(
-                forInfoDictionaryKey: "CFBundleShortVersionString"
-            ) as? String ?? "0.1",
-            manufacturer: "Apple",
-            model: UIDevice.current.model
-        )
-
         do {
             let prepared = try await service.openPlayback(
                 for: account,
                 itemID: detail.id,
-                deviceInfo: deviceInfo
+                deviceInfo: Self.deviceInfo()
             )
             guard generation == operationGeneration else {
                 if let sessionID = prepared.sessionID {
@@ -213,6 +207,7 @@ final class PlaybackModel {
         }
         activeAccount = nil
         preparation = nil
+        localPlaybackSession = nil
         resetPlayer()
         state = .preparing
         itemID = detail.id
@@ -280,6 +275,10 @@ final class PlaybackModel {
             )
             lastAttemptedSyncTime = currentTime
             lastPersistedLocalTime = currentTime
+            try beginLocalPlaybackSession(
+                detail: detail,
+                account: account
+            )
             try await rebuildQueue(at: currentTime)
             guard generation == operationGeneration else {
                 return
@@ -561,7 +560,6 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
-        persistLocalPosition()
         resetPlayer()
         await closeActiveSession()
         guard generation == operationGeneration else {
@@ -569,6 +567,7 @@ final class PlaybackModel {
         }
         activeAccount = nil
         preparation = nil
+        localPlaybackSession = nil
         itemID = nil
         title = ""
         author = ""
@@ -879,6 +878,18 @@ final class PlaybackModel {
                 accountID: activeAccount.id,
                 itemID: itemID
             )
+            guard let localPlaybackSession else {
+                syncState = .failed
+                return
+            }
+            let updated = try localPlaybackSession.updating(
+                currentTime: min(max(currentTime, 0), duration)
+            )
+            try localSessionStore.save(
+                updated,
+                accountID: activeAccount.id
+            )
+            self.localPlaybackSession = updated
             lastPersistedLocalTime = currentTime
         } catch {
             syncState = .failed
@@ -895,25 +906,50 @@ final class PlaybackModel {
         let position = min(max(currentTime, 0), preparation.duration)
         syncState = .syncing
         if preparation.sessionID == nil {
+            persistLocalPosition()
+            guard syncState != .failed else {
+                return
+            }
             do {
-                try await service.updateBookProgress(
+                let pending = try localSessionStore.pending(
+                    accountID: activeAccount.id
+                )
+                guard !pending.isEmpty else {
+                    syncState = .idle
+                    return
+                }
+                let results = try await service.syncLocalPlaybackSessions(
                     for: activeAccount,
-                    itemID: preparation.itemID,
-                    update: BookProgressUpdate(
-                        duration: preparation.duration,
-                        currentTime: position,
-                        progress: preparation.duration > 0
-                            ? position / preparation.duration : 0,
-                        isFinished: position >= preparation.duration
-                    )
+                    sessions: pending,
+                    deviceInfo: Self.deviceInfo()
                 )
                 guard self.preparation?.itemID == preparation.itemID,
                     self.preparation?.sessionID == nil
                 else {
                     return
                 }
+                let acknowledged = Set(
+                    results.filter(\.success).map(\.id)
+                )
+                try localSessionStore.removeAcknowledged(
+                    accountID: activeAccount.id,
+                    sessionIDs: acknowledged
+                )
                 lastAttemptedSyncTime = position
-                syncState = .idle
+                syncState =
+                    results.allSatisfy(\.success) ? .idle : .failed
+                if let localPlaybackSession,
+                    let currentResult = results.first(where: {
+                        $0.id == localPlaybackSession.id
+                    }),
+                    currentResult.success,
+                    !currentResult.progressSynced
+                {
+                    await refreshConflictAfterRejectedLocalProgress(
+                        account: activeAccount,
+                        session: localPlaybackSession
+                    )
+                }
             } catch {
                 guard self.preparation?.itemID == preparation.itemID,
                     self.preparation?.sessionID == nil
@@ -977,6 +1013,96 @@ final class PlaybackModel {
         case .local(let localTime):
             return localTime
         }
+    }
+
+    func syncPendingLocalSessions(for account: ServerAccount) async {
+        do {
+            let pending = try localSessionStore.pending(
+                accountID: account.id
+            )
+            guard !pending.isEmpty else {
+                return
+            }
+            let results = try await service.syncLocalPlaybackSessions(
+                for: account,
+                sessions: pending,
+                deviceInfo: Self.deviceInfo()
+            )
+            try localSessionStore.removeAcknowledged(
+                accountID: account.id,
+                sessionIDs: Set(results.filter(\.success).map(\.id))
+            )
+        } catch {
+            // The durable outbox remains intact for the next retry.
+        }
+    }
+
+    func removeLocalSessions(for accountID: AccountID) {
+        try? localSessionStore.removeAll(accountID: accountID)
+    }
+
+    private func beginLocalPlaybackSession(
+        detail: LibraryBookDetail,
+        account: ServerAccount
+    ) throws {
+        let existing = try localSessionStore.session(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        let session: LocalPlaybackSession
+        if let existing,
+            abs(existing.duration - duration) <= 1
+        {
+            session = try existing.updating(currentTime: currentTime)
+        } else {
+            session = try LocalPlaybackSession.makeBookSession(
+                libraryID: detail.libraryID,
+                libraryItemID: detail.id,
+                bookID: detail.bookID,
+                title: detail.title,
+                author: detail.authors.map(\.name).joined(separator: ", "),
+                chapters: detail.chapters,
+                duration: duration,
+                currentTime: currentTime
+            )
+        }
+        try localSessionStore.save(session, accountID: account.id)
+        localPlaybackSession = session
+    }
+
+    private func refreshConflictAfterRejectedLocalProgress(
+        account: ServerAccount,
+        session: LocalPlaybackSession
+    ) async {
+        guard
+            let remote = try? await service.bookProgress(
+                for: account,
+                itemID: session.libraryItemID
+            ),
+            remote.lastUpdateMilliseconds > session.updatedAtMilliseconds,
+            abs(remote.currentTime - session.currentTime) > 1
+        else {
+            return
+        }
+        player?.pause()
+        state = .paused
+        positionConflict = PlaybackPositionConflict(
+            localTime: session.currentTime,
+            serverTime: min(max(remote.currentTime, 0), session.duration)
+        )
+    }
+
+    private static func deviceInfo() -> PlaybackDeviceInfo {
+        PlaybackDeviceInfo(
+            deviceID: UIDevice.current.identifierForVendor?
+                .uuidString.lowercased() ?? "bleat-ios-device",
+            clientName: "Bleat",
+            clientVersion: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "0.1",
+            manufacturer: "Apple",
+            model: UIDevice.current.model
+        )
     }
 
     private func handleInterruption(

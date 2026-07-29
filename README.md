@@ -22,8 +22,10 @@ online-first/cache-fallback repository behavior, permission-derived book
 action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
-tracking, lifetime statistics, and listening-history import/export. Durable
-offline bookmark reconciliation remains under active development.
+tracking, lifetime statistics, and listening-history import/export. Downloaded
+playback uses a durable UUIDv4 local-session outbox while reporting zero
+listening time. Durable offline bookmark reconciliation remains under active
+development.
 
 ## Requirements
 
@@ -212,7 +214,10 @@ to Partial and exposes Repair. Repair preserves verified tracks, downloads only
 damaged entries, and refuses to mix files when the server's plan changed.
 Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and
-stop, then resumes from that durable position after relaunch. When both the
+stop, then resumes from that durable position after relaunch. Position updates
+are queued as Audiobookshelf local sessions and retried with the same UUID until
+the server acknowledges them, including after app or account restoration. When
+both the
 saved device position and server position changed after the download snapshot,
 Now Playing asks which position to keep before syncing. Book detail also
 supports explicit **Mark Finished** and **Mark Unfinished** actions.
@@ -287,11 +292,12 @@ swift test --filter BookActionPolicyTests
 ```
 
 The playback unit suite covers exact request fields, typed session decoding,
-direct/HLS route resolution, path prefixes, unsafe returned paths, and typed
-failures:
+direct/HLS route resolution, durable local-session batches, path prefixes,
+unsafe returned paths, and typed failures:
 
 ```sh
 swift test --filter PlaybackSessionTests
+swift test --filter LocalPlaybackSessionTests
 ```
 
 The metadata suite covers changed-field patch generation, replacement arrays,

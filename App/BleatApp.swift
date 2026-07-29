@@ -140,6 +140,14 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func syncLocalPlaybackSessions(
+        for account: ServerAccount,
+        sessions: [LocalPlaybackSession],
+        deviceInfo: PlaybackDeviceInfo
+    ) async throws(AppServiceError) -> [LocalPlaybackSessionSyncResult] {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func saveMetadata(
         for account: ServerAccount,
         baseline: LibraryBookDetail,
