@@ -33,6 +33,7 @@ outbox when the server is unavailable.
 - macOS with Xcode 26.x
 - Swift 6.2 or newer
 - An installed iOS Simulator runtime for simulator tests
+- Docker Desktop or another Docker Compose 2-compatible runtime for live tests
 - XcodeGen 2.46 or newer only when changing `project.yml`
 
 Confirm the active toolchain:
@@ -118,6 +119,14 @@ To run only host validation, without starting a simulator:
 BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
 ```
 
+The live app test creates and deletes its own simulator, installs only its
+disposable Caddy certificate, and runs against a freshly seeded
+Audiobookshelf instance:
+
+```sh
+./scripts/test-app-live.sh
+```
+
 ## Open in Xcode
 
 Open the generated project:
@@ -130,6 +139,34 @@ Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 **Product → Run** to launch the app or **Product → Test** to run the application
 unit and UI suites. Core package tests run through `swift test` or
 `scripts/test-core.sh`.
+
+## Archive a beta
+
+Validate a Release archive without signing:
+
+```sh
+./scripts/archive-beta.sh
+```
+
+The archive is written to `.build/Bleat.xcarchive` and is checked for a valid
+bundle plus the required `PrivacyInfo.xcprivacy` manifest. The manifest
+declares only the app's local preferences, app-container file metadata, and
+download-space preflight uses. Bleat declares no tracking domains or collected
+data.
+
+For a signed archive, provide the Apple development team at invocation time.
+The team identifier is not stored in the repository:
+
+```sh
+BLEAT_DEVELOPMENT_TEAM=YOURTEAMID \
+  BLEAT_ALLOW_PROVISIONING_UPDATES=1 \
+  ./scripts/archive-beta.sh
+```
+
+Open `.build/Bleat.xcarchive` in Xcode Organizer, choose **Distribute App**,
+then **TestFlight & App Store** to upload build `0.1.0 (1)`. Upload requires a
+paid Apple Developer team, a matching App Store Connect application, and an
+account permitted to distribute it.
 
 ## Sign in
 
@@ -285,9 +322,9 @@ plays those books. Bookmark changes made to that retained account-free copy are
 stored on the device, but server bookmarks and synchronization remain
 unavailable.
 
-The current app target requires HTTPS. The Docker harness below intentionally
-tests the lower-level HTTP contracts and is not a server intended for manual
-app sign-in yet.
+The app requires HTTPS. The live app harness below supplies a trusted,
+disposable local CA to its temporary simulator; production builds continue to
+use normal system trust validation and contain no trust bypass.
 
 ## Run against Audiobookshelf
 
@@ -299,28 +336,51 @@ Docker is required for live contract tests. Run the pinned Audiobookshelf
 ```
 
 The script creates fresh root and `/audiobookshelf` instances, waits for both
-services, initializes deterministic test-only root users and a three-book media
-library, validates username/password login, bearer authorization,
-rotating-token recovery, logout, playback routes, and authenticated per-file
-downloads, bookmarks, and metadata updates, and verifies that native-login account profiles
-survive store recreation, fetch typed libraries, and load their first paginated
+services, generates disposable test credentials at runtime, and seeds a
+three-book media library. It validates username/password login, bearer
+authorization, rotating-token recovery, logout, playback routes, and
+authenticated per-file downloads, bookmarks, and metadata updates, and
+verifies that native-login account profiles survive store recreation, fetch
+typed libraries, and load their first paginated
 audiobook summaries, a matching search result, personalized audiobook shelves,
 and an expanded audiobook detail with chapters and authenticated-user progress.
 It then removes the containers and volumes. On failure it retains redacted
 diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
 
+Run the real SwiftUI application through native username/password login,
+streaming, chapter and multi-file navigation, download completion, relaunch,
+cached browsing, and server-offline playback with:
+
+```sh
+./scripts/test-app-live.sh
+```
+
+This runner adds a pinned Caddy HTTPS proxy, builds the real app service,
+creates a throwaway iPhone simulator, installs Caddy's local root certificate,
+and runs separate online and offline XCUITest phases without deleting the
+app's account, cache, or downloaded media between them. Disposable credentials
+are passed only through the generated `.xctestrun` test environment and entered
+through the app's secure login form; they are never printed. The runner deletes
+the generated test configuration, simulator, certificates, containers, and
+volumes when it exits. Redacted Docker logs, screenshots on failure, and
+XCTest result bundles are written beneath
+`TestSupport/ServerHarness/app-live-artifacts/`.
+
 Control the environment directly when developing a contract test:
 
 ```sh
+export BLEAT_TEST_USERNAME="bleat-$(uuidgen)"
+export BLEAT_TEST_PASSWORD="$(uuidgen)"
 ./scripts/live-test-environment.sh reset
 ./scripts/live-test-environment.sh status
 ./scripts/live-test-environment.sh down
+unset BLEAT_TEST_USERNAME BLEAT_TEST_PASSWORD
 ```
 
-The harness currently covers the pinned 2.36.0 status, login-token,
-authorization, refresh-rotation, logout, seeded-library, and media contracts.
-The 2.26.x compatibility, current-stable compatibility, and HTTPS profiles will
-be added in subsequent implementation slices.
+The harness covers pinned 2.36.0 status, login-token, authorization,
+refresh-rotation, logout, seeded-library, media, root/prefix, and HTTPS app
+profiles. The 2.26.x and current-stable compatibility profiles remain later
+release work.
 
 The deterministic refresh suite exercises 20 simultaneous 401 responses,
 single-flight rotation, retry limits, 403 behavior, typed failures, and
@@ -375,6 +435,27 @@ swift test --filter DownloadStorageTests
 
 The earlier OIDC spike remains in the repository as isolated research code, but
 it is deferred and is not used by the app or Docker harness.
+
+## Manual device beta checks
+
+Physical-device testing is intentionally manual. Enable Developer Mode on the
+device, select the configured Apple team in Xcode, and install the Release
+candidate. On AP16, verify:
+
+- MP3, M4B/AAC, FLAC, transcoded, and multi-file playback;
+- whole-book seeking, chapter/file transitions, and persisted playback speed;
+- background, lock-screen, Control Center, wired/headset, Bluetooth, and
+  AirPlay controls, including removed-output pause behavior;
+- download continuation across backgrounding and relaunch, followed by local
+  playback with the server unavailable;
+- account removal with both retained and deleted downloads, plus progress
+  conflict resolution;
+- VoiceOver and the largest Dynamic Type setting across login, Library, Book
+  Detail, Downloads, mini-player, and Now Playing.
+
+Record the device, iOS build, server version, media fixture, and result for each
+check. No script in this repository discovers, installs to, or controls a
+physical device.
 
 ## Project documentation
 

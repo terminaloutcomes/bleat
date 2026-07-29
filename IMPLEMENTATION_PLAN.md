@@ -452,7 +452,8 @@ Deliver:
 - Speed selection, persistence, per-book override, pitch algorithm, and
   reapplication across transitions.
 - Full Player and mini-player behavior.
-- Whole-book scrubber with accidental-seek protection and chapter navigation.
+- Whole-book scrubber and chapter navigation. Accidental large-scrub
+  protection remains in the deferred follow-up list.
 - `AVAudioSession` interruption, route, AirPlay, and media-services-reset
   handling.
 - `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`.
@@ -480,9 +481,13 @@ controls.
 Current status: the MVP player, whole-book, chapter, and multi-file navigation,
 native AirPlay route picker, background audio, Now Playing metadata, remote
 commands, configurable skip intervals, sleep timers, resume rewind, streaming,
-and downloaded playback are implemented. Simulator build and automated
-coverage are in place; the physical iPhone media matrix remains to be
-exercised.
+and downloaded playback are implemented. Media-services reset recovery
+reactivates audio and rebuilds the queue at the whole-book position while
+preserving play/pause intent, with typed failure if recovery is impossible.
+The disposable HTTPS simulator journey covers live streaming, chapters,
+multi-file navigation, download completion, relaunch, cached detail, and
+server-offline local playback. The physical iPhone media matrix remains a
+manual beta gate.
 
 ### Phase 5 — progress, sessions, bookmarks, and conflict handling
 
@@ -761,8 +766,8 @@ Keep numeric coverage and requirement traceability as separate gates.
   interruption, route loss, and reset.
 - 0.5×–3.0× selection, pitch algorithm boundary at 2.0×, persistence, actual
   rate reporting, and transition reapplication.
-- Seek/scrub/skip/chapter commands, accidental-scrub protection, remote
-  commands, Now Playing global time, artwork, rate, and chapter.
+- Seek/scrub/skip/chapter commands, remote commands, Now Playing global time,
+  artwork, rate, and chapter. Accidental large-scrub protection is deferred.
 - Sleep timer presets/end-of-chapter and resume rewind limits.
 
 #### Progress, sessions, and bookmarks
@@ -844,6 +849,8 @@ concrete test names and release evidence:
 5. Requirement-link and changed-code coverage checks.
 6. For auth, API, DTO, route, playback-session, progress, metadata, or download
    changes: Dockerized pinned-server smoke tests.
+7. For the complete app journey: disposable HTTPS simulator tests through
+   `scripts/test-app-live.sh`.
 
 ### Main branch
 
@@ -869,7 +876,7 @@ concrete test names and release evidence:
 ### Beta and release
 
 1. All CI suites green from a clean checkout.
-2. Physical iPhone and iPad device matrix.
+2. Manual physical iPhone and iPad device matrix; no automated device control.
 3. Bluetooth/headset removal, AirPlay, CarPlay, lock/background, first-unlock,
    network-transition, and storage-pressure tests.
 4. Full accessibility audit.
