@@ -249,6 +249,86 @@ private struct ReauthenticationView: View {
     }
 }
 
+private struct DiagnosticsView: View {
+    let report: DiagnosticsReport
+
+    var body: some View {
+        List {
+            Section("App") {
+                LabeledContent(
+                    "Version",
+                    value:
+                        "\(report.environment.appVersion) (\(report.environment.appBuild))"
+                )
+                LabeledContent(
+                    "Operating System",
+                    value: report.environment.operatingSystem
+                )
+                LabeledContent("State", value: report.appState)
+            }
+
+            Section("Server") {
+                LabeledContent(
+                    "Version",
+                    value: report.serverVersion ?? "Unavailable"
+                )
+                .accessibilityIdentifier(
+                    "diagnostics.serverVersion"
+                )
+                LabeledContent(
+                    "Connection",
+                    value: report.connectionState ?? "No active account"
+                )
+                LabeledContent(
+                    "Saved Accounts",
+                    value: String(report.accountCount)
+                )
+            }
+
+            Section("Activity") {
+                LabeledContent("Libraries", value: report.libraryState)
+                LabeledContent("Home", value: report.homeState)
+                LabeledContent("Search", value: report.searchState)
+                LabeledContent("Playback", value: report.playbackState)
+                LabeledContent(
+                    "Playback Sync",
+                    value: report.playbackSyncState
+                )
+                LabeledContent(
+                    "Downloads",
+                    value: String(report.downloadCount)
+                )
+            }
+
+            if !report.errorCodes.isEmpty {
+                Section("Active Errors") {
+                    ForEach(report.errorCodes, id: \.self) { code in
+                        Text(code)
+                    }
+                }
+            }
+
+            Section {
+                ShareLink(
+                    item: report.text,
+                    subject: Text("Bleat Diagnostics")
+                ) {
+                    Label(
+                        "Export Diagnostics",
+                        systemImage: "square.and.arrow.up"
+                    )
+                }
+                .accessibilityIdentifier("diagnostics.export")
+            } footer: {
+                Text(
+                    "The export excludes account names, server addresses, credentials, tokens, response bodies, media URLs, session IDs, and local file paths."
+                )
+            }
+        }
+        .navigationTitle("Diagnostics")
+    }
+}
+
 private struct SignedInView: View {
     @Bindable var model: AppModel
     @State private var showPlayer = false
@@ -1295,6 +1375,20 @@ private struct SettingsView: View {
                     .accessibilityIdentifier(
                         "settings.playback.resumeRewind"
                     )
+                }
+
+                Section {
+                    NavigationLink {
+                        DiagnosticsView(
+                            report: model.diagnosticsReport()
+                        )
+                    } label: {
+                        Label(
+                            "Diagnostics",
+                            systemImage: "stethoscope"
+                        )
+                    }
+                    .accessibilityIdentifier("settings.diagnostics")
                 }
 
                 Section {

@@ -249,6 +249,12 @@ for the active saved account using only its password while preserving its
 downloads and local state. Switching the browsing account does not stop current
 playback or unrelated background downloads.
 
+Settings also provides **Diagnostics**, which shows the app, operating-system,
+server, connection, resource, playback, sync, and download state. **Export
+Diagnostics** shares the same snapshot with stable typed error codes. The
+snapshot is constructed without account names, server addresses, credentials,
+tokens, response bodies, media URLs, playback session IDs, or local file paths.
+
 **Remove Account** always asks for confirmation. If that account owns local
 books, choose whether to keep or delete them. Keeping them cancels unfinished
 transfers but preserves local files, metadata, and device progress. When no

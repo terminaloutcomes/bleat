@@ -142,6 +142,26 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
+        let diagnostics = app.buttons["settings.diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
+        diagnostics.tap()
+        XCTAssertTrue(
+            app.navigationBars["Diagnostics"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.swipeUp()
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "diagnostics.serverVersion"
+            ].waitForExistence(timeout: 3)
+        )
+        app.swipeUp()
+        XCTAssertTrue(
+            app.buttons["diagnostics.export"].waitForExistence(timeout: 3)
+        )
+        app.navigationBars.buttons.firstMatch.tap()
+
         let removeAccount = app.buttons["settings.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()

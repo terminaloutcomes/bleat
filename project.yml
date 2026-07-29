@@ -34,6 +34,8 @@ targets:
           - audio
     settings:
       base:
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.1.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
         PRODUCT_NAME: Bleat
         TARGETED_DEVICE_FAMILY: "1,2"

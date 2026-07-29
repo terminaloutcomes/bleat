@@ -729,6 +729,83 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.books, .loaded(page))
     }
 
+    func testDiagnosticsReportContainsStateWithoutAccountSecrets()
+        async throws
+    {
+        let account = try fixtureAccount(
+            accountID: "private-account-id",
+            userID: "private-user-id",
+            username: "private-username",
+            server: "https://private.example/library"
+        )
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let report = model.diagnosticsReport(
+            generatedAt: Date(timeIntervalSince1970: 1_721_865_600),
+            environment: DiagnosticsEnvironment(
+                appVersion: "0.1.0",
+                appBuild: "7",
+                operatingSystem: "iOS 26.0"
+            )
+        )
+
+        XCTAssertEqual(report.serverVersion, "2.36.0")
+        XCTAssertEqual(report.connectionState, "Connected")
+        XCTAssertEqual(report.accountCount, 1)
+        XCTAssertEqual(report.libraryState, "Loaded")
+        XCTAssertEqual(report.playbackState, "Idle")
+        XCTAssertTrue(report.errorCodes.isEmpty)
+        XCTAssertTrue(report.text.contains("App: 0.1.0 (7)"))
+        XCTAssertTrue(report.text.contains("Server version: 2.36.0"))
+        XCTAssertFalse(report.text.contains("private-account-id"))
+        XCTAssertFalse(report.text.contains("private-user-id"))
+        XCTAssertFalse(report.text.contains("private-username"))
+        XCTAssertFalse(report.text.contains("private.example"))
+    }
+
+    func testDiagnosticsReportUsesTypedErrorCodes() async throws {
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            login: .failure(
+                .onboarding(
+                    .authenticationFailed(.invalidCredentials)
+                )
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        _ = await model.login(
+            serverAddress: "https://private.example",
+            username: "private-username",
+            password: "private-password"
+        )
+        let report = model.diagnosticsReport(
+            environment: DiagnosticsEnvironment(
+                appVersion: "0.1.0",
+                appBuild: "7",
+                operatingSystem: "iOS 26.0"
+            )
+        )
+
+        XCTAssertEqual(report.errorCodes, ["invalid_credentials"])
+        XCTAssertTrue(
+            report.text.contains(
+                "Active error codes: invalid_credentials"
+            )
+        )
+        XCTAssertFalse(report.text.contains("private-password"))
+        XCTAssertFalse(report.text.contains("private-username"))
+        XCTAssertFalse(report.text.contains("private.example"))
+    }
+
     func testConcurrentLoginIsIgnoredWhileSubmissionIsActive() async throws {
         let account = try fixtureAccount()
         let gate = AsyncGate()
@@ -2265,7 +2342,9 @@ private actor AsyncGate {
         entered = true
         let continuations = enteredContinuations
         enteredContinuations.removeAll()
-        continuations.forEach { $0.resume() }
+        for continuation in continuations {
+            continuation.resume()
+        }
 
         guard !released else {
             return
@@ -2288,6 +2367,8 @@ private actor AsyncGate {
         released = true
         let continuations = releaseContinuations
         releaseContinuations.removeAll()
-        continuations.forEach { $0.resume() }
+        for continuation in continuations {
+            continuation.resume()
+        }
     }
 }

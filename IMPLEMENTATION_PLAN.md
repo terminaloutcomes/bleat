@@ -340,8 +340,9 @@ policy derives visible book actions from native-account permissions and
 mirrors the server's library, tag, and explicit-content access rules. A native
 username/password SwiftUI form now drives discovery and transactional
 onboarding, restores the active profile on launch, and removes accounts without
-any OIDC surface. Multi-account switching and password-only reauthentication
-are implemented. Diagnostics remain.
+any OIDC surface. Multi-account switching, password-only reauthentication, and
+a privacy-safe Settings diagnostics snapshot/export are implemented. Recording
+bounded endpoint/status/correlation and player-transition history remains.
 
 Deliver:
 
