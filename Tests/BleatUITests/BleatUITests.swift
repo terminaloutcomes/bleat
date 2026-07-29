@@ -101,6 +101,9 @@ final class BleatUITests: XCTestCase {
             ))
         app.buttons["Settings"].tap()
 
+        let wifiOnly = app.switches["settings.downloads.wifiOnly"]
+        XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
+        XCTAssertEqual(wifiOnly.value as? String, "1")
         let addAccount = app.buttons["settings.addAccount"]
         XCTAssertTrue(addAccount.waitForExistence(timeout: 3))
         addAccount.tap()

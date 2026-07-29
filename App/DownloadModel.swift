@@ -35,6 +35,47 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
     }
 }
 
+enum DownloadNetworkPolicy: String, Equatable, Sendable {
+    case wifiOnly
+    case allowCellular
+
+    var allowsExpensiveNetworkAccess: Bool {
+        self == .allowCellular
+    }
+
+    func applying(to request: URLRequest) -> URLRequest {
+        var request = request
+        request.allowsExpensiveNetworkAccess =
+            allowsExpensiveNetworkAccess
+        return request
+    }
+}
+
+enum DownloadNetworkDecision: Equatable, Sendable {
+    case schedule
+    case confirmCellular(expectedBytes: Int64)
+
+    static func decide(
+        policy: DownloadNetworkPolicy,
+        expectedBytes: Int64,
+        largeDownloadThresholdBytes: Int64
+    ) -> DownloadNetworkDecision {
+        guard policy == .allowCellular,
+            expectedBytes >= largeDownloadThresholdBytes
+        else {
+            return .schedule
+        }
+        return .confirmCellular(expectedBytes: expectedBytes)
+    }
+}
+
+struct PendingCellularDownload: Equatable, Sendable {
+    let detail: LibraryBookDetail
+    let account: ServerAccount
+    let plan: DownloadPlan
+    let expectedBytes: Int64
+}
+
 enum DownloadRepairPlanner {
     static func tracks(
         record: DownloadedBookRecord,
@@ -70,7 +111,11 @@ enum DownloadRepairPlanner {
 @MainActor
 @Observable
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
+    static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
+
     private let service: any AppServicing
+    private let defaults: UserDefaults
+    private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
     private nonisolated let layout: DownloadStorageLayout?
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
@@ -94,9 +139,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var progress: [DownloadID: Double] = [:]
     private(set) var pausedDownloadIDs: Set<DownloadID> = []
     private(set) var failure: DownloadModelFailure?
+    private(set) var networkPolicy: DownloadNetworkPolicy
+    private(set) var pendingCellularDownload: PendingCellularDownload?
 
-    init(service: any AppServicing) {
+    init(
+        service: any AppServicing,
+        defaults: UserDefaults = .standard
+    ) {
         self.service = service
+        self.defaults = defaults
+        networkPolicy =
+            defaults.string(
+                forKey: "bleat.downloads.networkPolicy.v1"
+            )
+            .flatMap(DownloadNetworkPolicy.init(rawValue:))
+            ?? .wifiOnly
         do {
             guard
                 let supportURL = FileManager.default.urls(
@@ -163,31 +220,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 for: account,
                 itemID: detail.id
             )
-            _ = try await storage.preflight(plan: plan)
-            let downloadID = DownloadID(
-                rawValue: UUID().uuidString.lowercased()
-            )
-            _ = try await storage.create(
-                downloadID: downloadID,
-                accountID: account.id,
-                plan: plan,
-                detail: detail
-            )
-            for track in plan.tracks {
-                let identity = try DownloadTaskIdentity(
-                    downloadID: downloadID,
-                    accountID: account.id,
-                    itemID: detail.id,
-                    track: track
+            let requirement = try await storage.preflight(plan: plan)
+            switch DownloadNetworkDecision.decide(
+                policy: networkPolicy,
+                expectedBytes: requirement.expectedBytes,
+                largeDownloadThresholdBytes:
+                    Self.largeDownloadThresholdBytes
+            ) {
+            case .confirmCellular(let expectedBytes):
+                pendingCellularDownload = PendingCellularDownload(
+                    detail: detail,
+                    account: account,
+                    plan: plan,
+                    expectedBytes: expectedBytes
                 )
-                let request = try await service.authorizedDownloadRequest(
-                    for: account,
-                    identity: identity
+            case .schedule:
+                try await schedule(
+                    plan: plan,
+                    detail: detail,
+                    account: account,
+                    storage: storage
                 )
-                let task = session.downloadTask(with: request)
-                task.taskDescription = try identity.taskDescription()
-                task.resume()
-                _ = try await storage.markDownloading(identity)
             }
             await refresh()
         } catch let error as DownloadStorageError {
@@ -196,6 +249,75 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         } catch {
             failure = .preparationFailed
             await refresh()
+        }
+    }
+
+    func setNetworkPolicy(_ policy: DownloadNetworkPolicy) {
+        networkPolicy = policy
+        defaults.set(policy.rawValue, forKey: networkPolicyKey)
+    }
+
+    func confirmCellularDownload() async {
+        guard let pending = pendingCellularDownload,
+            let storage
+        else {
+            return
+        }
+        pendingCellularDownload = nil
+        failure = nil
+        do {
+            _ = try await storage.preflight(plan: pending.plan)
+            try await schedule(
+                plan: pending.plan,
+                detail: pending.detail,
+                account: pending.account,
+                storage: storage
+            )
+            await refresh()
+        } catch let error as DownloadStorageError {
+            failure = storageFailure(error)
+        } catch {
+            failure = .preparationFailed
+        }
+    }
+
+    func cancelCellularDownload() {
+        pendingCellularDownload = nil
+    }
+
+    private func schedule(
+        plan: DownloadPlan,
+        detail: LibraryBookDetail,
+        account: ServerAccount,
+        storage: DownloadStorage
+    ) async throws {
+        let downloadID = DownloadID(
+            rawValue: UUID().uuidString.lowercased()
+        )
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        for track in plan.tracks {
+            let identity = try DownloadTaskIdentity(
+                downloadID: downloadID,
+                accountID: account.id,
+                itemID: detail.id,
+                track: track
+            )
+            let authorizedRequest =
+                try await service.authorizedDownloadRequest(
+                    for: account,
+                    identity: identity
+                )
+            let task = session.downloadTask(
+                with: networkPolicy.applying(to: authorizedRequest)
+            )
+            task.taskDescription = try identity.taskDescription()
+            task.resume()
+            _ = try await storage.markDownloading(identity)
         }
     }
 
@@ -278,7 +400,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     for: account,
                     identity: identity
                 )
-                let task = session.downloadTask(with: request)
+                let task = session.downloadTask(
+                    with: networkPolicy.applying(to: request)
+                )
                 task.taskDescription = try identity.taskDescription()
                 task.resume()
                 _ = try await storage.markDownloading(identity)
@@ -458,7 +582,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         rejectedRequest: request
                     )
                 let replacementTask = session.downloadTask(
-                    with: replacement
+                    with: networkPolicy.applying(to: replacement)
                 )
                 replacementTask.taskDescription = description
                 replacementTask.resume()

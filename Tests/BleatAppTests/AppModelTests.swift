@@ -115,6 +115,68 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
     }
 
+    func testDownloadNetworkPolicyPersistsAndControlsRequests() throws {
+        let suite = "DownloadNetworkPolicyTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let service = TestAppService(activeAccount: .success(nil))
+        let first = DownloadModel(
+            service: service,
+            defaults: defaults
+        )
+        var request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://books.example/file"))
+        )
+        request.setValue(
+            "Bearer access",
+            forHTTPHeaderField: "Authorization"
+        )
+
+        XCTAssertEqual(first.networkPolicy, .wifiOnly)
+        let wifiRequest = DownloadNetworkPolicy.wifiOnly.applying(
+            to: request
+        )
+        XCTAssertFalse(wifiRequest.allowsExpensiveNetworkAccess)
+        XCTAssertEqual(
+            wifiRequest.value(forHTTPHeaderField: "Authorization"),
+            "Bearer access"
+        )
+        first.setNetworkPolicy(.allowCellular)
+        let restored = DownloadModel(
+            service: service,
+            defaults: defaults
+        )
+        XCTAssertEqual(restored.networkPolicy, .allowCellular)
+        XCTAssertTrue(
+            DownloadNetworkPolicy.allowCellular.applying(to: request)
+                .allowsExpensiveNetworkAccess
+        )
+        XCTAssertEqual(
+            DownloadNetworkDecision.decide(
+                policy: .allowCellular,
+                expectedBytes:
+                    DownloadModel.largeDownloadThresholdBytes,
+                largeDownloadThresholdBytes:
+                    DownloadModel.largeDownloadThresholdBytes
+            ),
+            .confirmCellular(
+                expectedBytes:
+                    DownloadModel.largeDownloadThresholdBytes
+            )
+        )
+        XCTAssertEqual(
+            DownloadNetworkDecision.decide(
+                policy: .wifiOnly,
+                expectedBytes: Int64.max,
+                largeDownloadThresholdBytes:
+                    DownloadModel.largeDownloadThresholdBytes
+            ),
+            .schedule
+        )
+    }
+
     func testStartWithoutSavedAccountShowsLogin() async {
         let service = TestAppService(activeAccount: .success(nil))
         let model = AppModel(service: service)

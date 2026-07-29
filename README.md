@@ -199,6 +199,9 @@ audio bytes plus the larger of 10% or 256 MB to be available. Downloads are
 grouped by account and show stored versus expected bytes for each book and the
 stored total for that account. A 401 transfer response is replaced using the
 native account's rotating refresh token without placing tokens in URLs.
+Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
+expensive networks on newly created and replacement requests; books of 100 MB
+or more still require explicit confirmation before Bleat schedules them.
 
 Completed books play directly from their verified local files without opening a
 server playback session. Failed or cancelled books expose Retry, active books

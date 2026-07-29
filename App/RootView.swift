@@ -165,6 +165,30 @@ private struct SignedInView: View {
         .sheet(isPresented: $showPlayer) {
             PlayerView(playback: model.playback)
         }
+        .alert(
+            "Allow Cellular Download?",
+            isPresented: Binding(
+                get: {
+                    model.downloads.pendingCellularDownload != nil
+                },
+                set: { _ in }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                model.downloads.cancelCellularDownload()
+            }
+            Button("Download") {
+                Task {
+                    await model.downloads.confirmCellularDownload()
+                }
+            }
+        } message: {
+            if let pending = model.downloads.pendingCellularDownload {
+                Text(
+                    "\(pending.detail.title) is \(ByteCountFormatter.string(fromByteCount: pending.expectedBytes, countStyle: .file)). It may use cellular data."
+                )
+            }
+        }
         .accessibilityIdentifier("app.signedIn")
     }
 }
@@ -936,6 +960,25 @@ private struct SettingsView: View {
                         Text(failure.message)
                             .foregroundStyle(.red)
                     }
+                }
+
+                Section("Downloads") {
+                    Toggle(
+                        "Wi-Fi Only",
+                        isOn: Binding(
+                            get: {
+                                model.downloads.networkPolicy == .wifiOnly
+                            },
+                            set: { wifiOnly in
+                                model.downloads.setNetworkPolicy(
+                                    wifiOnly ? .wifiOnly : .allowCellular
+                                )
+                            }
+                        )
+                    )
+                    .accessibilityIdentifier(
+                        "settings.downloads.wifiOnly"
+                    )
                 }
 
                 Section {
