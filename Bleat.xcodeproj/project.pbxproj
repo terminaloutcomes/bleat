@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
+		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		212CB9A152C459B1BFDFBBCF /* CoverImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */; };
 		297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F16612F5D186DFAED140F6 /* BookCoverView.swift */; };
 		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
@@ -18,6 +19,7 @@
 		732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
 		81AC77653B52F97E7610C957 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0639281D9850EC68335644F /* RootView.swift */; };
+		83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */; };
 		9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */; };
 		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
 		C1224783D3F9B1CC7057759A /* AppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12995342C7E6318A5F929A2 /* AppService.swift */; };
@@ -42,6 +44,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStoreTests.swift; sourceTree = "<group>"; };
 		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
@@ -51,6 +54,7 @@
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		74A1612593F0EC1117D0ADD8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessor.swift; sourceTree = "<group>"; };
+		9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStore.swift; sourceTree = "<group>"; };
 		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */,
+				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
 			);
 			path = BleatAppTests;
 			sourceTree = "<group>";
@@ -123,6 +128,7 @@
 				A7BFAE347AEDFB9E315AD92C /* Info.plist */,
 				F2675018070436D35F6FC0FF /* MetadataEditorView.swift */,
 				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
+				9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */,
 				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
@@ -262,6 +268,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */,
+				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,6 +292,7 @@
 				9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */,
 				6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */,
 				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
+				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
 				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,

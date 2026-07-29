@@ -200,7 +200,9 @@ native account's rotating refresh token without placing tokens in URLs.
 Completed books play directly from their verified local files without opening a
 server playback session. Failed or cancelled books expose Retry, active books
 expose Pause and Cancel, paused books expose Resume, and completed books can be
-removed from the Downloads tab.
+removed from the Downloads tab. Local-file playback saves an account-scoped
+position every five seconds and on pause, seek, backgrounding, completion, and
+stop, then resumes from that durable position after relaunch.
 
 ## Use multiple accounts
 

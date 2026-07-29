@@ -32,6 +32,7 @@ enum BookmarkState: Equatable, Sendable {
 @Observable
 final class PlaybackModel {
     private let service: any AppServicing
+    private let positionStore: PlaybackPositionStore
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
@@ -44,6 +45,7 @@ final class PlaybackModel {
     private var sleepTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
+    private var lastPersistedLocalTime: Double = 0
 
     private(set) var state: PlaybackState = .idle
     private(set) var syncState: PlaybackSyncState = .idle
@@ -66,8 +68,12 @@ final class PlaybackModel {
         state == .playing
     }
 
-    init(service: any AppServicing) {
+    init(
+        service: any AppServicing,
+        positionStore: PlaybackPositionStore = .shared
+    ) {
         self.service = service
+        self.positionStore = positionStore
         configureRemoteCommands()
         observeAudioSession()
     }
@@ -250,8 +256,16 @@ final class PlaybackModel {
             activeAccount = account
             preparation = prepared
             duration = prepared.duration
-            currentTime = prepared.currentTime
+            let savedPosition = positionStore.position(
+                accountID: account.id,
+                itemID: detail.id
+            )
+            currentTime = min(
+                max(savedPosition ?? prepared.currentTime, 0),
+                prepared.duration
+            )
             lastAttemptedSyncTime = currentTime
+            lastPersistedLocalTime = currentTime
             try await rebuildQueue(at: currentTime)
             guard generation == operationGeneration else {
                 return
@@ -376,6 +390,7 @@ final class PlaybackModel {
         player.pause()
         state = .paused
         updateNowPlaying()
+        persistLocalPosition()
         Task { @MainActor [weak self] in
             await self?.syncProgress()
         }
@@ -446,6 +461,7 @@ final class PlaybackModel {
                 return
             }
             currentTime = target
+            persistLocalPosition()
             state = shouldResume ? .playing : .paused
             if shouldResume {
                 player?.playImmediately(atRate: rate)
@@ -500,6 +516,7 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        persistLocalPosition()
         resetPlayer()
         await closeActiveSession()
         guard generation == operationGeneration else {
@@ -684,6 +701,7 @@ final class PlaybackModel {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
+                    self?.persistLocalPosition()
                     await self?.syncProgress()
                 }
             }
@@ -779,6 +797,9 @@ final class PlaybackModel {
             return
         }
         currentTime = min(max(offset + itemTime, 0), duration)
+        if abs(currentTime - lastPersistedLocalTime) >= 5 {
+            persistLocalPosition()
+        }
         if isPlaying,
             currentTime - lastAttemptedSyncTime >= 15
         {
@@ -791,10 +812,30 @@ final class PlaybackModel {
 
     private func playbackEnded() {
         currentTime = duration
+        persistLocalPosition()
         state = .ended
         updateNowPlaying()
         Task { @MainActor [weak self] in
             await self?.syncProgress()
+        }
+    }
+
+    private func persistLocalPosition() {
+        guard let activeAccount,
+            let itemID,
+            preparation?.sessionID == nil
+        else {
+            return
+        }
+        do {
+            try positionStore.save(
+                currentTime,
+                accountID: activeAccount.id,
+                itemID: itemID
+            )
+            lastPersistedLocalTime = currentTime
+        } catch {
+            syncState = .failed
         }
     }
 
