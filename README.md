@@ -160,6 +160,10 @@ While streaming, Bleat sends the whole-book position to Audiobookshelf every
 15 seconds and after pause, seek, backgrounding, interruption, and completion.
 The MVP deliberately reports zero additional listening time.
 
+Home shelves, library/search rows, book detail, and Now Playing request bounded
+cover images with `updatedAt` cache busting. Cover URLs retain server path
+prefixes and never contain access tokens.
+
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual
 app sign-in yet.

@@ -232,6 +232,16 @@ private struct HomeContent: View {
                     ForEach(shelf.items, id: \.id.rawValue) { book in
                         NavigationLink(value: book) {
                             VStack(alignment: .leading, spacing: 4) {
+                                BookCoverView(
+                                    server: model.account?.server,
+                                    itemID: book.id,
+                                    updatedAtMilliseconds:
+                                        book.updatedAtMilliseconds,
+                                    width: 360,
+                                    height: 360,
+                                    cornerRadius: 10
+                                )
+                                .frame(width: 180, height: 180)
                                 Text(book.title)
                                     .font(.headline)
                                     .lineLimit(2)
@@ -363,7 +373,10 @@ private struct BookListContent: View {
             } else {
                 List(page.items, id: \.id.rawValue) { book in
                     NavigationLink(value: book) {
-                        BookSummaryRow(book: book)
+                        BookSummaryRow(
+                            book: book,
+                            server: model.account?.server
+                        )
                     }
                 }
                 .accessibilityIdentifier("books.list")
@@ -434,7 +447,10 @@ private struct SearchView: View {
             } else {
                 List(results, id: \.id.rawValue) { book in
                     NavigationLink(value: book) {
-                        BookSummaryRow(book: book)
+                        BookSummaryRow(
+                            book: book,
+                            server: model.account?.server
+                        )
                     }
                 }
                 .accessibilityIdentifier("search.results")
@@ -450,14 +466,25 @@ private struct SearchTaskContext: Hashable {
 
 private struct BookSummaryRow: View {
     let book: LibraryBookSummary
+    let server: NormalizedServerURL?
 
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(book.title)
-            if let author = book.authorName {
-                Text(author)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            BookCoverView(
+                server: server,
+                itemID: book.id,
+                updatedAtMilliseconds: book.updatedAtMilliseconds,
+                width: 128,
+                height: 128
+            )
+            .frame(width: 64, height: 64)
+            VStack(alignment: .leading) {
+                Text(book.title)
+                if let author = book.authorName {
+                    Text(author)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -499,6 +526,18 @@ private struct BookDetailView: View {
     private func detailContent(_ detail: LibraryBookDetail) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                BookCoverView(
+                    server: model.account?.server,
+                    itemID: detail.id,
+                    updatedAtMilliseconds: detail.updatedAtMilliseconds,
+                    width: 600,
+                    height: 600,
+                    cornerRadius: 14
+                )
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: 300)
+                .frame(maxWidth: .infinity)
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(detail.title)
                         .font(.title.bold())

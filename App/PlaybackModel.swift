@@ -41,6 +41,7 @@ final class PlaybackModel {
     private(set) var itemID: LibraryItemID?
     private(set) var title = ""
     private(set) var author = ""
+    private(set) var coverURL: URL?
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
@@ -89,6 +90,13 @@ final class PlaybackModel {
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
+        coverURL = BookCoverURL.make(
+            server: account.server,
+            itemID: detail.id,
+            updatedAtMilliseconds: detail.updatedAtMilliseconds,
+            width: 600,
+            height: 600
+        )
         duration = detail.duration
         currentTime = detail.progress?.currentTime ?? 0
         lastAttemptedSyncTime = currentTime
@@ -279,6 +287,7 @@ final class PlaybackModel {
         itemID = nil
         title = ""
         author = ""
+        coverURL = nil
         currentTime = 0
         duration = 0
         lastAttemptedSyncTime = 0

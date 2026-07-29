@@ -60,9 +60,12 @@ struct PlayerView: View {
             VStack(spacing: 24) {
                 Spacer()
 
-                Image(systemName: "book.closed.fill")
-                    .font(.system(size: 88))
-                    .foregroundStyle(.secondary)
+                BookCoverView(
+                    url: playback.coverURL,
+                    cornerRadius: 16
+                )
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: 320)
 
                 VStack(spacing: 6) {
                     Text(playback.title)

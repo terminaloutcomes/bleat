@@ -5,6 +5,49 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testCoverURLRetainsPrefixAndUsesCacheDimensionsWithoutToken()
+        throws
+    {
+        let server = try NormalizedServerURL(
+            "https://books.example/audiobookshelf"
+        )
+
+        let url = try XCTUnwrap(
+            BookCoverURL.make(
+                server: server,
+                itemID: LibraryItemID(rawValue: "item/one"),
+                updatedAtMilliseconds: 123,
+                width: 600,
+                height: 400
+            )
+        )
+        let components = try XCTUnwrap(
+            URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            )
+        )
+
+        XCTAssertEqual(
+            components.percentEncodedPath,
+            "/audiobookshelf/api/items/item%2Fone/cover"
+        )
+        XCTAssertEqual(
+            components.queryItems,
+            [
+                URLQueryItem(name: "width", value: "600"),
+                URLQueryItem(name: "height", value: "400"),
+                URLQueryItem(name: "format", value: "jpeg"),
+                URLQueryItem(name: "ts", value: "123"),
+            ]
+        )
+        XCTAssertFalse(
+            components.queryItems?.contains {
+                ["token", "access_token"].contains($0.name.lowercased())
+            } ?? true
+        )
+    }
+
     func testStartWithoutSavedAccountShowsLogin() async {
         let service = TestAppService(activeAccount: .success(nil))
         let model = AppModel(service: service)
