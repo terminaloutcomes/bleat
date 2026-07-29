@@ -402,12 +402,6 @@ private struct HomeView: View {
                 .navigationDestination(for: LibraryBookSummary.self) { book in
                     BookDetailView(model: model, book: book)
                 }
-                .refreshable {
-                    guard let library = model.selectedLibrary else {
-                        return
-                    }
-                    await model.selectLibrary(library)
-                }
         }
     }
 
@@ -542,6 +536,9 @@ private struct HomeContent: View {
             .padding(.vertical)
         }
         .accessibilityIdentifier("home.shelves")
+        .refreshable {
+            await refresh()
+        }
     }
 
     private func statusScroll<Content: View>(
@@ -553,6 +550,16 @@ private struct HomeContent: View {
                 .padding(.vertical, 80)
         }
         .accessibilityIdentifier("home.shelves")
+        .refreshable {
+            await refresh()
+        }
+    }
+
+    private func refresh() async {
+        guard let library = model.selectedLibrary else {
+            return
+        }
+        await model.selectLibrary(library)
     }
 
     private var downloadedShelf: some View {
@@ -682,9 +689,6 @@ private struct LibraryView: View {
                 BookListContent(model: model)
             }
             .navigationTitle("Library")
-            .refreshable {
-                await model.loadLibraries()
-            }
         }
     }
 
@@ -957,6 +961,9 @@ private struct BookListContent: View {
                     }
                 }
                 .accessibilityIdentifier("books.list")
+                .refreshable {
+                    await model.loadLibraries()
+                }
             }
         }
     }
@@ -970,6 +977,9 @@ private struct BookListContent: View {
                 .padding(.vertical, 80)
         }
         .accessibilityIdentifier("books.list")
+        .refreshable {
+            await model.loadLibraries()
+        }
     }
 
     private func failureView(_ failure: AppFailure) -> some View {

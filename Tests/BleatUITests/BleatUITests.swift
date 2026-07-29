@@ -12,7 +12,34 @@ private func tabButton(
     guard count > 0 else {
         return matches.firstMatch
     }
+    for selectedLabel in [
+        "Home",
+        "Library",
+        "Search",
+        "Downloads",
+        "Settings",
+    ] {
+        let selectedMatches = app.buttons.matching(
+            NSPredicate(format: "label == %@", selectedLabel)
+        )
+        let sharedCount = min(count, selectedMatches.count)
+        for index in 0..<sharedCount
+        where selectedMatches.element(boundBy: index).isSelected {
+            return matches.element(boundBy: index)
+        }
+    }
     return matches.element(boundBy: count - 1)
+}
+
+@MainActor
+private func pullToRefresh(_ element: XCUIElement) {
+    let start = element.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)
+    )
+    let end = element.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)
+    )
+    start.press(forDuration: 0.1, thenDragTo: end)
 }
 
 final class BleatUITests: XCTestCase {
@@ -270,6 +297,114 @@ final class BleatUITests: XCTestCase {
             )
         )
         XCTAssertFalse(loadMore.exists)
+    }
+
+    @MainActor
+    func testHomeAndLibraryUsePullToRefresh() {
+        let app = launch(scenario: "--ui-testing-refresh")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertFalse(app.buttons["home.reload"].exists)
+        let home = app.descendants(matching: .any)["home.shelves"]
+        XCTAssertTrue(home.waitForExistence(timeout: 3))
+        pullToRefresh(home)
+        XCTAssertTrue(
+            app.staticTexts["The Refreshed Home Audiobook"]
+                .waitForExistence(timeout: 3)
+        )
+
+        tabButton("Library", in: app).tap()
+        XCTAssertFalse(app.buttons["library.reload"].exists)
+        let library = app.descendants(matching: .any)["books.list"]
+        XCTAssertTrue(library.waitForExistence(timeout: 3))
+        pullToRefresh(library)
+        XCTAssertTrue(
+            app.staticTexts["The Refreshed Library Audiobook"]
+                .waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testTopMiniPlayerLeavesTabsNavigable() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "-UIPreferredContentSizeCategoryName",
+                "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.buttons.matching(
+            NSPredicate(
+                format: "label CONTAINS %@ AND label CONTAINS %@",
+                "The Test Audiobook",
+                "Test Author"
+            )
+        ).firstMatch
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        XCTAssertLessThan(miniPlayer.frame.midY, app.frame.midY)
+        let usesBottomTabBar = app.frame.width < 600
+
+        let library = tabButton("Library", in: app)
+        XCTAssertTrue(library.isHittable)
+        library.tap()
+        if usesBottomTabBar {
+            XCTAssertTrue(
+                app.navigationBars["Library"].waitForExistence(timeout: 3)
+            )
+        }
+
+        let search = tabButton("Search", in: app)
+        XCTAssertTrue(search.isHittable)
+        search.tap()
+        if usesBottomTabBar {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["search.screen"]
+                    .waitForExistence(timeout: 3)
+            )
+        }
+
+        let downloads = tabButton("Downloads", in: app)
+        XCTAssertTrue(downloads.isHittable)
+        downloads.tap()
+        if usesBottomTabBar {
+            XCTAssertTrue(
+                app.navigationBars["Downloads"].waitForExistence(timeout: 3)
+            )
+        }
+
+        let settings = tabButton("Settings", in: app)
+        XCTAssertTrue(settings.isHittable)
+        settings.tap()
+        if usesBottomTabBar {
+            XCTAssertTrue(
+                app.navigationBars["Settings"].waitForExistence(timeout: 3)
+            )
+        }
+
+        let home = tabButton("Home", in: app)
+        XCTAssertTrue(home.isHittable)
+        home.tap()
+        if usesBottomTabBar {
+            XCTAssertTrue(
+                app.navigationBars["The Test Audiobook"]
+                    .waitForExistence(timeout: 3)
+            )
+        }
     }
 
     @MainActor

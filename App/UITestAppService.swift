@@ -5,6 +5,7 @@
     private enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
         case signedIn = "--ui-testing-signed-in"
+        case refresh = "--ui-testing-refresh"
         case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
     }
@@ -12,6 +13,8 @@
     actor UITestAppService: AppServicing {
         private let scenario: UITestScenario
         private let accountResult: Result<ServerAccount, AppServiceError>
+        private var firstPageRequests = 0
+        private var homeShelfRequests = 0
 
         static func current() -> UITestAppService? {
             guard
@@ -34,7 +37,8 @@
         func accounts()
             async throws(AppServiceError) -> [ServerAccount]
         {
-            guard [.signedIn, .limitedPermissions].contains(scenario) else {
+            guard [.signedIn, .refresh, .limitedPermissions].contains(scenario)
+            else {
                 return []
             }
             return [try account()]
@@ -43,7 +47,8 @@
         func activeAccount()
             async throws(AppServiceError) -> ServerAccount?
         {
-            guard [.signedIn, .limitedPermissions].contains(scenario) else {
+            guard [.signedIn, .refresh, .limitedPermissions].contains(scenario)
+            else {
                 return nil
             }
             return try account()
@@ -111,11 +116,16 @@
                     limit: 1
                 )
             }
+            firstPageRequests += 1
+            let title =
+                scenario == .refresh && firstPageRequests >= 3
+                ? "The Refreshed Library Audiobook"
+                : "The Test Audiobook"
             return LibraryItemsPage(
                 items: [
                     Self.book(
                         id: "ui-book",
-                        title: "The Test Audiobook",
+                        title: title,
                         libraryID: libraryID
                     )
                 ],
@@ -129,30 +139,21 @@
             for account: ServerAccount,
             libraryID: LibraryID
         ) async throws(AppServiceError) -> [LibraryBookShelf] {
-            [
+            homeShelfRequests += 1
+            let title =
+                scenario == .refresh && homeShelfRequests >= 2
+                ? "The Refreshed Home Audiobook"
+                : "The Test Audiobook"
+            return [
                 LibraryBookShelf(
                     id: "continue-listening",
                     label: "Continue Listening",
                     labelLocalizationKey: nil,
                     items: [
-                        LibraryBookSummary(
-                            id: LibraryItemID(rawValue: "ui-book"),
-                            libraryID: libraryID,
-                            title: "The Test Audiobook",
-                            subtitle: nil,
-                            authorName: "Test Author",
-                            narratorName: "Test Narrator",
-                            seriesName: nil,
-                            genres: ["Fiction"],
-                            publisher: nil,
-                            publishedYear: "2026",
-                            duration: 3_600,
-                            trackCount: 1,
-                            chapterCount: 1,
-                            addedAtMilliseconds: 1,
-                            updatedAtMilliseconds: 1,
-                            isExplicit: false,
-                            isAbridged: false
+                        Self.book(
+                            id: "ui-book",
+                            title: title,
+                            libraryID: libraryID
                         )
                     ],
                     total: 1
