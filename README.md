@@ -1,15 +1,17 @@
 # Bleat
 
 Bleat is a native iPhone and iPad client for
-[Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 17 and newer
+[Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
 and is being implemented in Swift 6 with strict concurrency checking.
 
-The repository is currently at the core-foundation and authentication stage.
-`BleatCore` builds and its URL, routing, discovery, username/password login,
-single-flight token refresh, local logout, bearer-header, OIDC/PKCE, isolated
-authentication-cookie, and account-scoped Keychain behavior is tested. The
-SwiftUI application target has not been created yet, so there is not currently
-an app executable to launch.
+The repository is currently at the core-foundation, authentication, and
+playback-contract stage. `BleatCore` builds and its URL, routing, discovery,
+username/password login, single-flight token refresh, local logout,
+bearer-header, account-scoped Keychain, and playback-session behavior is
+tested. Native Audiobookshelf username/password is the active authentication
+scope; the earlier isolated OIDC spike is deferred. The SwiftUI application
+target has not been created yet, so there is not currently an app executable
+to launch.
 
 ## Requirements
 
@@ -114,11 +116,10 @@ Docker is required for live contract tests. Run the pinned Audiobookshelf
 ```
 
 The script creates fresh root and `/audiobookshelf` instances, waits for both
-services, initializes deterministic test-only root users, validates
-username/password login, bearer authorization, and rotating-token recovery
-after a 401, logs out, proves the server session is invalidated, then removes
-the containers and volumes. On failure it retains redacted diagnostic
-artifacts beneath
+services, initializes deterministic test-only root users and a three-book media
+library, validates username/password login, bearer authorization, rotating-token
+recovery, logout, and live playback routes, then removes the containers and
+volumes. On failure it retains redacted diagnostic artifacts beneath
 `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
@@ -130,9 +131,9 @@ Control the environment directly when developing a contract test:
 ```
 
 The harness currently covers the pinned 2.36.0 status, login-token,
-authorization, refresh-rotation, and logout contracts. Seeded libraries/media,
-2.26.x compatibility, current-stable compatibility, and HTTPS profiles will be
-added in subsequent implementation slices.
+authorization, refresh-rotation, logout, seeded-library, and media contracts.
+The 2.26.x compatibility, current-stable compatibility, and HTTPS profiles will
+be added in subsequent implementation slices.
 
 The deterministic refresh suite exercises 20 simultaneous 401 responses,
 single-flight rotation, retry limits, 403 behavior, typed failures, and
@@ -143,19 +144,16 @@ swift test --filter AuthenticatedRequestTests
 swift test --filter LogoutTests
 ```
 
-OIDC unit and transport-contract tests cover PKCE S256, strict callback and
-state validation, the external browser handoff, cookie-bound exchange,
-validation-before-persistence, concurrent-attempt rejection, and terminal
-cleanup. Run them directly with:
+The playback unit suite covers exact request fields, typed session decoding,
+direct/HLS route resolution, path prefixes, unsafe returned paths, and typed
+failures:
 
 ```sh
-swift test --filter OpenIDAuthenticationTests
-swift test \
-  --filter HTTPTransportTests.testOpenIDTransportKeepsThenClearsSessionCookies
+swift test --filter PlaybackSessionTests
 ```
 
-These tests model Audiobookshelf's two-client bridge locally. They do not
-replace the planned Docker profile with a real identity provider.
+The earlier OIDC spike remains in the repository as isolated research code, but
+it is deferred and is not used by the app or Docker harness.
 
 There is not yet a supported command for connecting this checkout to a
 personal Audiobookshelf server.

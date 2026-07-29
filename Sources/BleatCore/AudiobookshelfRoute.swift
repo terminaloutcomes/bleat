@@ -1,11 +1,5 @@
 import Foundation
 
-public enum PlaybackMethod: Int, Codable, Hashable, Sendable {
-    case directPlay = 0
-    case transcode = 2
-    case local = 3
-}
-
 public enum AudiobookshelfRoute: Hashable, Sendable {
     case status
     case login

@@ -75,9 +75,109 @@ bleat_initialize() {
     fi
 }
 
+bleat_login_access_token() {
+    local base_url="$1"
+    local login_payload
+    login_payload="$(
+        /usr/bin/curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header 'x-return-tokens: true' \
+            --data "{\"username\":\"${bleat_test_username}\",\"password\":\"${bleat_test_password}\"}" \
+            "${base_url}/login"
+    )"
+
+    print -r -- "${login_payload}" | jq --exit-status --raw-output \
+        '.user.accessToken | select(type == "string" and length > 0)'
+}
+
+bleat_seed_library() {
+    local base_url="$1"
+    local access_token
+    local libraries_payload
+    local library_id
+    local items_payload
+    local item_count
+    local attempt
+
+    access_token="$(bleat_login_access_token "${base_url}")"
+    libraries_payload="$(
+        /usr/bin/curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --header "Authorization: Bearer ${access_token}" \
+            "${base_url}/api/libraries"
+    )"
+    library_id="$(
+        print -r -- "${libraries_payload}" \
+            | jq --raw-output \
+                '.libraries[]? | select(.name == "Bleat Live Fixtures") | .id' \
+            | head -n 1
+    )"
+
+    if [[ -z "${library_id}" ]]; then
+        library_id="$(
+            /usr/bin/curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                --request POST \
+                --header "Authorization: Bearer ${access_token}" \
+                --header 'Content-Type: application/json' \
+                --data '{"name":"Bleat Live Fixtures","folders":[{"fullPath":"/audiobooks"}],"mediaType":"book","provider":"google"}' \
+                "${base_url}/api/libraries" \
+                | jq --exit-status --raw-output \
+                    '.id | select(type == "string" and length > 0)'
+        )"
+    fi
+
+    /usr/bin/curl \
+        --fail \
+        --silent \
+        --show-error \
+        --max-time 10 \
+        --request POST \
+        --header "Authorization: Bearer ${access_token}" \
+        "${base_url}/api/libraries/${library_id}/scan" \
+        >/dev/null
+
+    for attempt in {1..60}; do
+        items_payload="$(
+            /usr/bin/curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                --header "Authorization: Bearer ${access_token}" \
+                "${base_url}/api/libraries/${library_id}/items"
+        )"
+        item_count="$(
+            print -r -- "${items_payload}" \
+                | jq --exit-status --raw-output '.total'
+        )"
+        if [[ "${item_count}" == "3" ]]; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    print -u2 \
+        "Expected 3 seeded media items from ${base_url}, received ${item_count}"
+    return 1
+}
+
 bleat_seed() {
     bleat_initialize "${bleat_root_url}"
     bleat_initialize "${bleat_prefix_url}"
+    bleat_seed_library "${bleat_root_url}"
+    bleat_seed_library "${bleat_prefix_url}"
 }
 
 bleat_artifacts() {

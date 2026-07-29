@@ -17,7 +17,7 @@ final class LocalAuthenticationLiveTests: XCTestCase {
         }
 
         for (index, liveURL) in [rootURL, prefixURL].enumerated() {
-            let server = try secureServerURL(for: liveURL)
+            let server = try secureLiveServerURL(for: liveURL)
             let accountID = AccountID(rawValue: "live-\(index)")
             let store = LiveCredentialStore()
             let client = AuthCoordinator(
@@ -127,62 +127,4 @@ final class LocalAuthenticationLiveTests: XCTestCase {
         }
     }
 
-    private func secureServerURL(
-        for liveURL: String
-    ) throws -> NormalizedServerURL {
-        var components = try XCTUnwrap(URLComponents(string: liveURL))
-        components.scheme = "https"
-        return try NormalizedServerURL(
-            try XCTUnwrap(components.url).absoluteString
-        )
-    }
-}
-
-/// Rewrites only the live test's loopback requests after production has
-/// enforced HTTPS and applied bearer authorization.
-private struct LocalDockerHTTPTransport: HTTPTransport {
-    private let transport = URLSessionHTTPTransport()
-
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
-        guard let requestURL = request.url,
-              var components = URLComponents(
-                  url: requestURL,
-                  resolvingAgainstBaseURL: false
-              ),
-              components.host == "127.0.0.1",
-              components.scheme == "https"
-        else {
-            throw LocalDockerTransportError.invalidRequest
-        }
-
-        components.scheme = "http"
-        var rewrittenRequest = request
-        rewrittenRequest.url = try XCTUnwrap(components.url)
-        return try await transport.send(rewrittenRequest)
-    }
-}
-
-private actor LiveCredentialStore: AccountCredentialStore {
-    private var stored: [AccountID: AuthenticationTokens] = [:]
-
-    func credentials(
-        for accountID: AccountID
-    ) -> AuthenticationTokens? {
-        stored[accountID]
-    }
-
-    func save(
-        _ credentials: AuthenticationTokens,
-        for accountID: AccountID
-    ) {
-        stored[accountID] = credentials
-    }
-
-    func deleteCredentials(for accountID: AccountID) {
-        stored[accountID] = nil
-    }
-}
-
-private enum LocalDockerTransportError: Error {
-    case invalidRequest
 }

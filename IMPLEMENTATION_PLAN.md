@@ -25,8 +25,8 @@ Bleat 1.0 is done when:
 7. all 28 acceptance criteria in section 22 have test evidence attached to the
    release candidate;
 8. the specification, implementation map, captured fixtures, privacy
-   declarations, and user-facing OIDC setup documentation match the shipped
-   behavior.
+   declarations, and user-facing authentication documentation match the
+   shipped behavior.
 
 “Full test coverage” means complete behavioral and requirement coverage, not a
 misleading claim that simulator line coverage proves AVFoundation, Keychain,
@@ -50,8 +50,9 @@ specification:
 - Playback: AVFoundation and MediaPlayer.
 - Tests: XCTest/XCUITest and Apple code coverage tools.
 - Third-party runtime dependencies: none for 1.0.
-- Identity-provider logout: omit it from 1.0. Clear all temporary OIDC cookies
-  after authentication and do not retain identity-provider cookies.
+- Authentication scope: native Audiobookshelf username/password login and
+  rotating tokens. OIDC is deferred and is not part of the active 1.0
+  implementation or live-test matrix.
 - Analytics: none.
 - No production ATS exception, trust override, token-bearing URL, undocumented
   AVFoundation header option, or general service locator.
@@ -180,7 +181,6 @@ Deliver:
 - Compose profiles for:
   - one plain Audiobookshelf instance;
   - Audiobookshelf behind an HTTPS reverse proxy at `/audiobookshelf`;
-  - Audiobookshelf plus the selected OIDC provider;
   - the full media/download matrix.
 - `scripts/live-test-environment.sh` with `up`, `wait`, `seed`, `reset`,
   `artifacts`, and `down` commands. It must use a unique Compose project name,
@@ -191,8 +191,6 @@ Deliver:
   or another non-OpenSSL implementation and install its root certificate into
   the target simulator Keychain for the test run.
 - Reverse-proxy deployment under `/audiobookshelf`.
-- Authentik or Keycloak-compatible OIDC configuration with the exact mobile
-  redirect allow-list.
 - Seeded limited and full-permission users.
 - Seeded single M4B, multi-file MP3, FLAC, forced-transcode, long range-seek,
   many-small-track, and metadata-editable books.
@@ -236,10 +234,11 @@ Prove:
 
 #### 1C. OIDC/PKCE spike
 
-Implement only enough `OAuthAttempt`, cookie storage, browser handoff, callback
-validation, and code exchange to prove the full two-client bridge.
+Status: deferred by product direction. The existing isolated spike remains
+available as research code, but no identity provider is required by Bleat's
+active implementation or test harness.
 
-Prove:
+The retained research spike records:
 
 - PKCE verifier length/entropy and S256 challenge;
 - initial cookies survive the browser boundary and are required at exchange;
@@ -267,6 +266,9 @@ Prove:
 - one account's refresh failure does not affect another.
 
 #### 1E. Playback-route spike
+
+Status: verified against deterministic DTO and route tests plus fresh pinned
+2.36.0 root and path-prefixed Docker instances.
 
 Open real server sessions and prove:
 
@@ -312,7 +314,7 @@ Deliver:
 
 - `ServerAccount` persistence and account-scoped Keychain references.
 - Add-server discovery and authentication-method presentation.
-- Production local-login and OIDC coordinators.
+- Production native username/password login coordinator.
 - `/api/authorize`, refresh, logout, reauthentication, and account-removal
   flows.
 - `AudiobookshelfAPI` actor, typed requests/responses, route builder, status
@@ -324,7 +326,7 @@ Deliver:
 
 Test before exit:
 
-- every add-server, local-login, OIDC, token, logout, and account-removal branch;
+- every add-server, local-login, token, logout, and account-removal branch;
 - malformed and forward-compatible fixtures;
 - cross-account concurrency and storage isolation;
 - credentials remain available after first unlock but do not synchronize;
@@ -653,9 +655,6 @@ Keep numeric coverage and requirement traceability as separate gates.
 #### Authentication and accounts
 
 - Local login success and every missing/invalid-token path.
-- PKCE verifier/challenge/state/callback validation and cleanup.
-- Cookie-bound OIDC exchange, provider cancellation, missing code, mismatched
-  state, bad callback, absent cookie, denied allow-list, and validation failure.
 - Atomic Keychain pair write, rollback/failure, accessibility, and isolation.
 - One refresh for 20 callers, rotation, retry-once, recursion prevention,
   account-local failure, and app relaunch.
@@ -729,7 +728,7 @@ concrete test names and release evidence:
 | --- | --- | --- |
 | AC-01 | Multiple concurrent accounts, including two users on one server | Account integration and XCUITest journey |
 | AC-02 | No secret in logs or media URLs | Security scan and live media test |
-| AC-03 | Exact OIDC/PKCE cookie bridge and rotating tokens | Live OIDC suite |
+| AC-03 | Native login, rotating tokens, and logout work without an identity provider | Live local-authentication suite |
 | AC-04 | Twenty 401s cause one refresh and one retry each | Deterministic actor concurrency test |
 | AC-05 | Server path prefixes work everywhere | Route unit tests and proxied live suite |
 | AC-06 | Limited users do not see forbidden actions | Permission unit and UI tests |
@@ -784,8 +783,7 @@ concrete test names and release evidence:
    2.26.x fixture/live compatibility suite.
 3. Recreate it again and run the current-stable compatibility observation
    suite.
-4. OIDC, media, download restoration, large-history import, and performance
-   suites.
+4. Media, download restoration, large-history import, and performance suites.
 5. Flake detection by repeating concurrency, timing, and UI tests.
 6. Upload only redacted Xcode and container artifacts, then verify the Compose
    project and its test volumes were removed.
@@ -799,8 +797,8 @@ concrete test names and release evidence:
 4. Full accessibility audit.
 5. Every AC-01 through AC-28 evidence link populated.
 6. No unresolved critical/high security finding or known data-loss issue.
-7. Specification baseline, fixtures, privacy declaration, and OIDC setup
-   documentation updated.
+7. Specification baseline, fixtures, privacy declaration, and native
+   authentication documentation updated.
 
 ## 8. Per-work-item completion checklist
 

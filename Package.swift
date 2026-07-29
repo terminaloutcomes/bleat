@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "Bleat",
     platforms: [
-        .iOS(.v17),
+        .iOS(.v26),
         .macOS(.v15),
     ],
     products: [
