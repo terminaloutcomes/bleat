@@ -14,6 +14,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case accountStore(AccountStoreError)
     case libraryRepository(LibraryRepositoryError)
     case pageRequest(LibraryPageRequestError)
+    case homeRequest(LibraryHomeRequestError)
     case searchRequest(LibrarySearchRequestError)
     case searchCoordinator(LibrarySearchCoordinatorError)
     case bookDetail(LibraryRepositoryError)
@@ -64,6 +65,11 @@ protocol AppServicing: Sendable {
         for account: ServerAccount,
         libraryID: LibraryID
     ) async throws(AppServiceError) -> LibraryItemsPage
+
+    func homeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf]
 
     func search(
         for account: ServerAccount,
@@ -222,6 +228,27 @@ actor LiveAppService: AppServicing {
         let repository = repository(for: account)
         do {
             return try await repository.libraryItems(
+                in: libraryID,
+                request: request
+            ).value
+        } catch let error {
+            throw .libraryRepository(error)
+        }
+    }
+
+    func homeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf] {
+        let request: LibraryHomeRequest
+        do {
+            request = try LibraryHomeRequest()
+        } catch let error {
+            throw .homeRequest(error)
+        }
+        let repository = repository(for: account)
+        do {
+            return try await repository.personalizedShelves(
                 in: libraryID,
                 request: request
             ).value

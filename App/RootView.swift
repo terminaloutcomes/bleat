@@ -162,8 +162,99 @@ private struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            BookListContent(model: model)
+            HomeContent(model: model)
                 .navigationTitle("Home")
+                .navigationDestination(for: LibraryBookSummary.self) { book in
+                    BookDetailView(model: model, book: book)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Reload", systemImage: "arrow.clockwise") {
+                            guard let library = model.selectedLibrary else {
+                                return
+                            }
+                            Task {
+                                await model.selectLibrary(library)
+                            }
+                        }
+                        .accessibilityIdentifier("home.reload")
+                    }
+                }
+        }
+    }
+}
+
+private struct HomeContent: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Group {
+            switch model.homeShelves {
+            case .idle, .loading:
+                ProgressView()
+                    .accessibilityIdentifier("home.loading")
+            case .failed(let failure):
+                ContentUnavailableView(
+                    "Home unavailable",
+                    systemImage: "wifi.exclamationmark",
+                    description: Text(failure.message)
+                )
+                .accessibilityIdentifier("home.error")
+            case .loaded(let shelves):
+                if shelves.isEmpty {
+                    ContentUnavailableView(
+                        "No personalized shelves",
+                        systemImage: "books.vertical"
+                    )
+                    .accessibilityIdentifier("home.empty")
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 24) {
+                            ForEach(shelves, id: \.id) { shelf in
+                                shelfContent(shelf)
+                            }
+                        }
+                        .padding(.vertical)
+                    }
+                    .accessibilityIdentifier("home.shelves")
+                }
+            }
+        }
+    }
+
+    private func shelfContent(_ shelf: LibraryBookShelf) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(shelf.label)
+                .font(.title2.bold())
+                .padding(.horizontal)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 12) {
+                    ForEach(shelf.items, id: \.id.rawValue) { book in
+                        NavigationLink(value: book) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(book.title)
+                                    .font(.headline)
+                                    .lineLimit(2)
+                                if let author = book.authorName {
+                                    Text(author)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .frame(width: 180, alignment: .leading)
+                            .padding()
+                            .background(
+                                .quaternary,
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .scrollIndicators(.hidden)
         }
     }
 }

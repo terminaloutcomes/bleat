@@ -98,6 +98,41 @@
             )
         }
 
+        func homeShelves(
+            for account: ServerAccount,
+            libraryID: LibraryID
+        ) async throws(AppServiceError) -> [LibraryBookShelf] {
+            [
+                LibraryBookShelf(
+                    id: "continue-listening",
+                    label: "Continue Listening",
+                    labelLocalizationKey: nil,
+                    items: [
+                        LibraryBookSummary(
+                            id: LibraryItemID(rawValue: "ui-book"),
+                            libraryID: libraryID,
+                            title: "The Test Audiobook",
+                            subtitle: nil,
+                            authorName: "Test Author",
+                            narratorName: "Test Narrator",
+                            seriesName: nil,
+                            genres: ["Fiction"],
+                            publisher: nil,
+                            publishedYear: "2026",
+                            duration: 3_600,
+                            trackCount: 1,
+                            chapterCount: 1,
+                            addedAtMilliseconds: 1,
+                            updatedAtMilliseconds: 1,
+                            isExplicit: false,
+                            isAbridged: false
+                        )
+                    ],
+                    total: 1
+                )
+            ]
+        }
+
         func search(
             for account: ServerAccount,
             libraryID: LibraryID,

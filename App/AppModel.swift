@@ -40,6 +40,7 @@ enum AppFailure: Equatable, Sendable {
     case loginFailed
     case accountUnavailable
     case libraryUnavailable
+    case homeUnavailable
     case searchUnavailable
     case bookUnavailable
     case playbackDenied
@@ -71,6 +72,8 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not restore the saved account."
         case .libraryUnavailable:
             "Bleat could not load the audiobook library."
+        case .homeUnavailable:
+            "Bleat could not load personalized shelves."
         case .searchUnavailable:
             "Bleat could not search the audiobook library."
         case .bookUnavailable:
@@ -122,6 +125,8 @@ enum AppFailure: Equatable, Sendable {
             self = .accountUnavailable
         case .libraryRepository, .pageRequest:
             self = .libraryUnavailable
+        case .homeRequest:
+            self = .homeUnavailable
         case .searchRequest, .searchCoordinator:
             self = .searchUnavailable
         case .bookDetail:
@@ -149,6 +154,7 @@ final class AppModel {
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
     private(set) var selectedLibrary: LibrarySummary?
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
+    private(set) var homeShelves: ResourceState<[LibraryBookShelf]> = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
     private(set) var selectedBookID: LibraryItemID?
@@ -227,6 +233,7 @@ final class AppModel {
         libraries = .loading
         selectedLibrary = nil
         books = .idle
+        homeShelves = .idle
         resetSearch()
         resetBookDetail()
 
@@ -248,6 +255,7 @@ final class AppModel {
     func selectLibrary(_ library: LibrarySummary) async {
         guard let account else {
             books = .failed(.accountUnavailable)
+            homeShelves = .failed(.accountUnavailable)
             return
         }
         if selectedLibrary?.id != library.id {
@@ -256,6 +264,7 @@ final class AppModel {
         }
         selectedLibrary = library
         books = .loading
+        homeShelves = .loading
 
         do {
             books = .loaded(
@@ -266,6 +275,16 @@ final class AppModel {
             )
         } catch let error {
             books = .failed(AppFailure(serviceError: error))
+        }
+        do {
+            homeShelves = .loaded(
+                try await service.homeShelves(
+                    for: account,
+                    libraryID: library.id
+                )
+            )
+        } catch {
+            homeShelves = .failed(.homeUnavailable)
         }
     }
 
@@ -355,6 +374,7 @@ final class AppModel {
             selectedLibrary = nil
             libraries = .idle
             books = .idle
+            homeShelves = .idle
             resetSearch()
             resetBookDetail()
             accountActionStatus = .idle

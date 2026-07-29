@@ -61,6 +61,13 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func homeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf] {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func search(
         for account: ServerAccount,
         libraryID: LibraryID,

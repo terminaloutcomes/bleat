@@ -25,10 +25,12 @@ final class AppModelTests: XCTestCase {
             mediaType: .podcast
         )
         let page = fixturePage(libraryID: audiobookLibrary.id)
+        let shelves = fixtureShelves(libraryID: audiobookLibrary.id)
         let service = TestAppService(
             activeAccount: .success(account),
             libraries: .success([podcastLibrary, audiobookLibrary]),
-            firstPage: .success(page)
+            firstPage: .success(page),
+            homeShelves: .success(shelves)
         )
         let model = AppModel(service: service)
 
@@ -39,8 +41,11 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.libraries, .loaded([audiobookLibrary]))
         XCTAssertEqual(model.selectedLibrary, audiobookLibrary)
         XCTAssertEqual(model.books, .loaded(page))
+        XCTAssertEqual(model.homeShelves, .loaded(shelves))
         let pageRequests = await service.pageRequests()
         XCTAssertEqual(pageRequests, [audiobookLibrary.id])
+        let homeRequests = await service.homeRequests()
+        XCTAssertEqual(homeRequests, [audiobookLibrary.id])
     }
 
     func testStartRunsOnlyOnce() async {
@@ -218,6 +223,10 @@ final class AppModelTests: XCTestCase {
 
         await model.selectLibrary(fixtureLibrary())
         XCTAssertEqual(model.books, .failed(.accountUnavailable))
+        XCTAssertEqual(
+            model.homeShelves,
+            .failed(.accountUnavailable)
+        )
 
         await model.removeAccount()
         XCTAssertEqual(
@@ -476,6 +485,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.selectedLibrary)
         XCTAssertEqual(model.libraries, .idle)
         XCTAssertEqual(model.books, .idle)
+        XCTAssertEqual(model.homeShelves, .idle)
         XCTAssertEqual(model.accountActionStatus, .idle)
     }
 
@@ -573,6 +583,7 @@ final class AppModelTests: XCTestCase {
                 .libraryUnavailable
             ),
             (.pageRequest(.invalidPage), .libraryUnavailable),
+            (.homeRequest(.invalidLimit), .homeUnavailable),
             (.searchRequest(.invalidQuery), .searchUnavailable),
             (
                 .searchCoordinator(.cancelled),
@@ -623,6 +634,7 @@ final class AppModelTests: XCTestCase {
             .loginFailed,
             .accountUnavailable,
             .libraryUnavailable,
+            .homeUnavailable,
             .searchUnavailable,
             .bookUnavailable,
             .playbackDenied,
@@ -736,6 +748,20 @@ final class AppModelTests: XCTestCase {
             progress: nil
         )
     }
+
+    private func fixtureShelves(
+        libraryID: LibraryID
+    ) -> [LibraryBookShelf] {
+        [
+            LibraryBookShelf(
+                id: "continue-listening",
+                label: "Continue Listening",
+                labelLocalizationKey: nil,
+                items: fixturePage(libraryID: libraryID).items,
+                total: 1
+            )
+        ]
+    }
 }
 
 private struct LoginRequest: Equatable, Sendable {
@@ -773,6 +799,11 @@ private actor TestAppService: AppServicing {
             LibraryItemsPage,
             AppServiceError
         >
+    private var homeShelvesResult:
+        Result<
+            [LibraryBookShelf],
+            AppServiceError
+        >
     private var searchResult:
         Result<
             [LibraryBookSummary],
@@ -791,6 +822,7 @@ private actor TestAppService: AppServicing {
     private var activeAccountRequests = 0
     private var recordedLogins: [LoginRequest] = []
     private var recordedPageRequests: [LibraryID] = []
+    private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
@@ -803,6 +835,9 @@ private actor TestAppService: AppServicing {
         libraries: Result<[LibrarySummary], AppServiceError> = .success([]),
         firstPage: Result<LibraryItemsPage, AppServiceError> = .failure(
             .libraryRepository(.noCachedValue)
+        ),
+        homeShelves: Result<[LibraryBookShelf], AppServiceError> = .success(
+            []
         ),
         search: Result<[LibraryBookSummary], AppServiceError> = .failure(
             .searchCoordinator(.repository(.noCachedValue))
@@ -819,6 +854,7 @@ private actor TestAppService: AppServicing {
         loginResult = login
         librariesResult = libraries
         firstPageResult = firstPage
+        homeShelvesResult = homeShelves
         searchResult = search
         bookDetailResult = bookDetail
         removeAccountResult = removeAccount
@@ -864,6 +900,14 @@ private actor TestAppService: AppServicing {
     ) async throws(AppServiceError) -> LibraryItemsPage {
         recordedPageRequests.append(libraryID)
         return try value(from: firstPageResult)
+    }
+
+    func homeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf] {
+        recordedHomeRequests.append(libraryID)
+        return try value(from: homeShelvesResult)
     }
 
     func search(
@@ -960,6 +1004,10 @@ private actor TestAppService: AppServicing {
 
     func pageRequests() -> [LibraryID] {
         recordedPageRequests
+    }
+
+    func homeRequests() -> [LibraryID] {
+        recordedHomeRequests
     }
 
     func searchRequests() -> [SearchRequest] {
