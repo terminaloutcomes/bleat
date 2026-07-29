@@ -143,6 +143,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can see per-book and per-file progress, pause/cancel/retry downloads, and understand failures.
 - Downloads resume after app suspension, process termination, connectivity loss, or access-token refresh.
 - I can restrict downloads to Wi-Fi/non-expensive networks.
+- Starting playback automatically caches complete source files for the current
+  position and a configurable lookahead, defaulting to five files/chapters
+  ahead; a single-file book caches that complete file.
+- I can choose whether automatic cache files are deleted after each completed
+  chapter, when the book finishes, or 24 hours after the book finishes.
+- I can promote an automatic cache to an explicit full-book download that is
+  exempt from automatic cleanup.
 - The app checks available storage before starting and never leaves a completed book pointing at partial files.
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
 - Offline listening sessions and progress synchronize after reconnection.
@@ -684,6 +691,13 @@ Requirements:
 
 - at most three concurrent audio-file downloads by default;
 - per-book queueing;
+- playback-driven automatic caching of whole files: use source-file timing to
+  cover the current and configured following chapter window, otherwise retain
+  the current file plus the configured number of following files;
+- default automatic lookahead of five, with a single-file book downloading the
+  complete file once;
+- distinguish automatic cache records from explicit downloads and allow an
+  automatic cache to be promoted to an explicit full-book download;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
 - pause/cancel/retry;
@@ -718,7 +732,12 @@ Partial books remain inspectable and retryable. Completed files are never silent
 - Exclude downloaded media and regenerable covers from iCloud/iTunes backup.
 - Apply file protection compatible with playback while locked after first unlock, such as complete-until-first-user-authentication.
 - Show storage by account and book.
-- Support explicit deletion and optional auto-delete after a configurable number of days following completion.
+- Support explicit deletion.
+- For automatic cache records, support deletion after each completed chapter,
+  immediately after book completion, or 24 hours after book completion; default
+  to 24 hours. If the app is suspended at the deadline, perform overdue cleanup
+  at the next launch or app activity.
+- Never apply automatic cleanup to an explicit full-book download.
 - Never evict the currently playing track.
 - If iOS removes or corrupts a local file, mark the download partial and offer repair instead of crashing.
 
@@ -1185,6 +1204,8 @@ MVP unit coverage continues with:
 - progress conflict detection;
 - metadata patch generation and stale-draft detection;
 - download manifest state transitions and path sanitization.
+- automatic whole-file lookahead selection, cache/manual ownership,
+  chapter-boundary eviction, and delayed book-completion cleanup.
 
 ### 20.2 Network integration tests
 

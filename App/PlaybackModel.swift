@@ -54,6 +54,11 @@ struct PlaybackPositionConflict: Equatable, Sendable {
     let serverTime: Double
 }
 
+private struct AutomaticDownloadSignal: Equatable {
+    let chapterID: Int?
+    let fileIndex: Int?
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -62,8 +67,7 @@ final class PlaybackModel {
     private let localSessionStore: LocalPlaybackSessionStore
     private let bookmarkMutationStore: BookmarkMutationStore
     private let preferencesStore: PlaybackPreferencesStore
-    private let audioSessionActivation:
-        @MainActor @Sendable () throws -> Void
+    private let audioSessionActivation: @MainActor @Sendable () throws -> Void
     private let queuePlanning:
         @MainActor @Sendable (
             AppPlaybackPreparation,
@@ -85,6 +89,11 @@ final class PlaybackModel {
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
     private var lastPersistedLocalTime: Double = 0
+    private var activeDownloadDetail: LibraryBookDetail?
+    private var lastAutomaticDownloadSignal: AutomaticDownloadSignal?
+    @ObservationIgnored
+    private var automaticDownloadHandler:
+        (@MainActor @Sendable (AutomaticDownloadActivity) async -> Void)?
 
     private(set) var state: PlaybackState = .idle
     private(set) var syncState: PlaybackSyncState = .idle
@@ -200,6 +209,15 @@ final class PlaybackModel {
         observeAudioSession()
     }
 
+    func setAutomaticDownloadHandler(
+        _ handler:
+            @escaping @MainActor @Sendable (
+                AutomaticDownloadActivity
+            ) async -> Void
+    ) {
+        automaticDownloadHandler = handler
+    }
+
     func start(
         detail: LibraryBookDetail,
         account: ServerAccount
@@ -226,6 +244,8 @@ final class PlaybackModel {
         activeAccount = nil
         localAccountID = nil
         preparation = nil
+        activeDownloadDetail = nil
+        lastAutomaticDownloadSignal = nil
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
@@ -270,6 +290,7 @@ final class PlaybackModel {
             try configureAudioSession()
             activeAccount = account
             preparation = prepared
+            activeDownloadDetail = detail
             title = prepared.title
             duration = prepared.duration
             currentTime = min(
@@ -282,6 +303,7 @@ final class PlaybackModel {
             }
             state = .ready
             play()
+            notifyAutomaticDownloadProgress(force: true)
             await loadBookmarks()
         } catch let error as AppServiceError {
             guard generation == operationGeneration else {
@@ -289,6 +311,7 @@ final class PlaybackModel {
             }
             activeAccount = nil
             preparation = nil
+            activeDownloadDetail = nil
             resetPlayer()
             state = .failed(AppFailure(serviceError: error))
         } catch {
@@ -298,6 +321,7 @@ final class PlaybackModel {
             await closeActiveSession()
             activeAccount = nil
             preparation = nil
+            activeDownloadDetail = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
         }
@@ -326,6 +350,8 @@ final class PlaybackModel {
         activeAccount = nil
         localAccountID = nil
         preparation = nil
+        activeDownloadDetail = nil
+        lastAutomaticDownloadSignal = nil
         localPlaybackSession = nil
         resetPlayer()
         setSleepTimer(minutes: nil)
@@ -823,6 +849,7 @@ final class PlaybackModel {
                 player?.playImmediately(atRate: rate)
             }
             updateNowPlaying()
+            notifyAutomaticDownloadProgress(force: true)
             await syncProgress()
         } catch {
             guard generation == operationGeneration else {
@@ -884,6 +911,8 @@ final class PlaybackModel {
         activeAccount = nil
         localAccountID = nil
         preparation = nil
+        activeDownloadDetail = nil
+        lastAutomaticDownloadSignal = nil
         localPlaybackSession = nil
         itemID = nil
         title = ""
@@ -1163,6 +1192,7 @@ final class PlaybackModel {
             return
         }
         currentTime = min(max(offset + itemTime, 0), duration)
+        notifyAutomaticDownloadProgress()
         if case .endOfChapter(let chapterEnd) = sleepTimer,
             currentTime >= chapterEnd
         {
@@ -1183,12 +1213,78 @@ final class PlaybackModel {
         }
     }
 
+    private func notifyAutomaticDownloadProgress(force: Bool = false) {
+        guard
+            let automaticDownloadHandler,
+            let detail = activeDownloadDetail,
+            let account = activeAccount,
+            let preparation
+        else {
+            return
+        }
+        let signal = AutomaticDownloadSignal(
+            chapterID: currentChapter?.id,
+            fileIndex: currentAudioFileIndex
+        )
+        guard force || signal != lastAutomaticDownloadSignal else {
+            return
+        }
+        lastAutomaticDownloadSignal = signal
+        let ranges: [AutomaticDownloadFileRange]
+        switch preparation.source {
+        case .direct(let tracks):
+            ranges = tracks.enumerated().map { index, track in
+                AutomaticDownloadFileRange(
+                    index: index,
+                    start: track.startOffset,
+                    end: track.startOffset + track.duration
+                )
+            }
+        case .hls:
+            ranges = []
+        }
+        let activity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: detail,
+            account: account,
+            currentTime: currentTime,
+            chapters: preparation.chapters,
+            fileRanges: ranges
+        )
+        Task { @MainActor in
+            await automaticDownloadHandler(activity)
+        }
+    }
+
+    private func notifyAutomaticDownloadFinished() {
+        guard
+            let automaticDownloadHandler,
+            let detail = activeDownloadDetail,
+            let account = activeAccount,
+            let preparation
+        else {
+            return
+        }
+        let activity = AutomaticDownloadActivity(
+            kind: .bookFinished,
+            detail: detail,
+            account: account,
+            currentTime: duration,
+            chapters: preparation.chapters,
+            fileRanges: []
+        )
+        Task { @MainActor in
+            await automaticDownloadHandler(activity)
+        }
+    }
+
     private func playbackEnded() {
         currentTime = duration
         setSleepTimer(minutes: nil)
         persistLocalPosition()
         state = .ended
         updateNowPlaying()
+        notifyAutomaticDownloadFinished()
         Task { @MainActor [weak self] in
             await self?.syncProgress()
         }

@@ -155,6 +155,13 @@ final class BleatUITests: XCTestCase {
         let wifiOnly = app.switches["settings.downloads.wifiOnly"]
         XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
         XCTAssertEqual(wifiOnly.value as? String, "1")
+        let filesAhead = app.steppers["settings.downloads.filesAhead"]
+        XCTAssertTrue(filesAhead.waitForExistence(timeout: 3))
+        XCTAssertTrue(filesAhead.label.contains("Files Ahead: 5"))
+        XCTAssertTrue(
+            app.buttons["settings.downloads.automaticCleanup"]
+                .waitForExistence(timeout: 3)
+        )
         let reauthenticate = app.buttons["settings.reauthenticate"]
         XCTAssertTrue(reauthenticate.waitForExistence(timeout: 3))
         reauthenticate.tap()
@@ -389,13 +396,17 @@ final class BleatLiveUITests: XCTestCase {
         secondFile.tap()
         app.buttons["Stop"].tap()
 
-        let download = app.buttons["book.detail.download"]
-        XCTAssertTrue(download.waitForExistence(timeout: 10))
-        download.tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.downloadStatus"]
                 .waitForExistence(timeout: 20)
         )
+        XCTAssertTrue(
+            app.staticTexts["Cached"].waitForExistence(timeout: 60)
+        )
+        let keepFullBook =
+            app.buttons["book.detail.download.keepFullBook"]
+        XCTAssertTrue(keepFullBook.waitForExistence(timeout: 10))
+        keepFullBook.tap()
         XCTAssertTrue(
             app.staticTexts["Downloaded"].waitForExistence(timeout: 60)
         )

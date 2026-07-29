@@ -275,7 +275,8 @@ public actor DownloadStorage {
         downloadID: DownloadID,
         accountID: AccountID,
         plan: DownloadPlan,
-        detail: LibraryBookDetail
+        detail: LibraryBookDetail,
+        purpose: DownloadPurpose = .manual
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
         guard plan.itemID == detail.id else {
             throw .mismatchedBook
@@ -292,11 +293,67 @@ public actor DownloadStorage {
             manifest: DownloadManifest(
                 downloadID: downloadID,
                 accountID: accountID,
-                plan: plan
+                plan: plan,
+                purpose: purpose
             ),
             detail: detail
         )
         try persist(record)
+        return record
+    }
+
+    public func promoteToManual(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        record.manifest.promoteToManual()
+        try persist(record)
+        return record
+    }
+
+    public func markBookFinished(
+        _ storedRecord: DownloadedBookRecord,
+        at date: Date?
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        record.manifest.markBookFinished(at: date)
+        try persist(record)
+        return record
+    }
+
+    public func removeCompletedTracks(
+        from storedRecord: DownloadedBookRecord,
+        trackIndexes: Set<Int>
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        let directory = layout.bookDirectory(
+            accountID: record.manifest.accountID,
+            itemID: record.manifest.itemID
+        )
+        do {
+            for entry in record.manifest.entries
+            where trackIndexes.contains(entry.trackIndex)
+                && entry.state == .complete
+            {
+                let destination = directory.appendingPathComponent(
+                    entry.destinationEntry,
+                    isDirectory: false
+                )
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try record.manifest.markQueued(
+                    trackIndex: entry.trackIndex
+                )
+            }
+            try persist(record)
+        } catch is DownloadManifestError {
+            throw .trackNotFound
+        } catch let error as DownloadStorageError {
+            throw error
+        } catch {
+            throw .persistenceFailed
+        }
         return record
     }
 
@@ -531,6 +588,38 @@ public actor DownloadStorage {
             guard record.manifest.downloadID == identity.downloadID,
                 record.manifest.accountID == identity.accountID,
                 record.manifest.itemID == identity.itemID
+            else {
+                throw DownloadStorageError.invalidStoredRecord
+            }
+            return record
+        } catch let error as DownloadStorageError {
+            throw error
+        } catch  where !FileManager.default.fileExists(atPath: url.path) {
+            throw .recordNotFound
+        } catch {
+            throw .invalidStoredRecord
+        }
+    }
+
+    private func load(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        let url = layout.recordURL(
+            accountID: storedRecord.manifest.accountID,
+            itemID: storedRecord.manifest.itemID
+        )
+        do {
+            let record = try decoder.decode(
+                DownloadedBookRecord.self,
+                from: Data(contentsOf: url)
+            )
+            guard
+                record.manifest.downloadID
+                    == storedRecord.manifest.downloadID,
+                record.manifest.accountID
+                    == storedRecord.manifest.accountID,
+                record.manifest.itemID
+                    == storedRecord.manifest.itemID
             else {
                 throw DownloadStorageError.invalidStoredRecord
             }

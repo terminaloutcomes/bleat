@@ -51,6 +51,163 @@ enum DownloadNetworkPolicy: String, Equatable, Sendable {
     }
 }
 
+enum AutomaticDownloadCleanupPolicy:
+    String,
+    CaseIterable,
+    Equatable,
+    Identifiable,
+    Sendable
+{
+    case afterTwentyFourHours
+    case afterBook
+    case afterChapter
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .afterTwentyFourHours:
+            "24 Hours After Finishing"
+        case .afterBook:
+            "After Finishing the Book"
+        case .afterChapter:
+            "After Finishing Each Chapter"
+        }
+    }
+}
+
+enum AutomaticDownloadActivityKind: Equatable, Sendable {
+    case progress
+    case bookFinished
+}
+
+struct AutomaticDownloadFileRange: Equatable, Sendable {
+    let index: Int
+    let start: Double
+    let end: Double
+}
+
+struct AutomaticDownloadActivity: Equatable, Sendable {
+    let kind: AutomaticDownloadActivityKind
+    let detail: LibraryBookDetail
+    let account: ServerAccount
+    let currentTime: Double
+    let chapters: [PlaybackChapter]
+    let fileRanges: [AutomaticDownloadFileRange]
+}
+
+enum AutomaticDownloadPlanner {
+    static func targetTrackIndexes(
+        plan: DownloadPlan,
+        activity: AutomaticDownloadActivity,
+        lookaheadCount: Int
+    ) -> Set<Int> {
+        guard !plan.tracks.isEmpty else {
+            return []
+        }
+        if plan.tracks.count == 1 {
+            return [plan.tracks[0].index]
+        }
+
+        let ranges = resolvedRanges(plan: plan, activity: activity)
+        guard !ranges.isEmpty else {
+            return Set(
+                plan.tracks.prefix(lookaheadCount + 1).map(\.index)
+            )
+        }
+
+        let currentFilePosition =
+            ranges.lastIndex {
+                $0.start <= activity.currentTime
+            } ?? 0
+        let fallbackEnd = min(
+            ranges.count,
+            currentFilePosition + lookaheadCount + 1
+        )
+        let fallbackIndexes = ranges[
+            currentFilePosition..<fallbackEnd
+        ].map(\.index)
+
+        guard
+            let currentChapterIndex = activity.chapters.lastIndex(where: {
+                $0.start <= activity.currentTime
+            })
+        else {
+            return Set(fallbackIndexes)
+        }
+        let finalChapterIndex = min(
+            activity.chapters.count - 1,
+            currentChapterIndex + lookaheadCount
+        )
+        let windowEnd = activity.chapters[finalChapterIndex].end
+        guard windowEnd.isFinite, windowEnd > activity.currentTime else {
+            return Set(fallbackIndexes)
+        }
+        let chapterIndexes = ranges.compactMap { range in
+            range.end > activity.currentTime && range.start < windowEnd
+                ? range.index
+                : nil
+        }
+        return chapterIndexes.isEmpty
+            ? Set(fallbackIndexes)
+            : Set(chapterIndexes)
+    }
+
+    static func completedTrackIndexes(
+        plan: DownloadPlan,
+        activity: AutomaticDownloadActivity
+    ) -> Set<Int> {
+        guard
+            let currentChapter = activity.chapters.last(where: {
+                $0.start <= activity.currentTime
+            })
+        else {
+            return []
+        }
+        return Set(
+            resolvedRanges(plan: plan, activity: activity)
+                .compactMap {
+                    $0.end <= currentChapter.start ? $0.index : nil
+                }
+        )
+    }
+
+    private static func resolvedRanges(
+        plan: DownloadPlan,
+        activity: AutomaticDownloadActivity
+    ) -> [AutomaticDownloadFileRange] {
+        let planRanges: [AutomaticDownloadFileRange] =
+            plan.tracks.compactMap { track in
+                guard
+                    let start = track.startOffset,
+                    let duration = track.duration
+                else {
+                    return nil
+                }
+                return AutomaticDownloadFileRange(
+                    index: track.index,
+                    start: start,
+                    end: start + duration
+                )
+            }
+        if planRanges.count == plan.tracks.count {
+            return planRanges
+        }
+        guard activity.fileRanges.count == plan.tracks.count else {
+            return []
+        }
+        return zip(plan.tracks, activity.fileRanges).map { track, range in
+            AutomaticDownloadFileRange(
+                index: track.index,
+                start: range.start,
+                end: range.end
+            )
+        }
+    }
+}
+
 enum DownloadNetworkDecision: Equatable, Sendable {
     case schedule
     case confirmCellular(expectedBytes: Int64)
@@ -74,6 +231,11 @@ struct PendingCellularDownload: Equatable, Sendable {
     let account: ServerAccount
     let plan: DownloadPlan
     let expectedBytes: Int64
+}
+
+private struct AutomaticDownloadKey: Hashable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
 }
 
 enum DownloadRepairPlanner {
@@ -116,10 +278,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let service: any AppServicing
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
+    private let automaticLookaheadKey =
+        "bleat.downloads.automaticLookahead.v1"
+    private let automaticCleanupPolicyKey =
+        "bleat.downloads.automaticCleanupPolicy.v1"
     private nonisolated let layout: DownloadStorageLayout?
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
     private var deletingDownloadIDs: Set<DownloadID> = []
+    private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
+    private var pendingAutomaticUpdates:
+        [AutomaticDownloadKey: AutomaticDownloadActivity] = [:]
+    private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(
@@ -141,6 +311,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var pausedDownloadIDs: Set<DownloadID> = []
     private(set) var failure: DownloadModelFailure?
     private(set) var networkPolicy: DownloadNetworkPolicy
+    private(set) var automaticLookaheadCount: Int
+    private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
 
     init(
@@ -156,6 +328,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             .flatMap(DownloadNetworkPolicy.init(rawValue:))
             ?? .wifiOnly
+        automaticLookaheadCount = Self.normalizedLookaheadCount(
+            defaults.object(forKey: automaticLookaheadKey) == nil
+                ? 5
+                : defaults.integer(forKey: automaticLookaheadKey)
+        )
+        automaticCleanupPolicy =
+            defaults.string(forKey: automaticCleanupPolicyKey)
+            .flatMap(AutomaticDownloadCleanupPolicy.init(rawValue:))
+            ?? .afterTwentyFourHours
         do {
             let rootURL: URL
             if let storageRootURL {
@@ -203,6 +384,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             pausedDownloadIDs.insert(identity.downloadID)
         }
         await refresh()
+        await cleanupExpiredAutomaticDownloads()
+        scheduleAutomaticCleanup()
     }
 
     func download(
@@ -265,6 +448,44 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         defaults.set(policy.rawValue, forKey: networkPolicyKey)
     }
 
+    func setAutomaticLookaheadCount(_ count: Int) {
+        automaticLookaheadCount = Self.normalizedLookaheadCount(count)
+        defaults.set(
+            automaticLookaheadCount,
+            forKey: automaticLookaheadKey
+        )
+    }
+
+    func setAutomaticCleanupPolicy(
+        _ policy: AutomaticDownloadCleanupPolicy
+    ) {
+        automaticCleanupPolicy = policy
+        defaults.set(policy.rawValue, forKey: automaticCleanupPolicyKey)
+        Task { @MainActor [weak self] in
+            await self?.applyCleanupPolicyToFinishedDownloads()
+        }
+    }
+
+    func handleAutomaticPlaybackActivity(
+        _ activity: AutomaticDownloadActivity
+    ) async {
+        let key = AutomaticDownloadKey(
+            accountID: activity.account.id,
+            itemID: activity.detail.id
+        )
+        pendingAutomaticUpdates[key] = activity
+        guard !automaticUpdatesInProgress.contains(key) else {
+            return
+        }
+        automaticUpdatesInProgress.insert(key)
+        defer {
+            automaticUpdatesInProgress.remove(key)
+        }
+        while let pending = pendingAutomaticUpdates.removeValue(forKey: key) {
+            await applyAutomaticPlaybackActivity(pending)
+        }
+    }
+
     func confirmCellularDownload() async {
         guard let pending = pendingCellularDownload,
             let storage
@@ -293,24 +514,255 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingCellularDownload = nil
     }
 
+    func keepFullBook(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        guard record.manifest.accountID == account.id,
+            record.manifest.purpose == .automaticCache,
+            let storage
+        else {
+            return
+        }
+        failure = nil
+        accounts[account.id] = account
+        do {
+            let plan = try await service.downloadPlan(
+                for: account,
+                itemID: record.manifest.itemID
+            )
+            let latest = try await storage.promoteToManual(record)
+            let tracks = try DownloadRepairPlanner.tracks(
+                record: latest,
+                plan: plan
+            )
+            _ = try await storage.preflight(tracks: tracks)
+            try await schedule(
+                plan: plan,
+                detail: latest.detail,
+                account: account,
+                storage: storage,
+                tracks: tracks,
+                downloadID: latest.manifest.downloadID
+            )
+            await refresh()
+        } catch let error as DownloadModelFailure {
+            failure = error
+        } catch let error as DownloadStorageError {
+            failure = storageFailure(error)
+        } catch {
+            failure = .preparationFailed
+        }
+    }
+
+    private func applyAutomaticPlaybackActivity(
+        _ activity: AutomaticDownloadActivity
+    ) async {
+        let availability = BookActionAvailability(
+            user: activity.account.user,
+            detail: activity.detail
+        )
+        guard availability.visibleActions.contains(.download),
+            let storage
+        else {
+            return
+        }
+        accounts[activity.account.id] = activity.account
+
+        if activity.kind == .bookFinished {
+            await finishAutomaticDownload(
+                accountID: activity.account.id,
+                itemID: activity.detail.id,
+                storage: storage
+            )
+            return
+        }
+
+        do {
+            let plan = try await service.downloadPlan(
+                for: activity.account,
+                itemID: activity.detail.id
+            )
+            var record = record(
+                accountID: activity.account.id,
+                itemID: activity.detail.id
+            )
+            if record?.manifest.purpose == .manual {
+                return
+            }
+            if let existing = record,
+                existing.manifest.bookFinishedAt != nil
+            {
+                record = try await storage.markBookFinished(
+                    existing,
+                    at: nil
+                )
+            }
+
+            if automaticCleanupPolicy == .afterChapter,
+                let existing = record
+            {
+                let completedIndexes =
+                    AutomaticDownloadPlanner.completedTrackIndexes(
+                        plan: plan,
+                        activity: activity
+                    )
+                if !completedIndexes.isEmpty {
+                    record = try await storage.removeCompletedTracks(
+                        from: existing,
+                        trackIndexes: completedIndexes
+                    )
+                }
+            }
+
+            let targets = AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: plan,
+                activity: activity,
+                lookaheadCount: automaticLookaheadCount
+            )
+            let existingStates = Dictionary(
+                uniqueKeysWithValues:
+                    record?.manifest.entries.map {
+                        ($0.trackIndex, $0.state)
+                    } ?? []
+            )
+            let tracks = plan.tracks.filter {
+                targets.contains($0.index)
+                    && existingStates[$0.index] != .complete
+                    && existingStates[$0.index] != .downloading
+            }
+            guard !tracks.isEmpty else {
+                await refresh()
+                return
+            }
+            _ = try await storage.preflight(tracks: tracks)
+            try await schedule(
+                plan: plan,
+                detail: activity.detail,
+                account: activity.account,
+                storage: storage,
+                purpose: .automaticCache,
+                tracks: tracks,
+                downloadID: record?.manifest.downloadID
+            )
+            await refresh()
+        } catch {
+            await refresh()
+        }
+    }
+
+    private func finishAutomaticDownload(
+        accountID: AccountID,
+        itemID: LibraryItemID,
+        storage: DownloadStorage
+    ) async {
+        guard
+            let record = record(accountID: accountID, itemID: itemID),
+            record.manifest.purpose == .automaticCache
+        else {
+            return
+        }
+        switch automaticCleanupPolicy {
+        case .afterChapter, .afterBook:
+            await remove(record)
+        case .afterTwentyFourHours:
+            do {
+                _ = try await storage.markBookFinished(
+                    record,
+                    at: Date()
+                )
+                await refresh()
+                scheduleAutomaticCleanup()
+            } catch {
+                failure = .transferFailed
+            }
+        }
+    }
+
+    private func applyCleanupPolicyToFinishedDownloads() async {
+        switch automaticCleanupPolicy {
+        case .afterChapter, .afterBook:
+            let finished = records.filter {
+                $0.manifest.purpose == .automaticCache
+                    && $0.manifest.bookFinishedAt != nil
+            }
+            for record in finished {
+                await remove(record)
+            }
+        case .afterTwentyFourHours:
+            await cleanupExpiredAutomaticDownloads()
+            scheduleAutomaticCleanup()
+        }
+    }
+
+    private func cleanupExpiredAutomaticDownloads(
+        now: Date = Date()
+    ) async {
+        let deadline = now.addingTimeInterval(-24 * 60 * 60)
+        let expired = records.filter {
+            $0.manifest.purpose == .automaticCache
+                && ($0.manifest.bookFinishedAt ?? .distantFuture) <= deadline
+        }
+        for record in expired {
+            await remove(record)
+        }
+    }
+
+    private func scheduleAutomaticCleanup(now: Date = Date()) {
+        automaticCleanupTask?.cancel()
+        automaticCleanupTask = nil
+        let cleanupDates: [Date] = records.compactMap { record in
+            guard record.manifest.purpose == .automaticCache,
+                let finishedAt = record.manifest.bookFinishedAt
+            else {
+                return nil
+            }
+            return finishedAt.addingTimeInterval(24 * 60 * 60)
+        }
+        guard automaticCleanupPolicy == .afterTwentyFourHours,
+            let nextDate = cleanupDates.min()
+        else {
+            return
+        }
+        let delay = max(nextDate.timeIntervalSince(now), 0)
+        automaticCleanupTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else {
+                return
+            }
+            await self?.cleanupExpiredAutomaticDownloads()
+            self?.scheduleAutomaticCleanup()
+        }
+    }
+
+    private static func normalizedLookaheadCount(_ count: Int) -> Int {
+        min(max(count, 1), 20)
+    }
+
     private func schedule(
         plan: DownloadPlan,
         detail: LibraryBookDetail,
         account: ServerAccount,
-        storage: DownloadStorage
+        storage: DownloadStorage,
+        purpose: DownloadPurpose = .manual,
+        tracks: [DownloadTrackPlan]? = nil,
+        downloadID: DownloadID? = nil
     ) async throws {
-        let downloadID = DownloadID(
-            rawValue: UUID().uuidString.lowercased()
-        )
-        _ = try await storage.create(
-            downloadID: downloadID,
-            accountID: account.id,
-            plan: plan,
-            detail: detail
-        )
-        for track in plan.tracks {
+        let resolvedDownloadID =
+            downloadID
+            ?? DownloadID(rawValue: UUID().uuidString.lowercased())
+        if downloadID == nil {
+            _ = try await storage.create(
+                downloadID: resolvedDownloadID,
+                accountID: account.id,
+                plan: plan,
+                detail: detail,
+                purpose: purpose
+            )
+        }
+        for track in tracks ?? plan.tracks {
             let identity = try DownloadTaskIdentity(
-                downloadID: downloadID,
+                downloadID: resolvedDownloadID,
                 accountID: account.id,
                 itemID: detail.id,
                 track: track

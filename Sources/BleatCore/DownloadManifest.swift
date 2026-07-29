@@ -22,6 +22,11 @@ public enum DownloadFilePlacement: String, Codable, Sendable {
     case finalized
 }
 
+public enum DownloadPurpose: String, Codable, Sendable {
+    case manual
+    case automaticCache
+}
+
 public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public let trackIndex: Int
     public let expectedByteLength: Int64
@@ -49,6 +54,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     public let accountID: AccountID
     public let itemID: LibraryItemID
     public internal(set) var state: DownloadManifestState
+    public internal(set) var purpose: DownloadPurpose
+    public internal(set) var bookFinishedAt: Date?
     public private(set) var entries: [DownloadManifestEntry]
 
     public var expectedByteLength: Int64 {
@@ -64,12 +71,15 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     public init(
         downloadID: DownloadID,
         accountID: AccountID,
-        plan: DownloadPlan
+        plan: DownloadPlan,
+        purpose: DownloadPurpose = .manual
     ) {
         self.downloadID = downloadID
         self.accountID = accountID
         itemID = plan.itemID
         state = .queued
+        self.purpose = purpose
+        bookFinishedAt = nil
         entries = plan.tracks.map {
             DownloadManifestEntry(
                 trackIndex: $0.index,
@@ -137,6 +147,28 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         state = .failed
     }
 
+    public mutating func markQueued(
+        trackIndex: Int
+    ) throws(DownloadManifestError) {
+        let index = try entryIndex(for: trackIndex)
+        entries[index].state = .queued
+        entries[index].observedByteLength = nil
+        entries[index].placement = nil
+        updateIncompleteState()
+    }
+
+    public mutating func promoteToManual() {
+        purpose = .manual
+        bookFinishedAt = nil
+    }
+
+    public mutating func markBookFinished(at date: Date?) {
+        guard purpose == .automaticCache else {
+            return
+        }
+        bookFinishedAt = date
+    }
+
     public mutating func markDeleting() {
         state = .deleting
     }
@@ -168,6 +200,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         case accountID
         case itemID
         case state
+        case purpose
+        case bookFinishedAt
         case entries
     }
 
@@ -177,6 +211,15 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         accountID = try container.decode(AccountID.self, forKey: .accountID)
         itemID = try container.decode(LibraryItemID.self, forKey: .itemID)
         state = try container.decode(DownloadManifestState.self, forKey: .state)
+        purpose =
+            try container.decodeIfPresent(
+                DownloadPurpose.self,
+                forKey: .purpose
+            ) ?? .manual
+        bookFinishedAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .bookFinishedAt
+        )
         entries = try container.decode(
             [DownloadManifestEntry].self,
             forKey: .entries
@@ -218,6 +261,11 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         try container.encode(accountID, forKey: .accountID)
         try container.encode(itemID, forKey: .itemID)
         try container.encode(state, forKey: .state)
+        try container.encode(purpose, forKey: .purpose)
+        try container.encodeIfPresent(
+            bookFinishedAt,
+            forKey: .bookFinishedAt
+        )
         try container.encode(entries, forKey: .entries)
     }
 
@@ -241,6 +289,18 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             throw .trackNotFound(trackIndex)
         }
         return index
+    }
+
+    private mutating func updateIncompleteState() {
+        if entries.allSatisfy({ $0.state == .queued }) {
+            state = .queued
+        } else if entries.contains(where: { $0.state == .downloading }) {
+            state = .downloading
+        } else if entries.contains(where: { $0.state == .failed }) {
+            state = .failed
+        } else {
+            state = .partial
+        }
     }
 
     private static func saturatingSum(_ values: [Int64]) -> Int64 {

@@ -30,11 +30,38 @@ public struct DownloadTrackPlan: Equatable, Sendable {
     public let mimeType: String
     public let safeExtension: SafeAudioExtension
     public let destinationEntry: String
+    public let startOffset: Double?
+    public let duration: Double?
+
+    public init(
+        index: Int,
+        inode: String,
+        expectedByteLength: Int64,
+        mimeType: String,
+        safeExtension: SafeAudioExtension,
+        destinationEntry: String,
+        startOffset: Double? = nil,
+        duration: Double? = nil
+    ) {
+        self.index = index
+        self.inode = inode
+        self.expectedByteLength = expectedByteLength
+        self.mimeType = mimeType
+        self.safeExtension = safeExtension
+        self.destinationEntry = destinationEntry
+        self.startOffset = startOffset
+        self.duration = duration
+    }
 }
 
 public struct DownloadPlan: Equatable, Sendable {
     public let itemID: LibraryItemID
     public let tracks: [DownloadTrackPlan]
+
+    public init(itemID: LibraryItemID, tracks: [DownloadTrackPlan]) {
+        self.itemID = itemID
+        self.tracks = tracks
+    }
 
     public static func decodeExpandedItem(
         from data: Data
@@ -57,6 +84,7 @@ public struct DownloadPlan: Equatable, Sendable {
 
         var tracks: [DownloadTrackPlan] = []
         tracks.reserveCapacity(payload.media.audioFiles.count)
+        var nextStartOffset: Double? = 0
         for (index, audioFile) in payload.media.audioFiles.enumerated() {
             guard !audioFile.ino.isEmpty else {
                 throw .emptyInode(trackIndex: index)
@@ -72,18 +100,30 @@ public struct DownloadPlan: Equatable, Sendable {
                 mimeType: audioFile.mimeType,
                 trackIndex: index
             )
-            tracks.append(DownloadTrackPlan(
-                index: index,
-                inode: audioFile.ino,
-                expectedByteLength: audioFile.metadata.size,
-                mimeType: normalizedMimeType(audioFile.mimeType),
-                safeExtension: safeExtension,
-                destinationEntry: String(
-                    format: "%05d.%@",
-                    index,
-                    safeExtension.rawValue
-                )
-            ))
+            let duration = audioFile.duration.flatMap {
+                $0.isFinite && $0 > 0 ? $0 : nil
+            }
+            let startOffset = duration == nil ? nil : nextStartOffset
+            tracks.append(
+                DownloadTrackPlan(
+                    index: index,
+                    inode: audioFile.ino,
+                    expectedByteLength: audioFile.metadata.size,
+                    mimeType: normalizedMimeType(audioFile.mimeType),
+                    safeExtension: safeExtension,
+                    destinationEntry: String(
+                        format: "%05d.%@",
+                        index,
+                        safeExtension.rawValue
+                    ),
+                    startOffset: startOffset,
+                    duration: duration
+                ))
+            if let resolvedStartOffset = nextStartOffset, let duration {
+                nextStartOffset = resolvedStartOffset + duration
+            } else {
+                nextStartOffset = nil
+            }
         }
         return DownloadPlan(itemID: payload.id, tracks: tracks)
     }
@@ -121,7 +161,7 @@ public struct DownloadPlan: Equatable, Sendable {
         case "audio/flac", "audio/x-flac":
             allowed = [.flac]
         case "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/m4b",
-             "audio/x-m4b":
+            "audio/x-m4b":
             allowed = [.m4a, .m4b]
         case "audio/mpeg", "audio/mp3":
             allowed = [.mp3]
@@ -144,7 +184,7 @@ public struct DownloadPlan: Equatable, Sendable {
             .pathExtension
             .lowercased()
         guard let candidate = SafeAudioExtension(rawValue: rawExtension),
-              allowed.contains(candidate)
+            allowed.contains(candidate)
         else {
             throw .incompatibleExtension(
                 trackIndex: trackIndex,
@@ -229,16 +269,16 @@ public struct DownloadTaskIdentity: Codable, Equatable, Sendable {
         _ description: String
     ) throws(DownloadTaskIdentityError) -> DownloadTaskIdentity {
         guard description.hasPrefix(taskDescriptionPrefix),
-              let data = Data(
-                  base64Encoded: String(
-                      description.dropFirst(taskDescriptionPrefix.count)
-                  )
-              ),
-              let decoded = try? JSONDecoder().decode(
-                  DownloadTaskIdentity.self,
-                  from: data
-              ),
-              decoded.isValid
+            let data = Data(
+                base64Encoded: String(
+                    description.dropFirst(taskDescriptionPrefix.count)
+                )
+            ),
+            let decoded = try? JSONDecoder().decode(
+                DownloadTaskIdentity.self,
+                from: data
+            ),
+            decoded.isValid
         else {
             throw .invalidTaskDescription
         }
@@ -257,18 +297,19 @@ public struct DownloadTaskIdentity: Codable, Equatable, Sendable {
 
     static func isValidDestinationEntry(_ entry: String) -> Bool {
         guard !entry.isEmpty,
-              !entry.contains("/"),
-              !entry.contains("\\"),
-              entry.rangeOfCharacter(from: .controlCharacters) == nil
+            !entry.contains("/"),
+            !entry.contains("\\"),
+            entry.rangeOfCharacter(from: .controlCharacters) == nil
         else {
             return false
         }
-        let components = entry.split(separator: ".", omittingEmptySubsequences: false)
+        let components = entry.split(
+            separator: ".", omittingEmptySubsequences: false)
         guard components.count == 2,
-              components[0].allSatisfy(\.isNumber),
-              let safeExtension = SafeAudioExtension(
-                  rawValue: String(components[1])
-              )
+            components[0].allSatisfy(\.isNumber),
+            let safeExtension = SafeAudioExtension(
+                rawValue: String(components[1])
+            )
         else {
             return false
         }
@@ -285,10 +326,13 @@ private struct ExpandedDownloadMedia: Decodable {
     let audioFiles: [ExpandedDownloadAudioFile]
 }
 
+// Pinned v2.36.0 `AudioFile.toJSON()` contract:
+// https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/objects/files/AudioFile.js
 private struct ExpandedDownloadAudioFile: Decodable {
     let ino: String
     let metadata: ExpandedDownloadFileMetadata
     let mimeType: String
+    let duration: Double?
 }
 
 private struct ExpandedDownloadFileMetadata: Decodable {

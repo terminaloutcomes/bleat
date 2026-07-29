@@ -24,6 +24,11 @@ final class BackgroundDownloadTests: XCTestCase {
             plan.tracks.map(\.safeExtension),
             [.aac, .m4b, .mp3]
         )
+        XCTAssertEqual(
+            plan.tracks.map(\.startOffset),
+            [0, 11, 33]
+        )
+        XCTAssertEqual(plan.tracks.map(\.duration), [11, 22, 33])
     }
 
     func testExpandedItemRejectsUnsafeOrUnexpectedFiles() {
@@ -129,10 +134,11 @@ final class BackgroundDownloadTests: XCTestCase {
             }
         )
         let requests = await registry.requests()
-        XCTAssertTrue(requests.allSatisfy {
-            $0.value(forHTTPHeaderField: "Authorization")
-                == "Bearer static-access"
-        })
+        XCTAssertTrue(
+            requests.allSatisfy {
+                $0.value(forHTTPHeaderField: "Authorization")
+                    == "Bearer static-access"
+            })
         XCTAssertTrue(requests.allSatisfy { $0.url?.query == nil })
     }
 
@@ -225,7 +231,8 @@ final class BackgroundDownloadTests: XCTestCase {
             "https://example.net/audiobookshelf"
         )
         let identity = try Self.identity(accountID: accountID)
-        let rejectedRequest = try await authCoordinator
+        let rejectedRequest =
+            try await authCoordinator
             .makeAuthorizedDownloadRequest(
                 identity: identity,
                 server: server
@@ -417,30 +424,34 @@ final class BackgroundDownloadTests: XCTestCase {
     }
 
     private static func expandedItemJSON() -> Data {
-        Data("""
-        {
-          "id": "item",
-          "media": {
-            "audioFiles": [
-              {
-                "ino": "101",
-                "metadata": {"filename": "01.aac", "size": 11},
-                "mimeType": "audio/aac"
-              },
-              {
-                "ino": "102",
-                "metadata": {"filename": "02.m4b", "size": 22},
-                "mimeType": "audio/mp4; charset=binary"
-              },
-              {
-                "ino": "103",
-                "metadata": {"filename": "03.mp3", "size": 33},
-                "mimeType": "audio/mpeg"
+        Data(
+            """
+            {
+              "id": "item",
+              "media": {
+                "audioFiles": [
+                  {
+                    "ino": "101",
+                    "metadata": {"filename": "01.aac", "size": 11},
+                    "mimeType": "audio/aac",
+                    "duration": 11
+                  },
+                  {
+                    "ino": "102",
+                    "metadata": {"filename": "02.m4b", "size": 22},
+                    "mimeType": "audio/mp4; charset=binary",
+                    "duration": 22
+                  },
+                  {
+                    "ino": "103",
+                    "metadata": {"filename": "03.mp3", "size": 33},
+                    "mimeType": "audio/mpeg",
+                    "duration": 33
+                  }
+                ]
               }
-            ]
-          }
-        }
-        """.utf8)
+            }
+            """.utf8)
     }
 
     private static func singleTrackJSON(
@@ -482,11 +493,12 @@ private actor DownloadTaskRegistry {
         let identifier = nextIdentifier
         nextIdentifier += 1
         recordedRequests.append(request)
-        storedSnapshots.append(.init(
-            taskIdentifier: identifier,
-            taskDescription: taskDescription,
-            originalRequest: request
-        ))
+        storedSnapshots.append(
+            .init(
+                taskIdentifier: identifier,
+                taskDescription: taskDescription,
+                originalRequest: request
+            ))
         return identifier
     }
 
@@ -587,29 +599,30 @@ private actor DownloadRefreshTransport: HTTPTransport {
     }
 
     private static func refreshResponse() -> Data {
-        Data("""
-        {
-          "user": {
-            "id": "user",
-            "username": "reader",
-            "type": "user",
-            "permissions": {
-              "download": true,
-              "update": false,
-              "delete": false,
-              "upload": false,
-              "createEreader": false,
-              "accessAllLibraries": true,
-              "accessAllTags": true,
-              "accessExplicitContent": true,
-              "selectedTagsNotAccessible": false
-            },
-            "librariesAccessible": [],
-            "itemTagsSelected": [],
-            "accessToken": "new-access",
-            "refreshToken": "new-refresh"
-          }
-        }
-        """.utf8)
+        Data(
+            """
+            {
+              "user": {
+                "id": "user",
+                "username": "reader",
+                "type": "user",
+                "permissions": {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "createEreader": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                },
+                "librariesAccessible": [],
+                "itemTagsSelected": [],
+                "accessToken": "new-access",
+                "refreshToken": "new-refresh"
+              }
+            }
+            """.utf8)
     }
 }

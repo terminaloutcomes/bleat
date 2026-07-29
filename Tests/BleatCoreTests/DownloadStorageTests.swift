@@ -265,6 +265,114 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 2)
     }
 
+    func testAutomaticCacheMetadataAndTrackRemovalPersist()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "101",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                ),
+                DownloadTrackPlan(
+                    index: 1,
+                    inode: "102",
+                    expectedByteLength: 2,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00001.mp3"
+                ),
+            ]
+        )
+        var record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail,
+            purpose: .automaticCache
+        )
+        let finishedAt = Date(timeIntervalSince1970: 123)
+        record = try await fixture.storage.markBookFinished(
+            record,
+            at: finishedAt
+        )
+        XCTAssertEqual(record.manifest.purpose, .automaticCache)
+        XCTAssertEqual(record.manifest.bookFinishedAt, finishedAt)
+
+        for (track, data) in zip(
+            plan.tracks,
+            [Data([1, 2, 3, 4]), Data([5, 6])]
+        ) {
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: track
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "temporary-\(track.index)"
+            )
+            try data.write(to: temporaryURL)
+            let observed = try fixture.layout.placeDownloadedFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            record = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
+        }
+        XCTAssertEqual(record.manifest.state, .complete)
+
+        record = try await fixture.storage.removeCompletedTracks(
+            from: record,
+            trackIndexes: [0]
+        )
+        XCTAssertEqual(record.manifest.state, .partial)
+        XCTAssertEqual(record.manifest.entries[0].state, .queued)
+        XCTAssertEqual(record.manifest.entries[1].state, .complete)
+        XCTAssertEqual(record.manifest.storedByteLength, 2)
+
+        record = try await fixture.storage.promoteToManual(record)
+        XCTAssertEqual(record.manifest.purpose, .manual)
+        XCTAssertNil(record.manifest.bookFinishedAt)
+        let records = try await fixture.storage.records()
+        XCTAssertEqual(records, [record])
+    }
+
+    func testLegacyManifestDefaultsToManualPurpose() throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(
+                    DownloadManifest(
+                        downloadID: fixture.downloadID,
+                        accountID: fixture.accountID,
+                        plan: fixture.plan
+                    )
+                )
+            ) as? [String: Any]
+        )
+        object["purpose"] = nil
+        object["bookFinishedAt"] = nil
+
+        let decoded = try JSONDecoder().decode(
+            DownloadManifest.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.purpose, .manual)
+        XCTAssertNil(decoded.bookFinishedAt)
+    }
+
     func testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()
         async throws
     {

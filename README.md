@@ -285,6 +285,15 @@ Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
 expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.
 
+Starting streamed playback also creates an automatic whole-file cache. Bleat
+keeps the current file plus enough following files to cover the next configured
+chapter window when file timing is available, and otherwise keeps the
+configured number of files ahead. The default is five files ahead; a single
+M4B is downloaded once in full. Settings can delete automatic cache files after
+each completed chapter, when the book finishes, or—by default—24 hours after
+the book finishes. Cleanup never applies to an explicit download. Choose
+**Keep Full Book** on an automatic cache to retain it as a normal download.
+
 Book detail keeps Play, Download, and finished-state actions above long
 description and metadata content. It shows series and sequence, audio-file and
 chapter counts, and a duration beside every chapter. Existing downloads show

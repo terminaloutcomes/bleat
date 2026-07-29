@@ -245,6 +245,83 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testExpiredAutomaticCacheIsRemovedWithoutDeletingManualDownload()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatAutomaticCleanup-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let suite = "AutomaticCleanupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let account = try fixtureAccount()
+        let automaticPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let manualPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8)
+                    .replacingOccurrences(
+                        of: "\"item-1\"",
+                        with: "\"item-2\""
+                    )
+                    .utf8
+            )
+        )
+        var automatic = try await storage.create(
+            downloadID: DownloadID(rawValue: "automatic"),
+            accountID: account.id,
+            plan: automaticPlan,
+            detail: fixtureBookDetail(
+                item: fixtureBook(
+                    id: automaticPlan.itemID.rawValue,
+                    title: "Automatic",
+                    libraryID: fixtureLibrary().id
+                )
+            ),
+            purpose: .automaticCache
+        )
+        automatic = try await storage.markBookFinished(
+            automatic,
+            at: Date().addingTimeInterval(-(25 * 60 * 60))
+        )
+        XCTAssertNotNil(automatic.manifest.bookFinishedAt)
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "manual"),
+            accountID: account.id,
+            plan: manualPlan,
+            detail: fixtureBookDetail(
+                item: fixtureBook(
+                    id: manualPlan.itemID.rawValue,
+                    title: "Manual",
+                    libraryID: fixtureLibrary().id
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            defaults: defaults,
+            storageRootURL: root
+        )
+
+        await model.start(account: nil)
+
+        XCTAssertEqual(
+            model.records.map(\.manifest.itemID),
+            [
+                manualPlan.itemID
+            ])
+        XCTAssertEqual(model.records.first?.manifest.purpose, .manual)
+    }
+
     func testDownloadFailuresHaveDistinctMessages() {
         let failures: [DownloadModelFailure] = [
             .storageUnavailable,
@@ -321,6 +398,161 @@ final class AppModelTests: XCTestCase {
                     DownloadModel.largeDownloadThresholdBytes
             ),
             .schedule
+        )
+    }
+
+    func testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist()
+        throws
+    {
+        let suite = "AutomaticDownloadSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let service = TestAppService(activeAccount: .success(nil))
+        let first = DownloadModel(service: service, defaults: defaults)
+
+        XCTAssertEqual(first.automaticLookaheadCount, 5)
+        XCTAssertEqual(
+            first.automaticCleanupPolicy,
+            .afterTwentyFourHours
+        )
+
+        first.setAutomaticLookaheadCount(9)
+        first.setAutomaticCleanupPolicy(.afterChapter)
+        let restored = DownloadModel(service: service, defaults: defaults)
+        XCTAssertEqual(restored.automaticLookaheadCount, 9)
+        XCTAssertEqual(restored.automaticCleanupPolicy, .afterChapter)
+
+        restored.setAutomaticLookaheadCount(0)
+        XCTAssertEqual(restored.automaticLookaheadCount, 1)
+        restored.setAutomaticLookaheadCount(99)
+        XCTAssertEqual(restored.automaticLookaheadCount, 20)
+    }
+
+    func testAutomaticDownloadPlannerUsesWholeFilesForChapterWindow()
+        throws
+    {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: (0..<10).map { index in
+                DownloadTrackPlan(
+                    index: index,
+                    inode: "\(index)",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: String(
+                        format: "%05d.mp3",
+                        index
+                    ),
+                    startOffset: Double(index * 60),
+                    duration: 60
+                )
+            }
+        )
+        let chapters = (0..<20).map { index in
+            PlaybackChapter(
+                id: index,
+                start: Double(index * 30),
+                end: Double((index + 1) * 30),
+                title: "Chapter \(index + 1)"
+            )
+        }
+        let activity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+            ),
+            account: try fixtureAccount(),
+            currentTime: 15,
+            chapters: chapters,
+            fileRanges: []
+        )
+
+        XCTAssertEqual(
+            AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: plan,
+                activity: activity,
+                lookaheadCount: 5
+            ),
+            [0, 1, 2]
+        )
+
+        let laterActivity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: activity.detail,
+            account: activity.account,
+            currentTime: 125,
+            chapters: chapters,
+            fileRanges: []
+        )
+        XCTAssertEqual(
+            AutomaticDownloadPlanner.completedTrackIndexes(
+                plan: plan,
+                activity: laterActivity
+            ),
+            [0, 1]
+        )
+    }
+
+    func testAutomaticDownloadPlannerFallsBackToCurrentPlusFilesAhead()
+        throws
+    {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: (0..<10).map { index in
+                DownloadTrackPlan(
+                    index: index,
+                    inode: "\(index)",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: String(
+                        format: "%05d.mp3",
+                        index
+                    )
+                )
+            }
+        )
+        let ranges = (0..<10).map { index in
+            AutomaticDownloadFileRange(
+                index: index,
+                start: Double(index * 60),
+                end: Double((index + 1) * 60)
+            )
+        }
+        let activity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+            ),
+            account: try fixtureAccount(),
+            currentTime: 125,
+            chapters: [],
+            fileRanges: ranges
+        )
+
+        XCTAssertEqual(
+            AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: plan,
+                activity: activity,
+                lookaheadCount: 5
+            ),
+            [2, 3, 4, 5, 6, 7]
+        )
+
+        let singleFile = DownloadPlan(
+            itemID: plan.itemID,
+            tracks: [plan.tracks[0]]
+        )
+        XCTAssertEqual(
+            AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: singleFile,
+                activity: activity,
+                lookaheadCount: 5
+            ),
+            [0]
         )
     }
 

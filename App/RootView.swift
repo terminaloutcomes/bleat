@@ -1514,6 +1514,9 @@ private struct BookDetailView: View {
                                 downloadStatus(record),
                                 systemImage: downloadStatusIcon(record)
                             )
+                            .accessibilityIdentifier(
+                                "book.detail.downloadStatus"
+                            )
                             Spacer()
                             Text(downloadBytes(record))
                                 .foregroundStyle(.secondary)
@@ -1564,7 +1567,6 @@ private struct BookDetailView: View {
                         .quaternary,
                         in: RoundedRectangle(cornerRadius: 12)
                     )
-                    .accessibilityIdentifier("book.detail.downloadStatus")
                 } else {
                     Button {
                         Task {
@@ -1592,6 +1594,20 @@ private struct BookDetailView: View {
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) -> some View {
+        if record.manifest.purpose == .automaticCache {
+            Button("Keep Full Book", systemImage: "pin") {
+                Task {
+                    await model.downloads.keepFullBook(
+                        record,
+                        account: account
+                    )
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(
+                "book.detail.download.keepFullBook"
+            )
+        }
         if [
             DownloadManifestState.complete,
             .deleting,
@@ -1663,7 +1679,9 @@ private struct BookDetailView: View {
         case .partial:
             return "Repair needed"
         case .complete:
-            return "Downloaded"
+            return record.manifest.purpose == .automaticCache
+                ? "Cached"
+                : "Downloaded"
         case .failed:
             return "Download failed"
         case .deleting:
@@ -1824,6 +1842,46 @@ private struct SettingsView: View {
                     )
                     .accessibilityIdentifier(
                         "settings.downloads.wifiOnly"
+                    )
+
+                    Stepper(
+                        "Files Ahead: \(model.downloads.automaticLookaheadCount)",
+                        value: Binding(
+                            get: {
+                                model.downloads.automaticLookaheadCount
+                            },
+                            set: { value in
+                                model.downloads
+                                    .setAutomaticLookaheadCount(value)
+                            }
+                        ),
+                        in: 1...20
+                    )
+                    .accessibilityIdentifier(
+                        "settings.downloads.filesAhead"
+                    )
+
+                    Picker(
+                        "Delete Automatic Downloads",
+                        selection: Binding(
+                            get: {
+                                model.downloads.automaticCleanupPolicy
+                            },
+                            set: { value in
+                                model.downloads.setAutomaticCleanupPolicy(
+                                    value
+                                )
+                            }
+                        )
+                    ) {
+                        ForEach(
+                            AutomaticDownloadCleanupPolicy.allCases
+                        ) { policy in
+                            Text(policy.label).tag(policy)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.downloads.automaticCleanup"
                     )
 
                     NavigationLink {
@@ -2169,8 +2227,16 @@ private struct DownloadStorageView: View {
     @ViewBuilder
     private func downloadRow(_ record: DownloadedBookRecord) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(record.detail.title)
-                .font(.headline)
+            HStack {
+                Text(record.detail.title)
+                    .font(.headline)
+                if record.manifest.purpose == .automaticCache {
+                    Spacer()
+                    Label("Automatic", systemImage: "arrow.down.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             ProgressView(
                 value: model.downloads.progress[
                     record.manifest.downloadID

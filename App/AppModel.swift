@@ -225,11 +225,16 @@ final class AppModel {
         downloadsStorageRootURL: URL? = nil
     ) {
         self.service = service
-        playback = PlaybackModel(service: service)
-        downloads = DownloadModel(
+        let playback = PlaybackModel(service: service)
+        let downloads = DownloadModel(
             service: service,
             storageRootURL: downloadsStorageRootURL
         )
+        self.playback = playback
+        self.downloads = downloads
+        playback.setAutomaticDownloadHandler { [weak downloads] activity in
+            await downloads?.handleAutomaticPlaybackActivity(activity)
+        }
         phase = .launching
     }
 
@@ -238,8 +243,13 @@ final class AppModel {
         bootstrapError: AppBootstrapError
     ) {
         self.service = service
-        playback = PlaybackModel(service: service)
-        downloads = DownloadModel(service: service)
+        let playback = PlaybackModel(service: service)
+        let downloads = DownloadModel(service: service)
+        self.playback = playback
+        self.downloads = downloads
+        playback.setAutomaticDownloadHandler { [weak downloads] activity in
+            await downloads?.handleAutomaticPlaybackActivity(activity)
+        }
         hasStarted = true
         switch bootstrapError {
         case .persistenceUnavailable:
