@@ -457,35 +457,166 @@ private struct HomeContent: View {
         Group {
             switch model.homeShelves {
             case .idle, .loading:
-                ProgressView()
-                    .accessibilityIdentifier("home.loading")
+                if downloadedRecords.isEmpty {
+                    ProgressView()
+                        .accessibilityIdentifier("home.loading")
+                } else {
+                    homeScroll(shelves: []) {
+                        ProgressView("Loading shelves")
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("home.loading")
+                    }
+                }
             case .failed(let failure):
-                ContentUnavailableView(
-                    "Home unavailable",
-                    systemImage: "wifi.exclamationmark",
-                    description: Text(failure.message)
-                )
-                .accessibilityIdentifier("home.error")
+                if downloadedRecords.isEmpty {
+                    ContentUnavailableView(
+                        "Home unavailable",
+                        systemImage: "wifi.exclamationmark",
+                        description: Text(failure.message)
+                    )
+                    .accessibilityIdentifier("home.error")
+                } else {
+                    homeScroll(shelves: []) {
+                        Label(
+                            failure.message,
+                            systemImage: "wifi.exclamationmark"
+                        )
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                        .accessibilityIdentifier("home.error")
+                    }
+                }
             case .loaded(let shelves):
-                if shelves.isEmpty {
+                if shelves.isEmpty && downloadedRecords.isEmpty {
                     ContentUnavailableView(
                         "No personalized shelves",
                         systemImage: "books.vertical"
                     )
                     .accessibilityIdentifier("home.empty")
                 } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 24) {
-                            ForEach(shelves, id: \.id) { shelf in
-                                shelfContent(shelf)
-                            }
+                    homeScroll(shelves: shelves) {
+                        if shelves.isEmpty {
+                            Label(
+                                "No personalized shelves",
+                                systemImage: "books.vertical"
+                            )
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                            .accessibilityIdentifier("home.empty")
                         }
-                        .padding(.vertical)
                     }
-                    .accessibilityIdentifier("home.shelves")
                 }
             }
         }
+    }
+
+    private var downloadedRecords: [DownloadedBookRecord] {
+        guard let accountID = model.account?.id else {
+            return []
+        }
+        return model.downloads.records
+            .filter {
+                $0.manifest.accountID == accountID
+                    && $0.manifest.state == .complete
+            }
+            .sorted {
+                $0.detail.title.localizedStandardCompare(
+                    $1.detail.title
+                ) == .orderedAscending
+            }
+    }
+
+    private func homeScroll<Trailing: View>(
+        shelves: [LibraryBookShelf],
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 24) {
+                if !downloadedRecords.isEmpty {
+                    downloadedShelf
+                }
+                ForEach(shelves, id: \.id) { shelf in
+                    shelfContent(shelf)
+                }
+                trailing()
+            }
+            .padding(.vertical)
+        }
+        .accessibilityIdentifier("home.shelves")
+    }
+
+    private var downloadedShelf: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Downloaded")
+                .font(.title2.bold())
+                .padding(.horizontal)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 12) {
+                    ForEach(
+                        downloadedRecords,
+                        id: \.manifest.downloadID
+                    ) { record in
+                        Button {
+                            Task {
+                                await model.playDownloaded(record)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ZStack(alignment: .bottomTrailing) {
+                                    BookCoverView(
+                                        server: model.account?.server,
+                                        itemID: record.detail.id,
+                                        updatedAtMilliseconds:
+                                            record.detail
+                                            .updatedAtMilliseconds,
+                                        width: 360,
+                                        height: 360,
+                                        cornerRadius: 10
+                                    )
+                                    .frame(width: 148, height: 148)
+                                    Image(
+                                        systemName:
+                                            model.playback.itemID
+                                            == record.detail.id
+                                            && model.playback.accountID
+                                                == record.manifest.accountID
+                                            ? "speaker.wave.2.circle.fill"
+                                            : "play.circle.fill"
+                                    )
+                                    .font(.title)
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(
+                                        .white, .black.opacity(0.7)
+                                    )
+                                    .padding(8)
+                                }
+                                Text(record.detail.title)
+                                    .font(.headline)
+                                    .lineLimit(2)
+                                if !record.detail.authors.isEmpty {
+                                    Text(
+                                        record.detail.authors
+                                            .map(\.name)
+                                            .joined(separator: ", ")
+                                    )
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                }
+                            }
+                            .frame(width: 148, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            "Play \(record.detail.title) offline"
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .accessibilityIdentifier("home.downloaded")
     }
 
     private func shelfContent(_ shelf: LibraryBookShelf) -> some View {

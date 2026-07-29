@@ -391,8 +391,10 @@ render the first cached/live audiobook page with loading, empty, and failure
 states. Search now performs debounced, cancellable, cache-backed server queries
 against the selected native account and library. Personalized Home, expanded
 detail, bookmarks, bounded cover requests, the persistent mini-player, account
-context, and actionable download state now have runnable UI. Large-library
-performance validation and the remaining release polish still remain.
+context, and actionable download state now have runnable UI. Home also exposes
+completed active-account downloads independently of the remote shelf state and
+starts their local playback directly. Large-library performance validation and
+the remaining release polish still remain.
 
 Deliver:
 

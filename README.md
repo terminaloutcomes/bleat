@@ -149,8 +149,11 @@ part of the app.
 ## Browse the library
 
 Home identifies the active username, server host, and audiobook library above
-the server's personalized shelves. Shelf cards are compact enough to scan
-several books without losing title and author context.
+the server's personalized shelves. Completed books for that account appear
+first in a local **Downloaded** shelf and start offline playback directly. That
+shelf remains usable while personalized shelves are loading or unavailable.
+Shelf cards are compact enough to scan several books without losing title and
+author context.
 
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
