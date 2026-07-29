@@ -102,6 +102,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
     }
 
+    func testSwitchAccountPersistsSelectionAndReloadsBrowsingContext()
+        async throws
+    {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.switchAccount(to: second)
+
+        XCTAssertEqual(model.account, second)
+        XCTAssertEqual(model.accounts, [first, second])
+        XCTAssertEqual(model.accountActionStatus, .idle)
+        let activated = await service.activatedAccounts()
+        XCTAssertEqual(activated, [second])
+        XCTAssertFalse(model.playback.hasActiveBook)
+    }
+
     func testStartFailureShowsUnavailableState() async {
         let service = TestAppService(
             activeAccount: .failure(.accountStore(.persistenceFailed))
@@ -211,7 +238,7 @@ final class AppModelTests: XCTestCase {
             password: "second"
         )
         await gate.release()
-        await firstLogin.value
+        _ = await firstLogin.value
 
         let loginRequestCount = await service.loginRequests().count
         XCTAssertEqual(loginRequestCount, 1)
@@ -733,6 +760,7 @@ final class AppModelTests: XCTestCase {
             .mediaUnavailable,
             .invalidMetadata,
             .metadataUnavailable,
+            .bookmarkUnavailable,
             .accountRemovalFailed,
         ]
 
@@ -740,15 +768,20 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
     }
 
-    private func fixtureAccount() throws -> ServerAccount {
+    private func fixtureAccount(
+        accountID: String = "account-1",
+        userID: String = "user-1",
+        username: String = "reader",
+        server: String = "https://books.example"
+    ) throws -> ServerAccount {
         try ServerAccount(
-            id: AccountID(rawValue: "account-1"),
-            server: NormalizedServerURL("https://books.example"),
+            id: AccountID(rawValue: accountID),
+            server: NormalizedServerURL(server),
             serverVersion: "2.36.0",
             authenticationMethods: [.local],
             user: AuthenticatedUser(
-                id: UserID(rawValue: "user-1"),
-                username: "reader",
+                id: UserID(rawValue: userID),
+                username: username,
                 type: .user,
                 permissions: UserPermissions(
                     download: true,
@@ -883,6 +916,7 @@ private struct MetadataSaveRequest: Equatable, Sendable {
 }
 
 private actor TestAppService: AppServicing {
+    private var accountsResult: Result<[ServerAccount], AppServiceError>?
     private var activeAccountResult:
         Result<
             ServerAccount?,
@@ -920,6 +954,7 @@ private actor TestAppService: AppServicing {
     private let searchGate: AsyncGate?
 
     private var activeAccountRequests = 0
+    private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
     private var recordedPageRequests: [LibraryID] = []
     private var recordedHomeRequests: [LibraryID] = []
@@ -929,6 +964,7 @@ private actor TestAppService: AppServicing {
     private var recordedRemovedAccounts: [ServerAccount] = []
 
     init(
+        accounts: Result<[ServerAccount], AppServiceError>? = nil,
         activeAccount: Result<ServerAccount?, AppServiceError>,
         login: Result<ServerAccount, AppServiceError> = .failure(
             .onboarding(.authenticationRequestFailed)
@@ -951,6 +987,7 @@ private actor TestAppService: AppServicing {
         removeGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil
     ) {
+        accountsResult = accounts
         activeAccountResult = activeAccount
         loginResult = login
         librariesResult = libraries
@@ -964,11 +1001,31 @@ private actor TestAppService: AppServicing {
         self.searchGate = searchGate
     }
 
+    func accounts()
+        async throws(AppServiceError) -> [ServerAccount]
+    {
+        if let accountsResult {
+            return try value(from: accountsResult)
+        }
+        switch activeAccountResult {
+        case .success(let account):
+            return account.map { [$0] } ?? []
+        case .failure(let error):
+            throw error
+        }
+    }
+
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
     {
         activeAccountRequests += 1
         return try value(from: activeAccountResult)
+    }
+
+    func activateAccount(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        recordedActivatedAccounts.append(account)
     }
 
     func login(
@@ -1183,6 +1240,10 @@ private actor TestAppService: AppServicing {
 
     func activeAccountRequestCount() -> Int {
         activeAccountRequests
+    }
+
+    func activatedAccounts() -> [ServerAccount] {
+        recordedActivatedAccounts
     }
 
     func loginRequests() -> [LoginRequest] {

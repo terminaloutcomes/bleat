@@ -24,6 +24,7 @@ enum ResourceState<Value: Equatable & Sendable>: Equatable, Sendable {
 
 enum AccountActionStatus: Equatable, Sendable {
     case idle
+    case switching
     case removing
     case failed(AppFailure)
 }
@@ -176,6 +177,7 @@ final class AppModel {
     private(set) var loginStatus: LoginStatus = .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
     private(set) var account: ServerAccount?
+    private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
     private(set) var selectedLibrary: LibrarySummary?
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
@@ -216,6 +218,7 @@ final class AppModel {
         hasStarted = true
 
         do {
+            accounts = try await service.accounts()
             guard let restoredAccount = try await service.activeAccount()
             else {
                 phase = .signedOut
@@ -223,20 +226,23 @@ final class AppModel {
             }
             account = restoredAccount
             phase = .signedIn
-            await downloads.start(account: restoredAccount)
+            for storedAccount in accounts {
+                await downloads.start(account: storedAccount)
+            }
             await loadLibraries()
         } catch let error {
             phase = .unavailable(AppFailure(serviceError: error))
         }
     }
 
+    @discardableResult
     func login(
         serverAddress: String,
         username: String,
         password: String
-    ) async {
+    ) async -> Bool {
         guard loginStatus != .submitting else {
-            return
+            return false
         }
         loginStatus = .submitting
 
@@ -247,12 +253,42 @@ final class AppModel {
                 password: password
             )
             account = authenticatedAccount
+            accounts.removeAll { $0.id == authenticatedAccount.id }
+            accounts.append(authenticatedAccount)
+            accounts.sort(by: Self.sortAccounts)
             phase = .signedIn
             loginStatus = .idle
             await downloads.start(account: authenticatedAccount)
             await loadLibraries()
+            return true
         } catch let error {
             loginStatus = .failed(AppFailure(serviceError: error))
+            return false
+        }
+    }
+
+    func prepareAccountLogin() {
+        loginStatus = .idle
+    }
+
+    func switchAccount(to selectedAccount: ServerAccount) async {
+        guard selectedAccount.id != account?.id else {
+            return
+        }
+        guard accountActionStatus == .idle else {
+            return
+        }
+        accountActionStatus = .switching
+        do {
+            try await service.activateAccount(selectedAccount)
+            account = selectedAccount
+            await downloads.start(account: selectedAccount)
+            await loadLibraries()
+            accountActionStatus = .idle
+        } catch let error {
+            accountActionStatus = .failed(
+                AppFailure(serviceError: error)
+            )
         }
     }
 
@@ -480,7 +516,8 @@ final class AppModel {
         do {
             try await service.removeAccount(account)
             await downloads.removeAll(for: account.id)
-            self.account = nil
+            accounts.removeAll { $0.id == account.id }
+            self.account = accounts.first
             selectedLibrary = nil
             libraries = .idle
             books = .idle
@@ -489,7 +526,14 @@ final class AppModel {
             resetBookDetail()
             accountActionStatus = .idle
             loginStatus = .idle
-            phase = .signedOut
+            if let replacement = self.account {
+                try await service.activateAccount(replacement)
+                phase = .signedIn
+                await downloads.start(account: replacement)
+                await loadLibraries()
+            } else {
+                phase = .signedOut
+            }
         } catch let error {
             accountActionStatus = .failed(
                 AppFailure(serviceError: error)
@@ -508,5 +552,19 @@ final class AppModel {
         selectedBookID = nil
         bookDetail = .idle
         metadataSaveState = .idle
+    }
+
+    private static func sortAccounts(
+        _ lhs: ServerAccount,
+        _ rhs: ServerAccount
+    ) -> Bool {
+        let usernameOrder = lhs.user.username.localizedStandardCompare(
+            rhs.user.username
+        )
+        if usernameOrder == .orderedSame {
+            return lhs.server.url.absoluteString
+                < rhs.server.url.absoluteString
+        }
+        return usernameOrder == .orderedAscending
     }
 }

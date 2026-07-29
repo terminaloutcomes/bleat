@@ -54,9 +54,21 @@ struct BleatApp: App {
 }
 
 private struct UnavailableAppService: AppServicing {
+    func accounts()
+        async throws(AppServiceError) -> [ServerAccount]
+    {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
     {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func activateAccount(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
         throw .accountStore(.persistenceFailed)
     }
 

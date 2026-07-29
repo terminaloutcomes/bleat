@@ -28,6 +28,15 @@
             accountResult = Self.makeAccount()
         }
 
+        func accounts()
+            async throws(AppServiceError) -> [ServerAccount]
+        {
+            guard scenario == .signedIn else {
+                return []
+            }
+            return [try account()]
+        }
+
         func activeAccount()
             async throws(AppServiceError) -> ServerAccount?
         {
@@ -36,6 +45,10 @@
             }
             return try account()
         }
+
+        func activateAccount(
+            _ account: ServerAccount
+        ) async throws(AppServiceError) {}
 
         func login(
             serverAddress: String,

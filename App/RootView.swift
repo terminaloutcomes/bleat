@@ -32,6 +32,9 @@ struct RootView: View {
 
 private struct NativeLoginView: View {
     @Bindable var model: AppModel
+    var navigationTitle = "Bleat"
+    var onSignedIn: () -> Void = {}
+    var onCancel: (() -> Void)?
     @State private var serverAddress = ""
     @State private var username = ""
     @State private var password = ""
@@ -99,7 +102,14 @@ private struct NativeLoginView: View {
                     .accessibilityIdentifier("login.submit")
                 }
             }
-            .navigationTitle("Bleat")
+            .navigationTitle(navigationTitle)
+            .toolbar {
+                if let onCancel {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onCancel)
+                    }
+                }
+            }
         }
     }
 
@@ -110,11 +120,14 @@ private struct NativeLoginView: View {
         password = ""
 
         Task {
-            await model.login(
+            let signedIn = await model.login(
                 serverAddress: submittedServerAddress,
                 username: submittedUsername,
                 password: submittedPassword
             )
+            if signedIn {
+                onSignedIn()
+            }
         }
     }
 }
@@ -857,20 +870,42 @@ private struct BookDetailView: View {
 
 private struct SettingsView: View {
     @Bindable var model: AppModel
+    @State private var showAddAccount = false
 
     var body: some View {
         NavigationStack {
             Form {
-                if let account = model.account {
-                    Section("Account") {
-                        LabeledContent("Username", value: account.user.username)
-                        LabeledContent(
-                            "Server",
-                            value: account.server.url.host
-                                ?? account.server.url
-                                .absoluteString
+                Section("Accounts") {
+                    ForEach(model.accounts, id: \.id) { account in
+                        Button {
+                            Task {
+                                await model.switchAccount(to: account)
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(account.user.username)
+                                    Text(account.server.url.absoluteString)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if account.id == model.account?.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(
+                            account.id == model.account?.id
+                                || model.accountActionStatus == .switching
                         )
                     }
+                    Button("Add Account", systemImage: "plus") {
+                        model.prepareAccountLogin()
+                        showAddAccount = true
+                    }
+                    .accessibilityIdentifier("settings.addAccount")
                 }
 
                 if case .failed(let failure) = model.accountActionStatus {
@@ -891,6 +926,16 @@ private struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showAddAccount) {
+                NativeLoginView(
+                    model: model,
+                    navigationTitle: "Add Account"
+                ) {
+                    showAddAccount = false
+                } onCancel: {
+                    showAddAccount = false
+                }
+            }
         }
     }
 }

@@ -59,8 +59,15 @@ enum AppMetadataSaveOutcome: Equatable, Sendable {
 }
 
 protocol AppServicing: Sendable {
+    func accounts()
+        async throws(AppServiceError) -> [ServerAccount]
+
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
+
+    func activateAccount(
+        _ account: ServerAccount
+    ) async throws(AppServiceError)
 
     func login(
         serverAddress: String,
@@ -218,11 +225,31 @@ actor LiveAppService: AppServicing {
         libraryCache = LibraryCache(modelContainer: modelContainer)
     }
 
+    func accounts()
+        async throws(AppServiceError) -> [ServerAccount]
+    {
+        do {
+            return try await accountStore.accounts()
+        } catch let error {
+            throw .accountStore(error)
+        }
+    }
+
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
     {
         do {
             return try await accountStore.activeAccount()
+        } catch let error {
+            throw .accountStore(error)
+        }
+    }
+
+    func activateAccount(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        do {
+            try await accountStore.setActiveAccount(id: account.id)
         } catch let error {
             throw .accountStore(error)
         }

@@ -23,8 +23,7 @@ action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
 tracking, lifetime statistics, and listening-history import/export. Durable
-bookmark reconciliation and multi-account switching remain under active
-development.
+offline bookmark reconciliation remains under active development.
 
 ## Requirements
 
@@ -202,6 +201,14 @@ Completed books play directly from their verified local files without opening a
 server playback session. Failed or cancelled books expose Retry, active books
 expose Pause and Cancel, paused books expose Resume, and completed books can be
 removed from the Downloads tab.
+
+## Use multiple accounts
+
+Settings lists every saved username/server pair and marks the active browsing
+account. Choose another account to reload Home, Library, and Search in that
+account's isolated context, or use **Add Account** for another standard
+Audiobookshelf username/password login. Switching the browsing account does not
+stop current playback or unrelated background downloads.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual
