@@ -229,7 +229,7 @@ The script creates fresh root and `/audiobookshelf` instances, waits for both
 services, initializes deterministic test-only root users and a three-book media
 library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
-downloads and metadata updates, and verifies that native-login account profiles
+downloads, bookmarks, and metadata updates, and verifies that native-login account profiles
 survive store recreation, fetch typed libraries, and load their first paginated
 audiobook summaries, a matching search result, personalized audiobook shelves,
 and an expanded audiobook detail with chapters and authenticated-user progress.
