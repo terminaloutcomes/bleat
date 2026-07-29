@@ -307,6 +307,53 @@ struct PlayerView: View {
                                 .accessibilityIdentifier("player.chapters")
                             }
 
+                            if playback.audioFiles.count > 1 {
+                                Menu {
+                                    ForEach(
+                                        Array(
+                                            playback.audioFiles.enumerated()
+                                        ),
+                                        id: \.offset
+                                    ) { index, file in
+                                        Button {
+                                            Task {
+                                                await playback
+                                                    .seekToAudioFile(at: index)
+                                            }
+                                        } label: {
+                                            if index
+                                                == playback
+                                                .currentAudioFileIndex
+                                            {
+                                                Label(
+                                                    audioFileLabel(
+                                                        file,
+                                                        index: index
+                                                    ),
+                                                    systemImage: "checkmark"
+                                                )
+                                            } else {
+                                                Text(
+                                                    audioFileLabel(
+                                                        file,
+                                                        index: index
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        .accessibilityIdentifier(
+                                            "player.audioFile.\(index)"
+                                        )
+                                    }
+                                } label: {
+                                    Label(
+                                        "Audio Files",
+                                        systemImage: "waveform"
+                                    )
+                                }
+                                .accessibilityIdentifier("player.audioFiles")
+                            }
+
                             Menu {
                                 ForEach(
                                     [5, 10, 15, 30, 45, 60, 90, 120],
@@ -517,6 +564,17 @@ struct PlayerView: View {
             .number
                 .precision(.fractionLength(value.rounded() == value ? 0 : 2))
         ) + "×"
+    }
+
+    private func audioFileLabel(
+        _ file: AppPlaybackTrack,
+        index: Int
+    ) -> String {
+        let title = file.title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let displayTitle = title.isEmpty ? "File \(index + 1)" : title
+        return "\(displayTitle) · \(playbackTime(file.duration))"
     }
 }
 

@@ -106,6 +106,19 @@ final class PlaybackModel {
         preparation?.chapters ?? []
     }
 
+    var audioFiles: [AppPlaybackTrack] {
+        guard case .direct(let tracks) = preparation?.source else {
+            return []
+        }
+        return tracks
+    }
+
+    var currentAudioFileIndex: Int? {
+        audioFiles.lastIndex {
+            $0.startOffset <= currentTime
+        }
+    }
+
     var currentChapter: PlaybackChapter? {
         chapters.last {
             $0.start <= currentTime
@@ -667,6 +680,14 @@ final class PlaybackModel {
         } else {
             play()
         }
+    }
+
+    func seekToAudioFile(at index: Int) async {
+        let files = audioFiles
+        guard files.indices.contains(index) else {
+            return
+        }
+        await seek(to: files[index].startOffset)
     }
 
     func fail(_ failure: AppFailure) {

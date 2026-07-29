@@ -171,9 +171,11 @@ forward controls, previous/next chapter controls, speed control from 0.5× to
 3×, and Stop. Rewind defaults to 15 seconds and forward defaults to 30 seconds;
 Settings offers 5, 10, 15, 30, 45, and 60-second choices for either direction.
 Now Playing identifies the narrator and current chapter, offers a chapter list
-for direct navigation, and includes the native AirPlay route picker. Player
-content and secondary controls scroll when the screen or text size is too small
-to show them at once.
+for direct navigation, and shows an Audio Files menu for multi-file direct or
+downloaded books. Selecting a file seeks to its whole-book start position. The
+player also includes the native AirPlay route picker. Player content and
+secondary controls scroll when the screen or text size is too small to show
+them at once.
 The selected global speed persists across relaunches and can be adjusted in
 0.05× steps.
 
