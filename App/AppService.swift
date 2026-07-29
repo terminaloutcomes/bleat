@@ -25,6 +25,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case metadataPatch(BookMetadataPatchError)
     case metadataUpdate(BookMetadataUpdateError)
     case coverUpdate(BookCoverUploadError)
+    case bookDeletion(BookDeletionError)
     case bookmark(BookmarkError)
     case progress(BookProgressError)
     case downloadPlan(DownloadPlanRequestError)
@@ -58,6 +59,11 @@ struct AppPlaybackPreparation: Equatable, Sendable {
 enum AppMetadataSaveOutcome: Equatable, Sendable {
     case saved(LibraryBookDetail)
     case stale(LibraryBookDetail)
+}
+
+enum AppBookDeletionOutcome: Equatable, Sendable {
+    case deleted
+    case deletedWithCacheCleanupFailure
 }
 
 protocol AppServicing: Sendable {
@@ -164,6 +170,12 @@ protocol AppServicing: Sendable {
         detail: LibraryBookDetail,
         jpegData: Data
     ) async throws(AppServiceError) -> LibraryBookDetail
+
+    func deleteBook(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        mode: BookDeletionMode
+    ) async throws(AppServiceError) -> AppBookDeletionOutcome
 
     func bookmarks(
         for account: ServerAccount,
@@ -695,6 +707,33 @@ actor LiveAppService: AppServicing {
             ).value
         } catch let error {
             throw .bookDetail(error)
+        }
+    }
+
+    func deleteBook(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        mode: BookDeletionMode
+    ) async throws(AppServiceError) -> AppBookDeletionOutcome {
+        do {
+            try await coordinator.deleteBook(
+                accountID: account.id,
+                server: account.server,
+                itemID: detail.id,
+                mode: mode
+            )
+        } catch let error {
+            throw .bookDeletion(error)
+        }
+
+        do {
+            try await libraryCache.invalidateLibrary(
+                detail.libraryID,
+                for: account.id
+            )
+            return .deleted
+        } catch {
+            return .deletedWithCacheCleanupFailure
         }
     }
 

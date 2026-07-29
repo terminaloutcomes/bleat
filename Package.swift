@@ -6,6 +6,7 @@ let package = Package(
     name: "Bleat",
     platforms: [
         .iOS(.v26),
+        .macCatalyst(.v18),
         .macOS(.v15),
     ],
     products: [

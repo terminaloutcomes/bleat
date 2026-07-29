@@ -2960,6 +2960,14 @@ private actor TestAppService: AppServicing {
         detail
     }
 
+    func deleteBook(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        mode: BookDeletionMode
+    ) async throws(AppServiceError) -> AppBookDeletionOutcome {
+        .deleted
+    }
+
     func bookmarks(
         for account: ServerAccount,
         itemID: LibraryItemID

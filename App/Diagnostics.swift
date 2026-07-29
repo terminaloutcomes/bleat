@@ -113,12 +113,31 @@ extension AppModel {
                 bookDetail.failure,
                 playback.state.failure,
                 bookmarkFailure,
+                bookEditFailure,
+                bookDeletionFailure,
             ].compactMap(\.self))
         return Array(Set(errors.map(\.diagnosticsCode))).sorted()
     }
 
     private var bookmarkFailure: AppFailure? {
         if case .failed(let failure) = playback.bookmarkState {
+            return failure
+        }
+        return nil
+    }
+
+    private var bookEditFailure: AppFailure? {
+        switch bookEditSaveState {
+        case .failed(let failure),
+            .metadataSavedCoverFailed(_, let failure):
+            failure
+        case .idle, .saving, .stale, .saved:
+            nil
+        }
+    }
+
+    private var bookDeletionFailure: AppFailure? {
+        if case .failed(let failure) = bookDeletionState {
             return failure
         }
         return nil
@@ -259,6 +278,10 @@ extension AppFailure {
             .invalidMetadata
         case .metadataUnavailable:
             .metadataUnavailable
+        case .bookDeletionDenied:
+            .bookDeletionDenied
+        case .bookDeletionUnavailable:
+            .bookDeletionUnavailable
         case .bookmarkUnavailable:
             .bookmarkUnavailable
         case .accountRemovalFailed:

@@ -2,7 +2,9 @@
 
 Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
-and is being implemented in Swift 6 with strict concurrency checking.
+and is being implemented in Swift 6 with strict concurrency checking. The same
+application target can also produce a Mac Catalyst 18 build for macOS 15 and
+newer.
 
 The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
@@ -75,6 +77,17 @@ xcodebuild \
   build
 ```
 
+Build an unsigned Mac Catalyst Release app:
+
+```sh
+mise run macos
+```
+
+The Catalyst app is written to
+`.build/xcode-derived/Build/Products/Release-maccatalyst/Bleat.app`. This
+workflow verifies compilation only; macOS runtime behavior, signing,
+notarization, and distribution are not currently release gates.
+
 Build products and intermediate files are written beneath `.build/`.
 
 If `project.yml` changes, regenerate the checked-in project before building:
@@ -139,6 +152,9 @@ Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 **Product → Run** to launch the app or **Product → Test** to run the application
 unit and UI suites. Core package tests run through `swift test` or
 `scripts/test-core.sh`.
+
+Select **My Mac (Mac Catalyst)** to compile the shared application target for
+macOS 15 or newer. The application unit and UI test targets remain iOS-only.
 
 The equivalent command-line simulator workflow is:
 

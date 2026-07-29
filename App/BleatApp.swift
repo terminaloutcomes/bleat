@@ -226,6 +226,14 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func deleteBook(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        mode: BookDeletionMode
+    ) async throws(AppServiceError) -> AppBookDeletionOutcome {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func bookmarks(
         for account: ServerAccount,
         itemID: LibraryItemID

@@ -295,6 +295,14 @@
             detail
         }
 
+        func deleteBook(
+            for account: ServerAccount,
+            detail: LibraryBookDetail,
+            mode: BookDeletionMode
+        ) async throws(AppServiceError) -> AppBookDeletionOutcome {
+            .deleted
+        }
+
         func bookmarks(
             for account: ServerAccount,
             itemID: LibraryItemID
@@ -414,8 +422,8 @@
                             permissions: UserPermissions(
                                 download: hasManagementPermissions,
                                 update: hasManagementPermissions,
-                                delete: false,
-                                upload: false,
+                                delete: hasManagementPermissions,
+                                upload: hasManagementPermissions,
                                 createEReader: false,
                                 accessAllLibraries: true,
                                 accessAllTags: true,

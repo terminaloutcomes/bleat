@@ -1,6 +1,5 @@
 import BleatCore
 import Foundation
-import PhotosUI
 import SwiftUI
 
 struct RootView: View {
@@ -1186,10 +1185,8 @@ private struct BookSummaryRow: View {
 private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
+    @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
-    @State private var selectedCoverItem: PhotosPickerItem?
-    @State private var isUploadingCover = false
-    @State private var coverError: String?
     @State private var showRemoveDownloadConfirmation = false
 
     var body: some View {
@@ -1221,7 +1218,7 @@ private struct BookDetailView: View {
         }
         .toolbar {
             if let detail = loadedDetail {
-                if canEditMetadata(detail) {
+                if canOpenEditor(detail) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Edit") {
                             showMetadataEditor = true
@@ -1229,31 +1226,18 @@ private struct BookDetailView: View {
                         .accessibilityIdentifier("book.detail.edit")
                     }
                 }
-                if canEditCover(detail) {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        PhotosPicker(
-                            selection: $selectedCoverItem,
-                            matching: .images
-                        ) {
-                            Text("Cover")
-                        }
-                        .disabled(isUploadingCover)
-                        .accessibilityIdentifier("book.detail.cover")
-                    }
-                }
             }
         }
         .sheet(isPresented: $showMetadataEditor) {
             if let detail = loadedDetail {
-                MetadataEditorView(model: model, detail: detail)
-            }
-        }
-        .onChange(of: selectedCoverItem) { _, item in
-            guard let item else {
-                return
-            }
-            Task {
-                await uploadCover(item)
+                MetadataEditorView(
+                    model: model,
+                    detail: detail
+                ) {
+                    showMetadataEditor = false
+                    model.completeBookDeletion()
+                    dismiss()
+                }
             }
         }
         .confirmationDialog(
@@ -1286,59 +1270,17 @@ private struct BookDetailView: View {
         return detail
     }
 
-    private func canEditMetadata(_ detail: LibraryBookDetail) -> Bool {
+    private func canOpenEditor(_ detail: LibraryBookDetail) -> Bool {
         guard let user = model.account?.user else {
             return false
         }
-        return BookActionAvailability(
+        let actions = BookActionAvailability(
             user: user,
             detail: detail
-        ).visibleActions.contains(.editMetadata)
-    }
-
-    private func canEditCover(_ detail: LibraryBookDetail) -> Bool {
-        guard let user = model.account?.user else {
-            return false
-        }
-        return BookActionAvailability(
-            user: user,
-            detail: detail
-        ).visibleActions.contains(.editCover)
-    }
-
-    private func uploadCover(_ item: PhotosPickerItem) async {
-        guard let detail = loadedDetail else {
-            return
-        }
-        isUploadingCover = true
-        coverError = nil
-        defer {
-            isUploadingCover = false
-            selectedCoverItem = nil
-        }
-        do {
-            guard
-                let sourceData = try await item.loadTransferable(
-                    type: Data.self
-                )
-            else {
-                throw CoverImageProcessingError.invalidImage
-            }
-            let jpegData = try await Task.detached {
-                try CoverImageProcessor.jpegData(from: sourceData)
-            }.value
-            guard
-                await model.replaceCover(
-                    jpegData: jpegData,
-                    detail: detail
-                )
-            else {
-                coverError = "Bleat could not upload that cover."
-                return
-            }
-        } catch {
-            coverError = "Choose a valid image and try again."
-        }
+        ).visibleActions
+        return actions.contains(.editMetadata)
+            || actions.contains(.editCover)
+            || actions.contains(.deleteFromServer)
     }
 
     private func detailContent(_ detail: LibraryBookDetail) -> some View {
@@ -1355,12 +1297,6 @@ private struct BookDetailView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 220)
                 .frame(maxWidth: .infinity)
-
-                if let coverError {
-                    Text(coverError)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("book.detail.coverError")
-                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(detail.title)

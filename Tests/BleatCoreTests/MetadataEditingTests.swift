@@ -210,6 +210,92 @@ final class MetadataEditingTests: XCTestCase {
         XCTAssertNotNil(body.range(of: jpeg))
     }
 
+    func testBookDeletionUsesAuthenticatedPrefixedContract() async throws {
+        for (mode, expectedURL) in [
+            (
+                BookDeletionMode.libraryRecordOnly,
+                "https://books.example/audiobookshelf/api/items/item-1"
+            ),
+            (
+                BookDeletionMode.libraryRecordAndFiles,
+                "https://books.example/audiobookshelf/api/items/item-1?hard=1"
+            ),
+        ] {
+            let accountID = AccountID(rawValue: "account")
+            let transport = MetadataTestTransport(
+                response: HTTPResponse(data: Data(), statusCode: 200)
+            )
+            let store = MetadataTestCredentialStore(
+                accountID: accountID,
+                credentials: try AuthenticationTokens(
+                    accessToken: "access-token",
+                    refreshToken: "refresh-token"
+                )
+            )
+            let coordinator = AuthCoordinator(
+                transport: transport,
+                credentialStore: store
+            )
+
+            try await coordinator.deleteBook(
+                accountID: accountID,
+                server: NormalizedServerURL(
+                    "https://books.example/audiobookshelf"
+                ),
+                itemID: LibraryItemID(rawValue: "item-1"),
+                mode: mode
+            )
+
+            let recordedRequest = await transport.recordedRequest()
+            let request = try XCTUnwrap(recordedRequest)
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertEqual(request.url?.absoluteString, expectedURL)
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer access-token"
+            )
+            XCTAssertNil(request.httpBody)
+        }
+    }
+
+    func testBookDeletionMapsPermissionAndMissingItemStatuses() async throws {
+        for (status, expectedError) in [
+            (403, BookDeletionError.permissionDenied),
+            (404, BookDeletionError.itemNotFound),
+            (500, BookDeletionError.unexpectedStatus(500)),
+        ] {
+            let accountID = AccountID(rawValue: "account-\(status)")
+            let transport = MetadataTestTransport(
+                response: HTTPResponse(data: Data(), statusCode: status)
+            )
+            let store = MetadataTestCredentialStore(
+                accountID: accountID,
+                credentials: try AuthenticationTokens(
+                    accessToken: "access-token",
+                    refreshToken: "refresh-token"
+                )
+            )
+            let coordinator = AuthCoordinator(
+                transport: transport,
+                credentialStore: store
+            )
+
+            do {
+                try await coordinator.deleteBook(
+                    accountID: accountID,
+                    server: NormalizedServerURL(
+                        "https://books.example"
+                    ),
+                    itemID: LibraryItemID(rawValue: "item-1"),
+                    mode: .libraryRecordOnly
+                )
+                XCTFail("Expected deletion to fail for status \(status)")
+            } catch let error as BookDeletionError {
+                XCTAssertEqual(error, expectedError)
+            }
+        }
+    }
+
     private func fixtureDetail() -> LibraryBookDetail {
         LibraryBookDetail(
             id: LibraryItemID(rawValue: "item-1"),

@@ -1,9 +1,10 @@
 # Bleat 1.0 Implementation Plan
 
 This plan turns `audiobookshelf-ios-app-spec.md` draft 1.3 into an executable
-delivery sequence for a native iPhone and iPad application. The specification
-remains the product and protocol source of truth; this document defines work
-order, deliverables, test ownership, and release gates.
+delivery sequence for a native iPhone and iPad application. The shared
+application target also supports build-only Mac Catalyst compilation. The
+specification remains the product and protocol source of truth; this document
+defines work order, deliverables, test ownership, and release gates.
 
 ## 1. Definition of done
 
@@ -40,7 +41,10 @@ These decisions keep the implementation direct and consistent with the
 specification:
 
 - Product and target name: `Bleat`.
-- Deployment target: iOS 26 and above.
+- Deployment targets: iOS 26 and above; Mac Catalyst 18 for macOS 15 and above.
+- Catalyst support is compilation-only. macOS runtime testing, signing,
+  notarization, distribution, and Mac-specific interface adaptation are not
+  Bleat 1.0 release gates.
 - Language mode: Swift 6 with complete strict concurrency checking.
 - UI: SwiftUI with Observation-based, `@MainActor` feature models.
 - Persistence: versioned SwiftData schemas for structured state and opaque

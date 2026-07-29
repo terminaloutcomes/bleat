@@ -1,3 +1,6 @@
+[env]
+_.file = { path = ".envrc", redact = true }
+
 [tasks.iphone]
 description = "Build and launch Bleat on the default iPhone simulator"
 run = [
@@ -12,6 +15,18 @@ run = [
   .build/xcode-derived/Build/Products/Debug-iphonesimulator/Bleat.app""",
     "xcrun simctl launch --terminate-running-process booted com.yaleman.Bleat",
 ]
+
+[tasks.macos]
+description = "Build an unsigned Bleat Release app for macOS with Mac Catalyst"
+run = """xcodebuild \
+  -project Bleat.xcodeproj \
+  -scheme Bleat \
+  -configuration Release \
+  -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+  -derivedDataPath .build/xcode-derived \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  build"""
 
 [tasks.archive]
 description = "Create and validate the Release archive"

@@ -110,6 +110,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case mediaUnavailable = "media_unavailable"
     case invalidMetadata = "invalid_metadata"
     case metadataUnavailable = "metadata_unavailable"
+    case bookDeletionDenied = "book_deletion_denied"
+    case bookDeletionUnavailable = "book_deletion_unavailable"
     case bookmarkUnavailable = "bookmark_unavailable"
     case accountRemovalFailed = "account_removal_failed"
     case requestCancelled = "request_cancelled"

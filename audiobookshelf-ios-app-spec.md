@@ -1,9 +1,9 @@
 # Audiobookshelf iOS Client — Product and Technical Specification
 
 Status: Implementation-audited draft 1.3
-Platform: iPhone and iPad
+Platform: iPhone and iPad; build-only Mac Catalyst
 UI framework: SwiftUI
-Minimum OS: iOS 26.0
+Minimum OS: iOS 26.0; Mac Catalyst 18 on macOS 15
 Language mode: Swift 6 with strict concurrency checking
 Backend: Audiobookshelf 2.26.0 or newer
 Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`
@@ -22,6 +22,9 @@ Build a native iOS audiobook client for one or more Audiobookshelf servers. The 
 - edit book metadata and cover art when the authenticated user has permission.
 
 This is an audiobook app, not a general Audiobookshelf administration client.
+The same application target may compile for Mac Catalyst 18 on macOS 15 or
+newer. Catalyst runtime behavior, signing, notarization, distribution, and
+Mac-specific interface adaptation are not version 1.0 acceptance requirements.
 
 ## 2. Product defaults
 

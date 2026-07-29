@@ -836,10 +836,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func remove(_ record: DownloadedBookRecord) async {
+    @discardableResult
+    func remove(_ record: DownloadedBookRecord) async -> Bool {
         guard let storage else {
             failure = .storageUnavailable
-            return
+            return false
         }
         failure = nil
         deletingDownloadIDs.insert(record.manifest.downloadID)
@@ -864,8 +865,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 record.manifest.downloadID
             )
             await refresh()
+            return true
         } catch {
             failure = .transferFailed
+            return false
         }
     }
 

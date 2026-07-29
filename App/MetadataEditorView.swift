@@ -1,8 +1,19 @@
 import BleatCore
+import PhotosUI
 import SwiftUI
+import UIKit
+
+private enum PendingCoverState: Equatable {
+    case unchanged
+    case processing
+    case ready(Data)
+    case failed(CoverImageProcessingError)
+}
 
 struct MetadataEditorView: View {
     @Bindable var model: AppModel
+    let onDeleted: () -> Void
+
     @Environment(\.dismiss) private var dismiss
     @State private var baseline: LibraryBookDetail
     @State private var draft: BookMetadataDraft
@@ -11,9 +22,20 @@ struct MetadataEditorView: View {
     @State private var seriesText: String
     @State private var genresText: String
     @State private var tagsText: String
+    @State private var selectedCoverItem: PhotosPickerItem?
+    @State private var pendingCover: PendingCoverState = .unchanged
+    @State private var showDeleteOptions = false
+    @State private var showDeletionWarning = false
+    @State private var deletionCleanupStatus:
+        BookDeletionCleanupStatus?
 
-    init(model: AppModel, detail: LibraryBookDetail) {
+    init(
+        model: AppModel,
+        detail: LibraryBookDetail,
+        onDeleted: @escaping () -> Void = {}
+    ) {
         self.model = model
+        self.onDeleted = onDeleted
         _baseline = State(initialValue: detail)
         let initialDraft = BookMetadataDraft(detail: detail)
         _draft = State(initialValue: initialDraft)
@@ -37,59 +59,58 @@ struct MetadataEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Book") {
-                    TextField("Title", text: $draft.title)
-                        .accessibilityIdentifier("metadata.title")
-                    TextField("Subtitle", text: $draft.subtitle)
-                    TextField("Authors", text: $authorsText)
-                    TextField("Narrators", text: $narratorsText)
-                    TextField("Series", text: $seriesText, axis: .vertical)
-                    TextField("Genres", text: $genresText)
-                    TextField("Tags", text: $tagsText)
+                if canEditCover {
+                    coverSection
                 }
-
-                Section("Publishing") {
-                    TextField("Published year", text: $draft.publishedYear)
-                    TextField("Published date", text: $draft.publishedDate)
-                    TextField("Publisher", text: $draft.publisher)
-                    TextField("Language", text: $draft.language)
-                    TextField("ISBN", text: $draft.isbn)
-                    TextField("ASIN", text: $draft.asin)
+                if canEditMetadata {
+                    metadataSections
                 }
-
-                Section("Description") {
-                    TextEditor(text: $draft.description)
-                        .frame(minHeight: 140)
-                }
-
-                Section {
-                    Toggle("Explicit", isOn: $draft.isExplicit)
-                    Toggle("Abridged", isOn: $draft.isAbridged)
-                }
-
-                if case .failed(let failure) = model.metadataSaveState {
+                if let failure = editFailure {
                     Section {
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("metadata.error")
                     }
                 }
+                if case .failed(let failure) = model.bookDeletionState {
+                    Section {
+                        Text(failure.message)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("book.delete.error")
+                    }
+                }
+                if canDeleteFromServer {
+                    Section {
+                        Button(
+                            "Delete from Server",
+                            role: .destructive
+                        ) {
+                            showDeleteOptions = true
+                        }
+                        .disabled(isBusy)
+                        .accessibilityIdentifier("book.edit.delete")
+                    }
+                }
             }
-            .navigationTitle("Edit Metadata")
+            .navigationTitle("Edit Book")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        model.resetMetadataSaveState()
+                        model.resetBookEditSaveState()
+                        model.resetBookDeletionState()
                         dismiss()
                     }
+                    .disabled(isBusy)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        save(overwrite: false)
+                if canSave {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            save(overwrite: false)
+                        }
+                        .disabled(isBusy || pendingCover == .processing)
+                        .accessibilityIdentifier("metadata.save")
                     }
-                    .disabled(model.metadataSaveState == .saving)
-                    .accessibilityIdentifier("metadata.save")
                 }
             }
             .alert(
@@ -103,55 +124,316 @@ struct MetadataEditorView: View {
                     save(overwrite: true)
                 }
                 Button("Review My Draft", role: .cancel) {
-                    model.resetMetadataSaveState()
+                    model.resetBookEditSaveState()
                 }
             } message: {
                 Text(
                     "This is a best-effort check. The server does not support atomic metadata preconditions."
                 )
             }
-            .onChange(of: model.metadataSaveState) { _, newState in
-                if newState == .saved {
-                    model.resetMetadataSaveState()
-                    dismiss()
+            .confirmationDialog(
+                "Delete from Server?",
+                isPresented: $showDeleteOptions,
+                titleVisibility: .visible
+            ) {
+                Button("Remove from Library", role: .destructive) {
+                    delete(mode: .libraryRecordOnly)
+                }
+                Button("Delete Files from Server", role: .destructive) {
+                    delete(mode: .libraryRecordAndFiles)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(deletionConfirmationMessage)
+            }
+            .alert(
+                "Deleted with a Warning",
+                isPresented: $showDeletionWarning
+            ) {
+                Button("OK") {
+                    onDeleted()
+                }
+            } message: {
+                Text(deletionWarningMessage)
+            }
+            .onChange(of: selectedCoverItem) { _, item in
+                guard let item else {
+                    return
+                }
+                Task {
+                    await prepareCover(item)
                 }
             }
+            .onChange(of: model.bookEditSaveState) { _, newState in
+                switch newState {
+                case .saved:
+                    model.resetBookEditSaveState()
+                    dismiss()
+                case .metadataSavedCoverFailed(let latest, _):
+                    baseline = latest
+                case .idle, .saving, .stale, .failed:
+                    break
+                }
+            }
+            .onChange(of: model.bookDeletionState) { _, newState in
+                guard case .deleted(let status) = newState else {
+                    return
+                }
+                if status.hasWarning {
+                    deletionCleanupStatus = status
+                    showDeletionWarning = true
+                } else {
+                    onDeleted()
+                }
+            }
+        }
+    }
+
+    private var actions: Set<BookAction> {
+        guard let user = model.account?.user else {
+            return []
+        }
+        return BookActionAvailability(
+            user: user,
+            detail: baseline
+        ).visibleActions
+    }
+
+    private var canEditMetadata: Bool {
+        actions.contains(.editMetadata)
+    }
+
+    private var canEditCover: Bool {
+        actions.contains(.editCover)
+    }
+
+    private var canDeleteFromServer: Bool {
+        actions.contains(.deleteFromServer)
+    }
+
+    private var canSave: Bool {
+        canEditMetadata || canEditCover
+    }
+
+    private var isBusy: Bool {
+        model.bookEditSaveState == .saving
+            || model.bookDeletionState == .deleting
+    }
+
+    private var isActiveBook: Bool {
+        guard let account = model.account else {
+            return false
+        }
+        return model.playback.hasActiveBook
+            && model.playback.accountID == account.id
+            && model.playback.itemID == baseline.id
+    }
+
+    private var editFailure: AppFailure? {
+        switch model.bookEditSaveState {
+        case .failed(let failure),
+            .metadataSavedCoverFailed(_, let failure):
+            failure
+        case .idle, .saving, .stale, .saved:
+            nil
+        }
+    }
+
+    @ViewBuilder
+    private var coverSection: some View {
+        Section("Cover") {
+            Group {
+                if case .ready(let data) = pendingCover,
+                    let image = UIImage(data: data)
+                {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    BookCoverView(
+                        server: model.account?.server,
+                        itemID: baseline.id,
+                        updatedAtMilliseconds:
+                            baseline.updatedAtMilliseconds,
+                        width: 600,
+                        height: 600,
+                        cornerRadius: 12
+                    )
+                    .aspectRatio(1, contentMode: .fit)
+                }
+            }
+            .frame(maxWidth: 220)
+            .frame(maxWidth: .infinity)
+
+            PhotosPicker(
+                selection: $selectedCoverItem,
+                matching: .images
+            ) {
+                Label(
+                    pendingCoverJPEGData == nil
+                        ? "Choose Cover" : "Choose Another Cover",
+                    systemImage: "photo"
+                )
+            }
+            .disabled(isBusy || pendingCover == .processing)
+            .accessibilityIdentifier("book.edit.cover")
+
+            switch pendingCover {
+            case .processing:
+                ProgressView("Preparing cover")
+            case .failed:
+                Text("Choose a valid image and try again.")
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("book.edit.coverError")
+            case .unchanged, .ready:
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var metadataSections: some View {
+        Section("Book") {
+            TextField("Title", text: $draft.title)
+                .accessibilityIdentifier("metadata.title")
+            TextField("Subtitle", text: $draft.subtitle)
+            TextField("Authors", text: $authorsText)
+            TextField("Narrators", text: $narratorsText)
+            TextField("Series", text: $seriesText, axis: .vertical)
+            TextField("Genres", text: $genresText)
+            TextField("Tags", text: $tagsText)
+        }
+
+        Section("Publishing") {
+            TextField("Published year", text: $draft.publishedYear)
+            TextField("Published date", text: $draft.publishedDate)
+            TextField("Publisher", text: $draft.publisher)
+            TextField("Language", text: $draft.language)
+            TextField("ISBN", text: $draft.isbn)
+            TextField("ASIN", text: $draft.asin)
+        }
+
+        Section("Description") {
+            TextEditor(text: $draft.description)
+                .frame(minHeight: 140)
+        }
+
+        Section {
+            Toggle("Explicit", isOn: $draft.isExplicit)
+            Toggle("Abridged", isOn: $draft.isAbridged)
         }
     }
 
     private var staleAlertPresented: Binding<Bool> {
         Binding(
             get: {
-                if case .stale = model.metadataSaveState {
+                if case .stale = model.bookEditSaveState {
                     return true
                 }
                 return false
             },
             set: { presented in
                 if !presented,
-                    case .stale = model.metadataSaveState
+                    case .stale = model.bookEditSaveState
                 {
-                    model.resetMetadataSaveState()
+                    model.resetBookEditSaveState()
                 }
             }
         )
+    }
+
+    private var pendingCoverJPEGData: Data? {
+        guard case .ready(let data) = pendingCover else {
+            return nil
+        }
+        return data
+    }
+
+    private var deletionConfirmationMessage: String {
+        let accountDescription: String
+        if let account = model.account {
+            let server =
+                account.server.url.host
+                ?? account.server.url.absoluteString
+            accountDescription =
+                "This affects \(account.user.username) on \(server). "
+        } else {
+            accountDescription = ""
+        }
+        let modeDescription =
+            "Removing from the library leaves the server files in place. Deleting files removes the server media permanently."
+        let playbackDescription =
+            isActiveBook
+            ? " Playback will stop and the local copy will also be deleted."
+            : ""
+        return accountDescription + modeDescription + playbackDescription
+    }
+
+    private var deletionWarningMessage: String {
+        guard let status = deletionCleanupStatus else {
+            return "The audiobook was deleted from the server."
+        }
+        switch (
+            status.cacheCleanupFailed,
+            status.localDownloadCleanupFailed
+        ) {
+        case (true, true):
+            return "The server item was deleted, but Bleat could not fully clear its cached library data or local download."
+        case (true, false):
+            return "The server item was deleted, but Bleat could not fully clear its cached library data."
+        case (false, true):
+            return "The server item was deleted, but Bleat could not remove its local download."
+        case (false, false):
+            return "The audiobook was deleted from the server."
+        }
+    }
+
+    private func prepareCover(_ item: PhotosPickerItem) async {
+        pendingCover = .processing
+        selectedCoverItem = nil
+        model.resetBookEditSaveState()
+        do {
+            guard
+                let sourceData = try await item.loadTransferable(
+                    type: Data.self
+                )
+            else {
+                throw CoverImageProcessingError.invalidImage
+            }
+            let jpegData = try await Task.detached {
+                try CoverImageProcessor.jpegData(from: sourceData)
+            }.value
+            pendingCover = .ready(jpegData)
+        } catch let error as CoverImageProcessingError {
+            pendingCover = .failed(error)
+        } catch {
+            pendingCover = .failed(.invalidImage)
+        }
     }
 
     private func save(overwrite: Bool) {
         updateDraftArrays()
         let submittedDraft = draft
         let submittedBaseline = baseline
+        let submittedCover = pendingCoverJPEGData
         Task {
-            await model.saveMetadata(
+            await model.saveBookEdits(
                 draft: submittedDraft,
                 baseline: submittedBaseline,
+                coverJPEGData: submittedCover,
                 overwrite: overwrite
             )
         }
     }
 
+    private func delete(mode: BookDeletionMode) {
+        Task {
+            await model.deleteBook(baseline, mode: mode)
+        }
+    }
+
     private func reloadServerVersion() {
-        guard case .stale(let latest) = model.metadataSaveState else {
+        guard case .stale(let latest) = model.bookEditSaveState else {
             return
         }
         baseline = latest
@@ -161,7 +443,7 @@ struct MetadataEditorView: View {
         seriesText = Self.seriesText(draft.series)
         genresText = draft.genres.joined(separator: ", ")
         tagsText = draft.tags.joined(separator: ", ")
-        model.resetMetadataSaveState()
+        model.resetBookEditSaveState()
     }
 
     private func updateDraftArrays() {

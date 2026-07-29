@@ -7,30 +7,36 @@ final class BookActionPolicyTests: XCTestCase {
         for download in [false, true] {
             for update in [false, true] {
                 for upload in [false, true] {
-                    let availability = BookActionAvailability(
-                        user: Self.user(
-                            download: download,
-                            update: update,
-                            upload: upload
-                        ),
-                        detail: Self.detail()
-                    )
-                    var expected: Set<BookAction> = [.play]
-                    if download {
-                        expected.insert(.download)
-                    }
-                    if update {
-                        expected.insert(.editMetadata)
-                        if upload {
-                            expected.insert(.editCover)
+                    for delete in [false, true] {
+                        let availability = BookActionAvailability(
+                            user: Self.user(
+                                download: download,
+                                update: update,
+                                delete: delete,
+                                upload: upload
+                            ),
+                            detail: Self.detail()
+                        )
+                        var expected: Set<BookAction> = [.play]
+                        if download {
+                            expected.insert(.download)
                         }
+                        if update {
+                            expected.insert(.editMetadata)
+                            if upload {
+                                expected.insert(.editCover)
+                            }
+                        }
+                        if delete {
+                            expected.insert(.deleteFromServer)
+                        }
+                        XCTAssertEqual(availability.access, .allowed)
+                        XCTAssertEqual(
+                            availability.visibleActions,
+                            expected,
+                            "download=\(download) update=\(update) delete=\(delete) upload=\(upload)"
+                        )
                     }
-                    XCTAssertEqual(availability.access, .allowed)
-                    XCTAssertEqual(
-                        availability.visibleActions,
-                        expected,
-                        "download=\(download) update=\(update) upload=\(upload)"
-                    )
                 }
             }
         }
@@ -128,6 +134,7 @@ final class BookActionPolicyTests: XCTestCase {
     private static func user(
         download: Bool = true,
         update: Bool = true,
+        delete: Bool = true,
         upload: Bool = true,
         accessAllLibraries: Bool = true,
         accessibleLibraryIDs: [LibraryID] = [],
@@ -143,7 +150,7 @@ final class BookActionPolicyTests: XCTestCase {
             permissions: UserPermissions(
                 download: download,
                 update: update,
-                delete: true,
+                delete: delete,
                 upload: upload,
                 createEReader: false,
                 accessAllLibraries: accessAllLibraries,

@@ -18,7 +18,10 @@ settings:
 targets:
   BleatApp:
     type: application
-    platform: iOS
+    platform: auto
+    supportedDestinations:
+      - iOS
+      - macCatalyst
     sources:
       - path: App
     dependencies:
@@ -49,6 +52,7 @@ targets:
         MARKETING_VERSION: "0.1.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
         PRODUCT_NAME: Bleat
+        "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
 

@@ -34,11 +34,28 @@ enum AccountDownloadDisposition: Equatable, Sendable {
     case delete
 }
 
-enum MetadataSaveState: Equatable, Sendable {
+enum BookEditSaveState: Equatable, Sendable {
     case idle
     case saving
     case stale(LibraryBookDetail)
     case saved
+    case metadataSavedCoverFailed(LibraryBookDetail, AppFailure)
+    case failed(AppFailure)
+}
+
+struct BookDeletionCleanupStatus: Equatable, Sendable {
+    let cacheCleanupFailed: Bool
+    let localDownloadCleanupFailed: Bool
+
+    var hasWarning: Bool {
+        cacheCleanupFailed || localDownloadCleanupFailed
+    }
+}
+
+enum BookDeletionState: Equatable, Sendable {
+    case idle
+    case deleting
+    case deleted(BookDeletionCleanupStatus)
     case failed(AppFailure)
 }
 
@@ -76,6 +93,8 @@ enum AppFailure: Equatable, Sendable {
     case mediaUnavailable
     case invalidMetadata
     case metadataUnavailable
+    case bookDeletionDenied
+    case bookDeletionUnavailable
     case bookmarkUnavailable
     case accountRemovalFailed
 
@@ -121,6 +140,10 @@ enum AppFailure: Equatable, Sendable {
             "Review the metadata fields and enter a title."
         case .metadataUnavailable:
             "Bleat could not save metadata to the server."
+        case .bookDeletionDenied:
+            "This account is not allowed to delete that audiobook."
+        case .bookDeletionUnavailable:
+            "Bleat could not delete that audiobook from the server."
         case .bookmarkUnavailable:
             "Bleat could not update bookmarks."
         case .accountRemovalFailed:
@@ -178,6 +201,15 @@ enum AppFailure: Equatable, Sendable {
             self = .invalidMetadata
         case .metadataUpdate, .coverUpdate:
             self = .metadataUnavailable
+        case .bookDeletion(let error):
+            switch error {
+            case .permissionDenied:
+                self = .bookDeletionDenied
+            case .itemNotFound:
+                self = .bookUnavailable
+            default:
+                self = .bookDeletionUnavailable
+            }
         case .bookmark:
             self = .bookmarkUnavailable
         case .downloadPlan, .downloadAuthorization:
@@ -216,7 +248,8 @@ final class AppModel {
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
-    private(set) var metadataSaveState: MetadataSaveState = .idle
+    private(set) var bookEditSaveState: BookEditSaveState = .idle
+    private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     let playback: PlaybackModel
     let downloads: DownloadModel
@@ -881,19 +914,20 @@ final class AppModel {
         }
     }
 
-    func saveMetadata(
+    func saveBookEdits(
         draft: BookMetadataDraft,
         baseline: LibraryBookDetail,
+        coverJPEGData: Data?,
         overwrite: Bool = false
     ) async {
         guard let account else {
-            metadataSaveState = .failed(.accountUnavailable)
+            bookEditSaveState = .failed(.accountUnavailable)
             return
         }
-        guard metadataSaveState != .saving else {
+        guard bookEditSaveState != .saving else {
             return
         }
-        metadataSaveState = .saving
+        bookEditSaveState = .saving
         do {
             switch try await service.saveMetadata(
                 for: account,
@@ -904,39 +938,120 @@ final class AppModel {
             case .saved(let detail):
                 selectedBookID = detail.id
                 bookDetail = .loaded(detail)
-                metadataSaveState = .saved
+                guard let coverJPEGData else {
+                    bookEditSaveState = .saved
+                    return
+                }
+                do {
+                    let updated = try await service.replaceCover(
+                        for: account,
+                        detail: detail,
+                        jpegData: coverJPEGData
+                    )
+                    selectedBookID = updated.id
+                    bookDetail = .loaded(updated)
+                    bookEditSaveState = .saved
+                } catch let error {
+                    bookEditSaveState = .metadataSavedCoverFailed(
+                        detail,
+                        AppFailure(serviceError: error)
+                    )
+                }
             case .stale(let latest):
-                metadataSaveState = .stale(latest)
+                bookEditSaveState = .stale(latest)
             }
         } catch let error {
-            metadataSaveState = .failed(
+            bookEditSaveState = .failed(
                 AppFailure(serviceError: error)
             )
         }
     }
 
-    func resetMetadataSaveState() {
-        metadataSaveState = .idle
+    func resetBookEditSaveState() {
+        bookEditSaveState = .idle
     }
 
-    func replaceCover(
-        jpegData: Data,
-        detail: LibraryBookDetail
-    ) async -> Bool {
+    func deleteBook(
+        _ detail: LibraryBookDetail,
+        mode: BookDeletionMode
+    ) async {
         guard let account else {
-            return false
+            bookDeletionState = .failed(.accountUnavailable)
+            return
         }
+        guard bookDeletionState != .deleting else {
+            return
+        }
+        bookDeletionState = .deleting
+
+        let isActiveBook =
+            playback.hasActiveBook
+            && playback.accountID == account.id
+            && playback.itemID == detail.id
+        let localRecord =
+            isActiveBook
+            ? downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            )
+            : nil
+        if isActiveBook {
+            await playback.stop()
+        }
+
         do {
-            let updated = try await service.replaceCover(
+            let serviceOutcome = try await service.deleteBook(
                 for: account,
                 detail: detail,
-                jpegData: jpegData
+                mode: mode
             )
-            selectedBookID = updated.id
-            bookDetail = .loaded(updated)
-            return true
-        } catch {
-            return false
+            let localDownloadCleanupFailed: Bool
+            if let localRecord {
+                localDownloadCleanupFailed =
+                    !(await downloads.remove(localRecord))
+            } else {
+                localDownloadCleanupFailed = false
+            }
+            let cacheCleanupFailed =
+                serviceOutcome == .deletedWithCacheCleanupFailure
+            bookDeletionState = .deleted(
+                BookDeletionCleanupStatus(
+                    cacheCleanupFailed: cacheCleanupFailed,
+                    localDownloadCleanupFailed:
+                        localDownloadCleanupFailed
+                )
+            )
+            if selectedLibrary?.id == detail.libraryID {
+                await reloadAfterBookDeletion()
+            }
+        } catch let error {
+            bookDeletionState = .failed(
+                AppFailure(serviceError: error)
+            )
+        }
+    }
+
+    func resetBookDeletionState() {
+        bookDeletionState = .idle
+    }
+
+    func completeBookDeletion() {
+        bookDetailGeneration &+= 1
+        selectedBookID = nil
+        bookDetail = .idle
+        bookBookmarks = .idle
+        bookEditSaveState = .idle
+        bookDeletionState = .idle
+    }
+
+    private func reloadAfterBookDeletion() async {
+        guard let library = selectedLibrary else {
+            return
+        }
+        let activeQuery = searchQuery
+        await selectLibrary(library)
+        if !activeQuery.isEmpty {
+            await search(query: activeQuery)
         }
     }
 
@@ -1072,7 +1187,8 @@ final class AppModel {
         selectedBookID = nil
         bookDetail = .idle
         bookBookmarks = .idle
-        metadataSaveState = .idle
+        bookEditSaveState = .idle
+        bookDeletionState = .idle
     }
 
     private static func sortAccounts(

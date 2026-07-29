@@ -12,6 +12,7 @@ public enum BookAction: CaseIterable, Hashable, Sendable {
     case download
     case editMetadata
     case editCover
+    case deleteFromServer
 }
 
 public struct BookActionAvailability: Equatable, Sendable {
@@ -37,6 +38,9 @@ public struct BookActionAvailability: Equatable, Sendable {
             if user.permissions.upload {
                 actions.insert(.editCover)
             }
+        }
+        if user.permissions.delete {
+            actions.insert(.deleteFromServer)
         }
         visibleActions = actions
     }
