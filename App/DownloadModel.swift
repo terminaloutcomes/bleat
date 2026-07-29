@@ -381,6 +381,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func start(account: ServerAccount?) async {
+        await diagnostics.record(
+            .started(.restoreDownloads, category: .download)
+        )
         if let account {
             accounts[account.id] = account
         }
@@ -405,22 +408,46 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         await cleanupExpiredAutomaticDownloads()
         scheduleAutomaticCleanup()
+        await diagnostics.record(
+            .completed(
+                .restoreDownloads,
+                category: .download,
+                count: records.count
+            )
+        )
     }
 
     func download(
         detail: LibraryBookDetail,
         account: ServerAccount
     ) async {
+        await diagnostics.record(
+            .started(.planDownload, category: .download)
+        )
         let availability = BookActionAvailability(
             user: account.user,
             detail: detail
         )
         guard availability.visibleActions.contains(.download) else {
             failure = .permissionDenied
+            await diagnostics.record(
+                .failed(
+                    .planDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
             return
         }
         guard let storage else {
             failure = .storageUnavailable
+            await diagnostics.record(
+                .failed(
+                    .planDownload,
+                    category: .download,
+                    failureCode: .persistenceUnavailable
+                )
+            )
             return
         }
         accounts[account.id] = account
@@ -453,12 +480,29 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             }
             await refresh()
+            await diagnostics.record(
+                .completed(.planDownload, category: .download)
+            )
         } catch let error as DownloadStorageError {
             failure = storageFailure(error)
             await refresh()
+            await diagnostics.record(
+                .failed(
+                    .planDownload,
+                    category: .download,
+                    failureCode: .persistenceUnavailable
+                )
+            )
         } catch {
             failure = .preparationFailed
             await refresh()
+            await diagnostics.record(
+                .failed(
+                    .planDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
         }
     }
 
@@ -837,6 +881,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func cancel(_ record: DownloadedBookRecord) async {
+        await diagnostics.record(
+            .started(.cancelDownload, category: .download)
+        )
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -860,26 +907,58 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             record.manifest.downloadID
         )
         await refresh()
+        await diagnostics.record(
+            .completed(.cancelDownload, category: .download)
+        )
     }
 
     func pause(_ record: DownloadedBookRecord) async {
+        await diagnostics.record(
+            .started(.pauseDownload, category: .download)
+        )
         await setSuspended(true, record: record)
+        await diagnostics.record(
+            .completed(.pauseDownload, category: .download)
+        )
     }
 
     func resume(_ record: DownloadedBookRecord) async {
+        await diagnostics.record(
+            .started(.resumeDownload, category: .download)
+        )
         await setSuspended(false, record: record)
+        await diagnostics.record(
+            .completed(.resumeDownload, category: .download)
+        )
     }
 
     func repair(
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) async {
+        await diagnostics.record(
+            .started(.repairDownload, category: .download)
+        )
         guard record.manifest.accountID == account.id else {
             failure = .permissionDenied
+            await diagnostics.record(
+                .failed(
+                    .repairDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
             return
         }
         guard let storage else {
             failure = .storageUnavailable
+            await diagnostics.record(
+                .failed(
+                    .repairDownload,
+                    category: .download,
+                    failureCode: .persistenceUnavailable
+                )
+            )
             return
         }
         failure = nil
@@ -926,12 +1005,40 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 _ = try await storage.markDownloading(identity)
             }
             await refresh()
+            await diagnostics.record(
+                .completed(
+                    .repairDownload,
+                    category: .download,
+                    count: tracks.count
+                )
+            )
         } catch let error as DownloadModelFailure {
             failure = error
+            await diagnostics.record(
+                .failed(
+                    .repairDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
         } catch let error as DownloadStorageError {
             failure = storageFailure(error)
+            await diagnostics.record(
+                .failed(
+                    .repairDownload,
+                    category: .download,
+                    failureCode: .persistenceUnavailable
+                )
+            )
         } catch {
             failure = .preparationFailed
+            await diagnostics.record(
+                .failed(
+                    .repairDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
         }
     }
 
@@ -1191,6 +1298,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity,
                 observedByteLength: observedByteLength
             )
+            await diagnostics.record(
+                .completed(.completeDownload, category: .download)
+            )
             await refresh()
             clearTransferredBytes(for: identity)
             let key = AutomaticDownloadKey(
@@ -1208,6 +1318,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             _ = try? await storage.markFailed(identity)
             clearTransferredBytes(for: identity)
             failure = .transferFailed
+            await diagnostics.record(
+                .failed(
+                    .completeDownload,
+                    category: .download,
+                    failureCode: .mediaUnavailable
+                )
+            )
             await refresh()
         }
     }
