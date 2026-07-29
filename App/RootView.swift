@@ -1583,6 +1583,44 @@ private struct SettingsView: View {
 
                 Section("Playback") {
                     Picker(
+                        "Skip Back",
+                        selection: Binding(
+                            get: {
+                                model.playback.skipBackwardInterval
+                            },
+                            set: { value in
+                                model.playback.setSkipBackwardInterval(value)
+                            }
+                        )
+                    ) {
+                        ForEach(PlaybackSkipInterval.allCases) { value in
+                            Text(value.label).tag(value)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.playback.skipBackward"
+                    )
+
+                    Picker(
+                        "Skip Forward",
+                        selection: Binding(
+                            get: {
+                                model.playback.skipForwardInterval
+                            },
+                            set: { value in
+                                model.playback.setSkipForwardInterval(value)
+                            }
+                        )
+                    ) {
+                        ForEach(PlaybackSkipInterval.allCases) { value in
+                            Text(value.label).tag(value)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.playback.skipForward"
+                    )
+
+                    Picker(
                         "Resume Rewind",
                         selection: Binding(
                             get: {

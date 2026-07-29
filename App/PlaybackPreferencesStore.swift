@@ -1,6 +1,23 @@
 import BleatCore
 import Foundation
 
+enum PlaybackSkipInterval: Int, CaseIterable, Identifiable, Sendable {
+    case fiveSeconds = 5
+    case tenSeconds = 10
+    case fifteenSeconds = 15
+    case thirtySeconds = 30
+    case fortyFiveSeconds = 45
+    case sixtySeconds = 60
+
+    var id: Int {
+        rawValue
+    }
+
+    var label: String {
+        "\(rawValue) seconds"
+    }
+}
+
 enum ResumeRewind: Int, CaseIterable, Codable, Identifiable, Sendable {
     case off = 0
     case fiveSeconds = 5
@@ -71,6 +88,8 @@ final class PlaybackPreferencesStore {
     private let defaults: UserDefaults
     private let rateKey = "bleat.playback.defaultRate.v1"
     private let resumeRewindKey = "bleat.playback.resumeRewind.v1"
+    private let skipBackwardKey = "bleat.playback.skipBackward.v1"
+    private let skipForwardKey = "bleat.playback.skipForward.v1"
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -100,6 +119,42 @@ final class PlaybackPreferencesStore {
 
     func saveResumeRewind(_ value: ResumeRewind) {
         defaults.set(value.rawValue, forKey: resumeRewindKey)
+    }
+
+    func skipBackward() -> PlaybackSkipInterval {
+        skipInterval(
+            forKey: skipBackwardKey,
+            defaultValue: .fifteenSeconds
+        )
+    }
+
+    func saveSkipBackward(_ value: PlaybackSkipInterval) {
+        defaults.set(value.rawValue, forKey: skipBackwardKey)
+    }
+
+    func skipForward() -> PlaybackSkipInterval {
+        skipInterval(
+            forKey: skipForwardKey,
+            defaultValue: .thirtySeconds
+        )
+    }
+
+    func saveSkipForward(_ value: PlaybackSkipInterval) {
+        defaults.set(value.rawValue, forKey: skipForwardKey)
+    }
+
+    private func skipInterval(
+        forKey key: String,
+        defaultValue: PlaybackSkipInterval
+    ) -> PlaybackSkipInterval {
+        guard defaults.object(forKey: key) != nil,
+            let value = PlaybackSkipInterval(
+                rawValue: defaults.integer(forKey: key)
+            )
+        else {
+            return defaultValue
+        }
+        return value
     }
 
     private static func normalizedRate(_ rate: Float) -> Float {

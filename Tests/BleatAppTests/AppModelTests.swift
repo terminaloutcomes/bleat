@@ -254,7 +254,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testPlaybackPreferencesPersistNormalizedRateAndResumeRewind()
+    func testPlaybackPreferencesPersistRateRewindAndSkipIntervals()
         throws
     {
         let suite = "PlaybackPreferencesTests.\(UUID().uuidString)"
@@ -266,12 +266,18 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(first.playbackRate(), 1)
         XCTAssertEqual(first.resumeRewind(), .tenSeconds)
+        XCTAssertEqual(first.skipBackward(), .fifteenSeconds)
+        XCTAssertEqual(first.skipForward(), .thirtySeconds)
         first.savePlaybackRate(1.37)
         first.saveResumeRewind(.thirtySeconds)
+        first.saveSkipBackward(.fortyFiveSeconds)
+        first.saveSkipForward(.sixtySeconds)
 
         let restored = PlaybackPreferencesStore(defaults: defaults)
         XCTAssertEqual(restored.playbackRate(), 1.35, accuracy: 0.001)
         XCTAssertEqual(restored.resumeRewind(), .thirtySeconds)
+        XCTAssertEqual(restored.skipBackward(), .fortyFiveSeconds)
+        XCTAssertEqual(restored.skipForward(), .sixtySeconds)
         restored.savePlaybackRate(10)
         XCTAssertEqual(restored.playbackRate(), 3)
         restored.savePlaybackRate(0)

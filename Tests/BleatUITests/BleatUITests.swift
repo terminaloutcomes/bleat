@@ -142,6 +142,16 @@ final class BleatUITests: XCTestCase {
 
         app.swipeUp()
         XCTAssertTrue(
+            app.buttons["settings.playback.skipBackward"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertTrue(
+            app.buttons["settings.playback.skipForward"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertTrue(
             app.staticTexts["Resume Rewind"].waitForExistence(
                 timeout: 3
             )

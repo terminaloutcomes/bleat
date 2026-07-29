@@ -187,10 +187,17 @@ struct PlayerView: View {
                                 await playback.skipBackward()
                             }
                         } label: {
-                            Image(systemName: "gobackward.15")
-                                .font(.title)
+                            Image(
+                                systemName:
+                                    "gobackward.\(playback.skipBackwardInterval.rawValue)"
+                            )
+                            .font(.title)
                         }
                         .disabled(playback.state == .preparing)
+                        .accessibilityLabel(
+                            "Back \(playback.skipBackwardInterval.rawValue) seconds"
+                        )
+                        .accessibilityIdentifier("player.skipBackward")
 
                         Button {
                             playback.togglePlayback()
@@ -213,10 +220,17 @@ struct PlayerView: View {
                                 await playback.skipForward()
                             }
                         } label: {
-                            Image(systemName: "goforward.30")
-                                .font(.title)
+                            Image(
+                                systemName:
+                                    "goforward.\(playback.skipForwardInterval.rawValue)"
+                            )
+                            .font(.title)
                         }
                         .disabled(playback.state == .preparing)
+                        .accessibilityLabel(
+                            "Forward \(playback.skipForwardInterval.rawValue) seconds"
+                        )
+                        .accessibilityIdentifier("player.skipForward")
 
                         Button {
                             Task {

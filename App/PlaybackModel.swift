@@ -75,6 +75,8 @@ final class PlaybackModel {
     private(set) var rate: Float = 1
     private(set) var sleepTimer: PlaybackSleepTimer?
     private(set) var resumeRewind: ResumeRewind
+    private(set) var skipBackwardInterval: PlaybackSkipInterval
+    private(set) var skipForwardInterval: PlaybackSkipInterval
     private(set) var bookmarks: [AudioBookmark] = []
     private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
@@ -127,6 +129,8 @@ final class PlaybackModel {
         bookmarkMutationStore: BookmarkMutationStore = .shared,
         preferencesStore: PlaybackPreferencesStore = .shared
     ) {
+        let skipBackwardInterval = preferencesStore.skipBackward()
+        let skipForwardInterval = preferencesStore.skipForward()
         self.service = service
         self.positionStore = positionStore
         self.localSessionStore = localSessionStore
@@ -134,6 +138,8 @@ final class PlaybackModel {
         self.preferencesStore = preferencesStore
         rate = preferencesStore.playbackRate()
         resumeRewind = preferencesStore.resumeRewind()
+        self.skipBackwardInterval = skipBackwardInterval
+        self.skipForwardInterval = skipForwardInterval
         configureRemoteCommands()
         observeAudioSession()
     }
@@ -713,6 +719,18 @@ final class PlaybackModel {
         resumeRewind = value
     }
 
+    func setSkipBackwardInterval(_ value: PlaybackSkipInterval) {
+        preferencesStore.saveSkipBackward(value)
+        skipBackwardInterval = value
+        updateRemoteSkipIntervals()
+    }
+
+    func setSkipForwardInterval(_ value: PlaybackSkipInterval) {
+        preferencesStore.saveSkipForward(value)
+        skipForwardInterval = value
+        updateRemoteSkipIntervals()
+    }
+
     func seek(to requestedTime: Double) async {
         guard let preparation else {
             return
@@ -752,11 +770,15 @@ final class PlaybackModel {
     }
 
     func skipBackward() async {
-        await seek(to: currentTime - 15)
+        await seek(
+            to: currentTime - Double(skipBackwardInterval.rawValue)
+        )
     }
 
     func skipForward() async {
-        await seek(to: currentTime + 30)
+        await seek(
+            to: currentTime + Double(skipForwardInterval.rawValue)
+        )
     }
 
     func previousChapter() async {
@@ -879,8 +901,7 @@ final class PlaybackModel {
 
     private func configureRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
-        commandCenter.skipBackwardCommand.preferredIntervals = [15]
-        commandCenter.skipForwardCommand.preferredIntervals = [30]
+        updateRemoteSkipIntervals()
 
         addRemoteTarget(to: commandCenter.playCommand) {
             Task { @MainActor [weak self] in
@@ -935,6 +956,16 @@ final class PlaybackModel {
         remoteCommandTargets.append(
             (commandCenter.changePlaybackPositionCommand, positionTarget)
         )
+    }
+
+    private func updateRemoteSkipIntervals() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.skipBackwardCommand.preferredIntervals = [
+            NSNumber(value: skipBackwardInterval.rawValue)
+        ]
+        commandCenter.skipForwardCommand.preferredIntervals = [
+            NSNumber(value: skipForwardInterval.rawValue)
+        ]
     }
 
     private func addRemoteTarget(
