@@ -1002,13 +1002,19 @@ private struct DownloadsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
-                            } else if record.manifest.state == .failed,
+                            } else if [
+                                DownloadManifestState.failed,
+                                .partial,
+                            ].contains(record.manifest.state),
                                 let account = model.account,
                                 account.id == record.manifest.accountID
                             {
-                                Button("Retry") {
+                                Button(
+                                    record.manifest.state == .partial
+                                        ? "Repair" : "Retry"
+                                ) {
                                     Task {
-                                        await model.downloads.retry(
+                                        await model.downloads.repair(
                                             record,
                                             account: account
                                         )
@@ -1056,6 +1062,20 @@ private struct DownloadsView: View {
                             }
                         }
                     }
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                if let failure = model.downloads.failure {
+                    Label(
+                        failure.message,
+                        systemImage: "externaldrive.badge.exclamationmark"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.regularMaterial)
+                    .accessibilityIdentifier("downloads.error")
                 }
             }
             .navigationTitle("Downloads")

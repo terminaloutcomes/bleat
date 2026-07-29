@@ -285,11 +285,11 @@ public actor DownloadStorage {
         where url.lastPathComponent == "record.json" {
             do {
                 let data = try Data(contentsOf: url)
-                records.append(
-                    try decoder.decode(
-                        DownloadedBookRecord.self,
-                        from: data
-                    ))
+                let record = try decoder.decode(
+                    DownloadedBookRecord.self,
+                    from: data
+                )
+                records.append(try reconcileCompletedFiles(in: record))
             } catch {
                 throw .invalidStoredRecord
             }
@@ -304,10 +304,11 @@ public actor DownloadStorage {
     public func localTrackURLs(
         for record: DownloadedBookRecord
     ) throws(DownloadStorageError) -> [URL] {
-        guard record.manifest.state == .complete else {
+        let reconciled = try reconcileCompletedFiles(in: record)
+        guard reconciled.manifest.state == .complete else {
             throw .invalidStoredRecord
         }
-        let entries = record.manifest.entries.sorted {
+        let entries = reconciled.manifest.entries.sorted {
             $0.trackIndex < $1.trackIndex
         }
         var urls: [URL] = []
@@ -331,9 +332,9 @@ public actor DownloadStorage {
             let identity: DownloadTaskIdentity
             do {
                 identity = try DownloadTaskIdentity(
-                    downloadID: record.manifest.downloadID,
-                    accountID: record.manifest.accountID,
-                    itemID: record.manifest.itemID,
+                    downloadID: reconciled.manifest.downloadID,
+                    accountID: reconciled.manifest.accountID,
+                    itemID: reconciled.manifest.itemID,
                     track: track
                 )
             } catch {
@@ -349,6 +350,43 @@ public actor DownloadStorage {
             urls.append(url)
         }
         return urls
+    }
+
+    private func reconcileCompletedFiles(
+        in storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = storedRecord
+        var changed = false
+        for entry in record.manifest.entries where entry.state == .complete {
+            let url =
+                layout
+                .bookDirectory(
+                    accountID: record.manifest.accountID,
+                    itemID: record.manifest.itemID
+                )
+                .appendingPathComponent(
+                    entry.destinationEntry,
+                    isDirectory: false
+                )
+            let observed = Self.fileSize(at: url)
+            guard observed != entry.expectedByteLength else {
+                continue
+            }
+            do {
+                try record.manifest.markPartial(
+                    trackIndex: entry.trackIndex,
+                    observedByteLength: max(observed, 0),
+                    placement: .temporary
+                )
+            } catch {
+                throw .invalidStoredRecord
+            }
+            changed = true
+        }
+        if changed {
+            try persist(record)
+        }
+        return record
     }
 
     public func remove(

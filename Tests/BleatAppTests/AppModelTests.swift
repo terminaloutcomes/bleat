@@ -48,6 +48,69 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testDownloadRepairPlannerPreservesHealthyTracksAndRejectsDrift()
+        throws
+    {
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8).utf8
+            )
+        )
+        let item = fixturePage(
+            libraryID: fixtureLibrary().id
+        ).items[0]
+        var manifest = DownloadManifest(
+            downloadID: DownloadID(rawValue: "download"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan
+        )
+        try manifest.markComplete(
+            trackIndex: 0,
+            observedByteLength: 4,
+            placement: .finalized
+        )
+        try manifest.markFailed(trackIndex: 1)
+        let record = DownloadedBookRecord(
+            manifest: manifest,
+            detail: fixtureBookDetail(item: item)
+        )
+
+        let tracks = try DownloadRepairPlanner.tracks(
+            record: record,
+            plan: plan
+        )
+
+        XCTAssertEqual(tracks.map(\.index), [1])
+        XCTAssertThrowsError(
+            try DownloadRepairPlanner.tracks(
+                record: record,
+                plan: DownloadPlan.decodeExpandedItem(
+                    from: Data(
+                        Self.downloadPlanJSON(secondSize: 9).utf8
+                    )
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadModelFailure,
+                .repairPlanChanged
+            )
+        }
+    }
+
+    func testDownloadFailuresHaveDistinctMessages() {
+        let failures: [DownloadModelFailure] = [
+            .storageUnavailable,
+            .permissionDenied,
+            .preparationFailed,
+            .repairPlanChanged,
+            .transferFailed,
+        ]
+
+        XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
+        XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+    }
+
     func testStartWithoutSavedAccountShowsLogin() async {
         let service = TestAppService(activeAccount: .success(nil))
         let model = AppModel(service: service)
@@ -954,6 +1017,31 @@ final class AppModelTests: XCTestCase {
                 total: 1
             )
         ]
+    }
+
+    private static func downloadPlanJSON(secondSize: Int) -> String {
+        """
+        {
+          "id": "item-1",
+          "media": {
+            "audioFiles": [
+              {
+                "ino": "1",
+                "mimeType": "audio/mpeg",
+                "metadata": {"filename": "one.mp3", "size": 4}
+              },
+              {
+                "ino": "2",
+                "mimeType": "audio/mpeg",
+                "metadata": {
+                  "filename": "two.mp3",
+                  "size": \(secondSize)
+                }
+              }
+            ]
+          }
+        }
+        """
     }
 }
 

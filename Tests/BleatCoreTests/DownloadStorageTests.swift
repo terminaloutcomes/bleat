@@ -89,6 +89,98 @@ final class DownloadStorageTests: XCTestCase {
         )
     }
 
+    func testMissingCompletedFileBecomesRepairablePartial()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent(
+            "temporary"
+        )
+        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        let observed = try fixture.layout.placeDownloadedFile(
+            from: temporaryURL,
+            identity: identity
+        )
+        let completed = try await fixture.storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+        try FileManager.default.removeItem(
+            at: fixture.layout.destinationURL(for: identity)
+        )
+
+        let records = try await fixture.storage.records()
+
+        let repaired = try XCTUnwrap(records.first)
+        XCTAssertEqual(repaired.manifest.state, .partial)
+        XCTAssertEqual(repaired.manifest.entries[0].state, .partial)
+        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
+        XCTAssertEqual(
+            repaired.manifest.entries[0].placement,
+            .temporary
+        )
+        do {
+            _ = try await fixture.storage.localTrackURLs(for: completed)
+            XCTFail("Expected the stale complete record to require repair")
+        } catch {
+            XCTAssertEqual(error, .invalidStoredRecord)
+        }
+    }
+
+    func testCorruptCompletedFileBecomesRepairablePartial()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent(
+            "temporary"
+        )
+        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        let observed = try fixture.layout.placeDownloadedFile(
+            from: temporaryURL,
+            identity: identity
+        )
+        _ = try await fixture.storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+        try Data([1, 2]).write(
+            to: fixture.layout.destinationURL(for: identity)
+        )
+
+        let records = try await fixture.storage.records()
+
+        let repaired = try XCTUnwrap(records.first)
+        XCTAssertEqual(repaired.manifest.state, .partial)
+        XCTAssertEqual(repaired.manifest.entries[0].state, .partial)
+        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 2)
+    }
+
     func testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()
         async throws
     {

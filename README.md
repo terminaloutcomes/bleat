@@ -200,7 +200,11 @@ native account's rotating refresh token without placing tokens in URLs.
 Completed books play directly from their verified local files without opening a
 server playback session. Failed or cancelled books expose Retry, active books
 expose Pause and Cancel, paused books expose Resume, and completed books can be
-removed from the Downloads tab. Local-file playback saves an account-scoped
+removed from the Downloads tab. Bleat audits completed files when restoring
+downloads and before playback; a missing or byte-corrupt track changes the book
+to Partial and exposes Repair. Repair preserves verified tracks, downloads only
+damaged entries, and refuses to mix files when the server's plan changed.
+Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and
 stop, then resumes from that durable position after relaunch. When both the
 saved device position and server position changed after the download snapshot,

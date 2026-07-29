@@ -6,7 +6,55 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
     case storageUnavailable
     case permissionDenied
     case preparationFailed
+    case repairPlanChanged
     case transferFailed
+
+    var message: String {
+        switch self {
+        case .storageUnavailable:
+            "Bleat could not access downloaded media storage."
+        case .permissionDenied:
+            "This account is not allowed to download that audiobook."
+        case .preparationFailed:
+            "Bleat could not prepare this audiobook for download."
+        case .repairPlanChanged:
+            "The server's audio files changed. Delete and download the book again."
+        case .transferFailed:
+            "One or more audio files could not be downloaded."
+        }
+    }
+}
+
+enum DownloadRepairPlanner {
+    static func tracks(
+        record: DownloadedBookRecord,
+        plan: DownloadPlan
+    ) throws(DownloadModelFailure) -> [DownloadTrackPlan] {
+        guard plan.itemID == record.manifest.itemID,
+            plan.tracks.count == record.manifest.entries.count
+        else {
+            throw .repairPlanChanged
+        }
+        let entries = Dictionary(
+            uniqueKeysWithValues: record.manifest.entries.map {
+                ($0.trackIndex, $0)
+            }
+        )
+        for track in plan.tracks {
+            guard let entry = entries[track.index],
+                entry.expectedByteLength == track.expectedByteLength,
+                entry.destinationEntry == track.destinationEntry
+            else {
+                throw .repairPlanChanged
+            }
+        }
+        return plan.tracks.filter {
+            guard let state = entries[$0.index]?.state else {
+                return false
+            }
+            return state != .complete && state != .downloading
+        }
+    }
 }
 
 @MainActor
@@ -142,6 +190,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             failure = .storageUnavailable
             return
         }
+        failure = nil
         do {
             try await storage.remove(record)
             progress[record.manifest.downloadID] = nil
@@ -167,7 +216,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 _ = try? await storage.markFailed(identity)
             }
         }
-        failure = .transferFailed
+        failure = nil
         pausedDownloadIDs.remove(record.manifest.downloadID)
         await refresh()
     }
@@ -180,7 +229,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await setSuspended(false, record: record)
     }
 
-    func retry(
+    func repair(
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) async {
@@ -188,12 +237,43 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             failure = .permissionDenied
             return
         }
-        failure = nil
-        await remove(record)
-        guard failure == nil else {
+        guard let storage else {
+            failure = .storageUnavailable
             return
         }
-        await download(detail: record.detail, account: account)
+        failure = nil
+        accounts[account.id] = account
+        do {
+            let plan = try await service.downloadPlan(
+                for: account,
+                itemID: record.manifest.itemID
+            )
+            let tracks = try DownloadRepairPlanner.tracks(
+                record: record,
+                plan: plan
+            )
+            for track in tracks {
+                let identity = try DownloadTaskIdentity(
+                    downloadID: record.manifest.downloadID,
+                    accountID: account.id,
+                    itemID: record.manifest.itemID,
+                    track: track
+                )
+                let request = try await service.authorizedDownloadRequest(
+                    for: account,
+                    identity: identity
+                )
+                let task = session.downloadTask(with: request)
+                task.taskDescription = try identity.taskDescription()
+                task.resume()
+                _ = try await storage.markDownloading(identity)
+            }
+            await refresh()
+        } catch let error as DownloadModelFailure {
+            failure = error
+        } catch {
+            failure = .preparationFailed
+        }
     }
 
     private func setSuspended(
@@ -269,6 +349,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         do {
             return try await storage.localTrackURLs(for: record)
         } catch {
+            await refresh()
             throw .transferFailed
         }
     }
