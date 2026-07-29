@@ -19,8 +19,8 @@ action visibility, playback-session, and background-download contract behavior
 is tested. Native Audiobookshelf username/password is the active
 authentication scope; the earlier isolated OIDC spike is deferred. The MVP
 also defers local time tracking, lifetime statistics, and listening-history
-import/export. Search, playback UI, downloads UI, and editing remain under
-active development.
+import/export. Server-side audiobook search is available in the Search tab;
+playback, downloads, and editing remain under active development.
 
 ## Requirements
 

@@ -40,6 +40,7 @@ enum AppFailure: Equatable, Sendable {
     case loginFailed
     case accountUnavailable
     case libraryUnavailable
+    case searchUnavailable
     case accountRemovalFailed
 
     var message: String {
@@ -66,6 +67,8 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not restore the saved account."
         case .libraryUnavailable:
             "Bleat could not load the audiobook library."
+        case .searchUnavailable:
+            "Bleat could not search the audiobook library."
         case .accountRemovalFailed:
             "Bleat could not remove the account."
         }
@@ -107,6 +110,8 @@ enum AppFailure: Equatable, Sendable {
             self = .accountUnavailable
         case .libraryRepository, .pageRequest:
             self = .libraryUnavailable
+        case .searchRequest, .searchCoordinator:
+            self = .searchUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed
         }
@@ -118,6 +123,7 @@ enum AppFailure: Equatable, Sendable {
 final class AppModel {
     private let service: any AppServicing
     private var hasStarted = false
+    private var searchGeneration: UInt64 = 0
 
     private(set) var phase: AppPhase
     private(set) var loginStatus: LoginStatus = .idle
@@ -126,6 +132,8 @@ final class AppModel {
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
     private(set) var selectedLibrary: LibrarySummary?
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
+    private(set) var searchQuery = ""
+    private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
 
     init(service: any AppServicing) {
         self.service = service
@@ -197,6 +205,7 @@ final class AppModel {
         libraries = .loading
         selectedLibrary = nil
         books = .idle
+        resetSearch()
 
         do {
             let loadedLibraries = try await service.libraries(for: account)
@@ -218,6 +227,9 @@ final class AppModel {
             books = .failed(.accountUnavailable)
             return
         }
+        if selectedLibrary?.id != library.id {
+            resetSearch()
+        }
         selectedLibrary = library
         books = .loading
 
@@ -230,6 +242,44 @@ final class AppModel {
             )
         } catch let error {
             books = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func search(query: String) async {
+        searchGeneration &+= 1
+        let operationGeneration = searchGeneration
+        searchQuery = query
+
+        let normalizedQuery = query.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !normalizedQuery.isEmpty else {
+            searchResults = .idle
+            return
+        }
+        guard let account, let selectedLibrary else {
+            searchResults = .failed(.accountUnavailable)
+            return
+        }
+        searchResults = .loading
+
+        do {
+            let results = try await service.search(
+                for: account,
+                libraryID: selectedLibrary.id,
+                query: normalizedQuery
+            )
+            guard searchGeneration == operationGeneration else {
+                return
+            }
+            searchResults = .loaded(results)
+        } catch let error {
+            guard searchGeneration == operationGeneration,
+                !Task.isCancelled
+            else {
+                return
+            }
+            searchResults = .failed(AppFailure(serviceError: error))
         }
     }
 
@@ -249,6 +299,7 @@ final class AppModel {
             selectedLibrary = nil
             libraries = .idle
             books = .idle
+            resetSearch()
             accountActionStatus = .idle
             loginStatus = .idle
             phase = .signedOut
@@ -257,5 +308,11 @@ final class AppModel {
                 AppFailure(serviceError: error)
             )
         }
+    }
+
+    private func resetSearch() {
+        searchGeneration &+= 1
+        searchQuery = ""
+        searchResults = .idle
     }
 }

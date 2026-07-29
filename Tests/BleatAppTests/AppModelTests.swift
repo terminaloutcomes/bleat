@@ -224,6 +224,158 @@ final class AppModelTests: XCTestCase {
             model.accountActionStatus,
             .failed(.accountUnavailable)
         )
+
+        await model.search(query: "a book")
+        XCTAssertEqual(
+            model.searchResults,
+            .failed(.accountUnavailable)
+        )
+    }
+
+    func testSearchTrimsQueryAndPublishesResults() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let result = fixturePage(libraryID: library.id).items
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            search: .success(result)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.search(query: "  A Book  ")
+
+        XCTAssertEqual(model.searchQuery, "  A Book  ")
+        XCTAssertEqual(model.searchResults, .loaded(result))
+        let requests = await service.searchRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                SearchRequest(
+                    accountID: account.id,
+                    libraryID: library.id,
+                    query: "A Book"
+                )
+            ]
+        )
+    }
+
+    func testBlankSearchClearsWithoutCallingService() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.search(query: "   ")
+
+        XCTAssertEqual(model.searchResults, .idle)
+        let requests = await service.searchRequests()
+        XCTAssertEqual(requests, [])
+    }
+
+    func testSearchFailureRemainsTyped() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            search: .failure(
+                .searchCoordinator(
+                    .repository(.remote(.unexpectedStatus(503)))
+                )
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.search(query: "a book")
+
+        XCTAssertEqual(model.searchResults, .failed(.searchUnavailable))
+    }
+
+    func testSupersededSearchCannotPublishLateResult() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let oldResult = fixturePage(libraryID: library.id).items
+        let newResult = [
+            LibraryBookSummary(
+                id: LibraryItemID(rawValue: "item-2"),
+                libraryID: library.id,
+                title: "New Result",
+                subtitle: nil,
+                authorName: nil,
+                narratorName: nil,
+                seriesName: nil,
+                genres: [],
+                publisher: nil,
+                publishedYear: nil,
+                duration: 1,
+                trackCount: 1,
+                chapterCount: 0,
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false
+            )
+        ]
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            search: .success(oldResult),
+            searchGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let oldSearch = Task { @MainActor in
+            await model.search(query: "old")
+        }
+        await gate.waitUntilEntered()
+        await service.setSearch(.success(newResult))
+
+        await model.search(query: "new")
+        await gate.release()
+        await oldSearch.value
+
+        XCTAssertEqual(model.searchQuery, "new")
+        XCTAssertEqual(model.searchResults, .loaded(newResult))
+    }
+
+    func testChangingLibraryResetsSearchState() async throws {
+        let account = try fixtureAccount()
+        let firstLibrary = fixtureLibrary()
+        let secondLibrary = LibrarySummary(
+            id: LibraryID(rawValue: "library-2"),
+            name: "Second Library",
+            mediaType: .book
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([firstLibrary, secondLibrary]),
+            firstPage: .success(fixturePage(libraryID: firstLibrary.id)),
+            search: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.search(query: "query")
+
+        await service.setFirstPage(
+            .success(fixturePage(libraryID: secondLibrary.id))
+        )
+        await model.selectLibrary(secondLibrary)
+
+        XCTAssertEqual(model.searchQuery, "")
+        XCTAssertEqual(model.searchResults, .idle)
     }
 
     func testRemoveAccountClearsSignedInState() async throws {
@@ -341,6 +493,11 @@ final class AppModelTests: XCTestCase {
                 .libraryUnavailable
             ),
             (.pageRequest(.invalidPage), .libraryUnavailable),
+            (.searchRequest(.invalidQuery), .searchUnavailable),
+            (
+                .searchCoordinator(.cancelled),
+                .searchUnavailable
+            ),
             (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
@@ -373,6 +530,7 @@ final class AppModelTests: XCTestCase {
             .loginFailed,
             .accountUnavailable,
             .libraryUnavailable,
+            .searchUnavailable,
             .accountRemovalFailed,
         ]
 
@@ -451,6 +609,12 @@ private struct LoginRequest: Equatable, Sendable {
     let password: String
 }
 
+private struct SearchRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let libraryID: LibraryID
+    let query: String
+}
+
 private actor TestAppService: AppServicing {
     private var activeAccountResult:
         Result<
@@ -468,13 +632,20 @@ private actor TestAppService: AppServicing {
             LibraryItemsPage,
             AppServiceError
         >
+    private var searchResult:
+        Result<
+            [LibraryBookSummary],
+            AppServiceError
+        >
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
+    private let searchGate: AsyncGate?
 
     private var activeAccountRequests = 0
     private var recordedLogins: [LoginRequest] = []
     private var recordedPageRequests: [LibraryID] = []
+    private var recordedSearchRequests: [SearchRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
 
     init(
@@ -486,17 +657,23 @@ private actor TestAppService: AppServicing {
         firstPage: Result<LibraryItemsPage, AppServiceError> = .failure(
             .libraryRepository(.noCachedValue)
         ),
+        search: Result<[LibraryBookSummary], AppServiceError> = .failure(
+            .searchCoordinator(.repository(.noCachedValue))
+        ),
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
-        removeGate: AsyncGate? = nil
+        removeGate: AsyncGate? = nil,
+        searchGate: AsyncGate? = nil
     ) {
         activeAccountResult = activeAccount
         loginResult = login
         librariesResult = libraries
         firstPageResult = firstPage
+        searchResult = search
         removeAccountResult = removeAccount
         self.loginGate = loginGate
         self.removeGate = removeGate
+        self.searchGate = searchGate
     }
 
     func activeAccount()
@@ -538,6 +715,27 @@ private actor TestAppService: AppServicing {
         return try value(from: firstPageResult)
     }
 
+    func search(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        query: String
+    ) async throws(AppServiceError) -> [LibraryBookSummary] {
+        recordedSearchRequests.append(
+            SearchRequest(
+                accountID: account.id,
+                libraryID: libraryID,
+                query: query
+            )
+        )
+        let result = searchResult
+        if recordedSearchRequests.count == 1,
+            let searchGate
+        {
+            await searchGate.enterAndWait()
+        }
+        return try value(from: result)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
@@ -560,6 +758,12 @@ private actor TestAppService: AppServicing {
         firstPageResult = result
     }
 
+    func setSearch(
+        _ result: Result<[LibraryBookSummary], AppServiceError>
+    ) {
+        searchResult = result
+    }
+
     func activeAccountRequestCount() -> Int {
         activeAccountRequests
     }
@@ -570,6 +774,10 @@ private actor TestAppService: AppServicing {
 
     func pageRequests() -> [LibraryID] {
         recordedPageRequests
+    }
+
+    func searchRequests() -> [SearchRequest] {
+        recordedSearchRequests
     }
 
     func removedAccounts() -> [ServerAccount] {

@@ -98,6 +98,17 @@
             )
         }
 
+        func search(
+            for account: ServerAccount,
+            libraryID: LibraryID,
+            query: String
+        ) async throws(AppServiceError) -> [LibraryBookSummary] {
+            guard query == "Test" else {
+                return []
+            }
+            return firstPageItem(libraryID: libraryID)
+        }
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}
@@ -149,5 +160,31 @@
                 )
             }
         }
+    }
+
+    private func firstPageItem(
+        libraryID: LibraryID
+    ) -> [LibraryBookSummary] {
+        [
+            LibraryBookSummary(
+                id: LibraryItemID(rawValue: "ui-search-book"),
+                libraryID: libraryID,
+                title: "The Search Result",
+                subtitle: nil,
+                authorName: "Test Author",
+                narratorName: "Test Narrator",
+                seriesName: nil,
+                genres: ["Fiction"],
+                publisher: nil,
+                publishedYear: "2026",
+                duration: 3_600,
+                trackCount: 1,
+                chapterCount: 1,
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false
+            )
+        ]
     }
 #endif

@@ -14,6 +14,8 @@ enum AppServiceError: Error, Equatable, Sendable {
     case accountStore(AccountStoreError)
     case libraryRepository(LibraryRepositoryError)
     case pageRequest(LibraryPageRequestError)
+    case searchRequest(LibrarySearchRequestError)
+    case searchCoordinator(LibrarySearchCoordinatorError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
 }
@@ -37,6 +39,12 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID
     ) async throws(AppServiceError) -> LibraryItemsPage
 
+    func search(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        query: String
+    ) async throws(AppServiceError) -> [LibraryBookSummary]
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError)
@@ -53,6 +61,7 @@ actor LiveAppService: AppServicing {
     private let coordinator: Coordinator
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
+    private let searchCoordinator = LibrarySearchCoordinator()
 
     init() throws(AppBootstrapError) {
         let schema = Schema([
@@ -168,6 +177,41 @@ actor LiveAppService: AppServicing {
             ).value
         } catch let error {
             throw .libraryRepository(error)
+        }
+    }
+
+    func search(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        query: String
+    ) async throws(AppServiceError) -> [LibraryBookSummary] {
+        let request: LibrarySearchRequest
+        do {
+            request = try LibrarySearchRequest(query: query)
+        } catch let error {
+            throw .searchRequest(error)
+        }
+
+        let repository = repository(for: account)
+        let operation: LibrarySearchCoordinator.Operation = {
+            context,
+            request in
+            try await repository.search(
+                in: context.libraryID,
+                request: request
+            )
+        }
+        do {
+            return try await searchCoordinator.search(
+                context: LibrarySearchContext(
+                    accountID: account.id,
+                    libraryID: libraryID
+                ),
+                request: request,
+                operation: operation
+            ).value
+        } catch let error {
+            throw .searchCoordinator(error)
         }
     }
 

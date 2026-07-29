@@ -130,10 +130,7 @@ private struct SignedInView: View {
                 LibraryView(model: model)
             }
             Tab("Search", systemImage: "magnifyingglass") {
-                PendingFeatureView(
-                    title: "Search",
-                    systemImage: "magnifyingglass"
-                )
+                SearchView(model: model)
             }
             Tab("Downloads", systemImage: "arrow.down.circle") {
                 PendingFeatureView(
@@ -260,14 +257,7 @@ private struct BookListContent: View {
                 )
             } else {
                 List(page.items, id: \.id.rawValue) { book in
-                    VStack(alignment: .leading) {
-                        Text(book.title)
-                        if let author = book.authorName {
-                            Text(author)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    BookSummaryRow(book: book)
                 }
                 .accessibilityIdentifier("books.list")
             }
@@ -280,6 +270,84 @@ private struct BookListContent: View {
             systemImage: "wifi.exclamationmark",
             description: Text(failure.message)
         )
+    }
+}
+
+private struct SearchView: View {
+    @Bindable var model: AppModel
+    @State private var query = ""
+
+    private var taskContext: SearchTaskContext {
+        SearchTaskContext(
+            query: query,
+            libraryID: model.selectedLibrary?.id
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("Search")
+        }
+        .searchable(
+            text: $query,
+            prompt: "Books, authors, or series"
+        )
+        .task(id: taskContext) {
+            await model.search(query: query)
+        }
+        .accessibilityIdentifier("search.screen")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.searchResults {
+        case .idle:
+            ContentUnavailableView(
+                "Search audiobooks",
+                systemImage: "magnifyingglass"
+            )
+        case .loading:
+            ProgressView()
+                .accessibilityIdentifier("search.loading")
+        case .failed(let failure):
+            ContentUnavailableView(
+                "Search unavailable",
+                systemImage: "wifi.exclamationmark",
+                description: Text(failure.message)
+            )
+            .accessibilityIdentifier("search.error")
+        case .loaded(let results):
+            if results.isEmpty {
+                ContentUnavailableView.search(text: query)
+                    .accessibilityIdentifier("search.empty")
+            } else {
+                List(results, id: \.id.rawValue) { book in
+                    BookSummaryRow(book: book)
+                }
+                .accessibilityIdentifier("search.results")
+            }
+        }
+    }
+}
+
+private struct SearchTaskContext: Hashable {
+    let query: String
+    let libraryID: LibraryID?
+}
+
+private struct BookSummaryRow: View {
+    let book: LibraryBookSummary
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(book.title)
+            if let author = book.authorName {
+                Text(author)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
