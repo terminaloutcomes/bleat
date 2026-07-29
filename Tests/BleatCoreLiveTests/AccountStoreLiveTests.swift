@@ -69,11 +69,21 @@ final class AccountStoreLiveTests: XCTestCase {
         let storedCredentials = await credentials.credentials(
             for: accountID
         )
+        let libraries = try await AudiobookshelfAPI(
+            account: account,
+            authCoordinator: authCoordinator
+        ).libraries()
 
         XCTAssertEqual(account.server, discovered.baseURL)
         XCTAssertEqual(account.user.username, username)
         XCTAssertEqual(account.connectionState, .connected)
         XCTAssertEqual(active, account)
         XCTAssertNotNil(storedCredentials)
+        XCTAssertTrue(
+            libraries.value.contains {
+                $0.name == "Bleat Live Fixtures"
+                    && $0.mediaType == .book
+            }
+        )
     }
 }

@@ -218,6 +218,22 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertFalse(encoded.contains("access-token"))
         XCTAssertFalse(encoded.contains("refresh-token"))
         XCTAssertFalse(encoded.contains("password"))
+        let invalidData = try JSONEncoder().encode(
+            UncheckedServerAccount(
+                id: AccountID(rawValue: ""),
+                server: valid.server,
+                serverVersion: valid.serverVersion,
+                authenticationMethods: valid.authenticationMethods,
+                user: valid.user,
+                connectionState: valid.connectionState
+            )
+        )
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                ServerAccount.self,
+                from: invalidData
+            )
+        )
 
         XCTAssertThrowsError(
             try ServerAccount(
@@ -616,6 +632,15 @@ private actor OnboardingCredentialStore: AccountCredentialStore {
 
 private enum OnboardingTestError: Error {
     case credentialDeletion
+}
+
+private struct UncheckedServerAccount: Encodable {
+    let id: AccountID
+    let server: NormalizedServerURL
+    let serverVersion: String
+    let authenticationMethods: [AuthenticationMethod]
+    let user: AuthenticatedUser
+    let connectionState: AccountConnectionState
 }
 
 private actor OnboardingTransport: HTTPTransport {

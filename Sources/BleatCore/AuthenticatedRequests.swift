@@ -8,6 +8,7 @@ public enum AuthenticatedRequestError: Error, Equatable, Sendable {
     case credentialsReadFailed
     case missingCredentials
     case authorizationFailed(BearerAuthorizationError)
+    case requestCancelled
     case requestTransportFailed
     case refreshRequestConstructionFailed
     case refreshTransportFailed
@@ -168,6 +169,9 @@ extension AuthCoordinator {
         do {
             return try await transport.send(authorizedRequest)
         } catch {
+            if Task.isCancelled {
+                throw AuthenticatedRequestError.requestCancelled
+            }
             throw AuthenticatedRequestError.requestTransportFailed
         }
     }

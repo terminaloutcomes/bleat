@@ -91,6 +91,52 @@ public struct ServerAccount: Codable, Hashable, Sendable {
             connectionState: state
         )
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case server
+        case serverVersion
+        case authenticationMethods
+        case user
+        case connectionState
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        do {
+            try self.init(
+                id: container.decode(AccountID.self, forKey: .id),
+                server: container.decode(
+                    NormalizedServerURL.self,
+                    forKey: .server
+                ),
+                serverVersion: container.decode(
+                    String.self,
+                    forKey: .serverVersion
+                ),
+                authenticationMethods: container.decode(
+                    [AuthenticationMethod].self,
+                    forKey: .authenticationMethods
+                ),
+                user: container.decode(
+                    AuthenticatedUser.self,
+                    forKey: .user
+                ),
+                connectionState: container.decode(
+                    AccountConnectionState.self,
+                    forKey: .connectionState
+                )
+            )
+        } catch let error as ServerAccountValidationError {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription:
+                        "Stored server account failed validation: \(error)"
+                )
+            )
+        }
+    }
 }
 
 @Model

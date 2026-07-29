@@ -320,8 +320,9 @@ Deferred OIDC and time/history research do not block the MVP.
 Status: in progress. Durable SwiftData account profiles, one persisted active
 browsing context, transactional native-login onboarding, and stored-account
 sign-out/removal are verified with unit tests and fresh pinned root and
-path-prefixed servers. The typed general API client, permissions, diagnostics,
-and application UI remain.
+path-prefixed servers. The typed API actor now performs cancellable,
+correlated, authenticated library listing with isolated DTO mapping. Paginated
+item DTOs, permissions, diagnostics, and application UI remain.
 
 Deliver:
 
