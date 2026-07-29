@@ -8,7 +8,8 @@ The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
 an Audiobookshelf username and password, loads cached or live audiobook
 libraries and their first pages, searches the selected library, opens expanded
-book details with progress and chapters, renders personalized Home shelves, and
+book details with progress and chapters, loads additional library pages on
+demand, renders personalized Home shelves, and
 streams direct-play or HLS audio through a background-capable player. It
 allows update-permitted accounts to edit supported book metadata, presents the
 five-tab root shell, and removes accounts. The core implements URL, routing,

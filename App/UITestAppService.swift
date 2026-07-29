@@ -79,35 +79,36 @@
             ]
         }
 
-        func firstPage(
+        func page(
             for account: ServerAccount,
-            libraryID: LibraryID
+            libraryID: LibraryID,
+            page: Int
         ) async throws(AppServiceError) -> LibraryItemsPage {
-            LibraryItemsPage(
+            if page == 1 {
+                return LibraryItemsPage(
+                    items: [
+                        Self.book(
+                            id: "ui-book-2",
+                            title: "The Second Audiobook",
+                            libraryID: libraryID
+                        )
+                    ],
+                    total: 2,
+                    page: 1,
+                    limit: 1
+                )
+            }
+            return LibraryItemsPage(
                 items: [
-                    LibraryBookSummary(
-                        id: LibraryItemID(rawValue: "ui-book"),
-                        libraryID: libraryID,
+                    Self.book(
+                        id: "ui-book",
                         title: "The Test Audiobook",
-                        subtitle: nil,
-                        authorName: "Test Author",
-                        narratorName: "Test Narrator",
-                        seriesName: nil,
-                        genres: ["Fiction"],
-                        publisher: nil,
-                        publishedYear: "2026",
-                        duration: 3_600,
-                        trackCount: 1,
-                        chapterCount: 1,
-                        addedAtMilliseconds: 1,
-                        updatedAtMilliseconds: 1,
-                        isExplicit: false,
-                        isAbridged: false
+                        libraryID: libraryID
                     )
                 ],
-                total: 1,
+                total: 2,
                 page: 0,
-                limit: 50
+                limit: 1
             )
         }
 
@@ -330,6 +331,32 @@
             case .failure(let error):
                 throw error
             }
+        }
+
+        private static func book(
+            id: String,
+            title: String,
+            libraryID: LibraryID
+        ) -> LibraryBookSummary {
+            LibraryBookSummary(
+                id: LibraryItemID(rawValue: id),
+                libraryID: libraryID,
+                title: title,
+                subtitle: nil,
+                authorName: "Test Author",
+                narratorName: "Test Narrator",
+                seriesName: nil,
+                genres: ["Fiction"],
+                publisher: nil,
+                publishedYear: "2026",
+                duration: 3_600,
+                trackCount: 1,
+                chapterCount: 1,
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false
+            )
         }
 
         private static func makeAccount()

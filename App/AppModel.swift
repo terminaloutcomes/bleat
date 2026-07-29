@@ -44,6 +44,12 @@ enum BookProgressUpdateState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum LibraryPaginationState: Equatable, Sendable {
+    case idle
+    case loading
+    case failed(AppFailure)
+}
+
 enum AppFailure: Equatable, Sendable {
     case persistenceUnavailable
     case invalidServerAddress
@@ -193,6 +199,7 @@ final class AppModel {
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
     private(set) var selectedLibrary: LibrarySummary?
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
+    private(set) var libraryPaginationState: LibraryPaginationState = .idle
     private(set) var homeShelves: ResourceState<[LibraryBookShelf]> = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
@@ -320,6 +327,7 @@ final class AppModel {
         libraries = .loading
         selectedLibrary = nil
         books = .idle
+        libraryPaginationState = .idle
         homeShelves = .idle
         resetSearch()
         resetBookDetail()
@@ -351,13 +359,15 @@ final class AppModel {
         }
         selectedLibrary = library
         books = .loading
+        libraryPaginationState = .idle
         homeShelves = .loading
 
         do {
             books = .loaded(
-                try await service.firstPage(
+                try await service.page(
                     for: account,
-                    libraryID: library.id
+                    libraryID: library.id,
+                    page: 0
                 )
             )
         } catch let error {
@@ -372,6 +382,56 @@ final class AppModel {
             )
         } catch {
             homeShelves = .failed(.homeUnavailable)
+        }
+    }
+
+    func loadNextBooksPage() async {
+        guard libraryPaginationState != .loading,
+            let account,
+            let library = selectedLibrary,
+            case .loaded(let currentPage) = books,
+            currentPage.hasNextPage
+        else {
+            return
+        }
+        libraryPaginationState = .loading
+        let nextPageNumber = currentPage.page + 1
+
+        do {
+            let nextPage = try await service.page(
+                for: account,
+                libraryID: library.id,
+                page: nextPageNumber
+            )
+            guard self.account?.id == account.id,
+                selectedLibrary?.id == library.id,
+                case .loaded(let latestPage) = books,
+                latestPage.page == currentPage.page
+            else {
+                return
+            }
+            let existingIDs = Set(latestPage.items.map(\.id))
+            let newItems = nextPage.items.filter {
+                !existingIDs.contains($0.id)
+            }
+            books = .loaded(
+                LibraryItemsPage(
+                    items: latestPage.items + newItems,
+                    total: nextPage.total,
+                    page: nextPage.page,
+                    limit: nextPage.limit
+                )
+            )
+            libraryPaginationState = .idle
+        } catch let error {
+            guard self.account?.id == account.id,
+                selectedLibrary?.id == library.id
+            else {
+                return
+            }
+            libraryPaginationState = .failed(
+                AppFailure(serviceError: error)
+            )
         }
     }
 
@@ -576,6 +636,7 @@ final class AppModel {
             selectedLibrary = nil
             libraries = .idle
             books = .idle
+            libraryPaginationState = .idle
             homeShelves = .idle
             resetSearch()
             resetBookDetail()

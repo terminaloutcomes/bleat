@@ -521,6 +521,95 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.books, .failed(.libraryUnavailable))
     }
 
+    func testLoadingNextLibraryPageAppendsBooks() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstBook = fixtureBook(
+            id: "item-1",
+            title: "First",
+            libraryID: library.id
+        )
+        let secondBook = fixtureBook(
+            id: "item-2",
+            title: "Second",
+            libraryID: library.id
+        )
+        let firstPage = LibraryItemsPage(
+            items: [firstBook],
+            total: 2,
+            page: 0,
+            limit: 1
+        )
+        let nextPage = LibraryItemsPage(
+            items: [secondBook],
+            total: 2,
+            page: 1,
+            limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(firstPage),
+            nextPage: .success(nextPage)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.loadNextBooksPage()
+
+        XCTAssertEqual(
+            model.books,
+            .loaded(
+                LibraryItemsPage(
+                    items: [firstBook, secondBook],
+                    total: 2,
+                    page: 1,
+                    limit: 1
+                )
+            )
+        )
+        XCTAssertEqual(model.libraryPaginationState, .idle)
+        let pageNumbers = await service.pageNumbers()
+        XCTAssertEqual(pageNumbers, [0, 1])
+    }
+
+    func testLoadingNextLibraryPageFailureKeepsExistingBooks()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstPage = LibraryItemsPage(
+            items: [
+                fixtureBook(
+                    id: "item-1",
+                    title: "First",
+                    libraryID: library.id
+                )
+            ],
+            total: 2,
+            page: 0,
+            limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(firstPage),
+            nextPage: .failure(
+                .libraryRepository(.remote(.unexpectedStatus(503)))
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.loadNextBooksPage()
+
+        XCTAssertEqual(model.books, .loaded(firstPage))
+        XCTAssertEqual(
+            model.libraryPaginationState,
+            .failed(.libraryUnavailable)
+        )
+    }
+
     func testLoadingWithoutAccountUsesTypedFailure() async {
         let service = TestAppService(activeAccount: .success(nil))
         let model = AppModel(service: service)
@@ -1119,29 +1208,41 @@ final class AppModelTests: XCTestCase {
     private func fixturePage(libraryID: LibraryID) -> LibraryItemsPage {
         LibraryItemsPage(
             items: [
-                LibraryBookSummary(
-                    id: LibraryItemID(rawValue: "item-1"),
-                    libraryID: libraryID,
+                fixtureBook(
+                    id: "item-1",
                     title: "A Book",
-                    subtitle: nil,
-                    authorName: "An Author",
-                    narratorName: "A Narrator",
-                    seriesName: nil,
-                    genres: ["Fiction"],
-                    publisher: nil,
-                    publishedYear: "2026",
-                    duration: 3_600,
-                    trackCount: 1,
-                    chapterCount: 2,
-                    addedAtMilliseconds: 1,
-                    updatedAtMilliseconds: 2,
-                    isExplicit: false,
-                    isAbridged: false
+                    libraryID: libraryID
                 )
             ],
             total: 1,
             page: 0,
             limit: 50
+        )
+    }
+
+    private func fixtureBook(
+        id: String,
+        title: String,
+        libraryID: LibraryID
+    ) -> LibraryBookSummary {
+        LibraryBookSummary(
+            id: LibraryItemID(rawValue: id),
+            libraryID: libraryID,
+            title: title,
+            subtitle: nil,
+            authorName: "An Author",
+            narratorName: "A Narrator",
+            seriesName: nil,
+            genres: ["Fiction"],
+            publisher: nil,
+            publishedYear: "2026",
+            duration: 3_600,
+            trackCount: 1,
+            chapterCount: 2,
+            addedAtMilliseconds: 1,
+            updatedAtMilliseconds: 2,
+            isExplicit: false,
+            isAbridged: false
         )
     }
 
@@ -1299,6 +1400,11 @@ private actor TestAppService: AppServicing {
             LibraryItemsPage,
             AppServiceError
         >
+    private var nextPageResult:
+        Result<
+            LibraryItemsPage,
+            AppServiceError
+        >
     private var homeShelvesResult:
         Result<
             [LibraryBookShelf],
@@ -1326,6 +1432,7 @@ private actor TestAppService: AppServicing {
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
     private var recordedPageRequests: [LibraryID] = []
+    private var recordedPageNumbers: [Int] = []
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
@@ -1342,6 +1449,9 @@ private actor TestAppService: AppServicing {
         ),
         libraries: Result<[LibrarySummary], AppServiceError> = .success([]),
         firstPage: Result<LibraryItemsPage, AppServiceError> = .failure(
+            .libraryRepository(.noCachedValue)
+        ),
+        nextPage: Result<LibraryItemsPage, AppServiceError> = .failure(
             .libraryRepository(.noCachedValue)
         ),
         homeShelves: Result<[LibraryBookShelf], AppServiceError> = .success(
@@ -1369,6 +1479,7 @@ private actor TestAppService: AppServicing {
         loginResult = login
         librariesResult = libraries
         firstPageResult = firstPage
+        nextPageResult = nextPage
         homeShelvesResult = homeShelves
         searchResult = search
         bookDetailResult = bookDetail
@@ -1431,12 +1542,17 @@ private actor TestAppService: AppServicing {
         try value(from: librariesResult)
     }
 
-    func firstPage(
+    func page(
         for account: ServerAccount,
-        libraryID: LibraryID
+        libraryID: LibraryID,
+        page: Int
     ) async throws(AppServiceError) -> LibraryItemsPage {
         recordedPageRequests.append(libraryID)
-        return try value(from: firstPageResult)
+        recordedPageNumbers.append(page)
+        if page == 0 {
+            return try value(from: firstPageResult)
+        }
+        return try value(from: nextPageResult)
     }
 
     func homeShelves(
@@ -1668,6 +1784,10 @@ private actor TestAppService: AppServicing {
 
     func pageRequests() -> [LibraryID] {
         recordedPageRequests
+    }
+
+    func pageNumbers() -> [Int] {
+        recordedPageNumbers
     }
 
     func homeRequests() -> [LibraryID] {

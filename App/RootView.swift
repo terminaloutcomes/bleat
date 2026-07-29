@@ -407,12 +407,46 @@ private struct BookListContent: View {
                     systemImage: "book.closed"
                 )
             } else {
-                List(page.items, id: \.id.rawValue) { book in
-                    NavigationLink(value: book) {
-                        BookSummaryRow(
-                            book: book,
-                            server: model.account?.server
-                        )
+                List {
+                    ForEach(page.items, id: \.id.rawValue) { book in
+                        NavigationLink(value: book) {
+                            BookSummaryRow(
+                                book: book,
+                                server: model.account?.server
+                            )
+                        }
+                    }
+                    if page.hasNextPage {
+                        switch model.libraryPaginationState {
+                        case .idle:
+                            Button("Load More") {
+                                Task {
+                                    await model.loadNextBooksPage()
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("books.loadMore")
+                        case .loading:
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Spacer()
+                            }
+                            .accessibilityIdentifier("books.loadingMore")
+                        case .failed(let failure):
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(failure.message)
+                                    .foregroundStyle(.secondary)
+                                Button("Try Again") {
+                                    Task {
+                                        await model.loadNextBooksPage()
+                                    }
+                                }
+                                .accessibilityIdentifier(
+                                    "books.retryLoadMore"
+                                )
+                            }
+                        }
                     }
                 }
                 .accessibilityIdentifier("books.list")

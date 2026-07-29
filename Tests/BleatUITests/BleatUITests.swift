@@ -125,6 +125,33 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testLibraryLoadsAnotherPage() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.buttons["Library"].tap()
+        XCTAssertTrue(
+            app.staticTexts["The Test Audiobook"].waitForExistence(
+                timeout: 3
+            )
+        )
+        let loadMore = app.buttons["books.loadMore"]
+        XCTAssertTrue(loadMore.waitForExistence(timeout: 3))
+        loadMore.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["The Second Audiobook"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertFalse(loadMore.exists)
+    }
+
+    @MainActor
     private func launch(scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [scenario]
