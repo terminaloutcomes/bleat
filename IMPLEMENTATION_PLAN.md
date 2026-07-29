@@ -362,9 +362,10 @@ replace atomically, and invalidate removed libraries without cross-account
 bleed. The `LibraryRepository` persists successful authenticated API reads and
 supports typed remote-only, cache-only, and remote-else-cache policies without
 turning cancellation into stale data. Exact normalized search queries use the
-same account-scoped persistence and cancellation rules. Debounced Search UI,
-home shelves, expanded details, cover caching, performance validation, and
-SwiftUI remain.
+same account-scoped persistence and cancellation rules. A deterministic 300 ms
+coordinator cancels and suppresses superseded query, account, and library work.
+Search presentation, home shelves, expanded details, cover caching, performance
+validation, and SwiftUI remain.
 
 Deliver:
 

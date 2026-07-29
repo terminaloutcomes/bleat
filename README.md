@@ -162,6 +162,7 @@ fallback, cancellation, and typed cache/remote failures:
 ```sh
 swift test --filter LibraryCacheTests
 swift test --filter LibraryRepositoryTests
+swift test --filter LibrarySearchCoordinatorTests
 ```
 
 The playback unit suite covers exact request fields, typed session decoding,

@@ -23,16 +23,17 @@ CarPlay browsing, watchOS, widgets, Siri, SharePlay, or server administration.
 Start with the Phase 0 risk spikes in section 21 of the specification. Prove the
 following before building broad UI:
 
-1. OIDC/PKCE with the cookie-bound Audiobookshelf mobile bridge.
+1. Native username/password login with account-scoped Keychain credentials.
 2. Per-account single-flight refresh-token rotation.
 3. Session-scoped direct-file range playback.
 4. Session-scoped transcoded HLS playback.
 5. Restorable bearer-authenticated background downloads.
-6. Listening-time accounting across rate changes, seeks, and stalls.
-7. Idempotent import and deduplication of server listening sessions.
 
 If a spike disproves an architectural assumption, update the specification and
 architecture before continuing.
+
+OIDC/PKCE, listening-time accounting, and listening-session import are
+deferred. Do not implement or extend them as part of the MVP.
 
 ## Server contract
 
@@ -75,11 +76,8 @@ across accounts.
 - Never put access or refresh tokens in URLs.
 - Treat playback session IDs as bearer-like secrets.
 - Do not use undocumented AVFoundation HTTP-header options.
-- Redact tokens, cookies, passwords, PKCE material, authorization codes,
-  callback queries, playback routes, and sensitive local paths from logs and
-  diagnostics.
-- Preserve the initial cookie jar through the complete OIDC bridge and validate
-  callback state exactly.
+- Redact tokens, passwords, playback routes, and sensitive local paths from
+  logs and diagnostics.
 
 ## Playback and statistics invariants
 
