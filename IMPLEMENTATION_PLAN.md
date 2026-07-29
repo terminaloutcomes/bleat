@@ -324,7 +324,7 @@ path-prefixed servers. The typed API actor now performs cancellable,
 correlated, authenticated library listing with isolated DTO mapping. Paginated
 book-summary DTOs and exact query construction are also verified against a
 pinned fixture and live root/path-prefixed servers. Expanded item DTOs,
-permissions, diagnostics, persistence, and application UI remain.
+permissions, diagnostics, and application UI remain.
 
 Deliver:
 
@@ -354,6 +354,14 @@ signed in, switch active browsing context, and fail/re-authenticate
 independently with no secret in logs or persistence.
 
 ### Phase 3 — library, cache, navigation, and book detail
+
+Status: in progress. Account-scoped SwiftData library collections and exact
+paginated-query snapshots now survive relaunch, preserve fetched-empty state,
+replace atomically, and invalidate removed libraries without cross-account
+bleed. The `LibraryRepository` persists successful authenticated API reads and
+supports typed remote-only, cache-only, and remote-else-cache policies without
+turning cancellation into stale data. Search, home shelves, expanded details,
+cover caching, performance validation, and SwiftUI remain.
 
 Deliver:
 

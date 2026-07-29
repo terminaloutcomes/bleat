@@ -6,7 +6,35 @@ public enum LibraryMediaType: Hashable, Sendable {
     case unknown(String)
 }
 
-public struct LibrarySummary: Hashable, Sendable {
+extension LibraryMediaType: Codable {
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "book":
+            self = .book
+        case "podcast":
+            self = .podcast
+        default:
+            self = .unknown(value)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        let value: String
+        switch self {
+        case .book:
+            value = "book"
+        case .podcast:
+            value = "podcast"
+        case let .unknown(rawValue):
+            value = rawValue
+        }
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
+public struct LibrarySummary: Codable, Hashable, Sendable {
     public let id: LibraryID
     public let name: String
     public let mediaType: LibraryMediaType
@@ -19,6 +47,31 @@ public struct LibrarySummary: Hashable, Sendable {
         self.id = id
         self.name = name
         self.mediaType = mediaType
+    }
+}
+
+extension LibrarySummary {
+    var isValidForStorage: Bool {
+        !id.rawValue.isEmpty
+            && Self.isValidDisplayString(name)
+            && mediaType.isValidForStorage
+    }
+
+    private static func isValidDisplayString(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
+private extension LibraryMediaType {
+    var isValidForStorage: Bool {
+        switch self {
+        case .book, .podcast:
+            true
+        case let .unknown(rawValue):
+            !rawValue.isEmpty
+                && rawValue.rangeOfCharacter(from: .controlCharacters) == nil
+        }
     }
 }
 
@@ -126,7 +179,7 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
     }
 }
 
-public struct LibraryBookSummary: Hashable, Sendable {
+public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let id: LibraryItemID
     public let libraryID: LibraryID
     public let title: String
@@ -146,7 +199,42 @@ public struct LibraryBookSummary: Hashable, Sendable {
     public let isAbridged: Bool
 }
 
-public struct LibraryItemsPage: Hashable, Sendable {
+extension LibraryBookSummary {
+    func isValidForStorage(in libraryID: LibraryID) -> Bool {
+        !id.rawValue.isEmpty
+            && self.libraryID == libraryID
+            && Self.isValidDisplayString(title)
+            && Self.isValidOptionalDisplayString(subtitle)
+            && Self.isValidOptionalDisplayString(authorName)
+            && Self.isValidOptionalDisplayString(narratorName)
+            && Self.isValidOptionalDisplayString(seriesName)
+            && genres.allSatisfy(Self.isValidDisplayString)
+            && Self.isValidOptionalDisplayString(publisher)
+            && Self.isValidOptionalDisplayString(publishedYear)
+            && duration.isFinite
+            && duration >= 0
+            && trackCount >= 0
+            && chapterCount >= 0
+            && addedAtMilliseconds >= 0
+            && updatedAtMilliseconds >= 0
+    }
+
+    private static func isValidDisplayString(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isValidOptionalDisplayString(
+        _ value: String?
+    ) -> Bool {
+        guard let value else {
+            return true
+        }
+        return value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
+public struct LibraryItemsPage: Codable, Hashable, Sendable {
     public let items: [LibraryBookSummary]
     public let total: Int
     public let page: Int
@@ -157,5 +245,18 @@ public struct LibraryItemsPage: Hashable, Sendable {
             return false
         }
         return page < (total - 1) / limit
+    }
+
+    func isValidForStorage(
+        request: LibraryItemsPageRequest,
+        libraryID: LibraryID
+    ) -> Bool {
+        page == request.page
+            && limit == request.limit
+            && total >= 0
+            && items.count <= limit
+            && items.allSatisfy {
+                $0.isValidForStorage(in: libraryID)
+            }
     }
 }
