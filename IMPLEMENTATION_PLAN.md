@@ -616,7 +616,7 @@ implemented. Storage removal cancels matching transfers and bulk management
 preserves the currently playing download. Simulator transfer lifecycle and the
 remaining process/network failure matrix still need release-level evidence.
 
-### Phase 8 — metadata and cover editing
+### Phase 8 — book editing and deletion
 
 Deliver:
 
@@ -629,6 +629,8 @@ Deliver:
 - Sanitized description rendering.
 - `PhotosPicker`, metadata removal, orientation, documented resize limit,
   multipart `cover` upload, confirmed cache swap, refetch, and `ts` cache bust.
+- Unified book editor with staged cover saving and permission-gated
+  library-record or permanent server-file deletion.
 
 Test before exit:
 
@@ -641,9 +643,15 @@ Test before exit:
 - update/upload permission combinations;
 - image orientation, metadata stripping, resizing, multipart field name,
   failure preserving old cover, success refetch, and token-free cache busting.
+- delete permission combinations, root/path-prefixed `DELETE`, explicit hard
+  mode, active-playback shutdown, local-download cleanup, and cache refresh.
 
 Exit gate: authorized users can deliberately edit metadata and cover art
 without claiming atomic conflict prevention; unauthorized controls are absent.
+
+Current status: metadata and cover editing share one permission-gated editor,
+cover changes stage until Save, and server deletion distinguishes library
+removal from permanent file deletion with typed partial-cleanup states.
 
 ### Phase 9 — release polish and complete-system validation
 

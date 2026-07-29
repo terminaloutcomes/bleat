@@ -1963,12 +1963,13 @@ final class AppModelTests: XCTestCase {
         var draft = BookMetadataDraft(detail: detail)
         draft.title = "Updated title"
 
-        await model.saveMetadata(
+        await model.saveBookEdits(
             draft: draft,
-            baseline: detail
+            baseline: detail,
+            coverJPEGData: nil
         )
 
-        XCTAssertEqual(model.metadataSaveState, .saved)
+        XCTAssertEqual(model.bookEditSaveState, .saved)
         XCTAssertEqual(model.bookDetail, .loaded(detail))
         let requests = await service.metadataSaveRequests()
         XCTAssertEqual(
@@ -1982,6 +1983,126 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
+    }
+
+    func testBookEditSavesMetadataBeforeUploadingStagedCover() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let jpegData = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            metadataSave: .success(.saved(detail)),
+            coverReplacement: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        var draft = BookMetadataDraft(detail: detail)
+        draft.title = "Updated title"
+
+        await model.saveBookEdits(
+            draft: draft,
+            baseline: detail,
+            coverJPEGData: jpegData
+        )
+
+        XCTAssertEqual(model.bookEditSaveState, .saved)
+        let coverRequests = await service.coverReplacementRequests()
+        XCTAssertEqual(
+            coverRequests,
+            [
+                CoverReplacementRequest(
+                    accountID: account.id,
+                    detail: detail,
+                    jpegData: jpegData
+                )
+            ]
+        )
+    }
+
+    func testBookEditRetainsSavedMetadataWhenCoverUploadFails()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            metadataSave: .success(.saved(detail)),
+            coverReplacement: .failure(
+                .coverUpdate(.uploadRejected)
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.saveBookEdits(
+            draft: BookMetadataDraft(detail: detail),
+            baseline: detail,
+            coverJPEGData: Data([1])
+        )
+
+        XCTAssertEqual(
+            model.bookEditSaveState,
+            .metadataSavedCoverFailed(detail, .metadataUnavailable)
+        )
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+    }
+
+    func testBookDeletionForwardsModeAndRefreshesLibrary()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            bookDeletion: .success(
+                .deletedWithCacheCleanupFailure
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.deleteBook(
+            detail,
+            mode: .libraryRecordAndFiles
+        )
+
+        let deletionRequests = await service.bookDeletionRequests()
+        XCTAssertEqual(
+            deletionRequests,
+            [
+                BookDeletionRequest(
+                    accountID: account.id,
+                    detail: detail,
+                    mode: .libraryRecordAndFiles
+                )
+            ]
+        )
+        XCTAssertEqual(
+            model.bookDeletionState,
+            .deleted(
+                BookDeletionCleanupStatus(
+                    cacheCleanupFailed: true,
+                    localDownloadCleanupFailed: false
+                )
+            )
+        )
+        let pageRequestCount = await service.pageRequests().count
+        XCTAssertEqual(pageRequestCount, 2)
     }
 
     func testSetFinishedUpdatesProgressAndRefetchesDetail() async throws {
@@ -2617,6 +2738,18 @@ private struct MetadataSaveRequest: Equatable, Sendable {
     let overwrite: Bool
 }
 
+private struct CoverReplacementRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let detail: LibraryBookDetail
+    let jpegData: Data
+}
+
+private struct BookDeletionRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let detail: LibraryBookDetail
+    let mode: BookDeletionMode
+}
+
 private struct ProgressUpdateRequest: Equatable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
@@ -2672,6 +2805,12 @@ private actor TestAppService: AppServicing {
             [AudioBookmark],
             AppServiceError
         >
+    private var metadataSaveResult:
+        Result<AppMetadataSaveOutcome, AppServiceError>?
+    private var coverReplacementResult:
+        Result<LibraryBookDetail, AppServiceError>?
+    private var bookDeletionResult:
+        Result<AppBookDeletionOutcome, AppServiceError>
     private var progressUpdateResult: Result<Void, AppServiceError>
     private var localSessionSyncResult:
         Result<[LocalPlaybackSessionSyncResult], AppServiceError>
@@ -2691,6 +2830,9 @@ private actor TestAppService: AppServicing {
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
+    private var recordedCoverReplacementRequests:
+        [CoverReplacementRequest] = []
+    private var recordedBookDeletionRequests: [BookDeletionRequest] = []
     private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
     private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
@@ -2718,6 +2860,14 @@ private actor TestAppService: AppServicing {
             .bookDetail(.noCachedValue)
         ),
         bookmarks: Result<[AudioBookmark], AppServiceError> = .success([]),
+        metadataSave:
+            Result<AppMetadataSaveOutcome, AppServiceError>? = nil,
+        coverReplacement:
+            Result<LibraryBookDetail, AppServiceError>? = nil,
+        bookDeletion:
+            Result<AppBookDeletionOutcome, AppServiceError> = .success(
+                .deleted
+            ),
         progressUpdate: Result<Void, AppServiceError> = .success(()),
         localSessionSync:
             Result<
@@ -2739,6 +2889,9 @@ private actor TestAppService: AppServicing {
         searchResult = search
         bookDetailResult = bookDetail
         bookmarksResult = bookmarks
+        metadataSaveResult = metadataSave
+        coverReplacementResult = coverReplacement
+        bookDeletionResult = bookDeletion
         progressUpdateResult = progressUpdate
         localSessionSyncResult = localSessionSync
         removeAccountResult = removeAccount
@@ -2927,6 +3080,9 @@ private actor TestAppService: AppServicing {
                 overwrite: overwrite
             )
         )
+        if let metadataSaveResult {
+            return try value(from: metadataSaveResult)
+        }
         return .saved(baseline)
     }
 
@@ -2957,7 +3113,17 @@ private actor TestAppService: AppServicing {
         detail: LibraryBookDetail,
         jpegData: Data
     ) async throws(AppServiceError) -> LibraryBookDetail {
-        detail
+        recordedCoverReplacementRequests.append(
+            CoverReplacementRequest(
+                accountID: account.id,
+                detail: detail,
+                jpegData: jpegData
+            )
+        )
+        if let coverReplacementResult {
+            return try value(from: coverReplacementResult)
+        }
+        return detail
     }
 
     func deleteBook(
@@ -2965,7 +3131,14 @@ private actor TestAppService: AppServicing {
         detail: LibraryBookDetail,
         mode: BookDeletionMode
     ) async throws(AppServiceError) -> AppBookDeletionOutcome {
-        .deleted
+        recordedBookDeletionRequests.append(
+            BookDeletionRequest(
+                accountID: account.id,
+                detail: detail,
+                mode: mode
+            )
+        )
+        return try value(from: bookDeletionResult)
     }
 
     func bookmarks(
@@ -3105,6 +3278,14 @@ private actor TestAppService: AppServicing {
 
     func metadataSaveRequests() -> [MetadataSaveRequest] {
         recordedMetadataSaveRequests
+    }
+
+    func coverReplacementRequests() -> [CoverReplacementRequest] {
+        recordedCoverReplacementRequests
+    }
+
+    func bookDeletionRequests() -> [BookDeletionRequest] {
+        recordedBookDeletionRequests
     }
 
     func progressUpdateRequests() -> [ProgressUpdateRequest] {

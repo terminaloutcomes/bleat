@@ -435,6 +435,34 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookEditorOwnsCoverAndServerDeletionControls() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+
+        let edit = app.buttons["book.detail.edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["book.detail.cover"].exists)
+        edit.tap()
+
+        XCTAssertTrue(
+            app.buttons["book.edit.cover"].waitForExistence(timeout: 3)
+        )
+        let delete = app.buttons["book.edit.delete"]
+        app.swipeUp()
+        app.swipeUp()
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+        XCTAssertTrue(app.buttons["Remove from Library"].exists)
+        XCTAssertTrue(app.buttons["Delete Files from Server"].exists)
+    }
+
+    @MainActor
     func testCoreJourneyAtLargestDynamicType() {
         let app = launch(
             scenario: "--ui-testing-signed-in",

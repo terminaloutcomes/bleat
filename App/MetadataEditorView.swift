@@ -241,6 +241,7 @@ struct MetadataEditorView: View {
 
     @ViewBuilder
     private var coverSection: some View {
+        let hasPendingCover = pendingCoverJPEGData != nil
         Section("Cover") {
             Group {
                 if case .ready(let data) = pendingCover,
@@ -270,7 +271,7 @@ struct MetadataEditorView: View {
                 matching: .images
             ) {
                 Label(
-                    pendingCoverJPEGData == nil
+                    !hasPendingCover
                         ? "Choose Cover" : "Choose Another Cover",
                     systemImage: "photo"
                 )

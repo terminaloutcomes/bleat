@@ -20,8 +20,11 @@ Build a native iOS audiobook client for one or more Audiobookshelf servers. The 
 - play multi-file and single-file books with chapters, bookmarks, background playback, system media controls, and variable speed;
 - keep listening progress and sessions synchronized with Audiobookshelf, including after offline playback;
 - edit book metadata and cover art when the authenticated user has permission.
+- remove a book from the server library, with an explicit separate choice to
+  delete its server files, when the authenticated user has permission.
 
-This is an audiobook app, not a general Audiobookshelf administration client.
+This is an audiobook app, not a general Audiobookshelf administration client;
+item deletion is limited to the current book editor.
 The same application target may compile for Mac Catalyst 18 on macOS 15 or
 newer. Catalyst runtime behavior, signing, notarization, distribution, and
 Mac-specific interface adaptation are not version 1.0 acceptance requirements.
@@ -155,9 +158,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
 - Offline listening sessions and progress synchronize after reconnection.
 
-### 4.5 Metadata editing
+### 4.5 Book editing and deletion
 
 - If my server account has update permission, I can edit supported book metadata and cover art.
+- Cover changes are staged in the book editor and upload only after metadata
+  saves successfully; cancelling the editor discards the staged cover.
+- If my server account has delete permission, I can remove the book from the
+  library or explicitly delete its files from the server.
 - If I lack permission, editing controls are absent rather than merely failing later.
 - Metadata edits are never silently queued while offline.
 - If the server item changed since I began editing, the app warns me and lets me reload or deliberately overwrite.
@@ -234,6 +241,7 @@ The detail screen contains:
 - chapters with durations;
 - bookmarks;
 - Edit button gated by server permission;
+- a single Edit destination for metadata, cover, and server deletion;
 - server/account attribution when it could be ambiguous.
 
 ### 5.3 Statistics — post-MVP
@@ -406,6 +414,7 @@ The app must honor server permissions returned for the current user:
 | `user.permissions.download` | Show download controls only when true |
 | `user.permissions.update` | Show metadata editing only when true |
 | `user.permissions.update` and `user.permissions.upload` | Both are required for cover upload because the router and controller perform separate checks |
+| `user.permissions.delete` | Show server deletion only when true |
 | `user.permissions.accessAllLibraries` plus top-level `user.librariesAccessible` | Restrict queries and UI to accessible libraries |
 | `user.permissions.accessAllTags`, `user.permissions.selectedTagsNotAccessible`, plus top-level `user.itemTagsSelected` | Mirror the server's tag allow/deny semantics and do not reveal stale inaccessible items |
 | `user.permissions.accessExplicitContent` | Respect server filtering and do not reveal cached inaccessible items |
@@ -506,6 +515,22 @@ Descriptions received from the server are untrusted rich text. Render a sanitize
 - Fetch with `GET /api/items/<item-id>/cover`, optionally using `width`, `height`, `format`, and `ts=<updatedAt>`; the current server intentionally permits unauthenticated cover GETs.
 - Cache-bust with `ts=<updatedAt>` rather than appending bearer tokens to URLs.
 - Chapter editing, track reordering, provider matching, and writing embedded audio tags are deferred.
+
+### 8.4 Server item deletion
+
+- Present one destructive `Delete from Server` action at the bottom of the book
+  editor and identify the affected account and server in its confirmation.
+- `DELETE /api/items/<item-id>` removes the library record while leaving its
+  media files on the server.
+- `DELETE /api/items/<item-id>?hard=1` removes the library record and requests
+  permanent deletion of its server media path.
+- If the same account and book are active in playback, warn that playback will
+  stop. Stop and close playback before sending the deletion. After confirmed
+  server success, remove that active book's local download; inactive local
+  downloads remain untouched.
+- Invalidate account- and library-scoped detail, page, search, and Home cache
+  records after server success. Report cache or local-download cleanup failures
+  as partial success rather than encouraging a second server delete.
 
 ## 9. Playback
 
@@ -1083,6 +1108,7 @@ These routes and shapes are audited against the pinned v2.36.0 implementation. D
 | Read cover | `GET /api/items/<id>/cover?width=&height=&format=&ts=` |
 | Update metadata | `PATCH /api/items/<id>/media` with `{metadata, tags}` |
 | Upload cover | Multipart `POST /api/items/<id>/cover`, field `cover` |
+| Delete item | `DELETE /api/items/<id>`; add `hard=1` only for confirmed permanent server-file deletion |
 
 All request construction, including path-prefix handling, belongs in one route builder. Endpoint strings must not be scattered through views.
 
@@ -1231,6 +1257,7 @@ Use a disposable Audiobookshelf container with a seeded library:
 - FLAC book;
 - a format that requires transcode;
 - metadata and cover updates;
+- library-record-only and permanent-file item deletion;
 - stream session sync/close;
 - offline local-session synchronization;
 - `/api/me/listening-stats`, paginated `/api/me/listening-sessions`, `/api/me/progress`, and `/api/me/stats/year/<year>` fixtures from the pinned implementation;
@@ -1343,6 +1370,8 @@ The 1.0 release is acceptable only when:
 - [ ] Offline sessions synchronize once and are not duplicated.
 - [ ] Concurrent local/server progress never silently overwrites both changed positions.
 - [ ] Metadata editing performs the documented best-effort `updatedAt` stale-draft check and does not claim atomic conflict prevention.
+- [ ] Server item deletion is permission-gated, distinguishes library removal
+  from permanent file deletion, and stops active playback before deletion.
 - [ ] Removing an account cannot leave credentials or cross-account cache records behind.
 - [ ] The app remains usable with VoiceOver and the largest Dynamic Type size.
 

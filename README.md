@@ -12,9 +12,11 @@ an Audiobookshelf username and password, loads cached or live audiobook
 libraries as bounded pages, searches the selected library, opens expanded book
 details with progress and chapters, loads additional library pages on demand,
 renders personalized Home shelves, and
-streams direct-play or HLS audio through a background-capable player. It
-allows update-permitted accounts to edit supported book metadata, presents the
-five-tab root shell, and removes accounts. The core implements URL, routing,
+streams direct-play or HLS audio through a background-capable player. Its
+permission-gated book editor stages metadata and cover changes behind one Save
+action and can either remove a book from the server library or permanently
+delete its server files after confirmation. It presents the five-tab root shell
+and removes accounts. The core implements URL, routing,
 discovery, username/password login,
 single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
