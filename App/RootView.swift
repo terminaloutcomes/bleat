@@ -199,7 +199,7 @@ private struct HomeView: View {
     var body: some View {
         NavigationStack {
             HomeContent(model: model)
-                .navigationTitle("Home")
+//                .navigationTitle("Home")
                 .navigationDestination(for: LibraryBookSummary.self) { book in
                     BookDetailView(model: model, book: book)
                 }

@@ -28,10 +28,11 @@ Bleat 1.0 is done when:
    declarations, and user-facing authentication documentation match the
    shipped behavior.
 
-“Full test coverage” means complete behavioral and requirement coverage, not a
-misleading claim that simulator line coverage proves AVFoundation, Keychain,
-background execution, Bluetooth, AirPlay, or CarPlay behavior. Those boundaries
-receive integration and physical-device coverage in addition to unit tests.
+“Full test coverage” means by the end of the full plan, complete behavioral 
+and requirement coverage, not a misleading claim that simulator line coverage 
+proves AVFoundation, Keychain, background execution, Bluetooth, AirPlay, or CarPlay behavior. 
+Those boundaries receive integration and physical-device coverage in addition to unit tests. 
+It's important to get the basics tested as you build, but focus on finishing the app MVP first.
 
 ## 2. Fixed implementation decisions
 
