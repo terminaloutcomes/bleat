@@ -28,6 +28,14 @@ enum AccountActionStatus: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum MetadataSaveState: Equatable, Sendable {
+    case idle
+    case saving
+    case stale(LibraryBookDetail)
+    case saved
+    case failed(AppFailure)
+}
+
 enum AppFailure: Equatable, Sendable {
     case persistenceUnavailable
     case invalidServerAddress
@@ -46,6 +54,8 @@ enum AppFailure: Equatable, Sendable {
     case playbackDenied
     case playbackUnavailable
     case mediaUnavailable
+    case invalidMetadata
+    case metadataUnavailable
     case accountRemovalFailed
 
     var message: String {
@@ -84,6 +94,10 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not start playback from the server."
         case .mediaUnavailable:
             "This audiobook could not be prepared for playback."
+        case .invalidMetadata:
+            "Review the metadata fields and enter a title."
+        case .metadataUnavailable:
+            "Bleat could not save metadata to the server."
         case .accountRemovalFailed:
             "Bleat could not remove the account."
         }
@@ -133,6 +147,10 @@ enum AppFailure: Equatable, Sendable {
             self = .bookUnavailable
         case .playbackSession, .playbackSource, .playbackSync:
             self = .playbackUnavailable
+        case .metadataPatch:
+            self = .invalidMetadata
+        case .metadataUpdate:
+            self = .metadataUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed
         }
@@ -159,6 +177,7 @@ final class AppModel {
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
+    private(set) var metadataSaveState: MetadataSaveState = .idle
     let playback: PlaybackModel
 
     init(service: any AppServicing) {
@@ -357,6 +376,44 @@ final class AppModel {
         }
     }
 
+    func saveMetadata(
+        draft: BookMetadataDraft,
+        baseline: LibraryBookDetail,
+        overwrite: Bool = false
+    ) async {
+        guard let account else {
+            metadataSaveState = .failed(.accountUnavailable)
+            return
+        }
+        guard metadataSaveState != .saving else {
+            return
+        }
+        metadataSaveState = .saving
+        do {
+            switch try await service.saveMetadata(
+                for: account,
+                baseline: baseline,
+                draft: draft,
+                overwrite: overwrite
+            ) {
+            case .saved(let detail):
+                selectedBookID = detail.id
+                bookDetail = .loaded(detail)
+                metadataSaveState = .saved
+            case .stale(let latest):
+                metadataSaveState = .stale(latest)
+            }
+        } catch let error {
+            metadataSaveState = .failed(
+                AppFailure(serviceError: error)
+            )
+        }
+    }
+
+    func resetMetadataSaveState() {
+        metadataSaveState = .idle
+    }
+
     func removeAccount() async {
         guard let account else {
             accountActionStatus = .failed(.accountUnavailable)
@@ -397,5 +454,6 @@ final class AppModel {
         bookDetailGeneration &+= 1
         selectedBookID = nil
         bookDetail = .idle
+        metadataSaveState = .idle
     }
 }

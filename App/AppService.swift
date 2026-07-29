@@ -21,6 +21,8 @@ enum AppServiceError: Error, Equatable, Sendable {
     case playbackSession(PlaybackSessionError)
     case playbackSource(PlaybackSourceError)
     case playbackSync(PlaybackSyncError)
+    case metadataPatch(BookMetadataPatchError)
+    case metadataUpdate(BookMetadataUpdateError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
 }
@@ -45,6 +47,11 @@ struct AppPlaybackPreparation: Equatable, Sendable {
     let currentTime: Double
     let chapters: [PlaybackChapter]
     let source: AppPlaybackSource
+}
+
+enum AppMetadataSaveOutcome: Equatable, Sendable {
+    case saved(LibraryBookDetail)
+    case stale(LibraryBookDetail)
 }
 
 protocol AppServicing: Sendable {
@@ -100,6 +107,13 @@ protocol AppServicing: Sendable {
         currentTime: Double,
         duration: Double
     ) async throws(AppServiceError)
+
+    func saveMetadata(
+        for account: ServerAccount,
+        baseline: LibraryBookDetail,
+        draft: BookMetadataDraft,
+        overwrite: Bool
+    ) async throws(AppServiceError) -> AppMetadataSaveOutcome
 
     func removeAccount(
         _ account: ServerAccount
@@ -401,6 +415,64 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .playbackSync(error)
+        }
+    }
+
+    func saveMetadata(
+        for account: ServerAccount,
+        baseline: LibraryBookDetail,
+        draft: BookMetadataDraft,
+        overwrite: Bool
+    ) async throws(AppServiceError) -> AppMetadataSaveOutcome {
+        let patch: BookMetadataPatch
+        do {
+            patch = try BookMetadataPatch(
+                baseline: baseline,
+                draft: draft
+            )
+        } catch let error {
+            throw .metadataPatch(error)
+        }
+        if patch.isEmpty {
+            return .saved(baseline)
+        }
+
+        let repository = repository(for: account)
+        let latest: LibraryBookDetail
+        do {
+            latest = try await repository.bookDetail(
+                for: baseline.id,
+                in: baseline.libraryID,
+                policy: .remoteOnly
+            ).value
+        } catch let error {
+            throw .bookDetail(error)
+        }
+        if patch.isStale(comparedTo: latest), !overwrite {
+            return .stale(latest)
+        }
+
+        do {
+            try await coordinator.updateBookMetadata(
+                accountID: account.id,
+                server: account.server,
+                itemID: baseline.id,
+                patch: patch
+            )
+        } catch let error {
+            throw .metadataUpdate(error)
+        }
+
+        do {
+            return .saved(
+                try await repository.bookDetail(
+                    for: baseline.id,
+                    in: baseline.libraryID,
+                    policy: .remoteOnly
+                ).value
+            )
+        } catch let error {
+            throw .bookDetail(error)
         }
     }
 

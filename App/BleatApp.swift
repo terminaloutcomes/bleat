@@ -108,6 +108,15 @@ private struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func saveMetadata(
+        for account: ServerAccount,
+        baseline: LibraryBookDetail,
+        draft: BookMetadataDraft,
+        overwrite: Bool
+    ) async throws(AppServiceError) -> AppMetadataSaveOutcome {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {

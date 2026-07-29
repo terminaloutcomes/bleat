@@ -487,6 +487,43 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.bookDetail, .failed(.bookUnavailable))
     }
 
+    func testMetadataSaveForwardsDraftAndPublishesSuccess() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        var draft = BookMetadataDraft(detail: detail)
+        draft.title = "Updated title"
+
+        await model.saveMetadata(
+            draft: draft,
+            baseline: detail
+        )
+
+        XCTAssertEqual(model.metadataSaveState, .saved)
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        let requests = await service.metadataSaveRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                MetadataSaveRequest(
+                    accountID: account.id,
+                    baseline: detail,
+                    draft: draft,
+                    overwrite: false
+                )
+            ]
+        )
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -645,6 +682,11 @@ final class AppModelTests: XCTestCase {
                 .playbackSync(.unexpectedStatus(503)),
                 .playbackUnavailable
             ),
+            (.metadataPatch(.emptyTitle), .invalidMetadata),
+            (
+                .metadataUpdate(.unexpectedStatus(503)),
+                .metadataUnavailable
+            ),
             (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
@@ -683,6 +725,8 @@ final class AppModelTests: XCTestCase {
             .playbackDenied,
             .playbackUnavailable,
             .mediaUnavailable,
+            .invalidMetadata,
+            .metadataUnavailable,
             .accountRemovalFailed,
         ]
 
@@ -825,6 +869,13 @@ private struct BookDetailRequest: Equatable, Sendable {
     let itemID: LibraryItemID
 }
 
+private struct MetadataSaveRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let baseline: LibraryBookDetail
+    let draft: BookMetadataDraft
+    let overwrite: Bool
+}
+
 private actor TestAppService: AppServicing {
     private var activeAccountResult:
         Result<
@@ -868,6 +919,7 @@ private actor TestAppService: AppServicing {
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
+    private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
 
     init(
@@ -1009,6 +1061,23 @@ private actor TestAppService: AppServicing {
         return try value(from: bookDetailResult)
     }
 
+    func saveMetadata(
+        for account: ServerAccount,
+        baseline: LibraryBookDetail,
+        draft: BookMetadataDraft,
+        overwrite: Bool
+    ) async throws(AppServiceError) -> AppMetadataSaveOutcome {
+        recordedMetadataSaveRequests.append(
+            MetadataSaveRequest(
+                accountID: account.id,
+                baseline: baseline,
+                draft: draft,
+                overwrite: overwrite
+            )
+        )
+        return .saved(baseline)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
@@ -1059,6 +1128,10 @@ private actor TestAppService: AppServicing {
 
     func bookDetailRequests() -> [BookDetailRequest] {
         recordedBookDetailRequests
+    }
+
+    func metadataSaveRequests() -> [MetadataSaveRequest] {
+        recordedMetadataSaveRequests
     }
 
     func removedAccounts() -> [ServerAccount] {

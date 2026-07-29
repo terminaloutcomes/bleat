@@ -493,6 +493,7 @@ private struct BookSummaryRow: View {
 private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
+    @State private var showMetadataEditor = false
 
     var body: some View {
         Group {
@@ -521,6 +522,42 @@ private struct BookDetailView: View {
         .task(id: book.id.rawValue) {
             await model.loadBookDetail(book)
         }
+        .toolbar {
+            if let detail = loadedDetail,
+                canEditMetadata(detail)
+            {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") {
+                        showMetadataEditor = true
+                    }
+                    .accessibilityIdentifier("book.detail.edit")
+                }
+            }
+        }
+        .sheet(isPresented: $showMetadataEditor) {
+            if let detail = loadedDetail {
+                MetadataEditorView(model: model, detail: detail)
+            }
+        }
+    }
+
+    private var loadedDetail: LibraryBookDetail? {
+        guard model.selectedBookID == book.id,
+            case .loaded(let detail) = model.bookDetail
+        else {
+            return nil
+        }
+        return detail
+    }
+
+    private func canEditMetadata(_ detail: LibraryBookDetail) -> Bool {
+        guard let user = model.account?.user else {
+            return false
+        }
+        return BookActionAvailability(
+            user: user,
+            detail: detail
+        ).visibleActions.contains(.editMetadata)
     }
 
     private func detailContent(_ detail: LibraryBookDetail) -> some View {

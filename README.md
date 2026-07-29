@@ -10,9 +10,9 @@ an Audiobookshelf username and password, loads cached or live audiobook
 libraries and their first pages, searches the selected library, opens expanded
 book details with progress and chapters, renders personalized Home shelves, and
 streams direct-play or HLS audio through a background-capable player. It
-presents the five-tab root shell and removes accounts. The core implements URL,
-routing, discovery,
-username/password login,
+allows update-permitted accounts to edit supported book metadata, presents the
+five-tab root shell, and removes accounts. The core implements URL, routing,
+discovery, username/password login,
 single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
@@ -20,11 +20,11 @@ library listing, pagination, and search, account-scoped SwiftData library
 caching including personalized shelves and expanded book details,
 online-first/cache-fallback repository behavior, permission-derived book
 action visibility, playback sessions, and background-download contracts.
-Native Audiobookshelf username/password is the active
-authentication scope; the earlier isolated OIDC spike is deferred. The MVP
-also defers local time tracking, lifetime statistics, and listening-history
-import/export. Durable offline position recovery, downloads, and editing remain
-under active development.
+Native Audiobookshelf username/password is the active authentication scope; the
+earlier isolated OIDC spike is deferred. The MVP also defers local time
+tracking, lifetime statistics, and listening-history import/export. Durable
+offline position recovery, downloads, and cover editing remain under active
+development.
 
 ## Requirements
 
@@ -164,6 +164,19 @@ Home shelves, library/search rows, book detail, and Now Playing request bounded
 cover images with `updatedAt` cache busting. Cover URLs retain server path
 prefixes and never contain access tokens.
 
+## Edit book metadata
+
+Accounts with Audiobookshelf's update permission see **Edit** on book detail.
+The editor supports title, subtitle, authors, narrators, series and sequence,
+genres, tags, publishing fields, description, explicit status, and abridged
+status. Saving sends only changed scalar fields and complete replacement arrays
+through the native account's bearer-authenticated metadata endpoint.
+
+Bleat refetches the item immediately before saving. If the server's `updatedAt`
+value changed since the editor opened, Bleat offers to load the server version,
+review the current draft, or overwrite it. This is a best-effort conflict check
+because Audiobookshelf does not expose an atomic metadata precondition.
+
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual
 app sign-in yet.
@@ -181,11 +194,11 @@ The script creates fresh root and `/audiobookshelf` instances, waits for both
 services, initializes deterministic test-only root users and a three-book media
 library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
-downloads, and verifies that native-login account profiles survive store
-recreation, fetch typed libraries, and load their first paginated audiobook
-summaries, a matching search result, personalized audiobook shelves, and an
-expanded audiobook detail with chapters and authenticated-user progress. It
-then removes the containers and volumes. On failure it retains redacted
+downloads and metadata updates, and verifies that native-login account profiles
+survive store recreation, fetch typed libraries, and load their first paginated
+audiobook summaries, a matching search result, personalized audiobook shelves,
+and an expanded audiobook detail with chapters and authenticated-user progress.
+It then removes the containers and volumes. On failure it retains redacted
 diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
@@ -231,6 +244,14 @@ failures:
 
 ```sh
 swift test --filter PlaybackSessionTests
+```
+
+The metadata suite covers changed-field patch generation, replacement arrays,
+explicit nulls, server revision detection, prefix-safe bearer authentication,
+and the exact update route:
+
+```sh
+swift test --filter MetadataEditingTests
 ```
 
 The background-download spike covers expanded-item plan decoding, safe file

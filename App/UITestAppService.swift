@@ -207,6 +207,15 @@
             duration: Double
         ) async throws(AppServiceError) {}
 
+        func saveMetadata(
+            for account: ServerAccount,
+            baseline: LibraryBookDetail,
+            draft: BookMetadataDraft,
+            overwrite: Bool
+        ) async throws(AppServiceError) -> AppMetadataSaveOutcome {
+            .saved(baseline)
+        }
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}
@@ -238,7 +247,7 @@
                             type: .user,
                             permissions: UserPermissions(
                                 download: true,
-                                update: false,
+                                update: true,
                                 delete: false,
                                 upload: false,
                                 createEReader: false,
