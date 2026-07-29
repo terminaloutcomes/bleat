@@ -1,6 +1,6 @@
 # Bleat 1.0 Implementation Plan
 
-This plan turns `audiobookshelf-ios-app-spec.md` draft 1.2 into an executable
+This plan turns `audiobookshelf-ios-app-spec.md` draft 1.3 into an executable
 delivery sequence for a native iPhone and iPad application. The specification
 remains the product and protocol source of truth; this document defines work
 order, deliverables, test ownership, and release gates.
@@ -18,11 +18,11 @@ Bleat 1.0 is done when:
    accessibility, security, migration, performance, and device suites pass;
 4. the app passes Swift 6 strict concurrency checking with no ignored
    data-race warnings;
-5. secrets, account data, cached objects, downloads, progress, and statistics
+5. secrets, account data, cached objects, downloads, and progress
    remain account-isolated;
 6. the compatibility matrix passes against Audiobookshelf 2.26.x, the audited
    2.36.0 baseline, and the current stable release selected at release time;
-7. all 28 acceptance criteria in section 22 have test evidence attached to the
+7. all 19 MVP acceptance criteria in section 22 have test evidence attached to the
    release candidate;
 8. the specification, implementation map, captured fixtures, privacy
    declarations, and user-facing authentication documentation match the
@@ -297,7 +297,10 @@ Prove:
 
 #### 1G. Time and history spike
 
-Implement the smallest clock-driven slice recorder and remote-session importer.
+Status: deferred until after the MVP by product direction. No time tracker,
+listening ledger, remote-history importer, statistics UI, or statistics
+retention behavior is an MVP deliverable or release gate. The design and proof
+list below are retained for later implementation.
 
 Prove:
 
@@ -309,11 +312,16 @@ Prove:
 - a local session represented remotely is counted once;
 - ambiguous online sync produces a bounded approximate all-device result.
 
-Exit gate: all seven risk spikes pass against the pinned live server. Record
-evidence and revise the specification before continuing if any contract
-assumption fails.
+Exit gate: all five active MVP risk spikes pass against the pinned live server.
+Deferred OIDC and time/history research do not block the MVP.
 
 ### Phase 2 — accounts, authentication, and API foundation
+
+Status: in progress. Durable SwiftData account profiles, one persisted active
+browsing context, transactional native-login onboarding, and stored-account
+sign-out/removal are verified with unit tests and fresh pinned root and
+path-prefixed servers. The typed general API client, permissions, diagnostics,
+and application UI remain.
 
 Deliver:
 
@@ -336,8 +344,6 @@ Test before exit:
 - cross-account concurrency and storage isolation;
 - credentials remain available after first unlock but do not synchronize;
 - server-unreachable logout still removes local credentials;
-- retained statistics contain no server URL, credential, cookie, pending
-  operation, or local media path;
 - permission-denied remains distinct from authentication failure.
 
 Exit gate: two users on one server and users on separate servers can remain
@@ -355,7 +361,7 @@ Deliver:
 - Paginated Library UI with 40–60 item pages, sort/filter, list/grid selection,
   and no full-library expanded fetch.
 - Debounced Search UI with cancellation on query/account/library change.
-- Home shelves, Downloads summary placeholder, lifetime-statistics placeholder,
+- Home shelves, Downloads summary placeholder,
   and current account indicator.
 - Book detail with account attribution, metadata, chapters, bookmarks,
   progress, and permission-gated actions.
@@ -419,9 +425,7 @@ controls.
 Deliver:
 
 - `ProgressCoordinator` actor and durable five-second checkpoints.
-- Online sync/close with separate whole-book position and unsent
-  monotonic-listening delta.
-- Explicit uncertain-delta state for transport-ambiguous sync failures.
+- Online sync/close with whole-book position and MVP `timeListened: 0`.
 - Offline UUIDv4 session queue and batch `/api/session/local-all` import.
 - Direct progress read/patch and local/server/common-checkpoint model.
 - Non-destructive two-position conflict UI.
@@ -432,8 +436,7 @@ Deliver:
 Test before exit:
 
 - every persistence trigger in section 11.1;
-- online sync cadence, final close, retry limit, confirmed reset, ambiguous
-  preservation, and no cumulative resend;
+- online position-sync cadence, final close, and retry limit;
 - partial batch results remove only acknowledged sessions;
 - `progressSynced == false` refreshes server progress;
 - obsolete local-progress endpoint is never used;
@@ -442,10 +445,13 @@ Test before exit:
 - ambiguous bookmark create is deduplicated by item/time/title;
 - pending mutations survive relaunch and remain visible.
 
-Exit gate: online and offline sessions synchronize once, progress conflicts are
-never resolved silently, and the server receives only confirmed deltas.
+Exit gate: online and offline sessions synchronize once and progress conflicts
+are never resolved silently.
 
-### Phase 6 — statistics ledger, import, aggregation, and portability
+### Post-MVP — statistics ledger, import, aggregation, and portability
+
+This phase is intentionally excluded from the MVP delivery sequence and
+release gates.
 
 Deliver:
 
@@ -560,8 +566,8 @@ without claiming atomic conflict prevention; unauthorized controls are absent.
 
 Deliver:
 
-- Final Home, Library, Search, Downloads, Settings, Player, Book Detail,
-  Metadata, and Statistics states.
+- Final Home, Library, Search, Downloads, Settings, Player, Book Detail, and
+  Metadata states.
 - Consistent empty/loading/offline/stale/reauth/permission/error/conflict states.
 - Diagnostics export with endpoint names, status, correlation IDs, versions,
   state transitions, and redacted errors.
@@ -578,8 +584,7 @@ Test before exit:
 - security scans of logs, persistence, exports, URLs, and diagnostics;
 - performance, memory, energy, launch, and large-data targets;
 - physical-device media/background matrix;
-- upgrade, backup/restore, account removal, statistics retention/deletion, and
-  app-data reset;
+- upgrade, backup/restore, account removal, and app-data reset;
 - clean install and release archive validation.
 
 Exit gate: the release candidate meets all section 22 criteria and every row in
@@ -689,20 +694,17 @@ Keep numeric coverage and requirement traceability as separate gates.
   commands, Now Playing global time, artwork, rate, and chapter.
 - Sleep timer presets/end-of-chapter and resume rewind limits.
 
-#### Progress, sessions, bookmarks, and statistics
+#### Progress, sessions, and bookmarks
 
 - Every durability event and five-second crash-loss limit.
-- Fifteen-second online sync, final close, delta-only accounting, ambiguous
-  result, later reconciliation, and no duplicate resend.
+- Fifteen-second online position sync and final close with
+  `timeListened: 0`.
 - UUIDv4 offline sessions, batch partial results, fallback behavior, progress
   refresh, and durable retry.
 - Four progress-conflict cases plus active playback, finished state, explicit
   resolution, and clock skew.
 - Bookmark create/rename/delete, offline queue, ambiguous create refetch, and
   visible failure.
-- Every section 12 metric, threshold, source, coverage label, range/account
-  filter, live overlay, import, reconciliation, chapter identity, milestone,
-  reset, export, and idempotent import behavior.
 
 #### Downloads and storage
 
@@ -742,15 +744,15 @@ concrete test names and release evidence:
 | AC-09 | Session routes contain no token/header workaround | Route/security tests |
 | AC-10 | Speed survives all transitions | Engine, relaunch, and device tests |
 | AC-11 | System controls report whole-book position | Device MediaPlayer suite |
-| AC-12 | Listening wall time differs from media position | Clock-driven recorder suite |
-| AC-13 | One hour at 2× gives 1h real/2h audiobook and seek gives neither | Deterministic long-duration test |
-| AC-14 | Multi-account statistics do not merge collisions | Aggregation identity suite |
-| AC-15 | All required counts and finished runtime display correctly | Statistics definition/UI suite |
-| AC-16 | Remote/local sources deduplicate with coverage labels | Reconciliation and UI suite |
-| AC-17 | Live statistics and five-second relaunch durability | Recorder/recovery/UI suite |
-| AC-18 | Statistics export/import is redacted and idempotent | Serialization/security suite |
-| AC-19 | Ambiguous sync shows bounds without altering exact local ledger | Uncertainty suite |
-| AC-20 | Online sync sends only the new listening delta | Request-capture suite |
+| AC-12 | Post-MVP: listening wall time differs from media position | Deferred clock-driven recorder suite |
+| AC-13 | Post-MVP: one hour at 2× gives 1h real/2h audiobook and seek gives neither | Deferred deterministic long-duration test |
+| AC-14 | Post-MVP: multi-account statistics do not merge collisions | Deferred aggregation identity suite |
+| AC-15 | Post-MVP: all required counts and finished runtime display correctly | Deferred statistics definition/UI suite |
+| AC-16 | Post-MVP: remote/local sources deduplicate with coverage labels | Deferred reconciliation and UI suite |
+| AC-17 | Post-MVP: live statistics and five-second relaunch durability | Deferred recorder/recovery/UI suite |
+| AC-18 | Post-MVP: statistics export/import is redacted and idempotent | Deferred serialization/security suite |
+| AC-19 | Post-MVP: ambiguous sync shows bounds without altering exact local ledger | Deferred uncertainty suite |
+| AC-20 | Post-MVP: online sync sends only the new listening delta | Deferred request-capture suite |
 | AC-21 | Multi-file boundaries stay within measured tolerance | Seed-media waveform test |
 | AC-22 | Downloads recover after every interruption class | Background download suite |
 | AC-23 | Downloaded media plays with server offline | Offline physical-device test |
@@ -769,8 +771,8 @@ concrete test names and release evidence:
 3. Unit and fixture-contract tests with coverage.
 4. Affected XCUITest journeys.
 5. Requirement-link and changed-code coverage checks.
-6. For auth, API, DTO, route, playback-session, progress, statistics-import,
-   metadata, or download changes: Dockerized pinned-server smoke tests.
+6. For auth, API, DTO, route, playback-session, progress, metadata, or download
+   changes: Dockerized pinned-server smoke tests.
 
 ### Main branch
 
@@ -788,7 +790,7 @@ concrete test names and release evidence:
    2.26.x fixture/live compatibility suite.
 3. Recreate it again and run the current-stable compatibility observation
    suite.
-4. Media, download restoration, large-history import, and performance suites.
+4. Media, download restoration, and performance suites.
 5. Flake detection by repeating concurrency, timing, and UI tests.
 6. Upload only redacted Xcode and container artifacts, then verify the Compose
    project and its test volumes were removed.
@@ -800,7 +802,9 @@ concrete test names and release evidence:
 3. Bluetooth/headset removal, AirPlay, CarPlay, lock/background, first-unlock,
    network-transition, and storage-pressure tests.
 4. Full accessibility audit.
-5. Every AC-01 through AC-28 evidence link populated.
+5. Every active MVP acceptance criterion—AC-01 through AC-11 and AC-21 through
+   AC-28—has an evidence link populated. AC-12 through AC-20 remain explicitly
+   deferred post-MVP.
 6. No unresolved critical/high security finding or known data-loss issue.
 7. Specification baseline, fixtures, privacy declaration, and native
    authentication documentation updated.
@@ -827,17 +831,16 @@ The critical path is:
 
 ```text
 Project/test foundation
-  → audited contract and seven risk spikes
+  → audited contract and five active MVP risk spikes
   → accounts/auth/API
   → library/cache
   → playback
   → progress/session sync
-  → statistics and offline downloads
+  → offline downloads
   → metadata
   → accessibility/security/performance/release validation
 ```
 
-Statistics and download implementation can proceed in parallel after playback
-and progress contracts are stable. Metadata editing can proceed after the API,
-permission, and book-detail layers are stable. Broad UI polish waits until the
-underlying typed states and failure behavior are proven.
+Metadata editing can proceed after the API, permission, and book-detail layers
+are stable. Broad UI polish waits until the underlying typed states and failure
+behavior are proven.

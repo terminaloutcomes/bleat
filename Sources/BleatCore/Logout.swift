@@ -40,6 +40,7 @@ extension AuthCoordinator {
             throw LogoutError.accountOperationInProgress
         }
 
+        accountOperationGenerations[accountID, default: 0] &+= 1
         accountsSigningOut.insert(accountID)
         defer {
             accountsSigningOut.remove(accountID)

@@ -31,7 +31,42 @@ struct LocalDockerHTTPTransport: HTTPTransport {
         components.scheme = "http"
         var rewrittenRequest = request
         rewrittenRequest.url = try XCTUnwrap(components.url)
-        return try await transport.send(rewrittenRequest)
+        let response = try await transport.send(rewrittenRequest)
+        let restoredURL = try response.url.map {
+            try Self.restoringSecureLoopbackURL($0)
+        }
+        var restoredHeaders = response.headers
+        if let location = response.header(named: "Location"),
+           let locationURL = URL(string: location),
+           locationURL.host == "127.0.0.1",
+           locationURL.scheme == "http"
+        {
+            let headerName = restoredHeaders.keys.first {
+                $0.caseInsensitiveCompare("Location") == .orderedSame
+            } ?? "Location"
+            restoredHeaders[headerName] = try Self
+                .restoringSecureLoopbackURL(locationURL)
+                .absoluteString
+        }
+        return HTTPResponse(
+            data: response.data,
+            statusCode: response.statusCode,
+            headers: restoredHeaders,
+            url: restoredURL
+        )
+    }
+
+    private static func restoringSecureLoopbackURL(
+        _ url: URL
+    ) throws -> URL {
+        guard var components = URLComponents(
+            url: url,
+            resolvingAgainstBaseURL: false
+        ), components.host == "127.0.0.1" else {
+            return url
+        }
+        components.scheme = "https"
+        return try XCTUnwrap(components.url)
     }
 }
 

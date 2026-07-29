@@ -7,11 +7,14 @@ and is being implemented in Swift 6 with strict concurrency checking.
 The repository is currently at the core-foundation and protocol-risk-spike
 stage. `BleatCore` builds and its URL, routing, discovery, username/password
 login, single-flight token refresh, local logout, bearer-header,
-account-scoped Keychain, playback-session, and background-download contract
-behavior is tested. Native Audiobookshelf username/password is the active
-authentication scope; the earlier isolated OIDC spike is deferred. The
-SwiftUI application target has not been created yet, so there is not currently
-an app executable to launch.
+account-scoped Keychain, durable multi-account SwiftData profiles,
+transactional native onboarding, account lifecycle, playback-session, and
+background-download contract behavior is tested. Native Audiobookshelf
+username/password is the active authentication scope; the earlier isolated
+OIDC spike is deferred. The MVP also defers local time tracking, lifetime
+statistics, and listening-history import/export. The SwiftUI application
+target has not been created yet, so there is not currently an app executable
+to launch.
 
 ## Requirements
 
@@ -119,7 +122,8 @@ The script creates fresh root and `/audiobookshelf` instances, waits for both
 services, initializes deterministic test-only root users and a three-book media
 library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
-downloads, then removes the containers and volumes. On failure it retains
+downloads, and verifies that native-login account profiles survive store
+recreation. It then removes the containers and volumes. On failure it retains
 redacted diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
@@ -142,6 +146,7 @@ account isolation:
 ```sh
 swift test --filter AuthenticatedRequestTests
 swift test --filter LogoutTests
+swift test --filter AccountStoreTests
 ```
 
 The playback unit suite covers exact request fields, typed session decoding,

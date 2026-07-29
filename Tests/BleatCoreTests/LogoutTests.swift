@@ -423,6 +423,60 @@ final class LogoutTests: XCTestCase {
         XCTAssertEqual(refreshCount, 0)
     }
 
+    func testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated()
+        async throws
+    {
+        let accountID = AccountID(rawValue: "account")
+        let server = try NormalizedServerURL("https://example.net")
+        let store = LogoutCredentialStore(
+            credentials: [
+                accountID: try AuthenticationTokens(
+                    accessToken: "access",
+                    refreshToken: "refresh"
+                ),
+            ]
+        )
+        let transport = InitialRequestRaceTransport()
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let librariesRequest = URLRequest(
+            url: try AudiobookshelfRouteBuilder(server: server)
+                .url(for: .libraries)
+        )
+        let authenticatedRequest = Task {
+            try await coordinator.sendAuthenticated(
+                librariesRequest,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilInitialRequestStarts()
+
+        let logout = Task {
+            try await coordinator.logout(
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilLogoutStarts()
+        await transport.completeLogout()
+        let logoutResult = try await logout.value
+        await transport.completeInitial(statusCode: 200)
+
+        await XCTAssertThrowsErrorAsync(
+            try await authenticatedRequest.value
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .accountOperationInProgress
+            )
+        }
+        XCTAssertEqual(logoutResult.remoteStatus, .completed)
+    }
+
     fileprivate static func authenticationJSON(
         accessToken: String,
         refreshToken: String
@@ -769,8 +823,12 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     }
 
     func rejectInitialRequest() {
+        completeInitial(statusCode: 401)
+    }
+
+    func completeInitial(statusCode: Int) {
         initialRequestContinuation?.resume(
-            returning: .init(data: Data(), statusCode: 401)
+            returning: .init(data: Data(), statusCode: statusCode)
         )
         initialRequestContinuation = nil
     }

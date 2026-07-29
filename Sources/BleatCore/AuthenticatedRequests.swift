@@ -47,9 +47,15 @@ extension AuthCoordinator {
         guard !accountID.rawValue.isEmpty else {
             throw AuthenticatedRequestError.invalidAccountID
         }
-        guard !accountsSigningOut.contains(accountID) else {
+        guard !accountsLoggingIn.contains(accountID),
+              !accountsSigningOut.contains(accountID)
+        else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
+        let operationGeneration = accountOperationGenerations[
+            accountID,
+            default: 0
+        ]
         guard !route.isAuthenticationEndpoint else {
             throw AuthenticatedRequestError.authenticationEndpoint
         }
@@ -66,6 +72,12 @@ extension AuthCoordinator {
             request,
             accessToken: initialTokens.accessToken
         )
+        guard accountOperationIsCurrent(
+            accountID,
+            generation: operationGeneration
+        ) else {
+            throw AuthenticatedRequestError.accountOperationInProgress
+        }
         guard initialResponse.statusCode == 401 else {
             return initialResponse
         }
@@ -75,7 +87,10 @@ extension AuthCoordinator {
             server: server,
             rejectedAccessToken: initialTokens.accessToken
         )
-        guard !accountsSigningOut.contains(accountID) else {
+        guard accountOperationIsCurrent(
+            accountID,
+            generation: operationGeneration
+        ) else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         let retriedResponse = try await send(
@@ -162,8 +177,15 @@ extension AuthCoordinator {
         server: NormalizedServerURL,
         rejectedAccessToken: String
     ) async throws -> AuthenticationTokens {
+        let operationGeneration = accountOperationGenerations[
+            accountID,
+            default: 0
+        ]
         let currentTokens = try await storedCredentials(for: accountID)
-        guard !accountsSigningOut.contains(accountID) else {
+        guard accountOperationIsCurrent(
+            accountID,
+            generation: operationGeneration
+        ) else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         if currentTokens.accessToken != rejectedAccessToken {
@@ -172,15 +194,29 @@ extension AuthCoordinator {
         if let completed = completedRefreshes[accountID],
            completed.rejectedAccessToken == rejectedAccessToken
         {
-            return try completed.result.get()
+            let tokens = try completed.result.get()
+            guard accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            ) else {
+                throw AuthenticatedRequestError.accountOperationInProgress
+            }
+            return tokens
         }
 
         if let attempt = refreshAttempts[accountID] {
-            return try await finishRefresh(
+            let tokens = try await finishRefresh(
                 attempt,
                 accountID: accountID,
                 rejectedAccessToken: rejectedAccessToken
             )
+            guard accountOperationIsCurrent(
+                accountID,
+                generation: operationGeneration
+            ) else {
+                throw AuthenticatedRequestError.accountOperationInProgress
+            }
+            return tokens
         }
 
         nextRefreshAttemptID &+= 1
@@ -209,11 +245,27 @@ extension AuthCoordinator {
         }
         let attempt = RefreshAttempt(id: attemptID, task: task)
         refreshAttempts[accountID] = attempt
-        return try await finishRefresh(
+        let tokens = try await finishRefresh(
             attempt,
             accountID: accountID,
             rejectedAccessToken: rejectedAccessToken
         )
+        guard accountOperationIsCurrent(
+            accountID,
+            generation: operationGeneration
+        ) else {
+            throw AuthenticatedRequestError.accountOperationInProgress
+        }
+        return tokens
+    }
+
+    private func accountOperationIsCurrent(
+        _ accountID: AccountID,
+        generation: UInt64
+    ) -> Bool {
+        accountOperationGenerations[accountID, default: 0] == generation
+            && !accountsLoggingIn.contains(accountID)
+            && !accountsSigningOut.contains(accountID)
     }
 
     private func finishRefresh(

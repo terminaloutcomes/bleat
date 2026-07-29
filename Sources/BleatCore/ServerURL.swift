@@ -50,3 +50,25 @@ public struct NormalizedServerURL: Hashable, Sendable {
         url = normalizedURL
     }
 }
+
+extension NormalizedServerURL: Codable {
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        do {
+            try self.init(value)
+        } catch {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription:
+                        "Stored server URL is not a valid normalized HTTPS URL"
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(url.absoluteString)
+    }
+}

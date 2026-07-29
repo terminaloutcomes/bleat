@@ -4,6 +4,27 @@ import XCTest
 @testable import BleatCore
 
 final class ServerURLTests: XCTestCase {
+    func testCodableRoundTripRevalidatesStoredURL() throws {
+        let server = try NormalizedServerURL(
+            "https://Example.COM/audiobookshelf/"
+        )
+        let data = try JSONEncoder().encode(server)
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                NormalizedServerURL.self,
+                from: data
+            ),
+            server
+        )
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                NormalizedServerURL.self,
+                from: Data("\"http://example.net\"".utf8)
+            )
+        )
+    }
+
     func testNormalizesHostAndFinalTrailingSlash() throws {
         let server = try NormalizedServerURL(
             "  HTTPS://EXAMPLE.NET:8443/audiobookshelf/  "

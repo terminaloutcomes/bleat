@@ -1,25 +1,24 @@
 # Audiobookshelf iOS Client — Product and Technical Specification
 
-Status: Implementation-audited draft 1.2  
-Platform: iPhone and iPad  
-UI framework: SwiftUI  
-Minimum OS: iOS 17.0  
-Language mode: Swift 6 with strict concurrency checking  
-Backend: Audiobookshelf 2.26.0 or newer  
-Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`  
-Audit date: 2026-07-28  
+Status: Implementation-audited draft 1.3
+Platform: iPhone and iPad
+UI framework: SwiftUI
+Minimum OS: iOS 26.0
+Language mode: Swift 6 with strict concurrency checking
+Backend: Audiobookshelf 2.26.0 or newer
+Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`
+Audit date: 2026-07-29
 
 ## 1. Purpose
 
 Build a native iOS audiobook client for one or more Audiobookshelf servers. The app must:
 
-- authenticate securely with either Audiobookshelf local credentials or Audiobookshelf's OpenID Connect bridge;
+- authenticate securely with Audiobookshelf local username/password credentials;
 - retain multiple server/account connections without mixing credentials, cached data, downloads, or progress;
 - browse and search book libraries;
 - stream and download audiobooks;
 - play multi-file and single-file books with chapters, bookmarks, background playback, system media controls, and variable speed;
 - keep listening progress and sessions synchronized with Audiobookshelf, including after offline playback;
-- maintain lifetime listening statistics across configured accounts, with separate real-time, audiobook-time, book, chapter, and completed-runtime measures;
 - edit book metadata and cover art when the authenticated user has permission.
 
 This is an audiobook app, not a general Audiobookshelf administration client.
@@ -40,8 +39,7 @@ These decisions keep the first release bounded:
 | Full CarPlay browsing UI | Out of scope for 1.0; Now Playing and transport controls must work through CarPlay |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Optional later enhancement; 1.0 refreshes on launch, foregrounding, pull-to-refresh, and after mutations |
-| Statistics scope | Default to all configured accounts; every screen can filter to one account. All-device metrics use imported server sessions, while rate- and chapter-aware metrics are explicitly limited to playback observed by this app |
-| Statistics retention | Structured listening history is retained through ordinary sign-out and is included in device backups; account removal asks whether to retain or delete its history |
+| Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design but is not an MVP implementation or release requirement |
 | Cleartext HTTP | Not supported in production builds |
 | Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
 | Third-party analytics | None by default |
@@ -79,16 +77,21 @@ These media routes work only while the in-memory playback session or stream exis
 
 Do not put access or refresh tokens in media URLs. Although the server still accepts `?token=` for compatibility, this client uses bearer headers only on authenticated API and download requests. Do not use undocumented `AVURLAssetHTTPHeaderFieldsKey`.
 
-### 3.3 Listening time is not media time
+### 3.3 Listening time is not media time — post-MVP
 
-At 2× speed, 30 seconds of real listening advances the book by roughly 60 seconds. Audiobookshelf session sync therefore needs two independent values:
+At 2× speed, 30 seconds of real listening advances the book by roughly 60
+seconds. A future time-tracking implementation therefore needs two independent
+values:
 
 - `currentTime`: position in the book's media timeline;
 - `timeListened`: the monotonic wall-clock listening-time **delta since the previous successful online session sync**.
 
 Buffering, paused time, interruption time, and time spent seeking must not be counted as listening time.
 
-### 3.4 The server does not provide every requested statistic
+The MVP does not measure this value and sends `timeListened: 0` during session
+position synchronization.
+
+### 3.4 The server does not provide every requested statistic — post-MVP
 
 The pinned v2.36.0 implementation exposes persisted listening sessions and two aggregate views, but it does not persist playback rate, media-timeline distance heard, or chapter-completion events. Its historical session model also returns `chapters: null`.
 
@@ -107,9 +110,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 ### 4.1 Accounts and instances
 
 - As a user, I can enter an Audiobookshelf server URL, including a path prefix such as `https://example.net/audiobookshelf`.
-- I can see which authentication methods the server supports.
-- I can sign in using OpenID Connect without entering identity-provider credentials into the app.
-- I can alternatively use a local Audiobookshelf username and password when the server enables local authentication.
+- I can sign in using a local Audiobookshelf username and password.
 - I can add multiple users from the same server and users from different servers.
 - I can switch accounts without stopping current playback or unrelated background downloads.
 - I can see when an account requires reauthentication.
@@ -153,7 +154,9 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Metadata edits are never silently queued while offline.
 - If the server item changed since I began editing, the app warns me and lets me reload or deliberately overwrite.
 
-### 4.6 Listening statistics
+### 4.6 Listening statistics — post-MVP
+
+This user story is intentionally deferred until after the MVP.
 
 - I can see lifetime totals across all configured Audiobookshelf accounts or filter to one account.
 - I can see real listening time separately from audiobook time heard at the active playback rate.
@@ -171,7 +174,6 @@ Use a `TabView` with:
    - Continue Listening
    - Recently Added
    - Downloaded
-   - Lifetime Listening summary card; tapping it opens the Statistics screen
    - current account/server indicator
 2. **Library**
    - library selector
@@ -225,9 +227,11 @@ The detail screen contains:
 - Edit button gated by server permission;
 - server/account attribution when it could be ambiguous.
 
-### 5.3 Statistics
+### 5.3 Statistics — post-MVP
 
-Statistics is a Home destination rather than a sixth tab. Its default range is **Lifetime** and its default account filter is **All Accounts**.
+This screen is not part of the MVP. When implemented, Statistics is a Home
+destination rather than a sixth tab. Its default range is **Lifetime** and its
+default account filter is **All Accounts**.
 
 Top-level cards show:
 
@@ -276,7 +280,11 @@ When `authMethods` contains `local`:
 6. Persist tokens only after validation succeeds.
 7. Discard the password immediately; never store or log it.
 
-### 6.3 OpenID Connect authentication
+### 6.3 OpenID Connect authentication — deferred research contract
+
+OpenID Connect is not an MVP authentication method. The MVP presents and uses
+the server's native username/password flow. The retained contract below is
+non-release-blocking research for a possible later release.
 
 Audiobookshelf acts as a bridge between the native client and its configured OpenID provider. Use Authorization Code with PKCE; do not embed a web view.
 
@@ -350,7 +358,10 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
 
 ### 6.5 Logout and account removal
 
-Logout calls `/logout` with the refresh-token header and any retained account-scoped OIDC logout cookies, then clears local credentials and cookies even if the server is unreachable. The current response is `{ "redirect_url": String? }`. Do not open that identity-provider logout URL unexpectedly; offer a separate “also sign out of identity provider” action only when the required cookies were retained and the server returned a URL.
+MVP logout calls `/logout` with the refresh-token header, then clears local
+credentials even if the server is unreachable. The current response is
+`{ "redirect_url": String? }`; the MVP ignores that deferred
+identity-provider logout URL.
 
 Removing an account must:
 
@@ -358,7 +369,6 @@ Removing an account must:
 - close its active playback session if possible;
 - delete Keychain credentials;
 - remove its cached data and pending sync operations;
-- ask separately whether to keep its listening history; retaining history keeps only statistics, display snapshots, and an inactive account label, never credentials, cookies, server URLs, pending network operations, or local media paths;
 - default to deleting its downloaded audio, with an explicit confirmation.
 
 ## 7. Account and permission isolation
@@ -725,14 +735,14 @@ Do not rely on an app-termination callback.
 For an open streamed session:
 
 - sync with `POST /api/session/<session-id>/sync`;
-- send `{ "currentTime": <whole-book-seconds>, "timeListened": <wall-clock-delta>, "duration": <whole-book-seconds> }`;
-- treat `timeListened` as the delta accumulated since the previous confirmed 2xx sync; the server adds it to `session.timeListening`;
+- send `{ "currentTime": <whole-book-seconds>, "timeListened": 0, "duration": <whole-book-seconds> }` in the MVP;
 - sync approximately every 15 seconds while connected and after significant events;
 - close with `POST /api/session/<session-id>/close`, optionally carrying the same final sync body, when the book changes or playback is deliberately ended.
 
-Track `timeListened` with a monotonic clock only while AVPlayer is audibly playing, not merely because desired rate is nonzero.
-
-`/sync` is not idempotent for `timeListened`. Reset the pending delta only after a confirmed 2xx. On a transport-ambiguous failure, do not blindly replay the same delta: preserve the latest `currentTime`, mark the listening-time delta uncertain, and prefer a small stats undercount over silently double-counting it. The server exposes no idempotency key.
+MVP session synchronization keeps server position current but deliberately does
+not accumulate listening time. Nonzero `timeListened`, its monotonic
+measurement, and ambiguous-delta reconciliation are part of the deferred
+section 12 work.
 
 ### 11.3 Offline session sync
 
@@ -804,7 +814,10 @@ Track a local `lastCommonServerUpdate` and position for each item.
 
 Marking a book finished or unfinished is an explicit progress mutation and follows the same conflict rules.
 
-## 12. Lifetime listening statistics
+## 12. Lifetime listening statistics — post-MVP
+
+This section is retained as the design for a later release. None of section 12
+is required for MVP implementation, testing, or release acceptance.
 
 ### 12.1 Metric definitions
 
@@ -927,12 +940,6 @@ Suggested models:
 - `BookDetailCache`
 - `ProgressCheckpoint`
 - `PendingPlaybackSession`
-- `ListeningSlice`
-- `RemoteSessionSnapshot`
-- `BookCompletionMilestone`
-- `ChapterIdentity`
-- `ChapterCoverage`
-- `StatisticsImportState`
 - `PendingBookmarkOperation`
 - `DownloadManifest`
 - `DownloadTrack`
@@ -1127,6 +1134,9 @@ Diagnostics export should include app version, iOS version, server version, endp
 - A failed token refresh affects one account, not global app state.
 - Download task restoration is deterministic after relaunch.
 - Repeated play taps cannot create multiple simultaneous server sessions.
+
+The following targets apply to the deferred post-MVP statistics work:
+
 - Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
 - Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
 - Statistics imports are resumable, deduplicated, and rate-limited so opening the Statistics screen does not repeatedly make the server scan all session history.
@@ -1138,11 +1148,13 @@ Diagnostics export should include app version, iOS version, server version, endp
 - URL normalization and path-prefix preservation;
 - typed ID isolation;
 - JSON decoding fixtures from minimum/current server versions;
-- PKCE verifier/challenge generation and callback validation;
 - rotating-token atomic replacement;
 - 20 concurrent 401s produce one refresh request;
 - whole-book/track/chapter time mapping;
 - speed persistence and pitch-algorithm selection;
+
+The following statistics tests are post-MVP and do not gate MVP delivery:
+
 - wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;
 - audiobook-time integration at 0.5×, 1×, 2×, and 3×;
 - pause, stall, seek, backward replay, rate change, chapter boundary, track boundary, and midnight slice splitting;
@@ -1156,6 +1168,9 @@ Diagnostics export should include app version, iOS version, server version, endp
 - repeated statistics import and repeated JSON import are idempotent;
 - online `timeListened` reports contain deltas rather than cumulative session totals;
 - an ambiguous `/sync` response cannot silently resend the same listening delta;
+
+MVP unit coverage continues with:
+
 - progress conflict detection;
 - metadata patch generation and stale-draft detection;
 - download manifest state transitions and path sanitization.
@@ -1165,9 +1180,6 @@ Diagnostics export should include app version, iOS version, server version, endp
 Use a disposable Audiobookshelf container with a seeded library:
 
 - local login and refresh rotation;
-- the exact mobile OIDC cookie bridge with at least Authentik or Keycloak-compatible configuration;
-- exact mobile redirect allow-list behaviour;
-- `/auth/openid/callback` fails when the initial Express session cookie is absent;
 - subdirectory deployment;
 - limited user permissions;
 - multi-file MP3 book;
@@ -1215,8 +1227,6 @@ Use a disposable Audiobookshelf container with a seeded library:
 - permission-gated metadata/download controls;
 - offline playback and pending-sync indicators;
 - metadata conflict choice;
-- live statistics during playback, All Accounts/per-account filters, coverage labels, and approximate-state details;
-- listening-history export, repeated import, account-removal retention choice, and destructive reset confirmation;
 - accidental scrub protection.
 
 ## 21. Delivery phases
@@ -1225,20 +1235,17 @@ Use a disposable Audiobookshelf container with a seeded library:
 
 Prove before building broad UI:
 
-1. Audiobookshelf's two-client OIDC/PKCE bridge: initial cookie-bearing API request, external `ASWebAuthenticationSession`, mobile redirect, and cookie-bound code exchange returning a refresh token.
-2. Single-flight refresh rotation.
-3. Session-scoped direct-file range playback through `/public/session/<id>/track/<index>`.
-4. Transcoded HLS playback through the returned `/hls/<session-id>/output.m3u8`.
-5. Bearer-authenticated background download restoration and 401 rescheduling.
-6. Real-time versus audiobook-time measurement through speed changes, seeks, buffering, and multi-file boundaries.
-7. Import and deduplication of current server listening sessions without double-counting locally synced sessions.
+1. Single-flight refresh rotation.
+2. Session-scoped direct-file range playback through `/public/session/<id>/track/<index>`.
+3. Transcoded HLS playback through the returned `/hls/<session-id>/output.m3u8`.
+4. Bearer-authenticated background download restoration and 401 rescheduling.
 
 If one of these fails, revise the architecture before proceeding.
 
 ### Phase 1 — accounts and library
 
 - account store and Keychain;
-- local and OIDC login;
+- local username/password login;
 - refresh/logout;
 - server/library discovery;
 - paginated browsing, search, cache;
@@ -1252,7 +1259,6 @@ If one of these fails, revise the architecture before proceeding.
 - background audio;
 - Now Playing and remote commands;
 - streamed session sync;
-- local statistics ledger and live session metrics;
 - sleep timer and bookmarks.
 
 ### Phase 3 — offline
@@ -1261,7 +1267,6 @@ If one of these fails, revise the architecture before proceeding.
 - manifests and storage UI;
 - local playback;
 - local-session sync and conflict UI;
-- remote history import, multi-account aggregation, chapter/book milestones, and statistics export/import;
 - network/storage policies.
 
 ### Phase 4 — metadata and release polish
@@ -1279,7 +1284,7 @@ The 1.0 release is acceptable only when:
 
 - [ ] Two different Audiobookshelf accounts can remain signed in concurrently.
 - [ ] No token, cookie, password, verifier, or OAuth code appears in logs or media URLs.
-- [ ] OIDC preserves the initial Audiobookshelf cookie jar, uses an external user agent, PKCE S256, the mobile-redirect bridge, exact state validation, and rotating refresh tokens.
+- [ ] Native username/password login, rotating refresh tokens, and logout work without an identity provider.
 - [ ] Twenty concurrent expired-token requests cause one refresh and at most one retry each.
 - [ ] Server path prefixes work for API, covers, playback, and downloads.
 - [ ] A limited user cannot see edit/download actions they lack permission to use.
@@ -1288,15 +1293,6 @@ The 1.0 release is acceptable only when:
 - [ ] Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
 - [ ] Speed remains correct through pause, track change, lock, interruption, and relaunch.
 - [ ] Lock Screen/Control Center/Bluetooth/AirPlay/CarPlay controls report the whole-book position correctly.
-- [ ] Listening time is wall time and progress is media time at non-1× speeds.
-- [ ] At 2×, one uninterrupted real hour records approximately one real hour and two audiobook hours; a seek adds neither.
-- [ ] Lifetime statistics can aggregate multiple accounts without treating matching remote IDs or titles as the same book.
-- [ ] The app shows books started/completed, chapters started/completed, listening-session count, and finished runtime using the definitions in section 12.
-- [ ] All-device real-time values are deduplicated against pending local sessions, while audiobook-time and chapter values are clearly labelled as this-app-only.
-- [ ] A live session changes visible statistics before the next server sync and survives an app relaunch with no more than five seconds lost.
-- [ ] Statistics history import and export are idempotent; no secret or local media path appears in the export.
-- [ ] Ambiguous session sync displays an approximate all-device total until reconciled and never changes the exact this-app ledger.
-- [ ] Each online session sync sends only the listening-time delta since the previous confirmed sync.
 - [ ] Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
 - [ ] Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
 - [ ] Downloaded media plays while the server is offline.
@@ -1308,6 +1304,9 @@ The 1.0 release is acceptable only when:
 
 ## 23. Deferred enhancements
 
+- OpenID Connect authentication and identity-provider logout;
+- local time tracking, lifetime statistics, listening-history import/export,
+  and the Statistics screen described in section 12;
 - full CarPlay browse/search templates;
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;

@@ -83,6 +83,7 @@ public actor AuthCoordinator<
     var reauthenticationRequiredAccounts: Set<AccountID>
     var accountsLoggingIn: Set<AccountID>
     var accountsSigningOut: Set<AccountID>
+    var accountOperationGenerations: [AccountID: UInt64]
 
     public init(
         transport: Transport,
@@ -100,6 +101,7 @@ public actor AuthCoordinator<
         reauthenticationRequiredAccounts = []
         accountsLoggingIn = []
         accountsSigningOut = []
+        accountOperationGenerations = [:]
     }
 
     public func login(
@@ -116,6 +118,7 @@ public actor AuthCoordinator<
         else {
             throw LocalAuthenticationError.accountOperationInProgress
         }
+        accountOperationGenerations[accountID, default: 0] &+= 1
         accountsLoggingIn.insert(accountID)
         defer {
             accountsLoggingIn.remove(accountID)

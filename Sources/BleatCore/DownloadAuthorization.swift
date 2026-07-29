@@ -86,7 +86,9 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
         guard !accountID.rawValue.isEmpty else {
             throw .invalidAccountID
         }
-        guard !accountsSigningOut.contains(accountID) else {
+        guard !accountsLoggingIn.contains(accountID),
+              !accountsSigningOut.contains(accountID)
+        else {
             throw .accountOperationInProgress
         }
     }
