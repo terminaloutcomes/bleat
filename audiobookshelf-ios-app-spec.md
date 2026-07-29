@@ -200,7 +200,8 @@ Use a `TabView` with:
    - storage management
    - diagnostics
 
-A persistent mini-player appears above the tab bar when a book is loaded. Tapping it opens the full player.
+A persistent mini-player appears at the top of the signed-in tab shell when a
+book is loaded, leaving every tab unobstructed. Tapping it opens the full player.
 
 ### 5.1 Full player
 

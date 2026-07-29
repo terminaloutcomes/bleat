@@ -197,22 +197,25 @@ the server's personalized shelves. Completed books for that account appear
 first in a local **Downloaded** shelf and start offline playback directly. That
 shelf remains usable while personalized shelves are loading or unavailable.
 Shelf cards are compact enough to scan several books without losing title and
-author context.
+author context. Pull down on Home to refresh the current library page and its
+personalized shelves.
 
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
 direction. The progress filter shows all, finished, in-progress, not-started,
-or not-finished books without downloading the entire library first. **Load
-More** fetches the next page using the active sort and filter.
+or not-finished books without downloading the entire library first. Pull down
+to reload accessible libraries and the selected library's content. **Load More**
+fetches the next page using the active sort and filter.
 
 ## Play an audiobook
 
 Open a book from Home, Library, or Search and tap **Play**. Bleat opens a native
 Audiobookshelf playback session and uses its session-scoped direct-play or HLS
-URL without putting access tokens in media URLs. The mini-player remains above
-the tab bar; tap its title for whole-book seeking, configurable rewind and
-forward controls, previous/next chapter controls, speed control from 0.5× to
-3×, and Stop. Rewind defaults to 15 seconds and forward defaults to 30 seconds;
+URL without putting access tokens in media URLs. The mini-player remains at the
+top of the signed-in tab shell so tab navigation stays unobstructed; tap its
+title for whole-book seeking, configurable rewind and forward controls,
+previous/next chapter controls, speed control from 0.5× to 3×, and Stop. Rewind
+defaults to 15 seconds and forward defaults to 30 seconds;
 Settings offers 5, 10, 15, 30, 45, and 60-second choices for either direction.
 Now Playing identifies the narrator and current chapter, offers a chapter list
 for direct navigation, and shows an Audio Files menu for multi-file direct or

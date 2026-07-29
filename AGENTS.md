@@ -1,143 +1,234 @@
 # Repository Guide
 
-## Current state
+## Project state and sources of truth
 
-This repository currently contains the implementation-audited product and
-technical specification in `audiobookshelf-ios-app-spec.md`. Treat that document
-as the source of truth until code and narrower design records exist.
+Bleat is an implemented native Audiobookshelf client for iPhone and iPad. The
+repository contains a runnable SwiftUI application, the `BleatCore` Swift
+package, unit and UI tests, and a disposable Audiobookshelf integration-test
+harness.
 
-The product is a native Audiobookshelf client for iPhone and iPad:
+Use these documents for their specific purposes:
 
-- SwiftUI
-- iOS 17.0 or newer
-- Swift 6 with strict concurrency checking
-- SwiftData for structured local state
-- Keychain references for credentials
-- `AVPlayer` and system media frameworks for playback
+- `audiobookshelf-ios-app-spec.md` defines product scope, protocol behavior,
+  security invariants, and acceptance criteria.
+- `README.md` documents current user-visible behavior and supported developer
+  workflows.
+- `IMPLEMENTATION_PLAN.md` records delivery sequencing and remaining release
+  work. Verify status claims against the current code and tests before relying
+  on them.
+- `docs/requirements-traceability.md` maps requirements to implementation and
+  test evidence.
 
-Do not broaden the first release to podcasts, ebooks, metadata matching, full
-CarPlay browsing, watchOS, widgets, Siri, SharePlay, or server administration.
+Keep all four aligned when a change affects their subject matter. Do not
+describe a proposed or partially implemented behavior as complete.
 
-## Implementation order
+## Platform and scope
 
-Start with the Phase 0 risk spikes in section 21 of the specification. Prove the
-following before building broad UI:
+The current targets are:
 
-1. Native username/password login with account-scoped Keychain credentials.
-2. Per-account single-flight refresh-token rotation.
-3. Session-scoped direct-file range playback.
-4. Session-scoped transcoded HLS playback.
-5. Restorable bearer-authenticated background downloads.
+- SwiftUI on iPhone and iPad;
+- iOS 26.0 or newer for the application;
+- Swift 6.2 or newer with complete strict-concurrency checking;
+- SwiftData for structured local state;
+- Security framework and Keychain references for secrets;
+- AVFoundation and MediaPlayer for playback;
+- Foundation `URLSession` for networking;
+- no third-party runtime dependencies in version 1.0.
 
-If a spike disproves an architectural assumption, update the specification and
-architecture before continuing.
+The Swift package also supports macOS 15 so its host-side tests can run without
+an iOS Simulator.
 
-OIDC/PKCE, listening-time accounting, and listening-session import are
-deferred. Do not implement or extend them as part of the MVP.
+Native Audiobookshelf username/password login with rotating access and refresh
+tokens is the active authentication scope. `OpenIDAuthentication.swift` is
+retained research code only: do not connect OIDC/PKCE to the application or
+live-test matrix unless product scope changes explicitly.
 
-## Server contract
+The MVP reports playback position while sending zero additional listening
+time. Local listening-time accounting, lifetime statistics, and
+listening-history import/export remain deferred.
 
-The pinned Audiobookshelf implementation is authoritative. The published API
-reference is not. Follow sections 3, 15, and 24 of the specification.
+Do not broaden version 1.0 to podcasts, ebooks, metadata matching, full CarPlay
+browsing, watchOS, widgets, Siri, SharePlay, or server administration.
 
-- Keep endpoint construction and path-prefix handling in one route builder.
-- Keep remote DTOs inside the `AudiobookshelfAPI` boundary.
-- Separate remote DTOs, domain models, and SwiftData models.
-- Ignore unknown JSON fields and tolerate missing nullable fields.
-- Keep remote identifiers as opaque strings wrapped in domain-specific ID
-  types.
-- Add pinned source links to non-trivial DTOs and route adapters.
-- Do not invent alternate endpoints or payloads.
-- Capture fixtures from the minimum supported, audited, and current stable
-  server versions.
+## Repository layout
+
+- `App/` contains SwiftUI views, app-level models, platform adapters, and the
+  composition root.
+- `Sources/BleatCore/` contains reusable domain, API, authentication,
+  persistence, playback-session, progress, bookmark, metadata, and download
+  logic. It must not depend on app UI.
+- `Tests/BleatCoreTests/` contains deterministic host tests and versioned
+  response fixtures.
+- `Tests/BleatCoreLiveTests/` contains tests against the disposable
+  Audiobookshelf server.
+- `Tests/BleatAppTests/` and `Tests/BleatUITests/` contain simulator application
+  and UI tests.
+- `TestSupport/ServerHarness/` contains Docker Compose, Caddy, seed media, and
+  live-test support.
+- `project.yml` is the editable XcodeGen project definition.
+- `Bleat.xcodeproj/` is generated from `project.yml` and is checked in.
+- `scripts/` contains the supported validation, live-test, and archive entry
+  points.
+
+Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
+`xcodegen generate`, and review the generated project diff.
 
 ## Architecture and concurrency
 
-Follow the component boundaries and source layout in section 14.
-
+- Keep the application entry point limited to composition.
+- Keep reusable functions in `BleatCore` or an appropriate app module, never in
+  the app entry point.
 - UI feature models use Observation and run on `@MainActor`.
-- Token, API, repository, download, progress, and statistics coordination use
-  actors.
-- Playback survives SwiftUI view reconstruction and account-context switches.
+- Token, API, repository, download, progress, and related mutable coordination
+  use actors.
+- Preserve playback across SwiftUI view reconstruction and account-context
+  changes.
+- Use protocols only at external boundaries that need test substitution.
 - Do not add a general service locator.
 - Do not expose remote DTOs to views.
-- Prefer Apple platform frameworks; version 1.0 requires no third-party runtime
-  dependency.
+- Separate remote DTOs, domain models, and SwiftData models.
+- Prefer direct implementations using Apple platform frameworks over new
+  abstractions or dependencies.
 
-Keep account identity in every cache, persistence, download, progress, and
-statistics key. Never merge records merely because remote IDs or titles match
-across accounts.
+Model distinct errors, result states, and transitions with enums or dedicated
+structs. Make decisions by matching typed variants. Never branch on localized
+descriptions, serialized error messages, or other string contents.
 
-## Security invariants
+## UI
+
+- Use native pull-to-refresh for refreshable primary browsing surfaces. Do not
+  add toolbar reload buttons when pull-to-refresh is available.
+
+## Audiobookshelf contract
+
+The pinned Audiobookshelf implementation is authoritative; the published API
+reference is not. Follow sections 3, 15, and 24 of
+`audiobookshelf-ios-app-spec.md`.
+
+- Keep endpoint construction and path-prefix handling in
+  `AudiobookshelfRoute`.
+- Keep remote DTOs inside the `AudiobookshelfAPI` boundary.
+- Ignore unknown JSON fields and tolerate absent nullable fields.
+- Keep remote identifiers as opaque strings wrapped in domain-specific ID
+  types.
+- Add pinned source links to non-trivial DTOs and route adapters.
+- Do not invent alternate endpoints, payloads, or fallback semantics.
+- Add redacted fixtures under the matching server-version directory when a
+  contract changes.
+- Test both root-hosted and path-prefixed server configurations where routing
+  is relevant.
+
+## Account and security invariants
+
+Account identity belongs in every cache, persistence, download, progress,
+bookmark, and request-coordination key. Never merge records merely because
+remote IDs or titles match across accounts.
 
 - Production connections require HTTPS and system trust validation.
-- Never add a trust-all or self-signed-certificate bypass.
-- Store credentials only through Keychain references.
+- Never add a trust-all or self-signed-certificate bypass. Live tests install
+  their disposable Caddy CA into their disposable Simulator.
+- Store credentials and tokens only through the account-scoped,
+  non-synchronizing, device-only Keychain item.
+- Never persist token text in SwiftData, property lists, fixtures, exports, or
+  logs.
 - Never put access or refresh tokens in URLs.
-- Treat playback session IDs as bearer-like secrets.
+- Treat playback session IDs and playback routes as bearer-like secrets.
 - Do not use undocumented AVFoundation HTTP-header options.
-- Redact tokens, passwords, playback routes, and sensitive local paths from
-  logs and diagnostics.
+- Redact passwords, tokens, authorization headers, cookies, playback routes,
+  callback queries, and sensitive local paths from diagnostics and retained
+  artifacts.
+- Account removal must close active playback and remove account-owned local
+  state and credentials in the defined lifecycle order.
 
-## Playback and statistics invariants
+## Playback, progress, bookmarks, and downloads
 
 Keep these quantities distinct:
 
-- media position;
+- whole-book media position;
 - monotonic wall-clock time actually spent listening;
 - audiobook-time heard after applying playback rate.
 
-Pauses, buffering, interruptions, and seeks add no listening time. A seek adds
-no audiobook-time. Online session sync sends only the listening-time delta
-since the last confirmed sync. Ambiguous sync results must not silently resend
-that delta.
+Pauses, buffering, interruptions, and seeks add no listening time. Seeks add no
+audiobook-time. Do not silently resend an ambiguous progress or statistics
+delta.
 
-Server history is authoritative for all-device real listening time. Exact
-rate-aware and chapter-aware history is available only for playback observed by
-this app. Preserve and display that coverage distinction.
+Playback URLs are session-scoped. Preserve server path prefixes for direct
+files, HLS playlists and segments, covers, and downloads. Close online playback
+sessions when their owning playback stops or their account is removed.
 
-## Persistence and downloads
+Offline progress and bookmark mutations use durable account-scoped outboxes.
+Preserve ordering and explicit uncertain/failure states; do not convert
+ambiguous creates into duplicate mutations.
 
-- Use SwiftData for structured state and the filesystem for media bytes.
-- Never persist token text in SwiftData, property lists, exports, or logs.
-- Complete downloads atomically through staging files and validated manifests.
-- Sanitize remote filenames and never let remote metadata choose arbitrary
-  local paths.
-- Downloaded books remain playable when a server is unavailable or an account
-  requires reauthentication.
-
-## Errors
-
-Model distinct errors and state transitions with enums or dedicated structs.
-Make behavior decisions by matching typed variants, never by inspecting
-localized descriptions or serialized error strings.
-
-Preserve the user-facing categories in section 16, including authentication,
-permission, media, storage, conflict, uncertain-statistics, and incompatible
-response errors.
+Use SwiftData for structured download state and the filesystem for media bytes.
+Complete downloads through staging files and validated manifests. Sanitize
+remote filenames, keep filesystem destinations app-owned, and preserve
+downloaded playback when the server is unavailable or the account requires
+reauthentication.
 
 ## Tests and validation
 
-Put tests in test targets, not production entry points. Keep reusable functions
-in library/application modules rather than an app entry point.
+Put tests in test targets, not production entry points. Add focused tests with
+each implementation change and use versioned saved fixtures for response
+decoding.
 
-Add focused unit tests with each implementation change. Use saved response
-fixtures for decoding and a disposable seeded Audiobookshelf server for
-contract integration tests. The complete required matrix is in section 20.
+Run the narrowest relevant check first. Typical host-side examples are:
 
-Once an Xcode project exists, use its checked-in shared schemes and run the
-repository's documented formatter, build, and test commands. Until those
-commands exist, do not claim the project has been compiled or tested.
+```sh
+swift test --filter BleatCoreTests
+swift test --filter TokenVaultTests
+```
 
-For every change:
+Run the complete local validation gate when practical:
 
-1. Run the narrowest relevant tests.
-2. Run the full repository validation gate when practical.
-3. Report which checks ran and distinguish static checks from live-server or
-   device validation.
+```sh
+./scripts/test-core.sh
+```
 
-## Documentation
+That gate runs host tests with coverage, a Release build, and application unit
+and UI tests on an iOS Simulator. For a host-only check:
 
-Keep `audiobookshelf-ios-app-spec.md` aligned with implemented behavior,
-especially its audited baseline, route map, delivery phase, and acceptance
-criteria. Use project-relative paths in documentation and comments.
+```sh
+BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
+```
+
+Contract or server-behavior changes require the disposable live suite:
+
+```sh
+./scripts/test-live.sh
+```
+
+Changes spanning the app, HTTPS trust, playback, downloads, offline state, or
+pending synchronization require the live application journeys when practical:
+
+```sh
+./scripts/test-app-live.sh
+```
+
+The live scripts create and tear down Docker state; the app-live script also
+creates and deletes its own Simulator. Use their supported environment
+variables rather than modifying the scripts for a local machine.
+
+For release packaging changes, run:
+
+```sh
+./scripts/archive-beta.sh
+```
+
+Always report exactly which checks ran. Distinguish host tests, static or
+simulator validation, disposable-server integration tests, and physical-device
+validation. Never claim live-server, background-execution, AirPlay, Bluetooth,
+CarPlay, or physical-device behavior was validated by a host or ordinary
+Simulator test.
+
+## Documentation and change discipline
+
+- Use project-relative paths in documentation, comments, diagnostics, and test
+  output. Never write full local filesystem paths into repository files.
+- Keep `README.md` focused on behavior that exists now.
+- Update `audiobookshelf-ios-app-spec.md` when implementation evidence changes
+  a product or architectural assumption.
+- Update `docs/requirements-traceability.md` with implementation and test
+  evidence for affected requirements.
+- Preserve unrelated worktree changes.
+- Prefer small, direct changes that reduce duplication and code sprawl.

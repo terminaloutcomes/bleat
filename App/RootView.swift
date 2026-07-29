@@ -351,7 +351,7 @@ private struct SignedInView: View {
                 SettingsView(model: model)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaInset(edge: .top, spacing: 0) {
             if model.playback.hasActiveBook {
                 MiniPlayerView(playback: model.playback) {
                     showPlayer = true
@@ -402,18 +402,11 @@ private struct HomeView: View {
                 .navigationDestination(for: LibraryBookSummary.self) { book in
                     BookDetailView(model: model, book: book)
                 }
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Reload", systemImage: "arrow.clockwise") {
-                            guard let library = model.selectedLibrary else {
-                                return
-                            }
-                            Task {
-                                await model.selectLibrary(library)
-                            }
-                        }
-                        .accessibilityIdentifier("home.reload")
+                .refreshable {
+                    guard let library = model.selectedLibrary else {
+                        return
                     }
+                    await model.selectLibrary(library)
                 }
         }
     }
@@ -458,8 +451,10 @@ private struct HomeContent: View {
             switch model.homeShelves {
             case .idle, .loading:
                 if downloadedRecords.isEmpty {
-                    ProgressView()
-                        .accessibilityIdentifier("home.loading")
+                    statusScroll {
+                        ProgressView()
+                            .accessibilityIdentifier("home.loading")
+                    }
                 } else {
                     homeScroll(shelves: []) {
                         ProgressView("Loading shelves")
@@ -469,12 +464,14 @@ private struct HomeContent: View {
                 }
             case .failed(let failure):
                 if downloadedRecords.isEmpty {
-                    ContentUnavailableView(
-                        "Home unavailable",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(failure.message)
-                    )
-                    .accessibilityIdentifier("home.error")
+                    statusScroll {
+                        ContentUnavailableView(
+                            "Home unavailable",
+                            systemImage: "wifi.exclamationmark",
+                            description: Text(failure.message)
+                        )
+                        .accessibilityIdentifier("home.error")
+                    }
                 } else {
                     homeScroll(shelves: []) {
                         Label(
@@ -488,11 +485,13 @@ private struct HomeContent: View {
                 }
             case .loaded(let shelves):
                 if shelves.isEmpty && downloadedRecords.isEmpty {
-                    ContentUnavailableView(
-                        "No personalized shelves",
-                        systemImage: "books.vertical"
-                    )
-                    .accessibilityIdentifier("home.empty")
+                    statusScroll {
+                        ContentUnavailableView(
+                            "No personalized shelves",
+                            systemImage: "books.vertical"
+                        )
+                        .accessibilityIdentifier("home.empty")
+                    }
                 } else {
                     homeScroll(shelves: shelves) {
                         if shelves.isEmpty {
@@ -541,6 +540,17 @@ private struct HomeContent: View {
                 trailing()
             }
             .padding(.vertical)
+        }
+        .accessibilityIdentifier("home.shelves")
+    }
+
+    private func statusScroll<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 80)
         }
         .accessibilityIdentifier("home.shelves")
     }
@@ -672,15 +682,8 @@ private struct LibraryView: View {
                 BookListContent(model: model)
             }
             .navigationTitle("Library")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Reload", systemImage: "arrow.clockwise") {
-                        Task {
-                            await model.loadLibraries()
-                        }
-                    }
-                    .accessibilityIdentifier("library.reload")
-                }
+            .refreshable {
+                await model.loadLibraries()
             }
         }
     }
@@ -864,16 +867,22 @@ private struct BookListContent: View {
         Group {
             switch model.libraries {
             case .idle, .loading:
-                ProgressView()
-                    .accessibilityIdentifier("library.loading")
+                statusScroll {
+                    ProgressView()
+                        .accessibilityIdentifier("library.loading")
+                }
             case .failed(let failure):
-                failureView(failure)
+                statusScroll {
+                    failureView(failure)
+                }
             case .loaded(let libraries):
                 if libraries.isEmpty {
-                    ContentUnavailableView(
-                        "No audiobook libraries",
-                        systemImage: "books.vertical"
-                    )
+                    statusScroll {
+                        ContentUnavailableView(
+                            "No audiobook libraries",
+                            systemImage: "books.vertical"
+                        )
+                    }
                 } else {
                     booksContent
                 }
@@ -888,16 +897,22 @@ private struct BookListContent: View {
     private var booksContent: some View {
         switch model.books {
         case .idle, .loading:
-            ProgressView()
-                .accessibilityIdentifier("books.loading")
+            statusScroll {
+                ProgressView()
+                    .accessibilityIdentifier("books.loading")
+            }
         case .failed(let failure):
-            failureView(failure)
+            statusScroll {
+                failureView(failure)
+            }
         case .loaded(let page):
             if page.items.isEmpty {
-                ContentUnavailableView(
-                    "No audiobooks",
-                    systemImage: "book.closed"
-                )
+                statusScroll {
+                    ContentUnavailableView(
+                        "No audiobooks",
+                        systemImage: "book.closed"
+                    )
+                }
             } else {
                 List {
                     ForEach(page.items, id: \.id.rawValue) { book in
@@ -944,6 +959,17 @@ private struct BookListContent: View {
                 .accessibilityIdentifier("books.list")
             }
         }
+    }
+
+    private func statusScroll<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 80)
+        }
+        .accessibilityIdentifier("books.list")
     }
 
     private func failureView(_ failure: AppFailure) -> some View {
