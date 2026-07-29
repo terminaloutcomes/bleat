@@ -1321,6 +1321,8 @@ private struct BookDetailView: View {
 
                 detailsGrid(detail)
 
+                bookmarksSection
+
                 if !detail.chapters.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Chapters")
@@ -1346,6 +1348,52 @@ private struct BookDetailView: View {
             .padding()
         }
         .accessibilityIdentifier("book.detail")
+    }
+
+    @ViewBuilder
+    private var bookmarksSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Bookmarks")
+                .font(.headline)
+            switch model.bookBookmarks {
+            case .idle, .loading:
+                ProgressView()
+                    .accessibilityIdentifier("book.detail.bookmarks.loading")
+            case .loaded(let bookmarks):
+                if bookmarks.isEmpty {
+                    Text("No bookmarks")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier(
+                            "book.detail.bookmarks.empty"
+                        )
+                } else {
+                    ForEach(bookmarks) { bookmark in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(bookmark.title)
+                            Spacer()
+                            Text(durationText(bookmark.time))
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier(
+                            "book.detail.bookmark"
+                        )
+                    }
+                }
+            case .failed(let failure):
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(failure.message)
+                        .foregroundStyle(.secondary)
+                    Button("Retry") {
+                        Task {
+                            await model.loadBookBookmarks()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .accessibilityIdentifier("book.detail.bookmarks.error")
+            }
+        }
     }
 
     @ViewBuilder

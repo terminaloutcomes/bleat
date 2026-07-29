@@ -1323,11 +1323,18 @@ final class AppModelTests: XCTestCase {
         let library = fixtureLibrary()
         let page = fixturePage(libraryID: library.id)
         let detail = fixtureBookDetail(item: page.items[0])
+        let bookmark = AudioBookmark(
+            libraryItemID: detail.id,
+            time: 600,
+            title: "A useful moment",
+            createdAtMilliseconds: 1
+        )
         let service = TestAppService(
             activeAccount: .success(account),
             libraries: .success([library]),
             firstPage: .success(page),
-            bookDetail: .success(detail)
+            bookDetail: .success(detail),
+            bookmarks: .success([bookmark])
         )
         let model = AppModel(service: service)
         await model.start()
@@ -1336,6 +1343,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedBookID, detail.id)
         XCTAssertEqual(model.bookDetail, .loaded(detail))
+        XCTAssertEqual(model.bookBookmarks, .loaded([bookmark]))
         let requests = await service.bookDetailRequests()
         XCTAssertEqual(
             requests,
@@ -1346,6 +1354,40 @@ final class AppModelTests: XCTestCase {
                     itemID: detail.id
                 )
             ]
+        )
+        let bookmarkRequests = await service.bookmarkRequests()
+        XCTAssertEqual(
+            bookmarkRequests,
+            [
+                BookmarkRequest(
+                    accountID: account.id,
+                    itemID: detail.id
+                )
+            ]
+        )
+    }
+
+    func testBookDetailBookmarkFailureDoesNotHideDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            bookmarks: .failure(.bookmark(.requestFailed))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.loadBookDetail(page.items[0])
+
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        XCTAssertEqual(
+            model.bookBookmarks,
+            .failed(.bookmarkUnavailable)
         )
     }
 
@@ -1902,6 +1944,11 @@ private struct BookDetailRequest: Equatable, Sendable {
     let itemID: LibraryItemID
 }
 
+private struct BookmarkRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
+}
+
 private struct MetadataSaveRequest: Equatable, Sendable {
     let accountID: AccountID
     let baseline: LibraryBookDetail
@@ -1959,6 +2006,11 @@ private actor TestAppService: AppServicing {
             LibraryBookDetail,
             AppServiceError
         >
+    private var bookmarksResult:
+        Result<
+            [AudioBookmark],
+            AppServiceError
+        >
     private var progressUpdateResult: Result<Void, AppServiceError>
     private var localSessionSyncResult:
         Result<[LocalPlaybackSessionSyncResult], AppServiceError>
@@ -1976,6 +2028,7 @@ private actor TestAppService: AppServicing {
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
+    private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
     private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []
@@ -2003,6 +2056,7 @@ private actor TestAppService: AppServicing {
         bookDetail: Result<LibraryBookDetail, AppServiceError> = .failure(
             .bookDetail(.noCachedValue)
         ),
+        bookmarks: Result<[AudioBookmark], AppServiceError> = .success([]),
         progressUpdate: Result<Void, AppServiceError> = .success(()),
         localSessionSync:
             Result<
@@ -2023,6 +2077,7 @@ private actor TestAppService: AppServicing {
         homeShelvesResult = homeShelves
         searchResult = search
         bookDetailResult = bookDetail
+        bookmarksResult = bookmarks
         progressUpdateResult = progressUpdate
         localSessionSyncResult = localSessionSync
         removeAccountResult = removeAccount
@@ -2248,7 +2303,13 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> [AudioBookmark] {
-        []
+        recordedBookmarkRequests.append(
+            BookmarkRequest(
+                accountID: account.id,
+                itemID: itemID
+            )
+        )
+        return try value(from: bookmarksResult)
     }
 
     func createBookmark(
@@ -2367,6 +2428,10 @@ private actor TestAppService: AppServicing {
 
     func bookDetailRequests() -> [BookDetailRequest] {
         recordedBookDetailRequests
+    }
+
+    func bookmarkRequests() -> [BookmarkRequest] {
+        recordedBookmarkRequests
     }
 
     func metadataSaveRequests() -> [MetadataSaveRequest] {

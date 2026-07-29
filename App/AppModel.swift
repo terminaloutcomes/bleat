@@ -214,6 +214,7 @@ final class AppModel {
     private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
+    private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
     private(set) var metadataSaveState: MetadataSaveState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     let playback: PlaybackModel
@@ -594,6 +595,7 @@ final class AppModel {
         bookDetailGeneration &+= 1
         let operationGeneration = bookDetailGeneration
         selectedBookID = book.id
+        bookBookmarks = .idle
 
         guard let account else {
             bookDetail = .failed(.accountUnavailable)
@@ -611,6 +613,7 @@ final class AppModel {
                 return
             }
             bookDetail = .loaded(detail)
+            await loadBookBookmarks()
         } catch let error {
             guard bookDetailGeneration == operationGeneration,
                 !Task.isCancelled
@@ -618,6 +621,35 @@ final class AppModel {
                 return
             }
             bookDetail = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func loadBookBookmarks() async {
+        let operationGeneration = bookDetailGeneration
+        guard let account, let itemID = selectedBookID else {
+            bookBookmarks = .failed(.accountUnavailable)
+            return
+        }
+        bookBookmarks = .loading
+        do {
+            let bookmarks = try await service.bookmarks(
+                for: account,
+                itemID: itemID
+            )
+            guard bookDetailGeneration == operationGeneration,
+                selectedBookID == itemID
+            else {
+                return
+            }
+            bookBookmarks = .loaded(bookmarks)
+        } catch let error {
+            guard bookDetailGeneration == operationGeneration,
+                selectedBookID == itemID,
+                !Task.isCancelled
+            else {
+                return
+            }
+            bookBookmarks = .failed(AppFailure(serviceError: error))
         }
     }
 
@@ -793,6 +825,7 @@ final class AppModel {
         bookDetailGeneration &+= 1
         selectedBookID = nil
         bookDetail = .idle
+        bookBookmarks = .idle
         metadataSaveState = .idle
     }
 

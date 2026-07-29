@@ -66,6 +66,13 @@ final class BleatUITests: XCTestCase {
             app.descendants(matching: .any)["book.detail.chapter.0"]
                 .waitForExistence(timeout: 3)
         )
+        let bookmark = app.descendants(matching: .any)[
+            "book.detail.bookmark"
+        ]
+        for _ in 0..<3 where !bookmark.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 3))
         let edit = app.buttons["book.detail.edit"]
         XCTAssertTrue(edit.exists)
         edit.tap()

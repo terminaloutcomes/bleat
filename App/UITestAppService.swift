@@ -295,7 +295,14 @@
             for account: ServerAccount,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> [AudioBookmark] {
-            []
+            [
+                AudioBookmark(
+                    libraryItemID: itemID,
+                    time: 600,
+                    title: "A useful moment",
+                    createdAtMilliseconds: 1
+                )
+            ]
         }
 
         func createBookmark(

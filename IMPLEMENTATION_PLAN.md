@@ -324,6 +324,17 @@ Prove:
 Exit gate: all five active MVP risk spikes pass against the pinned live server.
 Deferred OIDC and time/history research do not block the MVP.
 
+### Deferred MVP follow-ups
+
+The following work is intentionally retained without expanding it during the
+beta-ready MVP pass:
+
+- Book Detail bookmark loading and presentation is implemented as a usable
+  first slice. Further interaction and presentation refinement remains a
+  post-MVP TODO; the existing implementation and coverage must be preserved.
+- Accidental large-scrub protection remains a post-MVP TODO. Whole-book
+  seeking continues to use the current direct scrub behavior for this release.
+
 ### Phase 2 — accounts, authentication, and API foundation
 
 Status: in progress. Durable SwiftData account profiles, one persisted active
