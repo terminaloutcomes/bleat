@@ -1,0 +1,82 @@
+name: Bleat
+
+options:
+  bundleIdPrefix: com.yaleman
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  BleatPackage:
+    path: .
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  BleatApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: BleatPackage
+        product: BleatCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
+        PRODUCT_NAME: Bleat
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: Bleat
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
+
+  BleatAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/BleatAppTests
+    dependencies:
+      - target: BleatApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.BleatTests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  BleatUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/BleatUITests
+    dependencies:
+      - target: BleatApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.BleatUITests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: BleatApp
+
+schemes:
+  Bleat:
+    build:
+      targets:
+        BleatApp: all
+        BleatAppTests:
+          - test
+        BleatUITests:
+          - test
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - BleatAppTests
+        - BleatUITests
+    archive:
+      config: Release

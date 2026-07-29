@@ -1,0 +1,554 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
+		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
+		63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */; };
+		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
+		81AC77653B52F97E7610C957 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0639281D9850EC68335644F /* RootView.swift */; };
+		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
+		C1224783D3F9B1CC7057759A /* AppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12995342C7E6318A5F929A2 /* AppService.swift */; };
+		FF6591E97BE41B688DA71F70 /* BleatUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E1797402B69FE6551AC02B /* BleatUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5E485B9DC4A6E5E7E6470C81 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EBDCC250F3105FD38E8F8BC8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EAEDDF7ACE77CF40F703DAE3;
+			remoteInfo = BleatApp;
+		};
+		CCD0485B4B22387EED5DD155 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EBDCC250F3105FD38E8F8BC8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EAEDDF7ACE77CF40F703DAE3;
+			remoteInfo = BleatApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
+		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
+		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70E1797402B69FE6551AC02B /* BleatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatUITests.swift; sourceTree = "<group>"; };
+		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9A985B3A620C132DA9B6307 /* BleatApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BleatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
+		F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAppService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7DDFAC82CD7597B5ABC8CE66 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1921D1ABA91370CF06787226 /* BleatAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */,
+			);
+			path = BleatAppTests;
+			sourceTree = "<group>";
+		};
+		1C26699E2E4D01DA20417853 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				1921D1ABA91370CF06787226 /* BleatAppTests */,
+				31FAE8FC606F005D9250FD7E /* BleatUITests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		31FAE8FC606F005D9250FD7E /* BleatUITests */ = {
+			isa = PBXGroup;
+			children = (
+				70E1797402B69FE6551AC02B /* BleatUITests.swift */,
+			);
+			path = BleatUITests;
+			sourceTree = "<group>";
+		};
+		4CD68A9CF6420629913751C9 = {
+			isa = PBXGroup;
+			children = (
+				8B86FFC44E09566F82B93C9D /* App */,
+				F43C2BD821572C0860FA1783 /* Packages */,
+				1C26699E2E4D01DA20417853 /* Tests */,
+				B1FE776EA07A3A2C052FE1AA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8B86FFC44E09566F82B93C9D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				73719E4CDB73EE2DD988C5E3 /* AppModel.swift */,
+				E12995342C7E6318A5F929A2 /* AppService.swift */,
+				09B26309512E738CF21FDF57 /* BleatApp.swift */,
+				E0639281D9850EC68335644F /* RootView.swift */,
+				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		B1FE776EA07A3A2C052FE1AA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C9A985B3A620C132DA9B6307 /* BleatApp.app */,
+				B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */,
+				549E0D50852D5C5F631FB04D /* BleatUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F43C2BD821572C0860FA1783 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				4F72F17F031C453D357EE586 /* bleat */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		45D306A60FA716FBBEF22F80 /* BleatUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 36E7C2A77B1B9C093FE5D743 /* Build configuration list for PBXNativeTarget "BleatUITests" */;
+			buildPhases = (
+				44C81437CA71C09CB596F0CE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3EBF37FCC27E0EA07C600576 /* PBXTargetDependency */,
+			);
+			name = BleatUITests;
+			packageProductDependencies = (
+			);
+			productName = BleatUITests;
+			productReference = 549E0D50852D5C5F631FB04D /* BleatUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		EA02B362BC0C97508C61A505 /* BleatAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 68A7A1E73ADE0CF9C4A30B6A /* Build configuration list for PBXNativeTarget "BleatAppTests" */;
+			buildPhases = (
+				0A31A7CD70C3731884F1F210 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				56DA6958589BD1BEAFCB13CF /* PBXTargetDependency */,
+			);
+			name = BleatAppTests;
+			packageProductDependencies = (
+			);
+			productName = BleatAppTests;
+			productReference = B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		EAEDDF7ACE77CF40F703DAE3 /* BleatApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
+			buildPhases = (
+				A478EF5EDBF8264EFEDEBD5B /* Sources */,
+				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BleatApp;
+			packageProductDependencies = (
+				05BA90A0AA1604ECD1B8BCC9 /* BleatCore */,
+			);
+			productName = BleatApp;
+			productReference = C9A985B3A620C132DA9B6307 /* BleatApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EBDCC250F3105FD38E8F8BC8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					45D306A60FA716FBBEF22F80 = {
+						TestTargetID = EAEDDF7ACE77CF40F703DAE3;
+					};
+				};
+			};
+			buildConfigurationList = A785AF81BC045CF75224BA32 /* Build configuration list for PBXProject "Bleat" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 4CD68A9CF6420629913751C9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A21196710DB1921B6B6E700E /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B1FE776EA07A3A2C052FE1AA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EAEDDF7ACE77CF40F703DAE3 /* BleatApp */,
+				EA02B362BC0C97508C61A505 /* BleatAppTests */,
+				45D306A60FA716FBBEF22F80 /* BleatUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0A31A7CD70C3731884F1F210 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44C81437CA71C09CB596F0CE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF6591E97BE41B688DA71F70 /* BleatUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A478EF5EDBF8264EFEDEBD5B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				818AF28EBFB119999506CACA /* AppModel.swift in Sources */,
+				C1224783D3F9B1CC7057759A /* AppService.swift in Sources */,
+				071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */,
+				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
+				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3EBF37FCC27E0EA07C600576 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EAEDDF7ACE77CF40F703DAE3 /* BleatApp */;
+			targetProxy = 5E485B9DC4A6E5E7E6470C81 /* PBXContainerItemProxy */;
+		};
+		56DA6958589BD1BEAFCB13CF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EAEDDF7ACE77CF40F703DAE3 /* BleatApp */;
+			targetProxy = CCD0485B4B22387EED5DD155 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2EEC4B375443A715CE01E550 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		538688E521C8560DF1996B05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		682780436B253DD768FE8332 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BleatApp;
+			};
+			name = Debug;
+		};
+		8DEB0D26BE9F9E48CB63318E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Bleat connects to your Audiobookshelf server on the local network.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.Bleat;
+				PRODUCT_NAME = Bleat;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		946DBAABCA2065323CCE1714 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BleatApp;
+			};
+			name = Release;
+		};
+		9643CCB5B8960688DE25C898 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Bleat connects to your Audiobookshelf server on the local network.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.Bleat;
+				PRODUCT_NAME = Bleat;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B467B02D929F0D9011254921 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat";
+			};
+			name = Release;
+		};
+		E9A669660DCA8EEFE605D8F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8DEB0D26BE9F9E48CB63318E /* Debug */,
+				9643CCB5B8960688DE25C898 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		36E7C2A77B1B9C093FE5D743 /* Build configuration list for PBXNativeTarget "BleatUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				682780436B253DD768FE8332 /* Debug */,
+				946DBAABCA2065323CCE1714 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		68A7A1E73ADE0CF9C4A30B6A /* Build configuration list for PBXNativeTarget "BleatAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9A669660DCA8EEFE605D8F5 /* Debug */,
+				B467B02D929F0D9011254921 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A785AF81BC045CF75224BA32 /* Build configuration list for PBXProject "Bleat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				538688E521C8560DF1996B05 /* Debug */,
+				2EEC4B375443A715CE01E550 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A21196710DB1921B6B6E700E /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		05BA90A0AA1604ECD1B8BCC9 /* BleatCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BleatCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = EBDCC250F3105FD38E8F8BC8 /* Project object */;
+}

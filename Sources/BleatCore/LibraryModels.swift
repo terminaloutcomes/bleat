@@ -268,6 +268,44 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let updatedAtMilliseconds: Int64
     public let isExplicit: Bool
     public let isAbridged: Bool
+
+    public init(
+        id: LibraryItemID,
+        libraryID: LibraryID,
+        title: String,
+        subtitle: String?,
+        authorName: String?,
+        narratorName: String?,
+        seriesName: String?,
+        genres: [String],
+        publisher: String?,
+        publishedYear: String?,
+        duration: Double,
+        trackCount: Int,
+        chapterCount: Int,
+        addedAtMilliseconds: Int64,
+        updatedAtMilliseconds: Int64,
+        isExplicit: Bool,
+        isAbridged: Bool
+    ) {
+        self.id = id
+        self.libraryID = libraryID
+        self.title = title
+        self.subtitle = subtitle
+        self.authorName = authorName
+        self.narratorName = narratorName
+        self.seriesName = seriesName
+        self.genres = genres
+        self.publisher = publisher
+        self.publishedYear = publishedYear
+        self.duration = duration
+        self.trackCount = trackCount
+        self.chapterCount = chapterCount
+        self.addedAtMilliseconds = addedAtMilliseconds
+        self.updatedAtMilliseconds = updatedAtMilliseconds
+        self.isExplicit = isExplicit
+        self.isAbridged = isAbridged
+    }
 }
 
 public struct LibraryBookContributor: Codable, Hashable, Sendable {
@@ -609,6 +647,18 @@ public struct LibraryItemsPage: Codable, Hashable, Sendable {
     public let total: Int
     public let page: Int
     public let limit: Int
+
+    public init(
+        items: [LibraryBookSummary],
+        total: Int,
+        page: Int,
+        limit: Int
+    ) {
+        self.items = items
+        self.total = total
+        self.page = page
+        self.limit = limit
+    }
 
     public var hasNextPage: Bool {
         guard limit > 0, total > 0 else {

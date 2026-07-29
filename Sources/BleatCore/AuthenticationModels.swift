@@ -61,6 +61,28 @@ public struct UserPermissions: Codable, Hashable, Sendable {
     public let accessExplicitContent: Bool
     public let selectedTagsNotAccessible: Bool
 
+    public init(
+        download: Bool,
+        update: Bool,
+        delete: Bool,
+        upload: Bool,
+        createEReader: Bool,
+        accessAllLibraries: Bool,
+        accessAllTags: Bool,
+        accessExplicitContent: Bool,
+        selectedTagsNotAccessible: Bool
+    ) {
+        self.download = download
+        self.update = update
+        self.delete = delete
+        self.upload = upload
+        self.createEReader = createEReader
+        self.accessAllLibraries = accessAllLibraries
+        self.accessAllTags = accessAllTags
+        self.accessExplicitContent = accessExplicitContent
+        self.selectedTagsNotAccessible = selectedTagsNotAccessible
+    }
+
     enum CodingKeys: String, CodingKey {
         case download
         case update
@@ -81,6 +103,22 @@ public struct AuthenticatedUser: Codable, Hashable, Sendable {
     public let permissions: UserPermissions
     public let accessibleLibraryIDs: [LibraryID]
     public let selectedItemTags: [String]
+
+    public init(
+        id: UserID,
+        username: String,
+        type: AudiobookshelfUserType,
+        permissions: UserPermissions,
+        accessibleLibraryIDs: [LibraryID],
+        selectedItemTags: [String]
+    ) {
+        self.id = id
+        self.username = username
+        self.type = type
+        self.permissions = permissions
+        self.accessibleLibraryIDs = accessibleLibraryIDs
+        self.selectedItemTags = selectedItemTags
+    }
 
     enum CodingKeys: String, CodingKey {
         case id

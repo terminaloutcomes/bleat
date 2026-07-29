@@ -57,9 +57,9 @@ specification:
 - No production ATS exception, trust override, token-bearing URL, undocumented
   AVFoundation header option, or general service locator.
 
-Before App Store work, record the final bundle identifier, callback URI, signing
-team, app-group decision if any, and local-network usage copy in a short
-decision record. The callback URI must be registered exactly in Audiobookshelf.
+Before App Store work, record the final bundle identifier, signing team,
+app-group decision if any, and local-network usage copy in a short decision
+record.
 
 ## 3. Repository and target layout
 Create one Xcode project with checked-in shared schemes:
@@ -137,6 +137,14 @@ Each phase has an exit gate. Work may proceed within a phase in parallel, but a
 later phase cannot depend on an unproven earlier assumption.
 
 ### Phase 0 — project, traceability, and deterministic test foundations
+
+Status: in progress. The checked-in XcodeGen source and generated Xcode project
+now build a real `Bleat` application for iPhone and iPad. The application entry
+point performs composition only, strict-concurrency app code compiles, and the
+shared scheme runs application unit and XCUITest suites. Release configuration,
+generic iPhone/iPad simulator builds, and the shared scheme are verified.
+Privacy declarations, clean-clone reproduction, and the remaining test doubles
+still need their exit-gate audit.
 
 Deliver:
 
@@ -328,8 +336,11 @@ now validates and maps expanded matches without exposing DTOs. Expanded
 audiobook detail DTOs, chapters, and authenticated-user progress are also
 verified against unit fixtures and live root/path-prefixed servers. A typed
 policy derives visible book actions from native-account permissions and
-mirrors the server's library, tag, and explicit-content access rules.
-Diagnostics and application UI remain.
+mirrors the server's library, tag, and explicit-content access rules. A native
+username/password SwiftUI form now drives discovery and transactional
+onboarding, restores the active profile on launch, and removes accounts without
+any OIDC surface. Diagnostics, multi-account switching, and reauthentication UI
+remain.
 
 Deliver:
 
@@ -372,9 +383,12 @@ The native API also loads validated audiobook-only personalized shelves, which
 persist by exact account, library, limit, and progress request with typed
 online-first/cache-fallback behavior. Expanded audiobook details, chapters,
 metadata, and progress now use the same policy with cache keys scoped to the
-account, remote user, library, and item. Search, home, and detail presentation,
-bookmarks, cover caching, performance validation, and SwiftUI remain.
-Permission-derived action visibility is ready for those screens.
+account, remote user, library, and item. The runnable root `TabView` now has
+Home, Library, Search, Downloads, and Settings destinations; Home and Library
+render the first cached/live audiobook page with loading, empty, and failure
+states. Search, personalized-home, detail, bookmarks, cover caching, persistent
+mini-player, performance validation, and the remaining feature UI still
+remain. Permission-derived action visibility is ready for those screens.
 
 Deliver:
 

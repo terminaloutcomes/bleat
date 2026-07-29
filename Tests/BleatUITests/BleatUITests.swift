@@ -1,0 +1,90 @@
+import XCTest
+
+final class BleatUITests: XCTestCase {
+    @MainActor
+    func testNativeLoginShowsSignedInTabs() {
+        let app = launch(scenario: "--ui-testing-signed-out")
+        let server = app.textFields["login.server"]
+        let username = app.textFields["login.username"]
+        let password = app.secureTextFields["login.password"]
+        let submit = app.buttons["login.submit"]
+
+        XCTAssertTrue(server.waitForExistence(timeout: 3))
+        XCTAssertFalse(submit.isEnabled)
+
+        server.tap()
+        server.typeText("https://books.example")
+        username.tap()
+        username.typeText("reader")
+        password.tap()
+        password.typeText("native-password")
+
+        XCTAssertTrue(submit.isEnabled)
+        submit.tap()
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            ))
+        XCTAssertTrue(app.buttons["Home"].exists)
+        XCTAssertTrue(app.buttons["Library"].exists)
+        XCTAssertTrue(app.buttons["Search"].exists)
+        XCTAssertTrue(app.buttons["Downloads"].exists)
+        XCTAssertTrue(app.buttons["Settings"].exists)
+        XCTAssertTrue(app.staticTexts["The Test Audiobook"].exists)
+    }
+
+    @MainActor
+    func testRejectedNativeLoginShowsTypedErrorAndNoOIDCControl() {
+        let app = launch(scenario: "--ui-testing-reject-login")
+
+        app.textFields["login.server"].tap()
+        app.textFields["login.server"].typeText("https://books.example")
+        app.textFields["login.username"].tap()
+        app.textFields["login.username"].typeText("reader")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("native-password")
+        app.buttons["login.submit"].tap()
+
+        let error = app.staticTexts["login.error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            error.label,
+            "The username or password was not accepted."
+        )
+        XCTAssertEqual(
+            app.secureTextFields["login.password"].value as? String,
+            "Password"
+        )
+        XCTAssertFalse(app.buttons["Sign in with OpenID"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+    }
+
+    @MainActor
+    func testRestoredAccountCanBeRemoved() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            ))
+        app.buttons["Settings"].tap()
+
+        let removeAccount = app.buttons["settings.removeAccount"]
+        XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
+        removeAccount.tap()
+
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(
+                timeout: 3
+            ))
+    }
+
+    @MainActor
+    private func launch(scenario: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = [scenario]
+        app.launch()
+        return app
+    }
+}

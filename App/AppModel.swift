@@ -1,0 +1,261 @@
+import BleatCore
+import Foundation
+import Observation
+
+enum AppPhase: Equatable, Sendable {
+    case launching
+    case signedOut
+    case signedIn
+    case unavailable(AppFailure)
+}
+
+enum LoginStatus: Equatable, Sendable {
+    case idle
+    case submitting
+    case failed(AppFailure)
+}
+
+enum ResourceState<Value: Equatable & Sendable>: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded(Value)
+    case failed(AppFailure)
+}
+
+enum AccountActionStatus: Equatable, Sendable {
+    case idle
+    case removing
+    case failed(AppFailure)
+}
+
+enum AppFailure: Equatable, Sendable {
+    case persistenceUnavailable
+    case invalidServerAddress
+    case serverUnavailable
+    case serverRequiresHTTPS
+    case serverNotReady
+    case serverUnsupported
+    case localLoginUnavailable
+    case invalidCredentials
+    case loginFailed
+    case accountUnavailable
+    case libraryUnavailable
+    case accountRemovalFailed
+
+    var message: String {
+        switch self {
+        case .persistenceUnavailable:
+            "Bleat could not open its local data store."
+        case .invalidServerAddress:
+            "Enter a valid Audiobookshelf server address."
+        case .serverUnavailable:
+            "Bleat could not reach that Audiobookshelf server."
+        case .serverRequiresHTTPS:
+            "Bleat requires an HTTPS Audiobookshelf address."
+        case .serverNotReady:
+            "That Audiobookshelf server is not initialized."
+        case .serverUnsupported:
+            "That Audiobookshelf server version is not supported."
+        case .localLoginUnavailable:
+            "That server does not offer username and password login."
+        case .invalidCredentials:
+            "The username or password was not accepted."
+        case .loginFailed:
+            "Bleat could not sign in to that server."
+        case .accountUnavailable:
+            "Bleat could not restore the saved account."
+        case .libraryUnavailable:
+            "Bleat could not load the audiobook library."
+        case .accountRemovalFailed:
+            "Bleat could not remove the account."
+        }
+    }
+
+    init(serviceError: AppServiceError) {
+        switch serviceError {
+        case .invalidServerURL(let error):
+            switch error {
+            case .unsupportedScheme:
+                self = .serverRequiresHTTPS
+            default:
+                self = .invalidServerAddress
+            }
+        case .discovery(let error):
+            switch error {
+            case .uninitialized:
+                self = .serverNotReady
+            case .unsupportedServerVersion, .invalidServerVersion:
+                self = .serverUnsupported
+            default:
+                self = .serverUnavailable
+            }
+        case .discoveryRequestFailed:
+            self = .serverUnavailable
+        case .onboarding(let error):
+            switch error {
+            case .localAuthenticationUnavailable:
+                self = .localLoginUnavailable
+            case .authenticationFailed(let authenticationError):
+                self =
+                    authenticationError == .invalidCredentials
+                    ? .invalidCredentials
+                    : .loginFailed
+            default:
+                self = .loginFailed
+            }
+        case .accountStore:
+            self = .accountUnavailable
+        case .libraryRepository, .pageRequest:
+            self = .libraryUnavailable
+        case .accountRemoval, .libraryCache:
+            self = .accountRemovalFailed
+        }
+    }
+}
+
+@MainActor
+@Observable
+final class AppModel {
+    private let service: any AppServicing
+    private var hasStarted = false
+
+    private(set) var phase: AppPhase
+    private(set) var loginStatus: LoginStatus = .idle
+    private(set) var accountActionStatus: AccountActionStatus = .idle
+    private(set) var account: ServerAccount?
+    private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
+    private(set) var selectedLibrary: LibrarySummary?
+    private(set) var books: ResourceState<LibraryItemsPage> = .idle
+
+    init(service: any AppServicing) {
+        self.service = service
+        phase = .launching
+    }
+
+    init(
+        service: any AppServicing,
+        bootstrapError: AppBootstrapError
+    ) {
+        self.service = service
+        hasStarted = true
+        switch bootstrapError {
+        case .persistenceUnavailable:
+            phase = .unavailable(.persistenceUnavailable)
+        }
+    }
+
+    func start() async {
+        guard !hasStarted else {
+            return
+        }
+        hasStarted = true
+
+        do {
+            guard let restoredAccount = try await service.activeAccount()
+            else {
+                phase = .signedOut
+                return
+            }
+            account = restoredAccount
+            phase = .signedIn
+            await loadLibraries()
+        } catch let error {
+            phase = .unavailable(AppFailure(serviceError: error))
+        }
+    }
+
+    func login(
+        serverAddress: String,
+        username: String,
+        password: String
+    ) async {
+        guard loginStatus != .submitting else {
+            return
+        }
+        loginStatus = .submitting
+
+        do {
+            let authenticatedAccount = try await service.login(
+                serverAddress: serverAddress,
+                username: username,
+                password: password
+            )
+            account = authenticatedAccount
+            phase = .signedIn
+            loginStatus = .idle
+            await loadLibraries()
+        } catch let error {
+            loginStatus = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func loadLibraries() async {
+        guard let account else {
+            libraries = .failed(.accountUnavailable)
+            return
+        }
+        libraries = .loading
+        selectedLibrary = nil
+        books = .idle
+
+        do {
+            let loadedLibraries = try await service.libraries(for: account)
+                .filter { library in
+                    library.mediaType == .book
+                }
+            libraries = .loaded(loadedLibraries)
+            guard let firstLibrary = loadedLibraries.first else {
+                return
+            }
+            await selectLibrary(firstLibrary)
+        } catch let error {
+            libraries = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func selectLibrary(_ library: LibrarySummary) async {
+        guard let account else {
+            books = .failed(.accountUnavailable)
+            return
+        }
+        selectedLibrary = library
+        books = .loading
+
+        do {
+            books = .loaded(
+                try await service.firstPage(
+                    for: account,
+                    libraryID: library.id
+                )
+            )
+        } catch let error {
+            books = .failed(AppFailure(serviceError: error))
+        }
+    }
+
+    func removeAccount() async {
+        guard let account else {
+            accountActionStatus = .failed(.accountUnavailable)
+            return
+        }
+        guard accountActionStatus != .removing else {
+            return
+        }
+        accountActionStatus = .removing
+
+        do {
+            try await service.removeAccount(account)
+            self.account = nil
+            selectedLibrary = nil
+            libraries = .idle
+            books = .idle
+            accountActionStatus = .idle
+            loginStatus = .idle
+            phase = .signedOut
+        } catch let error {
+            accountActionStatus = .failed(
+                AppFailure(serviceError: error)
+            )
+        }
+    }
+}

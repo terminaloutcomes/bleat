@@ -4,9 +4,12 @@ Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
 and is being implemented in Swift 6 with strict concurrency checking.
 
-The repository is currently at the core-foundation and protocol-risk-spike
-stage. `BleatCore` builds and its URL, routing, discovery, username/password
-login, single-flight token refresh, local logout, bearer-header,
+The repository now contains a runnable SwiftUI application and the tested
+`BleatCore` package. The app restores a persisted native account, signs in with
+an Audiobookshelf username and password, loads cached or live audiobook
+libraries and their first pages, presents the five-tab root shell, and removes
+accounts. The core implements URL, routing, discovery, username/password login,
+single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
 library listing, pagination, and search, account-scoped SwiftData library
@@ -16,14 +19,15 @@ action visibility, playback-session, and background-download contract behavior
 is tested. Native Audiobookshelf username/password is the active
 authentication scope; the earlier isolated OIDC spike is deferred. The MVP
 also defers local time tracking, lifetime statistics, and listening-history
-import/export. The SwiftUI application target has not been created yet, so
-there is not currently an app executable to launch.
+import/export. Search, playback UI, downloads UI, and editing remain under
+active development.
 
 ## Requirements
 
 - macOS with Xcode 26.x
 - Swift 6.2 or newer
 - An installed iOS Simulator runtime for simulator tests
+- XcodeGen 2.46 or newer only when changing `project.yml`
 
 Confirm the active toolchain:
 
@@ -57,6 +61,7 @@ Build for a generic iOS Simulator destination through Xcode:
 
 ```sh
 xcodebuild \
+  -project Bleat.xcodeproj \
   -scheme Bleat \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath .build/xcode-derived \
@@ -64,6 +69,13 @@ xcodebuild \
 ```
 
 Build products and intermediate files are written beneath `.build/`.
+
+If `project.yml` changes, regenerate the checked-in project before building:
+
+```sh
+brew install xcodegen
+xcodegen generate
+```
 
 ## Test
 
@@ -73,8 +85,8 @@ Run the host test suite with code coverage:
 swift test --enable-code-coverage
 ```
 
-Run the complete current validation gate—host tests, Release build, and iOS
-Simulator tests:
+Run the complete current validation gate—core unit tests with coverage, Release
+build, and iOS Simulator application unit and UI tests:
 
 ```sh
 ./scripts/test-core.sh
@@ -102,15 +114,35 @@ BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
 
 ## Open in Xcode
 
-Open `Package.swift` in Xcode:
+Open the generated project:
 
 ```sh
-open Package.swift
+open Bleat.xcodeproj
 ```
 
 Select the `Bleat` scheme and an iPhone or iPad simulator, then use
-**Product → Test**. The current scheme tests `BleatCore`; it does not launch an
-application.
+**Product → Run** to launch the app or **Product → Test** to run the application
+unit and UI suites. Core package tests run through `swift test` or
+`scripts/test-core.sh`.
+
+## Sign in
+
+Launch Bleat, then enter:
+
+- the complete HTTPS address of the Audiobookshelf server, including any path
+  prefix;
+- an Audiobookshelf username;
+- that user's password.
+
+Bleat discovers the server, requires Audiobookshelf 2.26.0 or newer, and uses
+the server's native username/password login. The password is cleared before the
+request starts and is never stored. Access and refresh tokens are stored in the
+device Keychain. OIDC and third-party identity-provider configuration are not
+part of the app.
+
+The current app target requires HTTPS. The Docker harness below intentionally
+tests the lower-level HTTP contracts and is not a server intended for manual
+app sign-in yet.
 
 ## Run against Audiobookshelf
 
@@ -187,9 +219,6 @@ swift test --filter BackgroundDownloadTests
 
 The earlier OIDC spike remains in the repository as isolated research code, but
 it is deferred and is not used by the app or Docker harness.
-
-There is not yet a supported command for connecting this checkout to a
-personal Audiobookshelf server.
 
 ## Project documentation
 
