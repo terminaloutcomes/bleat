@@ -26,6 +26,17 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(
                 timeout: 3
             ))
+        let screenSize = XCUIScreen.main.screenshot().image.size
+        XCTAssertEqual(
+            app.frame.size.width,
+            screenSize.width,
+            accuracy: 1
+        )
+        XCTAssertEqual(
+            app.frame.size.height,
+            screenSize.height,
+            accuracy: 1
+        )
         XCTAssertTrue(app.buttons["Home"].exists)
         XCTAssertTrue(app.buttons["Library"].exists)
         XCTAssertTrue(app.buttons["Search"].exists)

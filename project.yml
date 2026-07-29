@@ -29,6 +29,7 @@ targets:
       properties:
         CFBundleDisplayName: Bleat
         NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
+        UILaunchScreen: {}
         UIBackgroundModes:
           - audio
     settings:
