@@ -22,8 +22,68 @@ public enum DownloadStorageError: Error, Equatable, Sendable {
     case trackNotFound
     case invalidTemporaryFile
     case byteLengthMismatch(expected: Int64, observed: Int64)
+    case requirementOverflow
+    case capacityUnavailable
+    case insufficientSpace(requiredBytes: Int64, availableBytes: Int64)
     case persistenceFailed
     case invalidStoredRecord
+}
+
+public struct DownloadStorageRequirement: Equatable, Sendable {
+    public static let minimumSafetyMarginBytes: Int64 = 256 * 1_024 * 1_024
+
+    public let expectedBytes: Int64
+    public let safetyMarginBytes: Int64
+    public let requiredBytes: Int64
+
+    public init(plan: DownloadPlan) throws(DownloadStorageError) {
+        try self.init(tracks: plan.tracks)
+    }
+
+    public init(
+        tracks: [DownloadTrackPlan]
+    ) throws(DownloadStorageError) {
+        var expected: Int64 = 0
+        for track in tracks {
+            let (sum, overflow) = expected.addingReportingOverflow(
+                track.expectedByteLength
+            )
+            guard !overflow else {
+                throw .requirementOverflow
+            }
+            expected = sum
+        }
+        let safetyMargin =
+            expected == 0
+            ? 0
+            : max(
+                Self.minimumSafetyMarginBytes,
+                expected / 10
+            )
+        let (required, overflow) = expected.addingReportingOverflow(
+            safetyMargin
+        )
+        guard !overflow else {
+            throw .requirementOverflow
+        }
+        expectedBytes = expected
+        safetyMarginBytes = safetyMargin
+        requiredBytes = required
+    }
+
+    public func validate(
+        availableBytes: Int64
+    ) throws(DownloadStorageError) {
+        guard availableBytes >= 0 else {
+            throw .capacityUnavailable
+        }
+        guard availableBytes >= requiredBytes else {
+            throw .insufficientSpace(
+                requiredBytes: requiredBytes,
+                availableBytes: availableBytes
+            )
+        }
+    }
 }
 
 public struct DownloadStorageLayout: Sendable {
@@ -127,6 +187,41 @@ public struct DownloadStorageLayout: Sendable {
         return observed
     }
 
+    fileprivate func availableCapacity()
+        throws(DownloadStorageError) -> Int64
+    {
+        var probe = rootURL
+        while !FileManager.default.fileExists(atPath: probe.path),
+            probe.pathComponents.count > 1
+        {
+            probe.deleteLastPathComponent()
+        }
+        do {
+            let values = try probe.resourceValues(forKeys: [
+                .volumeAvailableCapacityForImportantUsageKey
+            ])
+            if let available =
+                values.volumeAvailableCapacityForImportantUsage,
+                available >= 0
+            {
+                return available
+            }
+            let attributes =
+                try FileManager.default.attributesOfFileSystem(
+                    forPath: probe.path
+                )
+            if let available = (attributes[.systemFreeSize] as? NSNumber)?
+                .int64Value,
+                available >= 0
+            {
+                return available
+            }
+        } catch {
+            throw .capacityUnavailable
+        }
+        throw .capacityUnavailable
+    }
+
     private static func safeComponent(_ value: String) -> String {
         SHA256.hash(data: Data(value.utf8))
             .map { String(format: "%02x", $0) }
@@ -157,6 +252,22 @@ public actor DownloadStorage {
 
     public init(layout: DownloadStorageLayout) {
         self.layout = layout
+    }
+
+    public func preflight(
+        plan: DownloadPlan
+    ) throws(DownloadStorageError) -> DownloadStorageRequirement {
+        try preflight(tracks: plan.tracks)
+    }
+
+    public func preflight(
+        tracks: [DownloadTrackPlan]
+    ) throws(DownloadStorageError) -> DownloadStorageRequirement {
+        let requirement = try DownloadStorageRequirement(tracks: tracks)
+        try requirement.validate(
+            availableBytes: layout.availableCapacity()
+        )
+        return requirement
     }
 
     @discardableResult

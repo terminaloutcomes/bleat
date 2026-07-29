@@ -1,4 +1,5 @@
 import BleatCore
+import Foundation
 import PhotosUI
 import SwiftUI
 
@@ -974,91 +975,21 @@ private struct DownloadsView: View {
                         systemImage: "arrow.down.circle"
                     )
                 } else {
-                    List(model.downloads.records, id: \.manifest.downloadID) {
-                        record in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(record.detail.title)
-                                .font(.headline)
-                            ProgressView(
-                                value: model.downloads.progress[
-                                    record.manifest.downloadID
-                                ]
-                                    ?? (record.manifest.state == .complete
-                                        ? 1 : 0)
-                            )
-                            Text(
-                                model.downloads.pausedDownloadIDs.contains(
-                                    record.manifest.downloadID
+                    List {
+                        ForEach(accountGroups, id: \.accountID) { group in
+                            Section {
+                                ForEach(
+                                    group.records,
+                                    id: \.manifest.downloadID
+                                ) { record in
+                                    downloadRow(record)
+                                }
+                            } header: {
+                                Text(accountLabel(group.accountID))
+                            } footer: {
+                                Text(
+                                    "\(byteCount(group.storedBytes)) stored"
                                 )
-                                    ? "Paused"
-                                    : record.manifest.state.rawValue.capitalized
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            if record.manifest.state == .complete {
-                                Button("Play Offline") {
-                                    Task {
-                                        await model.playDownloaded(record)
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                            } else if [
-                                DownloadManifestState.failed,
-                                .partial,
-                            ].contains(record.manifest.state),
-                                let account = model.account,
-                                account.id == record.manifest.accountID
-                            {
-                                Button(
-                                    record.manifest.state == .partial
-                                        ? "Repair" : "Retry"
-                                ) {
-                                    Task {
-                                        await model.downloads.repair(
-                                            record,
-                                            account: account
-                                        )
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                            } else {
-                                HStack {
-                                    if model.downloads.pausedDownloadIDs
-                                        .contains(
-                                            record.manifest.downloadID
-                                        )
-                                    {
-                                        Button("Resume") {
-                                            Task {
-                                                await model.downloads.resume(
-                                                    record
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Button("Pause") {
-                                            Task {
-                                                await model.downloads.pause(
-                                                    record
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Button("Cancel", role: .destructive) {
-                                        Task {
-                                            await model.downloads.cancel(
-                                                record
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .swipeActions {
-                            Button("Delete", role: .destructive) {
-                                Task {
-                                    await model.downloads.remove(record)
-                                }
                             }
                         }
                     }
@@ -1079,6 +1010,143 @@ private struct DownloadsView: View {
                 }
             }
             .navigationTitle("Downloads")
+        }
+    }
+
+    private var accountGroups: [DownloadAccountGroup] {
+        Dictionary(
+            grouping: model.downloads.records,
+            by: \.manifest.accountID
+        )
+        .map {
+            DownloadAccountGroup(
+                accountID: $0.key,
+                records: $0.value
+            )
+        }
+        .sorted {
+            accountLabel($0.accountID).localizedStandardCompare(
+                accountLabel($1.accountID)
+            ) == .orderedAscending
+        }
+    }
+
+    @ViewBuilder
+    private func downloadRow(_ record: DownloadedBookRecord) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(record.detail.title)
+                .font(.headline)
+            ProgressView(
+                value: model.downloads.progress[
+                    record.manifest.downloadID
+                ]
+                    ?? (record.manifest.state == .complete ? 1 : 0)
+            )
+            HStack {
+                Text(
+                    model.downloads.pausedDownloadIDs.contains(
+                        record.manifest.downloadID
+                    )
+                        ? "Paused"
+                        : record.manifest.state.rawValue.capitalized
+                )
+                Spacer()
+                Text(
+                    "\(byteCount(record.manifest.storedByteLength)) of \(byteCount(record.manifest.expectedByteLength))"
+                )
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if record.manifest.state == .complete {
+                Button("Play Offline") {
+                    Task {
+                        await model.playDownloaded(record)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            } else if [
+                DownloadManifestState.failed,
+                .partial,
+            ].contains(record.manifest.state),
+                let account = model.account,
+                account.id == record.manifest.accountID
+            {
+                Button(
+                    record.manifest.state == .partial
+                        ? "Repair" : "Retry"
+                ) {
+                    Task {
+                        await model.downloads.repair(
+                            record,
+                            account: account
+                        )
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                HStack {
+                    if model.downloads.pausedDownloadIDs.contains(
+                        record.manifest.downloadID
+                    ) {
+                        Button("Resume") {
+                            Task {
+                                await model.downloads.resume(record)
+                            }
+                        }
+                    } else {
+                        Button("Pause") {
+                            Task {
+                                await model.downloads.pause(record)
+                            }
+                        }
+                    }
+                    Button("Cancel", role: .destructive) {
+                        Task {
+                            await model.downloads.cancel(record)
+                        }
+                    }
+                }
+            }
+        }
+        .swipeActions {
+            Button("Delete", role: .destructive) {
+                Task {
+                    await model.downloads.remove(record)
+                }
+            }
+        }
+    }
+
+    private func accountLabel(_ accountID: AccountID) -> String {
+        guard
+            let account = model.accounts.first(where: {
+                $0.id == accountID
+            })
+        else {
+            return "Saved account"
+        }
+        let host = account.server.url.host ?? account.server.url.absoluteString
+        return "\(account.user.username) · \(host)"
+    }
+
+    private func byteCount(_ value: Int64) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: max(value, 0),
+            countStyle: .file
+        )
+    }
+}
+
+private struct DownloadAccountGroup {
+    let accountID: AccountID
+    let records: [DownloadedBookRecord]
+
+    var storedBytes: Int64 {
+        records.reduce(0) { total, record in
+            let (sum, overflow) = total.addingReportingOverflow(
+                record.manifest.storedByteLength
+            )
+            return overflow ? Int64.max : sum
         }
     }
 }

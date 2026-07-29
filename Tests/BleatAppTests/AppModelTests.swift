@@ -104,6 +104,10 @@ final class AppModelTests: XCTestCase {
             .permissionDenied,
             .preparationFailed,
             .repairPlanChanged,
+            .insufficientStorage(
+                requiredBytes: 1_000,
+                availableBytes: 500
+            ),
             .transferFailed,
         ]
 

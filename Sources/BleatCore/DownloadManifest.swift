@@ -51,6 +51,16 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     public internal(set) var state: DownloadManifestState
     public private(set) var entries: [DownloadManifestEntry]
 
+    public var expectedByteLength: Int64 {
+        Self.saturatingSum(entries.map(\.expectedByteLength))
+    }
+
+    public var storedByteLength: Int64 {
+        Self.saturatingSum(
+            entries.compactMap(\.observedByteLength)
+        )
+    }
+
     public init(
         downloadID: DownloadID,
         accountID: AccountID,
@@ -231,5 +241,12 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             throw .trackNotFound(trackIndex)
         }
         return index
+    }
+
+    private static func saturatingSum(_ values: [Int64]) -> Int64 {
+        values.reduce(0) { total, value in
+            let (sum, overflow) = total.addingReportingOverflow(value)
+            return overflow ? Int64.max : sum
+        }
     }
 }

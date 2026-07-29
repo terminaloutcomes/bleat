@@ -4,6 +4,88 @@ import XCTest
 @testable import BleatCore
 
 final class DownloadStorageTests: XCTestCase {
+    func testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure()
+        throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let requirement = try DownloadStorageRequirement(
+            plan: fixture.plan
+        )
+
+        XCTAssertEqual(requirement.expectedBytes, 4)
+        XCTAssertEqual(
+            requirement.safetyMarginBytes,
+            DownloadStorageRequirement.minimumSafetyMarginBytes
+        )
+        XCTAssertEqual(
+            requirement.requiredBytes,
+            4 + DownloadStorageRequirement.minimumSafetyMarginBytes
+        )
+        XCTAssertNoThrow(
+            try requirement.validate(
+                availableBytes: requirement.requiredBytes
+            )
+        )
+        XCTAssertThrowsError(
+            try requirement.validate(
+                availableBytes: requirement.requiredBytes - 1
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadStorageError,
+                .insufficientSpace(
+                    requiredBytes: requirement.requiredBytes,
+                    availableBytes: requirement.requiredBytes - 1
+                )
+            )
+        }
+        let emptyRepair = try DownloadStorageRequirement(tracks: [])
+        XCTAssertEqual(emptyRepair.requiredBytes, 0)
+    }
+
+    func testStorageRequirementRejectsOverflow() {
+        let tracks = [
+            DownloadTrackPlan(
+                index: 0,
+                inode: "1",
+                expectedByteLength: Int64.max,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: "00000.mp3"
+            ),
+            DownloadTrackPlan(
+                index: 1,
+                inode: "2",
+                expectedByteLength: 1,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: "00001.mp3"
+            ),
+        ]
+
+        XCTAssertThrowsError(
+            try DownloadStorageRequirement(tracks: tracks)
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadStorageError,
+                .requirementOverflow
+            )
+        }
+    }
+
+    func testStoragePreflightReadsCapacityFromVolume() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+
+        let requirement = try await fixture.storage.preflight(
+            plan: fixture.plan
+        )
+
+        XCTAssertEqual(requirement.expectedBytes, 4)
+        XCTAssertGreaterThan(requirement.requiredBytes, 4)
+    }
+
     func testFinalizedFilesAndManifestSurviveStoreRecreation()
         async throws
     {
@@ -40,6 +122,8 @@ final class DownloadStorageTests: XCTestCase {
 
         XCTAssertEqual(record.manifest.state, .queued)
         XCTAssertEqual(completed.manifest.state, .complete)
+        XCTAssertEqual(completed.manifest.expectedByteLength, 4)
+        XCTAssertEqual(completed.manifest.storedByteLength, 4)
         XCTAssertEqual(records, [completed])
         XCTAssertEqual(urls.count, 1)
         XCTAssertEqual(try Data(contentsOf: urls[0]), Data([1, 2, 3, 4]))

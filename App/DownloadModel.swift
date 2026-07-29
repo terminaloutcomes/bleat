@@ -7,6 +7,7 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
     case permissionDenied
     case preparationFailed
     case repairPlanChanged
+    case insufficientStorage(requiredBytes: Int64, availableBytes: Int64)
     case transferFailed
 
     var message: String {
@@ -19,9 +20,18 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
             "Bleat could not prepare this audiobook for download."
         case .repairPlanChanged:
             "The server's audio files changed. Delete and download the book again."
+        case .insufficientStorage(let requiredBytes, let availableBytes):
+            "This download needs \(Self.byteCount(requiredBytes)), but only \(Self.byteCount(availableBytes)) is available."
         case .transferFailed:
             "One or more audio files could not be downloaded."
         }
+    }
+
+    private static func byteCount(_ value: Int64) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: max(value, 0),
+            countStyle: .file
+        )
     }
 }
 
@@ -153,6 +163,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 for: account,
                 itemID: detail.id
             )
+            _ = try await storage.preflight(plan: plan)
             let downloadID = DownloadID(
                 rawValue: UUID().uuidString.lowercased()
             )
@@ -178,6 +189,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 task.resume()
                 _ = try await storage.markDownloading(identity)
             }
+            await refresh()
+        } catch let error as DownloadStorageError {
+            failure = storageFailure(error)
             await refresh()
         } catch {
             failure = .preparationFailed
@@ -252,6 +266,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 record: record,
                 plan: plan
             )
+            _ = try await storage.preflight(tracks: tracks)
             for track in tracks {
                 let identity = try DownloadTaskIdentity(
                     downloadID: record.manifest.downloadID,
@@ -271,8 +286,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await refresh()
         } catch let error as DownloadModelFailure {
             failure = error
+        } catch let error as DownloadStorageError {
+            failure = storageFailure(error)
         } catch {
             failure = .preparationFailed
+        }
+    }
+
+    private func storageFailure(
+        _ error: DownloadStorageError
+    ) -> DownloadModelFailure {
+        switch error {
+        case .insufficientSpace(
+            let requiredBytes,
+            let availableBytes
+        ):
+            .insufficientStorage(
+                requiredBytes: requiredBytes,
+                availableBytes: availableBytes
+            )
+        default:
+            .preparationFailed
         }
     }
 
