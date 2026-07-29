@@ -13,6 +13,7 @@
 		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
 		63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */; };
 		66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */; };
+		6DA9F184B2FEFD3166BBB4D5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74A1612593F0EC1117D0ADD8 /* Assets.xcassets */; };
 		6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2675018070436D35F6FC0FF /* MetadataEditorView.swift */; };
 		732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
@@ -48,6 +49,7 @@
 		6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadModel.swift; sourceTree = "<group>"; };
 		70E1797402B69FE6551AC02B /* BleatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatUITests.swift; sourceTree = "<group>"; };
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		74A1612593F0EC1117D0ADD8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessor.swift; sourceTree = "<group>"; };
 		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
@@ -113,6 +115,7 @@
 			children = (
 				73719E4CDB73EE2DD988C5E3 /* AppModel.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
+				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
 				A9F16612F5D186DFAED140F6 /* BookCoverView.swift */,
 				9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */,
@@ -189,6 +192,7 @@
 			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
 			buildPhases = (
 				A478EF5EDBF8264EFEDEBD5B /* Sources */,
+				59425BEF486F1F479E902607 /* Resources */,
 				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
 			);
 			buildRules = (
@@ -240,6 +244,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		59425BEF486F1F479E902607 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6DA9F184B2FEFD3166BBB4D5 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0A31A7CD70C3731884F1F210 /* Sources */ = {
