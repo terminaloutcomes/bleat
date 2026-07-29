@@ -50,25 +50,7 @@ public struct TracedHTTPRequest: Sendable {
 }
 
 public protocol HTTPTransport: Sendable {
-    func send(_ request: URLRequest) async throws -> HTTPResponse
     func send(_ request: TracedHTTPRequest) async throws -> HTTPResponse
-}
-
-extension HTTPTransport {
-    public func send(_ request: URLRequest) async throws -> HTTPResponse {
-        try await send(
-            TracedHTTPRequest(
-                request: request,
-                endpoint: .status
-            )
-        )
-    }
-
-    public func send(
-        _ tracedRequest: TracedHTTPRequest
-    ) async throws -> HTTPResponse {
-        try await send(tracedRequest.request)
-    }
 }
 
 public enum HTTPTransportError: Error, Equatable, Sendable {

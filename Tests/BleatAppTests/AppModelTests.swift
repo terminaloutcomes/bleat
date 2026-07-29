@@ -1105,6 +1105,55 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.libraries, .idle)
     }
 
+    func testDiagnosticsRecordLifecycleAndTypedAuthFailureWithoutInputs()
+        async
+    {
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            login: .failure(
+                .onboarding(
+                    .authenticationFailed(.invalidCredentials)
+                )
+            )
+        )
+        let recorder = AppDiagnosticRecorderSpy()
+        let model = AppModel(
+            service: service,
+            diagnostics: recorder
+        )
+
+        await model.start()
+        _ = await model.login(
+            serverAddress: "https://secret.example/private",
+            username: "private-user",
+            password: "private-password"
+        )
+
+        let events = await recorder.events()
+        XCTAssertTrue(
+            events.contains {
+                $0.operation == .appStart
+                    && $0.name == .operationCompleted
+            }
+        )
+        XCTAssertTrue(
+            events.contains {
+                $0.fromState == .launching
+                    && $0.toState == .signedOut
+            }
+        )
+        XCTAssertTrue(
+            events.contains {
+                $0.operation == .login
+                    && $0.failureCode == .invalidCredentials
+            }
+        )
+        let exportedText = events.map(\.text).joined(separator: "\n")
+        XCTAssertFalse(exportedText.contains("secret.example"))
+        XCTAssertFalse(exportedText.contains("private-user"))
+        XCTAssertFalse(exportedText.contains("private-password"))
+    }
+
     func testStartRestoresAccountAndLoadsFirstAudiobookLibrary() async throws {
         let account = try fixtureAccount()
         let audiobookLibrary = fixtureLibrary()
@@ -3081,6 +3130,18 @@ private actor TestAppService: AppServicing {
         case .failure(let error):
             throw error
         }
+    }
+}
+
+private actor AppDiagnosticRecorderSpy: DiagnosticRecording {
+    private var recordedEvents: [DiagnosticEvent] = []
+
+    func record(_ event: DiagnosticEvent) {
+        recordedEvents.append(event)
+    }
+
+    func events() -> [DiagnosticEvent] {
+        recordedEvents
     }
 }
 

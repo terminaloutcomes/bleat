@@ -255,7 +255,10 @@ private actor MetadataTestTransport: HTTPTransport {
         self.response = response
     }
 
-    func send(_ request: URLRequest) -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) -> HTTPResponse {
+        let request = tracedRequest.request
         self.request = request
         return response
     }

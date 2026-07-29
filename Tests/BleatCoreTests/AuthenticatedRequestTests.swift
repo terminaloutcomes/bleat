@@ -63,6 +63,12 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertEqual(counts.oldAccessRequests, 20)
         XCTAssertEqual(counts.newAccessRequests, 20)
         XCTAssertEqual(counts.refreshRequests, 1)
+        let correlations = await transport.requestCorrelations()
+        XCTAssertEqual(Set(correlations).count, 20)
+        XCTAssertTrue(
+            Dictionary(grouping: correlations, by: { $0 })
+                .values.allSatisfy { $0.count == 2 }
+        )
         XCTAssertEqual(storedTokens, newTokens)
         XCTAssertEqual(saveCount, 1)
         XCTAssertFalse(requiresReauthentication)
@@ -1057,7 +1063,10 @@ private actor ScriptedRequestTransport: HTTPTransport {
         self.responses = responses
     }
 
-    func send(_ request: URLRequest) throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) throws -> HTTPResponse {
+        let request = tracedRequest.request
         requests.append(request)
         guard !responses.isEmpty else {
             throw RequestTestError.missingResponse
@@ -1117,6 +1126,7 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     private var oldAccessRequests = 0
     private var newAccessRequests = 0
     private var refreshRequests: [URLRequest] = []
+    private var correlations: [UUID] = []
     private var unauthorizedWaiters:
         [CheckedContinuation<HTTPResponse, Never>] = []
 
@@ -1130,7 +1140,10 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
         self.newTokens = newTokens
     }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests.append(request)
             return .json(
@@ -1139,6 +1152,7 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
                     refreshToken: newTokens.refreshToken
                 ))
         }
+        correlations.append(tracedRequest.correlationID)
 
         switch request.value(forHTTPHeaderField: "Authorization") {
         case "Bearer \(oldTokens.accessToken)":
@@ -1185,6 +1199,10 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     func refreshRequest() -> URLRequest? {
         refreshRequests.first
     }
+
+    func requestCorrelations() -> [UUID] {
+        correlations
+    }
 }
 
 private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
@@ -1203,7 +1221,10 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         self.accessToken = accessToken
     }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests += 1
             return .init(data: Data(), statusCode: 401)
@@ -1261,7 +1282,10 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
         self.newTokens = newTokens
     }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         switch request.url?.path {
         case "/auth/refresh":
             refreshRequests += 1
@@ -1336,7 +1360,10 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
 }
 
 private actor AccountIsolationTransport: HTTPTransport {
-    func send(_ request: URLRequest) -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             return .init(data: Data(), statusCode: 401)
         }
@@ -1370,7 +1397,10 @@ private actor ExternallyRotatedTransport: HTTPTransport {
         self.newTokens = newTokens
     }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests += 1
             throw RequestTestError.unexpectedAuthorization

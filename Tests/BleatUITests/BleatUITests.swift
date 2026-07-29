@@ -244,6 +244,15 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["diagnostics.export"].waitForExistence(timeout: 3)
         )
+        let recentLogs = app.buttons["diagnostics.exportRecentLogs"]
+        XCTAssertTrue(recentLogs.waitForExistence(timeout: 3))
+        recentLogs.tap()
+        let activityView = app.otherElements["diagnostics.activityView"]
+        XCTAssertTrue(activityView.waitForExistence(timeout: 5))
+        let closeShareSheet = app.buttons["header.closeButton"]
+        XCTAssertTrue(closeShareSheet.waitForExistence(timeout: 3))
+        closeShareSheet.tap()
+        XCTAssertTrue(activityView.waitForNonExistence(timeout: 3))
         app.navigationBars.buttons.firstMatch.tap()
 
         let removeAccount = app.buttons["settings.removeAccount"]

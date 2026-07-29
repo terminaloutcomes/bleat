@@ -603,7 +603,10 @@ private actor LogoutScriptedTransport: HTTPTransport {
         self.responses = responses
     }
 
-    func send(_ request: URLRequest) throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) throws -> HTTPResponse {
+        let request = tracedRequest.request
         requests.append(request)
         guard !responses.isEmpty else {
             throw LogoutTestError.missingResponse
@@ -626,7 +629,9 @@ private actor BlockingLogoutTransport: HTTPTransport {
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var started = false
 
-    func send(_ request: URLRequest) async -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async -> HTTPResponse {
         started = true
         let waiters = startWaiters
         startWaiters.removeAll()
@@ -661,7 +666,9 @@ private actor BlockingLoginTransport: HTTPTransport {
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var started = false
 
-    func send(_ request: URLRequest) async -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async -> HTTPResponse {
         started = true
         let waiters = startWaiters
         startWaiters.removeAll()
@@ -700,7 +707,10 @@ private actor RefreshRaceTransport: HTTPTransport {
     private var logoutRequests = 0
     private var recordedLogoutRefreshToken: String?
 
-    func send(_ request: URLRequest) async -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests += 1
             refreshStarted = true
@@ -776,7 +786,10 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     private var logoutStarted = false
     private var refreshRequests = 0
 
-    func send(_ request: URLRequest) async -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async -> HTTPResponse {
+        let request = tracedRequest.request
         if request.url?.path.hasSuffix("/logout") == true {
             logoutStarted = true
             let waiters = logoutStartWaiters

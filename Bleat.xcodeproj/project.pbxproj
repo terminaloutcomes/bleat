@@ -17,6 +17,7 @@
 		63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */; };
 		66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */; };
 		6DA9F184B2FEFD3166BBB4D5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74A1612593F0EC1117D0ADD8 /* Assets.xcassets */; };
+		6E053570A66A3B972AE16A4F /* DiagnosticLogStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */; };
 		6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2675018070436D35F6FC0FF /* MetadataEditorView.swift */; };
 		732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
@@ -53,6 +54,7 @@
 		003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStoreTests.swift; sourceTree = "<group>"; };
 		0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
+		167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStoreTests.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
@@ -95,6 +97,7 @@
 			isa = PBXGroup;
 			children = (
 				26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */,
+				167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
 			);
 			path = BleatAppTests;
@@ -287,6 +290,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */,
+				6E053570A66A3B972AE16A4F /* DiagnosticLogStoreTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

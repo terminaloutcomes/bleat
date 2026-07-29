@@ -28,7 +28,9 @@ final class HTTPTransportTests: XCTestCase {
         )
         let url = try XCTUnwrap(URL(string: "https://example.net/status"))
 
-        let response = try await transport.send(URLRequest(url: url))
+        let response = try await transport.send(
+            TracedHTTPRequest(request: URLRequest(url: url), endpoint: .status)
+        )
 
         XCTAssertEqual(response.statusCode, 200)
         XCTAssertEqual(response.data, Data(#"{"ok":true}"#.utf8))
@@ -63,13 +65,67 @@ final class HTTPTransportTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "https://example.net/status"))
 
         await XCTAssertThrowsErrorAsync(
-            try await transport.send(URLRequest(url: url))
+            try await transport.send(
+                TracedHTTPRequest(
+                    request: URLRequest(url: url),
+                    endpoint: .status
+                )
+            )
         ) { error in
             XCTAssertEqual(
                 error as? HTTPTransportError,
                 .nonHTTPResponse
             )
         }
+    }
+
+    func testURLSessionTransportRecordsTypedRequestOutcome() async throws {
+        URLProtocolStub.setHandler { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 204,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )!
+            return (response, Data())
+        }
+        defer {
+            URLProtocolStub.setHandler(nil)
+        }
+
+        let recorder = DiagnosticRecorderSpy()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        let transport = URLSessionHTTPTransport(
+            configuration: configuration,
+            diagnostics: recorder
+        )
+        let correlationID = UUID()
+        var request = URLRequest(
+            url: try XCTUnwrap(
+                URL(string: "https://secret.example/api/items/private")
+            )
+        )
+        request.httpMethod = "PATCH"
+
+        _ = try await transport.send(
+            TracedHTTPRequest(
+                request: request,
+                endpoint: .metadata,
+                correlationID: correlationID
+            )
+        )
+
+        let events = await recorder.events()
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events.map(\.correlationID), [
+            correlationID, correlationID,
+        ])
+        XCTAssertEqual(events.map(\.endpoint), [.metadata, .metadata])
+        XCTAssertEqual(events.map(\.method), [.patch, .patch])
+        XCTAssertEqual(events.last?.statusCode, 204)
+        XCTAssertFalse(events.map(\.text).joined().contains("secret"))
+        XCTAssertFalse(events.map(\.text).joined().contains("private"))
     }
 
     func testOpenIDTransportKeepsThenClearsSessionCookies() async throws {
@@ -126,7 +182,10 @@ final class HTTPTransportTests: XCTestCase {
         )
 
         let beginResponse = try await transport.send(
-            URLRequest(url: beginURL)
+            TracedHTTPRequest(
+                request: URLRequest(url: beginURL),
+                endpoint: .openIDSession
+            )
         )
         XCTAssertEqual(beginResponse.statusCode, 302)
         XCTAssertEqual(
@@ -136,7 +195,10 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(transport.cookieCount, 2)
 
         let callbackResponse = try await transport.send(
-            URLRequest(url: callbackURL)
+            TracedHTTPRequest(
+                request: URLRequest(url: callbackURL),
+                endpoint: .openIDSession
+            )
         )
         XCTAssertEqual(callbackResponse.statusCode, 200)
         let callbackCookie = try XCTUnwrap(
@@ -161,6 +223,18 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(transport.cookieCount, 0)
         await transport.clearSession()
         XCTAssertEqual(transport.cookieCount, 0)
+    }
+}
+
+private actor DiagnosticRecorderSpy: DiagnosticRecording {
+    private var recordedEvents: [DiagnosticEvent] = []
+
+    func record(_ event: DiagnosticEvent) {
+        recordedEvents.append(event)
+    }
+
+    func events() -> [DiagnosticEvent] {
+        recordedEvents
     }
 }
 

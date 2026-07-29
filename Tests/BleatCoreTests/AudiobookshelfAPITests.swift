@@ -1165,7 +1165,10 @@ private actor APIScriptTransport: HTTPTransport {
         self.responses = responses
     }
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         try Task.checkCancellation()
         requests.append(request)
         guard !responses.isEmpty else {

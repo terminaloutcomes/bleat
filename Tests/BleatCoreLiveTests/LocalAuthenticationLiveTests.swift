@@ -94,7 +94,10 @@ final class LocalAuthenticationLiveTests: XCTestCase {
             )
             let rejectedRefreshResponse =
                 try await LocalDockerHTTPTransport().send(
-                    rejectedRefreshRequest
+                    TracedHTTPRequest(
+                        request: rejectedRefreshRequest,
+                        endpoint: .refresh
+                    )
                 )
 
             XCTAssertEqual(logoutResult.remoteStatus, .completed)
@@ -130,7 +133,10 @@ final class LocalAuthenticationLiveTests: XCTestCase {
                 forHTTPHeaderField: "x-refresh-token"
             )
             let invalidationResponse = try await recoveryTransport.send(
-                invalidateRefreshRequest
+                TracedHTTPRequest(
+                    request: invalidateRefreshRequest,
+                    endpoint: .logout
+                )
             )
             XCTAssertEqual(invalidationResponse.statusCode, 200)
 

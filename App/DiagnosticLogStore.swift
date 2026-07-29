@@ -138,6 +138,18 @@
                 || loaded.contains {
                     $0.event.name == .historyTruncated
                 }
+            if invalidRecordFound,
+                records?.contains(where: {
+                    $0.event.name == .historyTruncated
+                }) != true
+            {
+                records?.append(
+                    DiagnosticRecord(
+                        timestamp: referenceDate,
+                        event: .historyTruncated
+                    )
+                )
+            }
             let pruned = try prune(referenceDate: referenceDate)
             let sizeLimited = try enforceSizeLimit(
                 referenceDate: referenceDate

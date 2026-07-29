@@ -238,7 +238,10 @@ private actor LocalSessionTestTransport: HTTPTransport {
         self.responses = responses
     }
 
-    func send(_ request: URLRequest) throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) throws -> HTTPResponse {
+        let request = tracedRequest.request
         requests.append(request)
         guard !responses.isEmpty else {
             throw LocalSessionTestTransportError.noResponse

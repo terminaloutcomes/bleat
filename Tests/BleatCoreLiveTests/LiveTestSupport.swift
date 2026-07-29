@@ -16,7 +16,10 @@ func secureLiveServerURL(for liveURL: String) throws -> NormalizedServerURL {
 struct LocalDockerHTTPTransport: HTTPTransport {
     private let transport = URLSessionHTTPTransport()
 
-    func send(_ request: URLRequest) async throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
         guard let requestURL = request.url,
             var components = URLComponents(
                 url: requestURL,
@@ -31,7 +34,9 @@ struct LocalDockerHTTPTransport: HTTPTransport {
         components.scheme = "http"
         var rewrittenRequest = request
         rewrittenRequest.url = try XCTUnwrap(components.url)
-        let response = try await transport.send(rewrittenRequest)
+        let response = try await transport.send(
+            tracedRequest.replacingRequest(rewrittenRequest)
+        )
         let restoredURL = try response.url.map {
             try Self.restoringSecureLoopbackURL($0)
         }

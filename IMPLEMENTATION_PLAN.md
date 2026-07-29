@@ -352,8 +352,11 @@ mirrors the server's library, tag, and explicit-content access rules. A native
 username/password SwiftUI form now drives discovery and transactional
 onboarding, restores the active profile on launch, and removes accounts without
 any OIDC surface. Multi-account switching, password-only reauthentication, and
-a privacy-safe Settings diagnostics snapshot/export are implemented. Recording
-bounded endpoint/status/correlation and player-transition history remains.
+a privacy-safe Settings diagnostics snapshot are implemented. Development
+builds also record a bounded 15-minute cross-launch history of typed,
+identifier-free app, endpoint/status/correlation, playback, download, and sync
+events and share it as a text file; both exports are compiled out of release
+builds while the status screen and categorized `OSLog` events remain.
 
 Deliver:
 

@@ -647,7 +647,10 @@ private actor OnboardingTransport: HTTPTransport {
     private var requests: [URLRequest] = []
     private var recordedLogoutRefreshTokens: [String] = []
 
-    func send(_ request: URLRequest) -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) -> HTTPResponse {
+        let request = tracedRequest.request
         requests.append(request)
         if request.url?.path.hasSuffix("/login") == true {
             return .init(

@@ -205,7 +205,10 @@ final class PlaybackSessionLiveTests: XCTestCase {
             sessionID: session.id
         )
         let closedResponse = try await transport.send(
-            URLRequest(url: mediaURL)
+            TracedHTTPRequest(
+                request: URLRequest(url: mediaURL),
+                endpoint: .directPlay
+            )
         )
         XCTAssertEqual(closedResponse.statusCode, 404)
     }
@@ -310,7 +313,10 @@ final class PlaybackSessionLiveTests: XCTestCase {
         )
 
         let playlistResponse = try await transport.send(
-            URLRequest(url: playlistURL)
+            TracedHTTPRequest(
+                request: URLRequest(url: playlistURL),
+                endpoint: .directPlay
+            )
         )
         XCTAssertEqual(playlistResponse.statusCode, 200)
         let playlist = String(decoding: playlistResponse.data, as: UTF8.self)
@@ -347,10 +353,16 @@ final class PlaybackSessionLiveTests: XCTestCase {
             sessionID: session.id
         )
         let closedPlaylist = try await transport.send(
-            URLRequest(url: playlistURL)
+            TracedHTTPRequest(
+                request: URLRequest(url: playlistURL),
+                endpoint: .directPlay
+            )
         )
         let closedSegment = try await transport.send(
-            URLRequest(url: try XCTUnwrap(segmentURLs.first))
+            TracedHTTPRequest(
+                request: URLRequest(url: try XCTUnwrap(segmentURLs.first)),
+                endpoint: .directPlay
+            )
         )
         XCTAssertEqual(closedPlaylist.statusCode, 404)
         XCTAssertEqual(closedSegment.statusCode, 404)
@@ -362,7 +374,12 @@ final class PlaybackSessionLiveTests: XCTestCase {
     ) async throws -> HTTPResponse {
         var lastResponse: HTTPResponse?
         for _ in 0 ..< 100 {
-            let response = try await transport.send(URLRequest(url: url))
+            let response = try await transport.send(
+                TracedHTTPRequest(
+                    request: URLRequest(url: url),
+                    endpoint: .directPlay
+                )
+            )
             if response.statusCode == 200 {
                 return response
             }
@@ -382,7 +399,9 @@ final class PlaybackSessionLiveTests: XCTestCase {
             "bytes=\(requestedRange.lowerBound)-\(requestedRange.upperBound)",
             forHTTPHeaderField: "Range"
         )
-        return try await transport.send(request)
+        return try await transport.send(
+            TracedHTTPRequest(request: request, endpoint: .directPlay)
+        )
     }
 
     private func totalSize(from response: HTTPResponse) throws -> Int {

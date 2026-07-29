@@ -1335,7 +1335,10 @@ private actor OpenIDTestTransport: OpenIDSessionTransport {
         self.authorizationData = authorizationData
     }
 
-    func send(_ request: URLRequest) throws -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) throws -> HTTPResponse {
+        let request = tracedRequest.request
         requests.append(request)
         guard let path = request.url?.path else {
             throw OpenIDTestError.invalidRequest

@@ -362,10 +362,15 @@ downloads and local state. Switching the browsing account does not stop current
 playback or unrelated background downloads.
 
 Settings also provides **Diagnostics**, which shows the app, operating-system,
-server, connection, resource, playback, sync, and download state. **Export
-Diagnostics** shares the same snapshot with stable typed error codes. The
-snapshot is constructed without account names, server addresses, credentials,
-tokens, response bodies, media URLs, playback session IDs, or local file paths.
+server, connection, resource, playback, sync, and download state. Development
+builds add **Export Diagnostics** and **Export Recent Logs**. The latter shares
+a text file containing up to 15 minutes of categorized app, authentication,
+API, playback, download, and synchronization events, including events from an
+earlier launch within that window. Release builds keep the status screen but
+compile out both exports and the rolling log file. Exports exclude account
+names, server addresses, credentials, tokens, response bodies, media titles
+and URLs, remote identifiers, playback session IDs, listening positions, and
+local file paths.
 
 **Remove Account** always asks for confirmation. If that account owns local
 books, choose whether to keep or delete them. Keeping them cancels unfinished

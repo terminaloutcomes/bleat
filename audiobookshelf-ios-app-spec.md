@@ -1124,6 +1124,13 @@ Use `OSLog` categories for auth, API, playback, download, and sync. Logs must re
 
 Diagnostics export should include app version, iOS version, server version, endpoint name, HTTP status, request correlation ID, player state transitions, and redacted errors. It must not include credentials or full response bodies by default.
 
+The Diagnostics status screen remains available in release builds. Development
+builds add snapshot and recent-log exports. Recent logs use typed, identifier-free
+events, retain at most the preceding 15 minutes across launches in a protected,
+backup-excluded 5 MiB rolling file, and export chronologically as UTF-8 text
+through the system sharing sheet. Release builds compile out both exports and
+the rolling file while continuing to emit the redacted `OSLog` categories.
+
 ## 17. Security and privacy requirements
 
 - HTTPS and system trust validation are mandatory in production.

@@ -73,6 +73,38 @@ final class AudiobookshelfRouteTests: XCTestCase {
         }
     }
 
+    func testDiagnosticEndpointsDiscardEveryOpaqueRouteValue() {
+        let secret = "must-not-appear"
+        let libraryID = LibraryID(rawValue: secret)
+        let itemID = LibraryItemID(rawValue: secret)
+        let sessionID = PlaybackSessionID(rawValue: secret)
+        let routes: [AudiobookshelfRoute] = [
+            .status, .login, .beginOpenID, .completeOpenID, .refresh,
+            .logout, .authorize, .libraries, .libraryItems(libraryID),
+            .personalized(libraryID), .search(libraryID), .item(itemID),
+            .play(itemID),
+            .directPlay(sessionID: sessionID, trackIndex: 9),
+            .syncSession(sessionID), .closeSession(sessionID),
+            .syncLocalSession, .syncLocalSessions, .progress(itemID),
+            .allProgress, .listeningStats, .listeningSessions,
+            .itemListeningSessions(itemID), .yearlyStats(2026),
+            .bookmarks(itemID), .bookmark(itemID),
+            .deleteBookmark(itemID: itemID, time: 123.5),
+            .downloadFile(itemID: itemID, inode: secret),
+            .cover(itemID), .metadata(itemID),
+        ]
+
+        XCTAssertEqual(
+            Set(routes.map(\.diagnosticEndpoint)),
+            Set(DiagnosticEndpoint.allCases).subtracting([.openIDSession])
+        )
+        XCTAssertTrue(
+            routes.allSatisfy {
+                !$0.diagnosticEndpoint.rawValue.contains(secret)
+            }
+        )
+    }
+
     func testPercentEncodesOpaquePathComponents() throws {
         let itemID = LibraryItemID(rawValue: "item/with space?#%")
 

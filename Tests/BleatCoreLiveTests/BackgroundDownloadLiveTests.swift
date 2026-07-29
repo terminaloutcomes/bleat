@@ -98,7 +98,12 @@ final class BackgroundDownloadLiveTests: XCTestCase {
                     )
                 )
 
-                let response = try await transport.send(request)
+                let response = try await transport.send(
+                    TracedHTTPRequest(
+                        request: request,
+                        endpoint: .downloadFile
+                    )
+                )
                 XCTAssertEqual(response.statusCode, 200)
                 XCTAssertEqual(
                     Int64(response.data.count),
@@ -119,7 +124,12 @@ final class BackgroundDownloadLiveTests: XCTestCase {
                 "Bearer expired-live-token",
                 forHTTPHeaderField: "Authorization"
             )
-            let unauthorized = try await transport.send(rejectedRequest)
+            let unauthorized = try await transport.send(
+                TracedHTTPRequest(
+                    request: rejectedRequest,
+                    endpoint: .downloadFile
+                )
+            )
             XCTAssertEqual(unauthorized.statusCode, 401)
 
             let replacement =
@@ -144,7 +154,10 @@ final class BackgroundDownloadLiveTests: XCTestCase {
             XCTAssertNil(replacementRequest.url?.query)
             XCTAssertEqual(replacement.identity, scheduled[0].identity)
             let replacementResponse = try await transport.send(
-                replacementRequest
+                TracedHTTPRequest(
+                    request: replacementRequest,
+                    endpoint: .downloadFile
+                )
             )
             XCTAssertEqual(replacementResponse.statusCode, 200)
             XCTAssertEqual(

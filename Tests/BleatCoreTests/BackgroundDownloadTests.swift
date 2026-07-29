@@ -586,7 +586,9 @@ private actor DownloadCredentialStore: AccountCredentialStore {
 private actor DownloadRefreshTransport: HTTPTransport {
     private var refreshRequests = 0
 
-    func send(_ request: URLRequest) -> HTTPResponse {
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) -> HTTPResponse {
         refreshRequests += 1
         return HTTPResponse(
             data: Self.refreshResponse(),
