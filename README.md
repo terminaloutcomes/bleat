@@ -126,9 +126,9 @@ library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
 downloads, and verifies that native-login account profiles survive store
 recreation, fetch typed libraries, and load their first paginated audiobook
-summaries and a matching search result. It then removes the containers and
-volumes. On failure it retains redacted diagnostic artifacts beneath
-`TestSupport/ServerHarness/artifacts/`.
+summaries, a matching search result, and personalized audiobook shelves. It
+then removes the containers and volumes. On failure it retains redacted
+diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
 

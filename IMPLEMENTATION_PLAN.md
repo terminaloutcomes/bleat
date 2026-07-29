@@ -364,8 +364,9 @@ supports typed remote-only, cache-only, and remote-else-cache policies without
 turning cancellation into stale data. Exact normalized search queries use the
 same account-scoped persistence and cancellation rules. A deterministic 300 ms
 coordinator cancels and suppresses superseded query, account, and library work.
-Search presentation, home shelves, expanded details, cover caching, performance
-validation, and SwiftUI remain.
+The native API also loads validated audiobook-only personalized shelves.
+Search presentation, home-shelf persistence, expanded details, cover caching,
+performance validation, and SwiftUI remain.
 
 Deliver:
 

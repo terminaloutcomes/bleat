@@ -95,6 +95,10 @@ final class AccountStoreLiveTests: XCTestCase {
                 limit: 12
             )
         )
+        let home = try await api.personalizedShelves(
+            in: seededLibrary.id,
+            request: try LibraryHomeRequest(limit: 10)
+        )
 
         XCTAssertEqual(account.server, discovered.baseURL)
         XCTAssertEqual(account.user.username, username)
@@ -116,6 +120,17 @@ final class AccountStoreLiveTests: XCTestCase {
         XCTAssertEqual(
             search.value.first?.libraryID,
             seededLibrary.id
+        )
+        XCTAssertFalse(home.value.isEmpty)
+        XCTAssertTrue(
+            home.value.allSatisfy { shelf in
+                !shelf.items.isEmpty
+                    && shelf.items.count <= 10
+                    && shelf.items.allSatisfy {
+                        $0.libraryID == seededLibrary.id
+                            && $0.trackCount > 0
+                    }
+            }
         )
     }
 }

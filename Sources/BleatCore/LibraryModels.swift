@@ -218,6 +218,38 @@ public struct LibrarySearchRequest: Hashable, Sendable {
     }
 }
 
+public enum LibraryHomeRequestError: Error, Equatable, Sendable {
+    case invalidLimit
+}
+
+public struct LibraryHomeRequest: Hashable, Sendable {
+    public let limit: Int
+    public let includeProgress: Bool
+
+    public init(
+        limit: Int = 10,
+        includeProgress: Bool = true
+    ) throws(LibraryHomeRequestError) {
+        guard (1 ... 100).contains(limit) else {
+            throw .invalidLimit
+        }
+        self.limit = limit
+        self.includeProgress = includeProgress
+    }
+
+    var queryItems: [URLQueryItem] {
+        var items = [
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        if includeProgress {
+            items.append(
+                URLQueryItem(name: "include", value: "progress")
+            )
+        }
+        return items
+    }
+}
+
 public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let id: LibraryItemID
     public let libraryID: LibraryID
@@ -256,6 +288,58 @@ extension LibraryBookSummary {
             && chapterCount >= 0
             && addedAtMilliseconds >= 0
             && updatedAtMilliseconds >= 0
+    }
+
+    private static func isValidDisplayString(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isValidOptionalDisplayString(
+        _ value: String?
+    ) -> Bool {
+        guard let value else {
+            return true
+        }
+        return value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
+public struct LibraryBookShelf: Codable, Hashable, Sendable {
+    public let id: String
+    public let label: String
+    public let labelLocalizationKey: String?
+    public let items: [LibraryBookSummary]
+    public let total: Int
+
+    public init(
+        id: String,
+        label: String,
+        labelLocalizationKey: String?,
+        items: [LibraryBookSummary],
+        total: Int
+    ) {
+        self.id = id
+        self.label = label
+        self.labelLocalizationKey = labelLocalizationKey
+        self.items = items
+        self.total = total
+    }
+
+    func isValidForStorage(
+        request: LibraryHomeRequest,
+        libraryID: LibraryID
+    ) -> Bool {
+        Self.isValidDisplayString(id)
+            && Self.isValidDisplayString(label)
+            && Self.isValidOptionalDisplayString(labelLocalizationKey)
+            && total >= items.count
+            && items.count <= request.limit
+            && !items.isEmpty
+            && items.allSatisfy {
+                $0.trackCount > 0
+                    && $0.isValidForStorage(in: libraryID)
+            }
     }
 
     private static func isValidDisplayString(_ value: String) -> Bool {

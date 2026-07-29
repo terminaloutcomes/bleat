@@ -4,6 +4,201 @@ import XCTest
 @testable import BleatCore
 
 final class AudiobookshelfAPITests: XCTestCase {
+    func testHomeRequestValidationAndExactQueryContract() throws {
+        for limit in [0, 101] {
+            XCTAssertThrowsError(
+                try LibraryHomeRequest(limit: limit)
+            ) { error in
+                XCTAssertEqual(
+                    error as? LibraryHomeRequestError,
+                    .invalidLimit
+                )
+            }
+        }
+
+        let request = try LibraryHomeRequest(limit: 12)
+        XCTAssertEqual(request.queryItems, [
+            URLQueryItem(name: "limit", value: "12"),
+            URLQueryItem(name: "include", value: "progress"),
+        ])
+        XCTAssertEqual(
+            try LibraryHomeRequest(
+                limit: 8,
+                includeProgress: false
+            ).queryItems,
+            [URLQueryItem(name: "limit", value: "8")]
+        )
+    }
+
+    func testPersonalizedShelvesMapOnlyAudioBooksAndExactRoute()
+        async throws
+    {
+        let audioBook = Self.bookItemJSON(
+            id: "audio",
+            libraryID: "library",
+            title: "Audio Book",
+            trackCount: 1
+        )
+        let ebook = Self.bookItemJSON(
+            id: "ebook",
+            libraryID: "library",
+            title: "Ebook",
+            trackCount: 0
+        )
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Data(
+                        """
+                        [
+                          {
+                            "id": "recently-added",
+                            "label": "Recently Added",
+                            "labelStringKey": "LabelRecentlyAdded",
+                            "type": "book",
+                            "entities": [\(audioBook), \(ebook)],
+                            "total": 2,
+                            "futureShelfField": true
+                          },
+                          {
+                            "id": "recent-series",
+                            "label": "Recent Series",
+                            "type": "series",
+                            "entities": [{"id": "series"}],
+                            "total": 1
+                          },
+                          {
+                            "id": "read-again",
+                            "label": "Read Again",
+                            "type": "book",
+                            "entities": [\(ebook)],
+                            "total": 1
+                          }
+                        ]
+                        """.utf8
+                    ),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let request = try LibraryHomeRequest(limit: 10)
+
+        let result = try await fixture.api.personalizedShelves(
+            in: LibraryID(rawValue: "library"),
+            request: request
+        )
+        let requests = await fixture.transport.recordedRequests()
+        let sent = try XCTUnwrap(requests.first)
+        let components = try XCTUnwrap(
+            URLComponents(
+                url: try XCTUnwrap(sent.url),
+                resolvingAgainstBaseURL: false
+            )
+        )
+
+        XCTAssertEqual(result.value.count, 1)
+        XCTAssertEqual(result.value.first?.id, "recently-added")
+        XCTAssertEqual(result.value.first?.label, "Recently Added")
+        XCTAssertEqual(
+            result.value.first?.labelLocalizationKey,
+            "LabelRecentlyAdded"
+        )
+        XCTAssertEqual(result.value.first?.total, 2)
+        XCTAssertEqual(result.value.first?.items.count, 1)
+        XCTAssertEqual(
+            result.value.first?.items.first?.id,
+            LibraryItemID(rawValue: "audio")
+        )
+        XCTAssertEqual(
+            components.path,
+            "/audiobookshelf/api/libraries/library/personalized"
+        )
+        XCTAssertEqual(components.queryItems, request.queryItems)
+        XCTAssertEqual(
+            sent.value(forHTTPHeaderField: "Authorization"),
+            "Bearer access-token"
+        )
+    }
+
+    func testPersonalizedShelfFailuresRemainTyped() async throws {
+        let book = Self.bookItemJSON(
+            id: "book",
+            libraryID: "library",
+            title: "Book",
+            trackCount: 1
+        )
+        let cases: [Data] = [
+            Data("{\"not\":\"an array\"}".utf8),
+            Data(
+                """
+                [{
+                  "id": "broken",
+                  "label": "Broken",
+                  "type": "book",
+                  "entities": [\(book)],
+                  "total": -1
+                }]
+                """.utf8
+            ),
+            Data(
+                """
+                [
+                  {
+                    "id": "duplicate",
+                    "label": "First",
+                    "type": "book",
+                    "entities": [\(book)],
+                    "total": 1
+                  },
+                  {
+                    "id": "duplicate",
+                    "label": "Second",
+                    "type": "book",
+                    "entities": [\(book)],
+                    "total": 1
+                  }
+                ]
+                """.utf8
+            ),
+        ]
+        let expected: [AudiobookshelfAPIError] = [
+            .malformedResponse,
+            .invalidPersonalizedShelves,
+            .invalidPersonalizedShelves,
+        ]
+        let request = try LibraryHomeRequest(limit: 1)
+        for (data, expectedError) in zip(cases, expected) {
+            let fixture = try APIFixture(
+                responses: [
+                    HTTPResponse(data: data, statusCode: 200),
+                ]
+            )
+            do {
+                _ = try await fixture.api.personalizedShelves(
+                    in: LibraryID(rawValue: "library"),
+                    request: request
+                )
+                XCTFail("Expected typed personalized-shelf failure")
+            } catch {
+                XCTAssertEqual(error, expectedError)
+            }
+        }
+
+        let fixture = try APIFixture(responses: [])
+        let defaultRequest = try LibraryHomeRequest()
+        do {
+            _ = try await fixture.api.personalizedShelves(
+                in: LibraryID(rawValue: ""),
+                request: defaultRequest
+            )
+            XCTFail("Expected invalid library")
+        } catch {
+            XCTAssertEqual(error, .invalidLibrary)
+        }
+        let requests = await fixture.transport.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testSearchRequestValidationAndExactQueryContract() throws {
         for query in ["", " \n ", "bad\nquery", String(repeating: "a", count: 201)] {
             XCTAssertThrowsError(
@@ -617,6 +812,34 @@ final class AudiobookshelfAPITests: XCTestCase {
             }
             """.utf8
         )
+    }
+
+    private static func bookItemJSON(
+        id: String,
+        libraryID: String,
+        title: String,
+        trackCount: Int
+    ) -> String {
+        """
+        {
+          "id": "\(id)",
+          "libraryId": "\(libraryID)",
+          "addedAt": 1,
+          "updatedAt": 2,
+          "mediaType": "book",
+          "media": {
+            "metadata": {
+              "title": "\(title)",
+              "genres": [],
+              "explicit": false,
+              "abridged": false
+            },
+            "numTracks": \(trackCount),
+            "numChapters": 0,
+            "duration": 60
+          }
+        }
+        """
     }
 }
 

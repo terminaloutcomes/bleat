@@ -32,6 +32,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidPage
     case invalidLibraryItem
     case invalidSearchResults
+    case invalidPersonalizedShelves
 }
 
 public actor AudiobookshelfAPI<
@@ -158,6 +159,77 @@ public actor AudiobookshelfAPI<
         )
     }
 
+    public func personalizedShelves(
+        in libraryID: LibraryID,
+        request: LibraryHomeRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<[LibraryBookShelf]>
+    {
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibrary
+        }
+        let result: AudiobookshelfAPIResult<[PersonalizedShelfDTO]> =
+            try await get(
+                .personalized(libraryID),
+                queryItems: request.queryItems,
+                as: [PersonalizedShelfDTO].self
+            )
+        var seenShelfIDs: Set<String> = []
+        var shelves: [LibraryBookShelf] = []
+        for shelf in result.value {
+            guard let entities = shelf.bookEntities else {
+                continue
+            }
+            guard entities.count <= request.limit,
+                  shelf.total >= entities.count,
+                  !shelf.id.trimmingCharacters(
+                      in: .whitespacesAndNewlines
+                  ).isEmpty,
+                  shelf.id.rangeOfCharacter(
+                      from: .controlCharacters
+                  ) == nil,
+                  !shelf.label.trimmingCharacters(
+                      in: .whitespacesAndNewlines
+                  ).isEmpty,
+                  shelf.label.rangeOfCharacter(
+                      from: .controlCharacters
+                  ) == nil,
+                  shelf.labelLocalizationKey?.rangeOfCharacter(
+                      from: .controlCharacters
+                  ) == nil
+            else {
+                throw .invalidPersonalizedShelves
+            }
+            var items: [LibraryBookSummary] = []
+            items.reserveCapacity(entities.count)
+            for entity in entities {
+                let item = try entity.domainValue(
+                    expectedLibraryID: libraryID
+                )
+                if item.trackCount > 0 {
+                    items.append(item)
+                }
+            }
+            guard !items.isEmpty else {
+                continue
+            }
+            guard seenShelfIDs.insert(shelf.id).inserted else {
+                throw .invalidPersonalizedShelves
+            }
+            shelves.append(LibraryBookShelf(
+                id: shelf.id,
+                label: shelf.label,
+                labelLocalizationKey: shelf.labelLocalizationKey,
+                items: items,
+                total: shelf.total
+            ))
+        }
+        return AudiobookshelfAPIResult(
+            value: shelves,
+            correlationID: result.correlationID
+        )
+    }
+
     private func get<Response: Decodable & Sendable>(
         _ route: AudiobookshelfRoute,
         queryItems: [URLQueryItem] = [],
@@ -277,6 +349,45 @@ private struct LibrarySearchResponseDTO: Decodable, Sendable {
 
 private struct LibrarySearchBookMatchDTO: Decodable, Sendable {
     let libraryItem: LibraryItemDTO
+}
+
+private struct PersonalizedShelfDTO: Decodable, Sendable {
+    let id: String
+    let label: String
+    let labelLocalizationKey: String?
+    let total: Int
+    let bookEntities: [LibraryItemDTO]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case label
+        case labelLocalizationKey = "labelStringKey"
+        case type
+        case entities
+        case total
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(
+            keyedBy: CodingKeys.self
+        )
+        id = try container.decode(String.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+        labelLocalizationKey = try container.decodeIfPresent(
+            String.self,
+            forKey: .labelLocalizationKey
+        )
+        total = try container.decode(Int.self, forKey: .total)
+        let type = try container.decode(String.self, forKey: .type)
+        if type == "book" {
+            bookEntities = try container.decode(
+                [LibraryItemDTO].self,
+                forKey: .entities
+            )
+        } else {
+            bookEntities = nil
+        }
+    }
 }
 
 private struct LibraryItemDTO: Decodable, Sendable {
