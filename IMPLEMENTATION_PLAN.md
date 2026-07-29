@@ -322,7 +322,9 @@ browsing context, transactional native-login onboarding, and stored-account
 sign-out/removal are verified with unit tests and fresh pinned root and
 path-prefixed servers. The typed API actor now performs cancellable,
 correlated, authenticated library listing with isolated DTO mapping. Paginated
-item DTOs, permissions, diagnostics, and application UI remain.
+book-summary DTOs and exact query construction are also verified against a
+pinned fixture and live root/path-prefixed servers. Expanded item DTOs,
+permissions, diagnostics, persistence, and application UI remain.
 
 Deliver:
 

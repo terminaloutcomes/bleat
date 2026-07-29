@@ -1,0 +1,60 @@
+{
+  "results": [
+    {
+      "id": "item-one",
+      "libraryId": "library",
+      "addedAt": 1700000000000,
+      "updatedAt": 1700000001000,
+      "mediaType": "book",
+      "media": {
+        "metadata": {
+          "title": "The First Book",
+          "subtitle": null,
+          "authorName": "First Author",
+          "narratorName": "",
+          "seriesName": "A Series #1",
+          "genres": ["Fiction"],
+          "publishedYear": "2024",
+          "publisher": null,
+          "explicit": false,
+          "abridged": false,
+          "futureMetadata": "ignored"
+        },
+        "numTracks": 2,
+        "numChapters": 4,
+        "duration": 7200.5,
+        "futureMedia": true
+      },
+      "futureItem": 123
+    },
+    {
+      "id": "item-two",
+      "libraryId": "library",
+      "addedAt": 1700000002000,
+      "updatedAt": 1700000003000,
+      "mediaType": "book",
+      "media": {
+        "metadata": {
+          "title": "Second Book",
+          "genres": [],
+          "explicit": true,
+          "abridged": true
+        },
+        "numTracks": 1,
+        "numChapters": 0,
+        "duration": 60
+      }
+    }
+  ],
+  "total": 3,
+  "limit": 2,
+  "page": 0,
+  "offset": 0,
+  "sortBy": "media.metadata.title",
+  "sortDesc": true,
+  "mediaType": "book",
+  "minified": true,
+  "collapseseries": true,
+  "include": "progress",
+  "futureEnvelope": "ignored"
+}

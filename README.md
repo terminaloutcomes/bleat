@@ -9,12 +9,12 @@ stage. `BleatCore` builds and its URL, routing, discovery, username/password
 login, single-flight token refresh, local logout, bearer-header,
 account-scoped Keychain, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
-library listing, playback-session, and background-download contract behavior
-is tested. Native Audiobookshelf username/password is the active
-authentication scope; the earlier isolated OIDC spike is deferred. The MVP
-also defers local time tracking, lifetime statistics, and listening-history
-import/export. The SwiftUI application target has not been created yet, so
-there is not currently an app executable to launch.
+library listing and pagination, playback-session, and background-download
+contract behavior is tested. Native Audiobookshelf username/password is the
+active authentication scope; the earlier isolated OIDC spike is deferred. The
+MVP also defers local time tracking, lifetime statistics, and
+listening-history import/export. The SwiftUI application target has not been
+created yet, so there is not currently an app executable to launch.
 
 ## Requirements
 
@@ -123,9 +123,9 @@ services, initializes deterministic test-only root users and a three-book media
 library, validates username/password login, bearer authorization,
 rotating-token recovery, logout, playback routes, and authenticated per-file
 downloads, and verifies that native-login account profiles survive store
-recreation and fetch typed libraries. It then removes the containers and
-volumes. On failure it retains redacted diagnostic artifacts beneath
-`TestSupport/ServerHarness/artifacts/`.
+recreation, fetch typed libraries, and load their first paginated audiobook
+summaries. It then removes the containers and volumes. On failure it retains
+redacted diagnostic artifacts beneath `TestSupport/ServerHarness/artifacts/`.
 
 Control the environment directly when developing a contract test:
 

@@ -69,20 +69,39 @@ final class AccountStoreLiveTests: XCTestCase {
         let storedCredentials = await credentials.credentials(
             for: accountID
         )
-        let libraries = try await AudiobookshelfAPI(
+        let api = AudiobookshelfAPI(
             account: account,
             authCoordinator: authCoordinator
-        ).libraries()
+        )
+        let libraries = try await api.libraries()
+        let seededLibrary = try XCTUnwrap(
+            libraries.value.first {
+                $0.name == "Bleat Live Fixtures"
+                    && $0.mediaType == .book
+            }
+        )
+        let firstPage = try await api.libraryItems(
+            in: seededLibrary.id,
+            request: try LibraryItemsPageRequest(
+                page: 0,
+                limit: 2,
+                sort: .title
+            )
+        )
 
         XCTAssertEqual(account.server, discovered.baseURL)
         XCTAssertEqual(account.user.username, username)
         XCTAssertEqual(account.connectionState, .connected)
         XCTAssertEqual(active, account)
         XCTAssertNotNil(storedCredentials)
+        XCTAssertEqual(firstPage.value.items.count, 2)
+        XCTAssertEqual(firstPage.value.total, 3)
+        XCTAssertTrue(firstPage.value.hasNextPage)
         XCTAssertTrue(
-            libraries.value.contains {
-                $0.name == "Bleat Live Fixtures"
-                    && $0.mediaType == .book
+            firstPage.value.items.allSatisfy {
+                $0.libraryID == seededLibrary.id
+                    && !$0.title.isEmpty
+                    && $0.duration > 0
             }
         )
     }

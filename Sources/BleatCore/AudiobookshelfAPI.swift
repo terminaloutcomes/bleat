@@ -21,28 +21,6 @@ public struct AudiobookshelfAPIResult<Value: Sendable>: Sendable {
     }
 }
 
-public enum LibraryMediaType: Hashable, Sendable {
-    case book
-    case podcast
-    case unknown(String)
-}
-
-public struct LibrarySummary: Hashable, Sendable {
-    public let id: LibraryID
-    public let name: String
-    public let mediaType: LibraryMediaType
-
-    public init(
-        id: LibraryID,
-        name: String,
-        mediaType: LibraryMediaType
-    ) {
-        self.id = id
-        self.name = name
-        self.mediaType = mediaType
-    }
-}
-
 public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidAccountID
     case routeConstruction(RouteConstructionError)
@@ -51,6 +29,8 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case unexpectedStatus(Int)
     case malformedResponse
     case invalidLibrary
+    case invalidPage
+    case invalidLibraryItem
 }
 
 public actor AudiobookshelfAPI<
@@ -100,6 +80,46 @@ public actor AudiobookshelfAPI<
         }
         return AudiobookshelfAPIResult(
             value: libraries,
+            correlationID: result.correlationID
+        )
+    }
+
+    public func libraryItems(
+        in libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<LibraryItemsPage>
+    {
+        guard !libraryID.rawValue.isEmpty else {
+            throw .invalidLibrary
+        }
+        let result: AudiobookshelfAPIResult<LibraryItemsPageDTO> =
+            try await get(
+                .libraryItems(libraryID),
+                queryItems: request.queryItems,
+                as: LibraryItemsPageDTO.self
+            )
+        guard result.value.total >= 0,
+              result.value.page == request.page,
+              result.value.limit == request.limit,
+              result.value.results.count <= request.limit
+        else {
+            throw .invalidPage
+        }
+        var items: [LibraryBookSummary] = []
+        items.reserveCapacity(result.value.results.count)
+        for item in result.value.results {
+            items.append(
+                try item.domainValue(expectedLibraryID: libraryID)
+            )
+        }
+        return AudiobookshelfAPIResult(
+            value: LibraryItemsPage(
+                items: items,
+                total: result.value.total,
+                page: result.value.page,
+                limit: result.value.limit
+            ),
             correlationID: result.correlationID
         )
     }
@@ -208,4 +228,120 @@ private enum LibraryMediaTypeDTO: Decodable, Sendable {
             .unknown(value)
         }
     }
+}
+
+private struct LibraryItemsPageDTO: Decodable, Sendable {
+    let results: [LibraryItemDTO]
+    let total: Int
+    let limit: Int
+    let page: Int
+}
+
+private struct LibraryItemDTO: Decodable, Sendable {
+    let id: LibraryItemID
+    let libraryID: LibraryID
+    let addedAt: Int64
+    let updatedAt: Int64
+    let mediaType: String
+    let media: LibraryBookDTO
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case libraryID = "libraryId"
+        case addedAt
+        case updatedAt
+        case mediaType
+        case media
+    }
+
+    func domainValue(
+        expectedLibraryID: LibraryID
+    ) throws(AudiobookshelfAPIError) -> LibraryBookSummary {
+        guard !id.rawValue.isEmpty,
+              libraryID == expectedLibraryID,
+              mediaType == "book",
+              Self.isValidDisplayString(media.metadata.title),
+              Self.isValidOptionalDisplayString(media.metadata.subtitle),
+              Self.isValidOptionalDisplayString(media.metadata.authorName),
+              Self.isValidOptionalDisplayString(media.metadata.narratorName),
+              Self.isValidOptionalDisplayString(media.metadata.seriesName),
+              Self.isValidOptionalDisplayString(media.metadata.publisher),
+              Self.isValidOptionalDisplayString(
+                  media.metadata.publishedYear
+              ),
+              media.metadata.genres.allSatisfy(Self.isValidDisplayString),
+              media.duration.isFinite,
+              media.duration >= 0,
+              media.numTracks >= 0,
+              media.numChapters >= 0,
+              addedAt >= 0,
+              updatedAt >= 0
+        else {
+            throw .invalidLibraryItem
+        }
+        return LibraryBookSummary(
+            id: id,
+            libraryID: libraryID,
+            title: media.metadata.title,
+            subtitle: Self.nonEmpty(media.metadata.subtitle),
+            authorName: Self.nonEmpty(media.metadata.authorName),
+            narratorName: Self.nonEmpty(media.metadata.narratorName),
+            seriesName: Self.nonEmpty(media.metadata.seriesName),
+            genres: media.metadata.genres,
+            publisher: Self.nonEmpty(media.metadata.publisher),
+            publishedYear: Self.nonEmpty(media.metadata.publishedYear),
+            duration: media.duration,
+            trackCount: media.numTracks,
+            chapterCount: media.numChapters,
+            addedAtMilliseconds: addedAt,
+            updatedAtMilliseconds: updatedAt,
+            isExplicit: media.metadata.explicit,
+            isAbridged: media.metadata.abridged
+        )
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value,
+              !value.trimmingCharacters(
+                  in: .whitespacesAndNewlines
+              ).isEmpty
+        else {
+            return nil
+        }
+        return value
+    }
+
+    private static func isValidDisplayString(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isValidOptionalDisplayString(
+        _ value: String?
+    ) -> Bool {
+        guard let value else {
+            return true
+        }
+        return value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
+private struct LibraryBookDTO: Decodable, Sendable {
+    let metadata: LibraryBookMetadataDTO
+    let numTracks: Int
+    let numChapters: Int
+    let duration: Double
+}
+
+private struct LibraryBookMetadataDTO: Decodable, Sendable {
+    let title: String
+    let subtitle: String?
+    let authorName: String?
+    let narratorName: String?
+    let seriesName: String?
+    let genres: [String]
+    let publishedYear: String?
+    let publisher: String?
+    let explicit: Bool
+    let abridged: Bool
 }

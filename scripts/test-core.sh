@@ -12,6 +12,11 @@ fi
 simulator_destination="${BLEAT_SIMULATOR_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro}"
 
 xcodebuild \
+    -resolvePackageDependencies \
+    -scheme Bleat \
+    -derivedDataPath .build/xcode-derived
+
+xcodebuild \
     -quiet \
     -scheme Bleat \
     -destination "${simulator_destination}" \
