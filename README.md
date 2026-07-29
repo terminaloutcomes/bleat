@@ -244,6 +244,13 @@ account's isolated context, or use **Add Account** for another standard
 Audiobookshelf username/password login. Switching the browsing account does not
 stop current playback or unrelated background downloads.
 
+**Remove Account** always asks for confirmation. If that account owns local
+books, choose whether to keep or delete them. Keeping them cancels unfinished
+transfers but preserves local files, metadata, and device progress. When no
+account remains, **Offline Downloads** on the sign-in screen still opens and
+plays those books; server bookmarks and synchronization remain unavailable
+for that retained account-free copy.
+
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual
 app sign-in yet.

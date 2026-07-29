@@ -123,6 +123,9 @@ final class BleatUITests: XCTestCase {
         let removeAccount = app.buttons["settings.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()
+        let confirmRemoval = app.sheets.buttons["Remove Account"]
+        XCTAssertTrue(confirmRemoval.waitForExistence(timeout: 3))
+        confirmRemoval.tap()
 
         XCTAssertTrue(
             app.textFields["login.server"].waitForExistence(

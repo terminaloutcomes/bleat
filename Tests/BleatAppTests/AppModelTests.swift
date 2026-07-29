@@ -98,6 +98,83 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testAccountRemovalChoiceKeepsOrDeletesDownloads()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8).utf8
+            )
+        )
+        let item = fixtureBook(
+            id: plan.itemID.rawValue,
+            title: "Downloaded",
+            libraryID: fixtureLibrary().id
+        )
+        var roots: [URL] = []
+        defer {
+            for root in roots {
+                try? FileManager.default.removeItem(at: root)
+            }
+        }
+
+        for (disposition, expectedCount) in [
+            (AccountDownloadDisposition.keep, 1),
+            (.delete, 0),
+        ] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatAccountRemoval-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            roots.append(root)
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root)
+            )
+            _ = try await storage.create(
+                downloadID: DownloadID(
+                    rawValue: UUID().uuidString.lowercased()
+                ),
+                accountID: account.id,
+                plan: plan,
+                detail: fixtureBookDetail(item: item)
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([])
+            )
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: root
+            )
+            await model.start()
+            XCTAssertEqual(model.downloads.records.count, 1)
+
+            await model.removeAccount(downloads: disposition)
+
+            XCTAssertEqual(
+                model.downloads.records.count,
+                expectedCount
+            )
+            XCTAssertEqual(model.phase, .signedOut)
+            if disposition == .keep {
+                let relaunched = AppModel(
+                    service: TestAppService(
+                        activeAccount: .success(nil)
+                    ),
+                    downloadsStorageRootURL: root
+                )
+                await relaunched.start()
+                XCTAssertEqual(relaunched.phase, .signedOut)
+                XCTAssertEqual(
+                    relaunched.downloads.records.count,
+                    1
+                )
+            }
+        }
+    }
+
     func testDownloadFailuresHaveDistinctMessages() {
         let failures: [DownloadModelFailure] = [
             .storageUnavailable,

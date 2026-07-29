@@ -29,6 +29,11 @@ enum AccountActionStatus: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum AccountDownloadDisposition: Equatable, Sendable {
+    case keep
+    case delete
+}
+
 enum MetadataSaveState: Equatable, Sendable {
     case idle
     case saving
@@ -214,10 +219,16 @@ final class AppModel {
     let playback: PlaybackModel
     let downloads: DownloadModel
 
-    init(service: any AppServicing) {
+    init(
+        service: any AppServicing,
+        downloadsStorageRootURL: URL? = nil
+    ) {
         self.service = service
         playback = PlaybackModel(service: service)
-        downloads = DownloadModel(service: service)
+        downloads = DownloadModel(
+            service: service,
+            storageRootURL: downloadsStorageRootURL
+        )
         phase = .launching
     }
 
@@ -243,6 +254,13 @@ final class AppModel {
 
         do {
             accounts = try await service.accounts()
+            await downloads.start(account: nil)
+            for storedAccount in accounts {
+                await downloads.start(account: storedAccount)
+                await playback.syncPendingLocalSessions(
+                    for: storedAccount
+                )
+            }
             guard let restoredAccount = try await service.activeAccount()
             else {
                 phase = .signedOut
@@ -250,12 +268,6 @@ final class AppModel {
             }
             account = restoredAccount
             phase = .signedIn
-            for storedAccount in accounts {
-                await downloads.start(account: storedAccount)
-                await playback.syncPendingLocalSessions(
-                    for: storedAccount
-                )
-            }
             await loadLibraries()
         } catch let error {
             phase = .unavailable(AppFailure(serviceError: error))
@@ -669,9 +681,8 @@ final class AppModel {
     }
 
     func playDownloaded(_ record: DownloadedBookRecord) async {
-        guard let account else {
-            playback.fail(.accountUnavailable)
-            return
+        let recordAccount = accounts.first {
+            $0.id == record.manifest.accountID
         }
         do {
             let urls = try await downloads.localTrackURLs(
@@ -680,14 +691,17 @@ final class AppModel {
             await playback.startDownloaded(
                 detail: record.detail,
                 trackURLs: urls,
-                account: account
+                accountID: record.manifest.accountID,
+                account: recordAccount
             )
         } catch {
             playback.fail(.mediaUnavailable)
         }
     }
 
-    func removeAccount() async {
+    func removeAccount(
+        downloads disposition: AccountDownloadDisposition = .delete
+    ) async {
         guard let account else {
             accountActionStatus = .failed(.accountUnavailable)
             return
@@ -700,8 +714,15 @@ final class AppModel {
 
         do {
             try await service.removeAccount(account)
-            await downloads.removeAll(for: account.id)
-            playback.removeLocalSessions(for: account.id)
+            switch disposition {
+            case .keep:
+                await downloads.retainDownloadsAndDetachAccount(
+                    account.id
+                )
+            case .delete:
+                await downloads.removeAll(for: account.id)
+                playback.removeLocalSessions(for: account.id)
+            }
             accounts.removeAll { $0.id == account.id }
             self.account = accounts.first
             selectedLibrary = nil

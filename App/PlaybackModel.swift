@@ -53,6 +53,7 @@ final class PlaybackModel {
     private var remoteCommandTargets: [(MPRemoteCommand, Any)] = []
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
     private var activeAccount: ServerAccount?
+    private var localAccountID: AccountID?
     private var preparation: AppPlaybackPreparation?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
@@ -128,6 +129,7 @@ final class PlaybackModel {
             return
         }
         activeAccount = nil
+        localAccountID = nil
         preparation = nil
         localPlaybackSession = nil
         resetPlayer()
@@ -207,7 +209,8 @@ final class PlaybackModel {
     func startDownloaded(
         detail: LibraryBookDetail,
         trackURLs: [URL],
-        account: ServerAccount
+        accountID: AccountID,
+        account: ServerAccount?
     ) async {
         guard !trackURLs.isEmpty else {
             state = .failed(.mediaUnavailable)
@@ -224,6 +227,7 @@ final class PlaybackModel {
             return
         }
         activeAccount = nil
+        localAccountID = nil
         preparation = nil
         localPlaybackSession = nil
         resetPlayer()
@@ -277,16 +281,22 @@ final class PlaybackModel {
             )
             try configureAudioSession()
             activeAccount = account
+            localAccountID = accountID
             preparation = prepared
             duration = prepared.duration
             let savedPosition = positionStore.position(
-                accountID: account.id,
+                accountID: accountID,
                 itemID: detail.id
             )
-            let remoteProgress = try? await service.bookProgress(
-                for: account,
-                itemID: detail.id
-            )
+            let remoteProgress: LibraryBookProgress?
+            if let account {
+                remoteProgress = try? await service.bookProgress(
+                    for: account,
+                    itemID: detail.id
+                )
+            } else {
+                remoteProgress = nil
+            }
             currentTime = reconciledDownloadedPosition(
                 savedPosition: savedPosition,
                 baseline: detail.progress,
@@ -297,7 +307,7 @@ final class PlaybackModel {
             lastPersistedLocalTime = currentTime
             try beginLocalPlaybackSession(
                 detail: detail,
-                account: account
+                accountID: accountID
             )
             try await rebuildQueue(at: currentTime)
             guard generation == operationGeneration else {
@@ -315,6 +325,8 @@ final class PlaybackModel {
             guard generation == operationGeneration else {
                 return
             }
+            activeAccount = nil
+            localAccountID = nil
             preparation = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
@@ -623,6 +635,7 @@ final class PlaybackModel {
             return
         }
         activeAccount = nil
+        localAccountID = nil
         preparation = nil
         localPlaybackSession = nil
         itemID = nil
@@ -932,7 +945,7 @@ final class PlaybackModel {
     }
 
     private func persistLocalPosition() {
-        guard let activeAccount,
+        guard let localAccountID,
             let itemID,
             preparation?.sessionID == nil
         else {
@@ -941,7 +954,7 @@ final class PlaybackModel {
         do {
             try positionStore.save(
                 currentTime,
-                accountID: activeAccount.id,
+                accountID: localAccountID,
                 itemID: itemID
             )
             guard let localPlaybackSession else {
@@ -953,7 +966,7 @@ final class PlaybackModel {
             )
             try localSessionStore.save(
                 updated,
-                accountID: activeAccount.id
+                accountID: localAccountID
             )
             self.localPlaybackSession = updated
             lastPersistedLocalTime = currentTime
@@ -964,21 +977,28 @@ final class PlaybackModel {
 
     private func syncProgress() async {
         guard syncState != .syncing,
-            let activeAccount,
             let preparation
         else {
             return
         }
         let position = min(max(currentTime, 0), preparation.duration)
-        syncState = .syncing
         if preparation.sessionID == nil {
+            guard let localAccountID else {
+                return
+            }
+            syncState = .syncing
             persistLocalPosition()
             guard syncState != .failed else {
                 return
             }
+            guard let activeAccount else {
+                lastAttemptedSyncTime = position
+                syncState = .idle
+                return
+            }
             do {
                 let pending = try localSessionStore.pending(
-                    accountID: activeAccount.id
+                    accountID: localAccountID
                 )
                 guard !pending.isEmpty else {
                     syncState = .idle
@@ -998,7 +1018,7 @@ final class PlaybackModel {
                     results.filter(\.success).map(\.id)
                 )
                 try localSessionStore.removeAcknowledged(
-                    accountID: activeAccount.id,
+                    accountID: localAccountID,
                     sessionIDs: acknowledged
                 )
                 lastAttemptedSyncTime = position
@@ -1026,9 +1046,12 @@ final class PlaybackModel {
             }
             return
         }
-        guard let sessionID = preparation.sessionID else {
+        guard let activeAccount,
+            let sessionID = preparation.sessionID
+        else {
             return
         }
+        syncState = .syncing
         do {
             try await service.syncPlayback(
                 for: activeAccount,
@@ -1068,10 +1091,10 @@ final class PlaybackModel {
             )
             return localTime
         case .server(let serverTime):
-            if let activeAccount, let itemID {
+            if let localAccountID, let itemID {
                 try? positionStore.save(
                     serverTime,
-                    accountID: activeAccount.id,
+                    accountID: localAccountID,
                     itemID: itemID
                 )
             }
@@ -1128,10 +1151,10 @@ final class PlaybackModel {
 
     private func beginLocalPlaybackSession(
         detail: LibraryBookDetail,
-        account: ServerAccount
+        accountID: AccountID
     ) throws {
         let existing = try localSessionStore.session(
-            accountID: account.id,
+            accountID: accountID,
             itemID: detail.id
         )
         let session: LocalPlaybackSession
@@ -1151,7 +1174,7 @@ final class PlaybackModel {
                 currentTime: currentTime
             )
         }
-        try localSessionStore.save(session, accountID: account.id)
+        try localSessionStore.save(session, accountID: accountID)
         localPlaybackSession = session
     }
 

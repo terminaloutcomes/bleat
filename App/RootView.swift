@@ -34,8 +34,10 @@ struct RootView: View {
 private struct NativeLoginView: View {
     @Bindable var model: AppModel
     var navigationTitle = "Bleat"
+    var showsOfflineDownloads = true
     var onSignedIn: () -> Void = {}
     var onCancel: (() -> Void)?
+    @State private var showOfflineDownloads = false
     @State private var serverAddress = ""
     @State private var username = ""
     @State private var password = ""
@@ -102,6 +104,22 @@ private struct NativeLoginView: View {
                     .disabled(!canSubmit)
                     .accessibilityIdentifier("login.submit")
                 }
+
+                if showsOfflineDownloads,
+                    !model.downloads.records.isEmpty
+                {
+                    Section {
+                        Button(
+                            "Offline Downloads",
+                            systemImage: "arrow.down.circle"
+                        ) {
+                            showOfflineDownloads = true
+                        }
+                        .accessibilityIdentifier(
+                            "login.offlineDownloads"
+                        )
+                    }
+                }
             }
             .navigationTitle(navigationTitle)
             .toolbar {
@@ -110,6 +128,9 @@ private struct NativeLoginView: View {
                         Button("Cancel", action: onCancel)
                     }
                 }
+            }
+            .sheet(isPresented: $showOfflineDownloads) {
+                OfflineDownloadsSheet(model: model)
             }
         }
     }
@@ -130,6 +151,25 @@ private struct NativeLoginView: View {
                 onSignedIn()
             }
         }
+    }
+}
+
+private struct OfflineDownloadsSheet: View {
+    @Bindable var model: AppModel
+    @State private var showPlayer = false
+
+    var body: some View {
+        DownloadsView(model: model)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if model.playback.hasActiveBook {
+                    MiniPlayerView(playback: model.playback) {
+                        showPlayer = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showPlayer) {
+                PlayerView(playback: model.playback)
+            }
     }
 }
 
@@ -1088,6 +1128,7 @@ private struct BookDetailView: View {
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var showAddAccount = false
+    @State private var showRemoveAccountConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -1174,9 +1215,7 @@ private struct SettingsView: View {
 
                 Section {
                     Button("Remove Account", role: .destructive) {
-                        Task {
-                            await model.removeAccount()
-                        }
+                        showRemoveAccountConfirmation = true
                     }
                     .disabled(model.accountActionStatus == .removing)
                     .accessibilityIdentifier("settings.removeAccount")
@@ -1186,13 +1225,75 @@ private struct SettingsView: View {
             .sheet(isPresented: $showAddAccount) {
                 NativeLoginView(
                     model: model,
-                    navigationTitle: "Add Account"
+                    navigationTitle: "Add Account",
+                    showsOfflineDownloads: false
                 ) {
                     showAddAccount = false
                 } onCancel: {
                     showAddAccount = false
                 }
             }
+            .confirmationDialog(
+                "Remove Account?",
+                isPresented: $showRemoveAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                if activeAccountDownloads.isEmpty {
+                    Button("Remove Account", role: .destructive) {
+                        removeAccount(downloads: .delete)
+                    }
+                } else {
+                    Button(
+                        "Remove Account, Keep Downloads",
+                        role: .destructive
+                    ) {
+                        removeAccount(downloads: .keep)
+                    }
+                    Button(
+                        "Remove Account and Delete Downloads",
+                        role: .destructive
+                    ) {
+                        removeAccount(downloads: .delete)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                if activeAccountDownloads.isEmpty {
+                    Text(
+                        "This removes the saved account and its credentials."
+                    )
+                } else {
+                    Text(
+                        "\(activeAccountDownloads.count) downloaded \(activeAccountDownloads.count == 1 ? "book" : "books") use \(ByteCountFormatter.string(fromByteCount: activeAccountDownloadBytes, countStyle: .file)). Choose whether to keep the local files."
+                    )
+                }
+            }
+        }
+    }
+
+    private var activeAccountDownloads: [DownloadedBookRecord] {
+        guard let accountID = model.account?.id else {
+            return []
+        }
+        return model.downloads.records.filter {
+            $0.manifest.accountID == accountID
+        }
+    }
+
+    private var activeAccountDownloadBytes: Int64 {
+        activeAccountDownloads.reduce(0) { total, record in
+            let (sum, overflow) = total.addingReportingOverflow(
+                record.manifest.storedByteLength
+            )
+            return overflow ? Int64.max : sum
+        }
+    }
+
+    private func removeAccount(
+        downloads disposition: AccountDownloadDisposition
+    ) {
+        Task {
+            await model.removeAccount(downloads: disposition)
         }
     }
 }
@@ -1301,22 +1402,27 @@ private struct DownloadsView: View {
             } else if [
                 DownloadManifestState.failed,
                 .partial,
-            ].contains(record.manifest.state),
-                let account = model.account,
-                account.id == record.manifest.accountID
-            {
-                Button(
-                    record.manifest.state == .partial
-                        ? "Repair" : "Retry"
-                ) {
-                    Task {
-                        await model.downloads.repair(
-                            record,
-                            account: account
-                        )
+            ].contains(record.manifest.state) {
+                if let account = model.account,
+                    account.id == record.manifest.accountID
+                {
+                    Button(
+                        record.manifest.state == .partial
+                            ? "Repair" : "Retry"
+                    ) {
+                        Task {
+                            await model.downloads.repair(
+                                record,
+                                account: account
+                            )
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Text("Account required to retry this download.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
             } else {
                 HStack {
                     if model.downloads.pausedDownloadIDs.contains(

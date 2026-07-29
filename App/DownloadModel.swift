@@ -144,7 +144,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     init(
         service: any AppServicing,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        storageRootURL: URL? = nil
     ) {
         self.service = service
         self.defaults = defaults
@@ -155,19 +156,25 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .flatMap(DownloadNetworkPolicy.init(rawValue:))
             ?? .wifiOnly
         do {
-            guard
-                let supportURL = FileManager.default.urls(
-                    for: .applicationSupportDirectory,
-                    in: .userDomainMask
-                ).first
-            else {
-                throw DownloadStorageError.invalidRoot
-            }
-            let layout = try DownloadStorageLayout(
-                rootURL: supportURL.appendingPathComponent(
+            let rootURL: URL
+            if let storageRootURL {
+                rootURL = storageRootURL
+            } else {
+                guard
+                    let supportURL = FileManager.default.urls(
+                        for: .applicationSupportDirectory,
+                        in: .userDomainMask
+                    ).first
+                else {
+                    throw DownloadStorageError.invalidRoot
+                }
+                rootURL = supportURL.appendingPathComponent(
                     "Bleat/Downloads",
                     isDirectory: true
                 )
+            }
+            let layout = try DownloadStorageLayout(
+                rootURL: rootURL
             )
             self.layout = layout
             storage = DownloadStorage(layout: layout)
@@ -486,6 +493,37 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await remove(record)
         }
         accounts[accountID] = nil
+    }
+
+    func retainDownloadsAndDetachAccount(
+        _ accountID: AccountID
+    ) async {
+        let accountDownloadIDs = Set(
+            records.lazy
+                .filter { $0.manifest.accountID == accountID }
+                .map(\.manifest.downloadID)
+        )
+        let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.accountID == accountID
+            else {
+                continue
+            }
+            task.cancel()
+            if let storage {
+                _ = try? await storage.markFailed(identity)
+            }
+        }
+        for downloadID in accountDownloadIDs {
+            progress[downloadID] = nil
+            pausedDownloadIDs.remove(downloadID)
+        }
+        accounts[accountID] = nil
+        await refresh()
     }
 
     func record(
