@@ -164,7 +164,11 @@ Open a book from Home, Library, or Search and tap **Play**. Bleat opens a native
 Audiobookshelf playback session and uses its session-scoped direct-play or HLS
 URL without putting access tokens in media URLs. The mini-player remains above
 the tab bar; tap its title for whole-book seeking, 15-second rewind, 30-second
-forward, speed control from 0.5× to 3×, and Stop.
+forward, previous/next chapter controls, speed control from 0.5× to 3×, and
+Stop. Now Playing identifies the narrator and current chapter, offers a chapter
+list for direct navigation, and includes the native AirPlay route picker.
+Player content and secondary controls scroll when the screen or text size is
+too small to show them at once.
 The selected global speed persists across relaunches and can be adjusted in
 0.05× steps.
 

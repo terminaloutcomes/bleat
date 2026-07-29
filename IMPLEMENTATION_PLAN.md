@@ -462,6 +462,12 @@ Exit gate: streaming and downloaded media pass the media matrix on simulator
 where supported and on a physical iPhone, including background and system
 controls.
 
+Current status: the MVP player, whole-book and chapter navigation, native
+AirPlay route picker, background audio, Now Playing metadata, remote commands,
+sleep timers, resume rewind, streaming, and downloaded playback are
+implemented. Simulator build and automated coverage are in place; the physical
+iPhone media matrix remains to be exercised.
+
 ### Phase 5 — progress, sessions, bookmarks, and conflict handling
 
 Deliver:

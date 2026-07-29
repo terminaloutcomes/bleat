@@ -68,6 +68,7 @@ final class PlaybackModel {
     private(set) var itemID: LibraryItemID?
     private(set) var title = ""
     private(set) var author = ""
+    private(set) var narrator = ""
     private(set) var coverURL: URL?
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
@@ -93,6 +94,30 @@ final class PlaybackModel {
 
     var canSetEndOfChapterSleepTimer: Bool {
         currentChapterEnd != nil
+    }
+
+    var chapters: [PlaybackChapter] {
+        preparation?.chapters ?? []
+    }
+
+    var currentChapter: PlaybackChapter? {
+        chapters.last {
+            $0.start <= currentTime
+                && currentTime < max($0.end, $0.start)
+        }
+            ?? chapters.last {
+                $0.start <= currentTime
+            }
+    }
+
+    var canMoveToPreviousChapter: Bool {
+        !chapters.isEmpty && currentTime > 1
+    }
+
+    var canMoveToNextChapter: Bool {
+        chapters.contains {
+            $0.start > currentTime + 1
+        }
     }
 
     init(
@@ -147,6 +172,7 @@ final class PlaybackModel {
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
+        narrator = detail.narrators.joined(separator: ", ")
         coverURL = BookCoverURL.make(
             server: account.server,
             itemID: detail.id,
@@ -246,6 +272,7 @@ final class PlaybackModel {
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
+        narrator = detail.narrators.joined(separator: ", ")
         coverURL = nil
         currentTime = detail.progress?.currentTime ?? 0
         syncState = .idle
@@ -775,6 +802,7 @@ final class PlaybackModel {
         itemID = nil
         title = ""
         author = ""
+        narrator = ""
         coverURL = nil
         currentTime = 0
         duration = 0
@@ -1030,8 +1058,8 @@ final class PlaybackModel {
     private func updateTimePitchAlgorithm() {
         let algorithm: AVAudioTimePitchAlgorithm =
             rate <= 2 ? .timeDomain : .spectral
-        player?.items().forEach {
-            $0.audioTimePitchAlgorithm = algorithm
+        for item in player?.items() ?? [] {
+            item.audioTimePitchAlgorithm = algorithm
         }
     }
 

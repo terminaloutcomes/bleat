@@ -1,3 +1,4 @@
+import AVKit
 import BleatCore
 import SwiftUI
 
@@ -59,287 +60,376 @@ struct PlayerView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
-
-                BookCoverView(
-                    url: playback.coverURL,
-                    cornerRadius: 16
-                )
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 320)
-
-                VStack(spacing: 6) {
-                    Text(playback.title)
-                        .font(.title2.bold())
-                        .multilineTextAlignment(.center)
-                    if !playback.author.isEmpty {
-                        Text(playback.author)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                VStack(spacing: 6) {
-                    Slider(
-                        value: $scrubTime,
-                        in: 0...max(playback.duration, 1)
-                    ) { editing in
-                        isScrubbing = editing
-                        guard !editing else {
-                            return
-                        }
-                        Task {
-                            await playback.seek(to: scrubTime)
-                        }
-                    }
-                    .disabled(playback.state == .preparing)
-                    .accessibilityIdentifier("player.position")
-
-                    HStack {
-                        Text(playbackTime(scrubTime))
-                        Spacer()
-                        Text(
-                            "-"
-                                + playbackTime(
-                                    max(playback.duration - scrubTime, 0)
-                                ))
-                    }
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                }
-
-                if case .failed(let failure) = playback.state {
-                    Text(failure.message)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("player.error")
-                }
-                if playback.syncState == .failed {
-                    Label(
-                        "Position has not synced",
-                        systemImage: "icloud.slash"
+            ScrollView {
+                VStack(spacing: 24) {
+                    BookCoverView(
+                        url: playback.coverURL,
+                        cornerRadius: 16
                     )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("player.syncError")
-                }
-                if let conflict = playback.positionConflict {
-                    VStack(spacing: 10) {
-                        Text("Playback position changed in two places.")
-                            .font(.headline)
-                        HStack {
-                            Button(
-                                "This device (\(playbackTime(conflict.localTime)))"
-                            ) {
-                                Task {
-                                    await playback.resolvePositionConflict(
-                                        useLocalPosition: true
-                                    )
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            Button(
-                                "Server (\(playbackTime(conflict.serverTime)))"
-                            ) {
-                                Task {
-                                    await playback.resolvePositionConflict(
-                                        useLocalPosition: false
-                                    )
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                    .accessibilityIdentifier("player.positionConflict")
-                }
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 320)
 
-                HStack(spacing: 40) {
-                    Button {
-                        Task {
-                            await playback.skipBackward()
+                    VStack(spacing: 6) {
+                        Text(playback.title)
+                            .font(.title2.bold())
+                            .multilineTextAlignment(.center)
+                        if !playback.author.isEmpty {
+                            Text(playback.author)
+                                .foregroundStyle(.secondary)
                         }
-                    } label: {
-                        Image(systemName: "gobackward.15")
-                            .font(.largeTitle)
-                    }
-                    .disabled(playback.state == .preparing)
-
-                    Button {
-                        playback.togglePlayback()
-                    } label: {
-                        Image(
-                            systemName: playback.isPlaying
-                                ? "pause.circle.fill"
-                                : "play.circle.fill"
-                        )
-                        .font(.system(size: 72))
-                    }
-                    .disabled(playback.state == .preparing)
-                    .accessibilityLabel(
-                        playback.isPlaying ? "Pause" : "Play"
-                    )
-                    .accessibilityIdentifier("player.toggle")
-
-                    Button {
-                        Task {
-                            await playback.skipForward()
+                        if !playback.narrator.isEmpty {
+                            Text("Narrated by \(playback.narrator)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-                    } label: {
-                        Image(systemName: "goforward.30")
-                            .font(.largeTitle)
-                    }
-                    .disabled(playback.state == .preparing)
-                }
-
-                HStack(spacing: 24) {
-                    Menu {
-                        ForEach(
-                            [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3],
-                            id: \.self
-                        ) { speed in
-                            Button(formatRate(speed)) {
-                                playback.setRate(Float(speed))
-                            }
-                        }
-                        Divider()
-                        Button("Slower by 0.05×") {
-                            playback.setRate(playback.rate - 0.05)
-                        }
-                        .disabled(playback.rate <= 0.5)
-                        Button("Faster by 0.05×") {
-                            playback.setRate(playback.rate + 0.05)
-                        }
-                        .disabled(playback.rate >= 3)
-                    } label: {
-                        Text(formatRate(Double(playback.rate)))
-                            .font(.headline)
-                            .frame(minWidth: 72)
-                    }
-                    .accessibilityIdentifier("player.rate")
-
-                    Menu {
-                        ForEach(
-                            [5, 10, 15, 30, 45, 60, 90, 120],
-                            id: \.self
-                        ) {
-                            minutes in
-                            Button("\(minutes) minutes") {
-                                playback.setSleepTimer(
-                                    minutes: minutes
+                        if let chapter = playback.currentChapter {
+                            Text(chapter.title)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                                .accessibilityIdentifier(
+                                    "player.currentChapter"
                                 )
-                            }
                         }
-                        if playback.canSetEndOfChapterSleepTimer {
-                            Button("End of Chapter") {
-                                playback.setSleepTimerToEndOfChapter()
-                            }
-                        }
-                        if playback.sleepTimer != nil {
-                            Button("Cancel Timer", role: .destructive) {
-                                playback.setSleepTimer(minutes: nil)
-                            }
-                        }
-                    } label: {
-                        Label(
-                            playback.sleepTimer == nil
-                                ? "Sleep Timer"
-                                : "Timer Set",
-                            systemImage: "moon.zzz"
-                        )
                     }
-                    .accessibilityIdentifier("player.sleepTimer")
 
-                    Menu {
-                        Button("Add at \(playbackTime(playback.currentTime))") {
-                            bookmarkDraft = BookmarkDraft(
-                                bookmark: nil,
-                                title: "Bookmark at "
-                                    + playbackTime(playback.currentTime)
-                            )
+                    VStack(spacing: 6) {
+                        Slider(
+                            value: $scrubTime,
+                            in: 0...max(playback.duration, 1)
+                        ) { editing in
+                            isScrubbing = editing
+                            guard !editing else {
+                                return
+                            }
+                            Task {
+                                await playback.seek(to: scrubTime)
+                            }
                         }
-                        if !playback.bookmarks.isEmpty {
-                            Divider()
+                        .disabled(playback.state == .preparing)
+                        .accessibilityIdentifier("player.position")
+
+                        HStack {
+                            Text(playbackTime(scrubTime))
+                            Spacer()
+                            Text(
+                                "-"
+                                    + playbackTime(
+                                        max(playback.duration - scrubTime, 0)
+                                    ))
                         }
-                        ForEach(playback.bookmarks) { bookmark in
-                            Menu {
-                                Button("Rename") {
-                                    bookmarkDraft = BookmarkDraft(
-                                        bookmark: bookmark,
-                                        title: bookmark.title
-                                    )
-                                }
-                                Button("Delete", role: .destructive) {
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+
+                    if case .failed(let failure) = playback.state {
+                        Text(failure.message)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("player.error")
+                    }
+                    if playback.syncState == .failed {
+                        Label(
+                            "Position has not synced",
+                            systemImage: "icloud.slash"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("player.syncError")
+                    }
+                    if let conflict = playback.positionConflict {
+                        VStack(spacing: 10) {
+                            Text("Playback position changed in two places.")
+                                .font(.headline)
+                            HStack {
+                                Button(
+                                    "This device (\(playbackTime(conflict.localTime)))"
+                                ) {
                                     Task {
-                                        await playback.deleteBookmark(
-                                            bookmark
+                                        await playback.resolvePositionConflict(
+                                            useLocalPosition: true
                                         )
                                     }
                                 }
-                            } label: {
-                                Text(
-                                    playbackTime(bookmark.time)
-                                        + "  " + bookmark.title
-                                )
-                            }
-                        }
-                        if case .failed = playback.bookmarkState {
-                            Divider()
-                            Button("Retry Loading") {
-                                Task {
-                                    await playback.loadBookmarks()
-                                }
-                            }
-                        }
-                        if !playback.pendingBookmarkMutations.isEmpty {
-                            Divider()
-                            Text(
-                                "\(playback.pendingBookmarkMutations.count) stored locally"
-                            )
-                            if playback.pendingBookmarkMutations.contains(
-                                where: { $0.status == .failed }
-                            ), playback.canSyncBookmarks {
-                                Button("Retry Pending Changes") {
+                                .buttonStyle(.borderedProminent)
+                                Button(
+                                    "Server (\(playbackTime(conflict.serverTime)))"
+                                ) {
                                     Task {
-                                        await playback
-                                            .retryPendingBookmarks()
+                                        await playback.resolvePositionConflict(
+                                            useLocalPosition: false
+                                        )
                                     }
                                 }
+                                .buttonStyle(.bordered)
                             }
                         }
-                    } label: {
-                        Label("Bookmarks", systemImage: "bookmark")
+                        .accessibilityIdentifier("player.positionConflict")
                     }
-                    .disabled(
-                        playback.bookmarkState == .loading
-                            || playback.bookmarkState == .saving
-                    )
-                    .accessibilityIdentifier("player.bookmarks")
-                }
 
-                if case .failed(let failure) = playback.bookmarkState {
-                    Text(failure.message)
+                    HStack(spacing: 22) {
+                        Button {
+                            Task {
+                                await playback.previousChapter()
+                            }
+                        } label: {
+                            Image(systemName: "backward.end.fill")
+                                .font(.title2)
+                        }
+                        .disabled(
+                            playback.state == .preparing
+                                || !playback.canMoveToPreviousChapter
+                        )
+                        .accessibilityLabel("Previous Chapter")
+                        .accessibilityIdentifier("player.previousChapter")
+
+                        Button {
+                            Task {
+                                await playback.skipBackward()
+                            }
+                        } label: {
+                            Image(systemName: "gobackward.15")
+                                .font(.title)
+                        }
+                        .disabled(playback.state == .preparing)
+
+                        Button {
+                            playback.togglePlayback()
+                        } label: {
+                            Image(
+                                systemName: playback.isPlaying
+                                    ? "pause.circle.fill"
+                                    : "play.circle.fill"
+                            )
+                            .font(.system(size: 64))
+                        }
+                        .disabled(playback.state == .preparing)
+                        .accessibilityLabel(
+                            playback.isPlaying ? "Pause" : "Play"
+                        )
+                        .accessibilityIdentifier("player.toggle")
+
+                        Button {
+                            Task {
+                                await playback.skipForward()
+                            }
+                        } label: {
+                            Image(systemName: "goforward.30")
+                                .font(.title)
+                        }
+                        .disabled(playback.state == .preparing)
+
+                        Button {
+                            Task {
+                                await playback.nextChapter()
+                            }
+                        } label: {
+                            Image(systemName: "forward.end.fill")
+                                .font(.title2)
+                        }
+                        .disabled(
+                            playback.state == .preparing
+                                || !playback.canMoveToNextChapter
+                        )
+                        .accessibilityLabel("Next Chapter")
+                        .accessibilityIdentifier("player.nextChapter")
+                    }
+
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 24) {
+                            Menu {
+                                ForEach(
+                                    [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3],
+                                    id: \.self
+                                ) { speed in
+                                    Button(formatRate(speed)) {
+                                        playback.setRate(Float(speed))
+                                    }
+                                }
+                                Divider()
+                                Button("Slower by 0.05×") {
+                                    playback.setRate(playback.rate - 0.05)
+                                }
+                                .disabled(playback.rate <= 0.5)
+                                Button("Faster by 0.05×") {
+                                    playback.setRate(playback.rate + 0.05)
+                                }
+                                .disabled(playback.rate >= 3)
+                            } label: {
+                                Text(formatRate(Double(playback.rate)))
+                                    .font(.headline)
+                                    .frame(minWidth: 72)
+                            }
+                            .accessibilityIdentifier("player.rate")
+
+                            if !playback.chapters.isEmpty {
+                                Menu {
+                                    ForEach(playback.chapters, id: \.id) {
+                                        chapter in
+                                        Button {
+                                            Task {
+                                                await playback.seek(
+                                                    to: chapter.start
+                                                )
+                                            }
+                                        } label: {
+                                            if chapter.id
+                                                == playback.currentChapter?.id
+                                            {
+                                                Label(
+                                                    chapter.title,
+                                                    systemImage: "checkmark"
+                                                )
+                                            } else {
+                                                Text(chapter.title)
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    Label(
+                                        "Chapters",
+                                        systemImage: "list.bullet"
+                                    )
+                                }
+                                .accessibilityIdentifier("player.chapters")
+                            }
+
+                            Menu {
+                                ForEach(
+                                    [5, 10, 15, 30, 45, 60, 90, 120],
+                                    id: \.self
+                                ) {
+                                    minutes in
+                                    Button("\(minutes) minutes") {
+                                        playback.setSleepTimer(
+                                            minutes: minutes
+                                        )
+                                    }
+                                }
+                                if playback.canSetEndOfChapterSleepTimer {
+                                    Button("End of Chapter") {
+                                        playback.setSleepTimerToEndOfChapter()
+                                    }
+                                }
+                                if playback.sleepTimer != nil {
+                                    Button(
+                                        "Cancel Timer",
+                                        role: .destructive
+                                    ) {
+                                        playback.setSleepTimer(minutes: nil)
+                                    }
+                                }
+                            } label: {
+                                Label(
+                                    playback.sleepTimer == nil
+                                        ? "Sleep Timer"
+                                        : "Timer Set",
+                                    systemImage: "moon.zzz"
+                                )
+                            }
+                            .accessibilityIdentifier("player.sleepTimer")
+
+                            Menu {
+                                Button(
+                                    "Add at \(playbackTime(playback.currentTime))"
+                                ) {
+                                    bookmarkDraft = BookmarkDraft(
+                                        bookmark: nil,
+                                        title: "Bookmark at "
+                                            + playbackTime(playback.currentTime)
+                                    )
+                                }
+                                if !playback.bookmarks.isEmpty {
+                                    Divider()
+                                }
+                                ForEach(playback.bookmarks) { bookmark in
+                                    Menu {
+                                        Button("Rename") {
+                                            bookmarkDraft = BookmarkDraft(
+                                                bookmark: bookmark,
+                                                title: bookmark.title
+                                            )
+                                        }
+                                        Button("Delete", role: .destructive) {
+                                            Task {
+                                                await playback.deleteBookmark(
+                                                    bookmark
+                                                )
+                                            }
+                                        }
+                                    } label: {
+                                        Text(
+                                            playbackTime(bookmark.time)
+                                                + "  " + bookmark.title
+                                        )
+                                    }
+                                }
+                                if case .failed = playback.bookmarkState {
+                                    Divider()
+                                    Button("Retry Loading") {
+                                        Task {
+                                            await playback.loadBookmarks()
+                                        }
+                                    }
+                                }
+                                if !playback.pendingBookmarkMutations.isEmpty {
+                                    Divider()
+                                    Text(
+                                        "\(playback.pendingBookmarkMutations.count) stored locally"
+                                    )
+                                    if playback.pendingBookmarkMutations
+                                        .contains(
+                                            where: { $0.status == .failed }
+                                        ), playback.canSyncBookmarks
+                                    {
+                                        Button("Retry Pending Changes") {
+                                            Task {
+                                                await playback
+                                                    .retryPendingBookmarks()
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Bookmarks", systemImage: "bookmark")
+                            }
+                            .disabled(
+                                playback.bookmarkState == .loading
+                                    || playback.bookmarkState == .saving
+                            )
+                            .accessibilityIdentifier("player.bookmarks")
+
+                            AirPlayRoutePicker()
+                                .frame(width: 44, height: 44)
+                                .accessibilityLabel("AirPlay")
+                                .accessibilityIdentifier("player.airPlay")
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+
+                    if case .failed(let failure) = playback.bookmarkState {
+                        Text(failure.message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("player.bookmarkError")
+                    }
+                    if !playback.pendingBookmarkMutations.isEmpty {
+                        let failedCount =
+                            playback.pendingBookmarkMutations.filter {
+                                $0.status == .failed
+                            }.count
+                        Text(
+                            failedCount == 0
+                                ? "Bookmark changes are stored on this device."
+                                : "\(failedCount) bookmark change \(failedCount == 1 ? "has" : "have") not synced."
+                        )
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("player.bookmarkError")
-                }
-                if !playback.pendingBookmarkMutations.isEmpty {
-                    let failedCount =
-                        playback.pendingBookmarkMutations.filter {
-                            $0.status == .failed
-                        }.count
-                    Text(
-                        failedCount == 0
-                            ? "Bookmark changes are stored on this device."
-                            : "\(failedCount) bookmark change \(failedCount == 1 ? "has" : "have") not synced."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("player.bookmarkPending")
-                }
+                        .accessibilityIdentifier("player.bookmarkPending")
+                    }
 
-                Spacer()
+                }
+                .padding()
             }
-            .padding()
             .navigationTitle("Now Playing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -373,6 +463,19 @@ struct PlayerView: View {
             }
         }
         .accessibilityIdentifier("player.screen")
+    }
+
+    private struct AirPlayRoutePicker: UIViewRepresentable {
+        func makeUIView(context: Context) -> AVRoutePickerView {
+            let picker = AVRoutePickerView()
+            picker.prioritizesVideoDevices = false
+            return picker
+        }
+
+        func updateUIView(
+            _ picker: AVRoutePickerView,
+            context: Context
+        ) {}
     }
 
     private func playbackTime(_ value: Double) -> String {
