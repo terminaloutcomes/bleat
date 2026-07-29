@@ -28,6 +28,11 @@ enum BookmarkState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum PlaybackSleepTimer: Equatable, Sendable {
+    case duration(Date)
+    case endOfChapter(Double)
+}
+
 struct PlaybackPositionConflict: Equatable, Sendable {
     let localTime: Double
     let serverTime: Double
@@ -39,6 +44,7 @@ final class PlaybackModel {
     private let service: any AppServicing
     private let positionStore: PlaybackPositionStore
     private let localSessionStore: LocalPlaybackSessionStore
+    private let preferencesStore: PlaybackPreferencesStore
     private var generation: UInt64 = 0
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
@@ -50,6 +56,7 @@ final class PlaybackModel {
     private var preparation: AppPlaybackPreparation?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
+    private var pausedAt: Date?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
     private var lastPersistedLocalTime: Double = 0
@@ -63,7 +70,8 @@ final class PlaybackModel {
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
-    private(set) var sleepTimerEnd: Date?
+    private(set) var sleepTimer: PlaybackSleepTimer?
+    private(set) var resumeRewind: ResumeRewind
     private(set) var bookmarks: [AudioBookmark] = []
     private(set) var bookmarkState: BookmarkState = .idle
     private(set) var positionConflict: PlaybackPositionConflict?
@@ -76,14 +84,22 @@ final class PlaybackModel {
         state == .playing
     }
 
+    var canSetEndOfChapterSleepTimer: Bool {
+        currentChapterEnd != nil
+    }
+
     init(
         service: any AppServicing,
         positionStore: PlaybackPositionStore = .shared,
-        localSessionStore: LocalPlaybackSessionStore = .shared
+        localSessionStore: LocalPlaybackSessionStore = .shared,
+        preferencesStore: PlaybackPreferencesStore = .shared
     ) {
         self.service = service
         self.positionStore = positionStore
         self.localSessionStore = localSessionStore
+        self.preferencesStore = preferencesStore
+        rate = preferencesStore.playbackRate()
+        resumeRewind = preferencesStore.resumeRewind()
         configureRemoteCommands()
         observeAudioSession()
     }
@@ -115,6 +131,8 @@ final class PlaybackModel {
         preparation = nil
         localPlaybackSession = nil
         resetPlayer()
+        setSleepTimer(minutes: nil)
+        pausedAt = nil
         state = .preparing
         itemID = detail.id
         title = detail.title
@@ -209,6 +227,8 @@ final class PlaybackModel {
         preparation = nil
         localPlaybackSession = nil
         resetPlayer()
+        setSleepTimer(minutes: nil)
+        pausedAt = nil
         state = .preparing
         itemID = detail.id
         title = detail.title
@@ -422,6 +442,20 @@ final class PlaybackModel {
         else {
             return
         }
+        if let rewindTarget = PlaybackResumeRewindDecision.target(
+            currentTime: currentTime,
+            pausedAt: pausedAt,
+            now: Date(),
+            setting: resumeRewind
+        ) {
+            pausedAt = nil
+            state = .preparing
+            Task { @MainActor [weak self] in
+                await self?.resumePlayback(afterRewindingTo: rewindTarget)
+            }
+            return
+        }
+        pausedAt = nil
         player.playImmediately(atRate: rate)
         state = .playing
         updateNowPlaying()
@@ -431,8 +465,12 @@ final class PlaybackModel {
         guard let player, hasActiveBook else {
             return
         }
+        let wasPlaying = isPlaying
         player.pause()
         state = .paused
+        if wasPlaying {
+            pausedAt = Date()
+        }
         updateNowPlaying()
         persistLocalPosition()
         Task { @MainActor [weak self] in
@@ -456,12 +494,14 @@ final class PlaybackModel {
         sleepTask?.cancel()
         sleepTask = nil
         guard let minutes else {
-            sleepTimerEnd = nil
+            sleepTimer = nil
             return
         }
         let seconds = max(minutes, 1) * 60
-        sleepTimerEnd = Date().addingTimeInterval(
-            TimeInterval(seconds)
+        sleepTimer = .duration(
+            Date().addingTimeInterval(
+                TimeInterval(seconds)
+            )
         )
         sleepTask = Task { @MainActor [weak self] in
             try? await Task.sleep(
@@ -470,20 +510,34 @@ final class PlaybackModel {
             guard !Task.isCancelled else {
                 return
             }
+            self?.sleepTimer = nil
             self?.pause()
-            self?.sleepTimerEnd = nil
             self?.sleepTask = nil
         }
     }
 
+    func setSleepTimerToEndOfChapter() {
+        guard let chapterEnd = currentChapterEnd else {
+            return
+        }
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepTimer = .endOfChapter(chapterEnd)
+    }
+
     func setRate(_ newRate: Float) {
-        let rounded = (newRate * 20).rounded() / 20
-        rate = min(max(rounded, 0.5), 3)
+        preferencesStore.savePlaybackRate(newRate)
+        rate = preferencesStore.playbackRate()
         updateTimePitchAlgorithm()
         if isPlaying {
             player?.playImmediately(atRate: rate)
         }
         updateNowPlaying()
+    }
+
+    func setResumeRewind(_ value: ResumeRewind) {
+        preferencesStore.saveResumeRewind(value)
+        resumeRewind = value
     }
 
     func seek(to requestedTime: Double) async {
@@ -498,6 +552,9 @@ final class PlaybackModel {
         }
         let target = min(max(requestedTime, 0), preparation.duration)
         let shouldResume = isPlaying
+        if !shouldResume {
+            pausedAt = nil
+        }
         state = .preparing
         do {
             try await rebuildQueue(at: target)
@@ -576,6 +633,7 @@ final class PlaybackModel {
         duration = 0
         lastAttemptedSyncTime = 0
         setSleepTimer(minutes: nil)
+        pausedAt = nil
         state = .idle
         syncState = .idle
         positionConflict = nil
@@ -842,6 +900,13 @@ final class PlaybackModel {
             return
         }
         currentTime = min(max(offset + itemTime, 0), duration)
+        if case .endOfChapter(let chapterEnd) = sleepTimer,
+            currentTime >= chapterEnd
+        {
+            sleepTimer = nil
+            pause()
+            return
+        }
         if abs(currentTime - lastPersistedLocalTime) >= 5 {
             persistLocalPosition()
         }
@@ -857,6 +922,7 @@ final class PlaybackModel {
 
     private func playbackEnded() {
         currentTime = duration
+        setSleepTimer(minutes: nil)
         persistLocalPosition()
         state = .ended
         updateNowPlaying()
@@ -1013,6 +1079,25 @@ final class PlaybackModel {
         case .local(let localTime):
             return localTime
         }
+    }
+
+    private var currentChapterEnd: Double? {
+        guard let preparation else {
+            return nil
+        }
+        return PlaybackChapterSleepDecision.target(
+            chapters: preparation.chapters,
+            currentTime: currentTime,
+            duration: duration
+        )
+    }
+
+    private func resumePlayback(afterRewindingTo target: Double) async {
+        await seek(to: target)
+        guard state == .paused || state == .ready else {
+            return
+        }
+        play()
     }
 
     func syncPendingLocalSessions(for account: ServerAccount) async {

@@ -80,6 +80,13 @@ public struct PlaybackChapter: Codable, Hashable, Sendable {
     public let start: Double
     public let end: Double
     public let title: String
+
+    public init(id: Int, start: Double, end: Double, title: String) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.title = title
+    }
 }
 
 public struct PlaybackBookMetadata: Decodable, Hashable, Sendable {

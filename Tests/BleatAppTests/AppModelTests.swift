@@ -177,6 +177,85 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPlaybackPreferencesPersistNormalizedRateAndResumeRewind()
+        throws
+    {
+        let suite = "PlaybackPreferencesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let first = PlaybackPreferencesStore(defaults: defaults)
+
+        XCTAssertEqual(first.playbackRate(), 1)
+        XCTAssertEqual(first.resumeRewind(), .tenSeconds)
+        first.savePlaybackRate(1.37)
+        first.saveResumeRewind(.thirtySeconds)
+
+        let restored = PlaybackPreferencesStore(defaults: defaults)
+        XCTAssertEqual(restored.playbackRate(), 1.35, accuracy: 0.001)
+        XCTAssertEqual(restored.resumeRewind(), .thirtySeconds)
+        restored.savePlaybackRate(10)
+        XCTAssertEqual(restored.playbackRate(), 3)
+        restored.savePlaybackRate(0)
+        XCTAssertEqual(restored.playbackRate(), 0.5)
+        restored.savePlaybackRate(.nan)
+        XCTAssertEqual(restored.playbackRate(), 1)
+    }
+
+    func testResumeRewindRequiresFiveMinutePauseAndClampsAtBookStart() {
+        let pausedAt = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertNil(
+            PlaybackResumeRewindDecision.target(
+                currentTime: 100,
+                pausedAt: pausedAt,
+                now: pausedAt.addingTimeInterval(299),
+                setting: .tenSeconds
+            )
+        )
+        XCTAssertNil(
+            PlaybackResumeRewindDecision.target(
+                currentTime: 100,
+                pausedAt: pausedAt,
+                now: pausedAt.addingTimeInterval(600),
+                setting: .off
+            )
+        )
+        XCTAssertEqual(
+            PlaybackResumeRewindDecision.target(
+                currentTime: 8,
+                pausedAt: pausedAt,
+                now: pausedAt.addingTimeInterval(300),
+                setting: .tenSeconds
+            ),
+            0
+        )
+    }
+
+    func testEndOfChapterSleepUsesWholeBookBoundary() {
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 60, title: "One"),
+            PlaybackChapter(id: 2, start: 60, end: 130, title: "Two"),
+        ]
+
+        XCTAssertEqual(
+            PlaybackChapterSleepDecision.target(
+                chapters: chapters,
+                currentTime: 75,
+                duration: 130
+            ),
+            130
+        )
+        XCTAssertNil(
+            PlaybackChapterSleepDecision.target(
+                chapters: chapters,
+                currentTime: 130,
+                duration: 130
+            )
+        )
+    }
+
     func testLocalSessionStorePersistsAndRemovesOnlyAcknowledgedIDs()
         throws
     {

@@ -1015,6 +1015,27 @@ private struct SettingsView: View {
                     )
                 }
 
+                Section("Playback") {
+                    Picker(
+                        "Resume Rewind",
+                        selection: Binding(
+                            get: {
+                                model.playback.resumeRewind
+                            },
+                            set: { value in
+                                model.playback.setResumeRewind(value)
+                            }
+                        )
+                    ) {
+                        ForEach(ResumeRewind.allCases) { value in
+                            Text(value.label).tag(value)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.playback.resumeRewind"
+                    )
+                }
+
                 Section {
                     Button("Remove Account", role: .destructive) {
                         Task {

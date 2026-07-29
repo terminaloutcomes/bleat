@@ -114,6 +114,12 @@ final class BleatUITests: XCTestCase {
         )
         app.buttons["Cancel"].tap()
 
+        app.swipeUp()
+        XCTAssertTrue(
+            app.staticTexts["Resume Rewind"].waitForExistence(
+                timeout: 3
+            )
+        )
         let removeAccount = app.buttons["settings.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()

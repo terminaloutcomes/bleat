@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */; };
 		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		212CB9A152C459B1BFDFBBCF /* CoverImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */; };
@@ -61,6 +62,7 @@
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C9A985B3A620C132DA9B6307 /* BleatApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BleatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
 		F2675018070436D35F6FC0FF /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
@@ -132,6 +134,7 @@
 				F2675018070436D35F6FC0FF /* MetadataEditorView.swift */,
 				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
 				9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */,
+				DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */,
 				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
@@ -297,6 +300,7 @@
 				6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */,
 				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
 				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
+				012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */,
 				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,

@@ -153,12 +153,17 @@ Audiobookshelf playback session and uses its session-scoped direct-play or HLS
 URL without putting access tokens in media URLs. The mini-player remains above
 the tab bar; tap its title for whole-book seeking, 15-second rewind, 30-second
 forward, speed control from 0.5× to 3×, and Stop.
+The selected global speed persists across relaunches and can be adjusted in
+0.05× steps.
 
 Audio continues in the background. Lock-screen, Control Center, headset, and
 Bluetooth controls can play, pause, seek, skip, and move between chapters.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
-The full player includes 15, 30, 45, and 60-minute sleep timers.
+The full player includes 5, 10, 15, 30, 45, 60, 90, and 120-minute sleep
+timers plus an end-of-current-chapter option. Settings also configures an
+optional 5, 10, 15, or 30-second rewind when resuming after a pause longer than
+five minutes.
 Its Bookmarks menu loads the current book's server bookmarks, creates a
 bookmark at the current whole-book position, and supports rename and delete.
 The same controls remain available during local-file playback when the server

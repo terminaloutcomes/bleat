@@ -201,6 +201,15 @@ struct PlayerView: View {
                                 playback.setRate(Float(speed))
                             }
                         }
+                        Divider()
+                        Button("Slower by 0.05×") {
+                            playback.setRate(playback.rate - 0.05)
+                        }
+                        .disabled(playback.rate <= 0.5)
+                        Button("Faster by 0.05×") {
+                            playback.setRate(playback.rate + 0.05)
+                        }
+                        .disabled(playback.rate >= 3)
                     } label: {
                         Text(formatRate(Double(playback.rate)))
                             .font(.headline)
@@ -209,7 +218,10 @@ struct PlayerView: View {
                     .accessibilityIdentifier("player.rate")
 
                     Menu {
-                        ForEach([15, 30, 45, 60], id: \.self) {
+                        ForEach(
+                            [5, 10, 15, 30, 45, 60, 90, 120],
+                            id: \.self
+                        ) {
                             minutes in
                             Button("\(minutes) minutes") {
                                 playback.setSleepTimer(
@@ -217,14 +229,19 @@ struct PlayerView: View {
                                 )
                             }
                         }
-                        if playback.sleepTimerEnd != nil {
+                        if playback.canSetEndOfChapterSleepTimer {
+                            Button("End of Chapter") {
+                                playback.setSleepTimerToEndOfChapter()
+                            }
+                        }
+                        if playback.sleepTimer != nil {
                             Button("Cancel Timer", role: .destructive) {
                                 playback.setSleepTimer(minutes: nil)
                             }
                         }
                     } label: {
                         Label(
-                            playback.sleepTimerEnd == nil
+                            playback.sleepTimer == nil
                                 ? "Sleep Timer"
                                 : "Timer Set",
                             systemImage: "moon.zzz"
