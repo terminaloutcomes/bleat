@@ -6,6 +6,44 @@ enum PlaybackPositionStoreError: Error, Equatable {
     case persistenceFailed
 }
 
+enum DownloadedPositionDecision: Equatable {
+    case local(Double)
+    case server(Double)
+    case conflict(local: Double, server: Double)
+}
+
+enum DownloadedPositionReconciler {
+    static func decide(
+        savedPosition: Double?,
+        baseline: LibraryBookProgress?,
+        remote: LibraryBookProgress?,
+        duration: Double
+    ) -> DownloadedPositionDecision {
+        let baselineTime = baseline?.currentTime ?? 0
+        let localTime = min(
+            max(savedPosition ?? baselineTime, 0),
+            duration
+        )
+        guard let remote else {
+            return .local(localTime)
+        }
+        let serverTime = min(max(remote.currentTime, 0), duration)
+        let localChanged =
+            savedPosition != nil && abs(localTime - baselineTime) > 1
+        let serverChanged =
+            remote.lastUpdateMilliseconds
+            > (baseline?.lastUpdateMilliseconds ?? 0)
+            && abs(serverTime - baselineTime) > 1
+        if localChanged, serverChanged, abs(localTime - serverTime) > 1 {
+            return .conflict(local: localTime, server: serverTime)
+        }
+        if serverChanged, !localChanged {
+            return .server(serverTime)
+        }
+        return .local(localTime)
+    }
+}
+
 @MainActor
 final class PlaybackPositionStore {
     static let shared = PlaybackPositionStore(defaults: .standard)

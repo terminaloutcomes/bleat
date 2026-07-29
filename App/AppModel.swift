@@ -37,6 +37,13 @@ enum MetadataSaveState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum BookProgressUpdateState: Equatable, Sendable {
+    case idle
+    case saving
+    case saved
+    case failed(AppFailure)
+}
+
 enum AppFailure: Equatable, Sendable {
     case persistenceUnavailable
     case invalidServerAddress
@@ -54,6 +61,7 @@ enum AppFailure: Equatable, Sendable {
     case bookUnavailable
     case playbackDenied
     case playbackUnavailable
+    case progressUnavailable
     case mediaUnavailable
     case invalidMetadata
     case metadataUnavailable
@@ -94,6 +102,8 @@ enum AppFailure: Equatable, Sendable {
             "This account is not allowed to play that audiobook."
         case .playbackUnavailable:
             "Bleat could not start playback from the server."
+        case .progressUnavailable:
+            "Bleat could not update audiobook progress."
         case .mediaUnavailable:
             "This audiobook could not be prepared for playback."
         case .invalidMetadata:
@@ -151,6 +161,8 @@ enum AppFailure: Equatable, Sendable {
             self = .bookUnavailable
         case .playbackSession, .playbackSource, .playbackSync:
             self = .playbackUnavailable
+        case .progress:
+            self = .progressUnavailable
         case .metadataPatch:
             self = .invalidMetadata
         case .metadataUpdate, .coverUpdate:
@@ -187,6 +199,7 @@ final class AppModel {
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var metadataSaveState: MetadataSaveState = .idle
+    private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     let playback: PlaybackModel
     let downloads: DownloadModel
 
@@ -394,6 +407,7 @@ final class AppModel {
     }
 
     func loadBookDetail(_ book: LibraryBookSummary) async {
+        bookProgressUpdateState = .idle
         bookDetailGeneration &+= 1
         let operationGeneration = bookDetailGeneration
         selectedBookID = book.id
@@ -480,6 +494,39 @@ final class AppModel {
             return true
         } catch {
             return false
+        }
+    }
+
+    func setFinished(
+        _ isFinished: Bool,
+        detail: LibraryBookDetail
+    ) async {
+        guard let account else {
+            bookProgressUpdateState = .failed(.accountUnavailable)
+            return
+        }
+        guard bookProgressUpdateState != .saving else {
+            return
+        }
+        bookProgressUpdateState = .saving
+        do {
+            try await service.updateBookProgress(
+                for: account,
+                itemID: detail.id,
+                update: BookProgressUpdate(isFinished: isFinished)
+            )
+            let updated = try await service.bookDetail(
+                for: account,
+                libraryID: detail.libraryID,
+                itemID: detail.id
+            )
+            selectedBookID = updated.id
+            bookDetail = .loaded(updated)
+            bookProgressUpdateState = .saved
+        } catch let error {
+            bookProgressUpdateState = .failed(
+                AppFailure(serviceError: error)
+            )
         }
     }
 

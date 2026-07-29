@@ -70,4 +70,57 @@ final class PlaybackPositionStoreTests: XCTestCase {
             10
         )
     }
+
+    func testReconcilerDetectsBothChangedAndAdoptsSingleChange() {
+        let baseline = progress(time: 10, updatedAt: 100)
+        let remote = progress(time: 30, updatedAt: 200)
+
+        XCTAssertEqual(
+            DownloadedPositionReconciler.decide(
+                savedPosition: 20,
+                baseline: baseline,
+                remote: remote,
+                duration: 100
+            ),
+            .conflict(local: 20, server: 30)
+        )
+        XCTAssertEqual(
+            DownloadedPositionReconciler.decide(
+                savedPosition: 10,
+                baseline: baseline,
+                remote: remote,
+                duration: 100
+            ),
+            .server(30)
+        )
+        XCTAssertEqual(
+            DownloadedPositionReconciler.decide(
+                savedPosition: 20,
+                baseline: baseline,
+                remote: baseline,
+                duration: 100
+            ),
+            .local(20)
+        )
+    }
+
+    private func progress(
+        time: Double,
+        updatedAt: Int64
+    ) -> LibraryBookProgress {
+        LibraryBookProgress(
+            id: "progress",
+            userID: UserID(rawValue: "user"),
+            libraryItemID: LibraryItemID(rawValue: "item"),
+            bookID: BookID(rawValue: "book"),
+            duration: 100,
+            progress: time / 100,
+            currentTime: time,
+            isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: updatedAt,
+            startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil
+        )
+    }
 }

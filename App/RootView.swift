@@ -694,6 +694,28 @@ private struct BookDetailView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+                Button(
+                    detail.progress?.isFinished == true
+                        ? "Mark Unfinished" : "Mark Finished"
+                ) {
+                    Task {
+                        await model.setFinished(
+                            detail.progress?.isFinished != true,
+                            detail: detail
+                        )
+                    }
+                }
+                .disabled(model.bookProgressUpdateState == .saving)
+                .accessibilityIdentifier("book.detail.finished")
+                if case .failed(let failure) =
+                    model.bookProgressUpdateState
+                {
+                    Text(failure.message)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier(
+                            "book.detail.progressError"
+                        )
+                }
 
                 if let description = detail.descriptionPlain,
                     !description.isEmpty

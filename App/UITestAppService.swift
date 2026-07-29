@@ -298,6 +298,19 @@
             bookmark: AudioBookmark
         ) async throws(AppServiceError) {}
 
+        func bookProgress(
+            for account: ServerAccount,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> LibraryBookProgress? {
+            nil
+        }
+
+        func updateBookProgress(
+            for account: ServerAccount,
+            itemID: LibraryItemID,
+            update: BookProgressUpdate
+        ) async throws(AppServiceError) {}
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

@@ -551,6 +551,68 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testSetFinishedUpdatesProgressAndRefetchesDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setFinished(true, detail: detail)
+
+        XCTAssertEqual(model.bookProgressUpdateState, .saved)
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        let updates = await service.progressUpdateRequests()
+        XCTAssertEqual(
+            updates,
+            [
+                ProgressUpdateRequest(
+                    accountID: account.id,
+                    itemID: detail.id,
+                    update: BookProgressUpdate(isFinished: true)
+                )
+            ]
+        )
+        let detailRequests = await service.bookDetailRequests()
+        XCTAssertEqual(
+            detailRequests,
+            [
+                BookDetailRequest(
+                    accountID: account.id,
+                    libraryID: library.id,
+                    itemID: detail.id
+                )
+            ]
+        )
+    }
+
+    func testSetFinishedFailureDoesNotRefetchDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            progressUpdate: .failure(.progress(.unexpectedStatus(503)))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setFinished(false, detail: detail)
+
+        XCTAssertEqual(
+            model.bookProgressUpdateState,
+            .failed(.progressUnavailable)
+        )
+        let detailRequests = await service.bookDetailRequests()
+        XCTAssertTrue(detailRequests.isEmpty)
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -709,6 +771,10 @@ final class AppModelTests: XCTestCase {
                 .playbackSync(.unexpectedStatus(503)),
                 .playbackUnavailable
             ),
+            (
+                .progress(.unexpectedStatus(503)),
+                .progressUnavailable
+            ),
             (.metadataPatch(.emptyTitle), .invalidMetadata),
             (
                 .metadataUpdate(.unexpectedStatus(503)),
@@ -757,6 +823,7 @@ final class AppModelTests: XCTestCase {
             .bookUnavailable,
             .playbackDenied,
             .playbackUnavailable,
+            .progressUnavailable,
             .mediaUnavailable,
             .invalidMetadata,
             .metadataUnavailable,
@@ -915,6 +982,12 @@ private struct MetadataSaveRequest: Equatable, Sendable {
     let overwrite: Bool
 }
 
+private struct ProgressUpdateRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
+    let update: BookProgressUpdate
+}
+
 private actor TestAppService: AppServicing {
     private var accountsResult: Result<[ServerAccount], AppServiceError>?
     private var activeAccountResult:
@@ -948,6 +1021,7 @@ private actor TestAppService: AppServicing {
             LibraryBookDetail,
             AppServiceError
         >
+    private var progressUpdateResult: Result<Void, AppServiceError>
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -961,6 +1035,7 @@ private actor TestAppService: AppServicing {
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
+    private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
 
     init(
@@ -982,6 +1057,7 @@ private actor TestAppService: AppServicing {
         bookDetail: Result<LibraryBookDetail, AppServiceError> = .failure(
             .bookDetail(.noCachedValue)
         ),
+        progressUpdate: Result<Void, AppServiceError> = .success(()),
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -995,6 +1071,7 @@ private actor TestAppService: AppServicing {
         homeShelvesResult = homeShelves
         searchResult = search
         bookDetailResult = bookDetail
+        progressUpdateResult = progressUpdate
         removeAccountResult = removeAccount
         self.loginGate = loginGate
         self.removeGate = removeGate
@@ -1210,6 +1287,28 @@ private actor TestAppService: AppServicing {
         bookmark: AudioBookmark
     ) async throws(AppServiceError) {}
 
+    func bookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookProgress? {
+        nil
+    }
+
+    func updateBookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        update: BookProgressUpdate
+    ) async throws(AppServiceError) {
+        recordedProgressUpdateRequests.append(
+            ProgressUpdateRequest(
+                accountID: account.id,
+                itemID: itemID,
+                update: update
+            )
+        )
+        try value(from: progressUpdateResult)
+    }
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
@@ -1268,6 +1367,10 @@ private actor TestAppService: AppServicing {
 
     func metadataSaveRequests() -> [MetadataSaveRequest] {
         recordedMetadataSaveRequests
+    }
+
+    func progressUpdateRequests() -> [ProgressUpdateRequest] {
+        recordedProgressUpdateRequests
     }
 
     func removedAccounts() -> [ServerAccount] {

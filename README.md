@@ -202,7 +202,10 @@ server playback session. Failed or cancelled books expose Retry, active books
 expose Pause and Cancel, paused books expose Resume, and completed books can be
 removed from the Downloads tab. Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and
-stop, then resumes from that durable position after relaunch.
+stop, then resumes from that durable position after relaunch. When both the
+saved device position and server position changed after the download snapshot,
+Now Playing asks which position to keep before syncing. Book detail also
+supports explicit **Mark Finished** and **Mark Unfinished** actions.
 
 ## Use multiple accounts
 

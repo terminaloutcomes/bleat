@@ -25,6 +25,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case metadataUpdate(BookMetadataUpdateError)
     case coverUpdate(BookCoverUploadError)
     case bookmark(BookmarkError)
+    case progress(BookProgressError)
     case downloadPlan(DownloadPlanRequestError)
     case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
@@ -169,6 +170,17 @@ protocol AppServicing: Sendable {
     func deleteBookmark(
         for account: ServerAccount,
         bookmark: AudioBookmark
+    ) async throws(AppServiceError)
+
+    func bookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookProgress?
+
+    func updateBookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        update: BookProgressUpdate
     ) async throws(AppServiceError)
 
     func removeAccount(
@@ -698,6 +710,38 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .bookmark(error)
+        }
+    }
+
+    func bookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookProgress? {
+        do {
+            return try await coordinator.bookProgress(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .progress(error)
+        }
+    }
+
+    func updateBookProgress(
+        for account: ServerAccount,
+        itemID: LibraryItemID,
+        update: BookProgressUpdate
+    ) async throws(AppServiceError) {
+        do {
+            try await coordinator.updateBookProgress(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID,
+                update: update
+            )
+        } catch let error {
+            throw .progress(error)
         }
     }
 

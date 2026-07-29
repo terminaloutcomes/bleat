@@ -28,6 +28,11 @@ enum BookmarkState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+struct PlaybackPositionConflict: Equatable, Sendable {
+    let localTime: Double
+    let serverTime: Double
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -59,6 +64,7 @@ final class PlaybackModel {
     private(set) var sleepTimerEnd: Date?
     private(set) var bookmarks: [AudioBookmark] = []
     private(set) var bookmarkState: BookmarkState = .idle
+    private(set) var positionConflict: PlaybackPositionConflict?
 
     var hasActiveBook: Bool {
         state != .idle
@@ -121,6 +127,7 @@ final class PlaybackModel {
         syncState = .idle
         bookmarks = []
         bookmarkState = .idle
+        positionConflict = nil
 
         let deviceInfo = PlaybackDeviceInfo(
             deviceID: UIDevice.current.identifierForVendor?
@@ -216,6 +223,7 @@ final class PlaybackModel {
         syncState = .idle
         bookmarks = []
         bookmarkState = .idle
+        positionConflict = nil
 
         do {
             var offset: Double = 0
@@ -260,9 +268,15 @@ final class PlaybackModel {
                 accountID: account.id,
                 itemID: detail.id
             )
-            currentTime = min(
-                max(savedPosition ?? prepared.currentTime, 0),
-                prepared.duration
+            let remoteProgress = try? await service.bookProgress(
+                for: account,
+                itemID: detail.id
+            )
+            currentTime = reconciledDownloadedPosition(
+                savedPosition: savedPosition,
+                baseline: detail.progress,
+                remote: remoteProgress,
+                duration: prepared.duration
             )
             lastAttemptedSyncTime = currentTime
             lastPersistedLocalTime = currentTime
@@ -271,7 +285,12 @@ final class PlaybackModel {
                 return
             }
             state = .ready
-            play()
+            if positionConflict == nil {
+                play()
+                await syncProgress()
+            } else {
+                state = .paused
+            }
             await loadBookmarks()
         } catch {
             guard generation == operationGeneration else {
@@ -279,6 +298,32 @@ final class PlaybackModel {
             }
             preparation = nil
             resetPlayer()
+            state = .failed(.mediaUnavailable)
+        }
+    }
+
+    func resolvePositionConflict(useLocalPosition: Bool) async {
+        guard let conflict = positionConflict,
+            preparation?.sessionID == nil
+        else {
+            return
+        }
+        let target =
+            useLocalPosition ? conflict.localTime : conflict.serverTime
+        state = .preparing
+        do {
+            try await rebuildQueue(at: target)
+            currentTime = target
+            positionConflict = nil
+            persistLocalPosition()
+            state = .ready
+            if useLocalPosition {
+                await syncProgress()
+            } else {
+                syncState = .idle
+            }
+            play()
+        } catch {
             state = .failed(.mediaUnavailable)
         }
     }
@@ -534,6 +579,7 @@ final class PlaybackModel {
         setSleepTimer(minutes: nil)
         state = .idle
         syncState = .idle
+        positionConflict = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(
             false,
@@ -842,13 +888,45 @@ final class PlaybackModel {
     private func syncProgress() async {
         guard syncState != .syncing,
             let activeAccount,
-            let preparation,
-            let sessionID = preparation.sessionID
+            let preparation
         else {
             return
         }
         let position = min(max(currentTime, 0), preparation.duration)
         syncState = .syncing
+        if preparation.sessionID == nil {
+            do {
+                try await service.updateBookProgress(
+                    for: activeAccount,
+                    itemID: preparation.itemID,
+                    update: BookProgressUpdate(
+                        duration: preparation.duration,
+                        currentTime: position,
+                        progress: preparation.duration > 0
+                            ? position / preparation.duration : 0,
+                        isFinished: position >= preparation.duration
+                    )
+                )
+                guard self.preparation?.itemID == preparation.itemID,
+                    self.preparation?.sessionID == nil
+                else {
+                    return
+                }
+                lastAttemptedSyncTime = position
+                syncState = .idle
+            } catch {
+                guard self.preparation?.itemID == preparation.itemID,
+                    self.preparation?.sessionID == nil
+                else {
+                    return
+                }
+                syncState = .failed
+            }
+            return
+        }
+        guard let sessionID = preparation.sessionID else {
+            return
+        }
         do {
             try await service.syncPlayback(
                 for: activeAccount,
@@ -866,6 +944,38 @@ final class PlaybackModel {
                 return
             }
             syncState = .failed
+        }
+    }
+
+    private func reconciledDownloadedPosition(
+        savedPosition: Double?,
+        baseline: LibraryBookProgress?,
+        remote: LibraryBookProgress?,
+        duration: Double
+    ) -> Double {
+        switch DownloadedPositionReconciler.decide(
+            savedPosition: savedPosition,
+            baseline: baseline,
+            remote: remote,
+            duration: duration
+        ) {
+        case .conflict(let localTime, let serverTime):
+            positionConflict = PlaybackPositionConflict(
+                localTime: localTime,
+                serverTime: serverTime
+            )
+            return localTime
+        case .server(let serverTime):
+            if let activeAccount, let itemID {
+                try? positionStore.save(
+                    serverTime,
+                    accountID: activeAccount.id,
+                    itemID: itemID
+                )
+            }
+            return serverTime
+        case .local(let localTime):
+            return localTime
         }
     }
 

@@ -123,6 +123,35 @@ struct PlayerView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("player.syncError")
                 }
+                if let conflict = playback.positionConflict {
+                    VStack(spacing: 10) {
+                        Text("Playback position changed in two places.")
+                            .font(.headline)
+                        HStack {
+                            Button(
+                                "This device (\(playbackTime(conflict.localTime)))"
+                            ) {
+                                Task {
+                                    await playback.resolvePositionConflict(
+                                        useLocalPosition: true
+                                    )
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button(
+                                "Server (\(playbackTime(conflict.serverTime)))"
+                            ) {
+                                Task {
+                                    await playback.resolvePositionConflict(
+                                        useLocalPosition: false
+                                    )
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .accessibilityIdentifier("player.positionConflict")
+                }
 
                 HStack(spacing: 40) {
                     Button {
