@@ -215,6 +215,10 @@ final class TokenVaultTests: XCTestCase {
                 "The stored Keychain credentials are invalid."
             ),
             (
+                .missingEntitlement,
+                "The app is missing a required Keychain entitlement."
+            ),
+            (
                 .interactionNotAllowed,
                 "Keychain interaction is not currently allowed."
             ),
@@ -226,6 +230,17 @@ final class TokenVaultTests: XCTestCase {
 
         for (error, expectedDescription) in cases {
             XCTAssertEqual(error.errorDescription, expectedDescription)
+        }
+    }
+
+    func testMissingEntitlementStatusHasTypedError() {
+        XCTAssertThrowsError(
+            try TokenVault.check(errSecMissingEntitlement)
+        ) { error in
+            XCTAssertEqual(
+                error as? TokenVaultError,
+                .missingEntitlement
+            )
         }
     }
 

@@ -576,6 +576,10 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["Cached"].waitForExistence(timeout: 60)
         )
+        XCTAssertTrue(
+            app.buttons["book.detail.download.fullBook"]
+                .waitForExistence(timeout: 10)
+        )
         app.terminate()
     }
 

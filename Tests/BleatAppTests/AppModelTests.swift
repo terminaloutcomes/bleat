@@ -6,7 +6,8 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
-    func testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
+    func
+        testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
     {
         var gate = AutomaticDownloadPlaybackGate()
 
@@ -68,8 +69,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testDisplayedDownloadBytesIncludeInflightTransferAndClampToExpected()
-    {
+    func testDisplayedDownloadBytesIncludeInflightTransferAndClampToExpected() {
         XCTAssertEqual(
             DownloadModel.combinedDownloadedByteLength(
                 storedByteLength: 100,
@@ -91,6 +91,89 @@ final class AppModelTests: XCTestCase {
                 storedByteLength: -1,
                 transferredByteLengths: [25],
                 expectedByteLength: 200
+            ),
+            25
+        )
+    }
+
+    func testAutomaticDownloadBytesAndStateUseOnlyActiveWindow()
+        throws
+    {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: (0..<10).map { index in
+                DownloadTrackPlan(
+                    index: index,
+                    inode: "\(index)",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: String(
+                        format: "%05d.mp3",
+                        index
+                    )
+                )
+            }
+        )
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "automatic"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [2, 3, 4, 5, 6]
+        )
+        for index in 2...6 {
+            try manifest.markComplete(
+                trackIndex: index,
+                observedByteLength: 10,
+                placement: .finalized
+            )
+        }
+        let record = DownloadedBookRecord(
+            manifest: manifest,
+            detail: fixtureBookDetail(
+                item: fixturePage(
+                    libraryID: fixtureLibrary().id
+                ).items[0]
+            )
+        )
+
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+        XCTAssertEqual(
+            record.manifest.automaticExpectedByteLength,
+            50
+        )
+        XCTAssertFalse(record.manifest.isFullBookComplete)
+        XCTAssertEqual(
+            DownloadModel.scopedDownloadedByteLength(
+                for: record,
+                transferredByteLengthsByTrack: [
+                    0: 10,
+                    9: Int64.max,
+                ]
+            ),
+            50
+        )
+
+        try manifest.setAutomaticWindow(
+            targetTrackIndexes: [5, 6, 7, 8, 9]
+        )
+        try manifest.markDownloading(trackIndex: 7)
+        let shifted = DownloadedBookRecord(
+            manifest: manifest,
+            detail: record.detail
+        )
+        XCTAssertEqual(
+            shifted.manifest.automaticCacheState,
+            .downloading
+        )
+        XCTAssertEqual(
+            DownloadModel.scopedDownloadedByteLength(
+                for: shifted,
+                transferredByteLengthsByTrack: [
+                    1: 10,
+                    7: 5,
+                ]
             ),
             25
         )
@@ -150,7 +233,7 @@ final class AppModelTests: XCTestCase {
         let item = fixturePage(
             libraryID: fixtureLibrary().id
         ).items[0]
-        var manifest = DownloadManifest(
+        var manifest = try DownloadManifest(
             downloadID: DownloadID(rawValue: "download"),
             accountID: AccountID(rawValue: "account"),
             plan: plan
@@ -187,6 +270,65 @@ final class AppModelTests: XCTestCase {
                 .repairPlanChanged
             )
         }
+    }
+
+    func testAutomaticRepairUsesWindowWhilePromotionUsesFullBook()
+        throws
+    {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: (0..<3).map { index in
+                DownloadTrackPlan(
+                    index: index,
+                    inode: "\(index)",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: String(
+                        format: "%05d.mp3",
+                        index
+                    )
+                )
+            }
+        )
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "automatic"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
+        )
+        try manifest.markComplete(
+            trackIndex: 0,
+            observedByteLength: 10,
+            placement: .finalized
+        )
+        try manifest.markFailed(trackIndex: 1)
+        try manifest.markFailed(trackIndex: 2)
+        let record = DownloadedBookRecord(
+            manifest: manifest,
+            detail: fixtureBookDetail(
+                item: fixturePage(
+                    libraryID: fixtureLibrary().id
+                ).items[0]
+            )
+        )
+
+        XCTAssertEqual(
+            try DownloadRepairPlanner.tracks(
+                record: record,
+                plan: plan
+            ).map(\.index),
+            [1]
+        )
+        XCTAssertEqual(
+            try DownloadRepairPlanner.tracks(
+                record: record,
+                plan: plan,
+                scope: .fullBook
+            ).map(\.index),
+            [1, 2]
+        )
     }
 
     func testAccountRemovalChoiceKeepsOrDeletesDownloads()
@@ -377,7 +519,10 @@ final class AppModelTests: XCTestCase {
                     libraryID: fixtureLibrary().id
                 )
             ),
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: Set(
+                automaticPlan.tracks.map(\.index)
+            )
         )
         automatic = try await storage.markBookFinished(
             automatic,
@@ -410,6 +555,102 @@ final class AppModelTests: XCTestCase {
                 manualPlan.itemID
             ])
         XCTAssertEqual(model.records.first?.manifest.purpose, .manual)
+    }
+
+    func testLegacyAutomaticCacheIsDiscardedWithoutDeletingManualDownload()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatLegacyAutomatic-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let account = try fixtureAccount()
+        let legacyPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let manualPlan = try DownloadPlan.decodeExpandedItem(
+            from: Data(
+                Self.downloadPlanJSON(secondSize: 8)
+                    .replacingOccurrences(
+                        of: "\"item-1\"",
+                        with: "\"item-2\""
+                    )
+                    .utf8
+            )
+        )
+        let manualDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: manualPlan.itemID.rawValue,
+                title: "Manual",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "manual"),
+            accountID: account.id,
+            plan: manualPlan,
+            detail: manualDetail
+        )
+
+        let legacyManifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "legacy-automatic"),
+            accountID: account.id,
+            plan: legacyPlan,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [0]
+        )
+        let legacyRecord = DownloadedBookRecord(
+            manifest: legacyManifest,
+            detail: fixtureBookDetail(
+                item: fixtureBook(
+                    id: legacyPlan.itemID.rawValue,
+                    title: "Legacy Automatic",
+                    libraryID: fixtureLibrary().id
+                )
+            )
+        )
+        let legacyURL = layout.recordURL(
+            accountID: account.id,
+            itemID: legacyPlan.itemID
+        )
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(legacyRecord)
+            ) as? [String: Any]
+        )
+        var legacyManifestObject = try XCTUnwrap(
+            legacyObject["manifest"] as? [String: Any]
+        )
+        legacyManifestObject["automaticWindow"] = nil
+        legacyObject["manifest"] = legacyManifestObject
+        try JSONSerialization.data(
+            withJSONObject: legacyObject
+        ).write(to: legacyURL)
+
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root
+        )
+        await model.start(account: nil)
+
+        XCTAssertEqual(model.records.count, 1)
+        XCTAssertEqual(
+            model.records.first?.manifest.downloadID,
+            DownloadID(rawValue: "manual")
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: legacyURL.path)
+        )
     }
 
     func testDownloadFailuresHaveDistinctMessages() {
@@ -2594,6 +2835,14 @@ final class AppModelTests: XCTestCase {
             ),
             (
                 .onboarding(
+                    .authenticationFailed(
+                        .credentialStorageUnavailable
+                    )
+                ),
+                .secureCredentialStorageUnavailable
+            ),
+            (
+                .onboarding(
                     .authenticationFailed(.malformedLoginResponse)
                 ),
                 .loginFailed
@@ -2675,6 +2924,7 @@ final class AppModelTests: XCTestCase {
             .serverUnsupported,
             .localLoginUnavailable,
             .invalidCredentials,
+            .secureCredentialStorageUnavailable,
             .loginFailed,
             .accountUnavailable,
             .libraryUnavailable,
@@ -2693,6 +2943,29 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+    }
+
+    func testSecureCredentialStorageFailureHasRedactedDiagnosticCode() {
+        let failure = AppFailure(
+            serviceError: .onboarding(
+                .authenticationFailed(
+                    .credentialStorageUnavailable
+                )
+            )
+        )
+
+        XCTAssertEqual(
+            failure,
+            .secureCredentialStorageUnavailable
+        )
+        XCTAssertEqual(
+            failure.diagnosticFailureCode,
+            .secureCredentialStorageUnavailable
+        )
+        XCTAssertEqual(
+            failure.diagnosticFailureCode.rawValue,
+            "secure_credential_storage_unavailable"
+        )
     }
 
     private func fixtureAccount(
@@ -3142,8 +3415,7 @@ private actor TestAppService: AppServicing {
     private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
-    private var recordedCoverReplacementRequests:
-        [CoverReplacementRequest] = []
+    private var recordedCoverReplacementRequests: [CoverReplacementRequest] = []
     private var recordedBookDeletionRequests: [BookDeletionRequest] = []
     private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
     private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []

@@ -601,7 +601,7 @@ private struct HomeContent: View {
         return model.downloads.records
             .filter {
                 $0.manifest.accountID == accountID
-                    && $0.manifest.state == .complete
+                    && model.downloads.isFullBookAvailable($0)
             }
             .sorted {
                 $0.detail.title.localizedStandardCompare(
@@ -1509,7 +1509,7 @@ private struct BookDetailView: View {
                         accountID: account.id,
                         itemID: detail.id
                     ),
-                    downloaded.manifest.state == .complete
+                    model.downloads.isFullBookAvailable(downloaded)
                 {
                     Button {
                         Task {
@@ -1592,7 +1592,9 @@ private struct BookDetailView: View {
                         }
                         .font(.subheadline)
 
-                        if record.manifest.state != .complete {
+                        if record.manifest.purpose == .automaticCache
+                            || !model.downloads.isFullBookAvailable(record)
+                        {
                             ProgressView(
                                 value: model.downloads.progress[
                                     record.manifest.downloadID
@@ -1603,10 +1605,7 @@ private struct BookDetailView: View {
                         HStack {
                             downloadControls(record, account: account)
                             Spacer()
-                            if [
-                                DownloadManifestState.queued,
-                                .downloading,
-                            ].contains(record.manifest.state) {
+                            if downloadIsActive(record) {
                                 Button(
                                     "Cancel",
                                     systemImage: "xmark",
@@ -1663,7 +1662,34 @@ private struct BookDetailView: View {
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) -> some View {
-        if [
+        if record.manifest.purpose == .automaticCache,
+            record.manifest.state != .deleting
+        {
+            Button("Download Full Book", systemImage: "arrow.down.circle") {
+                Task {
+                    await model.downloads.downloadFullBook(
+                        record,
+                        account: account
+                    )
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(
+                "book.detail.download.fullBook"
+            )
+            if model.downloads.automaticCacheState(for: record) == .failed {
+                Button("Retry") {
+                    Task {
+                        await model.downloads.repair(
+                            record,
+                            account: account
+                        )
+                    }
+                }
+            } else if downloadIsActive(record) {
+                automaticPauseControl(record)
+            }
+        } else if [
             DownloadManifestState.complete,
             .deleting,
         ].contains(record.manifest.state) {
@@ -1683,6 +1709,17 @@ private struct BookDetailView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+        } else {
+            automaticPauseControl(record)
+        }
+    }
+
+    @ViewBuilder
+    private func automaticPauseControl(
+        _ record: DownloadedBookRecord
+    ) -> some View {
+        if record.manifest.state == .deleting {
+            EmptyView()
         } else if model.downloads.pausedDownloadIDs.contains(
             record.manifest.downloadID
         ) {
@@ -1698,6 +1735,28 @@ private struct BookDetailView: View {
                 }
             }
         }
+    }
+
+    private func downloadIsActive(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        if record.manifest.purpose == .automaticCache {
+            guard
+                let state = model.downloads.automaticCacheState(
+                    for: record
+                )
+            else {
+                return false
+            }
+            return [
+                AutomaticCacheState.queued,
+                .downloading,
+            ].contains(state)
+        }
+        return [
+            DownloadManifestState.queued,
+            .downloading,
+        ].contains(record.manifest.state)
     }
 
     private var downloadedRecord: DownloadedBookRecord? {
@@ -1726,6 +1785,21 @@ private struct BookDetailView: View {
         ) {
             return "Paused"
         }
+        if record.manifest.state == .deleting {
+            return "Removing"
+        }
+        if let cacheState = model.downloads.automaticCacheState(
+            for: record
+        ) {
+            switch cacheState {
+            case .queued, .downloading:
+                return "Caching"
+            case .cached:
+                return "Cached"
+            case .failed:
+                return "Cache failed"
+            }
+        }
         switch record.manifest.state {
         case .queued:
             return "Queued"
@@ -1734,9 +1808,7 @@ private struct BookDetailView: View {
         case .partial:
             return "Repair needed"
         case .complete:
-            return record.manifest.purpose == .automaticCache
-                ? "Cached"
-                : "Downloaded"
+            return "Downloaded"
         case .failed:
             return "Download failed"
         case .deleting:
@@ -1751,6 +1823,23 @@ private struct BookDetailView: View {
             record.manifest.downloadID
         ) {
             return "pause.circle"
+        }
+        if record.manifest.state == .deleting {
+            return "trash"
+        }
+        if let cacheState = model.downloads.automaticCacheState(
+            for: record
+        ) {
+            switch cacheState {
+            case .queued:
+                return "clock"
+            case .downloading:
+                return "arrow.down.circle"
+            case .cached:
+                return "checkmark.circle.fill"
+            case .failed:
+                return "exclamationmark.circle"
+            }
         }
         switch record.manifest.state {
         case .queued:
@@ -1776,7 +1865,10 @@ private struct BookDetailView: View {
             countStyle: .file
         )
         let expected = ByteCountFormatter.string(
-            fromByteCount: max(record.manifest.expectedByteLength, 0),
+            fromByteCount: max(
+                model.downloads.expectedByteLength(for: record),
+                0
+            ),
             countStyle: .file
         )
         return "\(stored) of \(expected)"
@@ -2266,7 +2358,7 @@ private struct DownloadStorageView: View {
 
     private var completeDownloadCount: Int {
         model.downloads.records.count {
-            $0.manifest.state == .complete
+            model.downloads.isFullBookAvailable($0)
         }
     }
 
@@ -2305,7 +2397,7 @@ private struct DownloadStorageView: View {
                 value: model.downloads.progress[
                     record.manifest.downloadID
                 ]
-                    ?? (record.manifest.state == .complete ? 1 : 0)
+                    ?? (downloadIsComplete(record) ? 1 : 0)
             )
             HStack {
                 Text(
@@ -2313,11 +2405,11 @@ private struct DownloadStorageView: View {
                         record.manifest.downloadID
                     )
                         ? "Paused"
-                        : record.manifest.state.rawValue.capitalized
+                        : downloadStateLabel(record)
                 )
                 Spacer()
                 Text(
-                    "\(byteCount(model.downloads.downloadedByteLength(for: record))) of \(byteCount(record.manifest.expectedByteLength))"
+                    "\(byteCount(model.downloads.downloadedByteLength(for: record))) of \(byteCount(model.downloads.expectedByteLength(for: record)))"
                 )
             }
             .font(.caption)
@@ -2327,7 +2419,42 @@ private struct DownloadStorageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if [
+            if record.manifest.purpose == .automaticCache,
+                record.manifest.state != .deleting
+            {
+                if let account = model.account,
+                    account.id == record.manifest.accountID
+                {
+                    Button("Download Full Book") {
+                        Task {
+                            await model.downloads.downloadFullBook(
+                                record,
+                                account: account
+                            )
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    if model.downloads.automaticCacheState(
+                        for: record
+                    ) == .failed {
+                        Button("Retry") {
+                            Task {
+                                await model.downloads.repair(
+                                    record,
+                                    account: account
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text("Account required to download the full book.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if downloadIsActive(record) {
+                    transferControls(record)
+                }
+            } else if [
                 DownloadManifestState.failed,
                 .partial,
             ].contains(record.manifest.state) {
@@ -2351,29 +2478,8 @@ private struct DownloadStorageView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            } else if record.manifest.state != .complete {
-                HStack {
-                    if model.downloads.pausedDownloadIDs.contains(
-                        record.manifest.downloadID
-                    ) {
-                        Button("Resume") {
-                            Task {
-                                await model.downloads.resume(record)
-                            }
-                        }
-                    } else {
-                        Button("Pause") {
-                            Task {
-                                await model.downloads.pause(record)
-                            }
-                        }
-                    }
-                    Button("Cancel", role: .destructive) {
-                        Task {
-                            await model.downloads.cancel(record)
-                        }
-                    }
-                }
+            } else if !downloadIsComplete(record) {
+                transferControls(record)
             }
         }
         .swipeActions {
@@ -2385,6 +2491,101 @@ private struct DownloadStorageView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func transferControls(
+        _ record: DownloadedBookRecord
+    ) -> some View {
+        HStack {
+            if model.downloads.pausedDownloadIDs.contains(
+                record.manifest.downloadID
+            ) {
+                Button("Resume") {
+                    Task {
+                        await model.downloads.resume(record)
+                    }
+                }
+            } else {
+                Button("Pause") {
+                    Task {
+                        await model.downloads.pause(record)
+                    }
+                }
+            }
+            Button("Cancel", role: .destructive) {
+                Task {
+                    await model.downloads.cancel(record)
+                }
+            }
+        }
+    }
+
+    private func downloadStateLabel(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        if record.manifest.state == .deleting {
+            return "Removing"
+        }
+        if let state = model.downloads.automaticCacheState(
+            for: record
+        ) {
+            switch state {
+            case .queued, .downloading:
+                return "Caching"
+            case .cached:
+                return "Cached"
+            case .failed:
+                return "Cache failed"
+            }
+        }
+        switch record.manifest.state {
+        case .queued:
+            return "Queued"
+        case .downloading:
+            return "Downloading"
+        case .partial:
+            return "Repair needed"
+        case .complete:
+            return "Downloaded"
+        case .failed:
+            return "Download failed"
+        case .deleting:
+            return "Removing"
+        }
+    }
+
+    private func downloadIsComplete(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        if record.manifest.purpose == .automaticCache {
+            return model.downloads.automaticCacheState(
+                for: record
+            ) == .cached
+        }
+        return model.downloads.isFullBookAvailable(record)
+    }
+
+    private func downloadIsActive(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        if record.manifest.purpose == .automaticCache {
+            guard
+                let state = model.downloads.automaticCacheState(
+                    for: record
+                )
+            else {
+                return false
+            }
+            return [
+                AutomaticCacheState.queued,
+                .downloading,
+            ].contains(state)
+        }
+        return [
+            DownloadManifestState.queued,
+            .downloading,
+        ].contains(record.manifest.state)
     }
 
     private func accountLabel(_ accountID: AccountID) -> String {

@@ -353,19 +353,25 @@ chapter window when file timing is available, and otherwise keeps the
 configured number of files ahead. The default is five files ahead; a single
 M4B is downloaded once in full. Automatic transfers wait for stable playback,
 run at background priority, and suspend whenever the player needs bandwidth.
-Their displayed byte count advances during the transfer. Settings can delete
+Their status and displayed byte count cover only the active file window, so a
+fully cached window reads **Cached** at 100% without claiming the whole book is
+available offline. Completed files outside the active window still count
+toward device storage until cleanup removes them. Settings can delete
 automatic cache files after each completed chapter, when the book finishes,
 or—by default—24 hours after the book finishes. Cleanup never applies to an
-explicit download.
+explicit download. **Download Full Book** promotes an automatic cache in place,
+keeps its verified files, and downloads only the remaining files.
 
 Book detail keeps Play, Download, and finished-state actions above long
 description and metadata content. It shows series and sequence, audio-file and
 chapter counts, and a duration beside every chapter. Existing downloads show
 status, stored and expected bytes, and the relevant Pause, Resume, Retry,
-Repair, or Remove action there as well as in Downloads. Completed books play
-directly from their verified local files without opening a server playback
-session. Bleat audits completed files when restoring downloads and before
-playback; a missing or byte-corrupt track changes the book to Partial and
+Repair, Download Full Book, or Remove action there as well as in Downloads.
+Automatic cache failures retry only the active window and never appear as a
+full-book repair. Books play directly from local files only after every source
+file is verified, without opening a server playback session. Bleat audits
+completed files when restoring downloads and before playback; a missing or
+byte-corrupt track in an explicit download changes the book to Partial and
 exposes Repair. Repair preserves verified tracks, downloads only damaged
 entries, and refuses to mix files when the server's plan changed.
 Local-file playback saves an account-scoped

@@ -622,9 +622,12 @@ and playable offline across process and network failure.
 Current status: background per-file transfers, restoration, network policy,
 storage preflight, durable manifests, repair, offline playback, per-account and
 aggregate storage summaries, and confirmed single/bulk deletion are
-implemented. Storage removal cancels matching transfers and bulk management
-preserves the currently playing download. Simulator transfer lifecycle and the
-remaining process/network failure matrix still need release-level evidence.
+implemented. Automatic caches persist their current target window, report
+target-relative progress, discard superseded work without a repair state, and
+can be promoted to an explicit full-book download. Storage removal cancels
+matching transfers and bulk management preserves the currently playing
+download. Simulator transfer lifecycle and the remaining process/network
+failure matrix still need release-level evidence.
 
 ### Phase 8 — book editing and deletion
 
@@ -811,6 +814,9 @@ Keep numeric coverage and requirement traceability as separate gates.
 
 - Queue/concurrency, task restoration, pause/cancel/retry, bounded backoff,
   network policy, cellular warning, 401 replacement, and aggregate progress.
+- Automatic target-window persistence, target-only progress and retry,
+  superseded-task cancellation, legacy cache rebuilding, and full-book
+  promotion without redownloading verified files.
 - Safe opaque paths, MIME extensions, traversal rejection, free-space margin,
   staging, length validation, atomic move, manifest state transitions, repair,
   protection, backup exclusion, deletion, and auto-delete.

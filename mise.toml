@@ -18,7 +18,8 @@ run = [
 
 [tasks.macos]
 description = "Build an unsigned Bleat Release app for macOS with Mac Catalyst"
-run = """xcodebuild \
+run = [
+    """xcodebuild \
   -project Bleat.xcodeproj \
   -scheme Bleat \
   -configuration Release \
@@ -26,7 +27,11 @@ run = """xcodebuild \
   -derivedDataPath .build/xcode-derived \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
-  build"""
+  build""",
+    """codesign --force --deep --sign - \
+  .build/xcode-derived/Build/Products/Release-maccatalyst/Bleat.app""",
+    """open .build/xcode-derived/Build/Products/Release-maccatalyst/Bleat.app""",
+]
 
 [tasks.archive]
 description = "Create and validate the Release archive"

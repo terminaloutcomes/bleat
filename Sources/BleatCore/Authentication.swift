@@ -66,6 +66,7 @@ public enum LocalAuthenticationError: Error, Equatable, Sendable {
     case unexpectedAuthorizationStatus(Int)
     case malformedAuthorizationResponse
     case authorizedUserMismatch(expected: String, actual: String)
+    case credentialStorageUnavailable
     case credentialPersistenceFailed
 }
 
@@ -276,6 +277,15 @@ public actor AuthCoordinator<
                 nativeLogin: nativeLogin,
                 for: accountID
             )
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw LocalAuthenticationError
+                    .credentialStorageUnavailable
+            default:
+                throw LocalAuthenticationError
+                    .credentialPersistenceFailed
+            }
         } catch {
             throw LocalAuthenticationError.credentialPersistenceFailed
         }

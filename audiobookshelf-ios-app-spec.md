@@ -152,8 +152,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Starting playback automatically caches complete source files for the current
   position and a configurable lookahead, defaulting to five files/chapters
   ahead; a single-file book caches that complete file.
+- Automatic cache progress, target bytes, and `queued`, `downloading`,
+  `cached`, or `failed` state describe only the active window. A cached window
+  does not make a multi-file book an offline download.
 - I can choose whether automatic cache files are deleted after each completed
   chapter, when the book finishes, or 24 hours after the book finishes.
+- I can promote an automatic cache to a full-book download without downloading
+  its verified files again.
 - The app checks available storage before starting and never leaves a completed book pointing at partial files.
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
 - Offline listening sessions and progress synchronize after reconnection.
@@ -747,6 +752,12 @@ Requirements:
   network priority, and suspend whenever the player needs bandwidth;
 - distinguish automatic cache records from explicit downloads so automatic
   cleanup never applies to an explicit download;
+- persist the current automatic target track set and aggregate progress only
+  from target files and target transfers;
+- cancel superseded automatic transfers after a seek without treating that
+  cancellation as a failed cache;
+- promote an automatic cache in place when the user explicitly downloads the
+  full book, retaining verified files and preflighting only the remainder;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
 - pause/cancel/retry;
@@ -765,6 +776,11 @@ Derive a safe extension from a whitelist of known media types. Reject path trave
 ### 10.2 Atomic completion
 
 A downloaded book has a manifest with `queued`, `downloading`, `partial`, `complete`, `failed`, or `deleting` state.
+
+An automatic cache additionally has a window-scoped `queued`, `downloading`,
+`cached`, or `failed` state. It becomes `cached` when every target track is
+finalized at its expected byte length. Whole-book `complete` remains the only
+state that permits direct offline playback.
 
 A book becomes `complete` only after:
 
@@ -787,6 +803,10 @@ Partial books remain inspectable and retryable. Completed files are never silent
   to 24 hours. If the app is suspended at the deadline, perform overdue cleanup
   at the next launch or app activity.
 - Never apply automatic cleanup to an explicit full-book download.
+- Completed automatic files outside the current window continue to count
+  toward actual storage while being excluded from window progress.
+- Automatic records written before window targets were persisted are
+  regenerable and are removed before background-task restoration.
 - Never evict the currently playing track.
 - If iOS removes or corrupts a local file, mark the download partial and offer repair instead of crashing.
 

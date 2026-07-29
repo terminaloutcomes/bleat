@@ -27,6 +27,21 @@ public enum DownloadPurpose: String, Codable, Sendable {
     case automaticCache
 }
 
+public enum AutomaticCacheState: String, Codable, Equatable, Sendable {
+    case queued
+    case downloading
+    case cached
+    case failed
+}
+
+public struct AutomaticDownloadWindow: Codable, Equatable, Sendable {
+    public let targetTrackIndexes: [Int]
+
+    public init(targetTrackIndexes: Set<Int>) {
+        self.targetTrackIndexes = targetTrackIndexes.sorted()
+    }
+}
+
 public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public let trackIndex: Int
     public let expectedByteLength: Int64
@@ -47,6 +62,8 @@ public enum DownloadManifestError: Error, Equatable, Sendable {
     )
     case trackNotFinalized(Int)
     case incompleteTrack(Int)
+    case invalidAutomaticWindow
+    case invalidPurpose
 }
 
 public struct DownloadManifest: Codable, Equatable, Sendable {
@@ -56,6 +73,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     public internal(set) var state: DownloadManifestState
     public internal(set) var purpose: DownloadPurpose
     public internal(set) var bookFinishedAt: Date?
+    public private(set) var automaticWindow: AutomaticDownloadWindow?
     public private(set) var entries: [DownloadManifestEntry]
 
     public var expectedByteLength: Int64 {
@@ -68,18 +86,106 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         )
     }
 
+    public var isFullBookComplete: Bool {
+        isCompleteAndFinalized
+    }
+
+    public var automaticTargetTrackIndexes: Set<Int>? {
+        automaticWindow.map {
+            Set($0.targetTrackIndexes)
+        }
+    }
+
+    public var automaticExpectedByteLength: Int64? {
+        guard let targets = automaticTargetTrackIndexes else {
+            return nil
+        }
+        return Self.saturatingSum(
+            entries.compactMap {
+                targets.contains($0.trackIndex)
+                    ? $0.expectedByteLength
+                    : nil
+            }
+        )
+    }
+
+    public var automaticStoredByteLength: Int64? {
+        guard let targets = automaticTargetTrackIndexes else {
+            return nil
+        }
+        return Self.saturatingSum(
+            entries.compactMap { entry in
+                guard targets.contains(entry.trackIndex),
+                    entry.state == .complete,
+                    entry.placement == .finalized,
+                    entry.observedByteLength == entry.expectedByteLength
+                else {
+                    return nil
+                }
+                return entry.expectedByteLength
+            }
+        )
+    }
+
+    public var automaticCacheState: AutomaticCacheState? {
+        guard let targets = automaticTargetTrackIndexes else {
+            return nil
+        }
+        let targetEntries = entries.filter {
+            targets.contains($0.trackIndex)
+        }
+        if targetEntries.allSatisfy({
+            $0.state == .complete
+                && $0.placement == .finalized
+                && $0.observedByteLength == $0.expectedByteLength
+        }) {
+            return .cached
+        }
+        if targetEntries.contains(where: { $0.state == .downloading }) {
+            return .downloading
+        }
+        if targetEntries.contains(where: {
+            $0.state == .partial || $0.state == .failed
+        }) {
+            return .failed
+        }
+        return .queued
+    }
+
+    public var isLegacyAutomaticCache: Bool {
+        purpose == .automaticCache && automaticWindow == nil
+    }
+
     public init(
         downloadID: DownloadID,
         accountID: AccountID,
         plan: DownloadPlan,
-        purpose: DownloadPurpose = .manual
-    ) {
+        purpose: DownloadPurpose = .manual,
+        automaticTargetTrackIndexes: Set<Int>? = nil
+    ) throws(DownloadManifestError) {
+        let planTrackIndexes = Set(plan.tracks.map(\.index))
+        switch purpose {
+        case .manual:
+            guard automaticTargetTrackIndexes == nil else {
+                throw .invalidAutomaticWindow
+            }
+        case .automaticCache:
+            guard let automaticTargetTrackIndexes,
+                !automaticTargetTrackIndexes.isEmpty,
+                automaticTargetTrackIndexes.isSubset(of: planTrackIndexes)
+            else {
+                throw .invalidAutomaticWindow
+            }
+        }
         self.downloadID = downloadID
         self.accountID = accountID
         itemID = plan.itemID
         state = .queued
         self.purpose = purpose
         bookFinishedAt = nil
+        automaticWindow = automaticTargetTrackIndexes.map {
+            AutomaticDownloadWindow(targetTrackIndexes: $0)
+        }
         entries = plan.tracks.map {
             DownloadManifestEntry(
                 trackIndex: $0.index,
@@ -164,6 +270,30 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         bookFinishedAt = date
     }
 
+    public mutating func setAutomaticWindow(
+        targetTrackIndexes: Set<Int>
+    ) throws(DownloadManifestError) {
+        guard purpose == .automaticCache else {
+            throw .invalidPurpose
+        }
+        let entryIndexes = Set(entries.map(\.trackIndex))
+        guard !targetTrackIndexes.isEmpty,
+            targetTrackIndexes.isSubset(of: entryIndexes)
+        else {
+            throw .invalidAutomaticWindow
+        }
+        automaticWindow = AutomaticDownloadWindow(
+            targetTrackIndexes: targetTrackIndexes
+        )
+    }
+
+    public mutating func promoteToManual() {
+        purpose = .manual
+        bookFinishedAt = nil
+        automaticWindow = nil
+        updateIncompleteState()
+    }
+
     public mutating func markDeleting() {
         state = .deleting
     }
@@ -197,6 +327,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         case state
         case purpose
         case bookFinishedAt
+        case automaticWindow
         case entries
     }
 
@@ -214,6 +345,10 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         bookFinishedAt = try container.decodeIfPresent(
             Date.self,
             forKey: .bookFinishedAt
+        )
+        automaticWindow = try container.decodeIfPresent(
+            AutomaticDownloadWindow.self,
+            forKey: .automaticWindow
         )
         entries = try container.decode(
             [DownloadManifestEntry].self,
@@ -248,6 +383,30 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
                     "A complete manifest must contain only finalized complete tracks"
             )
         }
+        if let automaticWindow {
+            let targets = automaticWindow.targetTrackIndexes
+            guard purpose == .automaticCache,
+                !targets.isEmpty,
+                Set(targets).count == targets.count,
+                targets == targets.sorted(),
+                Set(targets).isSubset(of: Set(trackIndexes))
+            else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .automaticWindow,
+                    in: container,
+                    debugDescription:
+                        "Automatic cache window metadata is invalid"
+                )
+            }
+        }
+        guard purpose == .automaticCache || automaticWindow == nil else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .automaticWindow,
+                in: container,
+                debugDescription:
+                    "Manual downloads cannot contain an automatic cache window"
+            )
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -260,6 +419,10 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         try container.encodeIfPresent(
             bookFinishedAt,
             forKey: .bookFinishedAt
+        )
+        try container.encodeIfPresent(
+            automaticWindow,
+            forKey: .automaticWindow
         )
         try container.encode(entries, forKey: .entries)
     }
@@ -287,7 +450,9 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     }
 
     private mutating func updateIncompleteState() {
-        if entries.allSatisfy({ $0.state == .queued }) {
+        if isCompleteAndFinalized {
+            state = .complete
+        } else if entries.allSatisfy({ $0.state == .queued }) {
             state = .queued
         } else if entries.contains(where: { $0.state == .downloading }) {
             state = .downloading

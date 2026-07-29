@@ -311,7 +311,9 @@ final class AuthenticationTests: XCTestCase {
                 .json(Self.authenticationJSON()),
             ]
         )
-        let failingStore = RecordingCredentialStore(shouldFailSave: true)
+        let failingStore = RecordingCredentialStore(
+            saveFailure: .generic
+        )
         let client = AuthCoordinator(
             transport: transport,
             credentialStore: failingStore
@@ -334,6 +336,47 @@ final class AuthenticationTests: XCTestCase {
             for: AccountID(rawValue: "account")
         )
         XCTAssertNil(failedCredentials)
+    }
+
+    func testMissingKeychainEntitlementHasDistinctAuthenticationError()
+        async throws
+    {
+        let transport = AuthenticationHTTPTransport(
+            responses: [
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "access",
+                        refreshToken: "refresh"
+                    )
+                ),
+                .json(Self.authenticationJSON()),
+            ]
+        )
+        let store = RecordingCredentialStore(
+            saveFailure: .missingEntitlement
+        )
+        let client = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await client.login(
+                accountID: AccountID(rawValue: "account"),
+                server: NormalizedServerURL("https://example.net"),
+                username: "reader",
+                password: "test-password"
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? LocalAuthenticationError,
+                .credentialStorageUnavailable
+            )
+        }
+        let storedCredentials = await store.credentials(
+            for: AccountID(rawValue: "account")
+        )
+        XCTAssertNil(storedCredentials)
     }
 
     func testBearerAuthorizerAddsHeaderWithoutChangingURL() throws {
@@ -586,13 +629,18 @@ private actor AuthenticationHTTPTransport: HTTPTransport {
 }
 
 private actor RecordingCredentialStore: AccountCredentialStore {
+    enum SaveFailure: Sendable {
+        case generic
+        case missingEntitlement
+    }
+
     private var stored: [AccountID: AuthenticationTokens] = [:]
     private var nativeLogins: [AccountID: NativeLoginCredentials] = [:]
     private var saves = 0
-    private let shouldFailSave: Bool
+    private let saveFailure: SaveFailure?
 
-    init(shouldFailSave: Bool = false) {
-        self.shouldFailSave = shouldFailSave
+    init(saveFailure: SaveFailure? = nil) {
+        self.saveFailure = saveFailure
     }
 
     func credentials(
@@ -605,9 +653,7 @@ private actor RecordingCredentialStore: AccountCredentialStore {
         _ credentials: AuthenticationTokens,
         for accountID: AccountID
     ) throws {
-        if shouldFailSave {
-            throw AuthenticationTestError.storeFailure
-        }
+        try failSaveIfRequested()
         stored[accountID] = credentials
         saves += 1
     }
@@ -617,9 +663,7 @@ private actor RecordingCredentialStore: AccountCredentialStore {
         nativeLogin: NativeLoginCredentials,
         for accountID: AccountID
     ) async throws {
-        if shouldFailSave {
-            throw AuthenticationTestError.storeFailure
-        }
+        try failSaveIfRequested()
         stored[accountID] = credentials
         nativeLogins[accountID] = nativeLogin
         saves += 1
@@ -638,6 +682,17 @@ private actor RecordingCredentialStore: AccountCredentialStore {
 
     func saveCount() -> Int {
         saves
+    }
+
+    private func failSaveIfRequested() throws {
+        switch saveFailure {
+        case .generic:
+            throw AuthenticationTestError.storeFailure
+        case .missingEntitlement:
+            throw TokenVaultError.missingEntitlement
+        case nil:
+            return
+        }
     }
 }
 

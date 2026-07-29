@@ -81,6 +81,7 @@ enum AppFailure: Equatable, Sendable {
     case serverUnsupported
     case localLoginUnavailable
     case invalidCredentials
+    case secureCredentialStorageUnavailable
     case loginFailed
     case accountUnavailable
     case libraryUnavailable
@@ -116,6 +117,8 @@ enum AppFailure: Equatable, Sendable {
             "That server does not offer username and password login."
         case .invalidCredentials:
             "The username or password was not accepted."
+        case .secureCredentialStorageUnavailable:
+            "Bleat signed in, but could not access Keychain on this device."
         case .loginFailed:
             "Bleat could not sign in to that server."
         case .accountUnavailable:
@@ -176,10 +179,14 @@ enum AppFailure: Equatable, Sendable {
             case .localAuthenticationUnavailable:
                 self = .localLoginUnavailable
             case .authenticationFailed(let authenticationError):
-                self =
-                    authenticationError == .invalidCredentials
-                    ? .invalidCredentials
-                    : .loginFailed
+                switch authenticationError {
+                case .invalidCredentials:
+                    self = .invalidCredentials
+                case .credentialStorageUnavailable:
+                    self = .secureCredentialStorageUnavailable
+                default:
+                    self = .loginFailed
+                }
             default:
                 self = .loginFailed
             }

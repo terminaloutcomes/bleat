@@ -5,6 +5,7 @@ public enum TokenVaultError: Error, Equatable, Sendable {
     case invalidService
     case invalidAccountID
     case invalidStoredCredentials
+    case missingEntitlement
     case interactionNotAllowed
     case unexpectedStatus(OSStatus)
 }
@@ -18,6 +19,8 @@ extension TokenVaultError: LocalizedError {
             "The Keychain account identifier is empty."
         case .invalidStoredCredentials:
             "The stored Keychain credentials are invalid."
+        case .missingEntitlement:
+            "The app is missing a required Keychain entitlement."
         case .interactionNotAllowed:
             "Keychain interaction is not currently allowed."
         case .unexpectedStatus(let status):
@@ -184,12 +187,14 @@ public actor TokenVault: AccountCredentialStore {
         ]
     }
 
-    private static func check(
+    static func check(
         _ status: OSStatus
     ) throws(TokenVaultError) {
         switch status {
         case errSecSuccess:
             return
+        case errSecMissingEntitlement:
+            throw .missingEntitlement
         case errSecInteractionNotAllowed:
             throw .interactionNotAllowed
         default:

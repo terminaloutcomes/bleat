@@ -316,7 +316,7 @@ final class BackgroundDownloadTests: XCTestCase {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Data(Self.singleTrackJSON().utf8)
         )
-        var manifest = DownloadManifest(
+        var manifest = try DownloadManifest(
             downloadID: DownloadID(rawValue: "download"),
             accountID: AccountID(rawValue: "account"),
             plan: plan
@@ -372,7 +372,7 @@ final class BackgroundDownloadTests: XCTestCase {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Data(Self.singleTrackJSON().utf8)
         )
-        var manifest = DownloadManifest(
+        var manifest = try DownloadManifest(
             downloadID: DownloadID(rawValue: "download"),
             accountID: AccountID(rawValue: "account"),
             plan: plan

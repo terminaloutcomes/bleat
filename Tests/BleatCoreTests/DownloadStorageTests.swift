@@ -296,7 +296,8 @@ final class DownloadStorageTests: XCTestCase {
             accountID: fixture.accountID,
             plan: plan,
             detail: fixture.detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
         )
         let finishedAt = Date(timeIntervalSince1970: 123)
         record = try await fixture.storage.markBookFinished(
@@ -305,11 +306,15 @@ final class DownloadStorageTests: XCTestCase {
         )
         XCTAssertEqual(record.manifest.purpose, .automaticCache)
         XCTAssertEqual(record.manifest.bookFinishedAt, finishedAt)
+        XCTAssertEqual(
+            record.manifest.automaticTargetTrackIndexes,
+            [1]
+        )
 
-        for (track, data) in zip(
-            plan.tracks,
-            [Data([1, 2, 3, 4]), Data([5, 6])]
-        ) {
+        for (track, data) in [
+            (plan.tracks[1], Data([5, 6])),
+            (plan.tracks[0], Data([1, 2, 3, 4])),
+        ] {
             let identity = try DownloadTaskIdentity(
                 downloadID: fixture.downloadID,
                 accountID: fixture.accountID,
@@ -328,8 +333,43 @@ final class DownloadStorageTests: XCTestCase {
                 identity,
                 observedByteLength: observed
             )
+            if track.index == 1 {
+                XCTAssertEqual(record.manifest.state, .partial)
+                XCTAssertFalse(record.manifest.isFullBookComplete)
+                XCTAssertEqual(
+                    record.manifest.automaticCacheState,
+                    .cached
+                )
+                XCTAssertEqual(
+                    record.manifest.automaticExpectedByteLength,
+                    2
+                )
+                XCTAssertEqual(
+                    record.manifest.automaticStoredByteLength,
+                    2
+                )
+                record = try await fixture.storage.updateAutomaticWindow(
+                    record,
+                    targetTrackIndexes: [0, 1]
+                )
+                XCTAssertEqual(
+                    record.manifest.automaticCacheState,
+                    .queued
+                )
+                XCTAssertEqual(
+                    record.manifest.automaticExpectedByteLength,
+                    6
+                )
+            }
         }
         XCTAssertEqual(record.manifest.state, .complete)
+        XCTAssertTrue(record.manifest.isFullBookComplete)
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+
+        record = try await fixture.storage.updateAutomaticWindow(
+            record,
+            targetTrackIndexes: [1]
+        )
 
         record = try await fixture.storage.removeCompletedTracks(
             from: record,
@@ -339,6 +379,8 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertEqual(record.manifest.entries[0].state, .queued)
         XCTAssertEqual(record.manifest.entries[1].state, .complete)
         XCTAssertEqual(record.manifest.storedByteLength, 2)
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+        XCTAssertEqual(record.manifest.automaticStoredByteLength, 2)
 
         let records = try await fixture.storage.records()
         XCTAssertEqual(records, [record])
@@ -350,7 +392,7 @@ final class DownloadStorageTests: XCTestCase {
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(
                 with: JSONEncoder().encode(
-                    DownloadManifest(
+                    try DownloadManifest(
                         downloadID: fixture.downloadID,
                         accountID: fixture.accountID,
                         plan: fixture.plan
@@ -368,6 +410,165 @@ final class DownloadStorageTests: XCTestCase {
 
         XCTAssertEqual(decoded.purpose, .manual)
         XCTAssertNil(decoded.bookFinishedAt)
+    }
+
+    func testAutomaticWindowValidationPromotionAndLegacyDetection()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+
+        XCTAssertThrowsError(
+            try DownloadManifest(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                purpose: .automaticCache
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadManifestError,
+                .invalidAutomaticWindow
+            )
+        }
+
+        do {
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail,
+                purpose: .automaticCache
+            )
+            XCTFail("Expected an automatic cache window")
+        } catch {
+            XCTAssertEqual(error, .invalidAutomaticWindow)
+        }
+
+        let record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [0]
+        )
+        let promoted = try await fixture.storage.promoteToManual(record)
+
+        XCTAssertEqual(promoted.manifest.purpose, .manual)
+        XCTAssertNil(promoted.manifest.automaticWindow)
+        XCTAssertNil(promoted.manifest.automaticCacheState)
+
+        let current = try DownloadManifest(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [0]
+        )
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(current)
+            ) as? [String: Any]
+        )
+        legacyObject["automaticWindow"] = nil
+        let decoded = try JSONDecoder().decode(
+            DownloadManifest.self,
+            from: JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        XCTAssertTrue(decoded.isLegacyAutomaticCache)
+    }
+
+    func testAutomaticWindowIgnoresNonTargetCorruption()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "101",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                ),
+                DownloadTrackPlan(
+                    index: 1,
+                    inode: "102",
+                    expectedByteLength: 2,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00001.mp3"
+                ),
+            ]
+        )
+        var record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
+        )
+        for (track, data) in [
+            (plan.tracks[0], Data([1, 2, 3, 4])),
+            (plan.tracks[1], Data([5, 6])),
+        ] {
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: track
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "corruption-\(track.index)"
+            )
+            try data.write(to: temporaryURL)
+            let observed = try fixture.layout.placeDownloadedFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            record = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
+        }
+
+        let firstIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+        try Data([1]).write(
+            to: fixture.layout.destinationURL(for: firstIdentity)
+        )
+        let recordsAfterNonTargetCorruption =
+            try await fixture.storage.records()
+        record = try XCTUnwrap(
+            recordsAfterNonTargetCorruption.first
+        )
+        XCTAssertEqual(record.manifest.state, .partial)
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+
+        let secondIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[1]
+        )
+        try Data([5]).write(
+            to: fixture.layout.destinationURL(for: secondIdentity)
+        )
+        let recordsAfterTargetCorruption =
+            try await fixture.storage.records()
+        record = try XCTUnwrap(
+            recordsAfterTargetCorruption.first
+        )
+        XCTAssertEqual(record.manifest.automaticCacheState, .failed)
     }
 
     func testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()

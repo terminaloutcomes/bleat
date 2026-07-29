@@ -256,6 +256,8 @@ extension AppFailure {
             .localLoginUnavailable
         case .invalidCredentials:
             .invalidCredentials
+        case .secureCredentialStorageUnavailable:
+            .secureCredentialStorageUnavailable
         case .loginFailed:
             .loginFailed
         case .accountUnavailable:

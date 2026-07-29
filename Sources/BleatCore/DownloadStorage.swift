@@ -20,6 +20,7 @@ public enum DownloadStorageError: Error, Equatable, Sendable {
     case duplicateDownload
     case recordNotFound
     case trackNotFound
+    case invalidAutomaticWindow
     case invalidTemporaryFile
     case byteLengthMismatch(expected: Int64, observed: Int64)
     case requirementOverflow
@@ -276,7 +277,8 @@ public actor DownloadStorage {
         accountID: AccountID,
         plan: DownloadPlan,
         detail: LibraryBookDetail,
-        purpose: DownloadPurpose = .manual
+        purpose: DownloadPurpose = .manual,
+        automaticTargetTrackIndexes: Set<Int>? = nil
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
         guard plan.itemID == detail.id else {
             throw .mismatchedBook
@@ -289,15 +291,53 @@ public actor DownloadStorage {
         else {
             throw .duplicateDownload
         }
-        let record = DownloadedBookRecord(
-            manifest: DownloadManifest(
+        let manifest: DownloadManifest
+        do {
+            manifest = try DownloadManifest(
                 downloadID: downloadID,
                 accountID: accountID,
                 plan: plan,
-                purpose: purpose
-            ),
+                purpose: purpose,
+                automaticTargetTrackIndexes:
+                    automaticTargetTrackIndexes
+            )
+        } catch {
+            throw .invalidAutomaticWindow
+        }
+        let record = DownloadedBookRecord(
+            manifest: manifest,
             detail: detail
         )
+        try persist(record)
+        return record
+    }
+
+    public func updateAutomaticWindow(
+        _ storedRecord: DownloadedBookRecord,
+        targetTrackIndexes: Set<Int>
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        do {
+            try record.manifest.setAutomaticWindow(
+                targetTrackIndexes: targetTrackIndexes
+            )
+        } catch {
+            throw .invalidAutomaticWindow
+        }
+        try persist(record)
+        return record
+    }
+
+    public func promoteToManual(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        guard record.manifest.purpose == .automaticCache,
+            record.manifest.automaticWindow != nil
+        else {
+            throw .invalidAutomaticWindow
+        }
+        record.manifest.promoteToManual()
         try persist(record)
         return record
     }
@@ -414,6 +454,21 @@ public actor DownloadStorage {
         var record = try load(identity)
         do {
             try record.manifest.markFailed(
+                trackIndex: identity.trackIndex
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func markQueued(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(identity)
+        do {
+            try record.manifest.markQueued(
                 trackIndex: identity.trackIndex
             )
         } catch {

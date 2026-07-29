@@ -77,7 +77,7 @@ final class BackgroundDownloadLiveTests: XCTestCase {
 
             XCTAssertEqual(scheduled.count, plan.tracks.count)
             XCTAssertEqual(requests.count, plan.tracks.count)
-            var manifest = DownloadManifest(
+            var manifest = try DownloadManifest(
                 downloadID: downloadID,
                 accountID: accountID,
                 plan: plan

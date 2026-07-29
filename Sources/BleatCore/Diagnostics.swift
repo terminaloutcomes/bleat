@@ -100,6 +100,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case serverUnsupported = "server_unsupported"
     case localLoginUnavailable = "local_login_unavailable"
     case invalidCredentials = "invalid_credentials"
+    case secureCredentialStorageUnavailable =
+        "secure_credential_storage_unavailable"
     case loginFailed = "login_failed"
     case accountUnavailable = "account_unavailable"
     case libraryUnavailable = "library_unavailable"

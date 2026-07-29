@@ -229,6 +229,12 @@ enum DownloadNetworkDecision: Equatable, Sendable {
 }
 
 struct PendingCellularDownload: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case create
+        case promote(DownloadID)
+    }
+
+    let kind: Kind
     let detail: LibraryBookDetail
     let account: ServerAccount
     let plan: DownloadPlan
@@ -240,10 +246,26 @@ private struct AutomaticDownloadKey: Hashable {
     let itemID: LibraryItemID
 }
 
+private struct AutomaticDownloadTaskKey: Hashable {
+    let downloadID: DownloadID
+    let trackIndex: Int
+
+    init(_ identity: DownloadTaskIdentity) {
+        downloadID = identity.downloadID
+        trackIndex = identity.trackIndex
+    }
+}
+
+enum DownloadRepairScope: Equatable, Sendable {
+    case record
+    case fullBook
+}
+
 enum DownloadRepairPlanner {
     static func tracks(
         record: DownloadedBookRecord,
-        plan: DownloadPlan
+        plan: DownloadPlan,
+        scope: DownloadRepairScope = .record
     ) throws(DownloadModelFailure) -> [DownloadTrackPlan] {
         guard plan.itemID == record.manifest.itemID,
             plan.tracks.count == record.manifest.entries.count
@@ -263,7 +285,23 @@ enum DownloadRepairPlanner {
                 throw .repairPlanChanged
             }
         }
+        let targetIndexes: Set<Int>
+        switch scope {
+        case .record:
+            targetIndexes =
+                record.manifest.purpose == .automaticCache
+                ? record.manifest.automaticTargetTrackIndexes ?? []
+                : Set(plan.tracks.map(\.index))
+        case .fullBook:
+            targetIndexes = Set(plan.tracks.map(\.index))
+        }
+        guard !targetIndexes.isEmpty else {
+            throw .repairPlanChanged
+        }
         return plan.tracks.filter {
+            guard targetIndexes.contains($0.index) else {
+                return false
+            }
             guard let state = entries[$0.index]?.state else {
                 return false
             }
@@ -294,11 +332,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         [AutomaticDownloadKey: AutomaticDownloadActivity] = [:]
     private var latestAutomaticProgress:
         [AutomaticDownloadKey: AutomaticDownloadActivity] = [:]
-    private var playbackBlockedAutomaticDownloads:
-        Set<AutomaticDownloadKey> = []
+    private var playbackBlockedAutomaticDownloads: Set<AutomaticDownloadKey> =
+        []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
-    private var transferredBytesByTrack:
-        [DownloadID: [Int: Int64]] = [:]
+    private var supersededAutomaticTasks: Set<AutomaticDownloadTaskKey> = []
+    private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
     private lazy var session: URLSession = {
@@ -389,6 +427,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         _ = session
         await refresh()
+        await discardLegacyAutomaticCaches()
         let tasks = await session.allTasks
         for task in tasks where task.state == .suspended {
             guard let description = task.taskDescription,
@@ -466,6 +505,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             ) {
             case .confirmCellular(let expectedBytes):
                 pendingCellularDownload = PendingCellularDownload(
+                    kind: .create,
                     detail: detail,
                     account: account,
                     plan: plan,
@@ -575,13 +615,33 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingCellularDownload = nil
         failure = nil
         do {
-            _ = try await storage.preflight(plan: pending.plan)
-            try await schedule(
-                plan: pending.plan,
-                detail: pending.detail,
-                account: pending.account,
-                storage: storage
-            )
+            switch pending.kind {
+            case .create:
+                _ = try await storage.preflight(plan: pending.plan)
+                try await schedule(
+                    plan: pending.plan,
+                    detail: pending.detail,
+                    account: pending.account,
+                    storage: storage
+                )
+            case .promote(let downloadID):
+                guard let record = record(downloadID: downloadID) else {
+                    throw DownloadStorageError.recordNotFound
+                }
+                let tracks = try DownloadRepairPlanner.tracks(
+                    record: record,
+                    plan: pending.plan,
+                    scope: .fullBook
+                )
+                _ = try await storage.preflight(tracks: tracks)
+                try await promote(
+                    record,
+                    plan: pending.plan,
+                    tracks: tracks,
+                    account: pending.account,
+                    storage: storage
+                )
+            }
             await refresh()
         } catch let error as DownloadStorageError {
             failure = storageFailure(error)
@@ -592,6 +652,95 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func cancelCellularDownload() {
         pendingCellularDownload = nil
+    }
+
+    func downloadFullBook(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        guard record.manifest.accountID == account.id,
+            record.manifest.purpose == .automaticCache,
+            let storage
+        else {
+            failure = .preparationFailed
+            return
+        }
+        let availability = BookActionAvailability(
+            user: account.user,
+            detail: record.detail
+        )
+        guard availability.visibleActions.contains(.download) else {
+            failure = .permissionDenied
+            return
+        }
+        failure = nil
+        accounts[account.id] = account
+        do {
+            let plan = try await service.downloadPlan(
+                for: account,
+                itemID: record.manifest.itemID
+            )
+            let tracks = try DownloadRepairPlanner.tracks(
+                record: record,
+                plan: plan,
+                scope: .fullBook
+            )
+            _ = try await storage.preflight(tracks: tracks)
+            let fullBookBytes =
+                try DownloadStorageRequirement(plan: plan).expectedBytes
+            switch DownloadNetworkDecision.decide(
+                policy: networkPolicy,
+                expectedBytes: fullBookBytes,
+                largeDownloadThresholdBytes:
+                    Self.largeDownloadThresholdBytes
+            ) {
+            case .confirmCellular(let expectedBytes):
+                pendingCellularDownload = PendingCellularDownload(
+                    kind: .promote(record.manifest.downloadID),
+                    detail: record.detail,
+                    account: account,
+                    plan: plan,
+                    expectedBytes: expectedBytes
+                )
+            case .schedule:
+                try await promote(
+                    record,
+                    plan: plan,
+                    tracks: tracks,
+                    account: account,
+                    storage: storage
+                )
+            }
+            await refresh()
+        } catch let error as DownloadStorageError {
+            failure = storageFailure(error)
+        } catch let error as DownloadModelFailure {
+            failure = error
+        } catch {
+            failure = .preparationFailed
+        }
+    }
+
+    private func promote(
+        _ record: DownloadedBookRecord,
+        plan: DownloadPlan,
+        tracks: [DownloadTrackPlan],
+        account: ServerAccount,
+        storage: DownloadStorage
+    ) async throws {
+        let promoted = try await storage.promoteToManual(record)
+        guard !tracks.isEmpty else {
+            return
+        }
+        try await schedule(
+            plan: plan,
+            detail: promoted.detail,
+            account: account,
+            storage: storage,
+            purpose: .manual,
+            tracks: tracks,
+            downloadID: promoted.manifest.downloadID
+        )
     }
 
     private func applyAutomaticPlaybackActivity(
@@ -638,6 +787,31 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             }
 
+            let targets = AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: plan,
+                activity: activity,
+                lookaheadCount: automaticLookaheadCount
+            )
+            guard !targets.isEmpty else {
+                return
+            }
+            if let existing = record {
+                record = try await storage.updateAutomaticWindow(
+                    existing,
+                    targetTrackIndexes: targets
+                )
+                await cancelObsoleteAutomaticTasks(
+                    for: existing,
+                    retaining: targets,
+                    storage: storage
+                )
+                await refresh()
+                record =
+                    self.record(
+                        downloadID: existing.manifest.downloadID
+                    ) ?? record
+            }
+
             if automaticCleanupPolicy == .afterChapter,
                 let existing = record
             {
@@ -645,7 +819,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     AutomaticDownloadPlanner.completedTrackIndexes(
                         plan: plan,
                         activity: activity
-                    )
+                    ).subtracting(targets)
                 if !completedIndexes.isEmpty {
                     record = try await storage.removeCompletedTracks(
                         from: existing,
@@ -654,11 +828,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 }
             }
 
-            let targets = AutomaticDownloadPlanner.targetTrackIndexes(
-                plan: plan,
-                activity: activity,
-                lookaheadCount: automaticLookaheadCount
-            )
             let existingStates = Dictionary(
                 uniqueKeysWithValues:
                     record?.manifest.entries.map {
@@ -682,7 +851,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 storage: storage,
                 purpose: .automaticCache,
                 tracks: Array(tracks.prefix(1)),
-                downloadID: record?.manifest.downloadID
+                downloadID: record?.manifest.downloadID,
+                automaticTargetTrackIndexes: targets
             )
             await refresh()
         } catch {
@@ -778,6 +948,76 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         min(max(count, 1), 20)
     }
 
+    private func discardLegacyAutomaticCaches() async {
+        guard let storage else {
+            return
+        }
+        let legacyRecords = records.filter {
+            $0.manifest.isLegacyAutomaticCache
+        }
+        guard !legacyRecords.isEmpty else {
+            return
+        }
+        let legacyIDs = Set(
+            legacyRecords.map(\.manifest.downloadID)
+        )
+        deletingDownloadIDs.formUnion(legacyIDs)
+        let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                legacyIDs.contains(identity.downloadID)
+            else {
+                continue
+            }
+            task.cancel()
+        }
+        for record in legacyRecords {
+            try? await storage.remove(record)
+            progress[record.manifest.downloadID] = nil
+            transferredBytesByTrack[record.manifest.downloadID] = nil
+            pausedDownloadIDs.remove(record.manifest.downloadID)
+            playbackSuspendedDownloadIDs.remove(
+                record.manifest.downloadID
+            )
+        }
+        await refresh()
+    }
+
+    private func cancelObsoleteAutomaticTasks(
+        for record: DownloadedBookRecord,
+        retaining targetTrackIndexes: Set<Int>,
+        storage: DownloadStorage
+    ) async {
+        let states = Dictionary(
+            uniqueKeysWithValues: record.manifest.entries.map {
+                ($0.trackIndex, $0.state)
+            }
+        )
+        let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID,
+                !targetTrackIndexes.contains(identity.trackIndex)
+            else {
+                continue
+            }
+            supersededAutomaticTasks.insert(
+                AutomaticDownloadTaskKey(identity)
+            )
+            task.cancel()
+            if states[identity.trackIndex] == .downloading {
+                _ = try? await storage.markQueued(identity)
+            }
+            clearTransferredBytes(for: identity)
+        }
+    }
+
     private func schedule(
         plan: DownloadPlan,
         detail: LibraryBookDetail,
@@ -785,7 +1025,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         storage: DownloadStorage,
         purpose: DownloadPurpose = .manual,
         tracks: [DownloadTrackPlan]? = nil,
-        downloadID: DownloadID? = nil
+        downloadID: DownloadID? = nil,
+        automaticTargetTrackIndexes: Set<Int>? = nil
     ) async throws {
         let resolvedDownloadID =
             downloadID
@@ -796,7 +1037,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 accountID: account.id,
                 plan: plan,
                 detail: detail,
-                purpose: purpose
+                purpose: purpose,
+                automaticTargetTrackIndexes:
+                    automaticTargetTrackIndexes
             )
         }
         for track in tracks ?? plan.tracks {
@@ -805,6 +1048,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 accountID: account.id,
                 itemID: detail.id,
                 track: track
+            )
+            supersededAutomaticTasks.remove(
+                AutomaticDownloadTaskKey(identity)
             )
             var authorizedRequest =
                 try await service.authorizedDownloadRequest(
@@ -979,36 +1225,20 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 plan: plan
             )
             _ = try await storage.preflight(tracks: tracks)
-            for track in tracks {
-                let identity = try DownloadTaskIdentity(
-                    downloadID: record.manifest.downloadID,
-                    accountID: account.id,
-                    itemID: record.manifest.itemID,
-                    track: track
+            let scheduledTracks =
+                record.manifest.purpose == .automaticCache
+                ? Array(tracks.prefix(1))
+                : tracks
+            if !scheduledTracks.isEmpty {
+                try await schedule(
+                    plan: plan,
+                    detail: record.detail,
+                    account: account,
+                    storage: storage,
+                    purpose: record.manifest.purpose,
+                    tracks: scheduledTracks,
+                    downloadID: record.manifest.downloadID
                 )
-                var request = try await service.authorizedDownloadRequest(
-                    for: account,
-                    identity: identity
-                )
-                if record.manifest.purpose == .automaticCache {
-                    request.networkServiceType = .background
-                }
-                let task = session.downloadTask(
-                    with: networkPolicy.applying(to: request)
-                )
-                task.taskDescription = try identity.taskDescription()
-                task.priority =
-                    record.manifest.purpose == .automaticCache
-                    ? URLSessionTask.lowPriority
-                    : URLSessionTask.defaultPriority
-                if automaticDownloadIsBlocked(record) {
-                    playbackSuspendedDownloadIDs.insert(
-                        record.manifest.downloadID
-                    )
-                } else {
-                    task.resume()
-                }
-                _ = try await storage.markDownloading(identity)
             }
             await refresh()
             await diagnostics.record(
@@ -1238,13 +1468,61 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     func downloadedByteLength(
         for record: DownloadedBookRecord
     ) -> Int64 {
-        Self.combinedDownloadedByteLength(
+        Self.scopedDownloadedByteLength(
+            for: record,
+            transferredByteLengthsByTrack:
+                transferredBytesByTrack[record.manifest.downloadID] ?? [:]
+        )
+    }
+
+    static func scopedDownloadedByteLength(
+        for record: DownloadedBookRecord,
+        transferredByteLengthsByTrack: [Int: Int64]
+    ) -> Int64 {
+        if record.manifest.purpose == .automaticCache,
+            let targets = record.manifest.automaticTargetTrackIndexes
+        {
+            return Self.combinedDownloadedByteLength(
+                storedByteLength:
+                    record.manifest.automaticStoredByteLength ?? 0,
+                transferredByteLengths:
+                    transferredByteLengthsByTrack.compactMap {
+                        targets.contains($0.key) ? $0.value : nil
+                    },
+                expectedByteLength:
+                    record.manifest.automaticExpectedByteLength ?? 0
+            )
+        }
+        return Self.combinedDownloadedByteLength(
             storedByteLength: record.manifest.storedByteLength,
             transferredByteLengths:
-                transferredBytesByTrack[record.manifest.downloadID]?
-                .values.map { $0 } ?? [],
+                transferredByteLengthsByTrack.values.map { $0 },
             expectedByteLength: record.manifest.expectedByteLength
         )
+    }
+
+    func expectedByteLength(
+        for record: DownloadedBookRecord
+    ) -> Int64 {
+        if record.manifest.purpose == .automaticCache {
+            return record.manifest.automaticExpectedByteLength ?? 0
+        }
+        return record.manifest.expectedByteLength
+    }
+
+    func automaticCacheState(
+        for record: DownloadedBookRecord
+    ) -> AutomaticCacheState? {
+        guard record.manifest.purpose == .automaticCache else {
+            return nil
+        }
+        return record.manifest.automaticCacheState
+    }
+
+    func isFullBookAvailable(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        record.manifest.isFullBookComplete
     }
 
     static func combinedDownloadedByteLength(
@@ -1286,6 +1564,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         do {
             records = try await storage.records()
+            let currentIDs = Set(records.map(\.manifest.downloadID))
+            for downloadID in Array(progress.keys)
+            where !currentIDs.contains(downloadID) {
+                progress[downloadID] = nil
+            }
+            for record in records {
+                updateProgress(for: record.manifest.downloadID)
+            }
         } catch {
             failure = .storageUnavailable
         }
@@ -1295,6 +1581,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         identity: DownloadTaskIdentity,
         observedByteLength: Int64
     ) async {
+        supersededAutomaticTasks.remove(
+            AutomaticDownloadTaskKey(identity)
+        )
         guard let storage else {
             failure = .storageUnavailable
             return
@@ -1338,6 +1627,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private func rejectPlacement(
         identity: DownloadTaskIdentity
     ) async {
+        if supersededAutomaticTasks.remove(
+            AutomaticDownloadTaskKey(identity)
+        ) != nil {
+            clearTransferredBytes(for: identity)
+            return
+        }
         if let storage {
             _ = try? await storage.markFailed(identity)
         }
@@ -1353,12 +1648,25 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard let description = task.taskDescription,
             let identity =
                 try? DownloadTaskIdentity
-                .decodeTaskDescription(description),
-            let response = task.response as? HTTPURLResponse
+                .decodeTaskDescription(description)
         else {
             return
         }
+        if supersededAutomaticTasks.remove(
+            AutomaticDownloadTaskKey(identity)
+        ) != nil {
+            clearTransferredBytes(for: identity)
+            return
+        }
         guard !deletingDownloadIDs.contains(identity.downloadID) else {
+            return
+        }
+        guard let response = task.response as? HTTPURLResponse else {
+            if error != nil, let storage {
+                _ = try? await storage.markFailed(identity)
+                clearTransferredBytes(for: identity)
+                await refresh()
+            }
             return
         }
         if (200..<300).contains(response.statusCode), error == nil {
@@ -1386,7 +1694,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 replacementTask.taskDescription = description
                 replacementTask.priority =
                     record(downloadID: identity.downloadID)?
-                    .manifest.purpose == .automaticCache
+                        .manifest.purpose == .automaticCache
                     ? URLSessionTask.lowPriority
                     : URLSessionTask.defaultPriority
                 clearTransferredBytes(for: identity)
@@ -1440,10 +1748,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             progress[downloadID] = nil
             return
         }
-        let expected = record.manifest.expectedByteLength
+        let expected = expectedByteLength(for: record)
         guard expected > 0 else {
             progress[downloadID] =
-                record.manifest.state == .complete ? 1 : 0
+                isFullBookAvailable(record)
+                    || automaticCacheState(for: record) == .cached
+                ? 1 : 0
             return
         }
         progress[downloadID] = min(
