@@ -1,5 +1,20 @@
 import XCTest
 
+@MainActor
+private func tabButton(
+    _ label: String,
+    in app: XCUIApplication
+) -> XCUIElement {
+    let matches = app.buttons.matching(
+        NSPredicate(format: "label == %@", label)
+    )
+    let count = matches.count
+    guard count > 0 else {
+        return matches.firstMatch
+    }
+    return matches.element(boundBy: count - 1)
+}
+
 final class BleatUITests: XCTestCase {
     @MainActor
     func testNativeLoginShowsSignedInTabs() {
@@ -84,8 +99,14 @@ final class BleatUITests: XCTestCase {
         app.buttons["Cancel"].tap()
         app.navigationBars.buttons.firstMatch.tap()
 
-        app.buttons["Search"].tap()
+        tabButton("Search", in: app).tap()
         let searchField = app.searchFields.firstMatch
+        if !searchField.waitForExistence(timeout: 1) {
+            let presentSearch = app.navigationBars["Search"]
+                .buttons["Search"]
+            XCTAssertTrue(presentSearch.waitForExistence(timeout: 3))
+            presentSearch.tap()
+        }
         XCTAssertTrue(searchField.waitForExistence(timeout: 3))
         searchField.tap()
         searchField.typeText("Test")
@@ -129,7 +150,7 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(
                 timeout: 3
             ))
-        app.buttons["Settings"].tap()
+        tabButton("Settings", in: app).tap()
 
         let wifiOnly = app.switches["settings.downloads.wifiOnly"]
         XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
@@ -213,7 +234,7 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
-        app.tabBars.buttons["Library"].tap()
+        tabButton("Library", in: app).tap()
         XCTAssertTrue(
             app.staticTexts["The Test Audiobook"].waitForExistence(
                 timeout: 3
@@ -245,10 +266,200 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(scenario: String) -> XCUIApplication {
+    func testLimitedPermissionsShowPlayWithoutEditOrDownload() {
+        let app = launch(scenario: "--ui-testing-limited-permissions")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+
+        XCTAssertTrue(
+            app.buttons["book.detail.play"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["book.detail.edit"].exists)
+        XCTAssertFalse(app.buttons["book.detail.download"].exists)
+    }
+
+    @MainActor
+    func testCoreJourneyAtLargestDynamicType() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "-UIPreferredContentSizeCategoryName",
+                "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        let library = tabButton("Library", in: app)
+        XCTAssertTrue(library.exists)
+        library.tap()
+        XCTAssertTrue(
+            app.staticTexts["The Test Audiobook"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["book.detail.title"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.buttons["book.detail.play"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    private func launch(
+        scenario: String,
+        additionalArguments: [String] = []
+    ) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = [scenario]
+        app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+}
+
+final class BleatLiveUITests: XCTestCase {
+    @MainActor
+    func testLiveOnlineLoginPlaybackAndDownload() throws {
+        let environment = try liveEnvironment()
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 10)
+        )
+        app.textFields["login.server"].tap()
+        app.textFields["login.server"].typeText(environment.server)
+        app.textFields["login.username"].tap()
+        app.textFields["login.username"].typeText(environment.username)
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText(
+            environment.password
+        )
+        app.buttons["login.submit"].tap()
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 30
+            )
+        )
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["multi-track"].waitForExistence(timeout: 20)
+        )
+        app.staticTexts["multi-track"].tap()
+        XCTAssertTrue(
+            app.buttons["book.detail.play"].waitForExistence(timeout: 20)
+        )
+        app.buttons["book.detail.play"].tap()
+
+        let miniPlayer = app.buttons["multi-track"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
+        miniPlayer.tap()
+        XCTAssertTrue(
+            app.otherElements["player.screen"].waitForExistence(timeout: 10)
+        )
+        XCTAssertTrue(
+            app.buttons["player.skipBackward"].waitForExistence(timeout: 10)
+        )
+        app.buttons["player.skipForward"].tap()
+        app.buttons["player.toggle"].tap()
+        app.buttons["player.toggle"].tap()
+        app.buttons["player.rate"].tap()
+        app.buttons["1.25×"].tap()
+        let chapters = app.buttons["player.chapters"]
+        XCTAssertTrue(chapters.waitForExistence(timeout: 10))
+        chapters.tap()
+        app.buttons["02"].tap()
+        let audioFiles = app.buttons["player.audioFiles"]
+        XCTAssertTrue(audioFiles.waitForExistence(timeout: 10))
+        audioFiles.tap()
+        let secondFile = app.buttons["player.audioFile.1"]
+        XCTAssertTrue(secondFile.waitForExistence(timeout: 10))
+        secondFile.tap()
+        app.buttons["Stop"].tap()
+
+        let download = app.buttons["book.detail.download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 10))
+        download.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["book.detail.downloadStatus"]
+                .waitForExistence(timeout: 20)
+        )
+        XCTAssertTrue(
+            app.staticTexts["Downloaded"].waitForExistence(timeout: 60)
+        )
+        app.terminate()
+    }
+
+    @MainActor
+    func testLiveOfflineCachedDownloadAndPendingSync() throws {
+        _ = try liveEnvironment()
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 30
+            )
+        )
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["multi-track"].waitForExistence(timeout: 20)
+        )
+        app.staticTexts["multi-track"].tap()
+        let playOffline = app.buttons["book.detail.play"]
+        XCTAssertTrue(playOffline.waitForExistence(timeout: 20))
+        XCTAssertEqual(playOffline.label, "Play Offline")
+        playOffline.tap()
+
+        let miniPlayer = app.buttons["multi-track"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
+        miniPlayer.tap()
+        XCTAssertTrue(
+            app.otherElements["player.screen"].waitForExistence(timeout: 10)
+        )
+        app.buttons["player.skipForward"].tap()
+        app.buttons["player.toggle"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["player.syncError"]
+                .waitForExistence(timeout: 20)
+        )
+        app.buttons["player.toggle"].tap()
+        app.buttons["Done"].tap()
+
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["multi-track"].waitForExistence(timeout: 10)
+        )
+        XCTAssertTrue(app.buttons["Play Offline"].exists)
+        app.terminate()
+    }
+
+    private func liveEnvironment() throws -> (
+        server: String,
+        username: String,
+        password: String
+    ) {
+        let environment = ProcessInfo.processInfo.environment
+        guard let server = environment["BLEAT_LIVE_APP_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
+        else {
+            throw XCTSkip(
+                "Run scripts/test-app-live.sh to provide live app data"
+            )
+        }
+        return (server, username, password)
     }
 }

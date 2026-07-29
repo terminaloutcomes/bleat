@@ -1,0 +1,12 @@
+{
+	local_certs
+	admin off
+}
+
+https://localhost:8443 {
+	reverse_proxy audiobookshelf-root:80
+}
+
+https://localhost:8444 {
+	reverse_proxy audiobookshelf-prefix:80
+}

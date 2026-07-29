@@ -1,6 +1,22 @@
 name: bleat-live-tests
 
 services:
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports:
+      - "${BLEAT_HTTPS_ROOT_PORT:-13478}:8443"
+      - "${BLEAT_HTTPS_PREFIX_PORT:-13479}:8444"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      audiobookshelf-root:
+        condition: service_healthy
+      audiobookshelf-prefix:
+        condition: service_healthy
+    restart: "no"
+
   audiobookshelf-root:
     image: ghcr.io/advplyr/audiobookshelf:2.36.0@sha256:180acad33d69c99ed208676465d8edcb268fa46967735579a7810859885b1a8e
     ports:
@@ -37,6 +53,8 @@ services:
     restart: "no"
 
 volumes:
+  caddy-data:
+  caddy-config:
   root-config:
   root-metadata:
   prefix-config:

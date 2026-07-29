@@ -5,6 +5,7 @@
     private enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
         case signedIn = "--ui-testing-signed-in"
+        case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
     }
 
@@ -25,13 +26,15 @@
 
         private init(scenario: UITestScenario) {
             self.scenario = scenario
-            accountResult = Self.makeAccount()
+            accountResult = Self.makeAccount(
+                hasManagementPermissions: scenario != .limitedPermissions
+            )
         }
 
         func accounts()
             async throws(AppServiceError) -> [ServerAccount]
         {
-            guard scenario == .signedIn else {
+            guard [.signedIn, .limitedPermissions].contains(scenario) else {
                 return []
             }
             return [try account()]
@@ -40,7 +43,7 @@
         func activeAccount()
             async throws(AppServiceError) -> ServerAccount?
         {
-            guard scenario == .signedIn else {
+            guard [.signedIn, .limitedPermissions].contains(scenario) else {
                 return nil
             }
             return try account()
@@ -389,7 +392,9 @@
             )
         }
 
-        private static func makeAccount()
+        private static func makeAccount(
+            hasManagementPermissions: Bool
+        )
             -> Result<ServerAccount, AppServiceError>
         {
             do {
@@ -406,8 +411,8 @@
                             username: "reader",
                             type: .user,
                             permissions: UserPermissions(
-                                download: true,
-                                update: true,
+                                download: hasManagementPermissions,
+                                update: hasManagementPermissions,
                                 delete: false,
                                 upload: false,
                                 createEReader: false,

@@ -8,10 +8,14 @@ readonly bleat_compose_file="${bleat_repository_root}/TestSupport/ServerHarness/
 readonly bleat_project_name="${BLEAT_COMPOSE_PROJECT_NAME:-bleat-live-tests}"
 readonly bleat_root_port="${BLEAT_ABS_ROOT_PORT:-13378}"
 readonly bleat_prefix_port="${BLEAT_ABS_PREFIX_PORT:-13379}"
+readonly bleat_https_root_port="${BLEAT_HTTPS_ROOT_PORT:-13478}"
+readonly bleat_https_prefix_port="${BLEAT_HTTPS_PREFIX_PORT:-13479}"
 readonly bleat_root_url="http://127.0.0.1:${bleat_root_port}"
 readonly bleat_prefix_url="http://127.0.0.1:${bleat_prefix_port}/audiobookshelf"
-readonly bleat_test_username="${BLEAT_TEST_USERNAME:-bleat-root}"
-readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-bleat-test-only}"
+readonly bleat_https_root_url="https://localhost:${bleat_https_root_port}"
+readonly bleat_https_prefix_url="https://localhost:${bleat_https_prefix_port}/audiobookshelf"
+readonly bleat_test_username="${BLEAT_TEST_USERNAME:-}"
+readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-}"
 
 bleat_compose() {
     docker compose \
@@ -27,6 +31,49 @@ bleat_status() {
         --show-error \
         --max-time 2 \
         "${1}/status"
+}
+
+bleat_export_ca() {
+    local destination="$1"
+    bleat_compose cp \
+        caddy:/data/caddy/pki/authorities/local/root.crt \
+        "${destination}"
+}
+
+bleat_https_status() {
+    local base_url="$1"
+    local certificate="$2"
+    /usr/bin/curl \
+        --fail \
+        --silent \
+        --show-error \
+        --max-time 2 \
+        --cacert "${certificate}" \
+        "${base_url}/status"
+}
+
+bleat_wait_https() {
+    local certificate
+    local attempt
+    certificate="$(mktemp /tmp/bleat-caddy-root.XXXXXX)"
+    bleat_export_ca "${certificate}"
+    for attempt in {1..30}; do
+        if bleat_https_status \
+            "${bleat_https_root_url}" \
+            "${certificate}" \
+            >/dev/null 2>&1 \
+            && bleat_https_status \
+                "${bleat_https_prefix_url}" \
+                "${certificate}" \
+                >/dev/null 2>&1; then
+            rm -f "${certificate}"
+            return 0
+        fi
+        sleep 1
+    done
+    rm -f "${certificate}"
+    print -u2 "HTTPS proxy services did not become ready"
+    return 1
 }
 
 bleat_wait() {
@@ -174,17 +221,32 @@ bleat_seed_library() {
 }
 
 bleat_seed() {
+    if [[ -z "${bleat_test_username}" || -z "${bleat_test_password}" ]]; then
+        print -u2 \
+            "BLEAT_TEST_USERNAME and BLEAT_TEST_PASSWORD are required to seed"
+        return 64
+    fi
     bleat_initialize "${bleat_root_url}"
     bleat_initialize "${bleat_prefix_url}"
     bleat_seed_library "${bleat_root_url}"
     bleat_seed_library "${bleat_prefix_url}"
 }
 
+bleat_redact() {
+    sed -E \
+        -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' \
+        -e 's/("(accessToken|refreshToken|password)"[[:space:]]*:[[:space:]]*")[^"]*"/\1[REDACTED]"/g'
+}
+
 bleat_artifacts() {
     local artifact_dir="${1:-${bleat_repository_root}/TestSupport/ServerHarness/artifacts}"
     mkdir -p "${artifact_dir}"
-    bleat_compose ps >"${artifact_dir}/compose-ps.txt"
-    bleat_compose logs --no-color >"${artifact_dir}/compose.log" 2>&1
+    bleat_compose ps \
+        | bleat_redact \
+        >"${artifact_dir}/compose-ps.txt"
+    bleat_compose logs --no-color 2>&1 \
+        | bleat_redact \
+        >"${artifact_dir}/compose.log"
 }
 
 bleat_down() {
@@ -195,6 +257,7 @@ case "${1:-}" in
     up)
         bleat_compose up --detach --wait
         bleat_wait
+        bleat_wait_https
         ;;
     wait)
         bleat_wait
@@ -208,6 +271,7 @@ case "${1:-}" in
         bleat_compose up --detach --wait
         bleat_wait
         bleat_seed
+        bleat_wait_https
         ;;
     status)
         bleat_status "${bleat_root_url}"
@@ -218,11 +282,21 @@ case "${1:-}" in
     artifacts)
         bleat_artifacts "${2:-}"
         ;;
+    ca)
+        if [[ -z "${2:-}" ]]; then
+            print -u2 "Usage: $0 ca <destination>"
+            exit 64
+        fi
+        bleat_export_ca "$2"
+        ;;
+    stop)
+        bleat_compose stop
+        ;;
     down)
         bleat_down
         ;;
     *)
-        print -u2 "Usage: $0 {up|wait|seed|reset|status|artifacts [directory]|down}"
+        print -u2 "Usage: $0 {up|wait|seed|reset|status|artifacts [directory]|ca <destination>|stop|down}"
         exit 64
         ;;
 esac
