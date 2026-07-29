@@ -41,6 +41,7 @@ final class BleatUITests: XCTestCase {
             "An expanded audiobook loaded from the server."
         )
         XCTAssertTrue(app.buttons["book.detail.play"].exists)
+        XCTAssertTrue(app.buttons["book.detail.download"].exists)
         let edit = app.buttons["book.detail.edit"]
         XCTAssertTrue(edit.exists)
         edit.tap()

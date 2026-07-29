@@ -10,7 +10,63 @@ public enum DownloadAuthorizationError: Error, Equatable, Sendable {
     case authenticatedRequest(AuthenticatedRequestError)
 }
 
+public enum DownloadPlanRequestError: Error, Equatable, Sendable {
+    case invalidItemID
+    case routeConstruction(RouteConstructionError)
+    case authenticatedRequest(AuthenticatedRequestError)
+    case unexpectedStatus(Int)
+    case invalidPlan(DownloadPlanError)
+}
+
 extension AuthCoordinator: DownloadRequestAuthorizing {
+    public func downloadPlan(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        itemID: LibraryItemID
+    ) async throws(DownloadPlanRequestError) -> DownloadPlan {
+        guard !itemID.rawValue.isEmpty else {
+            throw .invalidItemID
+        }
+        let route = AudiobookshelfRoute.item(itemID)
+        let url: URL
+        do {
+            url = try AudiobookshelfRouteBuilder(server: server).url(
+                for: route,
+                queryItems: [
+                    URLQueryItem(name: "expanded", value: "1"),
+                    URLQueryItem(name: "include", value: "progress"),
+                ]
+            )
+        } catch let error {
+            throw .routeConstruction(error)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let response: HTTPResponse
+        do {
+            response = try await sendAuthenticated(
+                request,
+                route: route,
+                accountID: accountID,
+                server: server
+            )
+        } catch let error as AuthenticatedRequestError {
+            throw .authenticatedRequest(error)
+        } catch {
+            throw .authenticatedRequest(.requestTransportFailed)
+        }
+        guard response.statusCode == 200 else {
+            throw .unexpectedStatus(response.statusCode)
+        }
+        do {
+            return try DownloadPlan.decodeExpandedItem(
+                from: response.data
+            )
+        } catch let error {
+            throw .invalidPlan(error)
+        }
+    }
+
     public func makeAuthorizedDownloadRequest(
         identity: DownloadTaskIdentity,
         server: NormalizedServerURL
@@ -39,17 +95,21 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
             itemID: identity.itemID,
             inode: identity.inode
         )
-        guard requestMatchesDownload(
-            rejectedRequest,
-            route: route,
-            server: server
-        ) else {
+        guard
+            requestMatchesDownload(
+                rejectedRequest,
+                route: route,
+                server: server
+            )
+        else {
             throw DownloadAuthorizationError
                 .rejectedRequestDoesNotMatchDownload
         }
-        guard let authorization = rejectedRequest.value(
-            forHTTPHeaderField: "Authorization"
-        ) else {
+        guard
+            let authorization = rejectedRequest.value(
+                forHTTPHeaderField: "Authorization"
+            )
+        else {
             throw DownloadAuthorizationError.missingRejectedAuthorization
         }
         let components = authorization.split(
@@ -57,8 +117,8 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
             omittingEmptySubsequences: false
         )
         guard components.count == 2,
-              components[0].lowercased() == "bearer",
-              !components[1].isEmpty
+            components[0].lowercased() == "bearer",
+            !components[1].isEmpty
         else {
             throw DownloadAuthorizationError.malformedRejectedAuthorization
         }
@@ -87,7 +147,7 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
             throw .invalidAccountID
         }
         guard !accountsLoggingIn.contains(accountID),
-              !accountsSigningOut.contains(accountID)
+            !accountsSigningOut.contains(accountID)
         else {
             throw .accountOperationInProgress
         }
@@ -129,9 +189,9 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
         server: NormalizedServerURL
     ) -> Bool {
         guard let requestURL = request.url,
-              requestURL.query == nil,
-              let expectedURL = try? AudiobookshelfRouteBuilder(server: server)
-                  .url(for: route)
+            requestURL.query == nil,
+            let expectedURL = try? AudiobookshelfRouteBuilder(server: server)
+                .url(for: route)
         else {
             return false
         }

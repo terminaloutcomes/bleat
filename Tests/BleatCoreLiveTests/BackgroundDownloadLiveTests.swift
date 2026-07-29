@@ -7,9 +7,9 @@ final class BackgroundDownloadLiveTests: XCTestCase {
     func testPinnedRootAndPrefixPerFileDownloadContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
-              let username = environment["BLEAT_LIVE_USERNAME"],
-              let password = environment["BLEAT_LIVE_PASSWORD"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live download data"
@@ -53,11 +53,10 @@ final class BackgroundDownloadLiveTests: XCTestCase {
         XCTAssertEqual(itemIDs.count, 3)
 
         for (itemOffset, itemID) in itemIDs.enumerated() {
-            let plan = try await downloadPlan(
-                itemID: itemID,
-                coordinator: authCoordinator,
+            let plan = try await authCoordinator.downloadPlan(
                 accountID: accountID,
-                server: server
+                server: server,
+                itemID: itemID
             )
             let registry = LiveDownloadTaskRegistry()
             let scheduler = LiveDownloadScheduler(registry: registry)
@@ -123,7 +122,8 @@ final class BackgroundDownloadLiveTests: XCTestCase {
             let unauthorized = try await transport.send(rejectedRequest)
             XCTAssertEqual(unauthorized.statusCode, 401)
 
-            let replacement = try await coordinator
+            let replacement =
+                try await coordinator
                 .replaceUnauthorizedTask(
                     identity: scheduled[0].identity,
                     server: server,
@@ -158,14 +158,15 @@ final class BackgroundDownloadLiveTests: XCTestCase {
             )
             let restored = await relaunchedCoordinator.restoreTasks()
             XCTAssertEqual(restored.count, scheduled.count + 1)
-            XCTAssertTrue(restored.allSatisfy {
-                guard case let .restored(identity) = $0.state else {
-                    return false
-                }
-                return identity.accountID == accountID
-                    && identity.itemID == itemID
-                    && identity.downloadID == downloadID
-            })
+            XCTAssertTrue(
+                restored.allSatisfy {
+                    guard case .restored(let identity) = $0.state else {
+                        return false
+                    }
+                    return identity.accountID == accountID
+                        && identity.itemID == itemID
+                        && identity.downloadID == downloadID
+                })
         }
     }
 
@@ -216,34 +217,6 @@ final class BackgroundDownloadLiveTests: XCTestCase {
         return items.results.map(\.id)
     }
 
-    private func downloadPlan<
-        Transport: HTTPTransport,
-        CredentialStore: AccountCredentialStore
-    >(
-        itemID: LibraryItemID,
-        coordinator: AuthCoordinator<Transport, CredentialStore>,
-        accountID: AccountID,
-        server: NormalizedServerURL
-    ) async throws -> DownloadPlan {
-        let route = AudiobookshelfRoute.item(itemID)
-        let url = try AudiobookshelfRouteBuilder(server: server).url(
-            for: route,
-            queryItems: [
-                URLQueryItem(name: "expanded", value: "1"),
-                URLQueryItem(name: "include", value: "progress"),
-            ]
-        )
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        let response = try await coordinator.sendAuthenticated(
-            request,
-            route: route,
-            accountID: accountID,
-            server: server
-        )
-        XCTAssertEqual(response.statusCode, 200)
-        return try DownloadPlan.decodeExpandedItem(from: response.data)
-    }
 }
 
 private actor LiveDownloadTaskRegistry {
@@ -258,11 +231,12 @@ private actor LiveDownloadTaskRegistry {
         let identifier = nextIdentifier
         nextIdentifier += 1
         recordedRequests.append(request)
-        snapshots.append(.init(
-            taskIdentifier: identifier,
-            taskDescription: taskDescription,
-            originalRequest: request
-        ))
+        snapshots.append(
+            .init(
+                taskIdentifier: identifier,
+                taskDescription: taskDescription,
+                originalRequest: request
+            ))
         return identifier
     }
 

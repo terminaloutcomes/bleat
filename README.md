@@ -23,8 +23,8 @@ action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. The MVP also defers local time
 tracking, lifetime statistics, and listening-history import/export. Durable
-offline position recovery, downloads, and cover editing remain under active
-development.
+offline playback, download pause/retry controls, and cover editing remain under
+active development.
 
 ## Requirements
 
@@ -176,6 +176,19 @@ Bleat refetches the item immediately before saving. If the server's `updatedAt`
 value changed since the editor opened, Bleat offers to load the server version,
 review the current draft, or overwrite it. This is a best-effort conflict check
 because Audiobookshelf does not expose an atomic metadata precondition.
+
+## Download an audiobook
+
+Accounts with Audiobookshelf's download permission see **Download** on book
+detail. Bleat schedules every original audio file through a stable background
+URL session with bearer headers, limits each host to three concurrent transfers,
+persists an offline metadata snapshot and byte-exact manifest, and restores
+system-owned tasks after relaunch. The Downloads tab shows durable state and
+supports book-scoped deletion. A 401 transfer response is replaced using the
+native account's rotating refresh token without placing tokens in URLs.
+
+Completed local-file playback and pause/retry controls are the next download
+slice; until then, the Play button continues to open a streaming session.
 
 The current app target requires HTTPS. The Docker harness below intentionally
 tests the lower-level HTTP contracts and is not a server intended for manual

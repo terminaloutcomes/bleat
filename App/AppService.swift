@@ -23,6 +23,8 @@ enum AppServiceError: Error, Equatable, Sendable {
     case playbackSync(PlaybackSyncError)
     case metadataPatch(BookMetadataPatchError)
     case metadataUpdate(BookMetadataUpdateError)
+    case downloadPlan(DownloadPlanRequestError)
+    case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
 }
@@ -114,6 +116,22 @@ protocol AppServicing: Sendable {
         draft: BookMetadataDraft,
         overwrite: Bool
     ) async throws(AppServiceError) -> AppMetadataSaveOutcome
+
+    func downloadPlan(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> DownloadPlan
+
+    func authorizedDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity
+    ) async throws(AppServiceError) -> URLRequest
+
+    func replacementDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity,
+        rejectedRequest: URLRequest
+    ) async throws(AppServiceError) -> URLRequest
 
     func removeAccount(
         _ account: ServerAccount
@@ -473,6 +491,59 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .bookDetail(error)
+        }
+    }
+
+    func downloadPlan(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> DownloadPlan {
+        do {
+            return try await coordinator.downloadPlan(
+                accountID: account.id,
+                server: account.server,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .downloadPlan(error)
+        }
+    }
+
+    func authorizedDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity
+    ) async throws(AppServiceError) -> URLRequest {
+        do {
+            return try await coordinator.makeAuthorizedDownloadRequest(
+                identity: identity,
+                server: account.server
+            )
+        } catch let error as DownloadAuthorizationError {
+            throw .downloadAuthorization(error)
+        } catch {
+            throw .downloadAuthorization(
+                .authenticatedRequest(.requestTransportFailed)
+            )
+        }
+    }
+
+    func replacementDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity,
+        rejectedRequest: URLRequest
+    ) async throws(AppServiceError) -> URLRequest {
+        do {
+            return try await coordinator.makeReplacementDownloadRequest(
+                identity: identity,
+                server: account.server,
+                rejectedRequest: rejectedRequest
+            )
+        } catch let error as DownloadAuthorizationError {
+            throw .downloadAuthorization(error)
+        } catch {
+            throw .downloadAuthorization(
+                .authenticatedRequest(.requestTransportFailed)
+            )
         }
     }
 

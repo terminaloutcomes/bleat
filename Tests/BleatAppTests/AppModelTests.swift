@@ -687,6 +687,11 @@ final class AppModelTests: XCTestCase {
                 .metadataUpdate(.unexpectedStatus(503)),
                 .metadataUnavailable
             ),
+            (.downloadPlan(.unexpectedStatus(503)), .mediaUnavailable),
+            (
+                .downloadAuthorization(.invalidAccountID),
+                .mediaUnavailable
+            ),
             (
                 .accountRemoval(.logoutRequestFailed),
                 .accountRemovalFailed
@@ -1076,6 +1081,28 @@ private actor TestAppService: AppServicing {
             )
         )
         return .saved(baseline)
+    }
+
+    func downloadPlan(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> DownloadPlan {
+        throw .downloadPlan(.invalidItemID)
+    }
+
+    func authorizedDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity
+    ) async throws(AppServiceError) -> URLRequest {
+        throw .downloadAuthorization(.invalidAccountID)
+    }
+
+    func replacementDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity,
+        rejectedRequest: URLRequest
+    ) async throws(AppServiceError) -> URLRequest {
+        throw .downloadAuthorization(.invalidAccountID)
     }
 
     func removeAccount(

@@ -134,10 +134,7 @@ private struct SignedInView: View {
                 SearchView(model: model)
             }
             Tab("Downloads", systemImage: "arrow.down.circle") {
-                PendingFeatureView(
-                    title: "Downloads",
-                    systemImage: "arrow.down.circle"
-                )
+                DownloadsView(model: model)
             }
             Tab("Settings", systemImage: "gearshape") {
                 SettingsView(model: model)
@@ -633,6 +630,7 @@ private struct BookDetailView: View {
                 }
 
                 playbackAction(detail)
+                downloadAction(detail)
             }
             .padding()
         }
@@ -711,6 +709,46 @@ private struct BookDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func downloadAction(_ detail: LibraryBookDetail) -> some View {
+        if let account = model.account {
+            let availability = BookActionAvailability(
+                user: account.user,
+                detail: detail
+            )
+            if availability.visibleActions.contains(.download) {
+                if let record = model.downloads.record(
+                    accountID: account.id,
+                    itemID: detail.id
+                ) {
+                    LabeledContent(
+                        "Offline",
+                        value: record.manifest.state == .complete
+                            ? "Downloaded"
+                            : "Downloading"
+                    )
+                } else {
+                    Button {
+                        Task {
+                            await model.downloads.download(
+                                detail: detail,
+                                account: account
+                            )
+                        }
+                    } label: {
+                        Label(
+                            "Download",
+                            systemImage: "arrow.down.circle"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("book.detail.download")
+                }
+            }
+        }
+    }
+
     private func durationText(_ duration: Double) -> String {
         let totalMinutes = max(0, Int(duration) / 60)
         let hours = totalMinutes / 60
@@ -762,14 +800,45 @@ private struct SettingsView: View {
     }
 }
 
-private struct PendingFeatureView: View {
-    let title: String
-    let systemImage: String
+private struct DownloadsView: View {
+    @Bindable var model: AppModel
 
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(title, systemImage: systemImage)
-                .navigationTitle(title)
+            Group {
+                if model.downloads.records.isEmpty {
+                    ContentUnavailableView(
+                        "No Downloads",
+                        systemImage: "arrow.down.circle"
+                    )
+                } else {
+                    List(model.downloads.records, id: \.manifest.downloadID) {
+                        record in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(record.detail.title)
+                                .font(.headline)
+                            ProgressView(
+                                value: model.downloads.progress[
+                                    record.manifest.downloadID
+                                ]
+                                    ?? (record.manifest.state == .complete
+                                        ? 1 : 0)
+                            )
+                            Text(record.manifest.state.rawValue.capitalized)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .swipeActions {
+                            Button("Delete", role: .destructive) {
+                                Task {
+                                    await model.downloads.remove(record)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Downloads")
         }
     }
 }

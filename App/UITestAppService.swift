@@ -216,6 +216,28 @@
             .saved(baseline)
         }
 
+        func downloadPlan(
+            for account: ServerAccount,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> DownloadPlan {
+            throw .downloadPlan(.invalidItemID)
+        }
+
+        func authorizedDownloadRequest(
+            for account: ServerAccount,
+            identity: DownloadTaskIdentity
+        ) async throws(AppServiceError) -> URLRequest {
+            throw .downloadAuthorization(.invalidAccountID)
+        }
+
+        func replacementDownloadRequest(
+            for account: ServerAccount,
+            identity: DownloadTaskIdentity,
+            rejectedRequest: URLRequest
+        ) async throws(AppServiceError) -> URLRequest {
+            throw .downloadAuthorization(.invalidAccountID)
+        }
+
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}

@@ -151,6 +151,8 @@ enum AppFailure: Equatable, Sendable {
             self = .invalidMetadata
         case .metadataUpdate:
             self = .metadataUnavailable
+        case .downloadPlan, .downloadAuthorization:
+            self = .mediaUnavailable
         case .accountRemoval, .libraryCache:
             self = .accountRemovalFailed
         }
@@ -179,10 +181,12 @@ final class AppModel {
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var metadataSaveState: MetadataSaveState = .idle
     let playback: PlaybackModel
+    let downloads: DownloadModel
 
     init(service: any AppServicing) {
         self.service = service
         playback = PlaybackModel(service: service)
+        downloads = DownloadModel(service: service)
         phase = .launching
     }
 
@@ -192,6 +196,7 @@ final class AppModel {
     ) {
         self.service = service
         playback = PlaybackModel(service: service)
+        downloads = DownloadModel(service: service)
         hasStarted = true
         switch bootstrapError {
         case .persistenceUnavailable:
@@ -213,6 +218,7 @@ final class AppModel {
             }
             account = restoredAccount
             phase = .signedIn
+            await downloads.start(account: restoredAccount)
             await loadLibraries()
         } catch let error {
             phase = .unavailable(AppFailure(serviceError: error))
@@ -238,6 +244,7 @@ final class AppModel {
             account = authenticatedAccount
             phase = .signedIn
             loginStatus = .idle
+            await downloads.start(account: authenticatedAccount)
             await loadLibraries()
         } catch let error {
             loginStatus = .failed(AppFailure(serviceError: error))
@@ -427,6 +434,7 @@ final class AppModel {
 
         do {
             try await service.removeAccount(account)
+            await downloads.removeAll(for: account.id)
             self.account = nil
             selectedLibrary = nil
             libraries = .idle

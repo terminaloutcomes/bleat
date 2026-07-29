@@ -1,8 +1,28 @@
 import BleatCore
 import SwiftUI
+import UIKit
+
+@MainActor
+final class BleatAppDelegate: NSObject, UIApplicationDelegate {
+    static var backgroundDownloadCompletion: (() -> Void)?
+
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == bleatBackgroundDownloadSessionIdentifier else {
+            completionHandler()
+            return
+        }
+        Self.backgroundDownloadCompletion = completionHandler
+    }
+}
 
 @main
 struct BleatApp: App {
+    @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
+    private var appDelegate
     @State private var model: AppModel
 
     init() {
@@ -114,6 +134,28 @@ private struct UnavailableAppService: AppServicing {
         draft: BookMetadataDraft,
         overwrite: Bool
     ) async throws(AppServiceError) -> AppMetadataSaveOutcome {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func downloadPlan(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> DownloadPlan {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func authorizedDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity
+    ) async throws(AppServiceError) -> URLRequest {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func replacementDownloadRequest(
+        for account: ServerAccount,
+        identity: DownloadTaskIdentity,
+        rejectedRequest: URLRequest
+    ) async throws(AppServiceError) -> URLRequest {
         throw .accountStore(.persistenceFailed)
     }
 
