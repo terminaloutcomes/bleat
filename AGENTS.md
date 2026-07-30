@@ -98,6 +98,18 @@ model, UI, and diagnostics boundaries. Do not collapse distinct failures into a
 generic unavailable/failed state: translate them only into a typed,
 privacy-safe presentation cause, with retry behavior decided from that type.
 
+Treat every recoverable failure as data, never as a reason to terminate the
+application. Production code must not use force unwraps, forced casts, `try!`,
+`fatalError`, `preconditionFailure`, or implicitly unwrapped optionals. Return
+or present a typed failure instead. Assume Apple-framework callbacks may run on
+an arbitrary executor unless the API explicitly guarantees one: callback
+closures must not inherit `@MainActor` accidentally, and UI work must hop to the
+main actor explicitly. Add a regression test that exercises the actual failure
+boundary, including invoking framework callbacks off the main actor when
+relevant. Before handoff, audit changed and adjacent production paths for
+process-terminating constructs or executor assumptions and convert every
+recoverable case into a typed failure.
+
 ## UI
 
 - Use native pull-to-refresh for refreshable primary browsing surfaces. Do not

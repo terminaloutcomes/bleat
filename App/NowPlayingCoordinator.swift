@@ -92,6 +92,16 @@ struct NowPlayingSnapshot: Equatable, Sendable {
     }
 }
 
+enum NowPlayingArtwork {
+    nonisolated static func make(from image: UIImage) -> MPMediaItemArtwork {
+        let provider: @Sendable (CGSize) -> UIImage = { _ in image }
+        return MPMediaItemArtwork(
+            boundsSize: image.size,
+            requestHandler: provider
+        )
+    }
+}
+
 @MainActor
 final class NowPlayingCoordinator {
     private let infoCenter: MPNowPlayingInfoCenter
@@ -164,11 +174,7 @@ final class NowPlayingCoordinator {
             else {
                 return
             }
-            artwork = MPMediaItemArtwork(
-                boundsSize: image.size
-            ) { _ in
-                image
-            }
+            artwork = NowPlayingArtwork.make(from: image)
             guard let latestSnapshot else {
                 return
             }

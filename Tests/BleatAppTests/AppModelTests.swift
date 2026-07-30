@@ -3156,6 +3156,36 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    nonisolated func testNowPlayingArtworkCanRenderOffMainActor() async {
+        let image = await MainActor.run {
+            UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 2)
+            ).image { context in
+                UIColor.systemBlue.setFill()
+                context.fill(
+                    CGRect(x: 0, y: 0, width: 2, height: 2)
+                )
+            }
+        }
+        let artwork = TestSendableArtwork(
+            NowPlayingArtwork.make(from: image)
+        )
+
+        let renderedImage = await withCheckedContinuation { continuation in
+            DispatchQueue(
+                label: "NowPlayingArtworkTests.background"
+            ).async {
+                continuation.resume(
+                    returning: artwork.value.image(
+                        at: CGSize(width: 1, height: 1)
+                    )
+                )
+            }
+        }
+
+        XCTAssertNotNil(renderedImage)
+    }
+
     func testFeaturedPlaybackRateCyclesAndRemoteFailuresAreTyped() {
         let coordinator = NowPlayingCoordinator(
             registersRemoteCommands: false
@@ -4101,6 +4131,14 @@ final class AppModelTests: XCTestCase {
             detail: fixtureBookDetail(item: item),
             service: TestAppService(activeAccount: .success(nil))
         )
+    }
+}
+
+private struct TestSendableArtwork: @unchecked Sendable {
+    let value: MPMediaItemArtwork
+
+    init(_ value: MPMediaItemArtwork) {
+        self.value = value
     }
 }
 

@@ -523,7 +523,7 @@ public final class PrivateCloudSyncCoordinator:
         zoneName: PrivateCloudSyncStore.zoneName,
         ownerName: CKCurrentUserDefaultName
     )
-    private var engine: CKSyncEngine!
+    private var engine: CKSyncEngine?
 
     public init(
         statistics: StatisticsRepository,
@@ -569,6 +569,9 @@ public final class PrivateCloudSyncCoordinator:
         guard isEnabled else {
             throw .disabled
         }
+        guard let engine else {
+            throw .cloudUnavailable
+        }
         do {
             engine.state.add(
                 pendingDatabaseChanges: [
@@ -610,6 +613,9 @@ public final class PrivateCloudSyncCoordinator:
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(PrivateCloudSyncError) {
+        guard let engine else {
+            throw .cloudUnavailable
+        }
         if enabled {
             defaults.set(true, forKey: enabledKey)
             try await synchronize()
@@ -638,6 +644,9 @@ public final class PrivateCloudSyncCoordinator:
     ) async throws(PrivateCloudSyncError) {
         guard isEnabled else {
             throw .disabled
+        }
+        guard let engine else {
+            throw .cloudUnavailable
         }
         do {
             _ = try await store.prepareRecords(zoneID: zoneID)

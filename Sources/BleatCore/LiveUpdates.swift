@@ -110,9 +110,9 @@ public struct AudiobookshelfSocketCodec: Sendable {
             withJSONObject: ["auth", accessToken]
         )
         return "42" + String(
-            data: data ?? Data("[]".utf8),
-            encoding: .utf8
-        )!
+            decoding: data ?? Data("[]".utf8),
+            as: UTF8.self
+        )
     }
 
     public func decode(
