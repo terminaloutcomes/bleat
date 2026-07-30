@@ -1,5 +1,7 @@
 import BleatCore
+import CryptoKit
 import SwiftUI
+import UIKit
 
 enum BookCoverURL {
     static func make(
@@ -30,11 +32,319 @@ enum BookCoverURL {
     }
 }
 
-struct BookCoverView: View {
-    let url: URL?
-    let cornerRadius: CGFloat
+private struct BookCoverCacheKey: Hashable, Sendable {
+    let accountID: AccountID
+    let url: URL
+
+    var memoryKey: NSString {
+        "\(accountID.rawValue)\u{0}\(url.absoluteString)" as NSString
+    }
+}
+
+private struct LoadedBookCover: @unchecked Sendable {
+    let data: Data
+    let image: UIImage
+}
+
+actor BookCoverImageLoader {
+    typealias Fetch =
+        @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    static let shared = BookCoverImageLoader()
+
+    private static let maximumResponseBytes = 5 * 1_024 * 1_024
+    private static let memoryCapacity = 32 * 1_024 * 1_024
+    private static let diskCapacity = 128 * 1_024 * 1_024
+
+    private let fetch: Fetch
+    private let diskCapacity: Int
+    private let cacheRoot: URL?
+    private let memory = NSCache<NSString, UIImage>()
+    private var memoryKeys: [AccountID: Set<String>] = [:]
+    private var inFlight:
+        [BookCoverCacheKey: Task<LoadedBookCover?, Never>] = [:]
 
     init(
+        diskCapacity: Int = BookCoverImageLoader.diskCapacity,
+        cacheRoot: URL? = nil,
+        fetch: @escaping Fetch = { request in
+            try await URLSession.shared.data(for: request)
+        }
+    ) {
+        self.diskCapacity = max(0, diskCapacity)
+        self.cacheRoot = cacheRoot
+        self.fetch = fetch
+        memory.totalCostLimit = Self.memoryCapacity
+        memory.countLimit = 256
+    }
+
+    func image(
+        for url: URL,
+        accountID: AccountID?
+    ) async -> UIImage? {
+        guard let accountID else {
+            return await fetchImage(
+                URLRequest(
+                    url: url,
+                    cachePolicy: .reloadIgnoringLocalCacheData
+                )
+            )?.image
+        }
+        let key = BookCoverCacheKey(accountID: accountID, url: url)
+        if let image = memory.object(forKey: key.memoryKey) {
+            return image
+        }
+
+        let request = URLRequest(
+            url: url,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+        if let image = loadFromDisk(for: key) {
+            storeInMemory(image, for: key)
+            return image
+        }
+
+        if let task = inFlight[key] {
+            return await task.value?.image
+        }
+
+        let task = Task { [fetch] in
+            await Self.fetchImage(request, using: fetch)
+        }
+        inFlight[key] = task
+        let loaded = await task.value
+        inFlight[key] = nil
+        guard let loaded else {
+            return nil
+        }
+        storeOnDisk(loaded.data, for: key)
+        storeInMemory(loaded.image, for: key)
+        return loaded.image
+    }
+
+    func removeAll(for accountID: AccountID) {
+        for key in memoryKeys.removeValue(forKey: accountID) ?? [] {
+            memory.removeObject(forKey: key as NSString)
+        }
+        let inFlightKeys = inFlight.keys.filter {
+            $0.accountID == accountID
+        }
+        for key in inFlightKeys {
+            inFlight[key]?.cancel()
+            inFlight[key] = nil
+        }
+        if let directory = accountCacheDirectory(for: accountID) {
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    func clearMemoryCache() {
+        memory.removeAllObjects()
+        memoryKeys = [:]
+    }
+
+    private func storeInMemory(
+        _ image: UIImage,
+        for key: BookCoverCacheKey
+    ) {
+        let width = Double(image.size.width * image.scale)
+        let height = Double(image.size.height * image.scale)
+        let maximumPixels = Double(Self.memoryCapacity / 4)
+        let pixelCount =
+            width.isFinite && height.isFinite && width > 0 && height > 0
+            ? min(width * height, maximumPixels)
+            : maximumPixels
+        memory.setObject(
+            image,
+            forKey: key.memoryKey,
+            cost: max(1, Int(pixelCount) * 4)
+        )
+        memoryKeys[key.accountID, default: []].insert(
+            key.memoryKey as String
+        )
+    }
+
+    private func fetchImage(_ request: URLRequest) async -> LoadedBookCover? {
+        await Self.fetchImage(request, using: fetch)
+    }
+
+    private static func fetchImage(
+        _ request: URLRequest,
+        using fetch: Fetch
+    ) async -> LoadedBookCover? {
+        do {
+            let (data, response) = try await fetch(request)
+            guard
+                let response = response as? HTTPURLResponse,
+                (200...299).contains(response.statusCode),
+                data.count <= maximumResponseBytes,
+                let image = UIImage(data: data)
+            else {
+                return nil
+            }
+            return LoadedBookCover(
+                data: data,
+                image: image
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func loadFromDisk(for key: BookCoverCacheKey) -> UIImage? {
+        guard let url = diskURL(for: key),
+            let values = try? url.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            ),
+            values.isRegularFile == true,
+            let fileSize = values.fileSize,
+            (0...Self.maximumResponseBytes).contains(fileSize),
+            let data = try? Data(contentsOf: url),
+            let image = UIImage(data: data)
+        else {
+            return nil
+        }
+        try? FileManager.default.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: url.path
+        )
+        return image
+    }
+
+    private func storeOnDisk(
+        _ data: Data,
+        for key: BookCoverCacheKey
+    ) {
+        guard data.count <= Self.maximumResponseBytes,
+            let url = diskURL(for: key)
+        else {
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: .atomic)
+            pruneDiskCache()
+        } catch {
+            return
+        }
+    }
+
+    private func diskURL(for key: BookCoverCacheKey) -> URL? {
+        guard diskCapacity > 0,
+            let directory = accountCacheDirectory(
+                for: key.accountID
+            )
+        else {
+            return nil
+        }
+        return directory.appendingPathComponent(
+            Self.hash(key.url.absoluteString),
+            isDirectory: false
+        )
+    }
+
+    private func accountCacheDirectory(
+        for accountID: AccountID
+    ) -> URL? {
+        cacheDirectory?.appendingPathComponent(
+            Self.hash(accountID.rawValue),
+            isDirectory: true
+        )
+    }
+
+    private var cacheDirectory: URL? {
+        let root =
+            cacheRoot
+            ?? FileManager.default.urls(
+                for: .cachesDirectory,
+                in: .userDomainMask
+            ).first
+        guard let root else {
+            return nil
+        }
+        return cacheRoot == nil
+            ? root.appendingPathComponent("BookCovers", isDirectory: true)
+            : root
+    }
+
+    private func pruneDiskCache() {
+        guard diskCapacity > 0,
+            let cacheDirectory,
+            let enumerator = FileManager.default.enumerator(
+                at: cacheDirectory,
+                includingPropertiesForKeys: [
+                    .isRegularFileKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey,
+                ],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return
+        }
+        var files: [(url: URL, size: Int64, modifiedAt: Date)] = []
+        var totalSize: Int64 = 0
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(
+                forKeys: [
+                    .isRegularFileKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey,
+                ]
+            ), values.isRegularFile == true
+            else {
+                continue
+            }
+            let size = Int64(max(0, values.fileSize ?? 0))
+            let (newTotal, overflowed) =
+                totalSize.addingReportingOverflow(size)
+            totalSize = overflowed ? .max : newTotal
+            files.append(
+                (
+                    url: url,
+                    size: size,
+                    modifiedAt: values.contentModificationDate
+                        ?? .distantPast
+                )
+            )
+        }
+        guard totalSize > Int64(diskCapacity) else {
+            return
+        }
+        for file in files.sorted(by: { $0.modifiedAt < $1.modifiedAt }) {
+            try? FileManager.default.removeItem(at: file.url)
+            totalSize -= min(file.size, totalSize)
+            if totalSize <= Int64(diskCapacity) {
+                break
+            }
+        }
+    }
+
+    private static func hash(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+    }
+}
+
+private enum BookCoverLoadState {
+    case idle
+    case loading
+    case loaded(UIImage)
+    case failed
+}
+
+struct BookCoverView: View {
+    let accountID: AccountID?
+    let url: URL?
+    let cornerRadius: CGFloat
+    @State private var state = BookCoverLoadState.idle
+
+    init(
+        accountID: AccountID?,
         server: NormalizedServerURL?,
         itemID: LibraryItemID,
         updatedAtMilliseconds: Int64,
@@ -42,6 +352,7 @@ struct BookCoverView: View {
         height: Int,
         cornerRadius: CGFloat = 8
     ) {
+        self.accountID = accountID
         url = BookCoverURL.make(
             server: server,
             itemID: itemID,
@@ -52,31 +363,53 @@ struct BookCoverView: View {
         self.cornerRadius = cornerRadius
     }
 
-    init(url: URL?, cornerRadius: CGFloat = 8) {
+    init(
+        accountID: AccountID?,
+        url: URL?,
+        cornerRadius: CGFloat = 8
+    ) {
+        self.accountID = accountID
         self.url = url
         self.cornerRadius = cornerRadius
     }
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image
+        Group {
+            switch state {
+            case .loaded(let image):
+                Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-            case .empty:
+            case .idle, .loading:
                 placeholder
                     .overlay {
                         ProgressView()
                     }
-            case .failure:
-                placeholder
-            @unknown default:
+            case .failed:
                 placeholder
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .accessibilityHidden(true)
+        .task(id: request) {
+            guard let url else {
+                state = .failed
+                return
+            }
+            state = .loading
+            let image = await BookCoverImageLoader.shared.image(
+                for: url,
+                accountID: accountID
+            )
+            guard !Task.isCancelled else {
+                return
+            }
+            state = image.map(BookCoverLoadState.loaded) ?? .failed
+        }
+    }
+
+    private var request: BookCoverRequest {
+        BookCoverRequest(accountID: accountID, url: url)
     }
 
     private var placeholder: some View {
@@ -87,4 +420,9 @@ struct BookCoverView: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
+
+private struct BookCoverRequest: Hashable {
+    let accountID: AccountID?
+    let url: URL?
 }

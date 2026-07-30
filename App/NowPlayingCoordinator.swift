@@ -106,7 +106,7 @@ enum NowPlayingArtwork {
 final class NowPlayingCoordinator {
     private let infoCenter: MPNowPlayingInfoCenter
     private let commandCenter: MPRemoteCommandCenter
-    private let session: URLSession
+    private let coverLoader: BookCoverImageLoader
     private var commandTargets: [(MPRemoteCommand, Any)] = []
     private var commandHandler:
         (@MainActor (PlaybackRemoteCommand) -> PlaybackRemoteCommandOutcome)?
@@ -118,12 +118,12 @@ final class NowPlayingCoordinator {
     init(
         infoCenter: MPNowPlayingInfoCenter = .default(),
         commandCenter: MPRemoteCommandCenter = .shared(),
-        session: URLSession = .shared,
+        coverLoader: BookCoverImageLoader = .shared,
         registersRemoteCommands: Bool = true
     ) {
         self.infoCenter = infoCenter
         self.commandCenter = commandCenter
-        self.session = session
+        self.coverLoader = coverLoader
         if registersRemoteCommands {
             registerRemoteCommands()
         }
@@ -167,7 +167,10 @@ final class NowPlayingCoordinator {
         let generation = artworkGeneration
         artworkTask = Task { @MainActor [weak self] in
             guard let self,
-                let image = await loadArtwork(from: coverURL),
+                let image = await coverLoader.image(
+                    for: coverURL,
+                    accountID: snapshot.accountID
+                ),
                 !Task.isCancelled,
                 generation == artworkGeneration,
                 latestSnapshot?.coverURL == coverURL
@@ -294,21 +297,5 @@ final class NowPlayingCoordinator {
             available && snapshot?.canMoveToPreviousChapter == true
         commandCenter.nextTrackCommand.isEnabled =
             available && snapshot?.canMoveToNextChapter == true
-    }
-
-    private func loadArtwork(from url: URL) async -> UIImage? {
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard
-                let response = response as? HTTPURLResponse,
-                (200...299).contains(response.statusCode),
-                data.count <= 5 * 1_024 * 1_024
-            else {
-                return nil
-            }
-            return UIImage(data: data)
-        } catch {
-            return nil
-        }
     }
 }

@@ -252,6 +252,7 @@ struct MetadataEditorView: View {
                         .scaledToFit()
                 } else {
                     BookCoverView(
+                        accountID: model.account?.id,
                         server: model.account?.server,
                         itemID: baseline.id,
                         updatedAtMilliseconds:

@@ -411,8 +411,10 @@ Only forward audible playback contributes listening time; pauses, buffering,
 interruptions, and seeks do not.
 
 Home shelves, library/search rows, book detail, and Now Playing request bounded
-cover images with `updatedAt` cache busting. Cover URLs retain server path
-prefixes and never contain access tokens.
+cover images with `updatedAt` cache busting. SwiftUI, system Now Playing, and
+CarPlay share an account-scoped memory and bounded disk cache, including
+in-flight request deduplication. Cover URLs retain server path prefixes and
+never contain access tokens.
 
 ## Edit book metadata
 

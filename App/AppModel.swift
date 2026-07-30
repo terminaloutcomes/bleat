@@ -1448,6 +1448,9 @@ final class AppModel {
             case .delete:
                 await downloads.removeAll(for: account.id)
                 playback.removeLocalData(for: account.id)
+                await BookCoverImageLoader.shared.removeAll(
+                    for: account.id
+                )
             }
             accounts.removeAll { $0.id == account.id }
             self.account = accounts.first

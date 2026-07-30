@@ -216,6 +216,7 @@ struct PlayerView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     BookCoverView(
+                        accountID: playback.accountID,
                         url: playback.coverURL,
                         cornerRadius: 16
                     )

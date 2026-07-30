@@ -81,7 +81,7 @@
         }
 
         private let model: AppModel
-        private let session: URLSession
+        private let coverLoader: BookCoverImageLoader
         private var presenter: (any CarPlayPresenting)?
         private var rootContext: RootContext?
         private var homeTemplate: CPListTemplate?
@@ -91,7 +91,6 @@
         private var searchTemplate: CPSearchTemplate?
         private var searchResultsByItem:
             [ObjectIdentifier: LibraryBookSummary] = [:]
-        private var artworkCache: [URL: UIImage] = [:]
         private var artworkTasks: [Task<Void, Never>] = []
         private var presentationGeneration: UInt64 = 0
         private var selectionGeneration: UInt64 = 0
@@ -100,10 +99,10 @@
 
         init(
             model: AppModel,
-            session: URLSession = .shared
+            coverLoader: BookCoverImageLoader = .shared
         ) {
             self.model = model
-            self.session = session
+            self.coverLoader = coverLoader
             super.init()
         }
 
@@ -581,6 +580,7 @@
             }
             loadArtwork(
                 for: item,
+                accountID: model.account?.id,
                 url: BookCoverURL.make(
                     server: model.account?.server,
                     itemID: book.id,
@@ -620,6 +620,7 @@
             }?.server
             loadArtwork(
                 for: item,
+                accountID: record.manifest.accountID,
                 url: BookCoverURL.make(
                     server: server,
                     itemID: record.detail.id,
@@ -643,6 +644,7 @@
             searchResultsByItem[ObjectIdentifier(item)] = book
             loadArtwork(
                 for: item,
+                accountID: model.account?.id,
                 url: BookCoverURL.make(
                     server: model.account?.server,
                     itemID: book.id,
@@ -926,46 +928,29 @@
 
         private func loadArtwork(
             for item: CPListItem,
+            accountID: AccountID?,
             url: URL?
         ) {
             guard let url else {
-                return
-            }
-            if let image = artworkCache[url] {
-                item.setImage(image)
                 return
             }
             let generation = presentationGeneration
             let task = Task { @MainActor [weak self, weak item] in
                 guard let self,
                     let item,
-                    let image = await artwork(from: url),
+                    let image = await coverLoader.image(
+                        for: url,
+                        accountID: accountID
+                    ),
                     !Task.isCancelled,
                     generation == presentationGeneration,
                     presenter != nil
                 else {
                     return
                 }
-                artworkCache[url] = image
                 item.setImage(image)
             }
             artworkTasks.append(task)
-        }
-
-        private func artwork(from url: URL) async -> UIImage? {
-            do {
-                let (data, response) = try await session.data(from: url)
-                guard
-                    let response = response as? HTTPURLResponse,
-                    (200...299).contains(response.statusCode),
-                    data.count <= 5 * 1_024 * 1_024
-                else {
-                    return nil
-                }
-                return UIImage(data: data)
-            } catch {
-                return nil
-            }
         }
     }
 
@@ -1014,6 +999,9 @@
 
     @MainActor
     final class CarPlayCoordinator {
-        init(model: AppModel, session: URLSession = .shared) {}
+        init(
+            model: AppModel,
+            coverLoader: BookCoverImageLoader = .shared
+        ) {}
     }
 #endif

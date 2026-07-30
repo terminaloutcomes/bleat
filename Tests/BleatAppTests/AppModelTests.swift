@@ -11,6 +11,134 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testBookDetailPlaybackActionPausesCurrentRequestedBook() {
+        let currentItemID = LibraryItemID(rawValue: "current")
+
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: currentItemID,
+                currentItemID: currentItemID,
+                isPlaybackRequested: true
+            ),
+            .pause
+        )
+        XCTAssertEqual(BookDetailPlaybackAction.pause.label, "Pause")
+        XCTAssertEqual(
+            BookDetailPlaybackAction.pause.systemImage,
+            "pause.fill"
+        )
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: currentItemID,
+                currentItemID: currentItemID,
+                isPlaybackRequested: false
+            ),
+            .playAgain
+        )
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: LibraryItemID(rawValue: "other"),
+                currentItemID: currentItemID,
+                isPlaybackRequested: true
+            ),
+            .play
+        )
+    }
+
+    func testBookCoverLoaderDeduplicatesAndCachesAccountScopedImages()
+        async throws
+    {
+        let imageData = try XCTUnwrap(
+            UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 2)
+            ).image { context in
+                UIColor.systemPurple.setFill()
+                context.fill(
+                    CGRect(x: 0, y: 0, width: 2, height: 2)
+                )
+            }.pngData()
+        )
+        let fetcher = TestBookCoverFetcher(data: imageData)
+        let loader = BookCoverImageLoader(
+            diskCapacity: 0,
+            fetch: { request in
+                try await fetcher.fetch(request)
+            }
+        )
+        let accountID = AccountID(rawValue: "cover-account")
+        let url = try XCTUnwrap(
+            URL(string: "https://books.example/cover?ts=1")
+        )
+
+        async let first = loader.image(for: url, accountID: accountID)
+        async let second = loader.image(for: url, accountID: accountID)
+        let (firstImage, secondImage) = await (first, second)
+        let third = await loader.image(for: url, accountID: accountID)
+        let firstAccountRequestCount = await fetcher.requestCount
+
+        XCTAssertNotNil(firstImage)
+        XCTAssertNotNil(secondImage)
+        XCTAssertNotNil(third)
+        XCTAssertEqual(firstAccountRequestCount, 1)
+
+        _ = await loader.image(
+            for: url,
+            accountID: AccountID(rawValue: "other-account")
+        )
+        let secondAccountRequestCount = await fetcher.requestCount
+        XCTAssertEqual(secondAccountRequestCount, 2)
+    }
+
+    func testBookCoverLoaderReusesBoundedDiskCacheAfterMemoryEviction()
+        async throws
+    {
+        let imageData = try XCTUnwrap(
+            UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 2)
+            ).image { context in
+                UIColor.systemOrange.setFill()
+                context.fill(
+                    CGRect(x: 0, y: 0, width: 2, height: 2)
+                )
+            }.pngData()
+        )
+        let fetcher = TestBookCoverFetcher(data: imageData)
+        let cacheRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BookCoverLoaderTests-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: cacheRoot)
+        }
+        let accountID = AccountID(rawValue: "persistent-cover-account")
+        let url = try XCTUnwrap(
+            URL(string: "https://books.example/cover?ts=2")
+        )
+        let loader = BookCoverImageLoader(
+            diskCapacity: 1 * 1_024 * 1_024,
+            cacheRoot: cacheRoot,
+            fetch: { request in
+                try await fetcher.fetch(request)
+            }
+        )
+
+        let first = await loader.image(
+            for: url,
+            accountID: accountID
+        )
+        await loader.clearMemoryCache()
+        let second = await loader.image(
+            for: url,
+            accountID: accountID
+        )
+        let requestCount = await fetcher.requestCount
+
+        XCTAssertNotNil(first)
+        XCTAssertNotNil(second)
+        XCTAssertEqual(requestCount, 1)
+    }
+
     func testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection() {
         XCTAssertEqual(
             ScrubberSeekDecision.decide(origin: 1_000, target: 1_599.999),
@@ -4139,6 +4267,29 @@ private struct TestSendableArtwork: @unchecked Sendable {
 
     init(_ value: MPMediaItemArtwork) {
         self.value = value
+    }
+}
+
+private actor TestBookCoverFetcher {
+    let data: Data
+    private(set) var requestCount = 0
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    func fetch(_ request: URLRequest) throws -> (Data, URLResponse) {
+        requestCount += 1
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "image/png"]
+        ) else {
+            throw URLError(.badServerResponse)
+        }
+        return (data, response)
     }
 }
 

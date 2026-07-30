@@ -738,8 +738,11 @@ prefer verified local media, prepare exactly one local or streaming operation,
 and present Now Playing only after preparation succeeds.
 
 CarPlay list and Now Playing artwork use bounded token-free cover routes,
-placeholders, and account/item generation checks. Late results must not replace
-artwork or templates for a newer account, library, search, or playback item.
+placeholders, an account-scoped bounded memory/disk cache shared with phone
+cover views, and account/item generation checks. Concurrent requests for the
+same account and cache-busted URL are deduplicated. Late results must not
+replace artwork or templates for a newer account, library, search, or playback
+item.
 The CarPlay entitlement requires Apple's approval and matching provisioning;
 the repository intentionally omits it until approval. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)

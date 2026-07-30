@@ -2,6 +2,43 @@ import BleatCore
 import Foundation
 import SwiftUI
 
+enum BookDetailPlaybackAction: Equatable {
+    case play
+    case playAgain
+    case pause
+
+    static func decide(
+        itemID: LibraryItemID,
+        currentItemID: LibraryItemID?,
+        isPlaybackRequested: Bool
+    ) -> BookDetailPlaybackAction {
+        guard itemID == currentItemID else {
+            return .play
+        }
+        return isPlaybackRequested ? .pause : .playAgain
+    }
+
+    var label: String {
+        switch self {
+        case .play:
+            "Play"
+        case .playAgain:
+            "Play Again"
+        case .pause:
+            "Pause"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .play, .playAgain:
+            "play.fill"
+        case .pause:
+            "pause.fill"
+        }
+    }
+}
+
 struct RootView: View {
     @Bindable var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -684,6 +721,7 @@ private struct HomeContent: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 ZStack(alignment: .bottomTrailing) {
                                     BookCoverView(
+                                        accountID: model.account?.id,
                                         server: model.account?.server,
                                         itemID: record.detail.id,
                                         updatedAtMilliseconds:
@@ -750,6 +788,7 @@ private struct HomeContent: View {
                         NavigationLink(value: book) {
                             VStack(alignment: .leading, spacing: 4) {
                                 BookCoverView(
+                                    accountID: model.account?.id,
                                     server: model.account?.server,
                                     itemID: book.id,
                                     updatedAtMilliseconds:
@@ -1026,6 +1065,7 @@ private struct BookListContent: View {
                         NavigationLink(value: book) {
                             BookSummaryRow(
                                 book: book,
+                                accountID: model.account?.id,
                                 server: model.account?.server
                             )
                         }
@@ -1150,6 +1190,7 @@ private struct SearchView: View {
                     NavigationLink(value: book) {
                         BookSummaryRow(
                             book: book,
+                            accountID: model.account?.id,
                             server: model.account?.server
                         )
                     }
@@ -1167,11 +1208,13 @@ private struct SearchTaskContext: Hashable {
 
 private struct BookSummaryRow: View {
     let book: LibraryBookSummary
+    let accountID: AccountID?
     let server: NormalizedServerURL?
 
     var body: some View {
         HStack(spacing: 12) {
             BookCoverView(
+                accountID: accountID,
                 server: server,
                 itemID: book.id,
                 updatedAtMilliseconds: book.updatedAtMilliseconds,
@@ -1325,6 +1368,7 @@ private struct BookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 BookCoverView(
+                    accountID: model.account?.id,
                     server: model.account?.server,
                     itemID: detail.id,
                     updatedAtMilliseconds: detail.updatedAtMilliseconds,
@@ -1542,6 +1586,12 @@ private struct BookDetailView: View {
             )
             switch availability.access {
             case .allowed:
+                let primaryAction = BookDetailPlaybackAction.decide(
+                    itemID: detail.id,
+                    currentItemID: model.playback.itemID,
+                    isPlaybackRequested:
+                        model.playback.isPlaybackRequested
+                )
                 if let account = model.account,
                     let downloaded = model.downloads.record(
                         accountID: account.id,
@@ -1550,15 +1600,18 @@ private struct BookDetailView: View {
                     model.downloads.isFullBookAvailable(downloaded)
                 {
                     Button {
-                        Task {
-                            await model.playDownloaded(downloaded)
+                        switch primaryAction {
+                        case .pause:
+                            model.playback.pause()
+                        case .play, .playAgain:
+                            Task {
+                                await model.playDownloaded(downloaded)
+                            }
                         }
                     } label: {
                         Label(
-                            model.playback.itemID == detail.id
-                                ? "Play Again"
-                                : "Play",
-                            systemImage: "play.fill"
+                            primaryAction.label,
+                            systemImage: primaryAction.systemImage
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -1568,18 +1621,21 @@ private struct BookDetailView: View {
                     let account = model.account
                 {
                     Button {
-                        Task {
-                            await model.playback.start(
-                                detail: detail,
-                                account: account
-                            )
+                        switch primaryAction {
+                        case .pause:
+                            model.playback.pause()
+                        case .play, .playAgain:
+                            Task {
+                                await model.playback.start(
+                                    detail: detail,
+                                    account: account
+                                )
+                            }
                         }
                     } label: {
                         Label(
-                            model.playback.itemID == detail.id
-                                ? "Play Again"
-                                : "Play",
-                            systemImage: "play.fill"
+                            primaryAction.label,
+                            systemImage: primaryAction.systemImage
                         )
                         .frame(maxWidth: .infinity)
                     }
