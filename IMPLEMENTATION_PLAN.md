@@ -2,7 +2,8 @@
 
 This plan turns `audiobookshelf-ios-app-spec.md` draft 1.3 into an executable
 delivery sequence for a native iPhone and iPad application. The shared
-application target also supports build-only Mac Catalyst compilation. The
+application target also supports development-signed Mac Catalyst launch,
+native login, Keychain persistence, and account restoration. The
 specification remains the product and protocol source of truth; this document
 defines work order, deliverables, test ownership, and release gates.
 
@@ -42,9 +43,10 @@ specification:
 
 - Product and target name: `Bleat`.
 - Deployment targets: iOS 26 and above; Mac Catalyst 18 for macOS 15 and above.
-- Catalyst support is compilation-only. macOS runtime testing, signing,
-  notarization, distribution, and Mac-specific interface adaptation are not
-  Bleat 1.0 release gates.
+- Catalyst signed launch, native login, device-only Keychain persistence, and
+  account restoration are tested release requirements. Notarization,
+  distribution, Mac-specific interface adaptation, and otherwise unlisted Mac
+  media or background behavior are not Bleat 1.0 release gates.
 - Language mode: Swift 6 with complete strict concurrency checking.
 - UI: SwiftUI with Observation-based, `@MainActor` feature models.
 - Persistence: versioned SwiftData schemas for structured state and opaque

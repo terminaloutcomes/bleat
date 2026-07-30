@@ -4,7 +4,8 @@ Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
 and is being implemented in Swift 6 with strict concurrency checking. The same
 application target can also produce a Mac Catalyst 18 build for macOS 15 and
-newer.
+newer. Development-signed Catalyst builds support native login and
+account restoration through the macOS Keychain.
 
 The repository now contains a runnable SwiftUI application and the tested
 `BleatCore` package. The app restores a persisted native account, signs in with
@@ -39,6 +40,7 @@ outbox when the server is unavailable.
 - An installed iOS Simulator runtime for simulator tests
 - Docker Desktop or another Docker Compose 2-compatible runtime for live tests
 - XcodeGen 2.46 or newer only when changing `project.yml`
+- An Apple development team for signed Mac Catalyst runtime tests
 
 Confirm the active toolchain:
 
@@ -79,16 +81,29 @@ xcodebuild \
   build
 ```
 
-Build an unsigned Mac Catalyst Release app:
+Compile an unsigned Mac Catalyst Release app:
 
 ```sh
+mise run macos:compile
+```
+
+Build and launch a development-signed Catalyst app:
+
+```sh
+export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 mise run macos
 ```
 
-The Catalyst app is written to
-`.build/xcode-derived/Build/Products/Release-maccatalyst/Bleat.app`. This
-workflow verifies compilation only; macOS runtime behavior, signing,
-notarization, and distribution are not currently release gates.
+The signed app is written to
+`.build/macos-signed/Build/Products/Release-maccatalyst/Bleat.app`. The task
+verifies its signature, development team, and application-identifier
+entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
+identifier is unavailable to the selected team. Keep the same team and bundle
+identifier to retain access to existing Keychain credentials.
+
+Signed Catalyst launch, native login, and account restoration are supported.
+Notarization, distribution, Mac-specific interface adaptation, and unlisted
+Mac media or background behavior are not release gates.
 
 Build products and intermediate files are written beneath `.build/`.
 
@@ -134,6 +149,13 @@ To run only host validation, without starting a simulator:
 BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
 ```
 
+Run the app-hosted tests in a development-signed Catalyst process:
+
+```sh
+export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
+mise run macos:test
+```
+
 The live app test creates and deletes its own simulator, installs only its
 disposable Caddy certificate, and runs against a freshly seeded
 Audiobookshelf instance:
@@ -155,8 +177,9 @@ Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 unit and UI suites. Core package tests run through `swift test` or
 `scripts/test-core.sh`.
 
-Select **My Mac (Mac Catalyst)** to compile the shared application target for
-macOS 15 or newer. The application unit and UI test targets remain iOS-only.
+Select the `BleatMac` scheme and **My Mac (Mac Catalyst)** to run the shared
+application target or its app-hosted unit tests on macOS 15 or newer. UI tests
+remain iOS-only.
 
 The equivalent command-line simulator workflow is:
 

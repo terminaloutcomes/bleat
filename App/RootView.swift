@@ -59,7 +59,7 @@ private struct NativeLoginView: View {
             Form {
                 Section("Server") {
                     TextField(
-                        "https://audiobooks.example",
+                        "Server Url (e.g. https://bleat.example.com)",
                         text: $serverAddress
                     )
                     .textContentType(.URL)
