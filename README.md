@@ -387,9 +387,14 @@ keeps its verified files, and downloads only the remaining files.
 
 Book detail keeps Play, Download, and finished-state actions above long
 description and metadata content. It shows series and sequence, audio-file and
-chapter counts, and a duration beside every chapter. Existing downloads show
-status, stored and expected bytes, and the relevant Pause, Resume, Retry,
-Repair, Download Full Book, or Remove action there as well as in Downloads.
+chapter counts, and a duration beside every chapter. When detail loading fails,
+the screen distinguishes missing or forbidden items, expired authentication,
+invalid server responses, local-storage failures, offline cache misses, and
+temporary server failures. Retryable failures include a **Try Again** action;
+diagnostics retain only the corresponding non-sensitive failure code. Existing
+downloads show status, stored and expected bytes, and the relevant Pause,
+Resume, Retry, Repair, Download Full Book, or Remove action there as well as in
+Downloads.
 Automatic cache failures retry only the active window and never appear as a
 full-book repair. Books play directly from local files only after every source
 file is verified, without opening a server playback session. Bleat audits

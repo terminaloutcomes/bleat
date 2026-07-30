@@ -1200,12 +1200,7 @@ private struct BookDetailView: View {
                     ProgressView()
                         .accessibilityIdentifier("book.detail.loading")
                 case .failed(let failure):
-                    ContentUnavailableView(
-                        "Audiobook unavailable",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(failure.message)
-                    )
-                    .accessibilityIdentifier("book.detail.error")
+                    bookDetailFailureView(failure)
                 case .loaded(let detail):
                     detailContent(detail)
                 }
@@ -1258,6 +1253,40 @@ private struct BookDetailView: View {
             Text(
                 "This removes the audiobook files stored on this device."
             )
+        }
+    }
+
+    @ViewBuilder
+    private func bookDetailFailureView(
+        _ failure: AppFailure
+    ) -> some View {
+        if case .bookUnavailable(let detailFailure) = failure {
+            ContentUnavailableView {
+                Label(
+                    detailFailure.title,
+                    systemImage: detailFailure.systemImage
+                )
+            } description: {
+                Text(detailFailure.message)
+                    .accessibilityIdentifier("book.detail.error.reason")
+            } actions: {
+                if detailFailure.allowsRetry {
+                    Button("Try Again") {
+                        Task {
+                            await model.loadBookDetail(book)
+                        }
+                    }
+                    .accessibilityIdentifier("book.detail.retry")
+                }
+            }
+            .accessibilityIdentifier("book.detail.error")
+        } else {
+            ContentUnavailableView(
+                "Audiobook unavailable",
+                systemImage: "wifi.exclamationmark",
+                description: Text(failure.message)
+            )
+            .accessibilityIdentifier("book.detail.error")
         }
     }
 

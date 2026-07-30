@@ -2440,7 +2440,55 @@ final class AppModelTests: XCTestCase {
 
         await model.loadBookDetail(page.items[0])
 
-        XCTAssertEqual(model.bookDetail, .failed(.bookUnavailable))
+        XCTAssertEqual(
+            model.bookDetail,
+            .failed(.bookUnavailable(.unavailableOffline))
+        )
+    }
+
+    func testBookDetailRetryReloadsTheExactBook() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let book = page.items[0]
+        let detail = fixtureBookDetail(item: book)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .failure(
+                .bookDetail(.remote(.unexpectedStatus(503)))
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.loadBookDetail(book)
+        XCTAssertEqual(
+            model.bookDetail,
+            .failed(.bookUnavailable(.serverUnavailable))
+        )
+
+        await service.setBookDetail(.success(detail))
+        await model.loadBookDetail(book)
+
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        let requests = await service.bookDetailRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                BookDetailRequest(
+                    accountID: account.id,
+                    libraryID: library.id,
+                    itemID: book.id
+                ),
+                BookDetailRequest(
+                    accountID: account.id,
+                    libraryID: library.id,
+                    itemID: book.id
+                ),
+            ]
+        )
     }
 
     func testMetadataSaveForwardsDraftAndPublishesSuccess() async throws {
@@ -2863,7 +2911,30 @@ final class AppModelTests: XCTestCase {
                 .searchCoordinator(.cancelled),
                 .searchUnavailable
             ),
-            (.bookDetail(.noCachedValue), .bookUnavailable),
+            (
+                .bookDetail(.noCachedValue),
+                .bookUnavailable(.unavailableOffline)
+            ),
+            (
+                .bookDetail(.remote(.invalidBookDetail)),
+                .bookUnavailable(.invalidServerResponse)
+            ),
+            (
+                .bookDetail(.cache(.persistenceFailed)),
+                .bookUnavailable(.localStorageUnavailable)
+            ),
+            (
+                .bookDetail(.remote(.unexpectedStatus(404))),
+                .bookUnavailable(.notFound)
+            ),
+            (
+                .bookDetail(.remote(.unexpectedStatus(403))),
+                .bookUnavailable(.accessDenied)
+            ),
+            (
+                .bookDetail(.remote(.unexpectedStatus(503))),
+                .bookUnavailable(.serverUnavailable)
+            ),
             (
                 .playbackSession(.requestFailed),
                 .playbackUnavailable
@@ -2930,7 +3001,7 @@ final class AppModelTests: XCTestCase {
             .libraryUnavailable,
             .homeUnavailable,
             .searchUnavailable,
-            .bookUnavailable,
+            .bookUnavailable(.serverUnavailable),
             .playbackDenied,
             .playbackUnavailable,
             .progressUnavailable,
@@ -2966,6 +3037,29 @@ final class AppModelTests: XCTestCase {
             failure.diagnosticFailureCode.rawValue,
             "secure_credential_storage_unavailable"
         )
+    }
+
+    func testBookDetailFailuresHaveSpecificRedactedDiagnosticCodes() {
+        let cases: [(BookDetailFailure, DiagnosticFailureCode)] = [
+            (.notFound, .bookNotFound),
+            (.accessDenied, .bookAccessDenied),
+            (.reauthenticationRequired, .bookAuthenticationRequired),
+            (.invalidServerResponse, .bookResponseInvalid),
+            (.localStorageUnavailable, .bookStorageUnavailable),
+            (.unavailableOffline, .bookUnavailableOffline),
+            (.serverUnavailable, .bookUnavailable),
+            (.requestRejected, .bookRequestRejected),
+        ]
+
+        for (detailFailure, expectedCode) in cases {
+            let failure = AppFailure.bookUnavailable(detailFailure)
+            XCTAssertEqual(
+                failure.diagnosticFailureCode,
+                expectedCode
+            )
+            XCTAssertFalse(failure.message.isEmpty)
+            XCTAssertFalse(expectedCode.rawValue.contains("http"))
+        }
     }
 
     private func fixtureAccount(
@@ -3832,6 +3926,12 @@ private actor TestAppService: AppServicing {
         _ result: Result<[LibraryBookSummary], AppServiceError>
     ) {
         searchResult = result
+    }
+
+    func setBookDetail(
+        _ result: Result<LibraryBookDetail, AppServiceError>
+    ) {
+        bookDetailResult = result
     }
 
     func activeAccountRequestCount() -> Int {

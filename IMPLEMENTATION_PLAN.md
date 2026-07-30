@@ -418,7 +418,10 @@ cache-backed server queries against the selected native account and library.
 Personalized Home, expanded detail, bookmarks, bounded cover requests, the
 persistent mini-player, account context, and actionable download state now have
 runnable UI. Home also exposes completed active-account downloads independently
-of the remote shelf state and starts their local playback directly.
+of the remote shelf state and starts their local playback directly. Detail-load
+failures retain their typed repository cause through presentation and
+privacy-safe diagnostics, show a cause-specific message, and offer an explicit
+retry for retryable failures.
 Large-library performance validation and the remaining release polish still
 remain.
 
@@ -446,6 +449,9 @@ Test before exit:
 - search debounce is clock-controlled and deterministic;
 - no raw DTO reaches a feature model;
 - offline summaries/details and refresh timestamps render correctly;
+- detail failures map invalid responses, cache failures, authentication,
+  permission, missing-item, offline, and transient-server causes distinctly,
+  and retry reloads the exact selected item;
 - permissions hide actions before a request is attempted;
 - VoiceOver labels and largest Dynamic Type on all completed screens.
 

@@ -268,8 +268,25 @@ extension AppFailure {
             .homeUnavailable
         case .searchUnavailable:
             .searchUnavailable
-        case .bookUnavailable:
-            .bookUnavailable
+        case .bookUnavailable(let failure):
+            switch failure {
+            case .notFound:
+                .bookNotFound
+            case .accessDenied:
+                .bookAccessDenied
+            case .reauthenticationRequired:
+                .bookAuthenticationRequired
+            case .invalidServerResponse:
+                .bookResponseInvalid
+            case .localStorageUnavailable:
+                .bookStorageUnavailable
+            case .unavailableOffline:
+                .bookUnavailableOffline
+            case .serverUnavailable:
+                .bookUnavailable
+            case .requestRejected:
+                .bookRequestRejected
+            }
         case .playbackDenied:
             .playbackDenied
         case .playbackUnavailable:

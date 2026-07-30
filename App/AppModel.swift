@@ -72,6 +72,154 @@ enum LibraryPaginationState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum BookDetailFailure: Equatable, Sendable {
+    case notFound
+    case accessDenied
+    case reauthenticationRequired
+    case invalidServerResponse
+    case localStorageUnavailable
+    case unavailableOffline
+    case serverUnavailable
+    case requestRejected
+
+    var title: String {
+        switch self {
+        case .notFound:
+            "Audiobook not found"
+        case .accessDenied:
+            "Audiobook access denied"
+        case .reauthenticationRequired:
+            "Sign in again"
+        case .invalidServerResponse:
+            "Invalid audiobook details"
+        case .localStorageUnavailable:
+            "Local storage unavailable"
+        case .unavailableOffline:
+            "Audiobook unavailable offline"
+        case .serverUnavailable:
+            "Server unavailable"
+        case .requestRejected:
+            "Audiobook unavailable"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .notFound:
+            "This audiobook may have been removed from the server."
+        case .accessDenied:
+            "This account is not allowed to open that audiobook."
+        case .reauthenticationRequired:
+            "Your saved sign-in is no longer accepted by the server."
+        case .invalidServerResponse:
+            "The server returned incomplete or inconsistent audiobook details."
+        case .localStorageUnavailable:
+            "Bleat loaded the audiobook, but could not save its details on this device."
+        case .unavailableOffline:
+            "This audiobook has not been saved for offline access."
+        case .serverUnavailable:
+            "Bleat could not reach the server to load this audiobook."
+        case .requestRejected:
+            "The server refused the audiobook detail request."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .notFound:
+            "book.closed"
+        case .accessDenied:
+            "lock"
+        case .reauthenticationRequired:
+            "person.crop.circle.badge.exclamationmark"
+        case .invalidServerResponse:
+            "exclamationmark.triangle"
+        case .localStorageUnavailable:
+            "externaldrive.badge.exclamationmark"
+        case .unavailableOffline, .serverUnavailable:
+            "wifi.exclamationmark"
+        case .requestRejected:
+            "xmark.circle"
+        }
+    }
+
+    var allowsRetry: Bool {
+        switch self {
+        case .notFound, .accessDenied, .reauthenticationRequired:
+            false
+        case .invalidServerResponse, .localStorageUnavailable,
+            .unavailableOffline, .serverUnavailable, .requestRejected:
+            true
+        }
+    }
+
+    init(repositoryError: LibraryRepositoryError) {
+        switch repositoryError {
+        case .remote(let error):
+            self = Self(apiError: error)
+        case .fallbackCache(let remoteError, _):
+            self = Self(apiError: remoteError)
+        case .cache:
+            self = .localStorageUnavailable
+        case .noCachedValue:
+            self = .unavailableOffline
+        case .cancelled:
+            self = .serverUnavailable
+        }
+    }
+
+    private init(apiError: AudiobookshelfAPIError) {
+        switch apiError {
+        case .authentication(let error):
+            self = Self(authenticationError: error)
+        case .unexpectedStatus(let status):
+            switch status {
+            case 401:
+                self = .reauthenticationRequired
+            case 403:
+                self = .accessDenied
+            case 404:
+                self = .notFound
+            case 408, 429, 500 ... 599:
+                self = .serverUnavailable
+            default:
+                self = .requestRejected
+            }
+        case .malformedResponse, .invalidBookDetail:
+            self = .invalidServerResponse
+        case .cancelled:
+            self = .serverUnavailable
+        case .invalidAccountID, .routeConstruction, .invalidLibrary,
+            .invalidPage, .invalidLibraryItem, .invalidSearchResults,
+            .invalidPersonalizedShelves:
+            self = .requestRejected
+        }
+    }
+
+    private init(authenticationError: AuthenticatedRequestError) {
+        switch authenticationError {
+        case .requestTransportFailed, .refreshTransportFailed,
+            .automaticReauthenticationTransportFailed:
+            self = .serverUnavailable
+        case .credentialsReadFailed, .missingCredentials,
+            .refreshRejected, .missingAccessToken, .missingRefreshToken,
+            .credentialPersistenceFailed, .savedLoginCredentialsReadFailed,
+            .automaticReauthenticationFailed,
+            .retriedRequestUnauthorized:
+            self = .reauthenticationRequired
+        case .unexpectedRefreshStatus(let status)
+            where status == 401 || status == 403:
+            self = .reauthenticationRequired
+        case .invalidAccountID, .accountOperationInProgress,
+            .authenticationEndpoint, .requestDoesNotMatchRoute,
+            .authorizationFailed, .requestCancelled,
+            .refreshRequestConstructionFailed, .refreshCancelled,
+            .unexpectedRefreshStatus:
+            self = .requestRejected
+        }
+    }
+}
+
 enum AppFailure: Equatable, Sendable {
     case persistenceUnavailable
     case invalidServerAddress
@@ -87,7 +235,7 @@ enum AppFailure: Equatable, Sendable {
     case libraryUnavailable
     case homeUnavailable
     case searchUnavailable
-    case bookUnavailable
+    case bookUnavailable(BookDetailFailure)
     case playbackDenied
     case playbackUnavailable
     case progressUnavailable
@@ -129,8 +277,8 @@ enum AppFailure: Equatable, Sendable {
             "Bleat could not load personalized shelves."
         case .searchUnavailable:
             "Bleat could not search the audiobook library."
-        case .bookUnavailable:
-            "Bleat could not load that audiobook."
+        case .bookUnavailable(let failure):
+            failure.message
         case .playbackDenied:
             "This account is not allowed to play that audiobook."
         case .playbackUnavailable:
@@ -198,8 +346,10 @@ enum AppFailure: Equatable, Sendable {
             self = .homeUnavailable
         case .searchRequest, .searchCoordinator:
             self = .searchUnavailable
-        case .bookDetail:
-            self = .bookUnavailable
+        case .bookDetail(let error):
+            self = .bookUnavailable(
+                BookDetailFailure(repositoryError: error)
+            )
         case .playbackSession, .playbackSource, .playbackSync:
             self = .playbackUnavailable
         case .progress, .localPlaybackSession:
@@ -213,7 +363,7 @@ enum AppFailure: Equatable, Sendable {
             case .permissionDenied:
                 self = .bookDeletionDenied
             case .itemNotFound:
-                self = .bookUnavailable
+                self = .bookUnavailable(.notFound)
             default:
                 self = .bookDeletionUnavailable
             }

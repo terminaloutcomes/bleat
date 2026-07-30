@@ -250,6 +250,11 @@ The detail screen contains:
 - Edit button gated by server permission;
 - a single Edit destination for metadata, cover, and server deletion;
 - server/account attribution when it could be ambiguous.
+- a typed failure reason that distinguishes missing or forbidden items,
+  reauthentication, invalid server responses, local-storage failures, offline
+  cache misses, and temporary server failures;
+- an explicit retry action only when repeating the detail request can succeed
+  without a permission or account change.
 
 ### 5.3 Statistics — post-MVP
 
