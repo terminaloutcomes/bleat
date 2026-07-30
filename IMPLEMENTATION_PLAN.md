@@ -25,6 +25,10 @@ traceability rows can be closed:
   formats, background and locked playback, interruptions, route removal,
   Bluetooth, AirPlay, CarPlay transport commands, Now Playing position, speed,
   sleep timers, relaunch, and session recovery.
+- `APP-CARPLAY-001`: obtain Apple's managed CarPlay Audio App entitlement and
+  record CarPlay Simulator plus physical vehicle/head-unit evidence for
+  browsing, search, online/offline playback, artwork, transport controls,
+  background playback, disconnect/reconnect, and simultaneous phone use.
 
 ## 2. Version 1.0 release readiness
 
@@ -89,18 +93,15 @@ traceability rows can be closed:
 
 ### Other deferred enhancements
 
-- Full CarPlay browse/search templates.
 - Apple Watch remote control and offline transfer.
 - Widgets and Live Activities.
 - Siri and App Intents.
-- Podcast and ebook support.
 - Metadata provider search and matching.
 - Chapter editing and audio-track reordering.
 - Server WebSocket updates.
 - Configurable reverse-proxy/service-token headers.
 - Silence skipping, voice boost, and equalizer.
 - Series bulk download.
-- Optional private CloudKit synchronization of the statistics ledger.
 - Deliberate cross-server edition merging for statistics.
 
 ## Backlog maintenance

@@ -5,6 +5,53 @@ import UIKit
 @MainActor
 final class BleatAppDelegate: NSObject, UIApplicationDelegate {
     static var backgroundDownloadCompletion: (() -> Void)?
+    let model: AppModel
+    lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
+
+    override init() {
+        #if DEBUG
+            let diagnosticLogStore = PersistentDiagnosticLogStore()
+            let diagnostics: any DiagnosticRecording =
+                CompositeDiagnosticRecorder([
+                    SystemDiagnosticRecorder.shared,
+                    diagnosticLogStore,
+                ])
+        #else
+            let diagnostics: any DiagnosticRecording =
+                SystemDiagnosticRecorder.shared
+            let diagnosticLogStore: (any DiagnosticRecording)? = nil
+        #endif
+
+        #if DEBUG
+            if let testService = UITestAppService.current() {
+                model = AppModel(
+                    service: testService,
+                    diagnostics: diagnostics,
+                    diagnosticLogStore: diagnosticLogStore
+                )
+                super.init()
+                return
+            }
+        #endif
+
+        do {
+            model = AppModel(
+                service: try LiveAppService(
+                    diagnostics: diagnostics
+                ),
+                diagnostics: diagnostics,
+                diagnosticLogStore: diagnosticLogStore
+            )
+        } catch let error {
+            model = AppModel(
+                service: UnavailableAppService(),
+                bootstrapError: error,
+                diagnostics: diagnostics,
+                diagnosticLogStore: diagnosticLogStore
+            )
+        }
+        super.init()
+    }
 
     func application(
         _ application: UIApplication,
@@ -23,65 +70,15 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
 struct BleatApp: App {
     @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
     private var appDelegate
-    @State private var model: AppModel
-
-    init() {
-        #if DEBUG
-            let diagnosticLogStore = PersistentDiagnosticLogStore()
-            let diagnostics: any DiagnosticRecording =
-                CompositeDiagnosticRecorder([
-                    SystemDiagnosticRecorder.shared,
-                    diagnosticLogStore,
-                ])
-        #else
-            let diagnostics: any DiagnosticRecording =
-                SystemDiagnosticRecorder.shared
-            let diagnosticLogStore: (any DiagnosticRecording)? = nil
-        #endif
-
-        #if DEBUG
-            if let testService = UITestAppService.current() {
-                _model = State(
-                    initialValue: AppModel(
-                        service: testService,
-                        diagnostics: diagnostics,
-                        diagnosticLogStore: diagnosticLogStore
-                    )
-                )
-                return
-            }
-        #endif
-
-        do {
-            _model = State(
-                initialValue: AppModel(
-                    service: try LiveAppService(
-                        diagnostics: diagnostics
-                    ),
-                    diagnostics: diagnostics,
-                    diagnosticLogStore: diagnosticLogStore
-                )
-            )
-        } catch let error {
-            _model = State(
-                initialValue: AppModel(
-                    service: UnavailableAppService(),
-                    bootstrapError: error,
-                    diagnostics: diagnostics,
-                    diagnosticLogStore: diagnosticLogStore
-                )
-            )
-        }
-    }
 
     var body: some Scene {
         WindowGroup {
-            RootView(model: model)
+            RootView(model: appDelegate.model)
         }
     }
 }
 
-private struct UnavailableAppService: AppServicing {
+struct UnavailableAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {

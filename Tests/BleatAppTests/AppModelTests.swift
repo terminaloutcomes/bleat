@@ -1,8 +1,13 @@
 import AVFoundation
 import BleatCore
+import MediaPlayer
 import XCTest
 
 @testable import Bleat
+
+#if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+    import CarPlay
+#endif
 
 @MainActor
 final class AppModelTests: XCTestCase {
@@ -2865,32 +2870,89 @@ final class AppModelTests: XCTestCase {
     func testServiceErrorsMapToStablePresentationFailures() {
         let cases: [(AppFailureOperation, AppServiceError, AppFailureCause)] = [
             (.login, .invalidServerURL(.empty), .invalidInput),
-            (.login, .invalidServerURL(.unsupportedScheme("http")), .serverRequiresHTTPS),
+            (
+                .login, .invalidServerURL(.unsupportedScheme("http")),
+                .serverRequiresHTTPS
+            ),
             (.login, .discovery(.uninitialized), .serverNotReady),
-            (.login, .discovery(.unexpectedHTTPStatus(500)), .serverUnavailable),
-            (.login, .onboarding(.localAuthenticationUnavailable), .localLoginUnavailable),
-            (.login, .onboarding(.authenticationFailed(.invalidCredentials)), .invalidCredentials),
-            (.appStart, .accountStore(.persistenceFailed), .localStorageUnavailable),
-            (.loadLibraries, .libraryRepository(.noCachedValue), .unavailableOffline),
+            (
+                .login, .discovery(.unexpectedHTTPStatus(500)),
+                .serverUnavailable
+            ),
+            (
+                .login, .onboarding(.localAuthenticationUnavailable),
+                .localLoginUnavailable
+            ),
+            (
+                .login, .onboarding(.authenticationFailed(.invalidCredentials)),
+                .invalidCredentials
+            ),
+            (
+                .appStart, .accountStore(.persistenceFailed),
+                .localStorageUnavailable
+            ),
+            (
+                .loadLibraries, .libraryRepository(.noCachedValue),
+                .unavailableOffline
+            ),
             (.loadLibraryPage, .pageRequest(.invalidPage), .invalidInput),
             (.loadHome, .homeRequest(.invalidLimit), .invalidInput),
             (.search, .searchRequest(.invalidQuery), .invalidInput),
             (.search, .searchCoordinator(.cancelled), .serverUnavailable),
-            (.loadBook, .bookDetail(.remote(.invalidBookDetail)), .invalidServerResponse),
-            (.loadBook, .bookDetail(.remote(.unexpectedStatus(404))), .itemNotFound),
-            (.loadBook, .bookDetail(.remote(.unexpectedStatus(403))), .permissionDenied),
-            (.openPlayback, .playbackSession(.requestFailed), .serverUnavailable),
-            (.openPlayback, .playbackSource(.missingAudioTracks), .mediaUnavailable),
-            (.updateProgress, .playbackSync(.unexpectedStatus(503)), .serverUnavailable),
-            (.updateProgress, .localPlaybackSession(.unexpectedStatus(503)), .serverUnavailable),
-            (.updateProgress, .progress(.unexpectedStatus(503)), .serverUnavailable),
+            (
+                .loadBook, .bookDetail(.remote(.invalidBookDetail)),
+                .invalidServerResponse
+            ),
+            (
+                .loadBook, .bookDetail(.remote(.unexpectedStatus(404))),
+                .itemNotFound
+            ),
+            (
+                .loadBook, .bookDetail(.remote(.unexpectedStatus(403))),
+                .permissionDenied
+            ),
+            (
+                .openPlayback, .playbackSession(.requestFailed),
+                .serverUnavailable
+            ),
+            (
+                .openPlayback, .playbackSource(.missingAudioTracks),
+                .mediaUnavailable
+            ),
+            (
+                .updateProgress, .playbackSync(.unexpectedStatus(503)),
+                .serverUnavailable
+            ),
+            (
+                .updateProgress, .localPlaybackSession(.unexpectedStatus(503)),
+                .serverUnavailable
+            ),
+            (
+                .updateProgress, .progress(.unexpectedStatus(503)),
+                .serverUnavailable
+            ),
             (.saveMetadata, .metadataPatch(.emptyTitle), .invalidInput),
-            (.saveMetadata, .metadataUpdate(.unexpectedStatus(503)), .serverUnavailable),
-            (.download, .downloadPlan(.unexpectedStatus(503)), .serverUnavailable),
-            (.download, .downloadAuthorization(.invalidAccountID), .invalidInput),
+            (
+                .saveMetadata, .metadataUpdate(.unexpectedStatus(503)),
+                .serverUnavailable
+            ),
+            (
+                .download, .downloadPlan(.unexpectedStatus(503)),
+                .serverUnavailable
+            ),
+            (
+                .download, .downloadAuthorization(.invalidAccountID),
+                .invalidInput
+            ),
             (.replaceCover, .coverUpdate(.uploadRejected), .invalidInput),
-            (.removeAccount, .accountRemoval(.logoutRequestFailed), .uncertainMutation),
-            (.removeAccount, .libraryCache(.persistenceFailed), .localStorageUnavailable),
+            (
+                .removeAccount, .accountRemoval(.logoutRequestFailed),
+                .uncertainMutation
+            ),
+            (
+                .removeAccount, .libraryCache(.persistenceFailed),
+                .localStorageUnavailable
+            ),
         ]
 
         for (operation, error, cause) in cases {
@@ -2985,11 +3047,715 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testNowPlayingSnapshotPublishesWholeBookAudiobookMetadata() {
+        let snapshot = NowPlayingSnapshot(
+            accountID: AccountID(rawValue: "account"),
+            itemID: LibraryItemID(rawValue: "item"),
+            title: "The Book",
+            author: "The Author",
+            narrator: "The Narrator",
+            coverURL: nil,
+            currentTime: 125,
+            duration: 3_600,
+            rate: 1.25,
+            isPlaying: true,
+            isPlaybackRequested: true,
+            isPlaybackAvailable: true,
+            canMoveToPreviousChapter: true,
+            canMoveToNextChapter: true,
+            currentChapterIndex: 1,
+            currentChapterTitle: "Chapter Two",
+            chapterCount: 4
+        )
+
+        let information = snapshot.information(artwork: nil)
+
+        XCTAssertEqual(
+            information[MPMediaItemPropertyTitle] as? String,
+            "The Book"
+        )
+        XCTAssertEqual(
+            information[MPMediaItemPropertyArtist] as? String,
+            "The Author"
+        )
+        XCTAssertEqual(
+            information[MPMediaItemPropertyComposer] as? String,
+            "The Narrator"
+        )
+        XCTAssertEqual(
+            information[MPMediaItemPropertyAlbumTitle] as? String,
+            "Chapter Two"
+        )
+        XCTAssertEqual(
+            information[MPNowPlayingInfoPropertyChapterNumber] as? Int,
+            1
+        )
+        XCTAssertEqual(
+            information[MPNowPlayingInfoPropertyChapterCount] as? Int,
+            4
+        )
+        XCTAssertEqual(
+            information[
+                MPNowPlayingInfoPropertyElapsedPlaybackTime
+            ] as? Double,
+            125
+        )
+        XCTAssertEqual(
+            information[MPNowPlayingInfoPropertyPlaybackRate] as? Float,
+            1.25
+        )
+    }
+
+    func testFeaturedPlaybackRateCyclesAndRemoteFailuresAreTyped() {
+        let coordinator = NowPlayingCoordinator(
+            registersRemoteCommands: false
+        )
+        var receivedCommand: PlaybackRemoteCommand?
+        coordinator.setCommandHandler { command in
+            receivedCommand = command
+            return .accepted
+        }
+        coordinator.publish(
+            NowPlayingSnapshot(
+                accountID: nil,
+                itemID: LibraryItemID(rawValue: "item"),
+                title: "Book",
+                author: "",
+                narrator: "",
+                coverURL: nil,
+                currentTime: 0,
+                duration: 100,
+                rate: 1,
+                isPlaying: false,
+                isPlaybackRequested: false,
+                isPlaybackAvailable: true,
+                canMoveToPreviousChapter: false,
+                canMoveToNextChapter: false,
+                currentChapterIndex: nil,
+                currentChapterTitle: nil,
+                chapterCount: 0
+            )
+        )
+
+        XCTAssertEqual(
+            coordinator.cyclePlaybackRate(),
+            .accepted
+        )
+        XCTAssertEqual(receivedCommand, .setRate(1.25))
+        coordinator.clear()
+
+        let playback = PlaybackModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            nowPlayingCoordinator: NowPlayingCoordinator(
+                registersRemoteCommands: false
+            )
+        )
+        let unavailableCommands: [PlaybackRemoteCommand] = [
+            .play,
+            .pause,
+            .toggle,
+            .skipBackward,
+            .skipForward,
+            .previousChapter,
+            .nextChapter,
+            .seek(0),
+            .setRate(1),
+        ]
+        for command in unavailableCommands {
+            XCTAssertEqual(
+                playback.handleRemoteCommand(command),
+                .unavailable
+            )
+        }
+        XCTAssertEqual(
+            playback.handleRemoteCommand(.seek(.nan)),
+            .invalid
+        )
+        XCTAssertEqual(
+            playback.handleRemoteCommand(.seek(-1)),
+            .invalid
+        )
+        XCTAssertEqual(
+            playback.handleRemoteCommand(.setRate(4)),
+            .invalid
+        )
+    }
+
+    #if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+        func testCarPlayLoadingEmptyAndTypedFailureRoots() async throws {
+            let loadingModel = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            let loadingPresenter = TestCarPlayPresenter()
+            let loadingCoordinator = CarPlayCoordinator(model: loadingModel)
+            loadingCoordinator.connect(loadingPresenter)
+            let loadingRoot = try XCTUnwrap(
+                loadingPresenter.root as? CPListTemplate
+            )
+            XCTAssertEqual(
+                loadingRoot.emptyViewTitleVariants,
+                ["Loading Bleat"]
+            )
+            XCTAssertTrue(loadingRoot.showsSpinnerWhileEmpty)
+            loadingCoordinator.disconnect()
+
+            let failureModel = AppModel(
+                service: TestAppService(
+                    activeAccount: .failure(
+                        .accountStore(.persistenceFailed)
+                    )
+                )
+            )
+            await failureModel.start()
+            let failurePresenter = TestCarPlayPresenter()
+            let failureCoordinator = CarPlayCoordinator(model: failureModel)
+            failureCoordinator.connect(failurePresenter)
+            let failureRoot = try XCTUnwrap(
+                failurePresenter.root as? CPListTemplate
+            )
+            XCTAssertEqual(
+                failureRoot.emptyViewTitleVariants,
+                ["Bleat unavailable"]
+            )
+            XCTAssertFalse(
+                failureRoot.emptyViewSubtitleVariants.isEmpty
+            )
+            failureCoordinator.disconnect()
+
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let emptyModel = AppModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([library]),
+                    firstPage: .success(
+                        LibraryItemsPage(
+                            items: [],
+                            total: 0,
+                            page: 0,
+                            limit: 50
+                        )
+                    ),
+                    homeShelves: .success([])
+                )
+            )
+            await emptyModel.start()
+            let emptyPresenter = TestCarPlayPresenter()
+            let emptyCoordinator = CarPlayCoordinator(model: emptyModel)
+            emptyCoordinator.connect(emptyPresenter)
+            let emptyRoot = try XCTUnwrap(
+                emptyPresenter.root as? CPTabBarTemplate
+            )
+            let home = try XCTUnwrap(
+                emptyRoot.templates[0] as? CPListTemplate
+            )
+            let libraryTemplate = try XCTUnwrap(
+                emptyRoot.templates[1] as? CPListTemplate
+            )
+            XCTAssertEqual(
+                home.emptyViewTitleVariants,
+                ["Nothing to play"]
+            )
+            XCTAssertEqual(
+                libraryTemplate.emptyViewTitleVariants,
+                ["No audiobooks"]
+            )
+            emptyCoordinator.disconnect()
+        }
+
+        func testCarPlaySignedOutRootDirectsUserToPhone() async {
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+
+            coordinator.connect(presenter)
+            coordinator.refreshTemplates()
+
+            let root = try? XCTUnwrap(
+                presenter.root as? CPListTemplate
+            )
+            XCTAssertEqual(root?.title, "Downloads")
+            XCTAssertEqual(
+                root?.emptyViewTitleVariants,
+                ["No downloads"]
+            )
+            XCTAssertEqual(
+                root?.emptyViewSubtitleVariants,
+                ["Open Bleat on iPhone to sign in."]
+            )
+            coordinator.disconnect()
+        }
+
+        func testCarPlaySignedInRootHasHomeLibraryAndDownloads()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    fixturePage(libraryID: library.id)
+                ),
+                homeShelves: .success(
+                    fixtureShelves(libraryID: library.id)
+                )
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+
+            coordinator.connect(presenter)
+            coordinator.refreshTemplates()
+
+            let root = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+            XCTAssertEqual(root.templates.count, 3)
+            XCTAssertEqual(
+                root.templates.compactMap(\.tabTitle),
+                ["Home", "Library", "Downloads"]
+            )
+            let home = try XCTUnwrap(
+                root.templates[0] as? CPListTemplate
+            )
+            XCTAssertEqual(home.sections.first?.header, "Continue Listening")
+            XCTAssertEqual(home.sections.first?.items.count, 1)
+            coordinator.disconnect()
+        }
+
+        func testCarPlayFailedPlaybackStartsOnceAndDoesNotPushNowPlaying()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let book = fixturePage(libraryID: library.id).items[0]
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    fixturePage(libraryID: library.id)
+                ),
+                homeShelves: .success(
+                    fixtureShelves(libraryID: library.id)
+                ),
+                bookDetail: .success(fixtureBookDetail(item: book)),
+                playback: [
+                    .failure(.playbackSession(.requestFailed))
+                ]
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            coordinator.connect(presenter)
+            coordinator.refreshTemplates()
+            let root = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+            let home = try XCTUnwrap(
+                root.templates[0] as? CPListTemplate
+            )
+            let item = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            let completion = expectation(
+                description: "CarPlay selection completed"
+            )
+
+            item.handler?(item) {
+                completion.fulfill()
+            }
+            await fulfillment(of: [completion], timeout: 2)
+
+            let playbackRequests = await service.playbackOpenRequests()
+            XCTAssertEqual(playbackRequests.count, 1)
+            XCTAssertFalse(
+                presenter.pushed.contains {
+                    $0 === CPNowPlayingTemplate.shared
+                }
+            )
+            XCTAssertNotNil(presenter.presented as? CPAlertTemplate)
+            coordinator.disconnect()
+        }
+
+        func testCarPlayLibraryPagingAndReconnectRemainDeterministic()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let firstBook = fixtureBook(
+                id: "item-1",
+                title: "First",
+                libraryID: library.id
+            )
+            let secondBook = fixtureBook(
+                id: "item-2",
+                title: "Second",
+                libraryID: library.id
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    LibraryItemsPage(
+                        items: [firstBook],
+                        total: 2,
+                        page: 0,
+                        limit: 1
+                    )
+                ),
+                nextPage: .success(
+                    LibraryItemsPage(
+                        items: [secondBook],
+                        total: 2,
+                        page: 1,
+                        limit: 1
+                    )
+                )
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let firstPresenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            coordinator.connect(firstPresenter)
+            coordinator.refreshTemplates()
+            let root = try XCTUnwrap(
+                firstPresenter.root as? CPTabBarTemplate
+            )
+            let libraryTemplate = try XCTUnwrap(
+                root.templates[1] as? CPListTemplate
+            )
+            let loadMore = try XCTUnwrap(
+                libraryTemplate.sections.first?.items.last
+                    as? CPListItem
+            )
+            XCTAssertEqual(loadMore.text, "Load More")
+            let completion = expectation(
+                description: "CarPlay next page loaded"
+            )
+            loadMore.handler?(loadMore) {
+                completion.fulfill()
+            }
+            await fulfillment(of: [completion], timeout: 2)
+            XCTAssertEqual(
+                libraryTemplate.sections.first?.items.map(\.text),
+                ["First", "Second"]
+            )
+
+            coordinator.disconnect()
+            let secondPresenter = TestCarPlayPresenter()
+            coordinator.connect(secondPresenter)
+            coordinator.refreshTemplates()
+            XCTAssertNotNil(
+                secondPresenter.root as? CPTabBarTemplate
+            )
+            XCTAssertTrue(firstPresenter.pushed.isEmpty)
+            coordinator.disconnect()
+        }
+
+        func testCarPlayAccountAndLibraryChangesUseSharedBrowsingContext()
+            async throws
+        {
+            let firstAccount = try fixtureAccount()
+            let secondAccount = try fixtureAccount(
+                accountID: "account-2",
+                userID: "user-2",
+                username: "other"
+            )
+            let firstLibrary = fixtureLibrary()
+            let secondLibrary = LibrarySummary(
+                id: LibraryID(rawValue: "library-2"),
+                name: "Second Library",
+                mediaType: .book
+            )
+            let service = TestAppService(
+                accounts: .success([firstAccount, secondAccount]),
+                activeAccount: .success(firstAccount),
+                libraries: .success([firstLibrary, secondLibrary]),
+                firstPage: .success(
+                    fixturePage(libraryID: firstLibrary.id)
+                )
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            coordinator.connect(presenter)
+            coordinator.refreshTemplates()
+            let firstRoot = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+
+            await model.selectLibrary(secondLibrary)
+            coordinator.refreshTemplates()
+            XCTAssertEqual(model.selectedLibrary, secondLibrary)
+            let pageRequests = await service.pageRequests()
+            XCTAssertEqual(pageRequests.last, secondLibrary.id)
+
+            await model.switchAccount(to: secondAccount)
+            coordinator.refreshTemplates()
+            XCTAssertEqual(model.account, secondAccount)
+            let activatedAccounts = await service.activatedAccounts()
+            XCTAssertEqual(activatedAccounts, [secondAccount])
+            let secondRoot = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+            XCTAssertFalse(firstRoot === secondRoot)
+            coordinator.disconnect()
+        }
+
+        func testCarPlaySearchSuppressesSupersededResult() async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let result = fixtureBook(
+                id: "search-item",
+                title: "Current Result",
+                libraryID: library.id
+            )
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    fixturePage(libraryID: library.id)
+                ),
+                search: .success([result]),
+                searchGate: gate
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let coordinator = CarPlayCoordinator(model: model)
+            let presenter = TestCarPlayPresenter()
+            coordinator.connect(presenter)
+            var firstResult: [CPListItem]?
+            var secondResult: [CPListItem]?
+            let first = expectation(description: "Old search completed")
+            let second = expectation(description: "New search completed")
+
+            coordinator.searchTemplate(
+                CPSearchTemplate(),
+                updatedSearchText: "old"
+            ) {
+                firstResult = $0
+                first.fulfill()
+            }
+            try await Task.sleep(for: .milliseconds(350))
+            await gate.waitUntilEntered()
+            coordinator.searchTemplate(
+                CPSearchTemplate(),
+                updatedSearchText: "new"
+            ) {
+                secondResult = $0
+                second.fulfill()
+            }
+            try await Task.sleep(for: .milliseconds(350))
+            await gate.release()
+            await fulfillment(of: [first, second], timeout: 2)
+
+            XCTAssertEqual(firstResult?.count, 0)
+            XCTAssertEqual(secondResult?.map(\.text), ["Current Result"])
+            let requests = await service.searchRequests()
+            XCTAssertEqual(requests.map(\.query), ["old", "new"])
+            coordinator.disconnect()
+        }
+
+        func testCarPlayPermissionDenialDoesNotStartPlayback()
+            async throws
+        {
+            let permissions = UserPermissions(
+                download: false,
+                update: false,
+                delete: false,
+                upload: false,
+                createEReader: false,
+                accessAllLibraries: true,
+                accessAllTags: true,
+                accessExplicitContent: false,
+                selectedTagsNotAccessible: false
+            )
+            let account = try fixtureAccount(permissions: permissions)
+            let library = fixtureLibrary()
+            let book = fixtureBook(
+                id: "explicit",
+                title: "Restricted",
+                libraryID: library.id,
+                isExplicit: true
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    LibraryItemsPage(
+                        items: [book],
+                        total: 1,
+                        page: 0,
+                        limit: 50
+                    )
+                ),
+                homeShelves: .success([
+                    LibraryBookShelf(
+                        id: "restricted",
+                        label: "Restricted",
+                        labelLocalizationKey: nil,
+                        items: [book],
+                        total: 1
+                    )
+                ]),
+                bookDetail: .success(fixtureBookDetail(item: book))
+            )
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            coordinator.connect(presenter)
+            coordinator.refreshTemplates()
+            let root = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+            let home = try XCTUnwrap(
+                root.templates[0] as? CPListTemplate
+            )
+            let item = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            let completion = expectation(
+                description: "Denied selection completed"
+            )
+            item.handler?(item) {
+                completion.fulfill()
+            }
+            await fulfillment(of: [completion], timeout: 2)
+
+            let playbackRequests = await service.playbackOpenRequests()
+            XCTAssertTrue(playbackRequests.isEmpty)
+            XCTAssertNotNil(presenter.presented as? CPAlertTemplate)
+            coordinator.disconnect()
+        }
+
+        func testCarPlayCompletedDownloadWorksSignedOutAndIsPreferredOnline()
+            async throws
+        {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "CarPlayCompleteDownload-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            defer {
+                try? FileManager.default.removeItem(at: root)
+            }
+            try FileManager.default.createDirectory(
+                at: root,
+                withIntermediateDirectories: true
+            )
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let book = fixturePage(libraryID: library.id).items[0]
+            let detail = fixtureBookDetail(item: book)
+            try await prepareCompleteDownload(
+                root: root,
+                account: account,
+                detail: detail
+            )
+
+            let signedOutService = TestAppService(
+                activeAccount: .success(nil)
+            )
+            let signedOutModel = AppModel(
+                service: signedOutService,
+                downloadsStorageRootURL: root
+            )
+            await signedOutModel.start()
+            let signedOutPresenter = TestCarPlayPresenter()
+            let signedOutCoordinator = CarPlayCoordinator(
+                model: signedOutModel
+            )
+            signedOutCoordinator.connect(signedOutPresenter)
+            signedOutCoordinator.refreshTemplates()
+            let signedOutRoot = try XCTUnwrap(
+                signedOutPresenter.root as? CPListTemplate
+            )
+            let downloadedItem = try XCTUnwrap(
+                signedOutRoot.sections.first?.items.first
+                    as? CPListItem
+            )
+            let offlineCompletion = expectation(
+                description: "Signed-out download prepared"
+            )
+            downloadedItem.handler?(downloadedItem) {
+                offlineCompletion.fulfill()
+            }
+            await fulfillment(of: [offlineCompletion], timeout: 3)
+            XCTAssertTrue(
+                signedOutPresenter.pushed.contains {
+                    $0 === CPNowPlayingTemplate.shared
+                }
+            )
+            let signedOutPlaybackRequests =
+                await signedOutService.playbackOpenRequests()
+            XCTAssertTrue(signedOutPlaybackRequests.isEmpty)
+            await signedOutModel.playback.stop()
+            signedOutCoordinator.disconnect()
+
+            let onlineService = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    fixturePage(libraryID: library.id)
+                ),
+                homeShelves: .success(
+                    fixtureShelves(libraryID: library.id)
+                ),
+                bookDetail: .success(detail)
+            )
+            let onlineModel = AppModel(
+                service: onlineService,
+                downloadsStorageRootURL: root
+            )
+            await onlineModel.start()
+            let onlinePresenter = TestCarPlayPresenter()
+            let onlineCoordinator = CarPlayCoordinator(model: onlineModel)
+            onlineCoordinator.connect(onlinePresenter)
+            onlineCoordinator.refreshTemplates()
+            let onlineRoot = try XCTUnwrap(
+                onlinePresenter.root as? CPTabBarTemplate
+            )
+            let home = try XCTUnwrap(
+                onlineRoot.templates[0] as? CPListTemplate
+            )
+            let remoteItem = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            let onlineCompletion = expectation(
+                description: "Online selection preferred download"
+            )
+            remoteItem.handler?(remoteItem) {
+                onlineCompletion.fulfill()
+            }
+            await fulfillment(of: [onlineCompletion], timeout: 3)
+            let onlinePlaybackRequests =
+                await onlineService.playbackOpenRequests()
+            XCTAssertTrue(onlinePlaybackRequests.isEmpty)
+            XCTAssertTrue(
+                onlinePresenter.pushed.contains {
+                    $0 === CPNowPlayingTemplate.shared
+                }
+            )
+            await onlineModel.playback.stop()
+            onlineCoordinator.disconnect()
+        }
+    #endif
+
     private func fixtureAccount(
         accountID: String = "account-1",
         userID: String = "user-1",
         username: String = "reader",
-        server: String = "https://books.example"
+        server: String = "https://books.example",
+        permissions: UserPermissions? = nil
     ) throws -> ServerAccount {
         try ServerAccount(
             id: AccountID(rawValue: accountID),
@@ -3000,17 +3766,18 @@ final class AppModelTests: XCTestCase {
                 id: UserID(rawValue: userID),
                 username: username,
                 type: .user,
-                permissions: UserPermissions(
-                    download: true,
-                    update: false,
-                    delete: false,
-                    upload: false,
-                    createEReader: false,
-                    accessAllLibraries: true,
-                    accessAllTags: true,
-                    accessExplicitContent: true,
-                    selectedTagsNotAccessible: false
-                ),
+                permissions: permissions
+                    ?? UserPermissions(
+                        download: true,
+                        update: false,
+                        delete: false,
+                        upload: false,
+                        createEReader: false,
+                        accessAllLibraries: true,
+                        accessAllTags: true,
+                        accessExplicitContent: true,
+                        selectedTagsNotAccessible: false
+                    ),
                 accessibleLibraryIDs: [],
                 selectedItemTags: []
             )
@@ -3043,7 +3810,8 @@ final class AppModelTests: XCTestCase {
     private func fixtureBook(
         id: String,
         title: String,
-        libraryID: LibraryID
+        libraryID: LibraryID,
+        isExplicit: Bool = false
     ) -> LibraryBookSummary {
         LibraryBookSummary(
             id: LibraryItemID(rawValue: id),
@@ -3061,7 +3829,7 @@ final class AppModelTests: XCTestCase {
             chapterCount: 2,
             addedAtMilliseconds: 1,
             updatedAtMilliseconds: 2,
-            isExplicit: false,
+            isExplicit: isExplicit,
             isAbridged: false
         )
     }
@@ -3116,6 +3884,81 @@ final class AppModelTests: XCTestCase {
                 total: 1
             )
         ]
+    }
+
+    private func prepareCompleteDownload(
+        root: URL,
+        account: ServerAccount,
+        detail: LibraryBookDetail
+    ) async throws {
+        let source = root.appendingPathComponent(
+            "source.wav",
+            isDirectory: false
+        )
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                standardFormatWithSampleRate: 8_000,
+                channels: 1
+            )
+        )
+        do {
+            let audioFile = try AVAudioFile(
+                forWriting: source,
+                settings: format.settings
+            )
+            let buffer = try XCTUnwrap(
+                AVAudioPCMBuffer(
+                    pcmFormat: format,
+                    frameCapacity: 8_000
+                )
+            )
+            buffer.frameLength = 8_000
+            try audioFile.write(from: buffer)
+        }
+        let size = try XCTUnwrap(
+            FileManager.default.attributesOfItem(
+                atPath: source.path
+            )[.size] as? NSNumber
+        ).int64Value
+        let track = DownloadTrackPlan(
+            index: 0,
+            inode: "carplay-track",
+            expectedByteLength: size,
+            mimeType: "audio/wav",
+            safeExtension: .wav,
+            destinationEntry: "00000.wav",
+            startOffset: 0,
+            duration: 1
+        )
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [track]
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let downloadID = DownloadID(rawValue: "carplay-download")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: track
+        )
+        let staged = root.appendingPathComponent("staged.wav")
+        try FileManager.default.copyItem(at: source, to: staged)
+        let observed = try layout.placeDownloadedFile(
+            from: staged,
+            identity: identity
+        )
+        _ = try await storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
     }
 
     private static func downloadPlanJSON(secondSize: Int) -> String {
@@ -3288,6 +4131,35 @@ private struct PlaybackRecoveryFixture {
         try? FileManager.default.removeItem(at: root)
     }
 }
+
+#if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+    @MainActor
+    private final class TestCarPlayPresenter: CarPlayPresenting {
+        private(set) var root: CPTemplate?
+        private(set) var pushed: [CPTemplate] = []
+        private(set) var presented: CPTemplate?
+
+        func setRoot(_ template: CPTemplate) {
+            root = template
+        }
+
+        func push(_ template: CPTemplate) {
+            pushed.append(template)
+        }
+
+        func pop() {
+            _ = pushed.popLast()
+        }
+
+        func present(_ template: CPTemplate) {
+            presented = template
+        }
+
+        func dismiss() {
+            presented = nil
+        }
+    }
+#endif
 
 private struct LoginRequest: Equatable, Sendable {
     let serverAddress: String

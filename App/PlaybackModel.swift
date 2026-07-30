@@ -1,6 +1,5 @@
 import AVFoundation
 import BleatCore
-import MediaPlayer
 import Observation
 import UIKit
 
@@ -15,8 +14,8 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
-private extension PlaybackState {
-    var diagnosticState: DiagnosticState {
+extension PlaybackState {
+    fileprivate var diagnosticState: DiagnosticState {
         switch self {
         case .idle:
             .idle
@@ -293,6 +292,7 @@ final class PlaybackModel {
     private let localSessionStore: LocalPlaybackSessionStore
     private let bookmarkMutationStore: BookmarkMutationStore
     private let preferencesStore: PlaybackPreferencesStore
+    private let nowPlayingCoordinator: NowPlayingCoordinator
     private let audioSessionActivation: @MainActor @Sendable () throws -> Void
     private let queuePlanning:
         @MainActor @Sendable (
@@ -309,7 +309,6 @@ final class PlaybackModel {
     private var endObserver: NSObjectProtocol?
     private var currentItemObservers: [NSObjectProtocol] = []
     private var audioSessionObservers: [NSObjectProtocol] = []
-    private var remoteCommandTargets: [(MPRemoteCommand, Any)] = []
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
     private var activeAccount: ServerAccount?
     private var localAccountID: AccountID?
@@ -425,6 +424,8 @@ final class PlaybackModel {
         localSessionStore: LocalPlaybackSessionStore = .shared,
         bookmarkMutationStore: BookmarkMutationStore = .shared,
         preferencesStore: PlaybackPreferencesStore = .shared,
+        nowPlayingCoordinator: NowPlayingCoordinator =
+            NowPlayingCoordinator(),
         audioSessionActivation:
             @escaping @MainActor @Sendable () throws -> Void = {
                 try PlaybackModel.activateAudioSession()
@@ -454,6 +455,7 @@ final class PlaybackModel {
         self.localSessionStore = localSessionStore
         self.bookmarkMutationStore = bookmarkMutationStore
         self.preferencesStore = preferencesStore
+        self.nowPlayingCoordinator = nowPlayingCoordinator
         self.audioSessionActivation = audioSessionActivation
         self.queuePlanning = queuePlanning
         self.monotonicNow = monotonicNow
@@ -461,7 +463,11 @@ final class PlaybackModel {
         resumeRewind = preferencesStore.resumeRewind()
         self.skipBackwardInterval = skipBackwardInterval
         self.skipForwardInterval = skipForwardInterval
-        configureRemoteCommands()
+        nowPlayingCoordinator.setCommandHandler {
+            [weak self] command in
+            self?.handleRemoteCommand(command) ?? .unavailable
+        }
+        updateRemoteSkipIntervals()
         observeAudioSession()
     }
 
@@ -614,7 +620,8 @@ final class PlaybackModel {
             preparation = nil
             activeDownloadDetail = nil
             resetPlayer()
-            let failure = AppFailure(operation: .openPlayback, serviceError: error)
+            let failure = AppFailure(
+                operation: .openPlayback, serviceError: error)
             state = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -865,7 +872,8 @@ final class PlaybackModel {
         } catch let error {
             if let serviceError = error as? AppServiceError {
                 bookmarkState = .failed(
-                    AppFailure(operation: .loadBookmarks, serviceError: serviceError)
+                    AppFailure(
+                        operation: .loadBookmarks, serviceError: serviceError)
                 )
             } else {
                 bookmarkState = .failed(
@@ -1222,6 +1230,10 @@ final class PlaybackModel {
         updateNowPlaying()
     }
 
+    func cycleFeaturedPlaybackRate() -> PlaybackRemoteCommandOutcome {
+        nowPlayingCoordinator.cyclePlaybackRate()
+    }
+
     func setResumeRewind(_ value: ResumeRewind) {
         preferencesStore.saveResumeRewind(value)
         resumeRewind = value
@@ -1378,7 +1390,7 @@ final class PlaybackModel {
         state = .idle
         syncState = .idle
         positionConflict = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        nowPlayingCoordinator.clear()
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation
@@ -1432,84 +1444,11 @@ final class PlaybackModel {
         try audioSession.setActive(true)
     }
 
-    private func configureRemoteCommands() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-        updateRemoteSkipIntervals()
-
-        addRemoteTarget(to: commandCenter.playCommand) {
-            Task { @MainActor [weak self] in
-                self?.play()
-            }
-        }
-        addRemoteTarget(to: commandCenter.pauseCommand) {
-            Task { @MainActor [weak self] in
-                self?.pause()
-            }
-        }
-        addRemoteTarget(to: commandCenter.togglePlayPauseCommand) {
-            Task { @MainActor [weak self] in
-                self?.togglePlayback()
-            }
-        }
-        addRemoteTarget(to: commandCenter.skipBackwardCommand) {
-            Task { @MainActor [weak self] in
-                await self?.skipBackward()
-            }
-        }
-        addRemoteTarget(to: commandCenter.skipForwardCommand) {
-            Task { @MainActor [weak self] in
-                await self?.skipForward()
-            }
-        }
-        addRemoteTarget(to: commandCenter.previousTrackCommand) {
-            Task { @MainActor [weak self] in
-                await self?.previousChapter()
-            }
-        }
-        addRemoteTarget(to: commandCenter.nextTrackCommand) {
-            Task { @MainActor [weak self] in
-                await self?.nextChapter()
-            }
-        }
-        let positionTarget =
-            commandCenter.changePlaybackPositionCommand.addTarget {
-                [weak self] event in
-                guard
-                    let positionEvent =
-                        event as? MPChangePlaybackPositionCommandEvent
-                else {
-                    return .commandFailed
-                }
-                let position = positionEvent.positionTime
-                Task { @MainActor [weak self] in
-                    await self?.seek(to: position)
-                }
-                return .success
-            }
-        remoteCommandTargets.append(
-            (commandCenter.changePlaybackPositionCommand, positionTarget)
-        )
-    }
-
     private func updateRemoteSkipIntervals() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-        commandCenter.skipBackwardCommand.preferredIntervals = [
-            NSNumber(value: skipBackwardInterval.rawValue)
-        ]
-        commandCenter.skipForwardCommand.preferredIntervals = [
-            NSNumber(value: skipForwardInterval.rawValue)
-        ]
-    }
-
-    private func addRemoteTarget(
-        to command: MPRemoteCommand,
-        action: @escaping @Sendable () -> Void
-    ) {
-        let target = command.addTarget { _ in
-            action()
-            return .success
-        }
-        remoteCommandTargets.append((command, target))
+        nowPlayingCoordinator.setSkipIntervals(
+            backward: skipBackwardInterval.rawValue,
+            forward: skipForwardInterval.rawValue
+        )
     }
 
     private func observeAudioSession() {
@@ -1690,9 +1629,13 @@ final class PlaybackModel {
             return
         }
         let refreshedTime = min(max(offset + itemTime, 0), duration)
+        let previousChapterID = currentChapter?.id
         let previousObservedTime = lastObservedWholeBookTime
         currentTime = refreshedTime
         lastObservedWholeBookTime = refreshedTime
+        if currentChapter?.id != previousChapterID {
+            updateNowPlaying()
+        }
         if let previousObservedTime,
             refreshedTime - previousObservedTime > 0.01,
             isPlaybackRequested
@@ -2821,20 +2764,120 @@ final class PlaybackModel {
     }
 
     private func updateNowPlaying() {
-        guard hasActiveBook else {
+        guard let itemID, hasActiveBook else {
             return
         }
-        var information: [String: Any] = [
-            MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyPlaybackDuration: duration,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: rate,
-        ]
-        if !author.isEmpty {
-            information[MPMediaItemPropertyArtist] = author
+        let currentChapterIndex = currentChapter.flatMap { chapter in
+            chapters.firstIndex { $0.id == chapter.id }
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = information
+        nowPlayingCoordinator.publish(
+            NowPlayingSnapshot(
+                accountID: accountID,
+                itemID: itemID,
+                title: title,
+                author: author,
+                narrator: narrator,
+                coverURL: coverURL,
+                currentTime: currentTime,
+                duration: duration,
+                rate: rate,
+                isPlaying: isPlaying,
+                isPlaybackRequested: isPlaybackRequested,
+                isPlaybackAvailable: isPlaybackControlAvailable,
+                canMoveToPreviousChapter: canMoveToPreviousChapter,
+                canMoveToNextChapter: canMoveToNextChapter,
+                currentChapterIndex: currentChapterIndex,
+                currentChapterTitle: currentChapter?.title,
+                chapterCount: chapters.count
+            )
+        )
+    }
+
+    private var isPlaybackControlAvailable: Bool {
+        guard preparation != nil else {
+            return false
+        }
+        switch state {
+        case .ready, .buffering, .playing, .paused:
+            return true
+        case .idle, .preparing, .ended, .failed:
+            return false
+        }
+    }
+
+    func handleRemoteCommand(
+        _ command: PlaybackRemoteCommand
+    ) -> PlaybackRemoteCommandOutcome {
+        switch command {
+        case .play:
+            guard isPlaybackControlAvailable, !isPlaybackRequested else {
+                return .unavailable
+            }
+            play()
+        case .pause:
+            guard isPlaybackControlAvailable, isPlaybackRequested else {
+                return .unavailable
+            }
+            pause()
+        case .toggle:
+            guard isPlaybackControlAvailable else {
+                return .unavailable
+            }
+            togglePlayback()
+        case .skipBackward:
+            guard isPlaybackControlAvailable else {
+                return .unavailable
+            }
+            Task { @MainActor [weak self] in
+                await self?.skipBackward()
+            }
+        case .skipForward:
+            guard isPlaybackControlAvailable else {
+                return .unavailable
+            }
+            Task { @MainActor [weak self] in
+                await self?.skipForward()
+            }
+        case .previousChapter:
+            guard isPlaybackControlAvailable,
+                canMoveToPreviousChapter
+            else {
+                return .unavailable
+            }
+            Task { @MainActor [weak self] in
+                await self?.previousChapter()
+            }
+        case .nextChapter:
+            guard isPlaybackControlAvailable, canMoveToNextChapter else {
+                return .unavailable
+            }
+            Task { @MainActor [weak self] in
+                await self?.nextChapter()
+            }
+        case .seek(let position):
+            guard position.isFinite,
+                (0...duration).contains(position)
+            else {
+                return .invalid
+            }
+            guard isPlaybackControlAvailable else {
+                return .unavailable
+            }
+            Task { @MainActor [weak self] in
+                await self?.seek(to: position)
+            }
+        case .setRate(let requestedRate):
+            guard requestedRate.isFinite,
+                (0.5...3).contains(requestedRate)
+            else {
+                return .invalid
+            }
+            guard isPlaybackControlAvailable else {
+                return .unavailable
+            }
+            setRate(requestedRate)
+        }
+        return .accepted
     }
 
     private func seek(

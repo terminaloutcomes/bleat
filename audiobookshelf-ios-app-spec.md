@@ -44,7 +44,7 @@ These decisions keep the first release bounded:
 | Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
 | Podcasts and ebooks | Out of scope for 1.0 |
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
-| Full CarPlay browsing UI | Out of scope for 1.0; Now Playing and transport controls must work through CarPlay |
+| CarPlay | An audio-app scene browses the active account's Home shelves, audiobook libraries, search, and verified complete downloads; account and download management remain phone-only |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Optional later enhancement; 1.0 refreshes on launch, foregrounding, pull-to-refresh, and after mutations |
 | Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design but is not an MVP implementation or release requirement |
@@ -132,6 +132,8 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can sort and filter without loading the entire library into memory.
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
+- In CarPlay I can browse Home shelves, choose an audiobook library, page and
+  search its books, and play verified whole-book downloads.
 
 ### 4.3 Playback
 
@@ -701,8 +703,35 @@ Register `MPRemoteCommandCenter` handlers for:
 - skip forward;
 - absolute position change;
 - previous/next chapter where supported.
+- playback-rate changes using the featured 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2×,
+  2.5×, and 3× values.
 
 Remote commands and Bluetooth/headset actions call the same engine methods as SwiftUI controls.
+
+Provide a `CPTemplateApplicationScene` for the CarPlay Audio App category. Its
+signed-in root is a three-tab interface:
+
+- Home presents personalized shelves in server order followed by verified
+  completed downloads;
+- Library presents the active audiobook library, explicit bounded pagination,
+  search, and a chooser for that account's audiobook libraries;
+- Downloads presents verified whole-book-complete records only.
+
+CarPlay uses the phone's active account and shared library selection. Account
+switching, authentication, bookmark editing, sleep timers, Stop, and download
+management stay on the phone. When signed out, retained verified downloads
+remain playable and the interface instructs the user to sign in on the phone
+for server content. Remote selection must load typed detail and permissions,
+prefer verified local media, prepare exactly one local or streaming operation,
+and present Now Playing only after preparation succeeds.
+
+CarPlay list and Now Playing artwork use bounded token-free cover routes,
+placeholders, and account/item generation checks. Late results must not replace
+artwork or templates for a newer account, library, search, or playback item.
+The repository entitlement requires Apple's approval and matching provisioning;
+declaring it does not grant the capability. See Apple's
+[CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
+and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
 
 Handle:
 
@@ -1075,6 +1104,7 @@ Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, a
 | `DownloadCoordinator` actor | Queue and manifest state |
 | `BackgroundDownloadDelegate` | URLSession background callbacks forwarded into the coordinator |
 | `NowPlayingCoordinator` | MediaPlayer metadata and remote commands |
+| `CarPlayCoordinator` | Active-account CarPlay templates, generation-safe browsing, selection, artwork, and Now Playing presentation |
 
 UI feature models use Observation and are `@MainActor`. Network, persistence coordination, token refresh, and sync use actors. Avoid a general service locator and avoid exposing raw DTOs to views.
 
@@ -1327,7 +1357,11 @@ Use a disposable Audiobookshelf container with a seeded library:
 - local/remote source transition;
 - interruption and Bluetooth removal;
 - background and locked-screen playback;
-- AirPlay and CarPlay transport commands;
+- AirPlay and CarPlay transport commands, metadata, whole-book seeking, chapter
+  controls, and featured playback-rate changes;
+- CarPlay Home, library chooser, pagination, search, signed-out retained
+  downloads, online/offline selection, stale-result suppression, and
+  disconnect/reconnect state;
 - speed changes across track boundaries;
 - end-of-chapter sleep timer at non-1× speeds.
 
@@ -1434,7 +1468,6 @@ The 1.0 release is acceptable only when:
 - OpenID Connect authentication and identity-provider logout;
 - local time tracking, lifetime statistics, listening-history import/export,
   and the Statistics screen described in section 12;
-- full CarPlay browse/search templates;
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;
 - Siri/App Intents;

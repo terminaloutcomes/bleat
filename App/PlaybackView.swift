@@ -269,11 +269,11 @@ struct PlayerView: View {
                         HStack(spacing: 24) {
                             Menu {
                                 ForEach(
-                                    [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3],
+                                    PlaybackPreferencesStore.featuredRates,
                                     id: \.self
                                 ) { speed in
-                                    Button(formatRate(speed)) {
-                                        playback.setRate(Float(speed))
+                                    Button(formatRate(Double(speed))) {
+                                        playback.setRate(speed)
                                     }
                                 }
                                 Divider()

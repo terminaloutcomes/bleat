@@ -187,6 +187,16 @@ The equivalent command-line simulator workflow is:
 mise run iphone
 ```
 
+The iOS target declares Apple's managed CarPlay Audio App entitlement and a
+`CPTemplateApplicationScene`; the Catalyst target uses a separate CarPlay-free
+entitlement file. Apple must approve the capability and include it in the
+provisioning profile before a signed physical-device build or distribution can
+use it. Declaring the entitlement in this repository does not grant access.
+Follow Apple's
+[entitlement request](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
+and [CarPlay scene](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay)
+guidance when provisioning the app.
+
 ## Archive a beta
 
 Validate a Release archive without signing:
@@ -312,6 +322,16 @@ Audio continues in the background. Lock-screen, Control Center, headset, and
 Bluetooth controls can play, pause, seek, skip, and move between chapters.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
+The CarPlay audio scene shares the phone's active account, selected audiobook
+library, downloads, and process-wide player. Its Home, Library, and Downloads
+tabs provide personalized shelves, a library chooser, explicit pagination,
+debounced search, and verified whole-book offline playback. Selecting a book
+prefers a verified complete download, otherwise prepares one streaming
+session, then opens the system Now Playing template. Play/pause, configured
+skip intervals, whole-book seeking, chapter navigation, and a featured-speed
+cycle are available in-car. Sign-in, account switching, bookmark editing,
+sleep timers, Stop, and download management remain on the phone. Signed-out
+users can play retained verified downloads.
 The full player includes 5, 10, 15, 30, 45, 60, 90, and 120-minute sleep
 timers plus an end-of-current-chapter option. Settings also configures an
 optional 5, 10, 15, or 30-second rewind when resuming after a pause longer than
@@ -571,6 +591,10 @@ candidate. On AP16, verify:
 - whole-book seeking, chapter/file transitions, and persisted playback speed;
 - background, lock-screen, Control Center, wired/headset, Bluetooth, and
   AirPlay controls, including removed-output pause behavior;
+- CarPlay launch, Home shelves, library switching, pagination, search,
+  online/offline selection, artwork, play/pause, configured skip, chapter
+  controls, seeking, speed, background/locked playback, disconnect/reconnect,
+  and simultaneous phone interaction;
 - download continuation across backgrounding and relaunch, followed by local
   playback with the server unavailable;
 - account removal with both retained and deleted downloads, plus progress

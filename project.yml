@@ -39,6 +39,13 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes:
           - audio
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: Bleat CarPlay
+                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -51,6 +58,7 @@ targets:
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: App/Bleat.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.entitlements
         CURRENT_PROJECT_VERSION: "1"
         MARKETING_VERSION: "0.1.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
