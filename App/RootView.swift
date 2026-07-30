@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -26,6 +27,9 @@ struct RootView: View {
         }
         .task {
             await model.start()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            model.setLiveUpdatesActive(phase == .active)
         }
     }
 }

@@ -96,7 +96,6 @@ traceability rows can be closed:
 - Siri and App Intents.
 - Metadata provider search and matching.
 - Chapter editing and audio-track reordering.
-- Server WebSocket updates.
 - Configurable reverse-proxy/service-token headers.
 - Silence skipping, voice boost, and equalizer.
 - Series bulk download.

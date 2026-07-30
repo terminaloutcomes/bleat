@@ -67,6 +67,10 @@ enum AppBookDeletionOutcome: Equatable, Sendable {
 }
 
 protocol AppServicing: Sendable {
+    func liveUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AudiobookshelfLiveUpdate>
+
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
 
@@ -217,6 +221,14 @@ protocol AppServicing: Sendable {
     ) async throws(AppServiceError)
 }
 
+extension AppServicing {
+    func liveUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
+        AsyncStream { $0.finish() }
+    }
+}
+
 actor LiveAppService: AppServicing {
     private typealias Coordinator = AuthCoordinator<
         URLSessionHTTPTransport,
@@ -225,6 +237,7 @@ actor LiveAppService: AppServicing {
 
     private let modelContainer: ModelContainer
     private let transport: URLSessionHTTPTransport
+    private let credentialStore: TokenVault
     private let coordinator: Coordinator
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
@@ -258,7 +271,7 @@ actor LiveAppService: AppServicing {
         }
 
         transport = URLSessionHTTPTransport(diagnostics: diagnostics)
-        let credentialStore = TokenVault(
+        credentialStore = TokenVault(
             service: "com.yaleman.Bleat.credentials"
         )
         coordinator = Coordinator(
@@ -267,6 +280,26 @@ actor LiveAppService: AppServicing {
         )
         accountStore = AccountStore(modelContainer: modelContainer)
         libraryCache = LibraryCache(modelContainer: modelContainer)
+    }
+
+    func liveUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
+        let coordinator = coordinator
+        let client = AudiobookshelfLiveEventClient(
+            server: account.server,
+            tokenProvider: {
+                try await coordinator.accessToken(for: account.id)
+            },
+            tokenRecovery: { rejectedToken in
+                try await coordinator.recoverAccessToken(
+                    for: account.id,
+                    server: account.server,
+                    rejectedAccessToken: rejectedToken
+                )
+            }
+        )
+        return await client.updates()
     }
 
     func accounts()

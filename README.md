@@ -32,6 +32,10 @@ tracking, lifetime statistics, and listening-history import/export. Downloaded
 playback uses a durable UUIDv4 local-session outbox while reporting zero
 listening time. Bookmark creates, renames, and deletes also use a durable local
 outbox when the server is unavailable.
+While the app is active, an authenticated Socket.IO subscription refreshes
+visible libraries and progress after server-side changes. Progress from another
+device never interrupts active playback; paused playback adopts a newer remote
+position unless local offline progress is still pending.
 
 ## Requirements
 

@@ -46,7 +46,7 @@ These decisions keep the first release bounded:
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
 | CarPlay | An audio-app scene browses the active account's Home shelves, audiobook libraries, search, and verified complete downloads; account and download management remain phone-only |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
-| Server WebSocket events | Optional later enhancement; 1.0 refreshes on launch, foregrounding, pull-to-refresh, and after mutations |
+| Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
 | Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design but is not an MVP implementation or release requirement |
 | Cleartext HTTP | Not supported in production builds |
 | Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
@@ -1478,7 +1478,6 @@ The 1.0 release is acceptable only when:
 - podcasts and ebooks;
 - metadata provider search/matching;
 - chapter editor and audio-track reordering;
-- server WebSocket live updates;
 - configurable reverse-proxy/service-token headers;
 - Bonjour discovery;
 - silence skipping, voice boost, and equalizer;

@@ -43,6 +43,25 @@ enum PlaybackSyncState: Equatable, Sendable {
     case failed
 }
 
+enum ExternalProgressNotice: Equatable, Sendable {
+    case activeOnAnotherDevice(String?)
+    case localChangesPending(String?)
+
+    var message: String {
+        let device = switch self {
+        case .activeOnAnotherDevice(let value),
+            .localChangesPending(let value):
+            value.map { " on \($0)" } ?? ""
+        }
+        return switch self {
+        case .activeOnAnotherDevice:
+            "Another session updated this book\(device). Playback was not moved."
+        case .localChangesPending:
+            "Another session updated this book\(device). Your unsynced position was kept."
+        }
+    }
+}
+
 enum BookmarkState: Equatable, Sendable {
     case idle
     case loading
@@ -331,6 +350,7 @@ final class PlaybackModel {
     private var hasConfirmedPlaybackAdvance = false
     private var lastObservedWholeBookTime: Double?
     private var lastConfirmedAdvanceAt: TimeInterval?
+    private var lastExternalProgressUpdate: Int64 = -1
     private var stablePlaybackStartedAt: TimeInterval?
     private var playbackRecoveryPolicy = PlaybackRecoveryPolicy()
     private let monotonicNow: @MainActor @Sendable () -> TimeInterval
@@ -356,6 +376,7 @@ final class PlaybackModel {
     private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
     private(set) var positionConflict: PlaybackPositionConflict?
+    private(set) var externalProgressNotice: ExternalProgressNotice?
 
     var canSyncBookmarks: Bool {
         activeAccount != nil
@@ -371,6 +392,43 @@ final class PlaybackModel {
 
     var isPlaying: Bool {
         state == .playing
+    }
+
+    var activeSessionID: PlaybackSessionID? {
+        preparation?.sessionID
+    }
+
+    func handleLiveProgress(
+        _ progress: AudiobookshelfLivePlaybackProgress
+    ) async {
+        guard itemID == progress.itemID,
+            progress.sessionID != activeSessionID,
+            progress.lastUpdateMilliseconds > lastExternalProgressUpdate
+        else {
+            return
+        }
+        lastExternalProgressUpdate = progress.lastUpdateMilliseconds
+        if isPlaybackRequested {
+            externalProgressNotice = .activeOnAnotherDevice(
+                progress.deviceDescription
+            )
+            return
+        }
+        guard localPlaybackSession == nil, positionConflict == nil else {
+            externalProgressNotice = .localChangesPending(
+                progress.deviceDescription
+            )
+            return
+        }
+        guard state == .paused || state == .ready else {
+            return
+        }
+        externalProgressNotice = nil
+        await seek(to: progress.currentTime)
+    }
+
+    func dismissExternalProgressNotice() {
+        externalProgressNotice = nil
     }
 
     var isPlaybackRequested: Bool {

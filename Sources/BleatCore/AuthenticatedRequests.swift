@@ -54,6 +54,36 @@ struct CompletedRefresh: Sendable {
 }
 
 extension AuthCoordinator {
+    public func accessToken(
+        for accountID: AccountID
+    ) async throws(AuthenticatedRequestError) -> String {
+        do {
+            return try await storedCredentials(for: accountID).accessToken
+        } catch let error as AuthenticatedRequestError {
+            throw error
+        } catch {
+            throw .credentialsReadFailed
+        }
+    }
+
+    public func recoverAccessToken(
+        for accountID: AccountID,
+        server: NormalizedServerURL,
+        rejectedAccessToken: String
+    ) async throws(AuthenticatedRequestError) -> String {
+        do {
+            return try await credentialsAfterUnauthorizedResponse(
+                accountID: accountID,
+                server: server,
+                rejectedAccessToken: rejectedAccessToken
+            ).accessToken
+        } catch let error as AuthenticatedRequestError {
+            throw error
+        } catch {
+            throw .refreshTransportFailed
+        }
+    }
+
     public func sendAuthenticated(
         _ request: URLRequest,
         route: AudiobookshelfRoute,

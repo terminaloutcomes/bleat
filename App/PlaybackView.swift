@@ -247,6 +247,26 @@ struct PlayerView: View {
 
                     PlaybackScrubberView(playback: playback)
 
+                    if let notice = playback.externalProgressNotice {
+                        HStack(alignment: .top) {
+                            Label(
+                                notice.message,
+                                systemImage: "rectangle.on.rectangle"
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button {
+                                playback.dismissExternalProgressNotice()
+                            } label: {
+                                Image(systemName: "xmark")
+                            }
+                            .accessibilityLabel("Dismiss")
+                        }
+                        .font(.caption)
+                        .padding()
+                        .background(.regularMaterial, in: .rect(cornerRadius: 12))
+                        .accessibilityIdentifier("player.externalProgress")
+                    }
+
                     if case .failed(let failure) = playback.state {
                         Text(failure.message)
                             .foregroundStyle(.red)

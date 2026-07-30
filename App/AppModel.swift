@@ -329,6 +329,13 @@ final class AppModel {
     private var libraryPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
+    @ObservationIgnored
+    private var liveUpdatesTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var liveRefreshTask: Task<Void, Never>?
+    private var liveUpdatesAreActive = true
+    private var pendingLiveLibraryRefresh = false
+    private var pendingLiveItemIDs: Set<LibraryItemID> = []
 
     private(set) var phase: AppPhase
     private(set) var loginStatus: LoginStatus = .idle
@@ -473,6 +480,7 @@ final class AppModel {
                 )
             )
             await loadLibraries()
+            startLiveUpdates(for: restoredAccount)
             await diagnostics.record(
                 .completed(.appStart, category: .app)
             )
@@ -537,6 +545,7 @@ final class AppModel {
                 for: authenticatedAccount
             )
             await loadLibraries()
+            startLiveUpdates(for: authenticatedAccount)
             return true
         } catch let error {
             let failure = AppFailure(operation: .login, serviceError: error)
@@ -590,6 +599,7 @@ final class AppModel {
                 for: authenticatedAccount
             )
             await loadLibraries()
+            startLiveUpdates(for: authenticatedAccount)
             return true
         } catch let error {
             let failure = AppFailure(operation: .reauthenticate, serviceError: error)
@@ -613,6 +623,7 @@ final class AppModel {
             return
         }
         accountActionStatus = .switching
+        stopLiveUpdates()
         await diagnostics.record(
             .started(.switchAccount, category: .auth)
         )
@@ -622,6 +633,7 @@ final class AppModel {
             await downloads.start(account: selectedAccount)
             await playback.syncPendingLocalSessions(for: selectedAccount)
             await loadLibraries()
+            startLiveUpdates(for: selectedAccount)
             accountActionStatus = .idle
             await diagnostics.record(
                 .completed(.switchAccount, category: .auth)
@@ -631,6 +643,9 @@ final class AppModel {
             accountActionStatus = .failed(
                 failure
             )
+            if let account {
+                startLiveUpdates(for: account)
+            }
             await diagnostics.record(
                 .failed(
                     .switchAccount,
@@ -1245,6 +1260,7 @@ final class AppModel {
             return
         }
         accountActionStatus = .removing
+        stopLiveUpdates()
         await diagnostics.record(
             .started(.removeAccount, category: .auth)
         )
@@ -1278,6 +1294,7 @@ final class AppModel {
                 phase = .signedIn
                 await downloads.start(account: replacement)
                 await loadLibraries()
+                startLiveUpdates(for: replacement)
             } else {
                 phase = .signedOut
             }
@@ -1293,6 +1310,9 @@ final class AppModel {
             accountActionStatus = .failed(
                 failure
             )
+            if let account = self.account {
+                startLiveUpdates(for: account)
+            }
             await diagnostics.record(
                 .failed(
                     .removeAccount,
@@ -1307,6 +1327,126 @@ final class AppModel {
         searchGeneration &+= 1
         searchQuery = ""
         searchResults = .idle
+    }
+
+    func setLiveUpdatesActive(_ active: Bool) {
+        liveUpdatesAreActive = active
+        if active, let account {
+            startLiveUpdates(for: account)
+            scheduleLiveRefresh(libraryChanged: true, itemIDs: [])
+        } else {
+            stopLiveUpdates()
+        }
+    }
+
+    private func startLiveUpdates(for account: ServerAccount) {
+        guard liveUpdatesAreActive else {
+            return
+        }
+        liveUpdatesTask?.cancel()
+        let accountID = account.id
+        liveUpdatesTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let updates = await service.liveUpdates(for: account)
+            for await update in updates {
+                guard !Task.isCancelled, self.account?.id == accountID else {
+                    return
+                }
+                guard case .event(let event) = update else {
+                    continue
+                }
+                switch event {
+                case .libraryChanged:
+                    scheduleLiveRefresh(libraryChanged: true, itemIDs: [])
+                case .itemsChanged(let change):
+                    guard let selectedLibrary,
+                        change.libraryIDs.contains(selectedLibrary.id)
+                    else {
+                        continue
+                    }
+                    scheduleLiveRefresh(
+                        libraryChanged: false,
+                        itemIDs: change.itemIDs
+                    )
+                case .playbackProgress(let progress):
+                    await playback.handleLiveProgress(progress)
+                    scheduleLiveRefresh(
+                        libraryChanged: false,
+                        itemIDs: [progress.itemID]
+                    )
+                }
+            }
+        }
+    }
+
+    private func stopLiveUpdates() {
+        liveUpdatesTask?.cancel()
+        liveUpdatesTask = nil
+        liveRefreshTask?.cancel()
+        liveRefreshTask = nil
+    }
+
+    private func scheduleLiveRefresh(
+        libraryChanged: Bool,
+        itemIDs: Set<LibraryItemID>
+    ) {
+        pendingLiveLibraryRefresh =
+            pendingLiveLibraryRefresh || libraryChanged
+        pendingLiveItemIDs.formUnion(itemIDs)
+        liveRefreshTask?.cancel()
+        liveRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await self?.performLiveRefresh()
+        }
+    }
+
+    private func performLiveRefresh() async {
+        guard let account else { return }
+        let refreshLibraries = pendingLiveLibraryRefresh
+        let itemIDs = pendingLiveItemIDs
+        pendingLiveLibraryRefresh = false
+        pendingLiveItemIDs = []
+
+        if refreshLibraries {
+            guard let loaded = try? await service.libraries(for: account)
+                .filter({ $0.mediaType == .book })
+            else { return }
+            libraries = .loaded(loaded)
+            let retained = selectedLibrary.flatMap { selected in
+                loaded.first { $0.id == selected.id }
+            }
+            guard let library = retained ?? loaded.first else {
+                selectedLibrary = nil
+                books = .loaded(
+                    LibraryItemsPage(
+                        items: [], total: 0, page: 0, limit: 20
+                    )
+                )
+                homeShelves = .loaded([])
+                return
+            }
+            await selectLibrary(library)
+        } else if let library = selectedLibrary {
+            await selectLibrary(library)
+        }
+
+        if let selectedBookID,
+            refreshLibraries || itemIDs.contains(selectedBookID),
+            let selectedLibrary,
+            let detail = try? await service.bookDetail(
+                for: account,
+                libraryID: selectedLibrary.id,
+                itemID: selectedBookID
+            )
+        {
+            bookDetail = .loaded(detail)
+        }
+        if !searchQuery.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty {
+            await search(query: searchQuery)
+        }
     }
 
     private func resetBookDetail() {
