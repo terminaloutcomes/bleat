@@ -36,8 +36,7 @@ traceability rows can be closed:
 - Complete the download process/network failure matrix: suspension,
   termination, connectivity changes, token rotation, server outage/recovery,
   storage pressure, corrupt media repair, and hundreds-of-tracks behavior.
-- Add measured multi-file boundary evidence and finish the codec/transcode
-  matrix required by `AC-07`, `AC-21`, and `AC-22`.
+- Add measured multi-file boundary evidence required by `AC-21`.
 
 ### Quality and safety
 
@@ -99,10 +98,8 @@ traceability rows can be closed:
 - Chapter editing and audio-track reordering.
 - Server WebSocket updates.
 - Configurable reverse-proxy/service-token headers.
-- Bonjour discovery.
 - Silence skipping, voice boost, and equalizer.
 - Series bulk download.
-- Offline transcoding format selection.
 - Optional private CloudKit synchronization of the statistics ledger.
 - Deliberate cross-server edition merging for statistics.
 
