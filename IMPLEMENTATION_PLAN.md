@@ -21,6 +21,11 @@ traceability rows can be closed:
 - `APP-MAC-AUTH-001`: record a signed Catalyst login/relaunch journey that
   exercises the application-host Keychain entitlement and distinguishes
   rejected credentials from unavailable secure storage.
+- `APP-ICLOUD-001`: record an enabled, signed two-device journey against the
+  provisioned private CloudKit container, including statistics/configuration
+  merge, static-credential recovery, opt-out, cloud-copy deletion, and
+  this-device/all-device account removal. A Personal Team build with
+  `BLEAT_CLOUDKIT_MODE=disabled` is not CloudKit propagation evidence.
 - `APP-PLAYBACK-001`: complete the physical-device media matrix for supported
   formats, background and locked playback, interruptions, route removal,
   Bluetooth, AirPlay, CarPlay transport commands, Now Playing position, speed,

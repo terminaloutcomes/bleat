@@ -2112,7 +2112,9 @@ private struct SettingsView: View {
                     }
                 }
 
-                cloudSection
+                if model.privateCloudSyncAvailable {
+                    cloudSection
+                }
                 statisticsSection
 
                 Section("Downloads") {

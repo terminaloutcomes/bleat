@@ -389,7 +389,8 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
   The stable native username/password uses
   `kSecAttrAccessibleAfterFirstUnlock` with iCloud Keychain while private
   iCloud synchronization is enabled, and migrates back to a device-only item
-  when the user opts out.
+  when the user opts out. A build with the CloudKit capability disabled also
+  keeps this credential device-only.
 - Use a distinct Keychain service/account key for every local `AccountID`.
 - Use the access token only in `Authorization: Bearer` headers.
 - The current server also extracts an access token from `?token=`, but this client never uses or stores token-bearing URLs.
@@ -1071,7 +1072,13 @@ Private CloudKit synchronization is opt-out and uses
 milestones, non-secret account descriptors, and playback/download preferences
 use the private database. Access and refresh tokens never enter CloudKit or
 iCloud Keychain. Disabling synchronization keeps all local data and offers to
-retain or delete the private CloudKit zone.
+retain or delete the private CloudKit zone. `BLEAT_CLOUDKIT_MODE=disabled`
+selects CloudKit-free entitlements for development teams that do not support
+the capability; those builds do not initialize or present CloudKit
+synchronization. `enabled` is the default and the only other supported value.
+The selected value is embedded in the app's information property list so
+signing capabilities and runtime behavior use the same build mode; a missing or
+unknown runtime value fails closed as disabled.
 
 ## 13. Local data model
 

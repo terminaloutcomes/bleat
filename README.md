@@ -92,6 +92,35 @@ Compile an unsigned Mac Catalyst Release app:
 mise run macos:compile
 ```
 
+### CloudKit build modes
+
+`BLEAT_CLOUDKIT_MODE` is a build setting with two supported values:
+
+- `enabled` is the default for paid-team, beta, and distribution builds. It
+  selects the CloudKit entitlements and makes private iCloud synchronization
+  available in Settings.
+- `disabled` selects CloudKit-free entitlements for Personal Team builds. It
+  leaves statistics local, keeps all credentials device-only, and omits the
+  iCloud synchronization controls.
+
+The repository's Xcode, test, archive, and `mise` workflows forward this
+setting. For example:
+
+```sh
+BLEAT_CLOUDKIT_MODE=disabled mise run device:build
+```
+
+For direct Xcode command-line builds, pass the same build setting:
+
+```sh
+xcodebuild \
+  -project Bleat.xcodeproj \
+  -scheme Bleat \
+  -destination 'generic/platform=iOS' \
+  BLEAT_CLOUDKIT_MODE=disabled \
+  build
+```
+
 Build and launch a development-signed Catalyst app:
 
 ```sh
@@ -246,12 +275,19 @@ repository, then build, install, and launch the Release app:
 ```sh
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 export BLEAT_DEVICE_ID="YOUR_IPHONE_UDID"
+export BLEAT_CLOUDKIT_MODE=disabled
 mise run device
 ```
 
 The individual stages are also available as `device:build`, `device:install`,
-and `device:launch`. If Apple reports that `com.yaleman.Bleat` is unavailable
-for the selected team, set a stable alternative such as
+and `device:launch`. Personal Teams do not support the CloudKit capability, so
+set `BLEAT_CLOUDKIT_MODE=disabled` for those builds. The disabled mode selects
+CloudKit-free signing entitlements, hides iCloud synchronization, leaves
+statistics local, and stores native credentials in the device-only Keychain.
+Paid-team and distribution builds default to `enabled`.
+
+If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
+set a stable alternative such as
 `BLEAT_BUNDLE_ID=com.yaleman.Bleat.personal` before running the tasks.
 
 ## Sign in
@@ -285,6 +321,10 @@ listening slices, completion milestones, and imported server sessions in
 local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
+
+Builds made with `BLEAT_CLOUDKIT_MODE=disabled` omit the CloudKit entitlement
+entirely. They do not initialize CloudKit or show its Settings controls, and
+their stable native credentials remain device-only.
 
 Account removal distinguishes this device from all devices and asks separately
 whether listening history and downloaded audio should be retained.

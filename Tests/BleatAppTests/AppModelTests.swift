@@ -1641,6 +1641,21 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.libraries, .idle)
     }
 
+    func testCloudKitDisabledBuildKeepsSynchronizationUnavailable() async {
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncAvailable: false
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await model.setPrivateCloudSyncEnabled(true)
+
+        XCTAssertFalse(model.privateCloudSyncAvailable)
+        XCTAssertFalse(model.privateCloudSyncEnabled)
+        XCTAssertEqual(model.privateCloudState, .disabled)
+    }
+
     func testDiagnosticsRecordLifecycleAndTypedAuthFailureWithoutInputs()
         async
     {
@@ -4326,6 +4341,7 @@ private actor TestAppService: AppServicing {
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
     private let searchGate: AsyncGate?
+    private let privateCloudSyncAvailable: Bool
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -4387,7 +4403,8 @@ private actor TestAppService: AppServicing {
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
-        searchGate: AsyncGate? = nil
+        searchGate: AsyncGate? = nil,
+        privateCloudSyncAvailable: Bool = true
     ) {
         accountsResult = accounts
         activeAccountResult = activeAccount
@@ -4409,6 +4426,11 @@ private actor TestAppService: AppServicing {
         self.loginGate = loginGate
         self.removeGate = removeGate
         self.searchGate = searchGate
+        self.privateCloudSyncAvailable = privateCloudSyncAvailable
+    }
+
+    func isPrivateCloudSyncAvailable() async -> Bool {
+        privateCloudSyncAvailable
     }
 
     func accounts()

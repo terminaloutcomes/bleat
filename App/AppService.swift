@@ -6,6 +6,20 @@ enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
 }
 
+enum BleatCloudKitBuildMode: String, Sendable {
+    case enabled
+    case disabled
+
+    static var current: Self {
+        guard let value = Bundle.main.object(
+            forInfoDictionaryKey: "BleatCloudKitMode"
+        ) as? String else {
+            return .disabled
+        }
+        return Self(rawValue: value) ?? .disabled
+    }
+}
+
 enum AppServiceError: Error, Equatable, Sendable {
     case invalidServerURL(ServerURLValidationError)
     case discovery(ServerDiscoveryError)
@@ -272,6 +286,8 @@ protocol AppServicing: Sendable {
         realSeconds: Double
     ) async throws(AppServiceError)
 
+    func isPrivateCloudSyncAvailable() async -> Bool
+
     func isPrivateCloudSyncEnabled() async -> Bool
 
     func synchronizePrivateCloud() async throws(AppServiceError)
@@ -357,6 +373,10 @@ extension AppServicing {
         realSeconds: Double
     ) async throws(AppServiceError) {}
 
+    func isPrivateCloudSyncAvailable() async -> Bool {
+        true
+    }
+
     func isPrivateCloudSyncEnabled() async -> Bool {
         true
     }
@@ -387,7 +407,7 @@ actor LiveAppService: AppServicing {
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
     private let statisticsRepository: StatisticsRepository
-    private let privateCloudSync: PrivateCloudSyncCoordinator
+    private let privateCloudSync: PrivateCloudSyncCoordinator?
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
@@ -422,12 +442,17 @@ actor LiveAppService: AppServicing {
         }
 
         transport = URLSessionHTTPTransport(diagnostics: diagnostics)
+        let privateCloudAvailable =
+            BleatCloudKitBuildMode.current == .enabled
         let privateCloudEnabled =
-            UserDefaults.standard.object(
-                forKey: "bleat.cloudKit.enabled.v1"
-            ) == nil
-            || UserDefaults.standard.bool(
-                forKey: "bleat.cloudKit.enabled.v1"
+            privateCloudAvailable
+            && (
+                UserDefaults.standard.object(
+                    forKey: "bleat.cloudKit.enabled.v1"
+                ) == nil
+                || UserDefaults.standard.bool(
+                    forKey: "bleat.cloudKit.enabled.v1"
+                )
             )
         credentialStore = TokenVault(
             tokenService: "com.yaleman.Bleat.session-tokens",
@@ -444,11 +469,15 @@ actor LiveAppService: AppServicing {
         statisticsRepository = StatisticsRepository(
             modelContainer: modelContainer
         )
-        privateCloudSync = PrivateCloudSyncCoordinator(
-            statistics: statisticsRepository,
-            accounts: accountStore,
-            credentialStore: credentialStore
-        )
+        if privateCloudAvailable {
+            privateCloudSync = PrivateCloudSyncCoordinator(
+                statistics: statisticsRepository,
+                accounts: accountStore,
+                credentialStore: credentialStore
+            )
+        } else {
+            privateCloudSync = nil
+        }
     }
 
     func liveUpdates(
@@ -1093,7 +1122,7 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .libraryCache(error)
         }
-        await privateCloudSync.ignoreAccountOnThisDevice(
+        await privateCloudSync?.ignoreAccountOnThisDevice(
             account.id,
             includeStatistics: includeStatistics
         )
@@ -1205,11 +1234,18 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func isPrivateCloudSyncAvailable() async -> Bool {
+        privateCloudSync != nil
+    }
+
     func isPrivateCloudSyncEnabled() async -> Bool {
-        privateCloudSync.isEnabled
+        privateCloudSync?.isEnabled ?? false
     }
 
     func synchronizePrivateCloud() async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(.disabled)
+        }
         do {
             try await privateCloudSync.synchronize()
         } catch let error {
@@ -1221,6 +1257,9 @@ actor LiveAppService: AppServicing {
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(.disabled)
+        }
         let accountIDs: [AccountID]
         do {
             accountIDs = try await accountStore.accounts().map(\.id)
@@ -1255,6 +1294,9 @@ actor LiveAppService: AppServicing {
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(.disabled)
+        }
         do {
             try await privateCloudSync.deleteAccountEverywhere(
                 accountID,

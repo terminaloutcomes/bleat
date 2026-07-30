@@ -15,6 +15,7 @@ xcodebuild \
     -project Bleat.xcodeproj \
     -resolvePackageDependencies \
     -scheme Bleat \
+    BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -derivedDataPath .build/xcode-derived
 
 xcodebuild \
@@ -24,6 +25,7 @@ xcodebuild \
     -configuration Release \
     -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath .build/xcode-derived \
+    BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     build
 
 xcodebuild \
@@ -32,5 +34,6 @@ xcodebuild \
     -scheme Bleat \
     -destination "${simulator_destination}" \
     -derivedDataPath .build/xcode-derived \
+    BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     test

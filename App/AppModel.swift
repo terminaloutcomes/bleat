@@ -392,6 +392,7 @@ final class AppModel {
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
     private(set) var privateCloudState: PrivateCloudState = .idle
+    private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
     let playback: PlaybackModel
     let downloads: DownloadModel
@@ -472,8 +473,14 @@ final class AppModel {
         )
 
         do {
-            privateCloudSyncEnabled =
-                await service.isPrivateCloudSyncEnabled()
+            privateCloudSyncAvailable =
+                await service.isPrivateCloudSyncAvailable()
+            if privateCloudSyncAvailable {
+                privateCloudSyncEnabled =
+                    await service.isPrivateCloudSyncEnabled()
+            } else {
+                privateCloudSyncEnabled = false
+            }
             if privateCloudSyncEnabled {
                 privateCloudState = .syncing
                 do {
@@ -1337,7 +1344,8 @@ final class AppModel {
     }
 
     func synchronizePrivateCloud() async {
-        guard privateCloudSyncEnabled,
+        guard privateCloudSyncAvailable,
+            privateCloudSyncEnabled,
             privateCloudState != .syncing
         else {
             return
@@ -1367,6 +1375,11 @@ final class AppModel {
         _ enabled: Bool,
         deleteCloudData: Bool = false
     ) async {
+        guard privateCloudSyncAvailable else {
+            privateCloudSyncEnabled = false
+            privateCloudState = .disabled
+            return
+        }
         privateCloudState = .syncing
         do {
             try await service.setPrivateCloudSyncEnabled(

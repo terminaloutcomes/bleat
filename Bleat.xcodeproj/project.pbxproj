@@ -58,9 +58,9 @@
 		0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
 		167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStoreTests.swift; sourceTree = "<group>"; };
-		1B85E31F797AE496F706FB58 /* BleatMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.entitlements; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
+		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
 		4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -73,15 +73,17 @@
 		9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessor.swift; sourceTree = "<group>"; };
 		9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStore.swift; sourceTree = "<group>"; };
 		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.enabled.entitlements; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.enabled.entitlements; sourceTree = "<group>"; };
+		C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.disabled.entitlements; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
 		C9A985B3A620C132DA9B6307 /* BleatApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BleatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
-		E8C227D3C2E461D602143C2F /* Bleat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.entitlements; sourceTree = "<group>"; };
 		F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMutationStore.swift; sourceTree = "<group>"; };
 		F2675018070436D35F6FC0FF /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
 		F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAppService.swift; sourceTree = "<group>"; };
@@ -145,9 +147,11 @@
 				73719E4CDB73EE2DD988C5E3 /* AppModel.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
 				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
-				E8C227D3C2E461D602143C2F /* Bleat.entitlements */,
+				C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */,
+				C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
-				1B85E31F797AE496F706FB58 /* BleatMac.entitlements */,
+				481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */,
+				A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */,
 				A9F16612F5D186DFAED140F6 /* BookCoverView.swift */,
 				F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */,
 				C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */,
@@ -511,8 +515,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CODE_SIGN_ENTITLEMENTS = App/Bleat.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = App/BleatMac.entitlements;
+				BLEAT_CLOUDKIT_MODE = enabled;
+				CODE_SIGN_ENTITLEMENTS = "App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -555,8 +560,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CODE_SIGN_ENTITLEMENTS = App/Bleat.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = App/BleatMac.entitlements;
+				BLEAT_CLOUDKIT_MODE = enabled;
+				CODE_SIGN_ENTITLEMENTS = "App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
