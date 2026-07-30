@@ -44,21 +44,15 @@ enum PlaybackSyncState: Equatable, Sendable {
 }
 
 enum ExternalProgressNotice: Equatable, Sendable {
-    case activeOnAnotherDevice(String?)
     case localChangesPending(String?)
 
     var message: String {
         let device = switch self {
-        case .activeOnAnotherDevice(let value),
-            .localChangesPending(let value):
+        case .localChangesPending(let value):
             value.map { " on \($0)" } ?? ""
         }
-        return switch self {
-        case .activeOnAnotherDevice:
-            "Another session updated this book\(device). Playback was not moved."
-        case .localChangesPending:
+        return
             "Another session updated this book\(device). Your unsynced position was kept."
-        }
     }
 }
 
@@ -410,9 +404,7 @@ final class PlaybackModel {
         }
         lastExternalProgressUpdate = progress.lastUpdateMilliseconds
         if isPlaybackRequested {
-            externalProgressNotice = .activeOnAnotherDevice(
-                progress.deviceDescription
-            )
+            externalProgressNotice = nil
             return
         }
         guard localPlaybackSession == nil, positionConflict == nil else {
@@ -769,7 +761,13 @@ final class PlaybackModel {
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
         narrator = detail.narrators.joined(separator: ", ")
-        coverURL = nil
+        coverURL = BookCoverURL.make(
+            server: account?.server,
+            itemID: detail.id,
+            updatedAtMilliseconds: detail.updatedAtMilliseconds,
+            width: 600,
+            height: 600
+        )
         currentTime = detail.progress?.currentTime ?? 0
         syncState = .idle
         bookmarks = []
@@ -1151,6 +1149,7 @@ final class PlaybackModel {
             return
         }
         pausedAt = nil
+        externalProgressNotice = nil
         playbackRequested = true
         hasConfirmedPlaybackAdvance = false
         stablePlaybackStartedAt = nil

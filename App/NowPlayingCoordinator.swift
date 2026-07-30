@@ -102,21 +102,35 @@ enum NowPlayingArtwork {
     }
 }
 
+private struct NowPlayingArtworkIdentity: Equatable {
+    let accountID: AccountID?
+    let url: URL
+}
+
+@MainActor
+protocol NowPlayingInfoPublishing: AnyObject {
+    var nowPlayingInfo: [String: Any]? { get set }
+}
+
+extension MPNowPlayingInfoCenter: NowPlayingInfoPublishing {}
+
 @MainActor
 final class NowPlayingCoordinator {
-    private let infoCenter: MPNowPlayingInfoCenter
+    private let infoCenter: any NowPlayingInfoPublishing
     private let commandCenter: MPRemoteCommandCenter
     private let coverLoader: BookCoverImageLoader
     private var commandTargets: [(MPRemoteCommand, Any)] = []
     private var commandHandler:
         (@MainActor (PlaybackRemoteCommand) -> PlaybackRemoteCommandOutcome)?
     private var latestSnapshot: NowPlayingSnapshot?
+    private var artworkIdentity: NowPlayingArtworkIdentity?
     private var artwork: MPMediaItemArtwork?
     private var artworkTask: Task<Void, Never>?
     private var artworkGeneration: UInt64 = 0
 
     init(
-        infoCenter: MPNowPlayingInfoCenter = .default(),
+        infoCenter: any NowPlayingInfoPublishing =
+            MPNowPlayingInfoCenter.default(),
         commandCenter: MPRemoteCommandCenter = .shared(),
         coverLoader: BookCoverImageLoader = .shared,
         registersRemoteCommands: Bool = true
@@ -148,18 +162,25 @@ final class NowPlayingCoordinator {
     }
 
     func publish(_ snapshot: NowPlayingSnapshot) {
-        let previousCoverURL = latestSnapshot?.coverURL
+        let nextArtworkIdentity = snapshot.coverURL.map {
+            NowPlayingArtworkIdentity(
+                accountID: snapshot.accountID,
+                url: $0
+            )
+        }
         latestSnapshot = snapshot
         updateCommandAvailability(snapshot)
         infoCenter.nowPlayingInfo = snapshot.information(artwork: artwork)
 
-        guard snapshot.coverURL != previousCoverURL else {
+        guard nextArtworkIdentity != artworkIdentity else {
             return
         }
         artworkTask?.cancel()
+        artworkTask = nil
+        artworkIdentity = nextArtworkIdentity
         artwork = nil
         infoCenter.nowPlayingInfo = snapshot.information(artwork: nil)
-        guard let coverURL = snapshot.coverURL else {
+        guard let nextArtworkIdentity else {
             return
         }
 
@@ -168,12 +189,12 @@ final class NowPlayingCoordinator {
         artworkTask = Task { @MainActor [weak self] in
             guard let self,
                 let image = await coverLoader.image(
-                    for: coverURL,
-                    accountID: snapshot.accountID
+                    for: nextArtworkIdentity.url,
+                    accountID: nextArtworkIdentity.accountID
                 ),
                 !Task.isCancelled,
                 generation == artworkGeneration,
-                latestSnapshot?.coverURL == coverURL
+                artworkIdentity == nextArtworkIdentity
             else {
                 return
             }
@@ -191,6 +212,7 @@ final class NowPlayingCoordinator {
         artworkGeneration &+= 1
         artworkTask?.cancel()
         artworkTask = nil
+        artworkIdentity = nil
         artwork = nil
         latestSnapshot = nil
         infoCenter.nowPlayingInfo = nil

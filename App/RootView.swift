@@ -1720,7 +1720,7 @@ private struct BookDetailView: View {
                                 .disabled(
                                     record.manifest.state == .deleting
                                         || isDownloadedRecordPlaying
-                                )
+                                ).accessibilityLabel("Remove")
                             }
                         }
                     }
@@ -1759,15 +1759,18 @@ private struct BookDetailView: View {
         if record.manifest.purpose == .automaticCache,
             record.manifest.state != .deleting
         {
-            Button("Download Full Book", systemImage: "arrow.down.circle") {
+            Button {
                 Task {
                     await model.downloads.downloadFullBook(
                         record,
                         account: account
                     )
                 }
+            } label: {
+                Image(systemName: "arrow.down.circle")
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityLabel("Download Full Book")
             .accessibilityIdentifier(
                 "book.detail.download.fullBook"
             )

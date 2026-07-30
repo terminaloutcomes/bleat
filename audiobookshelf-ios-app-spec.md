@@ -951,7 +951,9 @@ Direct progress changes use `PATCH /api/me/progress/<library-item-id>` with the 
 
 Track a local `lastCommonServerUpdate` and position for each item.
 
-- While this device is actively playing, never jump due to remote progress.
+- While this device is actively playing, ignore remote progress without moving
+  playback or presenting a conflict alert. Session progress is echoed over the
+  user's Socket.IO subscription, including late events from stale sessions.
 - If only the local position changed since the last common update, upload it.
 - If only the server position changed, adopt it while idle.
 - If both changed, show a non-destructive conflict prompt with:

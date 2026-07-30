@@ -1583,6 +1583,37 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testDownloadedPlaybackCarriesCoverIntoNowPlaying() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let account = try fixtureAccount()
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: account
+        )
+
+        XCTAssertEqual(
+            playback.coverURL,
+            BookCoverURL.make(
+                server: account.server,
+                itemID: fixture.detail.id,
+                updatedAtMilliseconds:
+                    fixture.detail.updatedAtMilliseconds,
+                width: 600,
+                height: 600
+            )
+        )
+        await playback.stop()
+    }
+
     func testMediaServicesResetRebuildsAcrossAudioFileBoundary()
         async throws
     {
@@ -2953,6 +2984,54 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    func testActivePlaybackIgnoresEchoedProgressWithoutAlert() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let account = try fixtureAccount()
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "active-session"),
+            itemID: fixture.detail.id,
+            title: fixture.detail.title,
+            duration: 1,
+            currentTime: 0,
+            chapters: fixture.detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: fixture.audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: TestAppService(
+                activeAccount: .success(account),
+                playback: [.success(preparation)]
+            )
+        )
+        await playback.start(detail: fixture.detail, account: account)
+
+        await playback.handleLiveProgress(
+            AudiobookshelfLivePlaybackProgress(
+                itemID: fixture.detail.id,
+                sessionID: PlaybackSessionID(rawValue: "stale-session"),
+                deviceDescription: "iPhone / v0.1.0",
+                currentTime: 0.5,
+                duration: 1,
+                isFinished: false,
+                lastUpdateMilliseconds: 1
+            )
+        )
+
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertNil(playback.externalProgressNotice)
+        await playback.stop()
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -3312,6 +3391,56 @@ final class AppModelTests: XCTestCase {
         }
 
         XCTAssertNotNil(renderedImage)
+    }
+
+    func testNowPlayingRetriesCoverWhenAccountIdentityArrives() async throws {
+        let imageData = try XCTUnwrap(
+            UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 2)
+            ).image { context in
+                UIColor.systemTeal.setFill()
+                context.fill(
+                    CGRect(x: 0, y: 0, width: 2, height: 2)
+                )
+            }.pngData()
+        )
+        let fetcher = TestBookCoverFetcher(
+            data: imageData,
+            failingRequestCount: 1
+        )
+        let loader = BookCoverImageLoader(
+            diskCapacity: 0,
+            fetch: { request in
+                try await fetcher.fetch(request)
+            }
+        )
+        let infoPublisher = TestNowPlayingInfoPublisher()
+        let coordinator = NowPlayingCoordinator(
+            infoCenter: infoPublisher,
+            coverLoader: loader,
+            registersRemoteCommands: false
+        )
+        let url = try XCTUnwrap(
+            URL(string: "https://books.example/cover?ts=3")
+        )
+
+        coordinator.publish(
+            nowPlayingSnapshot(accountID: nil, coverURL: url)
+        )
+        await waitForCoverRequests(fetcher, count: 1)
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: AccountID(rawValue: "cover-account"),
+                coverURL: url
+            )
+        )
+        await waitForCoverRequests(fetcher, count: 2)
+
+        let requestCount = await fetcher.requestCount
+        let artwork = await waitForNowPlayingArtwork(in: infoPublisher)
+        XCTAssertEqual(requestCount, 2)
+        XCTAssertNotNil(artwork)
+        coordinator.clear()
     }
 
     func testFeaturedPlaybackRateCyclesAndRemoteFailuresAreTyped() {
@@ -4270,25 +4399,89 @@ private struct TestSendableArtwork: @unchecked Sendable {
     }
 }
 
+private func nowPlayingSnapshot(
+    accountID: AccountID?,
+    coverURL: URL?
+) -> NowPlayingSnapshot {
+    NowPlayingSnapshot(
+        accountID: accountID,
+        itemID: LibraryItemID(rawValue: "item"),
+        title: "Book",
+        author: "",
+        narrator: "",
+        coverURL: coverURL,
+        currentTime: 0,
+        duration: 100,
+        rate: 1,
+        isPlaying: true,
+        isPlaybackRequested: true,
+        isPlaybackAvailable: true,
+        canMoveToPreviousChapter: false,
+        canMoveToNextChapter: false,
+        currentChapterIndex: nil,
+        currentChapterTitle: nil,
+        chapterCount: 0
+    )
+}
+
+private func waitForCoverRequests(
+    _ fetcher: TestBookCoverFetcher,
+    count: Int
+) async {
+    for _ in 0..<100 {
+        if await fetcher.requestCount >= count {
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+}
+
+@MainActor
+private func waitForNowPlayingArtwork(
+    in publisher: TestNowPlayingInfoPublisher
+) async -> MPMediaItemArtwork? {
+    for _ in 0..<100 {
+        if let artwork =
+            publisher.nowPlayingInfo?[
+                MPMediaItemPropertyArtwork
+            ] as? MPMediaItemArtwork
+        {
+            return artwork
+        }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return nil
+}
+
+@MainActor
+private final class TestNowPlayingInfoPublisher:
+    NowPlayingInfoPublishing
+{
+    var nowPlayingInfo: [String: Any]?
+}
+
 private actor TestBookCoverFetcher {
     let data: Data
+    private var failingRequestCount: Int
     private(set) var requestCount = 0
 
-    init(data: Data) {
+    init(data: Data, failingRequestCount: Int = 0) {
         self.data = data
+        self.failingRequestCount = max(0, failingRequestCount)
     }
 
     func fetch(_ request: URLRequest) throws -> (Data, URLResponse) {
         requestCount += 1
         guard let url = request.url,
             let response = HTTPURLResponse(
-            url: url,
-            statusCode: 200,
-            httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": "image/png"]
-        ) else {
+                url: url,
+                statusCode: failingRequestCount > 0 ? 503 : 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "image/png"]
+            ) else {
             throw URLError(.badServerResponse)
         }
+        failingRequestCount = max(0, failingRequestCount - 1)
         return (data, response)
     }
 }

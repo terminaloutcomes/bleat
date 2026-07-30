@@ -457,11 +457,9 @@ struct PlayerView: View {
                                         }
                                     }
                                 } label: {
-                                    Label(
-                                        "Chapters",
-                                        systemImage: "list.bullet"
-                                    )
+                                    Image(systemName: "list.bullet")
                                 }
+                                .accessibilityLabel("Chapters")
                                 .accessibilityIdentifier("player.chapters")
                             }
 
@@ -538,13 +536,18 @@ struct PlayerView: View {
                                     }
                                 }
                             } label: {
-                                Label(
-                                    playback.sleepTimer == nil
-                                        ? "Sleep Timer"
-                                        : "Timer Set",
-                                    systemImage: "moon.zzz"
+                                Image(
+                                    systemName:
+                                        playback.sleepTimer == nil
+                                        ? "moon.zzz"
+                                        : "moon.zzz.fill"
                                 )
                             }
+                            .accessibilityLabel(
+                                playback.sleepTimer == nil
+                                    ? "Sleep Timer"
+                                    : "Timer Set"
+                            )
                             .accessibilityIdentifier("player.sleepTimer")
 
                             Menu {
@@ -609,8 +612,9 @@ struct PlayerView: View {
                                     }
                                 }
                             } label: {
-                                Label("Bookmarks", systemImage: "bookmark")
+                                Image(systemName: "bookmark")
                             }
+                            .accessibilityLabel("Bookmarks")
                             .disabled(
                                 playback.bookmarkState == .loading
                                     || playback.bookmarkState == .saving
@@ -652,19 +656,7 @@ struct PlayerView: View {
             .navigationTitle("Now Playing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Stop", role: .destructive) {
-                        Task {
-                            await playback.stop()
-                            dismiss()
-                        }
-                    }
-                }
+                playerToolbar
             }
             .sheet(item: $bookmarkDraft) { draft in
                 BookmarkEditorView(
@@ -674,6 +666,18 @@ struct PlayerView: View {
             }
         }
         .accessibilityIdentifier("player.screen")
+    }
+
+    @ToolbarContentBuilder
+    private var playerToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle")
+            }
+            .accessibilityLabel("Close")
+        }
     }
 
     private struct AirPlayRoutePicker: UIViewRepresentable {
