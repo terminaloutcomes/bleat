@@ -72,189 +72,75 @@ enum LibraryPaginationState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
-enum BookDetailFailure: Equatable, Sendable {
-    case notFound
-    case accessDenied
-    case reauthenticationRequired
-    case invalidServerResponse
-    case localStorageUnavailable
-    case unavailableOffline
-    case serverUnavailable
-    case requestRejected
+enum AppFailureOperation: String, Equatable, Sendable {
+    case appStart, login, reauthenticate, switchAccount, removeAccount
+    case loadLibraries, loadLibraryPage, loadHome, search, loadBook
+    case openPlayback, recoverPlayback, loadBookmarks, saveMetadata
+    case replaceCover, deleteBook, updateProgress, download, localPlayback
 
-    var title: String {
+    var isSafeToRetry: Bool {
         switch self {
-        case .notFound:
-            "Audiobook not found"
-        case .accessDenied:
-            "Audiobook access denied"
-        case .reauthenticationRequired:
-            "Sign in again"
-        case .invalidServerResponse:
-            "Invalid audiobook details"
-        case .localStorageUnavailable:
-            "Local storage unavailable"
-        case .unavailableOffline:
-            "Audiobook unavailable offline"
-        case .serverUnavailable:
-            "Server unavailable"
-        case .requestRejected:
-            "Audiobook unavailable"
-        }
-    }
-
-    var message: String {
-        switch self {
-        case .notFound:
-            "This audiobook may have been removed from the server."
-        case .accessDenied:
-            "This account is not allowed to open that audiobook."
-        case .reauthenticationRequired:
-            "Your saved sign-in is no longer accepted by the server."
-        case .invalidServerResponse:
-            "The server returned incomplete or inconsistent audiobook details."
-        case .localStorageUnavailable:
-            "Bleat loaded the audiobook, but could not save its details on this device."
-        case .unavailableOffline:
-            "This audiobook has not been saved for offline access."
-        case .serverUnavailable:
-            "Bleat could not reach the server to load this audiobook."
-        case .requestRejected:
-            "The server refused the audiobook detail request."
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .notFound:
-            "book.closed"
-        case .accessDenied:
-            "lock"
-        case .reauthenticationRequired:
-            "person.crop.circle.badge.exclamationmark"
-        case .invalidServerResponse:
-            "exclamationmark.triangle"
-        case .localStorageUnavailable:
-            "externaldrive.badge.exclamationmark"
-        case .unavailableOffline, .serverUnavailable:
-            "wifi.exclamationmark"
-        case .requestRejected:
-            "xmark.circle"
-        }
-    }
-
-    var allowsRetry: Bool {
-        switch self {
-        case .notFound, .accessDenied, .reauthenticationRequired:
-            false
-        case .invalidServerResponse, .localStorageUnavailable,
-            .unavailableOffline, .serverUnavailable, .requestRejected:
+        case .loadLibraries, .loadLibraryPage, .loadHome, .search, .loadBook,
+            .loadBookmarks:
             true
-        }
-    }
-
-    init(repositoryError: LibraryRepositoryError) {
-        switch repositoryError {
-        case .remote(let error):
-            self = Self(apiError: error)
-        case .fallbackCache(let remoteError, _):
-            self = Self(apiError: remoteError)
-        case .cache:
-            self = .localStorageUnavailable
-        case .noCachedValue:
-            self = .unavailableOffline
-        case .cancelled:
-            self = .serverUnavailable
-        }
-    }
-
-    private init(apiError: AudiobookshelfAPIError) {
-        switch apiError {
-        case .authentication(let error):
-            self = Self(authenticationError: error)
-        case .unexpectedStatus(let status):
-            switch status {
-            case 401:
-                self = .reauthenticationRequired
-            case 403:
-                self = .accessDenied
-            case 404:
-                self = .notFound
-            case 408, 429, 500 ... 599:
-                self = .serverUnavailable
-            default:
-                self = .requestRejected
-            }
-        case .malformedResponse, .invalidBookDetail:
-            self = .invalidServerResponse
-        case .cancelled:
-            self = .serverUnavailable
-        case .invalidAccountID, .routeConstruction, .invalidLibrary,
-            .invalidPage, .invalidLibraryItem, .invalidSearchResults,
-            .invalidPersonalizedShelves:
-            self = .requestRejected
-        }
-    }
-
-    private init(authenticationError: AuthenticatedRequestError) {
-        switch authenticationError {
-        case .requestTransportFailed, .refreshTransportFailed,
-            .automaticReauthenticationTransportFailed:
-            self = .serverUnavailable
-        case .credentialsReadFailed, .missingCredentials,
-            .refreshRejected, .missingAccessToken, .missingRefreshToken,
-            .credentialPersistenceFailed, .savedLoginCredentialsReadFailed,
-            .automaticReauthenticationFailed,
-            .retriedRequestUnauthorized:
-            self = .reauthenticationRequired
-        case .unexpectedRefreshStatus(let status)
-            where status == 401 || status == 403:
-            self = .reauthenticationRequired
-        case .invalidAccountID, .accountOperationInProgress,
-            .authenticationEndpoint, .requestDoesNotMatchRoute,
-            .authorizationFailed, .requestCancelled,
-            .refreshRequestConstructionFailed, .refreshCancelled,
-            .unexpectedRefreshStatus:
-            self = .requestRejected
+        case .appStart, .login, .reauthenticate, .switchAccount, .removeAccount,
+            .openPlayback, .recoverPlayback, .saveMetadata, .replaceCover,
+            .deleteBook, .updateProgress, .download, .localPlayback:
+            false
         }
     }
 }
 
-enum AppFailure: Equatable, Sendable {
-    case persistenceUnavailable
-    case invalidServerAddress
-    case serverUnavailable
-    case serverRequiresHTTPS
-    case serverNotReady
-    case serverUnsupported
-    case localLoginUnavailable
-    case invalidCredentials
-    case secureCredentialStorageUnavailable
-    case loginFailed
-    case accountUnavailable
-    case libraryUnavailable
-    case homeUnavailable
-    case searchUnavailable
-    case bookUnavailable(BookDetailFailure)
-    case playbackDenied
-    case playbackUnavailable
-    case progressUnavailable
-    case mediaUnavailable
-    case invalidMetadata
-    case metadataUnavailable
-    case bookDeletionDenied
-    case bookDeletionUnavailable
-    case bookmarkUnavailable
-    case accountRemovalFailed
+enum AppFailureCause: String, Equatable, Sendable {
+    case persistenceUnavailable, invalidInput, serverRequiresHTTPS, serverNotReady
+    case serverUnsupported, localLoginUnavailable, invalidCredentials
+    case authenticationRequired, permissionDenied, itemNotFound
+    case invalidServerResponse, localStorageUnavailable, unavailableOffline
+    case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
+
+    static let notFound = Self.itemNotFound
+    static let accessDenied = Self.permissionDenied
+    static let reauthenticationRequired = Self.authenticationRequired
+}
+
+typealias BookDetailFailure = AppFailureCause
+
+struct AppFailure: Equatable, Sendable {
+    let operation: AppFailureOperation
+    let cause: AppFailureCause
+
+    init(_ operation: AppFailureOperation, _ cause: AppFailureCause) {
+        self.operation = operation
+        self.cause = cause
+    }
+
+    var title: String {
+        switch cause {
+        case .itemNotFound: "Audiobook not found"
+        case .permissionDenied: "Access denied"
+        case .authenticationRequired: "Sign in again"
+        case .invalidServerResponse: "Invalid server response"
+        case .localStorageUnavailable, .persistenceUnavailable: "Local storage unavailable"
+        case .unavailableOffline: "Unavailable offline"
+        case .serverUnavailable: "Server unavailable"
+        case .serverRequiresHTTPS: "HTTPS required"
+        case .serverNotReady: "Server not ready"
+        case .serverUnsupported: "Server unsupported"
+        case .invalidCredentials: "Sign-in rejected"
+        case .invalidInput: "Check the entered information"
+        case .localLoginUnavailable: "Local login unavailable"
+        case .mediaUnavailable: "Playback unavailable"
+        case .uncertainMutation: "Change needs attention"
+        case .requestRejected: "Request rejected"
+        }
+    }
 
     var message: String {
-        switch self {
+        switch cause {
         case .persistenceUnavailable:
             "Bleat could not open its local data store."
-        case .invalidServerAddress:
-            "Enter a valid Audiobookshelf server address."
-        case .serverUnavailable:
-            "Bleat could not reach that Audiobookshelf server."
+        case .invalidInput:
+            "Review the information and try again."
         case .serverRequiresHTTPS:
             "Bleat requires an HTTPS Audiobookshelf address."
         case .serverNotReady:
@@ -265,115 +151,172 @@ enum AppFailure: Equatable, Sendable {
             "That server does not offer username and password login."
         case .invalidCredentials:
             "The username or password was not accepted."
-        case .secureCredentialStorageUnavailable:
-            "Bleat signed in, but could not access Keychain on this device."
-        case .loginFailed:
-            "Bleat could not sign in to that server."
-        case .accountUnavailable:
-            "Bleat could not restore the saved account."
-        case .libraryUnavailable:
-            "Bleat could not load the audiobook library."
-        case .homeUnavailable:
-            "Bleat could not load personalized shelves."
-        case .searchUnavailable:
-            "Bleat could not search the audiobook library."
-        case .bookUnavailable(let failure):
-            failure.message
-        case .playbackDenied:
-            "This account is not allowed to play that audiobook."
-        case .playbackUnavailable:
-            "Bleat could not start playback from the server."
-        case .progressUnavailable:
-            "Bleat could not update audiobook progress."
+        case .authenticationRequired:
+            "Your saved sign-in is no longer accepted by the server."
+        case .permissionDenied:
+            "This account is not allowed to perform that action."
+        case .itemNotFound:
+            "This audiobook may have been removed from the server."
+        case .invalidServerResponse:
+            "The server returned incomplete or inconsistent data."
+        case .localStorageUnavailable:
+            "Bleat could not save or read the required data on this device."
+        case .unavailableOffline:
+            "This information has not been saved for offline access."
+        case .serverUnavailable:
+            "Bleat could not reach the Audiobookshelf server."
+        case .requestRejected:
+            "The server refused this request."
         case .mediaUnavailable:
             "This audiobook could not be prepared for playback."
-        case .invalidMetadata:
-            "Review the metadata fields and enter a title."
-        case .metadataUnavailable:
-            "Bleat could not save metadata to the server."
-        case .bookDeletionDenied:
-            "This account is not allowed to delete that audiobook."
-        case .bookDeletionUnavailable:
-            "Bleat could not delete that audiobook from the server."
-        case .bookmarkUnavailable:
-            "Bleat could not update bookmarks."
-        case .accountRemovalFailed:
-            "Bleat could not remove the account."
+        case .uncertainMutation:
+            "The result of this change is uncertain; Bleat kept it for safe recovery."
         }
     }
 
-    init(serviceError: AppServiceError) {
-        switch serviceError {
+    var systemImage: String {
+        switch cause {
+        case .itemNotFound: "book.closed"
+        case .permissionDenied: "lock"
+        case .authenticationRequired: "person.crop.circle.badge.exclamationmark"
+        case .invalidServerResponse, .invalidInput, .requestRejected: "exclamationmark.triangle"
+        case .localStorageUnavailable, .persistenceUnavailable: "externaldrive.badge.exclamationmark"
+        case .unavailableOffline, .serverUnavailable: "wifi.exclamationmark"
+        case .mediaUnavailable: "play.slash"
+        case .uncertainMutation: "arrow.triangle.2.circlepath"
+        case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
+        case .serverNotReady, .serverUnsupported, .localLoginUnavailable, .invalidCredentials: "exclamationmark.circle"
+        }
+    }
+
+    var allowsRetry: Bool {
+        operation.isSafeToRetry && (cause == .invalidServerResponse
+            || cause == .localStorageUnavailable || cause == .unavailableOffline
+            || cause == .serverUnavailable || cause == .requestRejected)
+    }
+
+    static let persistenceUnavailable = AppFailure(.appStart, .persistenceUnavailable)
+    static let accountUnavailable = AppFailure(.appStart, .localStorageUnavailable)
+    static let mediaUnavailable = AppFailure(.localPlayback, .mediaUnavailable)
+    static let invalidServerAddress = AppFailure(.login, .invalidInput)
+    static let serverUnavailable = AppFailure(.login, .serverUnavailable)
+    static let serverRequiresHTTPS = AppFailure(.login, .serverRequiresHTTPS)
+    static let serverNotReady = AppFailure(.login, .serverNotReady)
+    static let serverUnsupported = AppFailure(.login, .serverUnsupported)
+    static let localLoginUnavailable = AppFailure(.login, .localLoginUnavailable)
+    static let invalidCredentials = AppFailure(.login, .invalidCredentials)
+    static let secureCredentialStorageUnavailable = AppFailure(.login, .localStorageUnavailable)
+    static let loginFailed = AppFailure(.login, .requestRejected)
+    static let libraryUnavailable = AppFailure(.loadLibraries, .serverUnavailable)
+    static let homeUnavailable = AppFailure(.loadHome, .serverUnavailable)
+    static let searchUnavailable = AppFailure(.search, .serverUnavailable)
+    static let playbackDenied = AppFailure(.openPlayback, .permissionDenied)
+    static let playbackUnavailable = AppFailure(.openPlayback, .serverUnavailable)
+    static let progressUnavailable = AppFailure(.updateProgress, .uncertainMutation)
+    static let invalidMetadata = AppFailure(.saveMetadata, .invalidInput)
+    static let metadataUnavailable = AppFailure(.saveMetadata, .uncertainMutation)
+    static let bookDeletionDenied = AppFailure(.deleteBook, .permissionDenied)
+    static let bookDeletionUnavailable = AppFailure(.deleteBook, .uncertainMutation)
+    static let bookmarkUnavailable = AppFailure(.loadBookmarks, .serverUnavailable)
+    static let accountRemovalFailed = AppFailure(.removeAccount, .uncertainMutation)
+
+    static func bookUnavailable(_ cause: AppFailureCause) -> AppFailure {
+        AppFailure(.loadBook, cause)
+    }
+
+    init(operation: AppFailureOperation, serviceError: AppServiceError) {
+        self.init(operation, Self.cause(for: serviceError))
+    }
+
+    private static func cause(for error: AppServiceError) -> AppFailureCause {
+        switch error {
         case .invalidServerURL(let error):
-            switch error {
-            case .unsupportedScheme:
-                self = .serverRequiresHTTPS
-            default:
-                self = .invalidServerAddress
-            }
+            if case .unsupportedScheme = error { return .serverRequiresHTTPS }
+            return .invalidInput
         case .discovery(let error):
             switch error {
-            case .uninitialized:
-                self = .serverNotReady
-            case .unsupportedServerVersion, .invalidServerVersion:
-                self = .serverUnsupported
-            default:
-                self = .serverUnavailable
+            case .uninitialized: return .serverNotReady
+            case .unsupportedServerVersion, .invalidServerVersion: return .serverUnsupported
+            case .malformedResponse, .wrongApplication: return .invalidServerResponse
+            case .unexpectedHTTPStatus(let status): return statusCause(status)
+            case .redirectMissingLocation, .redirectRequiresConfirmation,
+                .tooManyRedirects, .invalidRedirect: return .requestRejected
             }
-        case .discoveryRequestFailed:
-            self = .serverUnavailable
+        case .discoveryRequestFailed: return .serverUnavailable
         case .onboarding(let error):
             switch error {
-            case .localAuthenticationUnavailable:
-                self = .localLoginUnavailable
-            case .authenticationFailed(let authenticationError):
-                switch authenticationError {
-                case .invalidCredentials:
-                    self = .invalidCredentials
-                case .credentialStorageUnavailable:
-                    self = .secureCredentialStorageUnavailable
-                default:
-                    self = .loginFailed
+            case .localAuthenticationUnavailable: return .localLoginUnavailable
+            case .authenticationFailed(let error):
+                switch error {
+                case .invalidCredentials: return .invalidCredentials
+                case .credentialStorageUnavailable: return .localStorageUnavailable
+                case .malformedLoginResponse, .malformedAuthorizationResponse,
+                    .authorizedUserMismatch: return .invalidServerResponse
+                case .unexpectedLoginStatus(let status), .unexpectedAuthorizationStatus(let status): return statusCause(status)
+                case .invalidAccountID, .accountOperationInProgress,
+                    .missingAccessToken, .missingRefreshToken,
+                    .tokenValidationFailed, .credentialPersistenceFailed: return .authenticationRequired
                 }
-            default:
-                self = .loginFailed
+            case .authenticationRequestFailed: return .serverUnavailable
+            case .invalidAccount: return .invalidServerResponse
+            case .accountPersistenceFailed, .credentialRollbackFailed: return .localStorageUnavailable
             }
-        case .accountStore:
-            self = .accountUnavailable
-        case .libraryRepository, .pageRequest:
-            self = .libraryUnavailable
-        case .homeRequest:
-            self = .homeUnavailable
-        case .searchRequest, .searchCoordinator:
-            self = .searchUnavailable
-        case .bookDetail(let error):
-            self = .bookUnavailable(
-                BookDetailFailure(repositoryError: error)
-            )
-        case .playbackSession, .playbackSource, .playbackSync:
-            self = .playbackUnavailable
-        case .progress, .localPlaybackSession:
-            self = .progressUnavailable
-        case .metadataPatch:
-            self = .invalidMetadata
-        case .metadataUpdate, .coverUpdate:
-            self = .metadataUnavailable
+        case .accountStore, .libraryCache: return .localStorageUnavailable
+        case .libraryRepository(let error), .bookDetail(let error): return repositoryCause(error)
+        case .pageRequest, .homeRequest, .searchRequest, .metadataPatch: return .invalidInput
+        case .searchCoordinator(let error):
+            switch error { case .cancelled, .superseded: return .serverUnavailable; case .repository(let error): return repositoryCause(error) }
+        case .playbackSession(let error): return playbackSessionCause(error)
+        case .playbackSource: return .mediaUnavailable
+        case .playbackSync(let error): return playbackSyncCause(error)
+        case .localPlaybackSession(let error): return localSessionCause(error)
+        case .metadataUpdate(let error): return metadataCause(error)
+        case .coverUpdate(let error): return coverCause(error)
         case .bookDeletion(let error):
-            switch error {
-            case .permissionDenied:
-                self = .bookDeletionDenied
-            case .itemNotFound:
-                self = .bookUnavailable(.notFound)
-            default:
-                self = .bookDeletionUnavailable
-            }
-        case .bookmark:
-            self = .bookmarkUnavailable
-        case .downloadPlan, .downloadAuthorization:
-            self = .mediaUnavailable
-        case .accountRemoval, .libraryCache:
-            self = .accountRemovalFailed
+            switch error { case .permissionDenied: return .permissionDenied; case .itemNotFound: return .itemNotFound; case .requestFailed: return .uncertainMutation; case .unexpectedStatus(let status): return statusCause(status); case .invalidItemID, .requestConstructionFailed, .authenticationFailed: return .requestRejected }
+        case .bookmark(let error): return bookmarkCause(error)
+        case .progress(let error): return progressCause(error)
+        case .downloadPlan(let error):
+            switch error { case .invalidItemID: return .invalidInput; case .routeConstruction: return .requestRejected; case .authenticatedRequest(let error): return authenticationCause(error); case .unexpectedStatus(let status): return statusCause(status); case .invalidPlan: return .invalidServerResponse }
+        case .downloadAuthorization(let error):
+            switch error { case .invalidAccountID, .accountOperationInProgress, .rejectedRequestDoesNotMatchDownload, .missingRejectedAuthorization, .malformedRejectedAuthorization: return .invalidInput; case .routeConstruction: return .requestRejected; case .authenticatedRequest(let error): return authenticationCause(error) }
+        case .accountRemoval(let error):
+            switch error { case .accountNotFound: return .itemNotFound; case .logoutFailed, .logoutRequestFailed: return .uncertainMutation; case .accountStoreFailed: return .localStorageUnavailable }
         }
+    }
+
+    private static func statusCause(_ status: Int) -> AppFailureCause {
+        switch status { case 401: .authenticationRequired; case 403: .permissionDenied; case 404: .itemNotFound; case 408, 429, 500...599: .serverUnavailable; default: .requestRejected }
+    }
+    private static func repositoryCause(_ error: LibraryRepositoryError) -> AppFailureCause {
+        switch error { case .remote(let error): apiCause(error); case .fallbackCache(let remote, _): apiCause(remote); case .cache: .localStorageUnavailable; case .noCachedValue: .unavailableOffline; case .cancelled: .serverUnavailable }
+    }
+    private static func apiCause(_ error: AudiobookshelfAPIError) -> AppFailureCause {
+        switch error { case .authentication(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .malformedResponse, .invalidLibrary, .invalidPage, .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults, .invalidPersonalizedShelves: .invalidServerResponse; case .cancelled: .serverUnavailable; case .invalidAccountID, .routeConstruction: .requestRejected }
+    }
+    private static func authenticationCause(_ error: AuthenticatedRequestError) -> AppFailureCause {
+        switch error { case .requestTransportFailed, .refreshTransportFailed, .automaticReauthenticationTransportFailed: .serverUnavailable; case .credentialsReadFailed, .missingCredentials, .refreshRejected, .missingAccessToken, .missingRefreshToken, .credentialPersistenceFailed, .savedLoginCredentialsReadFailed, .automaticReauthenticationFailed, .retriedRequestUnauthorized: .authenticationRequired; case .unexpectedRefreshStatus(let status): statusCause(status); case .invalidAccountID, .accountOperationInProgress, .authenticationEndpoint, .requestDoesNotMatchRoute, .authorizationFailed, .requestCancelled, .refreshRequestConstructionFailed, .refreshCancelled, .malformedRefreshResponse: .requestRejected }
+    }
+    private static func playbackSessionCause(_ error: PlaybackSessionError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStartStatus(let status), .unexpectedCloseStatus(let status): statusCause(status); case .requestFailed: .serverUnavailable; case .malformedStartResponse, .invalidSessionResponse, .mismatchedLibraryItem: .invalidServerResponse; case .invalidLibraryItemID, .invalidDeviceInfo, .invalidSupportedMimeType, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    }
+    private static func playbackSyncCause(_ error: PlaybackSyncError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .invalidSessionID, .invalidPosition, .invalidDuration, .positionExceedsDuration, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    }
+    private static func localSessionCause(_ error: LocalPlaybackSessionError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .emptyBatch, .duplicateSessionID, .invalidSessionID, .invalidMetadata, .invalidDuration, .invalidPosition, .invalidTimestamp, .invalidMVPAccounting, .invalidDeviceInfo, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    }
+    private static func metadataCause(_ error: BookMetadataUpdateError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyPatch, .requestConstructionFailed, .requestEncodingFailed, .updateRejected: .invalidInput }
+    }
+    private static func coverCause(_ error: BookCoverUploadError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyImage, .imageTooLarge, .requestConstructionFailed, .uploadRejected: .invalidInput }
+    }
+    private static func bookmarkCause(_ error: BookmarkError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .invalidTime, .emptyTitle, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    }
+    private static func progressCause(_ error: BookProgressError) -> AppFailureCause {
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyUpdate, .invalidDuration, .invalidCurrentTime, .invalidProgress, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
     }
 }
 
@@ -534,7 +477,7 @@ final class AppModel {
                 .completed(.appStart, category: .app)
             )
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .appStart, serviceError: error)
             phase = .unavailable(failure)
             await diagnostics.record(
                 .failed(
@@ -596,7 +539,7 @@ final class AppModel {
             await loadLibraries()
             return true
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .login, serviceError: error)
             loginStatus = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -616,7 +559,9 @@ final class AppModel {
     @discardableResult
     func reauthenticate(password: String) async -> Bool {
         guard let account else {
-            loginStatus = .failed(.accountUnavailable)
+            loginStatus = .failed(
+                AppFailure(.reauthenticate, .authenticationRequired)
+            )
             return false
         }
         guard loginStatus != .submitting else {
@@ -647,7 +592,7 @@ final class AppModel {
             await loadLibraries()
             return true
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .reauthenticate, serviceError: error)
             loginStatus = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -682,7 +627,7 @@ final class AppModel {
                 .completed(.switchAccount, category: .auth)
             )
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .switchAccount, serviceError: error)
             accountActionStatus = .failed(
                 failure
             )
@@ -698,7 +643,9 @@ final class AppModel {
 
     func loadLibraries() async {
         guard let account else {
-            libraries = .failed(.accountUnavailable)
+            libraries = .failed(
+                AppFailure(.loadLibraries, .authenticationRequired)
+            )
             return
         }
         await diagnostics.record(
@@ -731,7 +678,7 @@ final class AppModel {
             }
             await selectLibrary(firstLibrary)
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .loadLibraries, serviceError: error)
             libraries = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -745,8 +692,12 @@ final class AppModel {
 
     func selectLibrary(_ library: LibrarySummary) async {
         guard let account else {
-            books = .failed(.accountUnavailable)
-            homeShelves = .failed(.accountUnavailable)
+            books = .failed(
+                AppFailure(.loadLibraryPage, .authenticationRequired)
+            )
+            homeShelves = .failed(
+                AppFailure(.loadHome, .authenticationRequired)
+            )
             return
         }
         if selectedLibrary?.id != library.id {
@@ -786,12 +737,13 @@ final class AppModel {
                 )
             )
         } catch {
-            homeShelves = .failed(.homeUnavailable)
+            let failure = AppFailure(.loadHome, .serverUnavailable)
+            homeShelves = .failed(failure)
             await diagnostics.record(
                 .failed(
                     .loadHome,
                     category: .api,
-                    failureCode: .homeUnavailable
+                    failureCode: failure.diagnosticFailureCode
                 )
             )
         }
@@ -827,7 +779,9 @@ final class AppModel {
         libraryPageGeneration &+= 1
         let operationGeneration = libraryPageGeneration
         guard let account, let library = selectedLibrary else {
-            books = .failed(.accountUnavailable)
+            books = .failed(
+                AppFailure(.loadLibraryPage, .authenticationRequired)
+            )
             return
         }
         books = .loading
@@ -868,7 +822,7 @@ final class AppModel {
             else {
                 return
             }
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .loadLibraryPage, serviceError: error)
             books = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -933,7 +887,7 @@ final class AppModel {
                 return
             }
             libraryPaginationState = .failed(
-                AppFailure(serviceError: error)
+                AppFailure(operation: .loadLibraryPage, serviceError: error)
             )
         }
     }
@@ -951,7 +905,9 @@ final class AppModel {
             return
         }
         guard let account, let selectedLibrary else {
-            searchResults = .failed(.accountUnavailable)
+            searchResults = .failed(
+                AppFailure(.search, .authenticationRequired)
+            )
             return
         }
         searchResults = .loading
@@ -982,7 +938,7 @@ final class AppModel {
             else {
                 return
             }
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .search, serviceError: error)
             searchResults = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -1002,7 +958,9 @@ final class AppModel {
         bookBookmarks = .idle
 
         guard let account else {
-            bookDetail = .failed(.accountUnavailable)
+            bookDetail = .failed(
+                AppFailure(.loadBook, .authenticationRequired)
+            )
             return
         }
         bookDetail = .loading
@@ -1030,7 +988,7 @@ final class AppModel {
             else {
                 return
             }
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .loadBook, serviceError: error)
             bookDetail = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -1045,7 +1003,9 @@ final class AppModel {
     func loadBookBookmarks() async {
         let operationGeneration = bookDetailGeneration
         guard let account, let itemID = selectedBookID else {
-            bookBookmarks = .failed(.accountUnavailable)
+            bookBookmarks = .failed(
+                AppFailure(.loadBookmarks, .authenticationRequired)
+            )
             return
         }
         bookBookmarks = .loading
@@ -1067,7 +1027,9 @@ final class AppModel {
             else {
                 return
             }
-            bookBookmarks = .failed(AppFailure(serviceError: error))
+            bookBookmarks = .failed(
+                AppFailure(operation: .loadBookmarks, serviceError: error)
+            )
         }
     }
 
@@ -1078,7 +1040,9 @@ final class AppModel {
         overwrite: Bool = false
     ) async {
         guard let account else {
-            bookEditSaveState = .failed(.accountUnavailable)
+            bookEditSaveState = .failed(
+                AppFailure(.saveMetadata, .authenticationRequired)
+            )
             return
         }
         guard bookEditSaveState != .saving else {
@@ -1111,7 +1075,7 @@ final class AppModel {
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
                         detail,
-                        AppFailure(serviceError: error)
+                        AppFailure(operation: .replaceCover, serviceError: error)
                     )
                 }
             case .stale(let latest):
@@ -1119,7 +1083,7 @@ final class AppModel {
             }
         } catch let error {
             bookEditSaveState = .failed(
-                AppFailure(serviceError: error)
+                AppFailure(operation: .saveMetadata, serviceError: error)
             )
         }
     }
@@ -1133,7 +1097,9 @@ final class AppModel {
         mode: BookDeletionMode
     ) async {
         guard let account else {
-            bookDeletionState = .failed(.accountUnavailable)
+            bookDeletionState = .failed(
+                AppFailure(.deleteBook, .authenticationRequired)
+            )
             return
         }
         guard bookDeletionState != .deleting else {
@@ -1183,7 +1149,7 @@ final class AppModel {
             }
         } catch let error {
             bookDeletionState = .failed(
-                AppFailure(serviceError: error)
+                AppFailure(operation: .deleteBook, serviceError: error)
             )
         }
     }
@@ -1217,7 +1183,9 @@ final class AppModel {
         detail: LibraryBookDetail
     ) async {
         guard let account else {
-            bookProgressUpdateState = .failed(.accountUnavailable)
+            bookProgressUpdateState = .failed(
+                AppFailure(.updateProgress, .authenticationRequired)
+            )
             return
         }
         guard bookProgressUpdateState != .saving else {
@@ -1240,7 +1208,7 @@ final class AppModel {
             bookProgressUpdateState = .saved
         } catch let error {
             bookProgressUpdateState = .failed(
-                AppFailure(serviceError: error)
+                AppFailure(operation: .updateProgress, serviceError: error)
             )
         }
     }
@@ -1268,7 +1236,9 @@ final class AppModel {
         downloads disposition: AccountDownloadDisposition = .delete
     ) async {
         guard let account else {
-            accountActionStatus = .failed(.accountUnavailable)
+            accountActionStatus = .failed(
+                AppFailure(.removeAccount, .authenticationRequired)
+            )
             return
         }
         guard accountActionStatus != .removing else {
@@ -1319,7 +1289,7 @@ final class AppModel {
                 )
             )
         } catch let error {
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .removeAccount, serviceError: error)
             accountActionStatus = .failed(
                 failure
             )

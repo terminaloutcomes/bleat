@@ -1172,7 +1172,10 @@ Do not update a DTO merely because the published API reference says something di
 
 ## 16. Error handling and diagnostics
 
-Define user-facing error categories:
+Preserve the failed operation together with a typed, user-safe failure cause.
+Do not collapse distinct failures into a generic unavailable state. The UI may
+group causes only when the resulting message, retry policy, and diagnostics
+code remain unambiguous. Define user-facing causes including:
 
 - server unreachable;
 - TLS trust failure;
@@ -1199,6 +1202,10 @@ Use `OSLog` categories for auth, API, playback, download, and sync. Logs must re
 - local file paths containing user metadata.
 
 Diagnostics export should include app version, iOS version, server version, endpoint name, HTTP status, request correlation ID, player state transitions, and redacted errors. It must not include credentials or full response bodies by default.
+
+Every diagnostic failure event carries its operation and a stable typed cause.
+Do not derive either from localized text, serialized errors, or raw server
+payloads.
 
 The Diagnostics status screen remains available in release builds. Development
 builds add snapshot and recent-log exports. Recent logs use typed, identifier-free

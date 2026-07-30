@@ -1984,7 +1984,10 @@ final class AppModelTests: XCTestCase {
         await model.start()
         await model.selectLibrary(fixtureLibrary())
 
-        XCTAssertEqual(model.books, .failed(.libraryUnavailable))
+        XCTAssertEqual(
+            model.books,
+            .failed(AppFailure(.loadLibraryPage, .invalidServerResponse))
+        )
     }
 
     func testLoadingNextLibraryPageAppendsBooks() async throws {
@@ -2167,7 +2170,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.books, .loaded(firstPage))
         XCTAssertEqual(
             model.libraryPaginationState,
-            .failed(.libraryUnavailable)
+            .failed(AppFailure(.loadLibraryPage, .serverUnavailable))
         )
     }
 
@@ -2176,25 +2179,31 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(service: service)
 
         await model.loadLibraries()
-        XCTAssertEqual(model.libraries, .failed(.accountUnavailable))
+        XCTAssertEqual(
+            model.libraries,
+            .failed(AppFailure(.loadLibraries, .authenticationRequired))
+        )
 
         await model.selectLibrary(fixtureLibrary())
-        XCTAssertEqual(model.books, .failed(.accountUnavailable))
+        XCTAssertEqual(
+            model.books,
+            .failed(AppFailure(.loadLibraryPage, .authenticationRequired))
+        )
         XCTAssertEqual(
             model.homeShelves,
-            .failed(.accountUnavailable)
+            .failed(AppFailure(.loadHome, .authenticationRequired))
         )
 
         await model.removeAccount()
         XCTAssertEqual(
             model.accountActionStatus,
-            .failed(.accountUnavailable)
+            .failed(AppFailure(.removeAccount, .authenticationRequired))
         )
 
         await model.search(query: "a book")
         XCTAssertEqual(
             model.searchResults,
-            .failed(.accountUnavailable)
+            .failed(AppFailure(.search, .authenticationRequired))
         )
 
         let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
@@ -2202,7 +2211,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.selectedBookID, book.id)
         XCTAssertEqual(
             model.bookDetail,
-            .failed(.accountUnavailable)
+            .failed(AppFailure(.loadBook, .authenticationRequired))
         )
     }
 
@@ -2421,7 +2430,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.bookDetail, .loaded(detail))
         XCTAssertEqual(
             model.bookBookmarks,
-            .failed(.bookmarkUnavailable)
+            .failed(AppFailure(.loadBookmarks, .uncertainMutation))
         )
     }
 
@@ -2596,7 +2605,10 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.bookEditSaveState,
-            .metadataSavedCoverFailed(detail, .metadataUnavailable)
+            .metadataSavedCoverFailed(
+                detail,
+                AppFailure(.replaceCover, .invalidInput)
+            )
         )
         XCTAssertEqual(model.bookDetail, .loaded(detail))
     }
@@ -2705,7 +2717,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.bookProgressUpdateState,
-            .failed(.progressUnavailable)
+            .failed(AppFailure(.updateProgress, .serverUnavailable))
         )
         let detailRequests = await service.bookDetailRequests()
         XCTAssertTrue(detailRequests.isEmpty)
@@ -2851,137 +2863,44 @@ final class AppModelTests: XCTestCase {
     }
 
     func testServiceErrorsMapToStablePresentationFailures() {
-        let cases: [(AppServiceError, AppFailure)] = [
-            (.invalidServerURL(.empty), .invalidServerAddress),
-            (
-                .invalidServerURL(.unsupportedScheme("http")),
-                .serverRequiresHTTPS
-            ),
-            (.discovery(.uninitialized), .serverNotReady),
-            (
-                .discovery(.unsupportedServerVersion("2.25.0")),
-                .serverUnsupported
-            ),
-            (
-                .discovery(.invalidServerVersion("not-a-version")),
-                .serverUnsupported
-            ),
-            (
-                .discovery(.unexpectedHTTPStatus(500)),
-                .serverUnavailable
-            ),
-            (.discoveryRequestFailed, .serverUnavailable),
-            (
-                .onboarding(.localAuthenticationUnavailable),
-                .localLoginUnavailable
-            ),
-            (
-                .onboarding(
-                    .authenticationFailed(.invalidCredentials)
-                ),
-                .invalidCredentials
-            ),
-            (
-                .onboarding(
-                    .authenticationFailed(
-                        .credentialStorageUnavailable
-                    )
-                ),
-                .secureCredentialStorageUnavailable
-            ),
-            (
-                .onboarding(
-                    .authenticationFailed(.malformedLoginResponse)
-                ),
-                .loginFailed
-            ),
-            (
-                .onboarding(.authenticationRequestFailed),
-                .loginFailed
-            ),
-            (.accountStore(.persistenceFailed), .accountUnavailable),
-            (
-                .libraryRepository(.noCachedValue),
-                .libraryUnavailable
-            ),
-            (.pageRequest(.invalidPage), .libraryUnavailable),
-            (.homeRequest(.invalidLimit), .homeUnavailable),
-            (.searchRequest(.invalidQuery), .searchUnavailable),
-            (
-                .searchCoordinator(.cancelled),
-                .searchUnavailable
-            ),
-            (
-                .bookDetail(.noCachedValue),
-                .bookUnavailable(.unavailableOffline)
-            ),
-            (
-                .bookDetail(.remote(.invalidBookDetail)),
-                .bookUnavailable(.invalidServerResponse)
-            ),
-            (
-                .bookDetail(.cache(.persistenceFailed)),
-                .bookUnavailable(.localStorageUnavailable)
-            ),
-            (
-                .bookDetail(.remote(.unexpectedStatus(404))),
-                .bookUnavailable(.notFound)
-            ),
-            (
-                .bookDetail(.remote(.unexpectedStatus(403))),
-                .bookUnavailable(.accessDenied)
-            ),
-            (
-                .bookDetail(.remote(.unexpectedStatus(503))),
-                .bookUnavailable(.serverUnavailable)
-            ),
-            (
-                .playbackSession(.requestFailed),
-                .playbackUnavailable
-            ),
-            (
-                .playbackSource(.missingAudioTracks),
-                .playbackUnavailable
-            ),
-            (
-                .playbackSync(.unexpectedStatus(503)),
-                .playbackUnavailable
-            ),
-            (
-                .localPlaybackSession(.unexpectedStatus(503)),
-                .progressUnavailable
-            ),
-            (
-                .progress(.unexpectedStatus(503)),
-                .progressUnavailable
-            ),
-            (.metadataPatch(.emptyTitle), .invalidMetadata),
-            (
-                .metadataUpdate(.unexpectedStatus(503)),
-                .metadataUnavailable
-            ),
-            (.downloadPlan(.unexpectedStatus(503)), .mediaUnavailable),
-            (
-                .downloadAuthorization(.invalidAccountID),
-                .mediaUnavailable
-            ),
-            (.coverUpdate(.uploadRejected), .metadataUnavailable),
-            (
-                .accountRemoval(.logoutRequestFailed),
-                .accountRemovalFailed
-            ),
-            (
-                .libraryCache(.persistenceFailed),
-                .accountRemovalFailed
-            ),
+        let cases: [(AppFailureOperation, AppServiceError, AppFailureCause)] = [
+            (.login, .invalidServerURL(.empty), .invalidInput),
+            (.login, .invalidServerURL(.unsupportedScheme("http")), .serverRequiresHTTPS),
+            (.login, .discovery(.uninitialized), .serverNotReady),
+            (.login, .discovery(.unexpectedHTTPStatus(500)), .serverUnavailable),
+            (.login, .onboarding(.localAuthenticationUnavailable), .localLoginUnavailable),
+            (.login, .onboarding(.authenticationFailed(.invalidCredentials)), .invalidCredentials),
+            (.appStart, .accountStore(.persistenceFailed), .localStorageUnavailable),
+            (.loadLibraries, .libraryRepository(.noCachedValue), .unavailableOffline),
+            (.loadLibraryPage, .pageRequest(.invalidPage), .invalidInput),
+            (.loadHome, .homeRequest(.invalidLimit), .invalidInput),
+            (.search, .searchRequest(.invalidQuery), .invalidInput),
+            (.search, .searchCoordinator(.cancelled), .serverUnavailable),
+            (.loadBook, .bookDetail(.remote(.invalidBookDetail)), .invalidServerResponse),
+            (.loadBook, .bookDetail(.remote(.unexpectedStatus(404))), .itemNotFound),
+            (.loadBook, .bookDetail(.remote(.unexpectedStatus(403))), .permissionDenied),
+            (.openPlayback, .playbackSession(.requestFailed), .serverUnavailable),
+            (.openPlayback, .playbackSource(.missingAudioTracks), .mediaUnavailable),
+            (.updateProgress, .playbackSync(.unexpectedStatus(503)), .serverUnavailable),
+            (.updateProgress, .localPlaybackSession(.unexpectedStatus(503)), .serverUnavailable),
+            (.updateProgress, .progress(.unexpectedStatus(503)), .serverUnavailable),
+            (.saveMetadata, .metadataPatch(.emptyTitle), .invalidInput),
+            (.saveMetadata, .metadataUpdate(.unexpectedStatus(503)), .serverUnavailable),
+            (.download, .downloadPlan(.unexpectedStatus(503)), .serverUnavailable),
+            (.download, .downloadAuthorization(.invalidAccountID), .invalidInput),
+            (.replaceCover, .coverUpdate(.uploadRejected), .invalidInput),
+            (.removeAccount, .accountRemoval(.logoutRequestFailed), .uncertainMutation),
+            (.removeAccount, .libraryCache(.persistenceFailed), .localStorageUnavailable),
         ]
 
-        for (error, expected) in cases {
+        for (operation, error, cause) in cases {
+            let expected = AppFailure(operation, cause)
             XCTAssertEqual(
-                AppFailure(serviceError: error),
+                AppFailure(operation: operation, serviceError: error),
                 expected,
                 "Unexpected mapping for \(error)"
             )
+            XCTAssertFalse(expected.diagnosticFailureCode.rawValue.isEmpty)
         }
     }
 
@@ -3013,11 +2932,15 @@ final class AppModelTests: XCTestCase {
         ]
 
         XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
-        XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+        XCTAssertTrue(failures.allSatisfy { !$0.title.isEmpty })
+        XCTAssertTrue(
+            failures.allSatisfy { !$0.diagnosticFailureCode.rawValue.isEmpty }
+        )
     }
 
     func testSecureCredentialStorageFailureHasRedactedDiagnosticCode() {
         let failure = AppFailure(
+            operation: .login,
             serviceError: .onboarding(
                 .authenticationFailed(
                     .credentialStorageUnavailable
@@ -3027,15 +2950,15 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(
             failure,
-            .secureCredentialStorageUnavailable
+            AppFailure(.login, .localStorageUnavailable)
         )
         XCTAssertEqual(
             failure.diagnosticFailureCode,
-            .secureCredentialStorageUnavailable
+            .localStorageUnavailable
         )
         XCTAssertEqual(
             failure.diagnosticFailureCode.rawValue,
-            "secure_credential_storage_unavailable"
+            "local_storage_unavailable"
         )
     }
 

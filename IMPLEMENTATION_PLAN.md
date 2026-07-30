@@ -422,6 +422,10 @@ of the remote shelf state and starts their local playback directly. Detail-load
 failures retain their typed repository cause through presentation and
 privacy-safe diagnostics, show a cause-specific message, and offer an explicit
 retry for retryable failures.
+All current user-facing operations retain their operation and typed safe cause
+through presentation and diagnostics rather than collapsing into broad
+unavailable states; mutation failures keep their existing durable recovery
+paths instead of receiving unsafe blind retries.
 Large-library performance validation and the remaining release polish still
 remain.
 

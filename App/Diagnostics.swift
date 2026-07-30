@@ -239,74 +239,32 @@ extension PlaybackSyncState {
 
 extension AppFailure {
     var diagnosticFailureCode: DiagnosticFailureCode {
-        switch self {
-        case .persistenceUnavailable:
-            .persistenceUnavailable
-        case .invalidServerAddress:
-            .invalidServerAddress
-        case .serverUnavailable:
-            .serverUnavailable
-        case .serverRequiresHTTPS:
-            .serverRequiresHTTPS
-        case .serverNotReady:
-            .serverNotReady
-        case .serverUnsupported:
-            .serverUnsupported
-        case .localLoginUnavailable:
-            .localLoginUnavailable
-        case .invalidCredentials:
-            .invalidCredentials
-        case .secureCredentialStorageUnavailable:
-            .secureCredentialStorageUnavailable
-        case .loginFailed:
-            .loginFailed
-        case .accountUnavailable:
-            .accountUnavailable
-        case .libraryUnavailable:
-            .libraryUnavailable
-        case .homeUnavailable:
-            .homeUnavailable
-        case .searchUnavailable:
-            .searchUnavailable
-        case .bookUnavailable(let failure):
-            switch failure {
-            case .notFound:
-                .bookNotFound
-            case .accessDenied:
-                .bookAccessDenied
-            case .reauthenticationRequired:
-                .bookAuthenticationRequired
-            case .invalidServerResponse:
-                .bookResponseInvalid
-            case .localStorageUnavailable:
-                .bookStorageUnavailable
-            case .unavailableOffline:
-                .bookUnavailableOffline
-            case .serverUnavailable:
-                .bookUnavailable
-            case .requestRejected:
-                .bookRequestRejected
-            }
-        case .playbackDenied:
-            .playbackDenied
-        case .playbackUnavailable:
-            .playbackUnavailable
-        case .progressUnavailable:
-            .progressUnavailable
-        case .mediaUnavailable:
-            .mediaUnavailable
-        case .invalidMetadata:
-            .invalidMetadata
-        case .metadataUnavailable:
-            .metadataUnavailable
-        case .bookDeletionDenied:
-            .bookDeletionDenied
-        case .bookDeletionUnavailable:
-            .bookDeletionUnavailable
-        case .bookmarkUnavailable:
-            .bookmarkUnavailable
-        case .accountRemovalFailed:
-            .accountRemovalFailed
+        switch (operation, cause) {
+        case (.loadBook, .itemNotFound): .bookNotFound
+        case (.loadBook, .permissionDenied): .bookAccessDenied
+        case (.loadBook, .authenticationRequired): .bookAuthenticationRequired
+        case (.loadBook, .invalidServerResponse): .bookResponseInvalid
+        case (.loadBook, .localStorageUnavailable): .bookStorageUnavailable
+        case (.loadBook, .unavailableOffline): .bookUnavailableOffline
+        case (.loadBook, .serverUnavailable): .bookUnavailable
+        case (.loadBook, .requestRejected): .bookRequestRejected
+        case (_, .persistenceUnavailable): .persistenceUnavailable
+        case (_, .invalidInput): .invalidInput
+        case (_, .serverRequiresHTTPS): .serverRequiresHTTPS
+        case (_, .serverNotReady): .serverNotReady
+        case (_, .serverUnsupported): .serverUnsupported
+        case (_, .localLoginUnavailable): .localLoginUnavailable
+        case (_, .invalidCredentials): .invalidCredentials
+        case (_, .authenticationRequired): .authenticationRequired
+        case (_, .permissionDenied): .permissionDenied
+        case (_, .itemNotFound): .itemNotFound
+        case (_, .invalidServerResponse): .invalidServerResponse
+        case (_, .localStorageUnavailable): .localStorageUnavailable
+        case (_, .unavailableOffline): .unavailableOffline
+        case (_, .serverUnavailable): .serverUnavailable
+        case (_, .requestRejected): .requestRejected
+        case (_, .mediaUnavailable): .mediaUnavailable
+        case (_, .uncertainMutation): .uncertainMutation
         }
     }
 

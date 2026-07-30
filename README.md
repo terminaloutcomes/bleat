@@ -433,6 +433,12 @@ names, server addresses, credentials, tokens, response bodies, media titles
 and URLs, remote identifiers, playback session IDs, listening positions, and
 local file paths.
 
+Each visible failure retains both the operation and a specific safe cause—for
+example authentication, permission, missing content, invalid server data,
+offline cache state, local storage, or transient connectivity—rather than a
+generic unavailable message. Read-only operations offer retry only when safely
+repeatable; mutation recovery continues through its existing durable state.
+
 **Remove Account** always asks for confirmation. If that account owns local
 books, choose whether to keep or delete them. Keeping them cancels unfinished
 transfers but preserves local files, metadata, and device progress. When no

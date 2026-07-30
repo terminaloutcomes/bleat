@@ -492,12 +492,14 @@ final class PlaybackModel {
             detail: detail
         )
         guard availability.visibleActions.contains(.play) else {
-            state = .failed(.playbackDenied)
+            state = .failed(
+                AppFailure(.openPlayback, .permissionDenied)
+            )
             await diagnostics.record(
                 .failed(
                     .openPlayback,
                     category: .playback,
-                    failureCode: .playbackDenied
+                    failureCode: .permissionDenied
                 )
             )
             return
@@ -612,7 +614,7 @@ final class PlaybackModel {
             preparation = nil
             activeDownloadDetail = nil
             resetPlayer()
-            let failure = AppFailure(serviceError: error)
+            let failure = AppFailure(operation: .openPlayback, serviceError: error)
             state = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -863,17 +865,21 @@ final class PlaybackModel {
         } catch let error {
             if let serviceError = error as? AppServiceError {
                 bookmarkState = .failed(
-                    AppFailure(serviceError: serviceError)
+                    AppFailure(operation: .loadBookmarks, serviceError: serviceError)
                 )
             } else {
-                bookmarkState = .failed(.bookmarkUnavailable)
+                bookmarkState = .failed(
+                    AppFailure(.loadBookmarks, .localStorageUnavailable)
+                )
             }
         }
     }
 
     func createBookmark(title: String) async -> Bool {
         guard let accountID = bookmarkAccountID, let itemID else {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .authenticationRequired)
+            )
             return false
         }
         let bookmark = AudioBookmark(
@@ -916,7 +922,9 @@ final class PlaybackModel {
 
     func retryPendingBookmarks() async {
         guard let accountID = activeAccount?.id else {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .authenticationRequired)
+            )
             return
         }
         do {
@@ -924,7 +932,9 @@ final class PlaybackModel {
                 accountID: accountID
             )
         } catch {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .localStorageUnavailable)
+            )
             return
         }
         await loadBookmarks()
@@ -935,7 +945,9 @@ final class PlaybackModel {
         title: String
     ) async -> Bool {
         guard let accountID = bookmarkAccountID else {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .authenticationRequired)
+            )
             return false
         }
         bookmarkState = .saving
@@ -971,7 +983,9 @@ final class PlaybackModel {
 
     func deleteBookmark(_ bookmark: AudioBookmark) async {
         guard let accountID = bookmarkAccountID else {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .authenticationRequired)
+            )
             return
         }
         bookmarkState = .saving
@@ -1033,7 +1047,9 @@ final class PlaybackModel {
             bookmarkState = .ready
             return true
         } catch {
-            bookmarkState = .failed(.bookmarkUnavailable)
+            bookmarkState = .failed(
+                AppFailure(.loadBookmarks, .localStorageUnavailable)
+            )
             return false
         }
     }
@@ -2112,7 +2128,9 @@ final class PlaybackModel {
             else {
                 return
             }
-            failPlaybackRecovery(AppFailure(serviceError: error))
+            failPlaybackRecovery(
+                AppFailure(operation: .recoverPlayback, serviceError: error)
+            )
         } catch {
             guard generation == operationGeneration,
                 !Task.isCancelled

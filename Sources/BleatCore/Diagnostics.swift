@@ -130,6 +130,15 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case requestTransportFailed = "request_transport_failed"
     case nonHTTPResponse = "non_http_response"
     case logStorageUnavailable = "log_storage_unavailable"
+    case invalidInput = "invalid_input"
+    case authenticationRequired = "authentication_required"
+    case permissionDenied = "permission_denied"
+    case itemNotFound = "item_not_found"
+    case invalidServerResponse = "invalid_server_response"
+    case localStorageUnavailable = "local_storage_unavailable"
+    case unavailableOffline = "unavailable_offline"
+    case requestRejected = "request_rejected"
+    case uncertainMutation = "uncertain_mutation"
 }
 
 public enum DiagnosticEndpoint: String, Codable, CaseIterable, Sendable {

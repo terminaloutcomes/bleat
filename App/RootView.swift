@@ -1260,17 +1260,17 @@ private struct BookDetailView: View {
     private func bookDetailFailureView(
         _ failure: AppFailure
     ) -> some View {
-        if case .bookUnavailable(let detailFailure) = failure {
+        if failure.operation == .loadBook {
             ContentUnavailableView {
                 Label(
-                    detailFailure.title,
-                    systemImage: detailFailure.systemImage
+                    failure.title,
+                    systemImage: failure.systemImage
                 )
             } description: {
-                Text(detailFailure.message)
+                Text(failure.message)
                     .accessibilityIdentifier("book.detail.error.reason")
             } actions: {
-                if detailFailure.allowsRetry {
+                if failure.allowsRetry {
                     Button("Try Again") {
                         Task {
                             await model.loadBookDetail(book)
