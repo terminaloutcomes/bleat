@@ -1407,27 +1407,27 @@ If one of these fails, revise the architecture before proceeding.
 
 The 1.0 release is acceptable only when:
 
-- [ ] Two different Audiobookshelf accounts can remain signed in concurrently.
-- [ ] No token, cookie, password, verifier, or OAuth code appears in logs or media URLs.
-- [ ] Native username/password login, rotating refresh tokens, and logout work without an identity provider.
-- [ ] Twenty concurrent expired-token requests cause one refresh and at most one retry each.
-- [ ] Server path prefixes work for API, covers, playback, and downloads.
-- [ ] A limited user cannot see edit/download actions they lack permission to use.
-- [ ] MP3, M4B/AAC, FLAC, and one transcoded format pass streaming tests.
-- [ ] Seeking a long remote file uses range requests and does not download the whole file first.
-- [ ] Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
-- [ ] Speed remains correct through pause, track change, lock, interruption, and relaunch.
-- [ ] Lock Screen/Control Center/Bluetooth/AirPlay/CarPlay controls report the whole-book position correctly.
-- [ ] Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
-- [ ] Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
-- [ ] Downloaded media plays while the server is offline.
-- [ ] Offline sessions synchronize once and are not duplicated.
-- [ ] Concurrent local/server progress never silently overwrites both changed positions.
-- [ ] Metadata editing performs the documented best-effort `updatedAt` stale-draft check and does not claim atomic conflict prevention.
-- [ ] Server item deletion is permission-gated, distinguishes library removal
+- [ ] **AC-01:** Two different Audiobookshelf accounts can remain signed in concurrently.
+- [ ] **AC-02:** No token, cookie, password, verifier, or OAuth code appears in logs or media URLs.
+- [ ] **AC-03:** Native username/password login, rotating refresh tokens, and logout work without an identity provider.
+- [ ] **AC-04:** Twenty concurrent expired-token requests cause one refresh and at most one retry each.
+- [ ] **AC-05:** Server path prefixes work for API, covers, playback, and downloads.
+- [ ] **AC-06:** A limited user cannot see edit/download actions they lack permission to use.
+- [ ] **AC-07:** MP3, M4B/AAC, FLAC, and one transcoded format pass streaming tests.
+- [ ] **AC-08:** Seeking a long remote file uses range requests and does not download the whole file first.
+- [ ] **AC-09:** Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
+- [ ] **AC-10:** Speed remains correct through pause, track change, lock, interruption, and relaunch.
+- [ ] **AC-11:** Lock Screen/Control Center/Bluetooth/AirPlay/CarPlay controls report the whole-book position correctly.
+- [ ] **AC-21:** Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
+- [ ] **AC-22:** Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
+- [ ] **AC-23:** Downloaded media plays while the server is offline.
+- [ ] **AC-24:** Offline sessions synchronize once and are not duplicated.
+- [ ] **AC-25:** Concurrent local/server progress never silently overwrites both changed positions.
+- [ ] **AC-26:** Metadata editing performs the documented best-effort `updatedAt` stale-draft check and does not claim atomic conflict prevention.
+- [ ] **AC-29:** Server item deletion is permission-gated, distinguishes library removal
   from permanent file deletion, and stops active playback before deletion.
-- [ ] Removing an account cannot leave credentials or cross-account cache records behind.
-- [ ] The app remains usable with VoiceOver and the largest Dynamic Type size.
+- [ ] **AC-27:** Removing an account cannot leave credentials or cross-account cache records behind.
+- [ ] **AC-28:** The app remains usable with VoiceOver and the largest Dynamic Type size.
 
 ## 23. Deferred enhancements
 

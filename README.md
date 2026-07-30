@@ -585,6 +585,7 @@ physical device.
 ## Project documentation
 
 - `audiobookshelf-ios-app-spec.md` is the product and protocol source of truth.
-- `IMPLEMENTATION_PLAN.md` defines implementation phases and validation gates.
+- `IMPLEMENTATION_PLAN.md` lists only remaining implementation and validation
+  work, including the deferred product backlog.
 - `docs/requirements-traceability.md` links implemented requirements to tests.
 - `AGENTS.md` contains repository implementation guidance.

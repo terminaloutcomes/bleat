@@ -1,967 +1,115 @@
-# Bleat 1.0 Implementation Plan
-
-This plan turns `audiobookshelf-ios-app-spec.md` draft 1.3 into an executable
-delivery sequence for a native iPhone and iPad application. The shared
-application target also supports development-signed Mac Catalyst launch,
-native login, Keychain persistence, and account restoration. The
-specification remains the product and protocol source of truth; this document
-defines work order, deliverables, test ownership, and release gates.
-
-## 1. Definition of done
-
-Bleat 1.0 is done when:
-
-1. every in-scope requirement and every release acceptance criterion in the
-   specification is implemented;
-2. every requirement is linked to at least one automated test or, where Apple
-   system behavior cannot be automated reliably, a repeatable physical-device
-   test;
-3. all required unit, fixture-contract, live-server, media, download, UI,
-   accessibility, security, migration, performance, and device suites pass;
-4. the app passes Swift 6 strict concurrency checking with no ignored
-   data-race warnings;
-5. secrets, account data, cached objects, downloads, and progress
-   remain account-isolated;
-6. the compatibility matrix passes against Audiobookshelf 2.26.x, the audited
-   2.36.0 baseline, and the current stable release selected at release time;
-7. all 19 MVP acceptance criteria in section 22 have test evidence attached to the
-   release candidate;
-8. the specification, implementation map, captured fixtures, privacy
-   declarations, and user-facing authentication documentation match the
-   shipped behavior.
-
-“Full test coverage” means by the end of the full plan, complete behavioral 
-and requirement coverage, not a misleading claim that simulator line coverage 
-proves AVFoundation, Keychain, background execution, Bluetooth, AirPlay, or CarPlay behavior. 
-Those boundaries receive integration and physical-device coverage in addition to unit tests. 
-It's important to get the basics tested as you build, but focus on finishing the app MVP first.
-
-## 2. Fixed implementation decisions
-
-These decisions keep the implementation direct and consistent with the
-specification:
-
-- Product and target name: `Bleat`.
-- Deployment targets: iOS 26 and above; Mac Catalyst 18 for macOS 15 and above.
-- Catalyst signed launch, native login, device-only Keychain persistence, and
-  account restoration are tested release requirements. Notarization,
-  distribution, Mac-specific interface adaptation, and otherwise unlisted Mac
-  media or background behavior are not Bleat 1.0 release gates.
-- Language mode: Swift 6 with complete strict concurrency checking.
-- UI: SwiftUI with Observation-based, `@MainActor` feature models.
-- Persistence: versioned SwiftData schemas for structured state and opaque
-  filesystem locations for media.
-- Secrets: Security framework/Keychain only, using
-  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
-- Networking: Foundation `URLSession`, with actors around mutable coordination.
-- Playback: AVFoundation and MediaPlayer.
-- Tests: XCTest/XCUITest and Apple code coverage tools.
-- Third-party runtime dependencies: none for 1.0.
-- Authentication scope: native Audiobookshelf username/password login and
-  rotating tokens. OIDC is deferred and is not part of the active 1.0
-  implementation or live-test matrix.
-- Analytics: none.
-- No production ATS exception, trust override, token-bearing URL, undocumented
-  AVFoundation header option, or general service locator.
-
-Before App Store work, record the final bundle identifier, signing team,
-app-group decision if any, and local-network usage copy in a short decision
-record.
-
-## 3. Repository and target layout
-Create one Xcode project with checked-in shared schemes:
-
-```text
-Bleat.xcodeproj
-Bleat/
-  App/
-  Core/
-    Accounts/
-    Auth/
-    Networking/
-    Persistence/
-    Diagnostics/
-  Audiobookshelf/
-    API/
-    DTO/
-    Mapping/
-  Playback/
-    Engine/
-    Routes/
-    NowPlaying/
-    Progress/
-  Statistics/
-    Ledger/
-    Import/
-    Aggregation/
-    Export/
-  Downloads/
-  Features/
-    Home/
-    Library/
-    Search/
-    BookDetail/
-    MetadataEditor/
-    Player/
-    Statistics/
-    Downloads/
-    Settings/
-BleatTests/
-BleatContractTests/
-BleatMediaTests/
-BleatUITests/
-TestSupport/
-  Fixtures/
-  SeedMedia/
-  Doubles/
-  ServerHarness/
-    compose.yaml
-    caddy/
-    oidc/
-    seed/
-docs/
-scripts/
-```
-
-Targets and ownership:
-
-| Target | Purpose |
-| --- | --- |
-| `Bleat` | Production application. The `App` entry point contains composition only. |
-| `BleatTests` | Fast deterministic unit and in-memory persistence tests. |
-| `BleatContractTests` | Saved-fixture decoding and disposable-server API tests. |
-| `BleatMediaTests` | AVFoundation, range, HLS, track-boundary, and interruption tests. |
-| `BleatUITests` | XCUITest user journeys, accessibility identifiers, and visual state checks. |
-| `TestSupport` | Test-only fixtures, clocks, URL protocol stubs, server control, and data builders. |
-
-Use protocols only at external boundaries that need substitution: clock,
-Keychain, HTTP transport, filesystem capacity/file operations, player adapter,
-and system command centers. Keep domain logic concrete.
-
-## 4. Delivery sequence
-
-Each phase has an exit gate. Work may proceed within a phase in parallel, but a
-later phase cannot depend on an unproven earlier assumption.
-
-### Phase 0 — project, traceability, and deterministic test foundations
-
-Status: in progress. The checked-in XcodeGen source and generated Xcode project
-now build a real `Bleat` application for iPhone and iPad. The application entry
-point performs composition only, strict-concurrency app code compiles, and the
-shared scheme runs application unit and XCUITest suites. Release configuration,
-generic iPhone/iPad simulator builds, and the shared scheme are verified.
-Privacy declarations, clean-clone reproduction, and the remaining test doubles
-still need their exit-gate audit.
-
-Deliver:
-
-- Xcode project, shared schemes, Debug/Release configuration, iPhone and iPad
-  destinations, audio background mode, and required privacy keys.
-- Strict concurrency and warnings-as-errors for app-owned code.
-- Minimal dependency composition in `App`; no library logic in the entry point.
-- Versioned SwiftData container with an empty initial schema and in-memory test
-  configuration.
-- Typed IDs: `AccountID`, `LibraryID`, `LibraryItemID`, `BookID`,
-  `PlaybackSessionID`, `DownloadID`, and `ChapterID`.
-- Typed error/state enums covering section 16.
-- Test-only controllable monotonic clock, UTC calendar, HTTP transport,
-  Keychain store, filesystem, AVPlayer adapter, and notification/event source.
-- Fixture conventions keyed by server version and pinned contract source.
-- `docs/requirements-traceability.md` containing stable requirement IDs.
-- Scripts for build, unit tests, all simulator tests, live tests, coverage
-  extraction, and fixture validation.
-- CI workflows described in section 7.
-
-Test before exit:
-
-- Debug and Release build for iPhone and iPad simulators.
-- Strict-concurrency compilation.
-- Typed IDs cannot be mixed at compile time in their API use sites.
-- In-memory SwiftData reset and persistence smoke tests.
-- Test runner fails if duplicate requirement IDs or missing test links exist.
-
-Exit gate: a clean clone can build and run the empty app and all empty test
-schemes from documented commands.
-
-### Phase 1 — audited contract harness and Phase 0 risk spikes
-
-#### 1A. Contract harness
-
-Deliver:
-
-- A Docker Compose test stack in `TestSupport/ServerHarness/compose.yaml`.
-- Disposable, seeded Audiobookshelf containers for 2.26.x, pinned 2.36.0, and a
-  configurable current stable version. Pin images by immutable digest in CI
-  after the version tag has been selected.
-- Compose profiles for:
-  - one plain Audiobookshelf instance;
-  - Audiobookshelf behind an HTTPS reverse proxy at `/audiobookshelf`;
-  - the full media/download matrix.
-- `scripts/live-test-environment.sh` with `up`, `wait`, `seed`, `reset`,
-  `artifacts`, and `down` commands. It must use a unique Compose project name,
-  allocate non-conflicting ports, and always tear down its exact project and
-  volumes.
-- HTTPS test endpoint using a test CA installed as trusted by the test
-  destination; never add an app trust bypass. Use Caddy's Go-based internal CA
-  or another non-OpenSSL implementation and install its root certificate into
-  the target simulator Keychain for the test run.
-- Reverse-proxy deployment under `/audiobookshelf`.
-- Seeded limited and full-permission users.
-- Seeded single M4B, multi-file MP3, FLAC, forced-transcode, long range-seek,
-  many-small-track, and metadata-editable books.
-- Version-specific deterministic seed/bootstrap adapters based on verified
-  server routes, or per-version database snapshots when no stable bootstrap API
-  exists. Never reuse a database snapshot across incompatible server versions.
-- A readiness check that validates `/status`, expected server version,
-  initialization state, seeded accounts, libraries, and media before tests
-  start. Container process health alone is not sufficient.
-- Test-run state isolation: restore the selected version's seed state before a
-  suite, use unique local account/device/session IDs, and serialize only the
-  live tests that mutate shared server state.
-- `scripts/test-live.sh` that starts the selected Compose profile, waits and
-  seeds it, passes its base URL and test-account references to
-  `BleatContractTests`/`BleatMediaTests`, captures results, and tears it down
-  through a shell trap on success, failure, or cancellation.
-- Redacted failure artifacts containing container health, server version,
-  proxy/server logs, and the Xcode result bundle. Proxy logging must omit or
-  redact authorization headers, cookies, callback queries, playback-session
-  paths, and HLS paths before an artifact is retained.
-- Versioned, redacted request/response fixtures for every non-trivial DTO.
-
-The Docker harness is part of automated testing. Developers run the focused
-live suite locally, contract-affecting pull requests run the pinned-server smoke
-profile, and CI runs the complete version/profile matrix on a macOS runner with
-Docker and iOS Simulator support. Run server versions sequentially to keep the
-test destination deterministic and resource use bounded.
-
-#### 1B. URL and route spike
-
-Implement URL normalization, same-host HTTP-to-HTTPS upgrade handling,
-cross-origin redirect confirmation state, base-relative route construction, and
-returned-path construction that preserves a reverse-proxy prefix.
-
-Prove:
-
-- query and fragment removal, plus credentials, old server, wrong app, and
-  uninitialized server rejection;
-- trailing-slash normalization without dropping a path prefix;
-- API, cover, direct-play, HLS, and download route construction.
-
-#### 1C. OIDC/PKCE spike
-
-Status: deferred by product direction. The existing isolated spike remains
-available as research code, but no identity provider is required by Bleat's
-active implementation or test harness.
-
-The retained research spike records:
-
-- PKCE verifier length/entropy and S256 challenge;
-- initial cookies survive the browser boundary and are required at exchange;
-- exact callback and state validation;
-- provider cancellation and missing-code behavior;
-- token validation before persistence;
-- cleanup of verifier, code, state, cookies, and temporary responses on every
-  terminal path;
-- no sensitive URL or value is logged.
-
-#### 1D. Single-flight refresh spike
-
-Implement `TokenVault` and a per-account `AuthCoordinator`.
-
-Status: verified against deterministic actor tests and fresh pinned 2.36.0
-root and path-prefixed Docker instances.
-
-Prove:
-
-- atomic rotating token replacement;
-- 20 concurrent 401 responses cause one refresh;
-- each ordinary request retries at most once;
-- auth endpoints never recurse into refresh;
-- a 403 never refreshes;
-- reachable refresh status, payload, rotated-token, and persistence failures
-  share one saved-password recovery;
-- transport and transient recovery failures are retryable and are not cached
-  against the rejected access token;
-- one account's refresh failure does not affect another.
-
-#### 1E. Playback-route spike
-
-Status: verified against deterministic DTO and route tests plus fresh pinned
-2.36.0 root and path-prefixed Docker instances.
-
-Open real server sessions and prove:
-
-- byte-range seeking near the start, middle, and end of a long direct-play
-  track;
-- ordered multi-file transition;
-- HLS startup and seeking with relative segments;
-- path-prefix preservation;
-- both routes fail after closing their session;
-- no access token is present in a media URL or undocumented asset option.
-
-#### 1F. Background-download spike
-
-Status: verified against deterministic restoration, authorization, and
-manifest tests plus fresh pinned 2.36.0 root and path-prefixed Docker
-instances. The full background delegate, queue controls, storage policy, and
-offline playback integration remain Phase 7 work.
-
-Prove:
-
-- bearer header on every file request;
-- background task restoration after process termination;
-- a 401 creates a newly authorized replacement request;
-- task-to-account/book/track mapping survives relaunch;
-- no completed manifest points at a partial file.
-
-#### 1G. Time and history spike
-
-Status: deferred until after the MVP by product direction. No time tracker,
-listening ledger, remote-history importer, statistics UI, or statistics
-retention behavior is an MVP deliverable or release gate. The design and proof
-list below are retained for later implementation.
-
-Prove:
-
-- real time versus audiobook time at 0.5×, 1×, 2×, and 3×;
-- pause, buffering, seek, interruption, route loss, rate change, track
-  transition, chapter transition, and midnight splitting;
-- one hour at 2× yields about one real hour and two audiobook hours;
-- repeated import is idempotent;
-- a local session represented remotely is counted once;
-- ambiguous online sync produces a bounded approximate all-device result.
-
-Exit gate: all five active MVP risk spikes pass against the pinned live server.
-Deferred OIDC and time/history research do not block the MVP.
-
-### Deferred MVP follow-ups
-
-The following work is intentionally retained without expanding it during the
-beta-ready MVP pass:
-
-- Book Detail bookmark loading and presentation is implemented as a usable
-  first slice. Further interaction and presentation refinement remains a
-  post-MVP TODO; the existing implementation and coverage must be preserved.
-- Accidental large-scrub protection remains a post-MVP TODO. Whole-book
-  seeking continues to use the current direct scrub behavior for this release.
-
-### Phase 2 — accounts, authentication, and API foundation
-
-Status: in progress. Durable SwiftData account profiles, one persisted active
-browsing context, transactional native-login onboarding, and stored-account
-sign-out/removal are verified with unit tests and fresh pinned root and
-path-prefixed servers. The typed API actor now performs cancellable,
-correlated, authenticated library listing with isolated DTO mapping. Paginated
-book-summary DTOs and exact query construction are also verified against a
-pinned fixture and live root/path-prefixed servers. Authenticated book search
-now validates and maps expanded matches without exposing DTOs. Expanded
-audiobook detail DTOs, chapters, and authenticated-user progress are also
-verified against unit fixtures and live root/path-prefixed servers. A typed
-policy derives visible book actions from native-account permissions and
-mirrors the server's library, tag, and explicit-content access rules. A native
-username/password SwiftUI form now drives discovery and transactional
-onboarding, restores the active profile on launch, and removes accounts without
-any OIDC surface. Multi-account switching, password-only reauthentication, and
-a privacy-safe Settings diagnostics snapshot are implemented. Development
-builds also record a bounded 15-minute cross-launch history of typed,
-identifier-free app, endpoint/status/correlation, playback, download, and sync
-events and share it as a text file; both exports are compiled out of release
-builds while the status screen and categorized `OSLog` events remain.
-
-Deliver:
-
-- `ServerAccount` persistence and account-scoped Keychain references.
-- Add-server discovery and authentication-method presentation.
-- Production native username/password login coordinator.
-- `/api/authorize`, refresh, logout, reauthentication, and account-removal
-  flows.
-- `AudiobookshelfAPI` actor, typed requests/responses, route builder, status
-  validation, retry policy, cancellation, and correlation IDs.
-- Permission model mirroring download, update, upload, library, tag, and
-  explicit-content constraints.
-- Account store supporting two users on one server and multiple servers.
-- Redacted `OSLog` categories and diagnostics event model.
-
-Test before exit:
-
-- every add-server, local-login, token, logout, and account-removal branch;
-- malformed and forward-compatible fixtures;
-- cross-account concurrency and storage isolation;
-- credentials remain available after first unlock but do not synchronize;
-- server-unreachable logout still removes local credentials;
-- permission-denied remains distinct from authentication failure.
-
-Exit gate: two users on one server and users on separate servers can remain
-signed in, switch active browsing context, and fail/re-authenticate
-independently with no secret in logs or persistence.
-
-### Phase 3 — library, cache, navigation, and book detail
-
-Status: in progress. Account-scoped SwiftData library collections and exact
-paginated-query snapshots now survive relaunch, preserve fetched-empty state,
-replace atomically, and invalidate removed libraries without cross-account
-bleed. The `LibraryRepository` persists successful authenticated API reads and
-supports typed remote-only, cache-only, and remote-else-cache policies without
-turning cancellation into stale data. Exact normalized search queries use the
-same account-scoped persistence and cancellation rules. A deterministic 300 ms
-coordinator cancels and suppresses superseded query, account, and library work.
-The native API also loads validated audiobook-only personalized shelves, which
-persist by exact account, library, limit, and progress request with typed
-online-first/cache-fallback behavior. Expanded audiobook details, chapters,
-metadata, and progress now use the same policy with cache keys scoped to the
-account, remote user, library, and item. Detail renders series and sequence,
-audio-file and chapter counts, and chapter durations. The runnable root
-`TabView` now has Home, Library, Search, Downloads, and Settings destinations;
-Home and Library render the first cached/live audiobook page with loading,
-empty, and failure states. Search now performs debounced, cancellable,
-cache-backed server queries against the selected native account and library.
-Personalized Home, expanded detail, bookmarks, bounded cover requests, the
-persistent mini-player, account context, and actionable download state now have
-runnable UI. Home also exposes completed active-account downloads independently
-of the remote shelf state and starts their local playback directly. Detail-load
-failures retain their typed repository cause through presentation and
-privacy-safe diagnostics, show a cause-specific message, and offer an explicit
-retry for retryable failures.
-All current user-facing operations retain their operation and typed safe cause
-through presentation and diagnostics rather than collapsing into broad
-unavailable states; mutation failures keep their existing durable recovery
-paths instead of receiving unsafe blind retries.
-Large-library performance validation and the remaining release polish still
-remain.
-
-Deliver:
-
-- SwiftData models and mappers for accessible libraries, book summaries,
-  expanded details, progress summaries, and cover-cache metadata.
-- `LibraryRepository` actor with server/cache merge, account/library
-  invalidation, pagination, home shelves, last-refresh state, and offline reads.
-- Paginated Library UI with 40–60 item pages, sort/filter, list/grid selection,
-  and no full-library expanded fetch.
-- Debounced Search UI with cancellation on query/account/library change.
-- Home shelves, Downloads summary placeholder,
-  and current account indicator.
-- Book detail with account attribution, metadata, chapters, bookmarks,
-  progress, and permission-gated actions.
-- Thumbnail and original-cover cache separation.
-- Root `TabView` and persistent mini-player shell.
-
-Test before exit:
-
-- pagination boundary, duplicate-page, empty-page, refresh, cancellation, stale
-  cache, inaccessible item removal, and 10,000-book data-set behavior;
-- account and library switches cannot publish superseded results;
-- search debounce is clock-controlled and deterministic;
-- no raw DTO reaches a feature model;
-- offline summaries/details and refresh timestamps render correctly;
-- detail failures map invalid responses, cache failures, authentication,
-  permission, missing-item, offline, and transient-server causes distinctly,
-  and retry reloads the exact selected item;
-- permissions hide actions before a request is attempted;
-- VoiceOver labels and largest Dynamic Type on all completed screens.
-
-Exit gate: accounts can browse, search, and inspect accessible books online and
-from cache without cross-account bleed or main-thread bulk work.
-
-### Phase 4 — playback engine and system media integration
-
-Deliver:
-
-- Process-wide `PlaybackEngine` and explicit typed playback state machine.
-- `PlaybackContext`, global/track/chapter timeline maps, preparation
-  cancellation, and observer ownership.
-- Stream session creation, direct-play and HLS route adapters, one-time
-  lost-session recovery, and deliberate session closure.
-- Local-manifest playback and explicit local-to-stream transition behavior.
-- Speed selection, persistence, per-book override, pitch algorithm, and
-  reapplication across transitions.
-- Full Player and mini-player behavior.
-- Whole-book scrubber and chapter navigation. Accidental large-scrub
-  protection remains in the deferred follow-up list.
-- `AVAudioSession` interruption, route, AirPlay, and media-services-reset
-  handling.
-- `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`.
-- Sleep timer and resume rewind.
-
-Test before exit:
-
-- all exact/zero/missing/floating-point timeline boundaries;
-- all allowed and rejected state transitions;
-- repeated play cannot create concurrent server sessions;
-- stale preparations cannot start the wrong item;
-- observer installation/removal has no duplicates or retain cycles;
-- MP3, M4B/AAC, FLAC, and transcode paths;
-- range seeking does not fetch a whole long file first;
-- rate/pitch/Now Playing consistency through every transition;
-- interruptions, output removal, background, lock screen, remote commands,
-  Bluetooth, AirPlay, and CarPlay;
-- sleep timers use wall time and chapter boundaries across tracks;
-- crash/relaunch recovery loses no more than five seconds of durable position.
-
-Exit gate: streaming and downloaded media pass the media matrix on simulator
-where supported and on a physical iPhone, including background and system
-controls.
-
-Current status: the MVP player, whole-book, chapter, and multi-file navigation,
-native AirPlay route picker, background audio, Now Playing metadata, remote
-commands, configurable skip intervals, sleep timers, resume rewind, streaming,
-and downloaded playback are implemented. Playback now separates requested
-play/pause intent from observed AVPlayer state, requires a ready item and
-advancing playhead before publishing `playing`, renders `buffering`, and uses a
-12-second monotonic no-progress watchdog. Recovery rebuilds the current source,
-replaces one lost server session, and retries one typed direct-play decoder
-failure through forced transcoding while preserving the whole-book position
-and desired rate. Media-services reset recovery
-reactivates audio and rebuilds the queue at the whole-book position while
-preserving play/pause intent, with typed failure if recovery is impossible.
-The disposable HTTPS simulator journey covers live streaming, chapters,
-multi-file navigation, download completion, relaunch, cached detail, and
-server-offline local playback. The physical iPhone media matrix remains a
-manual beta gate.
-
-### Phase 5 — progress, sessions, bookmarks, and conflict handling
-
-Deliver:
-
-- `ProgressCoordinator` actor and durable five-second checkpoints.
-- Online sync/close with whole-book position and MVP `timeListened: 0`.
-- Offline UUIDv4 session queue and batch `/api/session/local-all` import.
-- Direct progress read/patch and local/server/common-checkpoint model.
-- Non-destructive two-position conflict UI.
-- Online bookmark CRUD and visible offline operation queue with
-  refetch-before-ambiguous-retry behavior.
-- Finished/unfinished mutations using the same conflict rules.
-
-Test before exit:
-
-- every persistence trigger in section 11.1;
-- online position-sync cadence, final close, and retry limit;
-- partial batch results remove only acknowledged sessions;
-- `progressSynced == false` refreshes server progress;
-- obsolete local-progress endpoint is never used;
-- local-only, server-only, both-changed, active-playback, clock-skew, and user
-  choice conflict branches;
-- ambiguous bookmark create is deduplicated by item/time/title;
-- pending mutations survive relaunch and remain visible.
-
-Exit gate: online and offline sessions synchronize once and progress conflicts
-are never resolved silently.
-
-### Post-MVP — statistics ledger, import, aggregation, and portability
-
-This phase is intentionally excluded from the MVP delivery sequence and
-release gates.
-
-Deliver:
-
-- Versioned models for listening slices, remote snapshots, completion
-  milestones, chapter identity/coverage, import state, and uncertainty bounds.
-- Clock-driven live slice recording tied to playback generations.
-- Durable five-second slice persistence and live in-memory overlay.
-- Paginated server-history import, adaptive page sizing, once-daily automatic
-  limit, explicit refresh, resumability, upsert, and non-destructive deletion
-  semantics.
-- Remote/local reconciliation with expected remote totals and ambiguous
-  lower/upper bounds.
-- All Accounts and per-account aggregation with stale-account results.
-- Chapter identity remapping across metadata edits.
-- Natural, server-seeded, and explicit completion milestones with immutable
-  duration snapshots.
-- Statistics UI: Lifetime default, account/range filters, cards, charts,
-  per-book breakdown, recent sessions, live updates, and coverage badges.
-- Versioned, redacted, idempotent JSON export/import and destructive reset.
-
-Test before exit:
-
-- every metric definition and threshold in section 12.1;
-- every sample eligibility and split rule in section 12.2;
-- 0.5×/1×/2×/3×, replay, forward/backward seek, stall, interruption, rate
-  changes, track/chapter boundaries, and local midnight;
-- 250,000-slice aggregation within the 500 ms publication target off the main
-  actor;
-- remote session update/upsert, disappearance, concurrent paging inserts,
-  deleted sessions, retry/resume, memory-pressure page reduction, and stale
-  accounts;
-- book identity collisions across accounts and identical titles;
-- chapter unchanged/split/materially-replaced mappings;
-- metadata duration edits do not rewrite completion history;
-- current server progress seeds but cannot fabricate lost historical
-  completions;
-- export contains no secret, session URL, or local path;
-- repeated file import and repeated server import change nothing;
-- live UI includes uncommitted time and loses no more than five seconds after
-  relaunch.
-
-Exit gate: all statistics definitions produce exact or explicitly qualified
-results, with no remote/local double count and no manufactured historical
-precision.
-
-### Phase 7 — background downloads, storage, and offline recovery
-
-Deliver:
-
-- `DownloadCoordinator`, `BackgroundDownloadDelegate`, stable session
-  identifier, task restoration, and app completion-handler plumbing.
-- Expanded-item download plans using per-file `ino` endpoints.
-- Three-file default concurrency, per-book queueing, pause/cancel/retry,
-  bounded exponential retry, stalled-task detection, and 401 rescheduling.
-- Network policy and large-cellular confirmation.
-- Opaque account/item filesystem layout, MIME extension allow-list, path
-  sanitization, temporary staging, and atomic completion.
-- Manifest states, per-file/book progress, storage preflight, repair, deletion,
-  backup exclusion, file protection, storage summaries, and optional
-  completion-age cleanup.
-- Offline playback integration and reconnect-triggered session/progress/bookmark
-  synchronization.
-
-Test before exit:
-
-- kill/relaunch restoration with stable task mapping;
-- Wi-Fi/cellular/expensive/constrained transitions under every policy;
-- token expiration mid-queue with new request and no token query;
-- unavailable/restored server, bounded retries, cancellation, and pause/resume;
-- insufficient space and safety margin;
-- wrong length, truncated file, corrupt/deleted local file, unsafe filename,
-  unexpected MIME, and partial repair;
-- hundreds of tracks without main-actor stalls;
-- completed files survive a failed retry;
-- backup and protection attributes;
-- auto-delete never evicts the playing track;
-- offline playback while the server is down or reauthentication is required.
-
-Exit gate: a downloaded book remains atomically valid, private, recoverable,
-and playable offline across process and network failure.
-
-Current status: background per-file transfers, restoration, network policy,
-storage preflight, durable manifests, repair, offline playback, per-account and
-aggregate storage summaries, and confirmed single/bulk deletion are
-implemented. Automatic caches persist their current target window, report
-target-relative progress, discard superseded work without a repair state, and
-can be promoted to an explicit full-book download. Storage removal cancels
-matching transfers and bulk management preserves the currently playing
-download. Simulator transfer lifecycle and the remaining process/network
-failure matrix still need release-level evidence.
-
-### Phase 8 — book editing and deletion
-
-Deliver:
-
-- `MetadataDraft` and `MetadataRepository`.
-- Permission-gated editor for all fields in section 8.2.
-- Changed-scalar and complete-array replacement patch generation using the
-  audited old-model payload.
-- Final expanded-item fetch and best-effort `updatedAt` stale-draft UI.
-- Online-only explicit save; drafts never auto-submit.
-- Sanitized description rendering.
-- `PhotosPicker`, metadata removal, orientation, documented resize limit,
-  multipart `cover` upload, confirmed cache swap, refetch, and `ts` cache bust.
-- Unified book editor with staged cover saving and permission-gated
-  library-record or permanent server-file deletion.
-
-Test before exit:
-
-- field-by-field patch generation and null/removal behavior;
-- complete array replacement and top-level tags;
-- display-only fields never serialize;
-- unchanged, stale/reload, stale/review, overwrite, and race-disclosure paths;
-- offline save prevention and retained draft;
-- rich-text script/unsafe-link sanitization;
-- update/upload permission combinations;
-- image orientation, metadata stripping, resizing, multipart field name,
-  failure preserving old cover, success refetch, and token-free cache busting.
-- delete permission combinations, root/path-prefixed `DELETE`, explicit hard
-  mode, active-playback shutdown, local-download cleanup, and cache refresh.
-
-Exit gate: authorized users can deliberately edit metadata and cover art
-without claiming atomic conflict prevention; unauthorized controls are absent.
-
-Current status: metadata and cover editing share one permission-gated editor,
-cover changes stage until Save, and server deletion distinguishes library
-removal from permanent file deletion with typed partial-cleanup states.
-
-### Phase 9 — release polish and complete-system validation
-
-Deliver:
-
-- Final Home, Library, Search, Downloads, Settings, Player, Book Detail, and
-  Metadata states.
-- Consistent empty/loading/offline/stale/reauth/permission/error/conflict states.
-- Diagnostics export with endpoint names, status, correlation IDs, versions,
-  state transitions, and redacted errors.
-- Complete VoiceOver, Dynamic Type, Bold Text, Increase Contrast, Reduce
-  Motion, landscape, and iPad keyboard support.
-- Account/data deletion flows and privacy copy.
-- SwiftData migration tests from every shipped schema fixture.
-- App Store privacy labels, entitlements, screenshots, and release notes.
-- Updated audited server/current-client baselines and compatibility fixtures.
-
-Test before exit:
-
-- complete XCUITest journeys on iPhone and iPad sizes;
-- security scans of logs, persistence, exports, URLs, and diagnostics;
-- performance, memory, energy, launch, and large-data targets;
-- physical-device media/background matrix;
-- upgrade, backup/restore, account removal, and app-data reset;
-- clean install and release archive validation.
-
-Exit gate: the release candidate meets all section 22 criteria and every row in
-`docs/requirements-traceability.md` has passing evidence.
-
-## 5. Full test coverage model
-
-### 5.1 Coverage policy
-
-Enforce all of the following:
-
-- 100% of specification requirements and acceptance criteria have a stable ID
-  and at least one test/evidence link.
-- 100% reachable line coverage for deterministic security, URL/route, typed
-  state-machine, timeline, time-accounting, conflict, reconciliation,
-  aggregation, import/export, and manifest-transition logic.
-- At least 95% line coverage for repositories, API mapping, persistence
-  coordination, and download coordination.
-- At least 90% line coverage across all app-owned non-UI production code.
-- SwiftUI view declarations, generated code, the application entry point, and
-  direct Apple-framework callbacks may be excluded from the numeric threshold
-  only when the exclusion is documented and covered through UI, integration,
-  or device tests.
-- Changed-code coverage must not decrease, and new deterministic domain logic
-  must be fully covered before merge.
-
-Collect coverage with `xcodebuild test -enableCodeCoverage YES` and `xccov`.
-Keep numeric coverage and requirement traceability as separate gates.
-
-### 5.2 Test layers
-
-| Layer | Runs | Owns |
-| --- | --- | --- |
-| Compile/static | Every change | Swift 6 concurrency, warnings, format, forbidden API/string scans, source-boundary checks. |
-| Unit | Every change | Pure transformations, actors with doubles, state machines, persistence, timing, reconciliation, serialization. |
-| Fixture contract | Every change | DTO decoding/mapping and recorded request construction for all supported baselines. |
-| UI simulator | Every change for affected journeys; full suite before merge | Navigation, visible states, conflict choices, permission gating, account isolation, accessibility identifiers. |
-| Docker live server | Pinned smoke profile for contract changes; full matrix nightly and before release | Real authentication, routes, permissions, session sync, history, metadata, cover, and downloads against an automatically provisioned instance. |
-| Media/download | Nightly and before release | Range/HLS, codecs, transitions, restoration, storage and network failures. |
-| Physical device | Before each beta and release | lock/background, audio routes, Bluetooth, AirPlay, CarPlay, file protection, first-unlock behavior, energy. |
-| Performance | Nightly and release | 10,000 cached books, 250,000 slices, hundreds of tracks, launch/aggregation/main-thread targets. |
-| Migration/recovery | Every schema change and release | SwiftData migrations, corrupted/missing media repair, kill/relaunch, backup/restore. |
-| Security/privacy | Every change plus release deep scan | Secret leakage, TLS policy, path traversal, rich text, exports, deletion, account separation. |
-
-### 5.3 Deterministic test design
-
-- Inject `ContinuousClock`-compatible and UTC calendar boundaries rather than
-  sleeping.
-- Drive networking through a custom test `URLProtocol` or transport double;
-  reserve real `URLSession` for contract tests.
-- Use ephemeral Keychain service names and delete only those exact test items.
-- Use temporary directories and in-memory SwiftData stores for unit tests.
-- Use generated media only when the bytes themselves are under test; otherwise
-  use small checked-in deterministic seed files.
-- Record every asynchronous state transition and await typed states, never
-  arbitrary delays.
-- Seed random generators in tests except when testing cryptographic entropy
-  properties.
-- Run actor and cancellation tests repeatedly under Thread Sanitizer in a
-  dedicated CI job.
-
-### 5.4 Required behavioral suites
-
-#### URL, contract, and API
-
-- Normalization: HTTPS, trailing slash, path prefix, query, fragment, embedded
-  credentials, malformed URL, wrong app, uninitialized server, and old version.
-- Redirects: same-host upgrade, same-origin redirect, cross-origin
-  confirmation, and rejected downgrade.
-- Route builder: every section 15 endpoint, percent encoding, opaque IDs,
-  path-prefix preservation, returned HLS path, and no token query.
-- DTOs: minimum/audited/current fixtures, unknown fields, missing nullable
-  fields, malformed required fields, compatibility old JSON, and opaque IDs.
-- HTTP: success, empty success, structured error, malformed response,
-  cancellation, timeout, offline, TLS failure, 401 retry, 403 no retry, and
-  correlation/redaction behavior.
-
-#### Authentication and accounts
-
-- Local login success and every missing/invalid-token path.
-- Atomic Keychain pair write, rollback/failure, accessibility, and isolation.
-- One refresh for 20 callers, rotation, retry-once, recursion prevention,
-  account-local failure, and app relaunch.
-- Sign out while online/offline, account removal during playback/download, all
-  history/download retention choices, and two users on one server.
-
-#### Library and metadata
-
-- Pagination, shelves, sort/filter, debounce/cancellation, offline cache,
-  refresh triggers, stale state, cover variants, and permission filtering.
-- No expanded full-library fetch and bounded memory for 10,000 summaries.
-- Every editable field, array replacement, stale-draft choice, online-only
-  mutation, sanitization, cover preprocessing/upload/refetch, and failure
-  rollback.
-
-#### Playback and system integration
-
-- Whole-book/track/chapter maps at starts, ends, exact boundaries, gaps,
-  zero/missing durations, and tolerance limits.
-- Preparation cancellation, repeated play, direct/HLS/local/mixed sources,
-  lost-session recovery once, close behavior, and decoder retry as transcode.
-- State transitions through ready, playing, buffering, paused, ended, failed,
-  interruption, route loss, and reset.
-- 0.5×–3.0× selection, pitch algorithm boundary at 2.0×, persistence, actual
-  rate reporting, and transition reapplication.
-- Seek/scrub/skip/chapter commands, remote commands, Now Playing global time,
-  artwork, rate, and chapter. Accidental large-scrub protection is deferred.
-- Sleep timer presets/end-of-chapter and resume rewind limits.
-
-#### Progress, sessions, and bookmarks
-
-- Every durability event and five-second crash-loss limit.
-- Fifteen-second online position sync and final close with
-  `timeListened: 0`.
-- UUIDv4 offline sessions, batch partial results, fallback behavior, progress
-  refresh, and durable retry.
-- Four progress-conflict cases plus active playback, finished state, explicit
-  resolution, and clock skew.
-- Bookmark create/rename/delete, offline queue, ambiguous create refetch, and
-  visible failure.
-
-#### Downloads and storage
-
-- Queue/concurrency, task restoration, pause/cancel/retry, bounded backoff,
-  network policy, cellular warning, 401 replacement, and aggregate progress.
-- Automatic target-window persistence, target-only progress and retry,
-  superseded-task cancellation, legacy cache rebuilding, and full-book
-  promotion without redownloading verified files.
-- Safe opaque paths, MIME extensions, traversal rejection, free-space margin,
-  staging, length validation, atomic move, manifest state transitions, repair,
-  protection, backup exclusion, deletion, and auto-delete.
-- Process kill, app suspension, connectivity loss, reauthentication, server
-  outage, corrupt file, hundreds of tracks, and offline playback.
-
-#### UI, accessibility, diagnostics, and privacy
-
-- Every screen's loading, empty, content, partial, stale, offline, error,
-  permission, reauthentication, and destructive-confirmation states.
-- VoiceOver labels include action/state/time/coverage; largest Dynamic Type has
-  no essential clipping; 44-point targets; non-color cues; contrast; reduced
-  motion; landscape; and iPad shortcuts.
-- Diagnostics and export redaction, rich-text safety, cache/data cleanup,
-  account isolation, private file protection, and no third-party analytics.
-
-## 6. Acceptance-criterion traceability
-
-Create these entries in `docs/requirements-traceability.md` and link each to
-concrete test names and release evidence:
-
-| ID | Acceptance behavior | Primary evidence |
-| --- | --- | --- |
-| AC-01 | Multiple concurrent accounts, including two users on one server | Account integration and XCUITest journey |
-| AC-02 | No secret in logs or media URLs | Security scan and live media test |
-| AC-03 | Native login, rotating tokens, and logout work without an identity provider | Live local-authentication suite |
-| AC-04 | Twenty 401s cause one refresh and one retry each | Deterministic actor concurrency test |
-| AC-05 | Server path prefixes work everywhere | Route unit tests and proxied live suite |
-| AC-06 | Limited users do not see forbidden actions | Permission unit and UI tests |
-| AC-07 | MP3, M4B/AAC, FLAC, and transcode stream | Media matrix |
-| AC-08 | Long-file seek uses ranges | HTTP trace media test |
-| AC-09 | Session routes contain no token/header workaround | Route/security tests |
-| AC-10 | Speed survives all transitions | Engine, relaunch, and device tests |
-| AC-11 | System controls report whole-book position | Device MediaPlayer suite |
-| AC-12 | Post-MVP: listening wall time differs from media position | Deferred clock-driven recorder suite |
-| AC-13 | Post-MVP: one hour at 2× gives 1h real/2h audiobook and seek gives neither | Deferred deterministic long-duration test |
-| AC-14 | Post-MVP: multi-account statistics do not merge collisions | Deferred aggregation identity suite |
-| AC-15 | Post-MVP: all required counts and finished runtime display correctly | Deferred statistics definition/UI suite |
-| AC-16 | Post-MVP: remote/local sources deduplicate with coverage labels | Deferred reconciliation and UI suite |
-| AC-17 | Post-MVP: live statistics and five-second relaunch durability | Deferred recorder/recovery/UI suite |
-| AC-18 | Post-MVP: statistics export/import is redacted and idempotent | Deferred serialization/security suite |
-| AC-19 | Post-MVP: ambiguous sync shows bounds without altering exact local ledger | Deferred uncertainty suite |
-| AC-20 | Post-MVP: online sync sends only the new listening delta | Deferred request-capture suite |
-| AC-21 | Multi-file boundaries stay within measured tolerance | Seed-media waveform test |
-| AC-22 | Downloads recover after every interruption class | Background download suite |
-| AC-23 | Downloaded media plays with server offline | Offline physical-device test |
-| AC-24 | Offline sessions synchronize exactly once | Batch import/relaunch suite |
-| AC-25 | Concurrent progress never silently overwrites both positions | Conflict suite and UI journey |
-| AC-26 | Metadata uses honest best-effort stale-draft handling | Live mutation and UI suite |
-| AC-27 | Account removal leaves no credential or cross-account cache | Persistence/Keychain/filesystem audit |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Accessibility audit and UI suite |
-
-## 7. CI and validation gates
-
-### Per change
-
-1. Format and static policy checks.
-2. Debug build with complete concurrency checking.
-3. Unit and fixture-contract tests with coverage.
-4. Affected XCUITest journeys.
-5. Requirement-link and changed-code coverage checks.
-6. For auth, API, DTO, route, playback-session, progress, metadata, or download
-   changes: Dockerized pinned-server smoke tests.
-7. For the complete app journey: disposable HTTPS simulator tests through
-   `scripts/test-app-live.sh`.
-
-### Main branch
-
-1. Full iPhone and iPad simulator matrix.
-2. Release build and archive-without-signing validation.
-3. Thread Sanitizer actor/cancellation suite.
-4. SwiftData migration and kill/relaunch recovery suites.
-5. Security and secret scans.
-
-### Nightly
-
-1. Start a clean Docker Compose stack and run the full pinned Audiobookshelf
-   2.36.0 contract suite.
-2. Recreate the stack from its version-specific seed and run the minimum
-   2.26.x fixture/live compatibility suite.
-3. Recreate it again and run the current-stable compatibility observation
-   suite.
-4. Media, download restoration, and performance suites.
-5. Flake detection by repeating concurrency, timing, and UI tests.
-6. Upload only redacted Xcode and container artifacts, then verify the Compose
-   project and its test volumes were removed.
-
-### Beta and release
-
-1. All CI suites green from a clean checkout.
-2. Manual physical iPhone and iPad device matrix; no automated device control.
-3. Bluetooth/headset removal, AirPlay, CarPlay, lock/background, first-unlock,
-   network-transition, and storage-pressure tests.
-4. Full accessibility audit.
-5. Every active MVP acceptance criterion—AC-01 through AC-11 and AC-21 through
-   AC-28—has an evidence link populated. AC-12 through AC-20 remain explicitly
-   deferred post-MVP.
-6. No unresolved critical/high security finding or known data-loss issue.
-7. Specification baseline, fixtures, privacy declaration, and native
-   authentication documentation updated.
-
-## 8. Per-work-item completion checklist
-
-Every implementation change is complete only when:
-
-- the requirement IDs are identified;
-- typed success, failure, and transitional states are implemented;
-- unit tests cover every deterministic branch;
-- contract fixtures are added or updated when a remote shape changes;
-- an integration/UI/device test is added where a framework boundary is
-  involved;
-- account scoping, cancellation, relaunch, offline, and redaction behavior are
-  considered explicitly;
-- focused tests and the practical repository gate pass;
-- coverage and requirement traceability do not regress;
-- documentation uses project-relative paths and matches actual behavior.
-
-## 9. Release sequencing summary
-
-The critical path is:
-
-```text
-Project/test foundation
-  → audited contract and five active MVP risk spikes
-  → accounts/auth/API
-  → library/cache
-  → playback
-  → progress/session sync
-  → offline downloads
-  → metadata
-  → accessibility/security/performance/release validation
-```
-
-Metadata editing can proceed after the API, permission, and book-detail layers
-are stable. Broad UI polish waits until the underlying typed states and failure
-behavior are proven.
+# Bleat Remaining Work
+
+This file is the forward-looking backlog for Bleat. It contains only work that
+still needs implementation or evidence. Delivery history and existing proof
+belong in `README.md` and `docs/requirements-traceability.md`.
+
+## 1. Version 1.0 requirement evidence
+
+The following application requirements need additional evidence before their
+traceability rows can be closed:
+
+- `APP-HOME-001`: add deterministic application/UI coverage for shelf ordering,
+  loading, empty, partial-failure, offline-download, refresh, and detail
+  navigation states.
+- `APP-COVER-EDIT-001`: exercise a real cover image through preprocessing,
+  metadata-first saving, upload, refetch, and cache-busted presentation against
+  root-hosted and path-prefixed disposable servers.
+- `APP-DIAGNOSTICS-001`: prove the rolling development log's protection,
+  backup exclusion, size/time bounds, and redaction, and prove that export
+  controls and retained diagnostic files are absent from Release builds.
+- `APP-MAC-AUTH-001`: record a signed Catalyst login/relaunch journey that
+  exercises the application-host Keychain entitlement and distinguishes
+  rejected credentials from unavailable secure storage.
+- `APP-PLAYBACK-001`: complete the physical-device media matrix for supported
+  formats, background and locked playback, interruptions, route removal,
+  Bluetooth, AirPlay, CarPlay transport commands, Now Playing position, speed,
+  sleep timers, relaunch, and session recovery.
+
+## 2. Version 1.0 release readiness
+
+### Compatibility and integration
+
+- Add disposable Audiobookshelf 2.26.x and current-stable profiles with
+  version-specific seed state; run root-hosted and path-prefixed contract
+  journeys without reusing databases across incompatible versions.
+- Complete the download process/network failure matrix: suspension,
+  termination, connectivity changes, token rotation, server outage/recovery,
+  storage pressure, corrupt media repair, and hundreds-of-tracks behavior.
+- Add measured multi-file boundary evidence and finish the codec/transcode
+  matrix required by `AC-07`, `AC-21`, and `AC-22`.
+
+### Quality and safety
+
+- Exercise 10,000-book browsing/search/cache behavior without main-actor bulk
+  work and record launch, memory, energy, and storage results.
+- Add migration fixtures and tests for every shipped SwiftData schema, plus
+  upgrade, backup/restore, account removal, and app-data reset journeys.
+- Run deep secret scans over logs, diagnostics, persistence, exports, URLs,
+  live-test artifacts, and Release archives for `AC-02`.
+- Complete VoiceOver, largest Dynamic Type, Bold Text, Increase Contrast,
+  Reduce Motion, landscape, iPad keyboard, and 44-point target audits for
+  `AC-28`.
+
+### Delivery
+
+- Add CI workflows for strict-concurrency compilation, host tests and coverage,
+  iPhone/iPad simulator tests, unsigned Release/archive checks, migration and
+  security checks, the pinned live-server smoke suite, and redacted artifacts.
+- Add scheduled compatibility, media/download recovery, performance, and flake
+  jobs while keeping server versions sequential and disposable.
+- Prove the documented validation gate from a clean checkout and complete the
+  signed iPhone/iPad beta matrix, App Store privacy labels, entitlements,
+  screenshots, release notes, and final compatibility baseline.
+
+## 3. Post-1.0 product backlog
+
+### Playback and bookmarks
+
+- `APP-BOOKMARK-UX-001`: give Book Detail the same create, rename, delete,
+  pending-sync, failure, and retry affordances as Now Playing while preserving
+  the account-scoped mutation ordering rules.
+- `APP-SCRUB-001`: protect large whole-book scrubber jumps with an explicit
+  confirmation while leaving skip and chapter commands direct and accessible.
+
+### Listening statistics and portability
+
+- Record monotonic real listening time and rate-adjusted audiobook time without
+  counting pauses, buffering, interruptions, or seeks.
+- Persist account-scoped listening slices and completion milestones with
+  five-second crash durability and chapter identity handling across metadata
+  changes.
+- Import paginated Audiobookshelf history resumably and reconcile remote and
+  local sessions without double counting; represent ambiguous all-device
+  results with explicit lower/upper bounds.
+- Provide lifetime and filtered statistics, per-account and all-account views,
+  charts, per-book and recent-session detail, live overlays, and coverage
+  labels.
+- Add redacted, versioned, idempotent JSON export/import and destructive reset,
+  with performance coverage for 250,000 stored slices.
+
+### Other deferred enhancements
+
+- Full CarPlay browse/search templates.
+- Apple Watch remote control and offline transfer.
+- Widgets and Live Activities.
+- Siri and App Intents.
+- Podcast and ebook support.
+- Metadata provider search and matching.
+- Chapter editing and audio-track reordering.
+- Server WebSocket updates.
+- Configurable reverse-proxy/service-token headers.
+- Bonjour discovery.
+- Silence skipping, voice boost, and equalizer.
+- Series bulk download.
+- Offline transcoding format selection.
+- Optional private CloudKit synchronization of the statistics ledger.
+- Deliberate cross-server edition merging for statistics.
+
+## Backlog maintenance
+
+Every entry must map to a non-final row in
+`docs/requirements-traceability.md`, an unmet release acceptance criterion, or
+an explicit deferred item in `audiobookshelf-ios-app-spec.md`. Remove an entry
+once its implementation and required automated, live, simulator, signed-host,
+or physical-device evidence are recorded in the traceability file.
