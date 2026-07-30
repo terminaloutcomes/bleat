@@ -336,6 +336,7 @@ final class PlaybackModel {
     private var sleepTask: Task<Void, Never>?
     private var playbackWatchdogTask: Task<Void, Never>?
     private var playbackRecoveryTask: Task<Void, Never>?
+    private var statisticsRecordingTask: Task<Void, Never>?
     private var pausedAt: Date?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
@@ -580,6 +581,7 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        await finishStatisticsSession()
         await closeActiveSession()
         guard generation == operationGeneration else {
             return
@@ -743,6 +745,7 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        await finishStatisticsSession()
         await closeActiveSession()
         guard generation == operationGeneration else {
             return
@@ -1171,6 +1174,7 @@ final class PlaybackModel {
             return
         }
         player.playImmediately(atRate: rate)
+        recordStatisticsSample(isAudibleAndAdvancing: true)
         let previousState = state.diagnosticState
         state = .buffering
         record(
@@ -1190,6 +1194,7 @@ final class PlaybackModel {
             return
         }
         let wasPlaying = isPlaybackRequested
+        recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         playbackRequested = false
         cancelPlaybackWatchdog()
@@ -1279,6 +1284,7 @@ final class PlaybackModel {
     }
 
     func setRate(_ newRate: Float) {
+        recordStatisticsSample(isAudibleAndAdvancing: false)
         preferencesStore.savePlaybackRate(newRate)
         rate = preferencesStore.playbackRate()
         updateTimePitchAlgorithm()
@@ -1309,6 +1315,19 @@ final class PlaybackModel {
         updateRemoteSkipIntervals()
     }
 
+    func reloadSyncedPreferences() {
+        rate = preferencesStore.playbackRate()
+        resumeRewind = preferencesStore.resumeRewind()
+        skipBackwardInterval = preferencesStore.skipBackward()
+        skipForwardInterval = preferencesStore.skipForward()
+        updateTimePitchAlgorithm()
+        if isPlaybackRequested {
+            player?.playImmediately(atRate: rate)
+        }
+        updateRemoteSkipIntervals()
+        updateNowPlaying()
+    }
+
     func seek(to requestedTime: Double) async {
         guard let preparation else {
             return
@@ -1317,6 +1336,7 @@ final class PlaybackModel {
             .started(.seek, category: .playback)
         )
         let shouldResume = isPlaybackRequested
+        recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         let operationGeneration = generation
         playbackRequested = false
@@ -1419,6 +1439,7 @@ final class PlaybackModel {
         guard generation == operationGeneration else {
             return
         }
+        await finishStatisticsSession()
         notifyAutomaticDownloadBandwidthReleased()
         resetPlayer()
         await closeActiveSession()
@@ -1700,6 +1721,15 @@ final class PlaybackModel {
         {
             confirmPlaybackAdvance(at: monotonicNow())
         }
+        recordStatisticsSample(
+            isAudibleAndAdvancing:
+                isPlaybackRequested
+                && player.timeControlStatus == .playing
+                && currentItem.status == .readyToPlay
+                && (previousObservedTime.map {
+                    refreshedTime - $0 > 0.01
+                } ?? false)
+        )
         notifyAutomaticDownloadProgress()
         if case .endOfChapter(let chapterEnd) = sleepTimer,
             currentTime >= chapterEnd
@@ -1800,6 +1830,7 @@ final class PlaybackModel {
     private func handleTimeControlStatusChange() {
         updateAutomaticDownloadBandwidth()
         if player?.timeControlStatus != .playing {
+            recordStatisticsSample(isAudibleAndAdvancing: false)
             hasConfirmedPlaybackAdvance = false
             stablePlaybackStartedAt = nil
         }
@@ -2302,6 +2333,7 @@ final class PlaybackModel {
     }
 
     private func playbackEnded() {
+        recordStatisticsSample(isAudibleAndAdvancing: false)
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -2313,8 +2345,81 @@ final class PlaybackModel {
         updateNowPlaying()
         notifyAutomaticDownloadFinished()
         Task { @MainActor [weak self] in
-            await self?.syncProgress()
+            guard let self else {
+                return
+            }
+            await self.syncProgress()
+            await self.recordNaturalCompletion()
+            await self.finishStatisticsSession()
         }
+    }
+
+    private var statisticsSessionID: PlaybackSessionID? {
+        preparation?.sessionID ?? localPlaybackSession?.id
+    }
+
+    private func recordStatisticsSample(
+        isAudibleAndAdvancing: Bool
+    ) {
+        guard let accountID,
+            let itemID,
+            let sessionID = statisticsSessionID,
+            duration.isFinite,
+            duration > 0
+        else {
+            return
+        }
+        let sample = StatisticsPlaybackSample(
+            accountID: accountID,
+            itemID: itemID,
+            sessionID: sessionID,
+            observedAt: Date(),
+            monotonicTime: monotonicNow(),
+            wholeBookPosition: currentTime,
+            playbackRate: Double(rate),
+            playbackGeneration: generation,
+            isAudibleAndAdvancing: isAudibleAndAdvancing,
+            chapter: currentChapter,
+            title: title,
+            author: author,
+            duration: duration
+        )
+        let previousTask = statisticsRecordingTask
+        statisticsRecordingTask = Task { [service] in
+            _ = await previousTask?.result
+            try? await service.recordStatisticsSample(sample)
+        }
+    }
+
+    private func finishStatisticsSession() async {
+        guard let sessionID = statisticsSessionID else {
+            return
+        }
+        recordStatisticsSample(isAudibleAndAdvancing: false)
+        _ = await statisticsRecordingTask?.result
+        statisticsRecordingTask = nil
+        try? await service.finishStatisticsSession(sessionID)
+    }
+
+    private func recordNaturalCompletion() async {
+        guard let accountID,
+            let itemID,
+            duration.isFinite,
+            duration > 0
+        else {
+            return
+        }
+        try? await service.recordCompletion(
+            CompletionMilestone(
+                accountID: accountID,
+                itemID: itemID,
+                completedAt: Date(),
+                duration: duration,
+                title: title,
+                author: author,
+                evidence: .naturalEnd
+            )
+        )
     }
 
     private func persistLocalPosition() {
@@ -2376,6 +2481,7 @@ final class PlaybackModel {
                 return
             }
             do {
+                await finishStatisticsSession()
                 let pending = try localSessionStore.pending(
                     accountID: localAccountID
                 )
@@ -2390,9 +2496,13 @@ final class PlaybackModel {
                     )
                     return
                 }
+                let measured = try await localSessionsWithListeningTime(
+                    pending,
+                    accountID: localAccountID
+                )
                 let results = try await service.syncLocalPlaybackSessions(
                     for: activeAccount,
-                    sessions: pending,
+                    sessions: measured.sessions,
                     deviceInfo: Self.deviceInfo()
                 )
                 guard self.preparation?.itemID == preparation.itemID,
@@ -2403,6 +2513,13 @@ final class PlaybackModel {
                 let acknowledged = Set(
                     results.filter(\.success).map(\.id)
                 )
+                for sessionID in acknowledged {
+                    try await service.confirmStatisticsSync(
+                        accountID: localAccountID,
+                        sessionID: sessionID,
+                        realSeconds: measured.deltas[sessionID] ?? 0
+                    )
+                }
                 try localSessionStore.removeAcknowledged(
                     accountID: localAccountID,
                     sessionIDs: acknowledged
@@ -2461,25 +2578,46 @@ final class PlaybackModel {
         else {
             return
         }
+        await finishStatisticsSession()
+        let listeningDelta =
+            (try? await service.pendingStatisticsRealSeconds(
+                accountID: activeAccount.id,
+                sessionID: sessionID
+            )) ?? 0
         syncState = .syncing
         do {
             try await service.syncPlayback(
                 for: activeAccount,
                 sessionID: sessionID,
                 currentTime: position,
-                duration: preparation.duration
+                duration: preparation.duration,
+                timeListened: listeningDelta
             )
             guard self.preparation?.sessionID == sessionID else {
                 return
             }
+            try await service.confirmStatisticsSync(
+                accountID: activeAccount.id,
+                sessionID: sessionID,
+                realSeconds: listeningDelta
+            )
             lastAttemptedSyncTime = position
             syncState = .idle
             await diagnostics.record(
                 .completed(.syncPlayback, category: .sync)
             )
-        } catch {
+        } catch let error {
             guard self.preparation?.sessionID == sessionID else {
                 return
+            }
+            if listeningDelta > 0,
+                Self.isAmbiguousStatisticsSyncFailure(error)
+            {
+                try? await service.markStatisticsSyncUncertain(
+                    accountID: activeAccount.id,
+                    sessionID: sessionID,
+                    realSeconds: listeningDelta
+                )
             }
             syncState = .failed
             await diagnostics.record(
@@ -2489,6 +2627,21 @@ final class PlaybackModel {
                     failureCode: .progressUnavailable
                 )
             )
+        }
+    }
+
+    private static func isAmbiguousStatisticsSyncFailure(
+        _ error: AppServiceError
+    ) -> Bool {
+        switch error {
+        case .playbackSync(.requestFailed):
+            true
+        case .playbackSync(
+            .authenticationFailed(.requestTransportFailed)
+        ):
+            true
+        default:
+            false
         }
     }
 
@@ -2552,14 +2705,28 @@ final class PlaybackModel {
                 accountID: account.id
             )
             if !pending.isEmpty {
+                let measured = try await localSessionsWithListeningTime(
+                    pending,
+                    accountID: account.id
+                )
                 let results = try await service.syncLocalPlaybackSessions(
                     for: account,
-                    sessions: pending,
+                    sessions: measured.sessions,
                     deviceInfo: Self.deviceInfo()
                 )
+                let acknowledged = Set(
+                    results.filter(\.success).map(\.id)
+                )
+                for sessionID in acknowledged {
+                    try await service.confirmStatisticsSync(
+                        accountID: account.id,
+                        sessionID: sessionID,
+                        realSeconds: measured.deltas[sessionID] ?? 0
+                    )
+                }
                 try localSessionStore.removeAcknowledged(
                     accountID: account.id,
-                    sessionIDs: Set(results.filter(\.success).map(\.id))
+                    sessionIDs: acknowledged
                 )
                 await diagnostics.record(
                     .completed(
@@ -2589,6 +2756,32 @@ final class PlaybackModel {
             return
         }
         await syncPendingBookmarks(for: account)
+    }
+
+    private func localSessionsWithListeningTime(
+        _ sessions: [LocalPlaybackSession],
+        accountID: AccountID
+    ) async throws -> (
+        sessions: [LocalPlaybackSession],
+        deltas: [PlaybackSessionID: Double]
+    ) {
+        var measured: [LocalPlaybackSession] = []
+        var deltas: [PlaybackSessionID: Double] = [:]
+        measured.reserveCapacity(sessions.count)
+        for session in sessions {
+            let delta = try await service.pendingStatisticsRealSeconds(
+                accountID: accountID,
+                sessionID: session.id
+            )
+            measured.append(
+                try session.updating(
+                    currentTime: session.currentTime,
+                    timeListening: session.timeListening + delta
+                )
+            )
+            deltas[session.id] = delta
+        }
+        return (measured, deltas)
     }
 
     func removeLocalData(for accountID: AccountID) {

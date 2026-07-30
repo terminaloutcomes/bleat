@@ -32,6 +32,8 @@ enum AppServiceError: Error, Equatable, Sendable {
     case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
+    case statistics(StatisticsRepositoryError)
+    case privateCloud(PrivateCloudSyncError)
 }
 
 struct AppPlaybackTrack: Equatable, Sendable {
@@ -141,6 +143,14 @@ protocol AppServicing: Sendable {
         duration: Double
     ) async throws(AppServiceError)
 
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double,
+        timeListened: Double
+    ) async throws(AppServiceError)
+
     func syncLocalPlaybackSessions(
         for account: ServerAccount,
         sessions: [LocalPlaybackSession],
@@ -219,6 +229,62 @@ protocol AppServicing: Sendable {
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError)
+
+    func removeAccountFromThisDevice(
+        _ account: ServerAccount,
+        includeStatistics: Bool
+    ) async throws(AppServiceError)
+
+    func removeStatistics(
+        accountID: AccountID
+    ) async throws(AppServiceError)
+
+    func recordStatisticsSample(
+        _ sample: StatisticsPlaybackSample
+    ) async throws(AppServiceError)
+
+    func finishStatisticsSession(
+        _ sessionID: PlaybackSessionID
+    ) async throws(AppServiceError)
+
+    func statisticsSummary(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsSummary
+
+    func recordCompletion(
+        _ milestone: CompletionMilestone
+    ) async throws(AppServiceError)
+
+    func pendingStatisticsRealSeconds(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> Double
+
+    func confirmStatisticsSync(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError)
+
+    func markStatisticsSyncUncertain(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError)
+
+    func isPrivateCloudSyncEnabled() async -> Bool
+
+    func synchronizePrivateCloud() async throws(AppServiceError)
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool
+    ) async throws(AppServiceError)
+
+    func deletePrivateCloudAccount(
+        _ accountID: AccountID,
+        includeStatistics: Bool
+    ) async throws(AppServiceError)
 }
 
 extension AppServicing {
@@ -227,6 +293,85 @@ extension AppServicing {
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
         AsyncStream { $0.finish() }
     }
+
+    func removeAccountFromThisDevice(
+        _ account: ServerAccount,
+        includeStatistics: Bool
+    ) async throws(AppServiceError) {
+        try await removeAccount(account)
+    }
+
+    func removeStatistics(
+        accountID: AccountID
+    ) async throws(AppServiceError) {}
+
+    func recordStatisticsSample(
+        _ sample: StatisticsPlaybackSample
+    ) async throws(AppServiceError) {}
+
+    func finishStatisticsSession(
+        _ sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {}
+
+    func statisticsSummary(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsSummary {
+        .empty
+    }
+
+    func recordCompletion(
+        _ milestone: CompletionMilestone
+    ) async throws(AppServiceError) {}
+
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double,
+        timeListened: Double
+    ) async throws(AppServiceError) {
+        try await syncPlayback(
+            for: account,
+            sessionID: sessionID,
+            currentTime: currentTime,
+            duration: duration
+        )
+    }
+
+    func pendingStatisticsRealSeconds(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> Double {
+        0
+    }
+
+    func confirmStatisticsSync(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError) {}
+
+    func markStatisticsSyncUncertain(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError) {}
+
+    func isPrivateCloudSyncEnabled() async -> Bool {
+        true
+    }
+
+    func synchronizePrivateCloud() async throws(AppServiceError) {}
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool
+    ) async throws(AppServiceError) {}
+
+    func deletePrivateCloudAccount(
+        _ accountID: AccountID,
+        includeStatistics: Bool
+    ) async throws(AppServiceError) {}
 }
 
 actor LiveAppService: AppServicing {
@@ -241,6 +386,8 @@ actor LiveAppService: AppServicing {
     private let coordinator: Coordinator
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
+    private let statisticsRepository: StatisticsRepository
+    private let privateCloudSync: PrivateCloudSyncCoordinator
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
@@ -255,6 +402,10 @@ actor LiveAppService: AppServicing {
             CachedLibrarySearchRecord.self,
             CachedLibraryHomeRecord.self,
             CachedLibraryBookDetailRecord.self,
+            ListeningSliceRecord.self,
+            CompletionMilestoneRecord.self,
+            RemoteListeningSessionRecord.self,
+            StatisticsSessionAccountingRecord.self,
         ])
         do {
             modelContainer = try ModelContainer(
@@ -271,8 +422,18 @@ actor LiveAppService: AppServicing {
         }
 
         transport = URLSessionHTTPTransport(diagnostics: diagnostics)
+        let privateCloudEnabled =
+            UserDefaults.standard.object(
+                forKey: "bleat.cloudKit.enabled.v1"
+            ) == nil
+            || UserDefaults.standard.bool(
+                forKey: "bleat.cloudKit.enabled.v1"
+            )
         credentialStore = TokenVault(
-            service: "com.yaleman.Bleat.credentials"
+            tokenService: "com.yaleman.Bleat.session-tokens",
+            nativeLoginService: "com.yaleman.Bleat.native-login",
+            legacyService: "com.yaleman.Bleat.credentials",
+            synchronizesNativeLogin: privateCloudEnabled
         )
         coordinator = Coordinator(
             transport: transport,
@@ -280,6 +441,14 @@ actor LiveAppService: AppServicing {
         )
         accountStore = AccountStore(modelContainer: modelContainer)
         libraryCache = LibraryCache(modelContainer: modelContainer)
+        statisticsRepository = StatisticsRepository(
+            modelContainer: modelContainer
+        )
+        privateCloudSync = PrivateCloudSyncCoordinator(
+            statistics: statisticsRepository,
+            accounts: accountStore,
+            credentialStore: credentialStore
+        )
     }
 
     func liveUpdates(
@@ -592,6 +761,27 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func syncPlayback(
+        for account: ServerAccount,
+        sessionID: PlaybackSessionID,
+        currentTime: Double,
+        duration: Double,
+        timeListened: Double
+    ) async throws(AppServiceError) {
+        do {
+            try await coordinator.syncPlaybackSession(
+                accountID: account.id,
+                server: account.server,
+                sessionID: sessionID,
+                currentTime: currentTime,
+                duration: duration,
+                timeListened: timeListened
+            )
+        } catch let error {
+            throw .playbackSync(error)
+        }
+    }
+
     func syncLocalPlaybackSessions(
         for account: ServerAccount,
         sessions: [LocalPlaybackSession],
@@ -891,6 +1081,187 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .accountRemoval(error)
+        }
+    }
+
+    func removeAccountFromThisDevice(
+        _ account: ServerAccount,
+        includeStatistics: Bool
+    ) async throws(AppServiceError) {
+        do {
+            try await libraryCache.removeAccount(account.id)
+        } catch let error {
+            throw .libraryCache(error)
+        }
+        await privateCloudSync.ignoreAccountOnThisDevice(
+            account.id,
+            includeStatistics: includeStatistics
+        )
+        do {
+            _ = try await coordinator.removePersistedAccountFromDevice(
+                accountID: account.id,
+                accountStore: accountStore
+            )
+        } catch let error {
+            throw .accountRemoval(error)
+        }
+    }
+
+    func removeStatistics(
+        accountID: AccountID
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.reset(
+                query: StatisticsQuery(accountID: accountID)
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func recordStatisticsSample(
+        _ sample: StatisticsPlaybackSample
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.record(sample)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func finishStatisticsSession(
+        _ sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.finish(sessionID: sessionID)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func statisticsSummary(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsSummary {
+        do {
+            return try await statisticsRepository.summary(query: query)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func recordCompletion(
+        _ milestone: CompletionMilestone
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.recordCompletion(milestone)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func pendingStatisticsRealSeconds(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> Double {
+        do {
+            return try await statisticsRepository.pendingRealSeconds(
+                accountID: accountID,
+                sessionID: sessionID
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func confirmStatisticsSync(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.confirmSync(
+                accountID: accountID,
+                sessionID: sessionID,
+                realSeconds: realSeconds
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func markStatisticsSyncUncertain(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID,
+        realSeconds: Double
+    ) async throws(AppServiceError) {
+        do {
+            try await statisticsRepository.markSyncUncertain(
+                accountID: accountID,
+                sessionID: sessionID,
+                realSeconds: realSeconds
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func isPrivateCloudSyncEnabled() async -> Bool {
+        privateCloudSync.isEnabled
+    }
+
+    func synchronizePrivateCloud() async throws(AppServiceError) {
+        do {
+            try await privateCloudSync.synchronize()
+        } catch let error {
+            throw .privateCloud(error)
+        }
+    }
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool
+    ) async throws(AppServiceError) {
+        let accountIDs: [AccountID]
+        do {
+            accountIDs = try await accountStore.accounts().map(\.id)
+        } catch let error {
+            throw .accountStore(error)
+        }
+        do {
+            try await credentialStore.setSynchronizesNativeLogin(
+                enabled,
+                accountIDs: accountIDs
+            )
+            do {
+                try await privateCloudSync.setEnabled(
+                    enabled,
+                    deleteCloudData: deleteCloudData
+                )
+            } catch {
+                try? await credentialStore.setSynchronizesNativeLogin(
+                    !enabled,
+                    accountIDs: accountIDs
+                )
+                throw error
+            }
+        } catch let error as PrivateCloudSyncError {
+            throw .privateCloud(error)
+        } catch {
+            throw .privateCloud(.persistenceFailed)
+        }
+    }
+
+    func deletePrivateCloudAccount(
+        _ accountID: AccountID,
+        includeStatistics: Bool
+    ) async throws(AppServiceError) {
+        do {
+            try await privateCloudSync.deleteAccountEverywhere(
+                accountID,
+                includeStatistics: includeStatistics
+            )
+        } catch let error {
+            throw .privateCloud(error)
         }
     }
 

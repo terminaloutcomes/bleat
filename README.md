@@ -20,17 +20,18 @@ delete its server files after confirmation. It presents the five-tab root shell
 and removes accounts. The core implements URL, routing,
 discovery, username/password login,
 single-flight token refresh, local logout, bearer-header,
-account-scoped Keychain, durable multi-account SwiftData profiles,
+split account-scoped Keychain storage, durable multi-account SwiftData profiles,
 transactional native onboarding, account lifecycle, typed authenticated
 library listing, pagination, and search, account-scoped SwiftData library
 caching including personalized shelves and expanded book details,
 online-first/cache-fallback repository behavior, permission-derived book
 action visibility, playback sessions, and background-download contracts.
 Native Audiobookshelf username/password is the active authentication scope; the
-earlier isolated OIDC spike is deferred. The MVP also defers local time
-tracking, lifetime statistics, and listening-history import/export. Downloaded
-playback uses a durable UUIDv4 local-session outbox while reporting zero
-listening time. Bookmark creates, renames, and deletes also use a durable local
+earlier isolated OIDC spike is deferred. Bleat records local listening slices,
+completion milestones, and lifetime summaries. Downloaded playback uses a
+durable UUIDv4 local-session outbox and reports measured listening time.
+Listening-history import/export remains deferred. Bookmark creates, renames,
+and deletes also use a durable local
 outbox when the server is unavailable.
 While the app is active, an authenticated Socket.IO subscription refreshes
 visible libraries and progress after server-side changes. Progress from another
@@ -264,14 +265,29 @@ Launch Bleat, then enter:
 
 Bleat discovers the server, requires Audiobookshelf 2.26.0 or newer, and uses
 the server's native username/password login. The password is cleared from the
-screen before the request starts. The username/password credential and rotating
-access/refresh tokens are stored only in a non-synchronizing, device-only
-Keychain item. If a reachable refresh endpoint rejects the session or returns
+screen before the request starts. Rotating access/refresh tokens stay in a
+non-synchronizing, device-only Keychain item. When iCloud sync is enabled, the
+stable username/password credential uses iCloud Keychain so another device can
+obtain its own token pair; tokens are never synchronized. If a reachable
+refresh endpoint rejects the session or returns
 an unusable response, Bleat silently performs one native login, verifies that
 the same server user was returned, and retries the request. Network, malformed
 recovery, and storage failures remain retryable; only a missing or conclusively
 invalid saved login requires explicit sign-in. OIDC and third-party
 identity-provider configuration are not part of the app.
+
+## iCloud synchronization
+
+Private iCloud synchronization is enabled by default and can be turned off in
+Settings. It merges account descriptors, playback and download preferences,
+listening slices, completion milestones, and imported server sessions in
+`iCloud.com.terminaloutcomes.Bleat`. Turning synchronization off always keeps
+local data and moves stable native credentials back to device-only Keychain
+storage; the confirmation also offers to retain or delete the private CloudKit
+copy.
+
+Account removal distinguishes this device from all devices and asks separately
+whether listening history and downloaded audio should be retained.
 
 Accounts created by an older Bleat build contain only tokens because those
 builds discarded the password. Enter the password once with **Sign In Again**
@@ -351,7 +367,8 @@ duplicate an already-created bookmark. Failed synchronization remains visible
 in Now Playing with an explicit retry action.
 While streaming, Bleat sends the whole-book position to Audiobookshelf every
 15 seconds and after pause, seek, backgrounding, interruption, and completion.
-The MVP deliberately reports zero additional listening time.
+Only forward audible playback contributes listening time; pauses, buffering,
+interruptions, and seeks do not.
 
 Home shelves, library/search rows, book detail, and Now Playing request bounded
 cover images with `updatedAt` cache busting. Cover URLs retain server path

@@ -258,6 +258,8 @@ public protocol AccountCredentialStore: Sendable {
     ) async throws -> NativeLoginCredentials?
 
     func deleteCredentials(for accountID: AccountID) async throws
+
+    func deleteSessionCredentials(for accountID: AccountID) async throws
 }
 
 extension AccountCredentialStore {
@@ -267,6 +269,12 @@ extension AccountCredentialStore {
         for accountID: AccountID
     ) async throws {
         try await save(credentials, for: accountID)
+    }
+
+    public func deleteSessionCredentials(
+        for accountID: AccountID
+    ) async throws {
+        try await deleteCredentials(for: accountID)
     }
 
     public func nativeLoginCredentials(

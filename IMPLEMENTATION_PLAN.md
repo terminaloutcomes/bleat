@@ -75,17 +75,11 @@ traceability rows can be closed:
 
 ### Listening statistics and portability
 
-- Record monotonic real listening time and rate-adjusted audiobook time without
-  counting pauses, buffering, interruptions, or seeks.
-- Persist account-scoped listening slices and completion milestones with
-  five-second crash durability and chapter identity handling across metadata
-  changes.
 - Import paginated Audiobookshelf history resumably and reconcile remote and
   local sessions without double counting; represent ambiguous all-device
   results with explicit lower/upper bounds.
-- Provide lifetime and filtered statistics, per-account and all-account views,
-  charts, per-book and recent-session detail, live overlays, and coverage
-  labels.
+- Add range filtering, all-account charts, per-book and recent-session detail,
+  and live overlays to the implemented lifetime summary.
 - Add redacted, versioned, idempotent JSON export/import and destructive reset,
   with performance coverage for 250,000 stored slices.
 

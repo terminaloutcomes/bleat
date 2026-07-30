@@ -231,6 +231,7 @@ public enum PlaybackSyncError: Error, Equatable, Sendable {
     case invalidSessionID
     case invalidPosition
     case invalidDuration
+    case invalidListeningTime
     case positionExceedsDuration
     case requestConstructionFailed(RouteConstructionError)
     case requestEncodingFailed
@@ -459,7 +460,8 @@ extension AuthCoordinator {
         server: NormalizedServerURL,
         sessionID: PlaybackSessionID,
         currentTime: Double,
-        duration: Double
+        duration: Double,
+        timeListened: Double = 0
     ) async throws(PlaybackSyncError) {
         guard !sessionID.rawValue.isEmpty else {
             throw .invalidSessionID
@@ -469,6 +471,9 @@ extension AuthCoordinator {
         }
         guard duration.isFinite, duration >= 0 else {
             throw .invalidDuration
+        }
+        guard timeListened.isFinite, timeListened >= 0 else {
+            throw .invalidListeningTime
         }
         guard currentTime <= duration else {
             throw .positionExceedsDuration
@@ -492,7 +497,7 @@ extension AuthCoordinator {
             request.httpBody = try JSONEncoder().encode(
                 PlaybackSyncRequest(
                     currentTime: currentTime,
-                    timeListened: 0,
+                    timeListened: timeListened,
                     duration: duration
                 )
             )

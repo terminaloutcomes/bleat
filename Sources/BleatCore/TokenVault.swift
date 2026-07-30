@@ -29,30 +29,95 @@ extension TokenVaultError: LocalizedError {
     }
 }
 
+/// Stores rotating session tokens separately from the native login credential.
+///
+/// Session tokens always remain in a non-synchronizing, device-only Keychain
+/// item. The native login can use iCloud Keychain so another device can obtain
+/// its own rotating token pair without sharing an active server session.
 public actor TokenVault: AccountCredentialStore {
-    public let service: String
+    public let tokenService: String
+    public let nativeLoginService: String
+    public let legacyService: String?
+    public private(set) var synchronizesNativeLogin: Bool
 
+    /// Compatibility initializer for device-only stores and existing tests.
     public init(service: String) {
-        self.service = service
+        tokenService = service
+        nativeLoginService = service
+        legacyService = nil
+        synchronizesNativeLogin = false
+    }
+
+    public init(
+        tokenService: String,
+        nativeLoginService: String,
+        legacyService: String?,
+        synchronizesNativeLogin: Bool
+    ) {
+        self.tokenService = tokenService
+        self.nativeLoginService = nativeLoginService
+        self.legacyService = legacyService
+        self.synchronizesNativeLogin = synchronizesNativeLogin
+    }
+
+    public var service: String {
+        tokenService
     }
 
     public func credentials(
         for accountID: AccountID
     ) async throws -> AuthenticationTokens? {
-        try storedCredentials(for: accountID)?.tokens
+        try migrateLegacyCredentialsIfNeeded(for: accountID)
+        guard let data = try storedData(
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
+        ) else {
+            return nil
+        }
+        if let tokens = try? JSONDecoder().decode(
+            AuthenticationTokens.self,
+            from: data
+        ) {
+            return tokens
+        }
+        if tokenService == nativeLoginService,
+            let stored = try? JSONDecoder().decode(
+                StoredAccountCredentials.self,
+                from: data
+            )
+        {
+            return stored.tokens
+        }
+        throw TokenVaultError.invalidStoredCredentials
     }
 
     public func save(
         _ credentials: AuthenticationTokens,
         for accountID: AccountID
     ) async throws {
-        let nativeLogin = try storedCredentials(for: accountID)?.nativeLogin
-        try save(
-            StoredAccountCredentials(
-                tokens: credentials,
-                nativeLogin: nativeLogin
-            ),
-            for: accountID
+        if tokenService == nativeLoginService {
+            let nativeLogin = try storedUnifiedCredentials(
+                for: accountID
+            )?.nativeLogin
+            try saveData(
+                JSONEncoder().encode(
+                    StoredAccountCredentials(
+                        tokens: credentials,
+                        nativeLogin: nativeLogin
+                    )
+                ),
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+            return
+        }
+        try saveData(
+            JSONEncoder().encode(credentials),
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
         )
     }
 
@@ -61,41 +126,264 @@ public actor TokenVault: AccountCredentialStore {
         nativeLogin: NativeLoginCredentials,
         for accountID: AccountID
     ) async throws {
-        try save(
-            StoredAccountCredentials(
-                tokens: credentials,
-                nativeLogin: nativeLogin
-            ),
-            for: accountID
+        if tokenService == nativeLoginService {
+            try saveData(
+                JSONEncoder().encode(
+                    StoredAccountCredentials(
+                        tokens: credentials,
+                        nativeLogin: nativeLogin
+                    )
+                ),
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+            return
+        }
+
+        try saveData(
+            JSONEncoder().encode(credentials),
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
         )
+        do {
+            try saveData(
+                JSONEncoder().encode(nativeLogin),
+                service: nativeLoginService,
+                accountID: accountID,
+                synchronizable: synchronizesNativeLogin
+            )
+        } catch {
+            try? deleteItem(
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+            throw error
+        }
     }
 
     public func nativeLoginCredentials(
         for accountID: AccountID
     ) async throws -> NativeLoginCredentials? {
-        try storedCredentials(for: accountID)?.nativeLogin
-    }
-
-    private func storedCredentials(
-        for accountID: AccountID
-    ) throws -> StoredAccountCredentials? {
-        let query = try baseQuery(for: accountID).merging([
-            kSecReturnData: kCFBooleanTrue as Any,
-            kSecMatchLimit: kSecMatchLimitOne,
-        ]) { _, new in new }
-
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(
-            query as CFDictionary,
-            &result
-        )
-        if status == errSecItemNotFound {
+        try migrateLegacyCredentialsIfNeeded(for: accountID)
+        if tokenService == nativeLoginService {
+            return try storedUnifiedCredentials(
+                for: accountID
+            )?.nativeLogin
+        }
+        guard let data = try storedData(
+            service: nativeLoginService,
+            accountID: accountID,
+            synchronizable: synchronizesNativeLogin
+        ) else {
             return nil
         }
-        try Self.check(status)
-
-        guard let data = result as? Data else {
+        guard let nativeLogin = try? JSONDecoder().decode(
+            NativeLoginCredentials.self,
+            from: data
+        ) else {
             throw TokenVaultError.invalidStoredCredentials
+        }
+        return nativeLogin
+    }
+
+    public func deleteCredentials(
+        for accountID: AccountID
+    ) async throws {
+        try deleteSessionTokens(for: accountID)
+        try deleteNativeLoginCredentials(for: accountID)
+        if let legacyService {
+            try deleteItem(
+                service: legacyService,
+                accountID: accountID,
+                synchronizable: false
+            )
+        }
+    }
+
+    public func deleteSessionTokens(
+        for accountID: AccountID
+    ) throws {
+        try deleteItem(
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
+        )
+    }
+
+    public func deleteSessionCredentials(
+        for accountID: AccountID
+    ) async throws {
+        try deleteSessionTokens(for: accountID)
+    }
+
+    public func deleteNativeLoginCredentials(
+        for accountID: AccountID
+    ) throws {
+        guard tokenService != nativeLoginService else {
+            try deleteItem(
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+            return
+        }
+        try deleteItem(
+            service: nativeLoginService,
+            accountID: accountID,
+            synchronizable: synchronizesNativeLogin
+        )
+    }
+
+    public func setSynchronizesNativeLogin(
+        _ enabled: Bool,
+        accountIDs: [AccountID]
+    ) throws {
+        guard tokenService != nativeLoginService,
+            enabled != synchronizesNativeLogin
+        else {
+            synchronizesNativeLogin = enabled
+            return
+        }
+        let sourceSynchronizable = synchronizesNativeLogin
+        var credentialsByAccount: [(AccountID, Data)] = []
+        for accountID in accountIDs {
+            guard let data = try storedData(
+                service: nativeLoginService,
+                accountID: accountID,
+                synchronizable: sourceSynchronizable
+            ) else {
+                continue
+            }
+            guard (try? JSONDecoder().decode(
+                NativeLoginCredentials.self,
+                from: data
+            )) != nil else {
+                throw TokenVaultError.invalidStoredCredentials
+            }
+            credentialsByAccount.append((accountID, data))
+        }
+
+        do {
+            for (accountID, data) in credentialsByAccount {
+                try saveData(
+                    data,
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: enabled
+                )
+            }
+        } catch {
+            for (accountID, _) in credentialsByAccount {
+                try? deleteItem(
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: enabled
+                )
+            }
+            throw error
+        }
+
+        do {
+            for (accountID, _) in credentialsByAccount {
+                try deleteItem(
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: sourceSynchronizable
+                )
+            }
+        } catch {
+            for (accountID, data) in credentialsByAccount {
+                try? saveData(
+                    data,
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: sourceSynchronizable
+                )
+                try? deleteItem(
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: enabled
+                )
+            }
+            throw error
+        }
+        synchronizesNativeLogin = enabled
+    }
+
+    private func migrateLegacyCredentialsIfNeeded(
+        for accountID: AccountID
+    ) throws {
+        guard tokenService != nativeLoginService,
+            let legacyService,
+            let data = try storedData(
+                service: legacyService,
+                accountID: accountID,
+                synchronizable: false
+            )
+        else {
+            return
+        }
+
+        let stored: StoredAccountCredentials
+        if let decoded = try? JSONDecoder().decode(
+            StoredAccountCredentials.self,
+            from: data
+        ) {
+            stored = decoded
+        } else if let tokens = try? JSONDecoder().decode(
+            AuthenticationTokens.self,
+            from: data
+        ) {
+            stored = StoredAccountCredentials(
+                tokens: tokens,
+                nativeLogin: nil
+            )
+        } else {
+            throw TokenVaultError.invalidStoredCredentials
+        }
+
+        try saveData(
+            JSONEncoder().encode(stored.tokens),
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
+        )
+        if let nativeLogin = stored.nativeLogin {
+            do {
+                try saveData(
+                    JSONEncoder().encode(nativeLogin),
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: synchronizesNativeLogin
+                )
+            } catch {
+                try? deleteItem(
+                    service: tokenService,
+                    accountID: accountID,
+                    synchronizable: false
+                )
+                throw error
+            }
+        }
+        try deleteItem(
+            service: legacyService,
+            accountID: accountID,
+            synchronizable: false
+        )
+    }
+
+    private func storedUnifiedCredentials(
+        for accountID: AccountID
+    ) throws -> StoredAccountCredentials? {
+        guard let data = try storedData(
+            service: tokenService,
+            accountID: accountID,
+            synchronizable: false
+        ) else {
+            return nil
         }
         if let stored = try? JSONDecoder().decode(
             StoredAccountCredentials.self,
@@ -115,19 +403,52 @@ public actor TokenVault: AccountCredentialStore {
         throw TokenVaultError.invalidStoredCredentials
     }
 
-    private func save(
-        _ credentials: StoredAccountCredentials,
-        for accountID: AccountID
+    private func storedData(
+        service: String,
+        accountID: AccountID,
+        synchronizable: Bool
+    ) throws -> Data? {
+        let query = try baseQuery(
+            service: service,
+            accountID: accountID,
+            synchronizable: synchronizable
+        ).merging([
+            kSecReturnData: kCFBooleanTrue as Any,
+            kSecMatchLimit: kSecMatchLimitOne,
+        ]) { _, new in new }
+
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        try Self.check(status)
+        guard let data = result as? Data else {
+            throw TokenVaultError.invalidStoredCredentials
+        }
+        return data
+    }
+
+    private func saveData(
+        _ data: Data,
+        service: String,
+        accountID: AccountID,
+        synchronizable: Bool
     ) throws {
-        let data = try JSONEncoder().encode(credentials)
-        let query = try baseQuery(for: accountID)
+        let query = try baseQuery(
+            service: service,
+            accountID: accountID,
+            synchronizable: synchronizable
+        )
         let updateValues: [CFString: Any] = [
             kSecValueData: data
         ]
+        let accessibility: CFString = synchronizable
+            ? kSecAttrAccessibleAfterFirstUnlock
+            : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let addValues: [CFString: Any] = [
             kSecValueData: data,
-            kSecAttrAccessible:
-                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrAccessible: accessibility,
         ]
 
         let updateStatus = SecItemUpdate(
@@ -158,11 +479,17 @@ public actor TokenVault: AccountCredentialStore {
         try Self.check(addStatus)
     }
 
-    public func deleteCredentials(
-        for accountID: AccountID
-    ) async throws {
+    private func deleteItem(
+        service: String,
+        accountID: AccountID,
+        synchronizable: Bool
+    ) throws {
         let status = SecItemDelete(
-            try baseQuery(for: accountID) as CFDictionary
+            try baseQuery(
+                service: service,
+                accountID: accountID,
+                synchronizable: synchronizable
+            ) as CFDictionary
         )
         if status == errSecItemNotFound {
             return
@@ -171,7 +498,9 @@ public actor TokenVault: AccountCredentialStore {
     }
 
     private func baseQuery(
-        for accountID: AccountID
+        service: String,
+        accountID: AccountID,
+        synchronizable: Bool
     ) throws(TokenVaultError) -> [CFString: Any] {
         guard !service.isEmpty else {
             throw .invalidService
@@ -183,7 +512,8 @@ public actor TokenVault: AccountCredentialStore {
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: accountID.rawValue,
-            kSecAttrSynchronizable: kCFBooleanFalse as Any,
+            kSecAttrSynchronizable:
+                synchronizable ? kCFBooleanTrue as Any : kCFBooleanFalse as Any,
         ]
     }
 

@@ -29,7 +29,24 @@ enum AccountActionStatus: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum PrivateCloudState: Equatable, Sendable {
+    case disabled
+    case idle
+    case syncing
+    case failed(AppFailure)
+}
+
 enum AccountDownloadDisposition: Equatable, Sendable {
+    case keep
+    case delete
+}
+
+enum AccountRemovalScope: Equatable, Sendable {
+    case thisDevice
+    case allDevices
+}
+
+enum AccountStatisticsDisposition: Equatable, Sendable {
     case keep
     case delete
 }
@@ -77,11 +94,12 @@ enum AppFailureOperation: String, Equatable, Sendable {
     case loadLibraries, loadLibraryPage, loadHome, search, loadBook
     case openPlayback, recoverPlayback, loadBookmarks, saveMetadata
     case replaceCover, deleteBook, updateProgress, download, localPlayback
+    case loadStatistics, privateCloudSync
 
     var isSafeToRetry: Bool {
         switch self {
         case .loadLibraries, .loadLibraryPage, .loadHome, .search, .loadBook,
-            .loadBookmarks:
+            .loadBookmarks, .loadStatistics, .privateCloudSync:
             true
         case .appStart, .login, .reauthenticate, .switchAccount, .removeAccount,
             .openPlayback, .recoverPlayback, .saveMetadata, .replaceCover,
@@ -261,7 +279,21 @@ struct AppFailure: Equatable, Sendable {
             case .invalidAccount: return .invalidServerResponse
             case .accountPersistenceFailed, .credentialRollbackFailed: return .localStorageUnavailable
             }
-        case .accountStore, .libraryCache: return .localStorageUnavailable
+        case .accountStore, .libraryCache, .statistics:
+            return .localStorageUnavailable
+        case .privateCloud(let error):
+            switch error {
+            case .accountUnavailable:
+                return .authenticationRequired
+            case .disabled:
+                return .requestRejected
+            case .invalidRecord:
+                return .invalidServerResponse
+            case .persistenceFailed:
+                return .localStorageUnavailable
+            case .cloudUnavailable:
+                return .serverUnavailable
+            }
         case .libraryRepository(let error), .bookDetail(let error): return repositoryCause(error)
         case .pageRequest, .homeRequest, .searchRequest, .metadataPatch: return .invalidInput
         case .searchCoordinator(let error):
@@ -301,7 +333,7 @@ struct AppFailure: Equatable, Sendable {
         switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStartStatus(let status), .unexpectedCloseStatus(let status): statusCause(status); case .requestFailed: .serverUnavailable; case .malformedStartResponse, .invalidSessionResponse, .mismatchedLibraryItem: .invalidServerResponse; case .invalidLibraryItemID, .invalidDeviceInfo, .invalidSupportedMimeType, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
     }
     private static func playbackSyncCause(_ error: PlaybackSyncError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .invalidSessionID, .invalidPosition, .invalidDuration, .positionExceedsDuration, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .invalidSessionID, .invalidPosition, .invalidDuration, .invalidListeningTime, .positionExceedsDuration, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
     }
     private static func localSessionCause(_ error: LocalPlaybackSessionError) -> AppFailureCause {
         switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .emptyBatch, .duplicateSessionID, .invalidSessionID, .invalidMetadata, .invalidDuration, .invalidPosition, .invalidTimestamp, .invalidMVPAccounting, .invalidDeviceInfo, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
@@ -358,6 +390,9 @@ final class AppModel {
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
+    private(set) var statistics: ResourceState<StatisticsSummary> = .idle
+    private(set) var privateCloudState: PrivateCloudState = .idle
+    private(set) var privateCloudSyncEnabled = true
     let playback: PlaybackModel
     let downloads: DownloadModel
     #if DEBUG
@@ -437,6 +472,24 @@ final class AppModel {
         )
 
         do {
+            privateCloudSyncEnabled =
+                await service.isPrivateCloudSyncEnabled()
+            if privateCloudSyncEnabled {
+                privateCloudState = .syncing
+                do {
+                    try await service.synchronizePrivateCloud()
+                    privateCloudState = .idle
+                } catch let error {
+                    privateCloudState = .failed(
+                        AppFailure(
+                            operation: .privateCloudSync,
+                            serviceError: error
+                        )
+                    )
+                }
+            } else {
+                privateCloudState = .disabled
+            }
             await diagnostics.record(
                 .started(.restoreAccounts, category: .auth)
             )
@@ -480,6 +533,7 @@ final class AppModel {
                 )
             )
             await loadLibraries()
+            await loadStatistics()
             startLiveUpdates(for: restoredAccount)
             await diagnostics.record(
                 .completed(.appStart, category: .app)
@@ -545,6 +599,8 @@ final class AppModel {
                 for: authenticatedAccount
             )
             await loadLibraries()
+            await loadStatistics()
+            await synchronizePrivateCloud()
             startLiveUpdates(for: authenticatedAccount)
             return true
         } catch let error {
@@ -1213,6 +1269,21 @@ final class AppModel {
                 itemID: detail.id,
                 update: BookProgressUpdate(isFinished: isFinished)
             )
+            if isFinished {
+                try? await service.recordCompletion(
+                    CompletionMilestone(
+                        accountID: account.id,
+                        itemID: detail.id,
+                        completedAt: Date(),
+                        duration: detail.duration,
+                        title: detail.title,
+                        author: detail.authors.map(\.name).joined(
+                            separator: ", "
+                        ),
+                        evidence: .explicitMarkFinished
+                    )
+                )
+            }
             let updated = try await service.bookDetail(
                 for: account,
                 libraryID: detail.libraryID,
@@ -1247,8 +1318,78 @@ final class AppModel {
         }
     }
 
+    func loadStatistics() async {
+        statistics = .loading
+        do {
+            statistics = .loaded(
+                try await service.statisticsSummary(
+                    query: StatisticsQuery(accountID: account?.id)
+                )
+            )
+        } catch let error {
+            statistics = .failed(
+                AppFailure(
+                    operation: .loadStatistics,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
+    func synchronizePrivateCloud() async {
+        guard privateCloudSyncEnabled,
+            privateCloudState != .syncing
+        else {
+            return
+        }
+        privateCloudState = .syncing
+        do {
+            try await service.synchronizePrivateCloud()
+            accounts = try await service.accounts()
+            if let active = try await service.activeAccount() {
+                account = active
+            }
+            playback.reloadSyncedPreferences()
+            downloads.reloadSyncedPreferences()
+            privateCloudState = .idle
+            await loadStatistics()
+        } catch let error {
+            privateCloudState = .failed(
+                AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool = false
+    ) async {
+        privateCloudState = .syncing
+        do {
+            try await service.setPrivateCloudSyncEnabled(
+                enabled,
+                deleteCloudData: deleteCloudData
+            )
+            privateCloudSyncEnabled = enabled
+            privateCloudState = enabled ? .idle : .disabled
+        } catch let error {
+            privateCloudState = .failed(
+                AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
     func removeAccount(
-        downloads disposition: AccountDownloadDisposition = .delete
+        downloads disposition: AccountDownloadDisposition = .delete,
+        scope: AccountRemovalScope = .thisDevice,
+        statistics statisticsDisposition:
+            AccountStatisticsDisposition = .keep
     ) async {
         guard let account else {
             accountActionStatus = .failed(
@@ -1267,7 +1408,25 @@ final class AppModel {
         await playback.stop()
 
         do {
-            try await service.removeAccount(account)
+            let deleteStatistics = statisticsDisposition == .delete
+            if scope == .allDevices {
+                try await service.deletePrivateCloudAccount(
+                    account.id,
+                    includeStatistics: deleteStatistics
+                )
+            }
+            if deleteStatistics {
+                try await service.removeStatistics(accountID: account.id)
+            }
+            switch scope {
+            case .thisDevice:
+                try await service.removeAccountFromThisDevice(
+                    account,
+                    includeStatistics: deleteStatistics
+                )
+            case .allDevices:
+                try await service.removeAccount(account)
+            }
             switch disposition {
             case .keep:
                 await downloads.retainDownloadsAndDetachAccount(

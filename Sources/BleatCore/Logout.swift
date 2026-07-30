@@ -65,6 +65,44 @@ extension AuthCoordinator {
         return LogoutResult(remoteStatus: remoteStatus)
     }
 
+    public func logoutKeepingNativeLogin(
+        accountID: AccountID,
+        server: NormalizedServerURL
+    ) async throws -> LogoutResult {
+        guard !accountID.rawValue.isEmpty else {
+            throw LogoutError.invalidAccountID
+        }
+        guard !accountsLoggingIn.contains(accountID),
+              !accountsSigningOut.contains(accountID)
+        else {
+            throw LogoutError.accountOperationInProgress
+        }
+
+        accountOperationGenerations[accountID, default: 0] &+= 1
+        accountsSigningOut.insert(accountID)
+        defer {
+            accountsSigningOut.remove(accountID)
+        }
+
+        await settleRefreshBeforeLogout(for: accountID)
+        let remoteStatus = await performRemoteLogout(
+            accountID: accountID,
+            server: server
+        )
+        do {
+            try await credentialStore.deleteSessionCredentials(
+                for: accountID
+            )
+        } catch {
+            clearAuthenticationState(for: accountID)
+            reauthenticationRequiredAccounts.insert(accountID)
+            throw LogoutError.credentialDeletionFailed
+        }
+        clearAuthenticationState(for: accountID)
+        reauthenticationRequiredAccounts.remove(accountID)
+        return LogoutResult(remoteStatus: remoteStatus)
+    }
+
     private func settleRefreshBeforeLogout(
         for accountID: AccountID
     ) async {

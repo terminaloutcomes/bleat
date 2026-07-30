@@ -258,9 +258,14 @@ final class BleatUITests: XCTestCase {
         let removeAccount = app.buttons["settings.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()
-        let confirmRemoval = app.sheets.buttons["Remove Account"]
-        XCTAssertTrue(confirmRemoval.waitForExistence(timeout: 3))
-        confirmRemoval.tap()
+        let removeFromDevice = app.sheets.buttons[
+            "Only on This Device"
+        ]
+        XCTAssertTrue(removeFromDevice.waitForExistence(timeout: 3))
+        removeFromDevice.tap()
+        let keepHistory = app.sheets.buttons["Keep Listening History"]
+        XCTAssertTrue(keepHistory.waitForExistence(timeout: 3))
+        keepHistory.tap()
 
         XCTAssertTrue(
             app.textFields["login.server"].waitForExistence(

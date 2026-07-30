@@ -30,6 +30,11 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             model.setLiveUpdatesActive(phase == .active)
+            if phase != .active {
+                Task {
+                    await model.synchronizePrivateCloud()
+                }
+            }
         }
     }
 }
@@ -1952,11 +1957,110 @@ private struct BookDetailView: View {
     }
 }
 
+private struct StatisticsView: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Group {
+            switch model.statistics {
+            case .idle, .loading:
+                ProgressView()
+            case .failed(let failure):
+                ContentUnavailableView(
+                    failure.title,
+                    systemImage: failure.systemImage,
+                    description: Text(failure.message)
+                )
+            case .loaded(let summary):
+                List {
+                    Section("Listening") {
+                        LabeledContent(
+                            "Time Listening",
+                            value: duration(summary.realSeconds)
+                        )
+                        LabeledContent(
+                            "Audiobook Time",
+                            value: duration(summary.audiobookSeconds)
+                        )
+                        if let speed = summary.effectiveAverageSpeed {
+                            LabeledContent(
+                                "Average Speed",
+                                value: speed.formatted(
+                                    .number.precision(
+                                        .fractionLength(2)
+                                    )
+                                ) + "×"
+                            )
+                        }
+                    }
+                    Section("Books") {
+                        LabeledContent(
+                            "Started",
+                            value: summary.booksStarted.formatted()
+                        )
+                        LabeledContent(
+                            "Completed",
+                            value: summary.booksCompleted.formatted()
+                        )
+                        LabeledContent(
+                            "Completed Runtime",
+                            value: duration(summary.finishedRuntime)
+                        )
+                    }
+                    Section("Chapters and Sessions") {
+                        LabeledContent(
+                            "Chapters Started",
+                            value: summary.chaptersStarted.formatted()
+                        )
+                        LabeledContent(
+                            "Chapters Completed",
+                            value: summary.chaptersCompleted.formatted()
+                        )
+                        LabeledContent(
+                            "Sessions",
+                            value: summary.sessions.formatted()
+                        )
+                    }
+                    if summary.realTimeCoverage == .approximate {
+                        Section {
+                            Label(
+                                "Some listening time is approximate because a server update had an uncertain result.",
+                                systemImage: "exclamationmark.triangle"
+                            )
+                        }
+                    }
+                }
+                .refreshable {
+                    await model.loadStatistics()
+                    await model.synchronizePrivateCloud()
+                }
+            }
+        }
+        .navigationTitle("Listening Statistics")
+        .task {
+            await model.loadStatistics()
+        }
+        .accessibilityIdentifier("statistics.view")
+    }
+
+    private func duration(_ seconds: Double) -> String {
+        let totalMinutes = max(0, Int(seconds.rounded())) / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours == 0 {
+            return "\(minutes) min"
+        }
+        return "\(hours) hr \(minutes) min"
+    }
+}
+
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var showAddAccount = false
     @State private var showReauthentication = false
     @State private var showRemoveAccountConfirmation = false
+    @State private var showDisableCloudSyncConfirmation = false
+    @State private var pendingRemovalScope: AccountRemovalScope?
 
     var body: some View {
         NavigationStack {
@@ -2007,6 +2111,9 @@ private struct SettingsView: View {
                             .foregroundStyle(.red)
                     }
                 }
+
+                cloudSection
+                statisticsSection
 
                 Section("Downloads") {
                     Toggle(
@@ -2192,41 +2299,177 @@ private struct SettingsView: View {
                 }
             }
             .confirmationDialog(
-                "Remove Account?",
-                isPresented: $showRemoveAccountConfirmation,
+                "Turn Off iCloud Sync?",
+                isPresented: $showDisableCloudSyncConfirmation,
                 titleVisibility: .visible
             ) {
-                if activeAccountDownloads.isEmpty {
-                    Button("Remove Account", role: .destructive) {
-                        removeAccount(downloads: .delete)
+                Button("Keep Data in iCloud") {
+                    Task {
+                        await model.setPrivateCloudSyncEnabled(
+                            false,
+                            deleteCloudData: false
+                        )
                     }
-                } else {
-                    Button(
-                        "Remove Account, Keep Downloads",
-                        role: .destructive
-                    ) {
-                        removeAccount(downloads: .keep)
-                    }
-                    Button(
-                        "Remove Account and Delete Downloads",
-                        role: .destructive
-                    ) {
-                        removeAccount(downloads: .delete)
+                }
+                Button("Delete Data from iCloud", role: .destructive) {
+                    Task {
+                        await model.setPrivateCloudSyncEnabled(
+                            false,
+                            deleteCloudData: true
+                        )
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                if activeAccountDownloads.isEmpty {
-                    Text(
-                        "This removes the saved account and its credentials."
-                    )
-                } else {
-                    Text(
-                        "\(activeAccountDownloads.count) downloaded \(activeAccountDownloads.count == 1 ? "book" : "books") use \(ByteCountFormatter.string(fromByteCount: activeAccountDownloadBytes, countStyle: .file)). Choose whether to keep the local files."
-                    )
+                Text(
+                    "Your statistics, accounts, preferences, and credentials remain on this device."
+                )
+            }
+            .confirmationDialog(
+                "Remove Account?",
+                isPresented: $showRemoveAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Only on This Device", role: .destructive) {
+                    pendingRemovalScope = .thisDevice
                 }
+                if model.privateCloudSyncEnabled {
+                    Button(
+                        "On All Devices",
+                        role: .destructive
+                    ) {
+                        pendingRemovalScope = .allDevices
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Choose where Bleat removes this saved account.")
+            }
+            .confirmationDialog(
+                "Keep Listening History?",
+                isPresented: Binding(
+                    get: { pendingRemovalScope != nil },
+                    set: { presented in
+                        if !presented {
+                            pendingRemovalScope = nil
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                removalDataButtons
+                Button("Cancel", role: .cancel) {
+                    pendingRemovalScope = nil
+                }
+            } message: {
+                Text(removalDataMessage)
             }
         }
+    }
+
+    private var cloudSection: some View {
+        Section {
+            Toggle(
+                "Sync with iCloud",
+                isOn: Binding(
+                    get: {
+                        model.privateCloudSyncEnabled
+                    },
+                    set: { enabled in
+                        if enabled {
+                            Task {
+                                await model.setPrivateCloudSyncEnabled(true)
+                            }
+                        } else {
+                            showDisableCloudSyncConfirmation = true
+                        }
+                    }
+                )
+            )
+            .disabled(model.privateCloudState == .syncing)
+            .accessibilityIdentifier("settings.icloud.enabled")
+
+            Button(
+                "Sync Now",
+                systemImage: "arrow.triangle.2.circlepath"
+            ) {
+                Task {
+                    await model.synchronizePrivateCloud()
+                }
+            }
+            .disabled(
+                !model.privateCloudSyncEnabled
+                    || model.privateCloudState == .syncing
+            )
+            .accessibilityIdentifier("settings.icloud.syncNow")
+
+            if case .failed(let failure) = model.privateCloudState {
+                Text(failure.message)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("settings.icloud.error")
+            }
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text(
+                "Syncs listening statistics, account details, preferences, and native usernames and passwords. Access and refresh tokens stay on this device."
+            )
+        }
+    }
+
+    private var statisticsSection: some View {
+        Section {
+            NavigationLink {
+                StatisticsView(model: model)
+            } label: {
+                Label("Listening Statistics", systemImage: "chart.bar")
+            }
+            .accessibilityIdentifier("settings.statistics")
+        }
+    }
+
+    @ViewBuilder
+    private var removalDataButtons: some View {
+        if activeAccountDownloads.isEmpty {
+            Button("Keep Listening History", role: .destructive) {
+                removeAccount(
+                    downloads: .delete,
+                    statistics: .keep
+                )
+            }
+            Button("Delete Listening History", role: .destructive) {
+                removeAccount(
+                    downloads: .delete,
+                    statistics: .delete
+                )
+            }
+        } else {
+            Button("Keep History and Downloads", role: .destructive) {
+                removeAccount(downloads: .keep, statistics: .keep)
+            }
+            Button("Keep History, Delete Downloads", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .keep)
+            }
+            Button("Delete History, Keep Downloads", role: .destructive) {
+                removeAccount(downloads: .keep, statistics: .delete)
+            }
+            Button("Delete History and Downloads", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .delete)
+            }
+        }
+    }
+
+    private var removalDataMessage: String {
+        guard !activeAccountDownloads.isEmpty else {
+            return "Choose whether to keep this account's listening history."
+        }
+        let count = activeAccountDownloads.count
+        let books = count == 1 ? "book" : "books"
+        let bytes = ByteCountFormatter.string(
+            fromByteCount: activeAccountDownloadBytes,
+            countStyle: .file
+        )
+        return "\(count) downloaded \(books) use \(bytes). Choose what to keep."
     }
 
     private var activeAccountDownloads: [DownloadedBookRecord] {
@@ -2250,10 +2493,19 @@ private struct SettingsView: View {
     }
 
     private func removeAccount(
-        downloads disposition: AccountDownloadDisposition
+        downloads disposition: AccountDownloadDisposition,
+        statistics statisticsDisposition: AccountStatisticsDisposition
     ) {
+        guard let scope = pendingRemovalScope else {
+            return
+        }
+        pendingRemovalScope = nil
         Task {
-            await model.removeAccount(downloads: disposition)
+            await model.removeAccount(
+                downloads: disposition,
+                scope: scope,
+                statistics: statisticsDisposition
+            )
         }
     }
 }

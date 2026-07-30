@@ -569,6 +569,23 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    func reloadSyncedPreferences() {
+        networkPolicy =
+            defaults.string(forKey: networkPolicyKey)
+            .flatMap(DownloadNetworkPolicy.init(rawValue:))
+            ?? .wifiOnly
+        automaticLookaheadCount = Self.normalizedLookaheadCount(
+            defaults.object(forKey: automaticLookaheadKey) == nil
+                ? 5
+                : defaults.integer(forKey: automaticLookaheadKey)
+        )
+        automaticCleanupPolicy =
+            defaults.string(forKey: automaticCleanupPolicyKey)
+            .flatMap(AutomaticDownloadCleanupPolicy.init(rawValue:))
+            ?? .afterTwentyFourHours
+        scheduleAutomaticCleanup()
+    }
+
     func handleAutomaticPlaybackActivity(
         _ activity: AutomaticDownloadActivity
     ) async {

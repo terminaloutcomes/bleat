@@ -499,6 +499,35 @@ extension AuthCoordinator {
         return result
     }
 
+    public func removePersistedAccountFromDevice(
+        accountID: AccountID,
+        accountStore: AccountStore
+    ) async throws(AccountLifecycleError) -> LogoutResult {
+        guard let account = try await storedAccount(
+            id: accountID,
+            accountStore: accountStore
+        ) else {
+            throw .accountNotFound(accountID)
+        }
+        let result: LogoutResult
+        do {
+            result = try await logoutKeepingNativeLogin(
+                accountID: accountID,
+                server: account.server
+            )
+        } catch let error as LogoutError {
+            throw .logoutFailed(error)
+        } catch {
+            throw .logoutRequestFailed
+        }
+        do {
+            _ = try await accountStore.removeAccount(id: accountID)
+        } catch let error {
+            throw .accountStoreFailed(error)
+        }
+        return result
+    }
+
     private func storedAccount(
         id: AccountID,
         accountStore: AccountStore

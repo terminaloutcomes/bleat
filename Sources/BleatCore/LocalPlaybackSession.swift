@@ -40,6 +40,7 @@ public struct LocalPlaybackSession: Codable, Hashable, Sendable {
         displayAuthor: String,
         coverPath: String? = nil,
         duration: Double,
+        timeListening: Double = 0,
         startTime: Double,
         currentTime: Double,
         startedAtMilliseconds: Int64,
@@ -59,7 +60,7 @@ public struct LocalPlaybackSession: Codable, Hashable, Sendable {
         self.duration = duration
         playMethod = .local
         mediaPlayer = "AVPlayer"
-        timeListening = 0
+        self.timeListening = timeListening
         self.startTime = startTime
         self.currentTime = currentTime
         self.startedAtMilliseconds = startedAtMilliseconds
@@ -100,6 +101,7 @@ public struct LocalPlaybackSession: Codable, Hashable, Sendable {
 
     public func updating(
         currentTime: Double,
+        timeListening: Double? = nil,
         now: Date = Date()
     ) throws(LocalPlaybackSessionError) -> Self {
         try Self(
@@ -113,6 +115,7 @@ public struct LocalPlaybackSession: Codable, Hashable, Sendable {
             displayAuthor: displayAuthor,
             coverPath: coverPath,
             duration: duration,
+            timeListening: timeListening ?? self.timeListening,
             startTime: startTime,
             currentTime: currentTime,
             startedAtMilliseconds: startedAtMilliseconds,
@@ -150,7 +153,10 @@ public struct LocalPlaybackSession: Codable, Hashable, Sendable {
         else {
             throw .invalidTimestamp
         }
-        guard playMethod == .local, timeListening == 0 else {
+        guard playMethod == .local,
+            timeListening.isFinite,
+            timeListening >= 0
+        else {
             throw .invalidMVPAccounting
         }
     }

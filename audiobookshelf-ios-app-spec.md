@@ -26,7 +26,7 @@ Build a native iOS audiobook client for one or more Audiobookshelf servers. The 
 This is an audiobook app, not a general Audiobookshelf administration client;
 item deletion is limited to the current book editor.
 The same application target supports development-signed Mac Catalyst 18 on
-macOS 15 or newer. Signed launch, native login, device-only Keychain credential
+macOS 15 or newer. Signed launch, native login, split Keychain credential
 persistence, and account restoration are acceptance requirements. Notarization,
 distribution, Mac-specific interface adaptation, and otherwise unlisted Mac
 media or background behavior are not version 1.0 acceptance requirements.
@@ -380,11 +380,16 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
 ### 6.4 Credential storage and refresh
 
 - Store the native username/password credential and access/refresh tokens in
-  Keychain, not SwiftData or `UserDefaults`.
+  separate Keychain items, not SwiftData or `UserDefaults`.
 - Treat an existing token-only Keychain item as a legacy account. It remains
   readable, but requires one explicit native login before automatic recovery is
   available because a previously discarded password cannot be reconstructed.
-- Keychain accessibility must be `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so background playback/download work after the device's first unlock without syncing credentials to iCloud.
+- Access and refresh tokens use
+  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and never synchronize.
+  The stable native username/password uses
+  `kSecAttrAccessibleAfterFirstUnlock` with iCloud Keychain while private
+  iCloud synchronization is enabled, and migrates back to a device-only item
+  when the user opts out.
 - Use a distinct Keychain service/account key for every local `AccountID`.
 - Use the access token only in `Authorization: Bearer` headers.
 - The current server also extracts an access token from `?token=`, but this client never uses or stores token-bearing URLs.
@@ -420,11 +425,13 @@ credentials even if the server is unreachable. The current response is
 `{ "redirect_url": String? }`; the MVP ignores that deferred
 identity-provider logout URL.
 
-Removing an account must:
+Removing an account distinguishes this device from all devices and asks
+separately whether to retain listening history. It must:
 
 - stop or detach its active downloads;
 - close its active playback session if possible;
-- delete Keychain credentials;
+- delete device session tokens; an all-device removal also deletes the
+  synchronized native credential;
 - remove its cached data and pending sync operations;
 - default to deleting its downloaded audio, with an explicit confirmation.
 
@@ -874,14 +881,13 @@ Do not rely on an app-termination callback.
 For an open streamed session:
 
 - sync with `POST /api/session/<session-id>/sync`;
-- send `{ "currentTime": <whole-book-seconds>, "timeListened": 0, "duration": <whole-book-seconds> }` in the MVP;
+- send `{ "currentTime": <whole-book-seconds>, "timeListened": <new-real-seconds>, "duration": <whole-book-seconds> }`;
 - sync approximately every 15 seconds while connected and after significant events;
 - close with `POST /api/session/<session-id>/close`, optionally carrying the same final sync body, when the book changes or playback is deliberately ended.
 
-MVP session synchronization keeps server position current but deliberately does
-not accumulate listening time. Nonzero `timeListened`, its monotonic
-measurement, and ambiguous-delta reconciliation are part of the deferred
-section 12 work.
+`timeListened` is an acknowledged delta measured from monotonic, audible
+forward playback. An ambiguous response marks that delta uncertain rather than
+silently sending it again.
 
 ### 11.3 Offline session sync
 
@@ -953,10 +959,12 @@ Track a local `lastCommonServerUpdate` and position for each item.
 
 Marking a book finished or unfinished is an explicit progress mutation and follows the same conflict rules.
 
-## 12. Lifetime listening statistics — post-MVP
+## 12. Lifetime listening statistics
 
-This section is retained as the design for a later release. None of section 12
-is required for MVP implementation, testing, or release acceptance.
+The app implements the local ledger, completion milestones, lifetime summary,
+and private CloudKit merge. Paginated server-history import, user-facing
+archive import/export, range charts, and large-ledger performance work remain
+deferred.
 
 ### 12.1 Metric definitions
 
@@ -1058,7 +1066,12 @@ Listening history contains personal behavioral data. It receives the same file p
 - Import validates schema and account mapping, then upserts by stable event/session ID so importing the same file twice changes nothing.
 - Structured statistics remain eligible for encrypted device backup; downloaded audio and regenerable covers remain excluded.
 
-Cross-device CloudKit synchronization is deferred. Therefore, exact audiobook-time and chapter history is lifetime for this app data set, not a claim that the Audiobookshelf server can reconstruct it after a fresh install with no backup or import.
+Private CloudKit synchronization is opt-out and uses
+`iCloud.com.terminaloutcomes.Bleat`. Mergeable ledger records, completion
+milestones, non-secret account descriptors, and playback/download preferences
+use the private database. Access and refresh tokens never enter CloudKit or
+iCloud Keychain. Disabling synchronization keeps all local data and offers to
+retain or delete the private CloudKit zone.
 
 ## 13. Local data model
 
@@ -1308,7 +1321,7 @@ The following targets apply to the deferred post-MVP statistics work:
 - whole-book/track/chapter time mapping;
 - speed persistence and pitch-algorithm selection;
 
-The following statistics tests are post-MVP and do not gate MVP delivery:
+The following advanced statistics tests remain post-MVP:
 
 - wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;
 - audiobook-time integration at 0.5×, 1×, 2×, and 3×;
@@ -1470,8 +1483,8 @@ The 1.0 release is acceptable only when:
 ## 23. Deferred enhancements
 
 - OpenID Connect authentication and identity-provider logout;
-- local time tracking, lifetime statistics, listening-history import/export,
-  and the Statistics screen described in section 12;
+- paginated listening-history import, user-facing archive import/export, and
+  advanced Statistics views described in section 12;
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;
 - Siri/App Intents;
@@ -1483,7 +1496,6 @@ The 1.0 release is acceptable only when:
 - silence skipping, voice boost, and equalizer;
 - series bulk download;
 - offline transcoding format selection;
-- optional private CloudKit synchronization of the local statistics ledger;
 - deliberate cross-server edition merging for statistics.
 
 ## 24. References

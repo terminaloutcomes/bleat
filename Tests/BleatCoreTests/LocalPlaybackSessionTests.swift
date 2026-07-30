@@ -4,11 +4,11 @@ import XCTest
 @testable import BleatCore
 
 final class LocalPlaybackSessionTests: XCTestCase {
-    func testBatchUsesExactAuthenticatedContractAndZeroListeningTime()
+    func testBatchUsesExactAuthenticatedContractAndListeningTime()
         async throws
     {
         let accountID = AccountID(rawValue: "account")
-        let session = try Self.session()
+        let session = try Self.session(timeListening: 12.5)
         let transport = LocalSessionTestTransport(
             responses: [
                 HTTPResponse(
@@ -63,7 +63,7 @@ final class LocalPlaybackSessionTests: XCTestCase {
         let encoded = try XCTUnwrap(sessions.first)
         XCTAssertEqual(encoded["id"] as? String, session.id.rawValue)
         XCTAssertEqual(encoded["playMethod"] as? Int, 3)
-        XCTAssertEqual(encoded["timeListening"] as? Double, 0)
+        XCTAssertEqual(encoded["timeListening"] as? Double, 12.5)
         XCTAssertEqual(encoded["currentTime"] as? Double, 25)
         XCTAssertEqual(encoded["updatedAt"] as? Int, 2_000)
         XCTAssertEqual(
@@ -210,7 +210,8 @@ final class LocalPlaybackSessionTests: XCTestCase {
 
     private static func session(
         id: String = "d9ef37df-6838-4dd5-9875-266ae49db169",
-        currentTime: Double = 25
+        currentTime: Double = 25,
+        timeListening: Double = 0
     ) throws -> LocalPlaybackSession {
         try LocalPlaybackSession(
             id: PlaybackSessionID(rawValue: id),
@@ -222,6 +223,7 @@ final class LocalPlaybackSessionTests: XCTestCase {
             displayTitle: "Example",
             displayAuthor: "Author",
             duration: 100,
+            timeListening: timeListening,
             startTime: 10,
             currentTime: currentTime,
             startedAtMilliseconds: 1_000,
