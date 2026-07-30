@@ -237,7 +237,11 @@ The full player contains:
 - AirPlay route picker;
 - sync/error indicator that explains pending offline state when tapped.
 
-Seeking must require an intentional drag or explicit tap target. Tiny accidental touches must not move a user hours into a book.
+Seeking must require an intentional drag or explicit tap target. Whole-book
+scrubber moves of at least 10 minutes from the position where the drag began
+require explicit confirmation in either direction. Skip, chapter, audio-file,
+and system position commands remain direct. Tiny accidental touches must not
+move a user hours into a book.
 
 ### 5.2 Book detail
 
@@ -728,8 +732,8 @@ and present Now Playing only after preparation succeeds.
 CarPlay list and Now Playing artwork use bounded token-free cover routes,
 placeholders, and account/item generation checks. Late results must not replace
 artwork or templates for a newer account, library, search, or playback item.
-The repository entitlement requires Apple's approval and matching provisioning;
-declaring it does not grant the capability. See Apple's
+The CarPlay entitlement requires Apple's approval and matching provisioning;
+the repository intentionally omits it until approval. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
 

@@ -8,6 +8,7 @@
         case refresh = "--ui-testing-refresh"
         case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
+        case playback = "--ui-testing-playback"
     }
 
     actor UITestAppService: AppServicing {
@@ -37,7 +38,9 @@
         func accounts()
             async throws(AppServiceError) -> [ServerAccount]
         {
-            guard [.signedIn, .refresh, .limitedPermissions].contains(scenario)
+            guard
+                [.signedIn, .refresh, .limitedPermissions, .playback]
+                    .contains(scenario)
             else {
                 return []
             }
@@ -47,7 +50,9 @@
         func activeAccount()
             async throws(AppServiceError) -> ServerAccount?
         {
-            guard [.signedIn, .refresh, .limitedPermissions].contains(scenario)
+            guard
+                [.signedIn, .refresh, .limitedPermissions, .playback]
+                    .contains(scenario)
             else {
                 return nil
             }
@@ -216,9 +221,15 @@
                     PlaybackChapter(
                         id: 0,
                         start: 0,
-                        end: 3_600,
+                        end: 1_800,
                         title: "Chapter One"
-                    )
+                    ),
+                    PlaybackChapter(
+                        id: 1,
+                        start: 1_800,
+                        end: 3_600,
+                        title: "Chapter Two"
+                    ),
                 ],
                 addedAtMilliseconds: 1,
                 updatedAtMilliseconds: 1,
@@ -234,7 +245,40 @@
             preference: PlaybackPreference,
             deviceInfo: PlaybackDeviceInfo
         ) async throws(AppServiceError) -> AppPlaybackPreparation {
-            throw .playbackSession(.requestFailed)
+            guard scenario == .playback else {
+                throw .playbackSession(.requestFailed)
+            }
+            return AppPlaybackPreparation(
+                sessionID: nil,
+                itemID: itemID,
+                title: "The Test Audiobook",
+                duration: 3_600,
+                currentTime: 0,
+                chapters: [
+                    PlaybackChapter(
+                        id: 0,
+                        start: 0,
+                        end: 1_800,
+                        title: "Chapter One"
+                    ),
+                    PlaybackChapter(
+                        id: 1,
+                        start: 1_800,
+                        end: 3_600,
+                        title: "Chapter Two"
+                    ),
+                ],
+                source: .direct([
+                    AppPlaybackTrack(
+                        url: URL(
+                            fileURLWithPath: "/tmp/bleat-ui-test-audio.m4b"
+                        ),
+                        startOffset: 0,
+                        duration: 3_600,
+                        title: "The Test Audiobook"
+                    )
+                ])
+            )
         }
 
         func closePlayback(

@@ -2,6 +2,155 @@ import AVKit
 import BleatCore
 import SwiftUI
 
+struct PendingScrubberSeek: Equatable {
+    let origin: Double
+    let target: Double
+
+    var distance: Double {
+        abs(target - origin)
+    }
+
+    var isForward: Bool {
+        target > origin
+    }
+}
+
+enum ScrubberSeekDecision: Equatable {
+    static let confirmationThreshold: TimeInterval = 600
+
+    case seekImmediately(Double)
+    case confirm(PendingScrubberSeek)
+
+    static func decide(origin: Double, target: Double) -> Self {
+        let pending = PendingScrubberSeek(
+            origin: origin,
+            target: target
+        )
+        guard pending.distance >= confirmationThreshold else {
+            return .seekImmediately(target)
+        }
+        return .confirm(pending)
+    }
+}
+
+private struct PlaybackScrubberView: View {
+    @Bindable var playback: PlaybackModel
+    @State private var scrubTime: Double = 0
+    @State private var isScrubbing = false
+    @State private var scrubOriginTime: Double?
+    @State private var pendingSeek: PendingScrubberSeek?
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Slider(
+                value: $scrubTime,
+                in: 0...max(playback.duration, 1)
+            ) { editing in
+                isScrubbing = editing
+                if editing {
+                    scrubOriginTime = playback.currentTime
+                } else {
+                    finishScrubbing()
+                }
+            }
+            .disabled(playback.state == .preparing)
+            .accessibilityIdentifier("player.position")
+
+            HStack {
+                Text(playbackTime(scrubTime))
+                Spacer()
+                Text(
+                    "-"
+                        + playbackTime(
+                            max(playback.duration - scrubTime, 0)
+                        )
+                )
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .task {
+            scrubTime = playback.currentTime
+        }
+        .onChange(of: playback.currentTime) { _, newValue in
+            if !isScrubbing {
+                scrubTime = newValue
+            }
+        }
+        .alert(
+            "Confirm Position Change",
+            isPresented: Binding(
+                get: {
+                    pendingSeek != nil
+                },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingSeek = nil
+                    }
+                }
+            ),
+            presenting: pendingSeek
+        ) { pending in
+            Button("Jump") {
+                Task {
+                    await playback.seek(to: pending.target)
+                }
+            }
+            .accessibilityIdentifier("player.scrub.confirm")
+            Button("Cancel", role: .cancel) {
+                scrubTime = playback.currentTime
+            }
+            .accessibilityIdentifier("player.scrub.cancel")
+        } message: { pending in
+            Text(confirmationMessage(for: pending))
+        }
+    }
+
+    private func finishScrubbing() {
+        let origin = scrubOriginTime ?? playback.currentTime
+        scrubOriginTime = nil
+        switch ScrubberSeekDecision.decide(
+            origin: origin,
+            target: scrubTime
+        ) {
+        case .seekImmediately(let target):
+            Task {
+                await playback.seek(to: target)
+            }
+        case .confirm(let pending):
+            pendingSeek = pending
+        }
+    }
+
+    private func confirmationMessage(
+        for pending: PendingScrubberSeek
+    ) -> String {
+        "Jump \(pending.isForward ? "forward" : "backward") "
+            + "by \(playbackTime(pending.distance)) "
+            + "to \(playbackTime(pending.target))?"
+    }
+
+    private func playbackTime(_ value: Double) -> String {
+        let seconds = max(0, Int(value))
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        if hours > 0 {
+            return String(
+                format: "%d:%02d:%02d",
+                hours,
+                minutes,
+                remainingSeconds
+            )
+        }
+        return String(
+            format: "%d:%02d",
+            minutes,
+            remainingSeconds
+        )
+    }
+}
+
 struct MiniPlayerView: View {
     @Bindable var playback: PlaybackModel
     let showPlayer: () -> Void
@@ -60,8 +209,6 @@ struct MiniPlayerView: View {
 struct PlayerView: View {
     @Bindable var playback: PlaybackModel
     @Environment(\.dismiss) private var dismiss
-    @State private var scrubTime: Double = 0
-    @State private var isScrubbing = false
     @State private var bookmarkDraft: BookmarkDraft?
 
     var body: some View {
@@ -98,34 +245,7 @@ struct PlayerView: View {
                         }
                     }
 
-                    VStack(spacing: 6) {
-                        Slider(
-                            value: $scrubTime,
-                            in: 0...max(playback.duration, 1)
-                        ) { editing in
-                            isScrubbing = editing
-                            guard !editing else {
-                                return
-                            }
-                            Task {
-                                await playback.seek(to: scrubTime)
-                            }
-                        }
-                        .disabled(playback.state == .preparing)
-                        .accessibilityIdentifier("player.position")
-
-                        HStack {
-                            Text(playbackTime(scrubTime))
-                            Spacer()
-                            Text(
-                                "-"
-                                    + playbackTime(
-                                        max(playback.duration - scrubTime, 0)
-                                    ))
-                        }
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    }
+                    PlaybackScrubberView(playback: playback)
 
                     if case .failed(let failure) = playback.state {
                         Text(failure.message)
@@ -523,14 +643,6 @@ struct PlayerView: View {
                             dismiss()
                         }
                     }
-                }
-            }
-            .task {
-                scrubTime = playback.currentTime
-            }
-            .onChange(of: playback.currentTime) { _, newValue in
-                if !isScrubbing {
-                    scrubTime = newValue
                 }
             }
             .sheet(item: $bookmarkDraft) { draft in

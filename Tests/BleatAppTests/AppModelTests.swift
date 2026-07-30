@@ -11,6 +11,41 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection() {
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 1_599.999),
+            .seekImmediately(1_599.999)
+        )
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 1_600),
+            .confirm(
+                PendingScrubberSeek(origin: 1_000, target: 1_600)
+            )
+        )
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 1_600.001),
+            .confirm(
+                PendingScrubberSeek(origin: 1_000, target: 1_600.001)
+            )
+        )
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 400.001),
+            .seekImmediately(400.001)
+        )
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 400),
+            .confirm(
+                PendingScrubberSeek(origin: 1_000, target: 400)
+            )
+        )
+        XCTAssertEqual(
+            ScrubberSeekDecision.decide(origin: 1_000, target: 399.999),
+            .confirm(
+                PendingScrubberSeek(origin: 1_000, target: 399.999)
+            )
+        )
+    }
+
     func
         testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
     {

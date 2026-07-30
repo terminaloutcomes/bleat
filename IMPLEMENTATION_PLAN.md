@@ -72,8 +72,6 @@ traceability rows can be closed:
 - `APP-BOOKMARK-UX-001`: give Book Detail the same create, rename, delete,
   pending-sync, failure, and retry affordances as Now Playing while preserving
   the account-scoped mutation ordering rules.
-- `APP-SCRUB-001`: protect large whole-book scrubber jumps with an explicit
-  confirmation while leaving skip and chapter commands direct and accessible.
 
 ### Listening statistics and portability
 

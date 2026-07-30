@@ -187,11 +187,11 @@ The equivalent command-line simulator workflow is:
 mise run iphone
 ```
 
-The iOS target declares Apple's managed CarPlay Audio App entitlement and a
-`CPTemplateApplicationScene`; the Catalyst target uses a separate CarPlay-free
-entitlement file. Apple must approve the capability and include it in the
-provisioning profile before a signed physical-device build or distribution can
-use it. Declaring the entitlement in this repository does not grant access.
+The iOS target includes a `CPTemplateApplicationScene`, but the managed CarPlay
+Audio App entitlement is intentionally omitted until Apple approves the
+capability. The Catalyst target also uses a CarPlay-free entitlement file.
+After approval, the entitlement and matching provisioning profile must be
+enabled before a signed physical-device build or distribution can use CarPlay.
 Follow Apple's
 [entitlement request](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [CarPlay scene](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay)
@@ -302,6 +302,8 @@ title for whole-book seeking, configurable rewind and forward controls,
 previous/next chapter controls, speed control from 0.5× to 3×, and Stop. Rewind
 defaults to 15 seconds and forward defaults to 30 seconds;
 Settings offers 5, 10, 15, 30, 45, and 60-second choices for either direction.
+Whole-book scrubber moves of 10 minutes or more in either direction require
+confirmation; skip, chapter, audio-file, and system commands remain immediate.
 Now Playing identifies the narrator and current chapter, offers a chapter list
 for direct navigation, and shows an Audio Files menu for multi-file direct or
 downloaded books. Selecting a file seeks to its whole-book start position. The

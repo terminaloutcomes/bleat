@@ -417,6 +417,68 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testLargeScrubberJumpsRequireConfirmationWithoutGuardingCommands() {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.buttons.matching(
+            NSPredicate(
+                format: "label CONTAINS %@ AND label CONTAINS %@",
+                "The Test Audiobook",
+                "Test Author"
+            )
+        ).firstMatch
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+
+        let slider = app.sliders["player.position"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 3))
+        let alert = app.alerts["Confirm Position Change"]
+
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        let cancelJump = alert.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancelJump.isHittable)
+        cancelJump.tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 3))
+
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        alert.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 3))
+
+        slider.adjust(toNormalizedSliderPosition: 0.01)
+        XCTAssertFalse(alert.waitForExistence(timeout: 1))
+
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        let confirmJump = alert.buttons["Jump"].firstMatch
+        XCTAssertTrue(confirmJump.isHittable)
+        confirmJump.tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 3))
+
+        let skipForward = app.buttons["player.skipForward"]
+        XCTAssertTrue(skipForward.waitForExistence(timeout: 3))
+        XCTAssertTrue(skipForward.isHittable)
+        skipForward.tap()
+        XCTAssertFalse(alert.waitForExistence(timeout: 1))
+
+        let chapters = app.buttons["player.chapters"]
+        XCTAssertTrue(chapters.waitForExistence(timeout: 3))
+        XCTAssertTrue(chapters.isHittable)
+        chapters.tap()
+        app.buttons["Chapter One"].tap()
+        XCTAssertFalse(alert.waitForExistence(timeout: 1))
+    }
+
+    @MainActor
     func testLimitedPermissionsShowPlayWithoutEditOrDownload() {
         let app = launch(scenario: "--ui-testing-limited-permissions")
 
