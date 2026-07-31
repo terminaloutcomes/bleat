@@ -579,6 +579,42 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testPlaybackRateMenuRemainsStableAcrossTimeUpdates() async throws {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.buttons.matching(
+            NSPredicate(
+                format: "label CONTAINS %@ AND label CONTAINS %@",
+                "The Test Audiobook",
+                "Test Author"
+            )
+        ).firstMatch
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+
+        let rateMenu = app.buttons["player.rate"]
+        XCTAssertTrue(rateMenu.waitForExistence(timeout: 3))
+        rateMenu.tap()
+        let increasedRate = app.collectionViews.buttons["1.25×"].firstMatch
+        XCTAssertTrue(increasedRate.waitForExistence(timeout: 3))
+
+        try await Task.sleep(for: .seconds(2))
+
+        XCTAssertTrue(increasedRate.exists)
+        XCTAssertTrue(increasedRate.isHittable)
+        increasedRate.tap()
+        XCTAssertEqual(rateMenu.label, "1.25×")
+    }
+
+    @MainActor
     func testLimitedPermissionsShowPlayWithoutEditOrDownload() {
         let app = launch(scenario: "--ui-testing-limited-permissions")
 

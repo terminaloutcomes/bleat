@@ -20,4 +20,4 @@ xcodebuild \
 
 xcrun simctl install booted \
   .build/xcode-derived/Build/Products/Debug-iphonesimulator/Bleat.app
-xcrun simctl launch --terminate-running-process booted com.terminaloutcomes.Bleat
+xcrun simctl launch --terminate-running-process booted com.yaleman.Bleat

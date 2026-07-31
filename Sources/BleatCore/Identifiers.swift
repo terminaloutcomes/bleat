@@ -32,3 +32,5 @@ public typealias BookID = TypedID<BookIDKind>
 public typealias PlaybackSessionID = TypedID<PlaybackSessionIDKind>
 public typealias DownloadID = TypedID<DownloadIDKind>
 public typealias ChapterID = TypedID<ChapterIDKind>
+
+public let AppIdentifier: String = "com.yaleman.Bleat"

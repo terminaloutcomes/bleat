@@ -480,30 +480,13 @@ struct NowPlaying: View {
                     }
 
                     HStack(spacing: 24) {
-                        Menu {
-                            ForEach(
-                                PlaybackPreferencesStore.featuredRates,
-                                id: \.self
-                            ) { speed in
-                                Button(formatRate(Double(speed))) {
-                                    playback.setRate(speed)
-                                }
-                            }
-                            Divider()
-                            Button("Slower by 0.05×") {
-                                playback.setRate(playback.rate - 0.05)
-                            }
-                            .disabled(playback.rate <= 0.5)
-                            Button("Faster by 0.05×") {
-                                playback.setRate(playback.rate + 0.05)
-                            }
-                            .disabled(playback.rate >= 3)
-                        } label: {
-                            Text(formatRate(Double(playback.rate)))
-                                .font(.headline)
-                                .frame(minWidth: 72)
+                        PlaybackRateMenu(
+                            sourceID: ObjectIdentifier(playback),
+                            rate: playback.rate
+                        ) { rate in
+                            playback.setRate(rate)
                         }
-                        .accessibilityIdentifier("player.rate")
+                        .equatable()
 
                         if !playback.chapters.isEmpty {
                             Menu {
@@ -783,13 +766,6 @@ struct NowPlaying: View {
         )
     }
 
-    private func formatRate(_ value: Double) -> String {
-        value.formatted(
-            .number
-                .precision(.fractionLength(value.rounded() == value ? 0 : 2))
-        ) + "×"
-    }
-
     private func audioFileLabel(
         _ file: AppPlaybackTrack,
         index: Int
@@ -799,6 +775,54 @@ struct NowPlaying: View {
         )
         let displayTitle = title.isEmpty ? "File \(index + 1)" : title
         return "\(displayTitle) · \(playbackTime(file.duration))"
+    }
+}
+
+private struct PlaybackRateMenu: View, @MainActor Equatable {
+    let sourceID: ObjectIdentifier
+    let rate: Float
+    let onSetRate: (Float) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.sourceID == rhs.sourceID && lhs.rate == rhs.rate
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(
+                PlaybackPreferencesStore.featuredRates,
+                id: \.self
+            ) { speed in
+                Button(formatRate(speed)) {
+                    onSetRate(speed)
+                }
+            }
+            Divider()
+            Button("Slower by 0.05×") {
+                onSetRate(rate - 0.05)
+            }
+            .disabled(rate <= 0.5)
+            Button("Faster by 0.05×") {
+                onSetRate(rate + 0.05)
+            }
+            .disabled(rate >= 3)
+        } label: {
+            Text(formatRate(rate))
+                .font(.headline)
+                .frame(minWidth: 72)
+        }
+        .accessibilityIdentifier("player.rate")
+    }
+
+    private func formatRate(_ value: Float) -> String {
+        Double(value).formatted(
+            .number
+                .precision(
+                    .fractionLength(
+                        value.rounded() == value ? 0 : 2
+                    )
+                )
+        ) + "×"
     }
 }
 

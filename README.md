@@ -286,9 +286,9 @@ CloudKit-free signing entitlements, hides iCloud synchronization, leaves
 statistics local, and stores native credentials in the device-only Keychain.
 Paid-team and distribution builds default to `enabled`.
 
-If Apple reports that `com.terminaloutcomes.Bleat` is unavailable for the selected team,
+If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
 set a stable alternative such as
-`BLEAT_BUNDLE_ID=com.terminaloutcomes.Bleat.personal` before running the tasks.
+`BLEAT_BUNDLE_ID=com.yaleman.Bleat.personal` before running the tasks.
 
 ## Sign in
 
@@ -317,7 +317,7 @@ identity-provider configuration are not part of the app.
 Private iCloud synchronization is enabled by default and can be turned off in
 Settings. It merges account descriptors, playback and download preferences,
 listening slices, completion milestones, and imported server sessions in
-`iCloud.com.terminaloutcomes.Bleat`. Turning synchronization off always keeps
+`iCloud.com.yaleman.Bleat`. Turning synchronization off always keeps
 local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.

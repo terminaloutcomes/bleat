@@ -10,7 +10,7 @@ fi
 
 : "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 : "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
 readonly bleat_app=".build/device-release/Build/Products/Release-iphoneos/Bleat.app"
 
 if [ -d "${bleat_app}" ]; then

@@ -1095,7 +1095,7 @@ Listening history contains personal behavioral data. It receives the same file p
 - Structured statistics remain eligible for encrypted device backup; downloaded audio and regenerable covers remain excluded.
 
 Private CloudKit synchronization is opt-out and uses
-`iCloud.com.terminaloutcomes.Bleat`. Mergeable ledger records, completion
+`iCloud.com.yaleman.Bleat`. Mergeable ledger records, completion
 milestones, non-secret account descriptors, and playback/download preferences
 use the private database. Access and refresh tokens never enter CloudKit or
 iCloud Keychain. Disabling synchronization keeps all local data and offers to

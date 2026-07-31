@@ -76,32 +76,42 @@ public actor CloudConfigurationStore {
         CloudConfigurationSnapshot(
             defaultPlaybackRate: defaults.object(
                 forKey: Key.defaultPlaybackRate
-            ) == nil ? 1 : defaults.double(
-                forKey: Key.defaultPlaybackRate
-            ),
+            ) == nil
+                ? 1
+                : defaults.double(
+                    forKey: Key.defaultPlaybackRate
+                ),
             resumeRewindSeconds: defaults.object(
                 forKey: Key.resumeRewind
-            ) == nil ? 10 : defaults.integer(
-                forKey: Key.resumeRewind
-            ),
+            ) == nil
+                ? 10
+                : defaults.integer(
+                    forKey: Key.resumeRewind
+                ),
             skipBackwardSeconds: defaults.object(
                 forKey: Key.skipBackward
-            ) == nil ? 15 : defaults.integer(
-                forKey: Key.skipBackward
-            ),
+            ) == nil
+                ? 15
+                : defaults.integer(
+                    forKey: Key.skipBackward
+                ),
             skipForwardSeconds: defaults.object(
                 forKey: Key.skipForward
-            ) == nil ? 30 : defaults.integer(
-                forKey: Key.skipForward
-            ),
+            ) == nil
+                ? 30
+                : defaults.integer(
+                    forKey: Key.skipForward
+                ),
             downloadNetworkPolicy: defaults.string(
                 forKey: Key.downloadNetworkPolicy
             ) ?? "wifiOnly",
             automaticDownloadLookahead: defaults.object(
                 forKey: Key.automaticDownloadLookahead
-            ) == nil ? 5 : defaults.integer(
-                forKey: Key.automaticDownloadLookahead
-            ),
+            ) == nil
+                ? 5
+                : defaults.integer(
+                    forKey: Key.automaticDownloadLookahead
+                ),
             automaticDownloadCleanupPolicy: defaults.string(
                 forKey: Key.automaticDownloadCleanupPolicy
             ) ?? "afterTwentyFourHours"
@@ -325,20 +335,23 @@ private actor PrivateCloudSyncStore {
             }
             switch record.recordType {
             case "ListeningSlice":
-                return (try? JSONDecoder().decode(
-                    ListeningSlice.self,
-                    from: data
-                ).accountID) == accountID ? record.recordID : nil
+                return
+                    (try? JSONDecoder().decode(
+                        ListeningSlice.self,
+                        from: data
+                    ).accountID) == accountID ? record.recordID : nil
             case "CompletionMilestone":
-                return (try? JSONDecoder().decode(
-                    CompletionMilestone.self,
-                    from: data
-                ).accountID) == accountID ? record.recordID : nil
+                return
+                    (try? JSONDecoder().decode(
+                        CompletionMilestone.self,
+                        from: data
+                    ).accountID) == accountID ? record.recordID : nil
             case "RemoteListeningSession":
-                return (try? JSONDecoder().decode(
-                    RemoteListeningSession.self,
-                    from: data
-                ).accountID) == accountID ? record.recordID : nil
+                return
+                    (try? JSONDecoder().decode(
+                        RemoteListeningSession.self,
+                        from: data
+                    ).accountID) == accountID ? record.recordID : nil
             default:
                 return nil
             }
@@ -355,7 +368,8 @@ private actor PrivateCloudSyncStore {
             recordName: name,
             zoneID: zoneID
         )
-        let record = records[recordID]
+        let record =
+            records[recordID]
             ?? CKRecord(recordType: type, recordID: recordID)
         do {
             record[Self.payloadKey] =
@@ -446,22 +460,26 @@ private actor PrivateCloudSyncStore {
         do {
             switch recordType {
             case "ListeningSlice":
-                guard let id = UUID(
-                    uuidString: name.replacingOccurrences(
-                        of: "slice.",
-                        with: ""
+                guard
+                    let id = UUID(
+                        uuidString: name.replacingOccurrences(
+                            of: "slice.",
+                            with: ""
+                        )
                     )
-                ) else {
+                else {
                     throw PrivateCloudSyncError.invalidRecord
                 }
                 try await statistics.deleteSlice(id: id)
             case "CompletionMilestone":
-                guard let id = UUID(
-                    uuidString: name.replacingOccurrences(
-                        of: "completion.",
-                        with: ""
+                guard
+                    let id = UUID(
+                        uuidString: name.replacingOccurrences(
+                            of: "completion.",
+                            with: ""
+                        )
                     )
-                ) else {
+                else {
                     throw PrivateCloudSyncError.invalidRecord
                 }
                 try await statistics.deleteCompletion(id: id)
@@ -513,7 +531,7 @@ public final class PrivateCloudSyncCoordinator:
     @unchecked Sendable
 {
     public static let containerIdentifier =
-        "iCloud.com.terminaloutcomes.Bleat"
+        "iCloud.com.yaleman.Bleat"
 
     private let store: PrivateCloudSyncStore
     private let defaults: UserDefaults

@@ -30,7 +30,8 @@ run = [
 
 [tasks."device:build"]
 description = "Build a development-signed Release app for a physical iPhone"
-env = { BLEAT_CLOUDKIT_MODE = "disabled" }                                   #Until CloudKit is supported on physical devices by getting a "proper" account
+#Until CloudKit is supported on physical devices by getting a "proper" account
+env = { BLEAT_CLOUDKIT_MODE = "disabled" }
 run = ["./scripts/build-device.sh"]
 
 [tasks."device:install"]
@@ -55,7 +56,7 @@ run = """
 set -euo pipefail
 
 : "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
 
 xcrun devicectl device process launch \
   --device "${BLEAT_DEVICE_ID}" \

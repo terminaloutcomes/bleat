@@ -627,9 +627,9 @@ actor LiveAppService: AppServicing {
                     forKey: "bleat.cloudKit.enabled.v1"
                 ))
         credentialStore = TokenVault(
-            tokenService: "com.terminaloutcomes.Bleat.session-tokens",
-            nativeLoginService: "com.terminaloutcomes.Bleat.native-login",
-            legacyService: "com.terminaloutcomes.Bleat.credentials",
+            tokenService: "com.yaleman.Bleat.session-tokens",
+            nativeLoginService: "com.yaleman.Bleat.native-login",
+            legacyService: "com.yaleman.Bleat.credentials",
             synchronizesNativeLogin: privateCloudEnabled
         )
         coordinator = Coordinator(
@@ -878,7 +878,8 @@ actor LiveAppService: AppServicing {
         let persisted: ServerAccount
         do {
             if password.isEmpty {
-                let authenticated = try await authenticationCoordinator
+                let authenticated =
+                    try await authenticationCoordinator
                     .validateStoredAuthentication(
                         accountID: account.id,
                         server: primary,
@@ -895,7 +896,8 @@ actor LiveAppService: AppServicing {
                 )
                 try await accountStore.save(persisted)
             } else {
-                persisted = try await authenticationCoordinator
+                persisted =
+                    try await authenticationCoordinator
                     .loginAndPersistAccount(
                         accountID: account.id,
                         discoveredServer: discoveredPrimary,
@@ -969,14 +971,14 @@ actor LiveAppService: AppServicing {
         do {
             let account =
                 try await authenticationCoordinator.loginAndPersistAccount(
-                accountID: AccountID(
-                    rawValue: UUID().uuidString.lowercased()
-                ),
-                discoveredServer: discoveredServer,
-                username: username,
-                password: password,
-                accountStore: accountStore
-            )
+                    accountID: AccountID(
+                        rawValue: UUID().uuidString.lowercased()
+                    ),
+                    discoveredServer: discoveredServer,
+                    username: username,
+                    password: password,
+                    accountStore: accountStore
+                )
             await endpointRouter.recordAuthenticationUse(
                 primary: account.server,
                 usage: .primary
@@ -995,14 +997,14 @@ actor LiveAppService: AppServicing {
         do {
             let authenticated =
                 try await authenticationCoordinator.loginAndPersistAccount(
-                accountID: account.id,
-                discoveredServer: discoveredServer,
-                username: account.user.username,
-                password: password,
-                expectedUserID: account.user.id,
-                accountStore: accountStore,
-                makeActive: false
-            )
+                    accountID: account.id,
+                    discoveredServer: discoveredServer,
+                    username: account.user.username,
+                    password: password,
+                    expectedUserID: account.user.id,
+                    accountStore: accountStore,
+                    makeActive: false
+                )
             await endpointRouter.recordAuthenticationUse(
                 primary: authenticated.server,
                 usage: .primary
@@ -1161,15 +1163,16 @@ actor LiveAppService: AppServicing {
                 var appTracks: [AppPlaybackTrack] = []
                 appTracks.reserveCapacity(tracks.count)
                 for track in tracks {
-                    appTracks.append(AppPlaybackTrack(
-                        url: await routedServerURL(
-                            track.url,
-                            purpose: .playback
-                        ),
-                        startOffset: track.track.startOffset,
-                        duration: track.track.duration,
-                        title: track.track.title
-                    ))
+                    appTracks.append(
+                        AppPlaybackTrack(
+                            url: await routedServerURL(
+                                track.url,
+                                purpose: .playback
+                            ),
+                            startOffset: track.track.startOffset,
+                            duration: track.track.duration,
+                            title: track.track.title
+                        ))
                 }
                 source = .direct(appTracks)
             case .hls(let url):

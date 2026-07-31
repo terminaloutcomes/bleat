@@ -9,7 +9,7 @@ if [[ "${BUILD_VERBOSE}" == "true" ]]; then
 fi
 
 : "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
 
 xcodebuild \
   -project Bleat.xcodeproj \
