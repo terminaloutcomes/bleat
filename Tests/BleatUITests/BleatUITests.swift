@@ -250,6 +250,11 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.descendants(matching: .any)[
+                "diagnostics.lastServerConnection"
+            ].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
                 "diagnostics.webSocketState"
             ].waitForExistence(timeout: 3)
         )

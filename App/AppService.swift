@@ -113,9 +113,38 @@ struct AppEndpointDescription: Equatable, Sendable {
 }
 
 struct AppEndpointDiagnostics: Equatable, Sendable {
+    let lastConnection: AppEndpointActivityDescription?
     let authentication: AppEndpointDescription?
     let api: AppEndpointDescription?
     let webSocket: AppEndpointDescription
+}
+
+struct AppEndpointActivityDescription: Equatable, Sendable {
+    let purpose: ServerConnectionPurpose
+    let endpoint: AppEndpointDescription
+
+    var diagnosticsLabel: String {
+        "\(purpose.diagnosticsLabel) — \(endpoint.diagnosticsLabel)"
+    }
+}
+
+extension ServerConnectionPurpose {
+    fileprivate var diagnosticsLabel: String {
+        switch self {
+        case .authentication:
+            "Authentication"
+        case .api:
+            "API"
+        case .webSocket:
+            "WebSocket"
+        case .cover:
+            "Cover"
+        case .playback:
+            "Playback"
+        case .download:
+            "Download"
+        }
+    }
 }
 
 struct AppPlaybackTrack: Equatable, Sendable {
@@ -158,6 +187,17 @@ protocol AppServicing: Sendable {
     func endpointDiagnostics(
         for account: ServerAccount
     ) async -> AppEndpointDiagnostics
+
+    func endpointDiagnosticsUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AppEndpointDiagnostics>
+
+    func serverEndpointRouter() async -> ServerEndpointRouter?
+
+    func recordServerActivity(
+        url: URL,
+        purpose: ServerConnectionPurpose
+    ) async
 
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
@@ -389,6 +429,7 @@ extension AppServicing {
         for account: ServerAccount
     ) async -> AppEndpointDiagnostics {
         AppEndpointDiagnostics(
+            lastConnection: nil,
             authentication: nil,
             api: nil,
             webSocket: AppEndpointDescription(
@@ -397,6 +438,21 @@ extension AppServicing {
             )
         )
     }
+
+    func endpointDiagnosticsUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AppEndpointDiagnostics> {
+        AsyncStream { $0.finish() }
+    }
+
+    func serverEndpointRouter() async -> ServerEndpointRouter? {
+        nil
+    }
+
+    func recordServerActivity(
+        url: URL,
+        purpose: ServerConnectionPurpose
+    ) async {}
 
     func updateAccount(
         _ account: ServerAccount,
@@ -551,7 +607,11 @@ actor LiveAppService: AppServicing {
 
         let endpointRouter = ServerEndpointRouter()
         self.endpointRouter = endpointRouter
-        directTransport = URLSessionHTTPTransport(diagnostics: diagnostics)
+        directTransport = URLSessionHTTPTransport(
+            diagnostics: diagnostics,
+            endpointRouter: endpointRouter,
+            routesRequests: false
+        )
         transport = URLSessionHTTPTransport(
             diagnostics: diagnostics,
             endpointRouter: endpointRouter
@@ -600,6 +660,11 @@ actor LiveAppService: AppServicing {
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
         let coordinator = coordinator
+        await endpointRouter.recordConnection(
+            primary: account.server,
+            usage: .primary,
+            purpose: .webSocket
+        )
         let client = AudiobookshelfLiveEventClient(
             server: account.server,
             tokenProvider: {
@@ -619,26 +684,82 @@ actor LiveAppService: AppServicing {
     func endpointDiagnostics(
         for account: ServerAccount
     ) async -> AppEndpointDiagnostics {
-        let authenticationUsage =
-            await endpointRouter.lastAuthenticationUse(for: account.server)
-        let apiUsage =
-            await endpointRouter.lastSuccessfulUse(for: account.server)
+        let snapshot =
+            await endpointRouter.activitySnapshot(for: account.server)
+        return endpointDiagnostics(
+            snapshot: snapshot,
+            account: account
+        )
+    }
+
+    func endpointDiagnosticsUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AppEndpointDiagnostics> {
+        let updates =
+            await endpointRouter.activityUpdates(for: account.server)
+        return AsyncStream { continuation in
+            let task = Task {
+                for await snapshot in updates {
+                    continuation.yield(
+                        self.endpointDiagnostics(
+                            snapshot: snapshot,
+                            account: account
+                        )
+                    )
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    func serverEndpointRouter() async -> ServerEndpointRouter? {
+        endpointRouter
+    }
+
+    func recordServerActivity(
+        url: URL,
+        purpose: ServerConnectionPurpose
+    ) async {
+        let candidate =
+            await endpointRouter.candidate(forResolvedURL: url)
+        await endpointRouter.recordConnection(
+            candidate,
+            purpose: purpose
+        )
+    }
+
+    nonisolated private func endpointDiagnostics(
+        snapshot: ServerEndpointActivitySnapshot,
+        account: ServerAccount
+    ) -> AppEndpointDiagnostics {
         return AppEndpointDiagnostics(
-            authentication: authenticationUsage.map {
+            lastConnection: snapshot.lastConnection.map {
+                AppEndpointActivityDescription(
+                    purpose: $0.purpose,
+                    endpoint: endpointDescription(
+                        usage: $0.usage,
+                        account: account
+                    )
+                )
+            },
+            authentication: snapshot.authentication.map {
                 endpointDescription(
                     usage: $0,
                     account: account
                 )
             },
-            api: apiUsage.map {
+            api: snapshot.api.map {
                 endpointDescription(
                     usage: $0,
                     account: account
                 )
             },
-            webSocket: AppEndpointDescription(
-                usage: .primary,
-                server: account.server
+            webSocket: endpointDescription(
+                usage: snapshot.webSocket ?? .primary,
+                account: account
             )
         )
     }
@@ -1041,7 +1162,10 @@ actor LiveAppService: AppServicing {
                 appTracks.reserveCapacity(tracks.count)
                 for track in tracks {
                     appTracks.append(AppPlaybackTrack(
-                        url: await endpointRouter.preferredURL(for: track.url),
+                        url: await routedServerURL(
+                            track.url,
+                            purpose: .playback
+                        ),
                         startOffset: track.track.startOffset,
                         duration: track.track.duration,
                         title: track.track.title
@@ -1049,7 +1173,12 @@ actor LiveAppService: AppServicing {
                 }
                 source = .direct(appTracks)
             case .hls(let url):
-                source = .hls(await endpointRouter.preferredURL(for: url))
+                source = .hls(
+                    await routedServerURL(
+                        url,
+                        purpose: .playback
+                    )
+                )
             }
         } catch let error {
             try? await coordinator.closePlaybackSession(
@@ -1229,7 +1358,10 @@ actor LiveAppService: AppServicing {
                 return request
             }
             var updated = request
-            updated.url = await endpointRouter.preferredURL(for: url)
+            updated.url = await routedServerURL(
+                url,
+                purpose: .download
+            )
             return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
@@ -1255,7 +1387,10 @@ actor LiveAppService: AppServicing {
                 return request
             }
             var updated = request
-            updated.url = await endpointRouter.preferredURL(for: url)
+            updated.url = await routedServerURL(
+                url,
+                purpose: .download
+            )
             return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
@@ -1634,7 +1769,7 @@ actor LiveAppService: AppServicing {
         }
     }
 
-    private func endpointDescription(
+    nonisolated private func endpointDescription(
         usage: ServerEndpointUsage,
         account: ServerAccount
     ) -> AppEndpointDescription {
@@ -1650,6 +1785,19 @@ actor LiveAppService: AppServicing {
                 server: account.localServer ?? account.server
             )
         }
+    }
+
+    private func routedServerURL(
+        _ url: URL,
+        purpose: ServerConnectionPurpose
+    ) async -> URL {
+        let candidate =
+            await endpointRouter.preferredCandidate(for: url)
+        await endpointRouter.recordConnection(
+            candidate,
+            purpose: purpose
+        )
+        return candidate.url
     }
 
     private func discoverDirect(

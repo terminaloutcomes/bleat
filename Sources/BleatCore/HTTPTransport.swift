@@ -58,7 +58,7 @@ public struct ServerEndpointCandidate: Sendable {
     public let primary: NormalizedServerURL?
     public let isLocal: Bool
 
-    init(
+    public init(
         url: URL,
         primary: NormalizedServerURL?,
         isLocal: Bool
@@ -74,18 +74,67 @@ public enum ServerEndpointUsage: String, Codable, Equatable, Sendable {
     case local
 }
 
+public enum ServerConnectionPurpose: String, Codable, Equatable, Sendable {
+    case authentication
+    case api
+    case webSocket
+    case cover
+    case playback
+    case download
+}
+
+public struct ServerConnectionActivity: Equatable, Sendable {
+    public let usage: ServerEndpointUsage
+    public let purpose: ServerConnectionPurpose
+
+    public init(
+        usage: ServerEndpointUsage,
+        purpose: ServerConnectionPurpose
+    ) {
+        self.usage = usage
+        self.purpose = purpose
+    }
+}
+
+public struct ServerEndpointActivitySnapshot: Equatable, Sendable {
+    public let lastConnection: ServerConnectionActivity?
+    public let authentication: ServerEndpointUsage?
+    public let api: ServerEndpointUsage?
+    public let webSocket: ServerEndpointUsage?
+
+    public init(
+        lastConnection: ServerConnectionActivity? = nil,
+        authentication: ServerEndpointUsage? = nil,
+        api: ServerEndpointUsage? = nil,
+        webSocket: ServerEndpointUsage? = nil
+    ) {
+        self.lastConnection = lastConnection
+        self.authentication = authentication
+        self.api = api
+        self.webSocket = webSocket
+    }
+}
+
 public actor ServerEndpointRouter {
     private struct Route: Sendable {
         let primary: NormalizedServerURL
-        let local: NormalizedServerURL
+        let local: NormalizedServerURL?
     }
 
     private var routes: [NormalizedServerURL: Route] = [:]
     private var localFailures: [NormalizedServerURL: Date] = [:]
-    private var lastSuccessfulUsage:
-        [NormalizedServerURL: ServerEndpointUsage] = [:]
-    private var lastAuthenticationUsage:
-        [NormalizedServerURL: ServerEndpointUsage] = [:]
+    private var activity:
+        [NormalizedServerURL: ServerEndpointActivitySnapshot] = [:]
+    private var activityObservers:
+        [
+            NormalizedServerURL:
+                [
+                    UUID:
+                        AsyncStream<
+                            ServerEndpointActivitySnapshot
+                        >.Continuation
+                ]
+        ] = [:]
 
     public init() {}
 
@@ -93,21 +142,29 @@ public actor ServerEndpointRouter {
         primary: NormalizedServerURL,
         local: NormalizedServerURL?
     ) {
-        guard let local, local != primary else {
-            routes[primary] = nil
-            localFailures[primary] = nil
-            return
-        }
-        routes[primary] = Route(primary: primary, local: local)
+        routes[primary] = Route(
+            primary: primary,
+            local: local == primary ? nil : local
+        )
         localFailures[primary] = nil
     }
 
     public func candidates(for url: URL) -> [ServerEndpointCandidate] {
         for route in routes.values {
+            guard let local = route.local else {
+                if isURL(url, under: route.primary) {
+                    return [ServerEndpointCandidate(
+                        url: url,
+                        primary: route.primary,
+                        isLocal: false
+                    )]
+                }
+                continue
+            }
             guard let localURL = replacingBase(
                 in: url,
                 from: route.primary,
-                with: route.local
+                with: local
             ) else {
                 continue
             }
@@ -140,8 +197,45 @@ public actor ServerEndpointRouter {
         )]
     }
 
+    public func candidate(
+        forResolvedURL url: URL
+    ) -> ServerEndpointCandidate {
+        for route in routes.values {
+            if isURL(url, under: route.primary) {
+                return ServerEndpointCandidate(
+                    url: url,
+                    primary: route.primary,
+                    isLocal: false
+                )
+            }
+            if let local = route.local, isURL(url, under: local) {
+                return ServerEndpointCandidate(
+                    url: url,
+                    primary: route.primary,
+                    isLocal: true
+                )
+            }
+        }
+        return ServerEndpointCandidate(
+            url: url,
+            primary: nil,
+            isLocal: false
+        )
+    }
+
+    public func preferredCandidate(
+        for url: URL
+    ) -> ServerEndpointCandidate {
+        candidates(for: url).first
+            ?? ServerEndpointCandidate(
+                url: url,
+                primary: nil,
+                isLocal: false
+            )
+    }
+
     public func preferredURL(for url: URL) -> URL {
-        candidates(for: url).first?.url ?? url
+        preferredCandidate(for: url).url
     }
 
     public func markLocalUnavailable(
@@ -155,16 +249,53 @@ public actor ServerEndpointRouter {
         _ candidate: ServerEndpointCandidate,
         endpoint: DiagnosticEndpoint
     ) {
+        switch endpoint {
+        case .login, .authorize, .refresh, .logout:
+            recordConnection(candidate, purpose: .authentication)
+        default:
+            recordConnection(candidate, purpose: .api)
+        }
+    }
+
+    public func recordConnection(
+        _ candidate: ServerEndpointCandidate,
+        purpose: ServerConnectionPurpose
+    ) {
         guard let primary = candidate.primary else {
             return
         }
-        let usage: ServerEndpointUsage =
-            candidate.isLocal ? .local : .primary
-        switch endpoint {
-        case .login, .authorize, .refresh, .logout:
-            lastAuthenticationUsage[primary] = usage
-        default:
-            lastSuccessfulUsage[primary] = usage
+        recordConnection(
+            primary: primary,
+            usage: candidate.isLocal ? .local : .primary,
+            purpose: purpose
+        )
+    }
+
+    public func recordConnection(
+        primary: NormalizedServerURL,
+        usage: ServerEndpointUsage,
+        purpose: ServerConnectionPurpose
+    ) {
+        let previous = activity[primary]
+            ?? ServerEndpointActivitySnapshot()
+        let updated = ServerEndpointActivitySnapshot(
+            lastConnection: ServerConnectionActivity(
+                usage: usage,
+                purpose: purpose
+            ),
+            authentication:
+                purpose == .authentication
+                ? usage : previous.authentication,
+            api: purpose == .api ? usage : previous.api,
+            webSocket:
+                purpose == .webSocket
+                ? usage : previous.webSocket
+        )
+        activity[primary] = updated
+        if let observers = activityObservers[primary] {
+            for continuation in observers.values {
+                continuation.yield(updated)
+            }
         }
     }
 
@@ -172,19 +303,49 @@ public actor ServerEndpointRouter {
         primary: NormalizedServerURL,
         usage: ServerEndpointUsage
     ) {
-        lastAuthenticationUsage[primary] = usage
+        recordConnection(
+            primary: primary,
+            usage: usage,
+            purpose: .authentication
+        )
     }
 
     public func lastSuccessfulUse(
         for primary: NormalizedServerURL
     ) -> ServerEndpointUsage? {
-        lastSuccessfulUsage[primary]
+        activity[primary]?.api
     }
 
     public func lastAuthenticationUse(
         for primary: NormalizedServerURL
     ) -> ServerEndpointUsage? {
-        lastAuthenticationUsage[primary]
+        activity[primary]?.authentication
+    }
+
+    public func activitySnapshot(
+        for primary: NormalizedServerURL
+    ) -> ServerEndpointActivitySnapshot {
+        activity[primary] ?? ServerEndpointActivitySnapshot()
+    }
+
+    public func activityUpdates(
+        for primary: NormalizedServerURL
+    ) -> AsyncStream<ServerEndpointActivitySnapshot> {
+        let observerID = UUID()
+        let initial = activitySnapshot(for: primary)
+        return AsyncStream { continuation in
+            activityObservers[primary, default: [:]][observerID] =
+                continuation
+            continuation.yield(initial)
+            continuation.onTermination = { [weak self] _ in
+                Task {
+                    await self?.removeActivityObserver(
+                        observerID,
+                        primary: primary
+                    )
+                }
+            }
+        }
     }
 
     private func replacingBase(
@@ -222,6 +383,23 @@ public actor ServerEndpointRouter {
         updated.path = localComponents.path + suffix
         return updated.url
     }
+
+    private func isURL(
+        _ url: URL,
+        under server: NormalizedServerURL
+    ) -> Bool {
+        replacingBase(in: url, from: server, with: server) != nil
+    }
+
+    private func removeActivityObserver(
+        _ observerID: UUID,
+        primary: NormalizedServerURL
+    ) {
+        activityObservers[primary]?[observerID] = nil
+        if activityObservers[primary]?.isEmpty == true {
+            activityObservers[primary] = nil
+        }
+    }
 }
 
 public enum HTTPTransportError: Error, Equatable, Sendable {
@@ -248,17 +426,20 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     private let session: URLSession
     private let diagnostics: any DiagnosticRecording
     private let endpointRouter: ServerEndpointRouter?
+    private let routesRequests: Bool
 
     public convenience init(
         configuration: URLSessionConfiguration = .ephemeral,
         diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
-        endpointRouter: ServerEndpointRouter? = nil
+        endpointRouter: ServerEndpointRouter? = nil,
+        routesRequests: Bool = true
     ) {
         self.init(
             configuration: configuration,
             cookieStorage: nil,
             diagnostics: diagnostics,
-            endpointRouter: endpointRouter
+            endpointRouter: endpointRouter,
+            routesRequests: routesRequests
         )
     }
 
@@ -266,7 +447,8 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         configuration: URLSessionConfiguration,
         cookieStorage: HTTPCookieStorage?,
         diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
-        endpointRouter: ServerEndpointRouter? = nil
+        endpointRouter: ServerEndpointRouter? = nil,
+        routesRequests: Bool = true
     ) {
         configuration.httpShouldSetCookies = cookieStorage != nil
         configuration.httpCookieStorage = cookieStorage
@@ -281,6 +463,7 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         )
         self.diagnostics = diagnostics
         self.endpointRouter = endpointRouter
+        self.routesRequests = routesRequests
     }
 
     public func send(
@@ -288,8 +471,12 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     ) async throws -> HTTPResponse {
         let request = tracedRequest.request
         let candidates: [ServerEndpointCandidate]
-        if let endpointRouter, let url = request.url {
+        if let endpointRouter, let url = request.url, routesRequests {
             candidates = await endpointRouter.candidates(for: url)
+        } else if let endpointRouter, let url = request.url {
+            candidates = [
+                await endpointRouter.candidate(forResolvedURL: url)
+            ]
         } else if let url = request.url {
             candidates = [ServerEndpointCandidate(
                 url: url,

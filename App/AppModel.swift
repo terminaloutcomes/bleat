@@ -604,6 +604,8 @@ final class AppModel {
     @ObservationIgnored
     private var liveUpdatesTask: Task<Void, Never>?
     @ObservationIgnored
+    private var endpointDiagnosticsTask: Task<Void, Never>?
+    @ObservationIgnored
     private var liveRefreshTask: Task<Void, Never>?
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
@@ -716,6 +718,11 @@ final class AppModel {
         )
 
         do {
+            if let endpointRouter = await service.serverEndpointRouter() {
+                await BookCoverImageLoader.shared.setEndpointRouter(
+                    endpointRouter
+                )
+            }
             privateCloudSyncAvailable =
                 await service.isPrivateCloudSyncAvailable()
             if privateCloudSyncAvailable {
@@ -1845,6 +1852,7 @@ final class AppModel {
     }
 
     private func startLiveUpdates(for account: ServerAccount) {
+        startEndpointDiagnostics(for: account)
         guard liveUpdatesAreActive else {
             return
         }
@@ -1852,8 +1860,6 @@ final class AppModel {
         let accountID = account.id
         liveUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            endpointDiagnostics =
-                await service.endpointDiagnostics(for: account)
             let updates = await service.liveUpdates(for: account)
             for await update in updates {
                 guard !Task.isCancelled, self.account?.id == accountID else {
@@ -1892,9 +1898,31 @@ final class AppModel {
     private func stopLiveUpdates() {
         liveUpdatesTask?.cancel()
         liveUpdatesTask = nil
+        endpointDiagnosticsTask?.cancel()
+        endpointDiagnosticsTask = nil
         liveUpdateConnectionState = .disconnected
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
+    }
+
+    private func startEndpointDiagnostics(for account: ServerAccount) {
+        endpointDiagnosticsTask?.cancel()
+        let accountID = account.id
+        endpointDiagnosticsTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            endpointDiagnostics =
+                await service.endpointDiagnostics(for: account)
+            let updates =
+                await service.endpointDiagnosticsUpdates(for: account)
+            for await update in updates {
+                guard !Task.isCancelled,
+                    self.account?.id == accountID
+                else {
+                    return
+                }
+                endpointDiagnostics = update
+            }
+        }
     }
 
     private func scheduleLiveRefresh(

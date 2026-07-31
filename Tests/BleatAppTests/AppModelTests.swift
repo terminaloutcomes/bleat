@@ -172,6 +172,59 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
     }
 
+    func testBookCoverLoaderRoutesThroughCentralEndpointAndFallsBack()
+        async throws
+    {
+        let imageData = try XCTUnwrap(
+            UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 2)
+            ).image { context in
+                UIColor.systemBlue.setFill()
+                context.fill(
+                    CGRect(x: 0, y: 0, width: 2, height: 2)
+                )
+            }.pngData()
+        )
+        let fetcher = TestBookCoverFetcher(
+            data: imageData,
+            failingRequestCount: 1
+        )
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        let loader = BookCoverImageLoader(
+            diskCapacity: 0,
+            fetch: { request in
+                try await fetcher.fetch(request)
+            }
+        )
+        await loader.setEndpointRouter(router)
+        let url = try XCTUnwrap(
+            URL(string: "https://books.example/api/items/item/cover")
+        )
+
+        let image = await loader.image(
+            for: url,
+            accountID: AccountID(rawValue: "cover-routing-account")
+        )
+
+        XCTAssertNotNil(image)
+        let requestHosts = await fetcher.requestHosts
+        XCTAssertEqual(
+            requestHosts,
+            ["books.home", "books.example"]
+        )
+        let snapshot = await router.activitySnapshot(for: primary)
+        XCTAssertEqual(
+            snapshot.lastConnection,
+            ServerConnectionActivity(
+                usage: .primary,
+                purpose: .cover
+            )
+        )
+    }
+
     func testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection() {
         XCTAssertEqual(
             ScrubberSeekDecision.decide(origin: 1_000, target: 1_599.999),
@@ -2267,6 +2320,15 @@ final class AppModelTests: XCTestCase {
         )
         let library = fixtureLibrary()
         let endpointDiagnostics = AppEndpointDiagnostics(
+            lastConnection: AppEndpointActivityDescription(
+                purpose: .api,
+                endpoint: AppEndpointDescription(
+                    usage: .local,
+                    server: try NormalizedServerURL(
+                        "https://books.home:8443/library"
+                    )
+                )
+            ),
             authentication: AppEndpointDescription(
                 usage: .primary,
                 server: try NormalizedServerURL(
@@ -2311,6 +2373,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(report.libraryState, "Loaded")
         XCTAssertEqual(report.playbackState, "Idle")
         XCTAssertEqual(
+            report.lastServerConnection,
+            "API — Local — books.home:8443"
+        )
+        XCTAssertEqual(
             report.authenticationEndpoint,
             "Primary — private.example"
         )
@@ -2330,6 +2396,36 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(report.text.contains("private-username"))
         XCTAssertTrue(report.text.contains("private.example"))
         XCTAssertFalse(report.text.contains("/library"))
+
+        let playbackDiagnostics = AppEndpointDiagnostics(
+            lastConnection: AppEndpointActivityDescription(
+                purpose: .playback,
+                endpoint: AppEndpointDescription(
+                    usage: .primary,
+                    server: account.server
+                )
+            ),
+            authentication: endpointDiagnostics.authentication,
+            api: endpointDiagnostics.api,
+            webSocket: endpointDiagnostics.webSocket
+        )
+        for _ in 0..<100 {
+            if await service.endpointDiagnosticsObserverCount() > 0 {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        await service.emitEndpointDiagnostics(playbackDiagnostics)
+        for _ in 0..<100 {
+            if model.endpointDiagnostics == playbackDiagnostics {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(
+            model.diagnosticsReport().lastServerConnection,
+            "Playback — Primary — private.example"
+        )
     }
 
     func testDiagnosticsReportUsesTypedErrorCodes() async throws {
@@ -4729,6 +4825,7 @@ private actor TestBookCoverFetcher {
     let data: Data
     private var failingRequestCount: Int
     private(set) var requestCount = 0
+    private(set) var requestHosts: [String] = []
 
     init(data: Data, failingRequestCount: Int = 0) {
         self.data = data
@@ -4737,6 +4834,7 @@ private actor TestBookCoverFetcher {
 
     func fetch(_ request: URLRequest) throws -> (Data, URLResponse) {
         requestCount += 1
+        requestHosts.append(request.url?.host ?? "")
         guard let url = request.url,
             let response = HTTPURLResponse(
                 url: url,
@@ -5000,6 +5098,11 @@ private actor TestAppService: AppServicing {
     private let searchGate: AsyncGate?
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
+    private var endpointDiagnosticsContinuations:
+        [
+            UUID:
+                AsyncStream<AppEndpointDiagnostics>.Continuation
+        ] = [:]
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -5099,6 +5202,7 @@ private actor TestAppService: AppServicing {
     ) async -> AppEndpointDiagnostics {
         configuredEndpointDiagnostics
             ?? AppEndpointDiagnostics(
+                lastConnection: nil,
                 authentication: nil,
                 api: nil,
                 webSocket: AppEndpointDescription(
@@ -5106,6 +5210,41 @@ private actor TestAppService: AppServicing {
                     server: account.server
                 )
             )
+    }
+
+    func endpointDiagnosticsUpdates(
+        for account: ServerAccount
+    ) async -> AsyncStream<AppEndpointDiagnostics> {
+        let observerID = UUID()
+        let (stream, continuation) =
+            AsyncStream<AppEndpointDiagnostics>.makeStream()
+        endpointDiagnosticsContinuations[observerID] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task {
+                await self?.removeEndpointDiagnosticsContinuation(
+                    observerID
+                )
+            }
+        }
+        return stream
+    }
+
+    func emitEndpointDiagnostics(
+        _ diagnostics: AppEndpointDiagnostics
+    ) {
+        for continuation in endpointDiagnosticsContinuations.values {
+            continuation.yield(diagnostics)
+        }
+    }
+
+    func endpointDiagnosticsObserverCount() -> Int {
+        endpointDiagnosticsContinuations.count
+    }
+
+    private func removeEndpointDiagnosticsContinuation(
+        _ observerID: UUID
+    ) {
+        endpointDiagnosticsContinuations[observerID] = nil
     }
 
     func accounts()

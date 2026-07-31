@@ -440,6 +440,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if record(downloadID: identity.downloadID)?
                 .manifest.purpose == .automaticCache
             {
+                if let url = task.currentRequest?.url
+                    ?? task.originalRequest?.url
+                {
+                    await service.recordServerActivity(
+                        url: url,
+                        purpose: .download
+                    )
+                }
                 task.resume()
             } else {
                 pausedDownloadIDs.insert(identity.downloadID)

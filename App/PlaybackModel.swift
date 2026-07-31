@@ -1817,7 +1817,17 @@ final class PlaybackModel {
             return
         }
         switch item.status {
-        case .unknown, .readyToPlay:
+        case .unknown:
+            applyObservedPlaybackState()
+        case .readyToPlay:
+            if let asset = item.asset as? AVURLAsset {
+                Task {
+                    await service.recordServerActivity(
+                        url: asset.url,
+                        purpose: .playback
+                    )
+                }
+            }
             applyObservedPlaybackState()
         case .failed:
             handleItemFailure(error: item.error, item: item)

@@ -525,6 +525,11 @@ Settings also provides **Diagnostics**, which shows the app, operating-system,
 server, connection, resource, playback, sync, and download state. It identifies
 the primary or local hostname and port last used for authentication and API
 traffic, plus the configured WebSocket endpoint and its connection state.
+Endpoint activity updates live and is collected through the same account-aware
+boundary for API and authentication requests, WebSockets, covers, streamed
+playback, and foreground or restored background downloads. **Last Server
+Activity** identifies which of those paths most recently selected or reached a
+server.
 Development builds add **Export Diagnostics** and **Export Recent Logs**. The
 latter shares a text file containing up to 15 minutes of categorized app,
 authentication, API, playback, download, and synchronization events, including

@@ -75,6 +75,55 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(authenticationUsage, .primary)
     }
 
+    func testEndpointRouterStreamsEveryServerConnectionPurpose()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        let updates = await router.activityUpdates(for: primary)
+        var iterator = updates.makeAsyncIterator()
+        let initialUpdate = await iterator.next()
+        XCTAssertEqual(
+            initialUpdate,
+            ServerEndpointActivitySnapshot()
+        )
+        let requestURL = try XCTUnwrap(
+            URL(string: "https://books.example/audio/file.mp3")
+        )
+        let candidates = await router.candidates(for: requestURL)
+
+        await router.recordConnection(
+            try XCTUnwrap(candidates.first),
+            purpose: .playback
+        )
+
+        let nextPlaybackUpdate = await iterator.next()
+        let playbackUpdate = try XCTUnwrap(nextPlaybackUpdate)
+        XCTAssertEqual(
+            playbackUpdate.lastConnection,
+            ServerConnectionActivity(
+                usage: .local,
+                purpose: .playback
+            )
+        )
+        XCTAssertNil(playbackUpdate.api)
+
+        await router.recordConnection(
+            try XCTUnwrap(candidates.last),
+            purpose: .webSocket
+        )
+
+        let nextWebSocketUpdate = await iterator.next()
+        let webSocketUpdate = try XCTUnwrap(nextWebSocketUpdate)
+        XCTAssertEqual(webSocketUpdate.webSocket, .primary)
+        XCTAssertEqual(
+            webSocketUpdate.lastConnection?.purpose,
+            .webSocket
+        )
+    }
+
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(

@@ -30,6 +30,7 @@ struct DiagnosticsReport: Equatable, Sendable {
     let accountCount: Int
     let serverVersion: String?
     let connectionState: String?
+    let lastServerConnection: String?
     let authenticationEndpoint: String?
     let apiEndpoint: String?
     let webSocketEndpoint: String?
@@ -61,6 +62,7 @@ struct DiagnosticsReport: Equatable, Sendable {
             Saved accounts: \(accountCount)
             Server version: \(serverVersion ?? "Unavailable")
             Connection state: \(connectionState ?? "No active account")
+            Last server activity: \(lastServerConnection ?? "Not recorded this launch")
             Last authentication: \(authenticationEndpoint ?? "Not recorded this launch")
             Last API connection: \(apiEndpoint ?? "Not recorded this launch")
             WebSocket endpoint: \(webSocketEndpoint ?? "No active account")
@@ -93,6 +95,8 @@ extension AppModel {
             accountCount: accounts.count,
             serverVersion: account?.serverVersion,
             connectionState: account?.connectionState.diagnosticsLabel,
+            lastServerConnection:
+                endpointDiagnostics?.lastConnection?.diagnosticsLabel,
             authenticationEndpoint:
                 endpointDiagnostics?.authentication?.diagnosticsLabel,
             apiEndpoint: endpointDiagnostics?.api?.diagnosticsLabel,

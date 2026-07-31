@@ -576,6 +576,15 @@ private struct DiagnosticsView: View {
                     value: String(report.accountCount)
                 )
                 LabeledContent(
+                    "Last Server Activity",
+                    value:
+                        report.lastServerConnection
+                        ?? "Not recorded this launch"
+                )
+                .accessibilityIdentifier(
+                    "diagnostics.lastServerConnection"
+                )
+                LabeledContent(
                     "Last Authentication",
                     value:
                         report.authenticationEndpoint

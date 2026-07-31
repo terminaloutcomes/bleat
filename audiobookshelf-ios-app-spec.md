@@ -1285,10 +1285,14 @@ Use `OSLog` categories for auth, API, playback, download, and sync. Logs must re
 Diagnostics should show the privacy-safe hostname and port, without URL paths
 or queries, for the primary or local endpoint last used for authentication and
 API traffic. It should also show the configured WebSocket endpoint and current
-WebSocket connection state. Snapshot export should include app version, iOS
-version, server version, those endpoint hostnames and roles, endpoint name,
-HTTP status, request correlation ID, player state transitions, and redacted
-errors. It must not include credentials or full response bodies by default.
+WebSocket connection state. A central account-aware endpoint activity boundary
+must publish live changes from routed and direct API/authentication requests,
+WebSockets, cover requests, streamed playback sources, and foreground or
+restored background downloads; Diagnostics must not rely on a one-time copied
+snapshot. Snapshot export should include app version, iOS version, server
+version, those endpoint hostnames and roles, endpoint name, HTTP status,
+request correlation ID, player state transitions, and redacted errors. It must
+not include credentials or full response bodies by default.
 
 Every diagnostic failure event carries its operation and a stable typed cause.
 Do not derive either from localized text, serialized errors, or raw server

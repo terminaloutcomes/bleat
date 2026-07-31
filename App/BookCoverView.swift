@@ -60,6 +60,7 @@ actor BookCoverImageLoader {
     private let diskCapacity: Int
     private let cacheRoot: URL?
     private let memory = NSCache<NSString, UIImage>()
+    private var endpointRouter: ServerEndpointRouter?
     private var memoryKeys: [AccountID: Set<String>] = [:]
     private var inFlight:
         [BookCoverCacheKey: Task<LoadedBookCover?, Never>] = [:]
@@ -83,11 +84,13 @@ actor BookCoverImageLoader {
         accountID: AccountID?
     ) async -> UIImage? {
         guard let accountID else {
-            return await fetchImage(
+            return await Self.fetchImage(
                 URLRequest(
                     url: url,
                     cachePolicy: .reloadIgnoringLocalCacheData
-                )
+                ),
+                using: fetch,
+                endpointRouter: endpointRouter
             )?.image
         }
         let key = BookCoverCacheKey(accountID: accountID, url: url)
@@ -108,8 +111,13 @@ actor BookCoverImageLoader {
             return await task.value?.image
         }
 
+        let endpointRouter = endpointRouter
         let task = Task { [fetch] in
-            await Self.fetchImage(request, using: fetch)
+            await Self.fetchImage(
+                request,
+                using: fetch,
+                endpointRouter: endpointRouter
+            )
         }
         inFlight[key] = task
         let loaded = await task.value
@@ -143,6 +151,10 @@ actor BookCoverImageLoader {
         memoryKeys = [:]
     }
 
+    func setEndpointRouter(_ endpointRouter: ServerEndpointRouter?) {
+        self.endpointRouter = endpointRouter
+    }
+
     private func storeInMemory(
         _ image: UIImage,
         for key: BookCoverCacheKey
@@ -164,31 +176,67 @@ actor BookCoverImageLoader {
         )
     }
 
-    private func fetchImage(_ request: URLRequest) async -> LoadedBookCover? {
-        await Self.fetchImage(request, using: fetch)
-    }
-
     private static func fetchImage(
         _ request: URLRequest,
-        using fetch: Fetch
+        using fetch: Fetch,
+        endpointRouter: ServerEndpointRouter?
     ) async -> LoadedBookCover? {
-        do {
-            let (data, response) = try await fetch(request)
-            guard
-                let response = response as? HTTPURLResponse,
-                (200...299).contains(response.statusCode),
-                data.count <= maximumResponseBytes,
-                let image = UIImage(data: data)
-            else {
+        let candidates: [ServerEndpointCandidate]
+        if let endpointRouter, let url = request.url {
+            candidates = await endpointRouter.candidates(for: url)
+        } else if let url = request.url {
+            candidates = [
+                ServerEndpointCandidate(
+                    url: url,
+                    primary: nil,
+                    isLocal: false
+                )
+            ]
+        } else {
+            candidates = []
+        }
+        for candidate in candidates {
+            do {
+                var routedRequest = request
+                routedRequest.url = candidate.url
+                let (data, response) = try await fetch(routedRequest)
+                guard
+                    let response = response as? HTTPURLResponse,
+                    (200...299).contains(response.statusCode),
+                    data.count <= maximumResponseBytes,
+                    let image = UIImage(data: data)
+                else {
+                    if candidate.isLocal,
+                        let primary = candidate.primary
+                    {
+                        await endpointRouter?.markLocalUnavailable(
+                            for: primary
+                        )
+                        continue
+                    }
+                    return nil
+                }
+                await endpointRouter?.recordConnection(
+                    candidate,
+                    purpose: .cover
+                )
+                return LoadedBookCover(
+                    data: data,
+                    image: image
+                )
+            } catch {
+                if candidate.isLocal,
+                    let primary = candidate.primary
+                {
+                    await endpointRouter?.markLocalUnavailable(
+                        for: primary
+                    )
+                    continue
+                }
                 return nil
             }
-            return LoadedBookCover(
-                data: data,
-                image: image
-            )
-        } catch {
-            return nil
         }
+        return nil
     }
 
     private func loadFromDisk(for key: BookCoverCacheKey) -> UIImage? {
