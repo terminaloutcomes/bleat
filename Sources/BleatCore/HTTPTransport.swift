@@ -69,6 +69,11 @@ public struct ServerEndpointCandidate: Sendable {
     }
 }
 
+public enum ServerEndpointUsage: String, Codable, Equatable, Sendable {
+    case primary
+    case local
+}
+
 public actor ServerEndpointRouter {
     private struct Route: Sendable {
         let primary: NormalizedServerURL
@@ -77,6 +82,10 @@ public actor ServerEndpointRouter {
 
     private var routes: [NormalizedServerURL: Route] = [:]
     private var localFailures: [NormalizedServerURL: Date] = [:]
+    private var lastSuccessfulUsage:
+        [NormalizedServerURL: ServerEndpointUsage] = [:]
+    private var lastAuthenticationUsage:
+        [NormalizedServerURL: ServerEndpointUsage] = [:]
 
     public init() {}
 
@@ -140,6 +149,42 @@ public actor ServerEndpointRouter {
         duration: TimeInterval = 30
     ) {
         localFailures[primary] = Date().addingTimeInterval(duration)
+    }
+
+    public func recordSuccessfulUse(
+        _ candidate: ServerEndpointCandidate,
+        endpoint: DiagnosticEndpoint
+    ) {
+        guard let primary = candidate.primary else {
+            return
+        }
+        let usage: ServerEndpointUsage =
+            candidate.isLocal ? .local : .primary
+        switch endpoint {
+        case .login, .authorize, .refresh, .logout:
+            lastAuthenticationUsage[primary] = usage
+        default:
+            lastSuccessfulUsage[primary] = usage
+        }
+    }
+
+    public func recordAuthenticationUse(
+        primary: NormalizedServerURL,
+        usage: ServerEndpointUsage
+    ) {
+        lastAuthenticationUsage[primary] = usage
+    }
+
+    public func lastSuccessfulUse(
+        for primary: NormalizedServerURL
+    ) -> ServerEndpointUsage? {
+        lastSuccessfulUsage[primary]
+    }
+
+    public func lastAuthenticationUse(
+        for primary: NormalizedServerURL
+    ) -> ServerEndpointUsage? {
+        lastAuthenticationUsage[primary]
     }
 
     private func replacingBase(
@@ -257,10 +302,15 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         var lastError: Error?
         for candidate in candidates {
             do {
-                return try await send(
+                let response = try await send(
                     tracedRequest,
                     requestURL: candidate.url
                 )
+                await endpointRouter?.recordSuccessfulUse(
+                    candidate,
+                    endpoint: tracedRequest.endpoint
+                )
+                return response
             } catch {
                 if Task.isCancelled {
                     throw error

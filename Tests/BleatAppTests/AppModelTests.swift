@@ -2137,6 +2137,37 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testAccountEditorKeepsCredentialsWhenPasswordIsBlank() async throws {
+        let account = try fixtureAccount()
+        let updated = try ServerAccount(
+            id: account.id,
+            server: NormalizedServerURL("https://new.example"),
+            serverVersion: account.serverVersion,
+            authenticationMethods: account.authenticationMethods,
+            user: account.user
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(updated)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let result = await model.updateAccount(
+            account,
+            serverAddress: "https://new.example",
+            localServerAddress: "",
+            username: account.user.username,
+            password: ""
+        )
+
+        XCTAssertEqual(result, .saved)
+        XCTAssertEqual(model.account, updated)
+        let requests = await service.accountUpdateRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].password, "")
+    }
+
     func testPrimaryOnlyAccountEditSkipsLocalValidation() throws {
         let fixture = try fixtureAccount()
         let account = try ServerAccount(
@@ -2235,13 +2266,35 @@ final class AppModelTests: XCTestCase {
             server: "https://private.example/library"
         )
         let library = fixtureLibrary()
+        let endpointDiagnostics = AppEndpointDiagnostics(
+            authentication: AppEndpointDescription(
+                usage: .primary,
+                server: try NormalizedServerURL(
+                    "https://private.example/library"
+                )
+            ),
+            api: AppEndpointDescription(
+                usage: .local,
+                server: try NormalizedServerURL(
+                    "https://books.home:8443/library"
+                )
+            ),
+            webSocket: AppEndpointDescription(
+                usage: .primary,
+                server: try NormalizedServerURL(
+                    "https://private.example/library"
+                )
+            )
+        )
         let service = TestAppService(
             activeAccount: .success(account),
             libraries: .success([library]),
-            firstPage: .success(fixturePage(libraryID: library.id))
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            endpointDiagnostics: endpointDiagnostics
         )
         let model = AppModel(service: service)
         await model.start()
+        await model.refreshEndpointDiagnostics()
 
         let report = model.diagnosticsReport(
             generatedAt: Date(timeIntervalSince1970: 1_721_865_600),
@@ -2257,13 +2310,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(report.accountCount, 1)
         XCTAssertEqual(report.libraryState, "Loaded")
         XCTAssertEqual(report.playbackState, "Idle")
+        XCTAssertEqual(
+            report.authenticationEndpoint,
+            "Primary — private.example"
+        )
+        XCTAssertEqual(report.apiEndpoint, "Local — books.home:8443")
+        XCTAssertEqual(report.webSocketEndpoint, "Primary — private.example")
+        XCTAssertEqual(report.webSocketState, "Disconnected")
         XCTAssertTrue(report.errorCodes.isEmpty)
         XCTAssertTrue(report.text.contains("App: 0.1.0 (7)"))
         XCTAssertTrue(report.text.contains("Server version: 2.36.0"))
+        XCTAssertTrue(
+            report.text.contains(
+                "Last API connection: Local — books.home:8443"
+            )
+        )
         XCTAssertFalse(report.text.contains("private-account-id"))
         XCTAssertFalse(report.text.contains("private-user-id"))
         XCTAssertFalse(report.text.contains("private-username"))
-        XCTAssertFalse(report.text.contains("private.example"))
+        XCTAssertTrue(report.text.contains("private.example"))
+        XCTAssertFalse(report.text.contains("/library"))
     }
 
     func testDiagnosticsReportUsesTypedErrorCodes() async throws {
@@ -3250,6 +3316,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.accountActionStatus, .idle)
     }
 
+    func testRemoveInactiveAccountKeepsBrowsingAccount() async throws {
+        let active = try fixtureAccount()
+        let inactive = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "other-reader",
+            server: "https://other.example"
+        )
+        let service = TestAppService(
+            accounts: .success([active, inactive]),
+            activeAccount: .success(active),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let removed = await model.removeAccount(inactive)
+
+        XCTAssertTrue(removed)
+        let removedAccounts = await service.removedAccounts()
+        XCTAssertEqual(removedAccounts, [inactive])
+        XCTAssertEqual(model.account, active)
+        XCTAssertEqual(model.accounts, [active])
+        XCTAssertEqual(model.phase, .signedIn)
+    }
+
     func testRemoveAccountFailurePreservesSignedInState() async throws {
         let account = try fixtureAccount()
         let service = TestAppService(
@@ -3290,7 +3382,7 @@ final class AppModelTests: XCTestCase {
 
         await model.removeAccount()
         await gate.release()
-        await firstRemoval.value
+        _ = await firstRemoval.value
 
         let removalCount = await service.removedAccounts().count
         XCTAssertEqual(removalCount, 1)
@@ -4907,6 +4999,7 @@ private actor TestAppService: AppServicing {
     private let removeGate: AsyncGate?
     private let searchGate: AsyncGate?
     private let privateCloudSyncAvailable: Bool
+    private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -4970,7 +5063,8 @@ private actor TestAppService: AppServicing {
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil,
-        privateCloudSyncAvailable: Bool = true
+        privateCloudSyncAvailable: Bool = true,
+        endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
         accountsResult = accounts
         activeAccountResult = activeAccount
@@ -4993,10 +5087,25 @@ private actor TestAppService: AppServicing {
         self.removeGate = removeGate
         self.searchGate = searchGate
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
+        configuredEndpointDiagnostics = endpointDiagnostics
     }
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSyncAvailable
+    }
+
+    func endpointDiagnostics(
+        for account: ServerAccount
+    ) async -> AppEndpointDiagnostics {
+        configuredEndpointDiagnostics
+            ?? AppEndpointDiagnostics(
+                authentication: nil,
+                api: nil,
+                webSocket: AppEndpointDescription(
+                    usage: .primary,
+                    server: account.server
+                )
+            )
     }
 
     func accounts()

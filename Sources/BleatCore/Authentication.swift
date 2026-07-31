@@ -172,6 +172,86 @@ public actor AuthCoordinator<
         ).account
     }
 
+    public func validateStoredSession(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        expectedUserID: UserID
+    ) async throws -> AuthenticatedAccount {
+        guard !accountID.rawValue.isEmpty else {
+            throw LocalAuthenticationError.invalidAccountID
+        }
+        let tokens: AuthenticationTokens
+        do {
+            guard let stored = try await credentialStore.credentials(
+                for: accountID
+            ) else {
+                throw LocalAuthenticationError.tokenValidationFailed
+            }
+            tokens = stored
+        } catch let error as LocalAuthenticationError {
+            throw error
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw LocalAuthenticationError.credentialStorageUnavailable
+            default:
+                throw LocalAuthenticationError.tokenValidationFailed
+            }
+        } catch {
+            throw LocalAuthenticationError.tokenValidationFailed
+        }
+
+        let user = try await Self.authorizedUser(
+            server: server,
+            accessToken: tokens.accessToken,
+            expectedUserID: expectedUserID,
+            transport: transport
+        )
+        return AuthenticatedAccount(
+            id: accountID,
+            server: server,
+            user: user.authenticatedUser
+        )
+    }
+
+    public func validateStoredAuthentication(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        expectedUserID: UserID
+    ) async throws -> AuthenticatedAccount {
+        do {
+            return try await validateStoredSession(
+                accountID: accountID,
+                server: server,
+                expectedUserID: expectedUserID
+            )
+        } catch LocalAuthenticationError.tokenValidationFailed {
+            let savedLogin: NativeLoginCredentials
+            do {
+                guard let credentials =
+                    try await credentialStore.nativeLoginCredentials(
+                        for: accountID
+                    ),
+                    credentials.userID == expectedUserID
+                else {
+                    throw LocalAuthenticationError.tokenValidationFailed
+                }
+                savedLogin = credentials
+            } catch let error as LocalAuthenticationError {
+                throw error
+            } catch {
+                throw LocalAuthenticationError.tokenValidationFailed
+            }
+            return try await validateLocalLogin(
+                accountID: accountID,
+                server: server,
+                username: savedLogin.username,
+                password: savedLogin.password,
+                expectedUserID: expectedUserID
+            )
+        }
+    }
+
     static func authenticateLocally(
         accountID: AccountID,
         server: NormalizedServerURL,
@@ -249,12 +329,69 @@ public actor AuthCoordinator<
             }
         }
 
+        let authorizationUser = try await authorizedUser(
+            server: server,
+            accessToken: tokens.accessToken,
+            expectedUserID: expectedUserID,
+            transport: transport
+        )
+
+        guard authorizationUser.id == loginPayload.user.id else {
+            throw LocalAuthenticationError.authorizedUserMismatch(
+                expected: loginPayload.user.id.rawValue,
+                actual: authorizationUser.id.rawValue
+            )
+        }
+
+        if persistCredentials {
+            do {
+                let nativeLogin = try NativeLoginCredentials(
+                    userID: authorizationUser.id,
+                    username: username,
+                    password: password
+                )
+                try await credentialStore.save(
+                    tokens,
+                    nativeLogin: nativeLogin,
+                    for: accountID
+                )
+            } catch let error as TokenVaultError {
+                switch error {
+                case .missingEntitlement, .interactionNotAllowed:
+                    throw LocalAuthenticationError
+                        .credentialStorageUnavailable
+                default:
+                    throw LocalAuthenticationError
+                        .credentialPersistenceFailed
+                }
+            } catch {
+                throw LocalAuthenticationError.credentialPersistenceFailed
+            }
+        }
+
+        return LocalAuthenticationResult(
+            account: AuthenticatedAccount(
+                id: accountID,
+                server: server,
+                user: authorizationUser.authenticatedUser
+            ),
+            tokens: tokens
+        )
+    }
+
+    private static func authorizedUser(
+        server: NormalizedServerURL,
+        accessToken: String,
+        expectedUserID: UserID?,
+        transport: Transport
+    ) async throws -> AuthenticationUserPayload {
+        let routeBuilder = AudiobookshelfRouteBuilder(server: server)
         let authorizeURL = try routeBuilder.url(for: .authorize)
         var authorizeRequest = URLRequest(url: authorizeURL)
         authorizeRequest.httpMethod = "POST"
         authorizeRequest = try BearerRequestAuthorizer().authorize(
             authorizeRequest,
-            accessToken: tokens.accessToken
+            accessToken: accessToken
         )
 
         let authorizeResponse = try await transport.send(
@@ -284,12 +421,6 @@ public actor AuthCoordinator<
             throw LocalAuthenticationError.malformedAuthorizationResponse
         }
 
-        guard authorizationPayload.user.id == loginPayload.user.id else {
-            throw LocalAuthenticationError.authorizedUserMismatch(
-                expected: loginPayload.user.id.rawValue,
-                actual: authorizationPayload.user.id.rawValue
-            )
-        }
         if let expectedUserID,
             authorizationPayload.user.id != expectedUserID
         {
@@ -298,41 +429,7 @@ public actor AuthCoordinator<
                 actual: authorizationPayload.user.id.rawValue
             )
         }
-
-        if persistCredentials {
-            do {
-                let nativeLogin = try NativeLoginCredentials(
-                    userID: authorizationPayload.user.id,
-                    username: username,
-                    password: password
-                )
-                try await credentialStore.save(
-                    tokens,
-                    nativeLogin: nativeLogin,
-                    for: accountID
-                )
-            } catch let error as TokenVaultError {
-                switch error {
-                case .missingEntitlement, .interactionNotAllowed:
-                    throw LocalAuthenticationError
-                        .credentialStorageUnavailable
-                default:
-                    throw LocalAuthenticationError
-                        .credentialPersistenceFailed
-                }
-            } catch {
-                throw LocalAuthenticationError.credentialPersistenceFailed
-            }
-        }
-
-        return LocalAuthenticationResult(
-            account: AuthenticatedAccount(
-                id: accountID,
-                server: server,
-                user: authorizationPayload.user.authenticatedUser
-            ),
-            tokens: tokens
-        )
+        return authorizationPayload.user
     }
 }
 

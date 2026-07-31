@@ -229,6 +229,8 @@ private struct AccountEditorView: View {
     @State private var username: String
     @State private var password = ""
     @State private var localValidationFailure: AppFailure?
+    @State private var showRemoveAccountConfirmation = false
+    @State private var pendingRemovalScope: AccountRemovalScope?
 
     init(
         model: AppModel,
@@ -256,7 +258,7 @@ private struct AccountEditorView: View {
             in: .whitespacesAndNewlines
         ).isEmpty
             && !username.isEmpty
-            && !password.isEmpty
+            && (username == account.user.username || !password.isEmpty)
             && !isSubmitting
     }
 
@@ -285,7 +287,7 @@ private struct AccountEditorView: View {
                     .accessibilityIdentifier("accountEditor.localServer")
                 }
 
-                Section("Credentials") {
+                Section {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
@@ -296,6 +298,13 @@ private struct AccountEditorView: View {
                         .accessibilityIdentifier(
                             "accountEditor.password"
                         )
+                } header: {
+                    Text("Credentials")
+                } footer: {
+                    Text(
+                        "Leave password blank to keep the existing saved "
+                            + "credentials."
+                    )
                 }
 
                 if case .failed(let failure) = model.loginStatus {
@@ -336,6 +345,21 @@ private struct AccountEditorView: View {
                         .accessibilityIdentifier("accountEditor.activate")
                     }
                 }
+
+                Section {
+                    Button("Remove Account", role: .destructive) {
+                        showRemoveAccountConfirmation = true
+                    }
+                    .disabled(model.accountActionStatus == .removing)
+                    .accessibilityIdentifier("accountEditor.removeAccount")
+                }
+
+                if case .failed(let failure) = model.accountActionStatus {
+                    Section {
+                        Text(failure.message)
+                            .foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle("Edit Account")
             .toolbar {
@@ -372,6 +396,42 @@ private struct AccountEditorView: View {
                     )
                 }
             }
+            .confirmationDialog(
+                "Remove Account?",
+                isPresented: $showRemoveAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Only on This Device", role: .destructive) {
+                    pendingRemovalScope = .thisDevice
+                }
+                if model.privateCloudSyncEnabled {
+                    Button("On All Devices", role: .destructive) {
+                        pendingRemovalScope = .allDevices
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Choose where Bleat removes this saved account.")
+            }
+            .confirmationDialog(
+                "Keep Listening History?",
+                isPresented: Binding(
+                    get: { pendingRemovalScope != nil },
+                    set: { presented in
+                        if !presented {
+                            pendingRemovalScope = nil
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                removalDataButtons
+                Button("Cancel", role: .cancel) {
+                    pendingRemovalScope = nil
+                }
+            } message: {
+                Text(removalDataMessage)
+            }
         }
     }
 
@@ -397,23 +457,92 @@ private struct AccountEditorView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var removalDataButtons: some View {
+        if accountDownloads.isEmpty {
+            Button("Keep Listening History", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .keep)
+            }
+            Button("Delete Listening History", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .delete)
+            }
+        } else {
+            Button("Keep History and Downloads", role: .destructive) {
+                removeAccount(downloads: .keep, statistics: .keep)
+            }
+            Button("Keep History, Delete Downloads", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .keep)
+            }
+            Button("Delete History, Keep Downloads", role: .destructive) {
+                removeAccount(downloads: .keep, statistics: .delete)
+            }
+            Button("Delete History and Downloads", role: .destructive) {
+                removeAccount(downloads: .delete, statistics: .delete)
+            }
+        }
+    }
+
+    private var removalDataMessage: String {
+        guard !accountDownloads.isEmpty else {
+            return "Choose whether to keep this account's listening history."
+        }
+        let count = accountDownloads.count
+        let books = count == 1 ? "book" : "books"
+        let bytes = ByteCountFormatter.string(
+            fromByteCount: storedDownloadBytes(accountDownloads),
+            countStyle: .file
+        )
+        return "\(count) downloaded \(books) use \(bytes). Choose what to keep."
+    }
+
+    private var accountDownloads: [DownloadedBookRecord] {
+        model.downloads.records.filter {
+            $0.manifest.accountID == account.id
+        }
+    }
+
+    private func removeAccount(
+        downloads disposition: AccountDownloadDisposition,
+        statistics statisticsDisposition: AccountStatisticsDisposition
+    ) {
+        guard let scope = pendingRemovalScope else {
+            return
+        }
+        pendingRemovalScope = nil
+        Task {
+            if await model.removeAccount(
+                account,
+                downloads: disposition,
+                scope: scope,
+                statistics: statisticsDisposition
+            ) {
+                onSaved()
+            }
+        }
+    }
 }
 
 private struct DiagnosticsView: View {
-    let report: DiagnosticsReport
+    @Bindable var model: AppModel
     #if DEBUG
         @State private var recentLogExport: RecentLogExportModel?
-
-        init(
-            report: DiagnosticsReport,
-            logStore: PersistentDiagnosticLogStore?
-        ) {
-            self.report = report
-            _recentLogExport = State(
-                initialValue: logStore.map(RecentLogExportModel.init)
-            )
-        }
     #endif
+
+    init(model: AppModel) {
+        self.model = model
+        #if DEBUG
+            _recentLogExport = State(
+                initialValue: model.diagnosticLogStore.map(
+                    RecentLogExportModel.init
+                )
+            )
+        #endif
+    }
+
+    private var report: DiagnosticsReport {
+        model.diagnosticsReport()
+    }
 
     var body: some View {
         List {
@@ -446,6 +575,32 @@ private struct DiagnosticsView: View {
                     "Saved Accounts",
                     value: String(report.accountCount)
                 )
+                LabeledContent(
+                    "Last Authentication",
+                    value:
+                        report.authenticationEndpoint
+                        ?? "Not recorded this launch"
+                )
+                .accessibilityIdentifier(
+                    "diagnostics.authenticationEndpoint"
+                )
+                LabeledContent(
+                    "Last API Connection",
+                    value:
+                        report.apiEndpoint
+                        ?? "Not recorded this launch"
+                )
+                .accessibilityIdentifier("diagnostics.apiEndpoint")
+                LabeledContent(
+                    "WebSocket",
+                    value: report.webSocketEndpoint ?? "No active account"
+                )
+                .accessibilityIdentifier("diagnostics.webSocketEndpoint")
+                LabeledContent(
+                    "WebSocket State",
+                    value: report.webSocketState
+                )
+                .accessibilityIdentifier("diagnostics.webSocketState")
             }
 
             Section("Activity") {
@@ -515,12 +670,15 @@ private struct DiagnosticsView: View {
                     )
                 } footer: {
                     Text(
-                        "Exports exclude account names, server addresses, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
+                        "The snapshot includes server hostnames and ports. Exports exclude account names, URL paths and queries, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
                     )
                 }
             #endif
         }
         .navigationTitle("Diagnostics")
+        .task {
+            await model.refreshEndpointDiagnostics()
+        }
         #if DEBUG
             .sheet(
                 isPresented: Binding(
@@ -2235,9 +2393,7 @@ private struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var showAddAccount = false
     @State private var editingAccount: ServerAccount?
-    @State private var showRemoveAccountConfirmation = false
     @State private var showDisableCloudSyncConfirmation = false
-    @State private var pendingRemovalScope: AccountRemovalScope?
 
     @ColourSchemePreference private var colourScheme
 
@@ -2265,6 +2421,9 @@ private struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(model.accountActionStatus == .switching)
+                        .accessibilityIdentifier(
+                            "settings.account.\(account.id.rawValue)"
+                        )
                     }
                     Button("Add Account", systemImage: "plus") {
                         model.prepareAccountLogin()
@@ -2427,16 +2586,7 @@ private struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        #if DEBUG
-                            DiagnosticsView(
-                                report: model.diagnosticsReport(),
-                                logStore: model.diagnosticLogStore
-                            )
-                        #else
-                            DiagnosticsView(
-                                report: model.diagnosticsReport()
-                            )
-                        #endif
+                        DiagnosticsView(model: model)
                     } label: {
                         Label(
                             "Diagnostics",
@@ -2446,13 +2596,6 @@ private struct SettingsView: View {
                     .accessibilityIdentifier("settings.diagnostics")
                 }
 
-                Section {
-                    Button("Remove Account", role: .destructive) {
-                        showRemoveAccountConfirmation = true
-                    }
-                    .disabled(model.accountActionStatus == .removing)
-                    .accessibilityIdentifier("settings.removeAccount")
-                }
             }
             .navigationTitle("Settings")
             .sheet(isPresented: $showAddAccount) {
@@ -2502,45 +2645,6 @@ private struct SettingsView: View {
                 Text(
                     "Your statistics, accounts, preferences, and credentials remain on this device."
                 )
-            }
-            .confirmationDialog(
-                "Remove Account?",
-                isPresented: $showRemoveAccountConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Only on This Device", role: .destructive) {
-                    pendingRemovalScope = .thisDevice
-                }
-                if model.privateCloudSyncEnabled {
-                    Button(
-                        "On All Devices",
-                        role: .destructive
-                    ) {
-                        pendingRemovalScope = .allDevices
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Choose where Bleat removes this saved account.")
-            }
-            .confirmationDialog(
-                "Keep Listening History?",
-                isPresented: Binding(
-                    get: { pendingRemovalScope != nil },
-                    set: { presented in
-                        if !presented {
-                            pendingRemovalScope = nil
-                        }
-                    }
-                ),
-                titleVisibility: .visible
-            ) {
-                removalDataButtons
-                Button("Cancel", role: .cancel) {
-                    pendingRemovalScope = nil
-                }
-            } message: {
-                Text(removalDataMessage)
             }
         }
     }
@@ -2606,63 +2710,6 @@ private struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var removalDataButtons: some View {
-        if activeAccountDownloads.isEmpty {
-            Button("Keep Listening History", role: .destructive) {
-                removeAccount(
-                    downloads: .delete,
-                    statistics: .keep
-                )
-            }
-            Button("Delete Listening History", role: .destructive) {
-                removeAccount(
-                    downloads: .delete,
-                    statistics: .delete
-                )
-            }
-        } else {
-            Button("Keep History and Downloads", role: .destructive) {
-                removeAccount(downloads: .keep, statistics: .keep)
-            }
-            Button("Keep History, Delete Downloads", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .keep)
-            }
-            Button("Delete History, Keep Downloads", role: .destructive) {
-                removeAccount(downloads: .keep, statistics: .delete)
-            }
-            Button("Delete History and Downloads", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .delete)
-            }
-        }
-    }
-
-    private var removalDataMessage: String {
-        guard !activeAccountDownloads.isEmpty else {
-            return "Choose whether to keep this account's listening history."
-        }
-        let count = activeAccountDownloads.count
-        let books = count == 1 ? "book" : "books"
-        let bytes = ByteCountFormatter.string(
-            fromByteCount: activeAccountDownloadBytes,
-            countStyle: .file
-        )
-        return "\(count) downloaded \(books) use \(bytes). Choose what to keep."
-    }
-
-    private var activeAccountDownloads: [DownloadedBookRecord] {
-        guard let accountID = model.account?.id else {
-            return []
-        }
-        return model.downloads.records.filter {
-            $0.manifest.accountID == accountID
-        }
-    }
-
-    private var activeAccountDownloadBytes: Int64 {
-        storedDownloadBytes(activeAccountDownloads)
-    }
-
     private var downloadStorageText: String {
         ByteCountFormatter.string(
             fromByteCount: storedDownloadBytes(model.downloads.records),
@@ -2670,22 +2717,6 @@ private struct SettingsView: View {
         )
     }
 
-    private func removeAccount(
-        downloads disposition: AccountDownloadDisposition,
-        statistics statisticsDisposition: AccountStatisticsDisposition
-    ) {
-        guard let scope = pendingRemovalScope else {
-            return
-        }
-        pendingRemovalScope = nil
-        Task {
-            await model.removeAccount(
-                downloads: disposition,
-                scope: scope,
-                statistics: statisticsDisposition
-            )
-        }
-    }
 }
 
 private struct DownloadsView: View {

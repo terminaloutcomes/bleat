@@ -328,6 +328,8 @@ struct AppFailure: Equatable, Sendable {
         case .invalidServerURL(let error):
             if case .unsupportedScheme = error { return .serverRequiresHTTPS }
             return .invalidInput
+        case .passwordRequiredForCredentialChange:
+            return .invalidInput
         case .discovery(let error):
             switch error {
             case .uninitialized: return .serverNotReady
@@ -610,6 +612,9 @@ final class AppModel {
     private(set) var phase: AppPhase
     private(set) var loginStatus: LoginStatus = .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
+    private(set) var endpointDiagnostics: AppEndpointDiagnostics?
+    private(set) var liveUpdateConnectionState:
+        AudiobookshelfLiveConnectionState = .disconnected
     private(set) var account: ServerAccount?
     private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
@@ -1701,27 +1706,34 @@ final class AppModel {
         }
     }
 
+    @discardableResult
     func removeAccount(
+        _ accountToRemove: ServerAccount? = nil,
         downloads disposition: AccountDownloadDisposition = .delete,
         scope: AccountRemovalScope = .thisDevice,
         statistics statisticsDisposition:
             AccountStatisticsDisposition = .keep
-    ) async {
-        guard let account else {
+    ) async -> Bool {
+        guard let account = accountToRemove ?? self.account else {
             accountActionStatus = .failed(
                 AppFailure(.removeAccount, .authenticationRequired)
             )
-            return
+            return false
         }
         guard accountActionStatus != .removing else {
-            return
+            return false
         }
+        let removingBrowsingAccount = account.id == self.account?.id
         accountActionStatus = .removing
-        stopLiveUpdates()
+        if removingBrowsingAccount {
+            stopLiveUpdates()
+        }
         await diagnostics.record(
             .started(.removeAccount, category: .auth)
         )
-        await playback.stop()
+        if playback.accountID == account.id {
+            await playback.stop()
+        }
 
         do {
             let deleteStatistics = statisticsDisposition == .delete
@@ -1756,25 +1768,29 @@ final class AppModel {
                 )
             }
             accounts.removeAll { $0.id == account.id }
-            self.account = accounts.first
-            selectedLibrary = nil
-            libraryPageGeneration &+= 1
-            libraries = .idle
-            books = .idle
-            libraryPaginationState = .idle
-            homeShelves = .idle
-            resetSearch()
-            resetBookDetail()
+            if removingBrowsingAccount {
+                self.account = accounts.first
+                selectedLibrary = nil
+                libraryPageGeneration &+= 1
+                libraries = .idle
+                books = .idle
+                libraryPaginationState = .idle
+                homeShelves = .idle
+                resetSearch()
+                resetBookDetail()
+            }
             accountActionStatus = .idle
             loginStatus = .idle
-            if let replacement = self.account {
-                try await service.activateAccount(replacement)
-                phase = .signedIn
-                await downloads.start(account: replacement)
-                await loadLibraries()
-                startLiveUpdates(for: replacement)
-            } else {
-                phase = .signedOut
+            if removingBrowsingAccount {
+                if let replacement = self.account {
+                    try await service.activateAccount(replacement)
+                    phase = .signedIn
+                    await downloads.start(account: replacement)
+                    await loadLibraries()
+                    startLiveUpdates(for: replacement)
+                } else {
+                    phase = .signedOut
+                }
             }
             await diagnostics.record(
                 .completed(
@@ -1783,13 +1799,14 @@ final class AppModel {
                     count: accounts.count
                 )
             )
+            return true
         } catch let error {
             let failure = AppFailure(
                 operation: .removeAccount, serviceError: error)
             accountActionStatus = .failed(
                 failure
             )
-            if let account = self.account {
+            if removingBrowsingAccount, let account = self.account {
                 startLiveUpdates(for: account)
             }
             await diagnostics.record(
@@ -1799,6 +1816,7 @@ final class AppModel {
                     failureCode: failure.diagnosticFailureCode
                 )
             )
+            return false
         }
     }
 
@@ -1818,6 +1836,14 @@ final class AppModel {
         }
     }
 
+    func refreshEndpointDiagnostics() async {
+        guard let account else {
+            endpointDiagnostics = nil
+            return
+        }
+        endpointDiagnostics = await service.endpointDiagnostics(for: account)
+    }
+
     private func startLiveUpdates(for account: ServerAccount) {
         guard liveUpdatesAreActive else {
             return
@@ -1826,12 +1852,17 @@ final class AppModel {
         let accountID = account.id
         liveUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            endpointDiagnostics =
+                await service.endpointDiagnostics(for: account)
             let updates = await service.liveUpdates(for: account)
             for await update in updates {
                 guard !Task.isCancelled, self.account?.id == accountID else {
                     return
                 }
                 guard case .event(let event) = update else {
+                    if case .connection(let state) = update {
+                        liveUpdateConnectionState = state
+                    }
                     continue
                 }
                 switch event {
@@ -1861,6 +1892,7 @@ final class AppModel {
     private func stopLiveUpdates() {
         liveUpdatesTask?.cancel()
         liveUpdatesTask = nil
+        liveUpdateConnectionState = .disconnected
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
     }

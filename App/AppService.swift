@@ -24,6 +24,7 @@ enum BleatCloudKitBuildMode: String, Sendable {
 
 enum AppServiceError: Error, Equatable, Sendable {
     case invalidServerURL(ServerURLValidationError)
+    case passwordRequiredForCredentialChange
     case discovery(ServerDiscoveryError)
     case discoveryRequestFailed
     case onboarding(AccountOnboardingError)
@@ -88,6 +89,35 @@ enum AccountUpdateServiceOutcome: Equatable, Sendable {
     case localServerValidationFailed(AppServiceError)
 }
 
+struct AppEndpointDescription: Equatable, Sendable {
+    let usage: ServerEndpointUsage
+    let host: String
+    let port: Int?
+
+    init(
+        usage: ServerEndpointUsage,
+        server: NormalizedServerURL
+    ) {
+        self.usage = usage
+        host = server.url.host ?? "Unknown"
+        port = server.url.port
+    }
+
+    var diagnosticsLabel: String {
+        let role = usage == .local ? "Local" : "Primary"
+        guard let port else {
+            return "\(role) — \(host)"
+        }
+        return "\(role) — \(host):\(port)"
+    }
+}
+
+struct AppEndpointDiagnostics: Equatable, Sendable {
+    let authentication: AppEndpointDescription?
+    let api: AppEndpointDescription?
+    let webSocket: AppEndpointDescription
+}
+
 struct AppPlaybackTrack: Equatable, Sendable {
     let url: URL
     let startOffset: Double
@@ -124,6 +154,10 @@ protocol AppServicing: Sendable {
     func liveUpdates(
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate>
+
+    func endpointDiagnostics(
+        for account: ServerAccount
+    ) async -> AppEndpointDiagnostics
 
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
@@ -351,6 +385,19 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func endpointDiagnostics(
+        for account: ServerAccount
+    ) async -> AppEndpointDiagnostics {
+        AppEndpointDiagnostics(
+            authentication: nil,
+            api: nil,
+            webSocket: AppEndpointDescription(
+                usage: .primary,
+                server: account.server
+            )
+        )
+    }
+
     func updateAccount(
         _ account: ServerAccount,
         serverAddress: String,
@@ -569,6 +616,33 @@ actor LiveAppService: AppServicing {
         return await client.updates()
     }
 
+    func endpointDiagnostics(
+        for account: ServerAccount
+    ) async -> AppEndpointDiagnostics {
+        let authenticationUsage =
+            await endpointRouter.lastAuthenticationUse(for: account.server)
+        let apiUsage =
+            await endpointRouter.lastSuccessfulUse(for: account.server)
+        return AppEndpointDiagnostics(
+            authentication: authenticationUsage.map {
+                endpointDescription(
+                    usage: $0,
+                    account: account
+                )
+            },
+            api: apiUsage.map {
+                endpointDescription(
+                    usage: $0,
+                    account: account
+                )
+            },
+            webSocket: AppEndpointDescription(
+                usage: .primary,
+                server: account.server
+            )
+        )
+    }
+
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
@@ -622,6 +696,9 @@ actor LiveAppService: AppServicing {
             throw .invalidServerURL(error)
         }
         let local = requestedLocal == primary ? nil : requestedLocal
+        guard !password.isEmpty || username == account.user.username else {
+            throw .passwordRequiredForCredentialChange
+        }
         let localValidationDecision = LocalServerValidationDecision.decide(
             account: account,
             primary: primary,
@@ -638,6 +715,11 @@ actor LiveAppService: AppServicing {
             localValidationDecision == .validate,
             localServerValidation == .required
         {
+            guard !password.isEmpty else {
+                return .localServerValidationFailed(
+                    .passwordRequiredForCredentialChange
+                )
+            }
             do {
                 let discoveredLocal = try await discoverDirect(local)
                 guard discoveredLocal.authenticationMethods.contains(.local)
@@ -674,16 +756,35 @@ actor LiveAppService: AppServicing {
 
         let persisted: ServerAccount
         do {
-            persisted = try await authenticationCoordinator
-                .loginAndPersistAccount(
-                    accountID: account.id,
-                    discoveredServer: discoveredPrimary,
-                    username: username,
-                    password: password,
-                    expectedUserID: account.user.id,
-                    accountStore: accountStore,
-                    makeActive: false
+            if password.isEmpty {
+                let authenticated = try await authenticationCoordinator
+                    .validateStoredAuthentication(
+                        accountID: account.id,
+                        server: primary,
+                        expectedUserID: account.user.id
+                    )
+                persisted = try ServerAccount(
+                    id: account.id,
+                    server: primary,
+                    serverVersion: discoveredPrimary.version.original,
+                    authenticationMethods:
+                        discoveredPrimary.authenticationMethods,
+                    user: authenticated.user,
+                    connectionState: account.connectionState
                 )
+                try await accountStore.save(persisted)
+            } else {
+                persisted = try await authenticationCoordinator
+                    .loginAndPersistAccount(
+                        accountID: account.id,
+                        discoveredServer: discoveredPrimary,
+                        username: username,
+                        password: password,
+                        expectedUserID: account.user.id,
+                        accountStore: accountStore,
+                        makeActive: false
+                    )
+            }
             try await accountStore.setLocalServer(
                 local,
                 validated: localValidated,
@@ -704,9 +805,15 @@ actor LiveAppService: AppServicing {
                     ? updated.localServer
                     : nil
             )
+            await endpointRouter.recordAuthenticationUse(
+                primary: updated.server,
+                usage: .primary
+            )
             return .updated(updated)
         } catch let error as AccountOnboardingError {
             throw .onboarding(error)
+        } catch let error as ServerAccountValidationError {
+            throw .onboarding(.invalidAccount(error))
         } catch let error as AccountStoreError {
             throw .accountStore(error)
         } catch {
@@ -739,7 +846,8 @@ actor LiveAppService: AppServicing {
         let discoveredServer = try await discoverDirect(server)
 
         do {
-            return try await authenticationCoordinator.loginAndPersistAccount(
+            let account =
+                try await authenticationCoordinator.loginAndPersistAccount(
                 accountID: AccountID(
                     rawValue: UUID().uuidString.lowercased()
                 ),
@@ -748,6 +856,11 @@ actor LiveAppService: AppServicing {
                 password: password,
                 accountStore: accountStore
             )
+            await endpointRouter.recordAuthenticationUse(
+                primary: account.server,
+                usage: .primary
+            )
+            return account
         } catch let error {
             throw .onboarding(error)
         }
@@ -759,7 +872,8 @@ actor LiveAppService: AppServicing {
     ) async throws(AppServiceError) -> ServerAccount {
         let discoveredServer = try await discoverDirect(account.server)
         do {
-            return try await authenticationCoordinator.loginAndPersistAccount(
+            let authenticated =
+                try await authenticationCoordinator.loginAndPersistAccount(
                 accountID: account.id,
                 discoveredServer: discoveredServer,
                 username: account.user.username,
@@ -768,6 +882,11 @@ actor LiveAppService: AppServicing {
                 accountStore: accountStore,
                 makeActive: false
             )
+            await endpointRouter.recordAuthenticationUse(
+                primary: authenticated.server,
+                usage: .primary
+            )
+            return authenticated
         } catch let error {
             throw .onboarding(error)
         }
@@ -1512,6 +1631,24 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .privateCloud(error)
+        }
+    }
+
+    private func endpointDescription(
+        usage: ServerEndpointUsage,
+        account: ServerAccount
+    ) -> AppEndpointDescription {
+        switch usage {
+        case .primary:
+            AppEndpointDescription(
+                usage: .primary,
+                server: account.server
+            )
+        case .local:
+            AppEndpointDescription(
+                usage: .local,
+                server: account.localServer ?? account.server
+            )
         }
     }
 

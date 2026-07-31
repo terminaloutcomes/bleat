@@ -30,6 +30,10 @@ struct DiagnosticsReport: Equatable, Sendable {
     let accountCount: Int
     let serverVersion: String?
     let connectionState: String?
+    let authenticationEndpoint: String?
+    let apiEndpoint: String?
+    let webSocketEndpoint: String?
+    let webSocketState: String
     let libraryState: String
     let homeState: String
     let searchState: String
@@ -57,6 +61,10 @@ struct DiagnosticsReport: Equatable, Sendable {
             Saved accounts: \(accountCount)
             Server version: \(serverVersion ?? "Unavailable")
             Connection state: \(connectionState ?? "No active account")
+            Last authentication: \(authenticationEndpoint ?? "Not recorded this launch")
+            Last API connection: \(apiEndpoint ?? "Not recorded this launch")
+            WebSocket endpoint: \(webSocketEndpoint ?? "No active account")
+            WebSocket state: \(webSocketState)
             Libraries: \(libraryState)
             Home: \(homeState)
             Search: \(searchState)
@@ -65,8 +73,9 @@ struct DiagnosticsReport: Equatable, Sendable {
             Downloads: \(downloadCount)
             Active error codes: \(errors)
 
-            Privacy: This report excludes credentials, cookies, tokens, server \
-            addresses, usernames, response bodies, media URLs, playback \
+            Privacy: This report includes server hostnames for connection \
+            diagnosis. It excludes credentials, cookies, tokens, usernames, \
+            response bodies, URL paths and queries, media URLs, playback \
             session IDs, and local file paths.
             """
     }
@@ -84,6 +93,12 @@ extension AppModel {
             accountCount: accounts.count,
             serverVersion: account?.serverVersion,
             connectionState: account?.connectionState.diagnosticsLabel,
+            authenticationEndpoint:
+                endpointDiagnostics?.authentication?.diagnosticsLabel,
+            apiEndpoint: endpointDiagnostics?.api?.diagnosticsLabel,
+            webSocketEndpoint:
+                endpointDiagnostics?.webSocket.diagnosticsLabel,
+            webSocketState: liveUpdateConnectionState.diagnosticsLabel,
             libraryState: libraries.diagnosticsLabel,
             homeState: homeShelves.diagnosticsLabel,
             searchState: searchResults.diagnosticsLabel,
@@ -141,6 +156,21 @@ extension AppModel {
             return failure
         }
         return nil
+    }
+}
+
+extension AudiobookshelfLiveConnectionState {
+    fileprivate var diagnosticsLabel: String {
+        switch self {
+        case .connecting:
+            "Connecting"
+        case .authenticated:
+            "Authenticated"
+        case .disconnected:
+            "Disconnected"
+        case .failed:
+            "Failed"
+        }
     }
 }
 

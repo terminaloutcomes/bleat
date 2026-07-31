@@ -243,6 +243,16 @@ final class BleatUITests: XCTestCase {
                 "diagnostics.serverVersion"
             ].waitForExistence(timeout: 3)
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "diagnostics.webSocketEndpoint"
+            ].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "diagnostics.webSocketState"
+            ].waitForExistence(timeout: 3)
+        )
         app.swipeUp()
         XCTAssertTrue(
             app.buttons["diagnostics.export"].waitForExistence(timeout: 3)
@@ -258,7 +268,10 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(activityView.waitForNonExistence(timeout: 3))
         app.navigationBars.buttons.firstMatch.tap()
 
-        let removeAccount = app.buttons["settings.removeAccount"]
+        let account = app.buttons["settings.account.ui-account"]
+        XCTAssertTrue(account.waitForExistence(timeout: 3))
+        account.tap()
+        let removeAccount = app.buttons["accountEditor.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()
         let removeFromDevice = app.sheets.buttons[

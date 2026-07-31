@@ -219,6 +219,95 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(saveCount, 0)
     }
 
+    func testStoredSessionValidationDoesNotReplaceCredentials() async throws {
+        let transport = AuthenticationHTTPTransport(
+            responses: [.json(Self.authenticationJSON())]
+        )
+        let store = RecordingCredentialStore()
+        let accountID = AccountID(rawValue: "edited-account")
+        let tokens = try AuthenticationTokens(
+            accessToken: "stored-access",
+            refreshToken: "stored-refresh"
+        )
+        try await store.save(tokens, for: accountID)
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        let authenticated = try await coordinator.validateStoredSession(
+            accountID: accountID,
+            server: NormalizedServerURL("https://new.example"),
+            expectedUserID: UserID(rawValue: "user-id")
+        )
+
+        XCTAssertEqual(authenticated.user.username, "reader")
+        let storedTokens = await store.credentials(for: accountID)
+        let saveCount = await store.saveCount()
+        XCTAssertEqual(storedTokens, tokens)
+        XCTAssertEqual(saveCount, 1)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(
+            requests[0].url?.absoluteString,
+            "https://new.example/api/authorize"
+        )
+        XCTAssertEqual(
+            requests[0].value(forHTTPHeaderField: "Authorization"),
+            "Bearer stored-access"
+        )
+    }
+
+    func testStoredAuthenticationFallsBackWithoutReplacingPassword()
+        async throws
+    {
+        let transport = AuthenticationHTTPTransport(
+            responses: [
+                .init(data: Data(), statusCode: 401),
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "temporary-access",
+                        refreshToken: "temporary-refresh"
+                    )
+                ),
+                .json(Self.authenticationJSON()),
+            ]
+        )
+        let store = RecordingCredentialStore()
+        let accountID = AccountID(rawValue: "edited-account")
+        let storedTokens = try AuthenticationTokens(
+            accessToken: "expired-access",
+            refreshToken: "stored-refresh"
+        )
+        let storedLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "stored-password"
+        )
+        try await store.save(
+            storedTokens,
+            nativeLogin: storedLogin,
+            for: accountID
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        _ = try await coordinator.validateStoredAuthentication(
+            accountID: accountID,
+            server: NormalizedServerURL("https://new.example"),
+            expectedUserID: UserID(rawValue: "user-id")
+        )
+
+        let retainedTokens = await store.credentials(for: accountID)
+        let retainedLogin = await store.nativeLoginCredentials(for: accountID)
+        let saveCount = await store.saveCount()
+        XCTAssertEqual(retainedTokens, storedTokens)
+        XCTAssertEqual(retainedLogin, storedLogin)
+        XCTAssertEqual(saveCount, 1)
+    }
+
     func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting()
         async throws
     {

@@ -504,8 +504,10 @@ supports explicit **Mark Finished** and **Mark Unfinished** actions.
 
 Settings lists every saved username/server pair and marks the active browsing
 account. Tap a saved account to edit its primary server URL, optional local
-server URL, username, and password, or to make it the active account. Use
-**Add Account** for another standard Audiobookshelf username/password login.
+server URL, username, and password, remove it, or make it the active account.
+Leave password blank while editing to preserve the existing Keychain
+credentials. Use **Add Account** for another standard Audiobookshelf
+username/password login.
 Switching the browsing account does not stop current playback or unrelated
 background downloads.
 
@@ -520,15 +522,18 @@ as another account and does not split caches, credentials, downloads, or
 playback state.
 
 Settings also provides **Diagnostics**, which shows the app, operating-system,
-server, connection, resource, playback, sync, and download state. Development
-builds add **Export Diagnostics** and **Export Recent Logs**. The latter shares
-a text file containing up to 15 minutes of categorized app, authentication,
-API, playback, download, and synchronization events, including events from an
-earlier launch within that window. Release builds keep the status screen but
-compile out both exports and the rolling log file. Exports exclude account
-names, server addresses, credentials, tokens, response bodies, media titles
-and URLs, remote identifiers, playback session IDs, listening positions, and
-local file paths.
+server, connection, resource, playback, sync, and download state. It identifies
+the primary or local hostname and port last used for authentication and API
+traffic, plus the configured WebSocket endpoint and its connection state.
+Development builds add **Export Diagnostics** and **Export Recent Logs**. The
+latter shares a text file containing up to 15 minutes of categorized app,
+authentication, API, playback, download, and synchronization events, including
+events from an earlier launch within that window. Release builds keep the
+status screen but compile out both exports and the rolling log file. Snapshot
+exports include these server hostnames and ports but exclude URL paths and
+queries, account names, credentials, tokens, response bodies, media titles and
+URLs, remote identifiers, playback session IDs, listening positions, and local
+file paths. Recent logs continue to exclude server addresses.
 
 Each visible failure retains both the operation and a specific safe cause—for
 example authentication, permission, missing content, invalid server data,

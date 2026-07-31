@@ -124,7 +124,10 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can see when an account requires reauthentication.
 - I can sign out or remove an account, with a clear choice about deleting its downloaded books.
 - I can tap a saved account to edit its primary URL, optional local-network URL,
-  username, and password.
+  username, and password, or remove that specific account.
+- Leaving the password blank while editing preserves the existing device
+  credentials; entering a password replaces them after successful
+  authentication.
 - The primary URL remains the account identity; matching requests prefer the
   local URL and fall back to the primary URL when the local endpoint is
   unavailable.
@@ -1279,7 +1282,13 @@ Use `OSLog` categories for auth, API, playback, download, and sync. Logs must re
 - custom secret headers;
 - local file paths containing user metadata.
 
-Diagnostics export should include app version, iOS version, server version, endpoint name, HTTP status, request correlation ID, player state transitions, and redacted errors. It must not include credentials or full response bodies by default.
+Diagnostics should show the privacy-safe hostname and port, without URL paths
+or queries, for the primary or local endpoint last used for authentication and
+API traffic. It should also show the configured WebSocket endpoint and current
+WebSocket connection state. Snapshot export should include app version, iOS
+version, server version, those endpoint hostnames and roles, endpoint name,
+HTTP status, request correlation ID, player state transitions, and redacted
+errors. It must not include credentials or full response bodies by default.
 
 Every diagnostic failure event carries its operation and a stable typed cause.
 Do not derive either from localized text, serialized errors, or raw server

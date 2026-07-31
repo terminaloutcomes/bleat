@@ -45,6 +45,36 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(candidates[0].url, requestURL)
     }
 
+    func testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        let requestURL = try XCTUnwrap(
+            URL(string: "https://books.example/api/libraries")
+        )
+        let candidates = await router.candidates(for: requestURL)
+        let localCandidate = try XCTUnwrap(candidates.first)
+        let primaryCandidate = try XCTUnwrap(candidates.last)
+
+        await router.recordSuccessfulUse(
+            localCandidate,
+            endpoint: .libraries
+        )
+        await router.recordSuccessfulUse(
+            primaryCandidate,
+            endpoint: .authorize
+        )
+
+        let apiUsage = await router.lastSuccessfulUse(for: primary)
+        let authenticationUsage =
+            await router.lastAuthenticationUse(for: primary)
+        XCTAssertEqual(apiUsage, .local)
+        XCTAssertEqual(authenticationUsage, .primary)
+    }
+
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(

@@ -13,6 +13,11 @@ fi
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
 readonly bleat_app=".build/device-release/Build/Products/Release-iphoneos/Bleat.app"
 
+if [ -d "${bleat_app}" ]; then
+  echo "Removing existing build at ${bleat_app} before building..."
+  rm -rf "${bleat_app}"
+fi
+
 xcodebuild \
   -project Bleat.xcodeproj \
   -scheme "Bleat (Bleat project)" \
@@ -26,7 +31,7 @@ xcodebuild \
   CODE_SIGN_STYLE=Automatic \
   PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
-  build
+  build | rg -v "Supported platforms for the buildables in the current scheme is empty"
 
 if [[ ! -d "${bleat_app}" ]]; then
   echo "xcodebuild succeeded without producing ${bleat_app}" >&2
