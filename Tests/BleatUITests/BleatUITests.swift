@@ -115,6 +115,9 @@ final class BleatUITests: XCTestCase {
             app.swipeUp()
         }
         XCTAssertTrue(bookmark.waitForExistence(timeout: 3))
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.exists)
+        actions.tap()
         let edit = app.buttons["book.detail.edit"]
         XCTAssertTrue(edit.exists)
         edit.tap()
@@ -422,6 +425,80 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testMiniPlayerSwipesAwayWhilePlayingAndPaused() {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        var miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        swipeUpToDismiss(miniToggle)
+        let playingDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hittable == false"),
+            object: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playingDismissed], timeout: 3),
+            .completed
+        )
+        XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 10))
+
+        let restartedPlay = app.buttons["book.detail.play"]
+        XCTAssertTrue(restartedPlay.waitForExistence(timeout: 3))
+        restartedPlay.tap()
+        miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        let pause = app.buttons["book.detail.play"]
+        XCTAssertTrue(pause.waitForExistence(timeout: 3))
+        let playbackRequested = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Pause"),
+            object: pause
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackRequested], timeout: 3),
+            .completed
+        )
+        XCTAssertEqual(pause.label, "Pause")
+        pause.tap()
+        let playbackPaused = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Play"),
+            object: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackPaused], timeout: 3),
+            .completed
+        )
+        XCTAssertEqual(miniToggle.label, "Play")
+        swipeUpToDismiss(miniToggle)
+        let pausedDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hittable == false"),
+            object: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [pausedDismissed], timeout: 3),
+            .completed
+        )
+        XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func swipeUpToDismiss(_ element: XCUIElement) {
+        let start = element.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: start.withOffset(CGVector(dx: 0, dy: -80))
+        )
+    }
+
+    @MainActor
     func testLargeScrubberJumpsRequireConfirmationWithoutGuardingCommands() {
         let app = launch(scenario: "--ui-testing-playback")
 
@@ -497,6 +574,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["book.detail.play"].waitForExistence(timeout: 3)
         )
+        XCTAssertFalse(app.buttons["book.detail.actions"].exists)
         XCTAssertFalse(app.buttons["book.detail.edit"].exists)
         XCTAssertFalse(app.buttons["book.detail.download"].exists)
     }
@@ -512,6 +590,9 @@ final class BleatUITests: XCTestCase {
         )
         app.staticTexts["The Test Audiobook"].tap()
 
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
         let edit = app.buttons["book.detail.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["book.detail.cover"].exists)

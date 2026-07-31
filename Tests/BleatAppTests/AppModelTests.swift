@@ -45,6 +45,39 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testMiniPlayerSwipeDismissesOnlyForUpwardVerticalDrag() {
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: -36)
+            ),
+            .dismiss
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 10, height: -80)
+            ),
+            .dismiss
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: -35)
+            ),
+            .ignore
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: 80)
+            ),
+            .ignore
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 80, height: -40)
+            ),
+            .ignore
+        )
+    }
+
     func testBookCoverLoaderDeduplicatesAndCachesAccountScopedImages()
         async throws
     {

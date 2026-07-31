@@ -1,6 +1,58 @@
 import BleatCore
 import Foundation
 import Observation
+import SwiftUI
+
+/// Names of app preferences used in the app. These are used as keys for @AppStorage and UserDefaults.
+enum AppPreferenceKey: CaseIterable, Equatable, Sendable {
+    static let colourScheme = "colourScheme"
+}
+
+/// Saves you having to keep repeating the @AppStorage property wrapper for each preference.
+///
+/// Example usage:
+/// ```swift
+/// @ColourSchemePreference private var colourScheme
+/// ```
+@propertyWrapper
+struct ColourSchemePreference: DynamicProperty {
+    @AppStorage(AppPreferenceKey.colourScheme)
+    private var storedValue: ColourScheme = .defaultValue
+
+    var wrappedValue: ColourScheme {
+        get { storedValue }
+        nonmutating set { storedValue = newValue }
+    }
+
+    var projectedValue: Binding<ColourScheme> {
+        $storedValue
+    }
+}
+
+enum ColourScheme: String, CaseIterable, Identifiable, Equatable, Sendable {
+    case purple
+    case orange
+    case blue
+    case pink
+    case red
+    case white
+
+    var id: Self { self }
+
+    static let defaultValue: Self = .purple
+
+    var color: Color {
+        switch self {
+        // #8236CB - https://easyrgb.com/en/convert.php HTML to SRGB
+        case .purple: Color(red: 0.5098, green: 0.21176, blue: 0.79608)
+        case .orange: .orange
+        case .blue: .blue
+        case .pink: .pink
+        case .red: .red
+        case .white: .white
+        }
+    }
+}
 
 enum AppPhase: Equatable, Sendable {
     case launching
@@ -110,7 +162,8 @@ enum AppFailureOperation: String, Equatable, Sendable {
 }
 
 enum AppFailureCause: String, Equatable, Sendable {
-    case persistenceUnavailable, invalidInput, serverRequiresHTTPS, serverNotReady
+    case persistenceUnavailable, invalidInput, serverRequiresHTTPS,
+        serverNotReady
     case serverUnsupported, localLoginUnavailable, invalidCredentials
     case authenticationRequired, permissionDenied, itemNotFound
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
@@ -138,7 +191,8 @@ struct AppFailure: Equatable, Sendable {
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
         case .invalidServerResponse: "Invalid server response"
-        case .localStorageUnavailable, .persistenceUnavailable: "Local storage unavailable"
+        case .localStorageUnavailable, .persistenceUnavailable:
+            "Local storage unavailable"
         case .unavailableOffline: "Unavailable offline"
         case .serverUnavailable: "Server unavailable"
         case .serverRequiresHTTPS: "HTTPS required"
@@ -197,46 +251,63 @@ struct AppFailure: Equatable, Sendable {
         case .itemNotFound: "book.closed"
         case .permissionDenied: "lock"
         case .authenticationRequired: "person.crop.circle.badge.exclamationmark"
-        case .invalidServerResponse, .invalidInput, .requestRejected: "exclamationmark.triangle"
-        case .localStorageUnavailable, .persistenceUnavailable: "externaldrive.badge.exclamationmark"
+        case .invalidServerResponse, .invalidInput, .requestRejected:
+            "exclamationmark.triangle"
+        case .localStorageUnavailable, .persistenceUnavailable:
+            "externaldrive.badge.exclamationmark"
         case .unavailableOffline, .serverUnavailable: "wifi.exclamationmark"
         case .mediaUnavailable: "play.slash"
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
-        case .serverNotReady, .serverUnsupported, .localLoginUnavailable, .invalidCredentials: "exclamationmark.circle"
+        case .serverNotReady, .serverUnsupported, .localLoginUnavailable,
+            .invalidCredentials:
+            "exclamationmark.circle"
         }
     }
 
     var allowsRetry: Bool {
-        operation.isSafeToRetry && (cause == .invalidServerResponse
-            || cause == .localStorageUnavailable || cause == .unavailableOffline
-            || cause == .serverUnavailable || cause == .requestRejected)
+        operation.isSafeToRetry
+            && (cause == .invalidServerResponse
+                || cause == .localStorageUnavailable
+                || cause == .unavailableOffline
+                || cause == .serverUnavailable || cause == .requestRejected)
     }
 
-    static let persistenceUnavailable = AppFailure(.appStart, .persistenceUnavailable)
-    static let accountUnavailable = AppFailure(.appStart, .localStorageUnavailable)
+    static let persistenceUnavailable = AppFailure(
+        .appStart, .persistenceUnavailable)
+    static let accountUnavailable = AppFailure(
+        .appStart, .localStorageUnavailable)
     static let mediaUnavailable = AppFailure(.localPlayback, .mediaUnavailable)
     static let invalidServerAddress = AppFailure(.login, .invalidInput)
     static let serverUnavailable = AppFailure(.login, .serverUnavailable)
     static let serverRequiresHTTPS = AppFailure(.login, .serverRequiresHTTPS)
     static let serverNotReady = AppFailure(.login, .serverNotReady)
     static let serverUnsupported = AppFailure(.login, .serverUnsupported)
-    static let localLoginUnavailable = AppFailure(.login, .localLoginUnavailable)
+    static let localLoginUnavailable = AppFailure(
+        .login, .localLoginUnavailable)
     static let invalidCredentials = AppFailure(.login, .invalidCredentials)
-    static let secureCredentialStorageUnavailable = AppFailure(.login, .localStorageUnavailable)
+    static let secureCredentialStorageUnavailable = AppFailure(
+        .login, .localStorageUnavailable)
     static let loginFailed = AppFailure(.login, .requestRejected)
-    static let libraryUnavailable = AppFailure(.loadLibraries, .serverUnavailable)
+    static let libraryUnavailable = AppFailure(
+        .loadLibraries, .serverUnavailable)
     static let homeUnavailable = AppFailure(.loadHome, .serverUnavailable)
     static let searchUnavailable = AppFailure(.search, .serverUnavailable)
     static let playbackDenied = AppFailure(.openPlayback, .permissionDenied)
-    static let playbackUnavailable = AppFailure(.openPlayback, .serverUnavailable)
-    static let progressUnavailable = AppFailure(.updateProgress, .uncertainMutation)
+    static let playbackUnavailable = AppFailure(
+        .openPlayback, .serverUnavailable)
+    static let progressUnavailable = AppFailure(
+        .updateProgress, .uncertainMutation)
     static let invalidMetadata = AppFailure(.saveMetadata, .invalidInput)
-    static let metadataUnavailable = AppFailure(.saveMetadata, .uncertainMutation)
+    static let metadataUnavailable = AppFailure(
+        .saveMetadata, .uncertainMutation)
     static let bookDeletionDenied = AppFailure(.deleteBook, .permissionDenied)
-    static let bookDeletionUnavailable = AppFailure(.deleteBook, .uncertainMutation)
-    static let bookmarkUnavailable = AppFailure(.loadBookmarks, .serverUnavailable)
-    static let accountRemovalFailed = AppFailure(.removeAccount, .uncertainMutation)
+    static let bookDeletionUnavailable = AppFailure(
+        .deleteBook, .uncertainMutation)
+    static let bookmarkUnavailable = AppFailure(
+        .loadBookmarks, .serverUnavailable)
+    static let accountRemovalFailed = AppFailure(
+        .removeAccount, .uncertainMutation)
 
     static func bookUnavailable(_ cause: AppFailureCause) -> AppFailure {
         AppFailure(.loadBook, cause)
@@ -254,11 +325,14 @@ struct AppFailure: Equatable, Sendable {
         case .discovery(let error):
             switch error {
             case .uninitialized: return .serverNotReady
-            case .unsupportedServerVersion, .invalidServerVersion: return .serverUnsupported
-            case .malformedResponse, .wrongApplication: return .invalidServerResponse
+            case .unsupportedServerVersion, .invalidServerVersion:
+                return .serverUnsupported
+            case .malformedResponse, .wrongApplication:
+                return .invalidServerResponse
             case .unexpectedHTTPStatus(let status): return statusCause(status)
             case .redirectMissingLocation, .redirectRequiresConfirmation,
-                .tooManyRedirects, .invalidRedirect: return .requestRejected
+                .tooManyRedirects, .invalidRedirect:
+                return .requestRejected
             }
         case .discoveryRequestFailed: return .serverUnavailable
         case .onboarding(let error):
@@ -267,17 +341,23 @@ struct AppFailure: Equatable, Sendable {
             case .authenticationFailed(let error):
                 switch error {
                 case .invalidCredentials: return .invalidCredentials
-                case .credentialStorageUnavailable: return .localStorageUnavailable
+                case .credentialStorageUnavailable:
+                    return .localStorageUnavailable
                 case .malformedLoginResponse, .malformedAuthorizationResponse,
-                    .authorizedUserMismatch: return .invalidServerResponse
-                case .unexpectedLoginStatus(let status), .unexpectedAuthorizationStatus(let status): return statusCause(status)
+                    .authorizedUserMismatch:
+                    return .invalidServerResponse
+                case .unexpectedLoginStatus(let status),
+                    .unexpectedAuthorizationStatus(let status):
+                    return statusCause(status)
                 case .invalidAccountID, .accountOperationInProgress,
                     .missingAccessToken, .missingRefreshToken,
-                    .tokenValidationFailed, .credentialPersistenceFailed: return .authenticationRequired
+                    .tokenValidationFailed, .credentialPersistenceFailed:
+                    return .authenticationRequired
                 }
             case .authenticationRequestFailed: return .serverUnavailable
             case .invalidAccount: return .invalidServerResponse
-            case .accountPersistenceFailed, .credentialRollbackFailed: return .localStorageUnavailable
+            case .accountPersistenceFailed, .credentialRollbackFailed:
+                return .localStorageUnavailable
             }
         case .accountStore, .libraryCache, .statistics:
             return .localStorageUnavailable
@@ -294,10 +374,15 @@ struct AppFailure: Equatable, Sendable {
             case .cloudUnavailable:
                 return .serverUnavailable
             }
-        case .libraryRepository(let error), .bookDetail(let error): return repositoryCause(error)
-        case .pageRequest, .homeRequest, .searchRequest, .metadataPatch: return .invalidInput
+        case .libraryRepository(let error), .bookDetail(let error):
+            return repositoryCause(error)
+        case .pageRequest, .homeRequest, .searchRequest, .metadataPatch:
+            return .invalidInput
         case .searchCoordinator(let error):
-            switch error { case .cancelled, .superseded: return .serverUnavailable; case .repository(let error): return repositoryCause(error) }
+            switch error {
+            case .cancelled, .superseded: return .serverUnavailable
+            case .repository(let error): return repositoryCause(error)
+            }
         case .playbackSession(let error): return playbackSessionCause(error)
         case .playbackSource: return .mediaUnavailable
         case .playbackSync(let error): return playbackSyncCause(error)
@@ -305,50 +390,197 @@ struct AppFailure: Equatable, Sendable {
         case .metadataUpdate(let error): return metadataCause(error)
         case .coverUpdate(let error): return coverCause(error)
         case .bookDeletion(let error):
-            switch error { case .permissionDenied: return .permissionDenied; case .itemNotFound: return .itemNotFound; case .requestFailed: return .uncertainMutation; case .unexpectedStatus(let status): return statusCause(status); case .invalidItemID, .requestConstructionFailed, .authenticationFailed: return .requestRejected }
+            switch error {
+            case .permissionDenied: return .permissionDenied
+            case .itemNotFound: return .itemNotFound
+            case .requestFailed: return .uncertainMutation
+            case .unexpectedStatus(let status): return statusCause(status)
+            case .invalidItemID, .requestConstructionFailed,
+                .authenticationFailed:
+                return .requestRejected
+            }
         case .bookmark(let error): return bookmarkCause(error)
         case .progress(let error): return progressCause(error)
         case .downloadPlan(let error):
-            switch error { case .invalidItemID: return .invalidInput; case .routeConstruction: return .requestRejected; case .authenticatedRequest(let error): return authenticationCause(error); case .unexpectedStatus(let status): return statusCause(status); case .invalidPlan: return .invalidServerResponse }
+            switch error {
+            case .invalidItemID: return .invalidInput
+            case .routeConstruction: return .requestRejected
+            case .authenticatedRequest(let error):
+                return authenticationCause(error)
+            case .unexpectedStatus(let status): return statusCause(status)
+            case .invalidPlan: return .invalidServerResponse
+            }
         case .downloadAuthorization(let error):
-            switch error { case .invalidAccountID, .accountOperationInProgress, .rejectedRequestDoesNotMatchDownload, .missingRejectedAuthorization, .malformedRejectedAuthorization: return .invalidInput; case .routeConstruction: return .requestRejected; case .authenticatedRequest(let error): return authenticationCause(error) }
+            switch error {
+            case .invalidAccountID, .accountOperationInProgress,
+                .rejectedRequestDoesNotMatchDownload,
+                .missingRejectedAuthorization, .malformedRejectedAuthorization:
+                return .invalidInput
+            case .routeConstruction: return .requestRejected
+            case .authenticatedRequest(let error):
+                return authenticationCause(error)
+            }
         case .accountRemoval(let error):
-            switch error { case .accountNotFound: return .itemNotFound; case .logoutFailed, .logoutRequestFailed: return .uncertainMutation; case .accountStoreFailed: return .localStorageUnavailable }
+            switch error {
+            case .accountNotFound: return .itemNotFound
+            case .logoutFailed, .logoutRequestFailed: return .uncertainMutation
+            case .accountStoreFailed: return .localStorageUnavailable
+            }
         }
     }
 
     private static func statusCause(_ status: Int) -> AppFailureCause {
-        switch status { case 401: .authenticationRequired; case 403: .permissionDenied; case 404: .itemNotFound; case 408, 429, 500...599: .serverUnavailable; default: .requestRejected }
+        switch status {
+        case 401: .authenticationRequired
+        case 403: .permissionDenied
+        case 404: .itemNotFound
+        case 408, 429, 500...599: .serverUnavailable
+        default: .requestRejected
+        }
     }
-    private static func repositoryCause(_ error: LibraryRepositoryError) -> AppFailureCause {
-        switch error { case .remote(let error): apiCause(error); case .fallbackCache(let remote, _): apiCause(remote); case .cache: .localStorageUnavailable; case .noCachedValue: .unavailableOffline; case .cancelled: .serverUnavailable }
+    private static func repositoryCause(_ error: LibraryRepositoryError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .remote(let error): apiCause(error)
+        case .fallbackCache(let remote, _): apiCause(remote)
+        case .cache: .localStorageUnavailable
+        case .noCachedValue: .unavailableOffline
+        case .cancelled: .serverUnavailable
+        }
     }
-    private static func apiCause(_ error: AudiobookshelfAPIError) -> AppFailureCause {
-        switch error { case .authentication(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .malformedResponse, .invalidLibrary, .invalidPage, .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults, .invalidPersonalizedShelves: .invalidServerResponse; case .cancelled: .serverUnavailable; case .invalidAccountID, .routeConstruction: .requestRejected }
+    private static func apiCause(_ error: AudiobookshelfAPIError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authentication(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .malformedResponse, .invalidLibrary, .invalidPage,
+            .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults,
+            .invalidPersonalizedShelves:
+            .invalidServerResponse
+        case .cancelled: .serverUnavailable
+        case .invalidAccountID, .routeConstruction: .requestRejected
+        }
     }
-    private static func authenticationCause(_ error: AuthenticatedRequestError) -> AppFailureCause {
-        switch error { case .requestTransportFailed, .refreshTransportFailed, .automaticReauthenticationTransportFailed: .serverUnavailable; case .credentialsReadFailed, .missingCredentials, .refreshRejected, .missingAccessToken, .missingRefreshToken, .credentialPersistenceFailed, .savedLoginCredentialsReadFailed, .automaticReauthenticationFailed, .retriedRequestUnauthorized: .authenticationRequired; case .unexpectedRefreshStatus(let status): statusCause(status); case .invalidAccountID, .accountOperationInProgress, .authenticationEndpoint, .requestDoesNotMatchRoute, .authorizationFailed, .requestCancelled, .refreshRequestConstructionFailed, .refreshCancelled, .malformedRefreshResponse: .requestRejected }
+    private static func authenticationCause(_ error: AuthenticatedRequestError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .requestTransportFailed, .refreshTransportFailed,
+            .automaticReauthenticationTransportFailed:
+            .serverUnavailable
+        case .credentialsReadFailed, .missingCredentials, .refreshRejected,
+            .missingAccessToken, .missingRefreshToken,
+            .credentialPersistenceFailed, .savedLoginCredentialsReadFailed,
+            .automaticReauthenticationFailed, .retriedRequestUnauthorized:
+            .authenticationRequired
+        case .unexpectedRefreshStatus(let status): statusCause(status)
+        case .invalidAccountID, .accountOperationInProgress,
+            .authenticationEndpoint, .requestDoesNotMatchRoute,
+            .authorizationFailed, .requestCancelled,
+            .refreshRequestConstructionFailed, .refreshCancelled,
+            .malformedRefreshResponse:
+            .requestRejected
+        }
     }
-    private static func playbackSessionCause(_ error: PlaybackSessionError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStartStatus(let status), .unexpectedCloseStatus(let status): statusCause(status); case .requestFailed: .serverUnavailable; case .malformedStartResponse, .invalidSessionResponse, .mismatchedLibraryItem: .invalidServerResponse; case .invalidLibraryItemID, .invalidDeviceInfo, .invalidSupportedMimeType, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    private static func playbackSessionCause(_ error: PlaybackSessionError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStartStatus(let status),
+            .unexpectedCloseStatus(let status):
+            statusCause(status)
+        case .requestFailed: .serverUnavailable
+        case .malformedStartResponse, .invalidSessionResponse,
+            .mismatchedLibraryItem:
+            .invalidServerResponse
+        case .invalidLibraryItemID, .invalidDeviceInfo,
+            .invalidSupportedMimeType, .requestConstructionFailed,
+            .requestEncodingFailed:
+            .invalidInput
+        }
     }
-    private static func playbackSyncCause(_ error: PlaybackSyncError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .invalidSessionID, .invalidPosition, .invalidDuration, .invalidListeningTime, .positionExceedsDuration, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    private static func playbackSyncCause(_ error: PlaybackSyncError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .invalidSessionID, .invalidPosition, .invalidDuration,
+            .invalidListeningTime, .positionExceedsDuration,
+            .requestConstructionFailed, .requestEncodingFailed:
+            .invalidInput
+        }
     }
-    private static func localSessionCause(_ error: LocalPlaybackSessionError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .emptyBatch, .duplicateSessionID, .invalidSessionID, .invalidMetadata, .invalidDuration, .invalidPosition, .invalidTimestamp, .invalidMVPAccounting, .invalidDeviceInfo, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    private static func localSessionCause(_ error: LocalPlaybackSessionError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .malformedResponse: .invalidServerResponse
+        case .emptyBatch, .duplicateSessionID, .invalidSessionID,
+            .invalidMetadata, .invalidDuration, .invalidPosition,
+            .invalidTimestamp, .invalidMVPAccounting, .invalidDeviceInfo,
+            .requestConstructionFailed, .requestEncodingFailed:
+            .invalidInput
+        }
     }
-    private static func metadataCause(_ error: BookMetadataUpdateError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyPatch, .requestConstructionFailed, .requestEncodingFailed, .updateRejected: .invalidInput }
+    private static func metadataCause(_ error: BookMetadataUpdateError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .malformedResponse: .invalidServerResponse
+        case .invalidItemID, .emptyPatch, .requestConstructionFailed,
+            .requestEncodingFailed, .updateRejected:
+            .invalidInput
+        }
     }
-    private static func coverCause(_ error: BookCoverUploadError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyImage, .imageTooLarge, .requestConstructionFailed, .uploadRejected: .invalidInput }
+    private static func coverCause(_ error: BookCoverUploadError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .malformedResponse: .invalidServerResponse
+        case .invalidItemID, .emptyImage, .imageTooLarge,
+            .requestConstructionFailed, .uploadRejected:
+            .invalidInput
+        }
     }
-    private static func bookmarkCause(_ error: BookmarkError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .invalidTime, .emptyTitle, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    private static func bookmarkCause(_ error: BookmarkError) -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .malformedResponse: .invalidServerResponse
+        case .invalidItemID, .invalidTime, .emptyTitle,
+            .requestConstructionFailed, .requestEncodingFailed:
+            .invalidInput
+        }
     }
-    private static func progressCause(_ error: BookProgressError) -> AppFailureCause {
-        switch error { case .authenticationFailed(let error): authenticationCause(error); case .unexpectedStatus(let status): statusCause(status); case .requestFailed: .uncertainMutation; case .malformedResponse: .invalidServerResponse; case .invalidItemID, .emptyUpdate, .invalidDuration, .invalidCurrentTime, .invalidProgress, .requestConstructionFailed, .requestEncodingFailed: .invalidInput }
+    private static func progressCause(_ error: BookProgressError)
+        -> AppFailureCause
+    {
+        switch error {
+        case .authenticationFailed(let error): authenticationCause(error)
+        case .unexpectedStatus(let status): statusCause(status)
+        case .requestFailed: .uncertainMutation
+        case .malformedResponse: .invalidServerResponse
+        case .invalidItemID, .emptyUpdate, .invalidDuration,
+            .invalidCurrentTime, .invalidProgress, .requestConstructionFailed,
+            .requestEncodingFailed:
+            .invalidInput
+        }
     }
 }
 
@@ -665,7 +897,8 @@ final class AppModel {
             startLiveUpdates(for: authenticatedAccount)
             return true
         } catch let error {
-            let failure = AppFailure(operation: .reauthenticate, serviceError: error)
+            let failure = AppFailure(
+                operation: .reauthenticate, serviceError: error)
             loginStatus = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -702,7 +935,8 @@ final class AppModel {
                 .completed(.switchAccount, category: .auth)
             )
         } catch let error {
-            let failure = AppFailure(operation: .switchAccount, serviceError: error)
+            let failure = AppFailure(
+                operation: .switchAccount, serviceError: error)
             accountActionStatus = .failed(
                 failure
             )
@@ -756,7 +990,8 @@ final class AppModel {
             }
             await selectLibrary(firstLibrary)
         } catch let error {
-            let failure = AppFailure(operation: .loadLibraries, serviceError: error)
+            let failure = AppFailure(
+                operation: .loadLibraries, serviceError: error)
             libraries = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -900,7 +1135,8 @@ final class AppModel {
             else {
                 return
             }
-            let failure = AppFailure(operation: .loadLibraryPage, serviceError: error)
+            let failure = AppFailure(
+                operation: .loadLibraryPage, serviceError: error)
             books = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -1153,7 +1389,8 @@ final class AppModel {
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
                         detail,
-                        AppFailure(operation: .replaceCover, serviceError: error)
+                        AppFailure(
+                            operation: .replaceCover, serviceError: error)
                     )
                 }
             case .stale(let latest):
@@ -1481,7 +1718,8 @@ final class AppModel {
                 )
             )
         } catch let error {
-            let failure = AppFailure(operation: .removeAccount, serviceError: error)
+            let failure = AppFailure(
+                operation: .removeAccount, serviceError: error)
             accountActionStatus = .failed(
                 failure
             )
@@ -1584,8 +1822,9 @@ final class AppModel {
         pendingLiveItemIDs = []
 
         if refreshLibraries {
-            guard let loaded = try? await service.libraries(for: account)
-                .filter({ $0.mediaType == .book })
+            guard
+                let loaded = try? await service.libraries(for: account)
+                    .filter({ $0.mediaType == .book })
             else { return }
             libraries = .loaded(loaded)
             let retained = selectedLibrary.flatMap { selected in

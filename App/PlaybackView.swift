@@ -33,12 +33,30 @@ enum ScrubberSeekDecision: Equatable {
     }
 }
 
+enum MiniPlayerSwipeDecision: Equatable {
+    static let dismissalDistance: CGFloat = 36
+
+    case ignore
+    case dismiss
+
+    static func decide(translation: CGSize) -> Self {
+        guard translation.height <= -dismissalDistance,
+            abs(translation.height) > abs(translation.width)
+        else {
+            return .ignore
+        }
+        return .dismiss
+    }
+}
+
 private struct PlaybackScrubberView: View {
     @Bindable var playback: PlaybackModel
     @State private var scrubTime: Double = 0
     @State private var isScrubbing = false
     @State private var scrubOriginTime: Double?
     @State private var pendingSeek: PendingScrubberSeek?
+
+    @ColourSchemePreference private var colourScheme
 
     var body: some View {
         VStack(spacing: 6) {
@@ -55,6 +73,8 @@ private struct PlaybackScrubberView: View {
             }
             .disabled(playback.state == .preparing)
             .accessibilityIdentifier("player.position")
+            .sliderThumbVisibility(Visibility.hidden)
+            .tint(colourScheme.color)
 
             HStack {
                 Text(playbackTime(scrubTime))
@@ -154,62 +174,110 @@ private struct PlaybackScrubberView: View {
 struct MiniPlayerView: View {
     @Bindable var playback: PlaybackModel
     let showPlayer: () -> Void
+    @State private var isDismissing = false
+
+    @ColourSchemePreference private var colourScheme
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: showPlayer) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(playback.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                    if !playback.author.isEmpty {
-                        Text(playback.author)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        if !isDismissing {
+            HStack(spacing: 12) {
+                Button(action: showPlayer) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(playback.title)
+                            .font(.headline)
                             .lineLimit(1)
+                        if !playback.author.isEmpty {
+                            Text(playback.author)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
+                .simultaneousGesture(dismissalGesture)
 
-            if playback.state == .preparing {
-                ProgressView()
-                    .accessibilityIdentifier("player.preparing")
-            } else {
-                if playback.state == .buffering {
+                if playback.state == .preparing {
                     ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel("Buffering")
-                        .accessibilityIdentifier("player.buffering")
-                }
-                Button {
-                    playback.togglePlayback()
-                } label: {
-                    Image(
-                        systemName: playback.isPlaybackRequested
-                            ? "pause.fill"
-                            : "play.fill"
+                        .accessibilityIdentifier("player.preparing")
+                } else {
+                    if playback.state == .buffering {
+                        ProgressView()
+                            .controlSize(.small)
+                            .accessibilityLabel("Buffering")
+                            .accessibilityIdentifier("player.buffering")
+                    }
+                    Button {
+                        playback.togglePlayback()
+                    } label: {
+                        Image(
+                            systemName: playback.isPlaybackRequested
+                                ? "pause.fill"
+                                : "play.fill"
+                        )
+                        .font(.title2)
+                    }
+                    .accessibilityLabel(
+                        playback.isPlaybackRequested ? "Pause" : "Play"
                     )
-                    .font(.title2)
+                    .accessibilityIdentifier("player.mini.toggle")
+                    .simultaneousGesture(dismissalGesture).tint(
+                        colourScheme.color)
                 }
-                .accessibilityLabel(
-                    playback.isPlaybackRequested ? "Pause" : "Play"
-                )
-                .accessibilityIdentifier("player.mini.toggle")
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .highPriorityGesture(dismissalGesture)
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: "Dismiss Now Playing") {
+                dismissMiniPlayer()
+            }
+            .accessibilityIdentifier("player.mini")
+        }
+    }
+
+    private var dismissalGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onEnded { value in
+                guard
+                    MiniPlayerSwipeDecision.decide(
+                        translation: value.translation
+                    ) == .dismiss
+                else {
+                    return
+                }
+                dismissMiniPlayer()
+            }
+    }
+
+    private func dismissMiniPlayer() {
+        guard !isDismissing else {
+            return
+        }
+        withAnimation(.easeOut(duration: 0.2)) {
+            isDismissing = true
+        }
+        Task {
+            await playback.stop()
+            guard playback.hasActiveBook else {
+                return
+            }
+            withAnimation(.easeIn(duration: 0.2)) {
+                isDismissing = false
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
-        .accessibilityIdentifier("player.mini")
     }
 }
 
-struct PlayerView: View {
+struct NowPlaying: View {
     @Bindable var playback: PlaybackModel
     @Environment(\.dismiss) private var dismiss
     @State private var bookmarkDraft: BookmarkDraft?
+
+    @ColourSchemePreference private var colourScheme
 
     var body: some View {
         NavigationStack {
@@ -264,7 +332,9 @@ struct PlayerView: View {
                         }
                         .font(.caption)
                         .padding()
-                        .background(.regularMaterial, in: .rect(cornerRadius: 12))
+                        .background(
+                            .regularMaterial, in: .rect(cornerRadius: 12)
+                        )
                         .accessibilityIdentifier("player.externalProgress")
                     }
 
@@ -275,6 +345,7 @@ struct PlayerView: View {
                             .accessibilityIdentifier("player.error")
                     }
                     if playback.syncState == .failed {
+                        // TODO have a button to force-sync the position, and show a progress indicator while syncing
                         Label(
                             "Position has not synced",
                             systemImage: "icloud.slash"
@@ -285,6 +356,7 @@ struct PlayerView: View {
                     }
                     if let conflict = playback.positionConflict {
                         VStack(spacing: 10) {
+                            // TODO have a button to force-sync the position or overwrite
                             Text("Playback position changed in two places.")
                                 .font(.headline)
                             HStack {
@@ -406,228 +478,225 @@ struct PlayerView: View {
                         .accessibilityIdentifier("player.nextChapter")
                     }
 
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 24) {
+                    HStack(spacing: 24) {
+                        Menu {
+                            ForEach(
+                                PlaybackPreferencesStore.featuredRates,
+                                id: \.self
+                            ) { speed in
+                                Button(formatRate(Double(speed))) {
+                                    playback.setRate(speed)
+                                }
+                            }
+                            Divider()
+                            Button("Slower by 0.05×") {
+                                playback.setRate(playback.rate - 0.05)
+                            }
+                            .disabled(playback.rate <= 0.5)
+                            Button("Faster by 0.05×") {
+                                playback.setRate(playback.rate + 0.05)
+                            }
+                            .disabled(playback.rate >= 3)
+                        } label: {
+                            Text(formatRate(Double(playback.rate)))
+                                .font(.headline)
+                                .frame(minWidth: 72)
+                        }
+                        .accessibilityIdentifier("player.rate")
+
+                        if !playback.chapters.isEmpty {
                             Menu {
-                                ForEach(
-                                    PlaybackPreferencesStore.featuredRates,
-                                    id: \.self
-                                ) { speed in
-                                    Button(formatRate(Double(speed))) {
-                                        playback.setRate(speed)
-                                    }
-                                }
-                                Divider()
-                                Button("Slower by 0.05×") {
-                                    playback.setRate(playback.rate - 0.05)
-                                }
-                                .disabled(playback.rate <= 0.5)
-                                Button("Faster by 0.05×") {
-                                    playback.setRate(playback.rate + 0.05)
-                                }
-                                .disabled(playback.rate >= 3)
-                            } label: {
-                                Text(formatRate(Double(playback.rate)))
-                                    .font(.headline)
-                                    .frame(minWidth: 72)
-                            }
-                            .accessibilityIdentifier("player.rate")
-
-                            if !playback.chapters.isEmpty {
-                                Menu {
-                                    ForEach(playback.chapters, id: \.id) {
-                                        chapter in
-                                        Button {
-                                            Task {
-                                                await playback.seek(
-                                                    to: chapter.start
-                                                )
-                                            }
-                                        } label: {
-                                            if chapter.id
-                                                == playback.currentChapter?.id
-                                            {
-                                                Label(
-                                                    chapter.title,
-                                                    systemImage: "checkmark"
-                                                )
-                                            } else {
-                                                Text(chapter.title)
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    Image(systemName: "list.bullet")
-                                }
-                                .accessibilityLabel("Chapters")
-                                .accessibilityIdentifier("player.chapters")
-                            }
-
-                            if playback.audioFiles.count > 1 {
-                                Menu {
-                                    ForEach(
-                                        Array(
-                                            playback.audioFiles.enumerated()
-                                        ),
-                                        id: \.offset
-                                    ) { index, file in
-                                        Button {
-                                            Task {
-                                                await playback
-                                                    .seekToAudioFile(at: index)
-                                            }
-                                        } label: {
-                                            if index
-                                                == playback
-                                                .currentAudioFileIndex
-                                            {
-                                                Label(
-                                                    audioFileLabel(
-                                                        file,
-                                                        index: index
-                                                    ),
-                                                    systemImage: "checkmark"
-                                                )
-                                            } else {
-                                                Text(
-                                                    audioFileLabel(
-                                                        file,
-                                                        index: index
-                                                    )
-                                                )
-                                            }
-                                        }
-                                        .accessibilityIdentifier(
-                                            "player.audioFile.\(index)"
-                                        )
-                                    }
-                                } label: {
-                                    Label(
-                                        "Audio Files",
-                                        systemImage: "waveform"
-                                    )
-                                }
-                                .accessibilityIdentifier("player.audioFiles")
-                            }
-
-                            Menu {
-                                ForEach(
-                                    [5, 10, 15, 30, 45, 60, 90, 120],
-                                    id: \.self
-                                ) {
-                                    minutes in
-                                    Button("\(minutes) minutes") {
-                                        playback.setSleepTimer(
-                                            minutes: minutes
-                                        )
-                                    }
-                                }
-                                if playback.canSetEndOfChapterSleepTimer {
-                                    Button("End of Chapter") {
-                                        playback.setSleepTimerToEndOfChapter()
-                                    }
-                                }
-                                if playback.sleepTimer != nil {
-                                    Button(
-                                        "Cancel Timer",
-                                        role: .destructive
-                                    ) {
-                                        playback.setSleepTimer(minutes: nil)
-                                    }
-                                }
-                            } label: {
-                                Image(
-                                    systemName:
-                                        playback.sleepTimer == nil
-                                        ? "moon.zzz"
-                                        : "moon.zzz.fill"
-                                )
-                            }
-                            .accessibilityLabel(
-                                playback.sleepTimer == nil
-                                    ? "Sleep Timer"
-                                    : "Timer Set"
-                            )
-                            .accessibilityIdentifier("player.sleepTimer")
-
-                            Menu {
-                                Button(
-                                    "Add at \(playbackTime(playback.currentTime))"
-                                ) {
-                                    bookmarkDraft = BookmarkDraft(
-                                        bookmark: nil,
-                                        title: "Bookmark at "
-                                            + playbackTime(playback.currentTime)
-                                    )
-                                }
-                                if !playback.bookmarks.isEmpty {
-                                    Divider()
-                                }
-                                ForEach(playback.bookmarks) { bookmark in
-                                    Menu {
-                                        Button("Rename") {
-                                            bookmarkDraft = BookmarkDraft(
-                                                bookmark: bookmark,
-                                                title: bookmark.title
+                                ForEach(playback.chapters, id: \.id) {
+                                    chapter in
+                                    Button {
+                                        Task {
+                                            await playback.seek(
+                                                to: chapter.start
                                             )
                                         }
-                                        Button("Delete", role: .destructive) {
-                                            Task {
-                                                await playback.deleteBookmark(
-                                                    bookmark
-                                                )
-                                            }
-                                        }
                                     } label: {
-                                        Text(
-                                            playbackTime(bookmark.time)
-                                                + "  " + bookmark.title
-                                        )
-                                    }
-                                }
-                                if case .failed = playback.bookmarkState {
-                                    Divider()
-                                    Button("Retry Loading") {
-                                        Task {
-                                            await playback.loadBookmarks()
-                                        }
-                                    }
-                                }
-                                if !playback.pendingBookmarkMutations.isEmpty {
-                                    Divider()
-                                    Text(
-                                        "\(playback.pendingBookmarkMutations.count) stored locally"
-                                    )
-                                    if playback.pendingBookmarkMutations
-                                        .contains(
-                                            where: { $0.status == .failed }
-                                        ), playback.canSyncBookmarks
-                                    {
-                                        Button("Retry Pending Changes") {
-                                            Task {
-                                                await playback
-                                                    .retryPendingBookmarks()
-                                            }
+                                        if chapter.id
+                                            == playback.currentChapter?.id
+                                        {
+                                            Label(
+                                                chapter.title,
+                                                systemImage: "checkmark"
+                                            )
+                                        } else {
+                                            Text(chapter.title)
                                         }
                                     }
                                 }
                             } label: {
-                                Image(systemName: "bookmark")
+                                Image(systemName: "list.bullet")
                             }
-                            .accessibilityLabel("Bookmarks")
-                            .disabled(
-                                playback.bookmarkState == .loading
-                                    || playback.bookmarkState == .saving
-                            )
-                            .accessibilityIdentifier("player.bookmarks")
-
-                            AirPlayRoutePicker()
-                                .frame(width: 44, height: 44)
-                                .accessibilityLabel("AirPlay")
-                                .accessibilityIdentifier("player.airPlay")
+                            .accessibilityLabel("Chapters")
+                            .accessibilityIdentifier("player.chapters")
                         }
+
+                        if playback.audioFiles.count > 1 {
+                            Menu {
+                                ForEach(
+                                    Array(
+                                        playback.audioFiles.enumerated()
+                                    ),
+                                    id: \.offset
+                                ) { index, file in
+                                    Button {
+                                        Task {
+                                            await playback
+                                                .seekToAudioFile(at: index)
+                                        }
+                                    } label: {
+                                        if index
+                                            == playback
+                                            .currentAudioFileIndex
+                                        {
+                                            Label(
+                                                audioFileLabel(
+                                                    file,
+                                                    index: index
+                                                ),
+                                                systemImage: "checkmark"
+                                            )
+                                        } else {
+                                            Text(
+                                                audioFileLabel(
+                                                    file,
+                                                    index: index
+                                                )
+                                            )
+                                        }
+                                    }
+                                    .accessibilityIdentifier(
+                                        "player.audioFile.\(index)"
+                                    )
+                                }
+                            } label: {
+                                Label(
+                                    "Audio Files",
+                                    systemImage: "waveform"
+                                )
+                            }
+                            .accessibilityIdentifier("player.audioFiles")
+                        }
+
+                        Menu {
+                            ForEach(
+                                [5, 10, 15, 30, 45, 60, 90, 120],
+                                id: \.self
+                            ) {
+                                minutes in
+                                Button("\(minutes) minutes") {
+                                    playback.setSleepTimer(
+                                        minutes: minutes
+                                    )
+                                }
+                            }
+                            if playback.canSetEndOfChapterSleepTimer {
+                                Button("End of Chapter") {
+                                    playback.setSleepTimerToEndOfChapter()
+                                }
+                            }
+                            if playback.sleepTimer != nil {
+                                Button(
+                                    "Cancel Timer",
+                                    role: .destructive
+                                ) {
+                                    playback.setSleepTimer(minutes: nil)
+                                }
+                            }
+                        } label: {
+                            Image(
+                                systemName:
+                                    playback.sleepTimer == nil
+                                    ? "moon.zzz"
+                                    : "moon.zzz.fill"
+                            )
+                        }
+                        .accessibilityLabel(
+                            playback.sleepTimer == nil
+                                ? "Sleep Timer"
+                                : "Timer Set"
+                        )
+                        .accessibilityIdentifier("player.sleepTimer")
+
+                        Menu {
+                            Button(
+                                "Add at \(playbackTime(playback.currentTime))"
+                            ) {
+                                bookmarkDraft = BookmarkDraft(
+                                    bookmark: nil,
+                                    title: "Bookmark at "
+                                        + playbackTime(playback.currentTime)
+                                )
+                            }
+                            if !playback.bookmarks.isEmpty {
+                                Divider()
+                            }
+                            ForEach(playback.bookmarks) { bookmark in
+                                Menu {
+                                    Button("Rename") {
+                                        bookmarkDraft = BookmarkDraft(
+                                            bookmark: bookmark,
+                                            title: bookmark.title
+                                        )
+                                    }
+                                    Button("Delete", role: .destructive) {
+                                        Task {
+                                            await playback.deleteBookmark(
+                                                bookmark
+                                            )
+                                        }
+                                    }
+                                } label: {
+                                    Text(
+                                        playbackTime(bookmark.time)
+                                            + "  " + bookmark.title
+                                    )
+                                }
+                            }
+                            if case .failed = playback.bookmarkState {
+                                Divider()
+                                Button("Retry Loading") {
+                                    Task {
+                                        await playback.loadBookmarks()
+                                    }
+                                }
+                            }
+                            if !playback.pendingBookmarkMutations.isEmpty {
+                                Divider()
+                                Text(
+                                    "\(playback.pendingBookmarkMutations.count) stored locally"
+                                )
+                                if playback.pendingBookmarkMutations
+                                    .contains(
+                                        where: { $0.status == .failed }
+                                    ), playback.canSyncBookmarks
+                                {
+                                    Button("Retry Pending Changes") {
+                                        Task {
+                                            await playback
+                                                .retryPendingBookmarks()
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "bookmark")
+                        }
+                        .accessibilityLabel("Bookmarks")
+                        .disabled(
+                            playback.bookmarkState == .loading
+                                || playback.bookmarkState == .saving
+                        )
+                        .accessibilityIdentifier("player.bookmarks")
+
+                        AirPlayRoutePicker()
+                            .frame(width: 44, height: 44)
+                            .accessibilityLabel("AirPlay")
+                            .accessibilityIdentifier("player.airPlay")
                     }
-                    .scrollIndicators(.hidden)
 
                     if case .failed(let failure) = playback.bookmarkState {
                         Text(failure.message)
@@ -665,7 +734,7 @@ struct PlayerView: View {
                 )
             }
         }
-        .accessibilityIdentifier("player.screen")
+        .accessibilityIdentifier("player.screen").tint(colourScheme.color)
     }
 
     @ToolbarContentBuilder

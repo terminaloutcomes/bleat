@@ -71,6 +71,9 @@ struct BleatApp: App {
     @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
     private var appDelegate
 
+    @AppStorage(AppPreferenceKey.colourScheme) private var appTint:
+        ColourScheme = .defaultValue
+
     var body: some Scene {
         WindowGroup {
             RootView(model: appDelegate.model)

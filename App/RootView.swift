@@ -42,6 +42,7 @@ enum BookDetailPlaybackAction: Equatable {
 struct RootView: View {
     @Bindable var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @ColourSchemePreference private var colourScheme
 
     var body: some View {
         Group {
@@ -72,7 +73,7 @@ struct RootView: View {
                     await model.synchronizePrivateCloud()
                 }
             }
-        }
+        }.tint(colourScheme.color)
     }
 }
 
@@ -213,7 +214,7 @@ private struct OfflineDownloadsSheet: View {
                 }
             }
             .sheet(isPresented: $showPlayer) {
-                PlayerView(playback: model.playback)
+                NowPlaying(playback: model.playback)
             }
     }
 }
@@ -496,7 +497,8 @@ private struct SignedInView: View {
             }
         }
         .sheet(isPresented: $showPlayer) {
-            PlayerView(playback: model.playback)
+            NowPlaying(playback: model.playback)
+
         }
         .alert(
             "Allow Cellular Download?",
@@ -1241,6 +1243,8 @@ private struct BookDetailView: View {
     @State private var showMetadataEditor = false
     @State private var showRemoveDownloadConfirmation = false
 
+    @ColourSchemePreference private var colourScheme
+
     var body: some View {
         Group {
             if model.selectedBookID != book.id {
@@ -1254,7 +1258,7 @@ private struct BookDetailView: View {
                 case .failed(let failure):
                     bookDetailFailureView(failure)
                 case .loaded(let detail):
-                    detailContent(detail)
+                    detailContent(detail, colourScheme: colourScheme)
                 }
             }
         }
@@ -1267,10 +1271,16 @@ private struct BookDetailView: View {
             if let detail = loadedDetail {
                 if canOpenEditor(detail) {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Edit") {
-                            showMetadataEditor = true
+                        Menu {
+                            Button("Edit", systemImage: "pencil") {
+                                showMetadataEditor = true
+                            }
+                            .accessibilityIdentifier("book.detail.edit")
+                        } label: {
+                            Image(systemName: "ellipsis")
                         }
-                        .accessibilityIdentifier("book.detail.edit")
+                        .accessibilityLabel("Book Actions")
+                        .accessibilityIdentifier("book.detail.actions")
                     }
                 }
             }
@@ -1364,7 +1374,9 @@ private struct BookDetailView: View {
             || actions.contains(.deleteFromServer)
     }
 
-    private func detailContent(_ detail: LibraryBookDetail) -> some View {
+    private func detailContent(
+        _ detail: LibraryBookDetail, colourScheme: ColourScheme
+    ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 BookCoverView(
@@ -1422,7 +1434,8 @@ private struct BookDetailView: View {
 
                 if let progress = detail.progress {
                     VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(value: progress.progress)
+                        ProgressView(value: progress.progress).tint(
+                            colourScheme.color)
                         Text(
                             progress.isFinished
                                 ? "Finished"
@@ -1815,6 +1828,7 @@ private struct BookDetailView: View {
     private func automaticPauseControl(
         _ record: DownloadedBookRecord
     ) -> some View {
+        @ColourSchemePreference var colourScheme
         if record.manifest.state == .deleting {
             EmptyView()
         } else if model.downloads.pausedDownloadIDs.contains(
@@ -1824,13 +1838,13 @@ private struct BookDetailView: View {
                 Task {
                     await model.downloads.resume(record)
                 }
-            }
+            }.tint(colourScheme.color)
         } else {
             Button("Pause", systemImage: "pause.fill") {
                 Task {
                     await model.downloads.pause(record)
                 }
-            }
+            }.tint(colourScheme.color)
         }
     }
 
@@ -2121,6 +2135,8 @@ private struct SettingsView: View {
     @State private var showDisableCloudSyncConfirmation = false
     @State private var pendingRemovalScope: AccountRemovalScope?
 
+    @ColourSchemePreference private var colourScheme
+
     var body: some View {
         NavigationStack {
             Form {
@@ -2175,6 +2191,16 @@ private struct SettingsView: View {
                     cloudSection
                 }
                 statisticsSection
+
+                Section("Appearance") {
+                    Picker("Colour Scheme", selection: $colourScheme) {
+                        ForEach(ColourScheme.allCases, id: \.self) { scheme in
+                            Text(scheme.rawValue.capitalized)
+                                .tag(scheme)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.appearance.tint")
+                }
 
                 Section("Downloads") {
                     Toggle(
@@ -2843,6 +2869,8 @@ private struct DownloadStorageView: View {
     private func transferControls(
         _ record: DownloadedBookRecord
     ) -> some View {
+        @ColourSchemePreference var colourScheme
+
         HStack {
             if model.downloads.pausedDownloadIDs.contains(
                 record.manifest.downloadID
@@ -2851,13 +2879,13 @@ private struct DownloadStorageView: View {
                     Task {
                         await model.downloads.resume(record)
                     }
-                }
+                }.tint(colourScheme.color)
             } else {
                 Button("Pause") {
                     Task {
                         await model.downloads.pause(record)
                     }
-                }
+                }.tint(colourScheme.color)
             }
             Button("Cancel", role: .destructive) {
                 Task {
