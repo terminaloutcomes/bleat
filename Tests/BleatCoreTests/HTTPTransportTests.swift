@@ -4,6 +4,47 @@ import XCTest
 @testable import BleatCore
 
 final class HTTPTransportTests: XCTestCase {
+    func testEndpointRouterUsesLocalServerAndPreservesPathPrefix() async throws {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL(
+            "https://books.example/audiobookshelf"
+        )
+        let local = try NormalizedServerURL(
+            "https://books.home/audiobookshelf"
+        )
+        await router.configure(primary: primary, local: local)
+
+        let requestURL = try XCTUnwrap(
+            URL(string: "https://books.example/audiobookshelf/api/libraries")
+        )
+        let candidates = await router.candidates(for: requestURL)
+
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(
+            candidates.first?.url.absoluteString,
+            "https://books.home/audiobookshelf/api/libraries"
+        )
+        XCTAssertTrue(candidates.first?.isLocal == true)
+        XCTAssertEqual(candidates.last?.url, requestURL)
+    }
+
+    func testEndpointRouterTemporarilySkipsFailedLocalServer() async throws {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        await router.markLocalUnavailable(for: primary, duration: 60)
+
+        let requestURL = try XCTUnwrap(
+            URL(string: "https://books.example/api/libraries")
+        )
+        let candidates = await router.candidates(for: requestURL)
+
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertFalse(candidates[0].isLocal)
+        XCTAssertEqual(candidates[0].url, requestURL)
+    }
+
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(

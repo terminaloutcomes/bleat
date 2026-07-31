@@ -2085,6 +2085,146 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.books, .loaded(page))
     }
 
+    func testAccountEditorUpdatesPrimaryLocalAndCredentials() async throws {
+        let account = try fixtureAccount()
+        let updated = try ServerAccount(
+            id: account.id,
+            server: NormalizedServerURL("https://primary.example"),
+            localServer: NormalizedServerURL("https://local.example"),
+            localServerValidated: true,
+            serverVersion: account.serverVersion,
+            authenticationMethods: account.authenticationMethods,
+            user: AuthenticatedUser(
+                id: account.user.id,
+                username: "updated-reader",
+                type: account.user.type,
+                permissions: account.user.permissions,
+                accessibleLibraryIDs: account.user.accessibleLibraryIDs,
+                selectedItemTags: account.user.selectedItemTags
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(updated)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let result = await model.updateAccount(
+            account,
+            serverAddress: "https://primary.example",
+            localServerAddress: "https://local.example",
+            username: "updated-reader",
+            password: "updated-password"
+        )
+
+        XCTAssertEqual(result, .saved)
+        XCTAssertEqual(model.account, updated)
+        XCTAssertEqual(model.accounts, [updated])
+        let requests = await service.accountUpdateRequests()
+        XCTAssertEqual(
+            requests,
+            [
+                AccountUpdateRequest(
+                    accountID: account.id,
+                    serverAddress: "https://primary.example",
+                    localServerAddress: "https://local.example",
+                    username: "updated-reader",
+                    password: "updated-password",
+                    localServerValidation: .required
+                )
+            ]
+        )
+    }
+
+    func testPrimaryOnlyAccountEditSkipsLocalValidation() throws {
+        let fixture = try fixtureAccount()
+        let account = try ServerAccount(
+            id: fixture.id,
+            server: NormalizedServerURL("https://old.example"),
+            localServer: NormalizedServerURL("https://local.example"),
+            localServerValidated: false,
+            serverVersion: fixture.serverVersion,
+            authenticationMethods: fixture.authenticationMethods,
+            user: fixture.user
+        )
+
+        XCTAssertEqual(
+            LocalServerValidationDecision.decide(
+                account: account,
+                primary: try NormalizedServerURL("https://new.example"),
+                local: account.localServer,
+                username: account.user.username
+            ),
+            .skip
+        )
+        XCTAssertEqual(
+            LocalServerValidationDecision.decide(
+                account: account,
+                primary: account.server,
+                local: try NormalizedServerURL(
+                    "https://new-local.example"
+                ),
+                username: account.user.username
+            ),
+            .validate
+        )
+    }
+
+    func testAccountEditorCanSaveAfterLocalValidationFailure() async throws {
+        let account = try fixtureAccount()
+        let updated = try ServerAccount(
+            id: account.id,
+            server: NormalizedServerURL("https://new.example"),
+            localServer: NormalizedServerURL("https://offline.local"),
+            localServerValidated: false,
+            serverVersion: account.serverVersion,
+            authenticationMethods: account.authenticationMethods,
+            user: account.user
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(updated)
+        )
+        await service.enqueueAccountUpdateOutcome(
+            .localServerValidationFailed(.discoveryRequestFailed)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let warning = await model.updateAccount(
+            account,
+            serverAddress: "https://new.example",
+            localServerAddress: "https://offline.local",
+            username: account.user.username,
+            password: "password"
+        )
+        XCTAssertEqual(
+            warning,
+            .localServerValidationFailed(
+                AppFailure(.reauthenticate, .serverUnavailable)
+            )
+        )
+        XCTAssertEqual(model.account, account)
+
+        let saved = await model.updateAccount(
+            account,
+            serverAddress: "https://new.example",
+            localServerAddress: "https://offline.local",
+            username: account.user.username,
+            password: "password",
+            allowUnvalidatedLocalServer: true
+        )
+
+        XCTAssertEqual(saved, .saved)
+        XCTAssertEqual(model.account, updated)
+        let requests = await service.accountUpdateRequests()
+        XCTAssertEqual(
+            requests.map(\.localServerValidation),
+            [.required, .allowUnvalidated]
+        )
+    }
+
     func testDiagnosticsReportContainsStateWithoutAccountSecrets()
         async throws
     {
@@ -4637,6 +4777,15 @@ private struct ReauthenticationRequest: Equatable, Sendable {
     let password: String
 }
 
+private struct AccountUpdateRequest: Equatable, Sendable {
+    let accountID: AccountID
+    let serverAddress: String
+    let localServerAddress: String
+    let username: String
+    let password: String
+    let localServerValidation: LocalServerValidationPolicy
+}
+
 private struct PlaybackOpenRequest: Equatable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
@@ -4706,6 +4855,7 @@ private actor TestAppService: AppServicing {
             AppServiceError
         >
     private var loginResult: Result<ServerAccount, AppServiceError>
+    private var accountUpdateOutcomes: [AccountUpdateServiceOutcome] = []
     private var librariesResult:
         Result<
             [LibrarySummary],
@@ -4762,6 +4912,7 @@ private actor TestAppService: AppServicing {
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
     private var recordedReauthentications: [ReauthenticationRequest] = []
+    private var recordedAccountUpdates: [AccountUpdateRequest] = []
     private var recordedPageRequests: [LibraryID] = []
     private var recordedPageSelections: [PageSelection] = []
     private var recordedHomeRequests: [LibraryID] = []
@@ -4904,6 +5055,28 @@ private actor TestAppService: AppServicing {
             )
         )
         return try value(from: loginResult)
+    }
+
+    func updateAccount(
+        _ account: ServerAccount,
+        serverAddress: String,
+        localServerAddress: String,
+        username: String,
+        password: String,
+        localServerValidation: LocalServerValidationPolicy
+    ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
+        recordedAccountUpdates.append(AccountUpdateRequest(
+            accountID: account.id,
+            serverAddress: serverAddress,
+            localServerAddress: localServerAddress,
+            username: username,
+            password: password,
+            localServerValidation: localServerValidation
+        ))
+        if !accountUpdateOutcomes.isEmpty {
+            return accountUpdateOutcomes.removeFirst()
+        }
+        return .updated(try value(from: loginResult))
     }
 
     func libraries(
@@ -5183,6 +5356,12 @@ private actor TestAppService: AppServicing {
         librariesResult = result
     }
 
+    func enqueueAccountUpdateOutcome(
+        _ outcome: AccountUpdateServiceOutcome
+    ) {
+        accountUpdateOutcomes.append(outcome)
+    }
+
     func setFirstPage(
         _ result: Result<LibraryItemsPage, AppServiceError>
     ) {
@@ -5215,6 +5394,10 @@ private actor TestAppService: AppServicing {
 
     func reauthenticationRequests() -> [ReauthenticationRequest] {
         recordedReauthentications
+    }
+
+    func accountUpdateRequests() -> [AccountUpdateRequest] {
+        recordedAccountUpdates
     }
 
     func pageRequests() -> [LibraryID] {

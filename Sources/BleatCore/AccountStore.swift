@@ -16,9 +16,11 @@ public enum ServerAccountValidationError: Error, Equatable, Sendable {
     case serverMismatch
 }
 
-public struct ServerAccount: Codable, Hashable, Sendable {
+public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
     public let id: AccountID
     public let server: NormalizedServerURL
+    public let localServer: NormalizedServerURL?
+    public let localServerValidated: Bool
     public let serverVersion: String
     public let authenticationMethods: [AuthenticationMethod]
     public let user: AuthenticatedUser
@@ -27,6 +29,8 @@ public struct ServerAccount: Codable, Hashable, Sendable {
     public init(
         id: AccountID,
         server: NormalizedServerURL,
+        localServer: NormalizedServerURL? = nil,
+        localServerValidated: Bool = false,
         serverVersion: String,
         authenticationMethods: [AuthenticationMethod],
         user: AuthenticatedUser,
@@ -53,6 +57,9 @@ public struct ServerAccount: Codable, Hashable, Sendable {
         }
         self.id = id
         self.server = server
+        self.localServer = localServer == server ? nil : localServer
+        self.localServerValidated =
+            self.localServer != nil && localServerValidated
         self.serverVersion = serverVersion
         self.authenticationMethods = authenticationMethods
         self.user = user
@@ -85,6 +92,8 @@ public struct ServerAccount: Codable, Hashable, Sendable {
         try ServerAccount(
             id: id,
             server: server,
+            localServer: localServer,
+            localServerValidated: localServerValidated,
             serverVersion: serverVersion,
             authenticationMethods: authenticationMethods,
             user: user,
@@ -92,9 +101,27 @@ public struct ServerAccount: Codable, Hashable, Sendable {
         )
     }
 
+    public func updatingLocalServer(
+        _ localServer: NormalizedServerURL?,
+        validated: Bool = false
+    ) throws(ServerAccountValidationError) -> ServerAccount {
+        try ServerAccount(
+            id: id,
+            server: server,
+            localServer: localServer,
+            localServerValidated: validated,
+            serverVersion: serverVersion,
+            authenticationMethods: authenticationMethods,
+            user: user,
+            connectionState: connectionState
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case server
+        case localServer
+        case localServerValidated
         case serverVersion
         case authenticationMethods
         case user
@@ -110,6 +137,14 @@ public struct ServerAccount: Codable, Hashable, Sendable {
                     NormalizedServerURL.self,
                     forKey: .server
                 ),
+                localServer: container.decodeIfPresent(
+                    NormalizedServerURL.self,
+                    forKey: .localServer
+                ),
+                localServerValidated: try container.decodeIfPresent(
+                    Bool.self,
+                    forKey: .localServerValidated
+                ) ?? false,
                 serverVersion: container.decode(
                     String.self,
                     forKey: .serverVersion
@@ -315,6 +350,30 @@ public actor AccountStore {
         try saveContext()
     }
 
+    public func setLocalServer(
+        _ localServer: NormalizedServerURL?,
+        validated: Bool = false,
+        for id: AccountID
+    ) throws(AccountStoreError) {
+        let records = try fetchRecords()
+        guard let record = records.first(where: {
+            $0.accountID == id.rawValue
+        }) else {
+            throw .accountNotFound(id)
+        }
+        let account = try decode(record)
+        do {
+            let updated = try account.updatingLocalServer(
+                localServer,
+                validated: validated
+            )
+            record.profileData = try JSONEncoder().encode(updated)
+        } catch {
+            throw .profileEncodingFailed
+        }
+        try saveContext()
+    }
+
     @discardableResult
     public func removeAccount(
         id: AccountID
@@ -381,6 +440,7 @@ extension AuthCoordinator {
         discoveredServer: DiscoveredServer,
         username: String,
         password: String,
+        expectedUserID: UserID? = nil,
         accountStore: AccountStore,
         makeActive: Bool = true
     ) async throws(AccountOnboardingError) -> ServerAccount {
@@ -394,7 +454,8 @@ extension AuthCoordinator {
                 accountID: accountID,
                 server: discoveredServer.baseURL,
                 username: username,
-                password: password
+                password: password,
+                expectedUserID: expectedUserID
             )
         } catch let error as LocalAuthenticationError {
             throw .authenticationFailed(error)

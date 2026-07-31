@@ -446,6 +446,7 @@ extension AuthCoordinator {
                 username: nativeLogin.username,
                 password: nativeLogin.password,
                 expectedUserID: nativeLogin.userID,
+                persistCredentials: true,
                 transport: transport,
                 credentialStore: credentialStore
             ).tokens

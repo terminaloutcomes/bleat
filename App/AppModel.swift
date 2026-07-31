@@ -67,6 +67,12 @@ enum LoginStatus: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum AccountUpdateResult: Equatable, Sendable {
+    case saved
+    case localServerValidationFailed(AppFailure)
+    case failed
+}
+
 enum ResourceState<Value: Equatable & Sendable>: Equatable, Sendable {
     case idle
     case loading
@@ -858,6 +864,66 @@ final class AppModel {
 
     func prepareAccountLogin() {
         loginStatus = .idle
+    }
+
+    @discardableResult
+    func updateAccount(
+        _ account: ServerAccount,
+        serverAddress: String,
+        localServerAddress: String,
+        username: String,
+        password: String,
+        allowUnvalidatedLocalServer: Bool = false
+    ) async -> AccountUpdateResult {
+        guard loginStatus != .submitting else {
+            return .failed
+        }
+        loginStatus = .submitting
+        do {
+            let outcome = try await service.updateAccount(
+                account,
+                serverAddress: serverAddress,
+                localServerAddress: localServerAddress,
+                username: username,
+                password: password,
+                localServerValidation:
+                    allowUnvalidatedLocalServer
+                    ? .allowUnvalidated
+                    : .required
+            )
+            let updated: ServerAccount
+            switch outcome {
+            case .updated(let account):
+                updated = account
+            case .localServerValidationFailed(let error):
+                let failure = AppFailure(
+                    operation: .reauthenticate,
+                    serviceError: error
+                )
+                loginStatus = .idle
+                return .localServerValidationFailed(failure)
+            }
+            accounts.removeAll { $0.id == updated.id }
+            accounts.append(updated)
+            accounts.sort(by: Self.sortAccounts)
+            if self.account?.id == updated.id {
+                stopLiveUpdates()
+                self.account = updated
+                await downloads.start(account: updated)
+                await loadLibraries()
+                startLiveUpdates(for: updated)
+            }
+            loginStatus = .idle
+            return .saved
+        } catch let error {
+            loginStatus = .failed(
+                AppFailure(
+                    operation: .reauthenticate,
+                    serviceError: error
+                )
+            )
+            return .failed
+        }
     }
 
     @discardableResult

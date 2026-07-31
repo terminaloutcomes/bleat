@@ -53,6 +53,132 @@ public protocol HTTPTransport: Sendable {
     func send(_ request: TracedHTTPRequest) async throws -> HTTPResponse
 }
 
+public struct ServerEndpointCandidate: Sendable {
+    public let url: URL
+    public let primary: NormalizedServerURL?
+    public let isLocal: Bool
+
+    init(
+        url: URL,
+        primary: NormalizedServerURL?,
+        isLocal: Bool
+    ) {
+        self.url = url
+        self.primary = primary
+        self.isLocal = isLocal
+    }
+}
+
+public actor ServerEndpointRouter {
+    private struct Route: Sendable {
+        let primary: NormalizedServerURL
+        let local: NormalizedServerURL
+    }
+
+    private var routes: [NormalizedServerURL: Route] = [:]
+    private var localFailures: [NormalizedServerURL: Date] = [:]
+
+    public init() {}
+
+    public func configure(
+        primary: NormalizedServerURL,
+        local: NormalizedServerURL?
+    ) {
+        guard let local, local != primary else {
+            routes[primary] = nil
+            localFailures[primary] = nil
+            return
+        }
+        routes[primary] = Route(primary: primary, local: local)
+        localFailures[primary] = nil
+    }
+
+    public func candidates(for url: URL) -> [ServerEndpointCandidate] {
+        for route in routes.values {
+            guard let localURL = replacingBase(
+                in: url,
+                from: route.primary,
+                with: route.local
+            ) else {
+                continue
+            }
+            if let failedUntil = localFailures[route.primary],
+               failedUntil > Date()
+            {
+                return [ServerEndpointCandidate(
+                    url: url,
+                    primary: route.primary,
+                    isLocal: false
+                )]
+            }
+            return [
+                ServerEndpointCandidate(
+                    url: localURL,
+                    primary: route.primary,
+                    isLocal: true
+                ),
+                ServerEndpointCandidate(
+                    url: url,
+                    primary: route.primary,
+                    isLocal: false
+                ),
+            ]
+        }
+        return [ServerEndpointCandidate(
+            url: url,
+            primary: nil,
+            isLocal: false
+        )]
+    }
+
+    public func preferredURL(for url: URL) -> URL {
+        candidates(for: url).first?.url ?? url
+    }
+
+    public func markLocalUnavailable(
+        for primary: NormalizedServerURL,
+        duration: TimeInterval = 30
+    ) {
+        localFailures[primary] = Date().addingTimeInterval(duration)
+    }
+
+    private func replacingBase(
+        in url: URL,
+        from primary: NormalizedServerURL,
+        with local: NormalizedServerURL
+    ) -> URL? {
+        guard
+            let request = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ),
+            let primaryComponents = URLComponents(
+                url: primary.url,
+                resolvingAgainstBaseURL: false
+            ),
+            let localComponents = URLComponents(
+                url: local.url,
+                resolvingAgainstBaseURL: false
+            ),
+            request.scheme == primaryComponents.scheme,
+            request.host == primaryComponents.host,
+            request.port == primaryComponents.port,
+            request.path.hasPrefix(primaryComponents.path)
+        else {
+            return nil
+        }
+        var updated = request
+        let suffix = String(
+            request.path.dropFirst(primaryComponents.path.count)
+        )
+        updated.scheme = localComponents.scheme
+        updated.host = localComponents.host
+        updated.port = localComponents.port
+        updated.path = localComponents.path + suffix
+        return updated.url
+    }
+}
+
 public enum HTTPTransportError: Error, Equatable, Sendable {
     case nonHTTPResponse
 }
@@ -76,22 +202,26 @@ private final class RedirectBlockingDelegate:
 public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     private let session: URLSession
     private let diagnostics: any DiagnosticRecording
+    private let endpointRouter: ServerEndpointRouter?
 
     public convenience init(
         configuration: URLSessionConfiguration = .ephemeral,
-        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
+        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
+        endpointRouter: ServerEndpointRouter? = nil
     ) {
         self.init(
             configuration: configuration,
             cookieStorage: nil,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            endpointRouter: endpointRouter
         )
     }
 
     init(
         configuration: URLSessionConfiguration,
         cookieStorage: HTTPCookieStorage?,
-        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
+        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
+        endpointRouter: ServerEndpointRouter? = nil
     ) {
         configuration.httpShouldSetCookies = cookieStorage != nil
         configuration.httpCookieStorage = cookieStorage
@@ -105,12 +235,56 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             delegateQueue: nil
         )
         self.diagnostics = diagnostics
+        self.endpointRouter = endpointRouter
     }
 
     public func send(
         _ tracedRequest: TracedHTTPRequest
     ) async throws -> HTTPResponse {
         let request = tracedRequest.request
+        let candidates: [ServerEndpointCandidate]
+        if let endpointRouter, let url = request.url {
+            candidates = await endpointRouter.candidates(for: url)
+        } else if let url = request.url {
+            candidates = [ServerEndpointCandidate(
+                url: url,
+                primary: nil,
+                isLocal: false
+            )]
+        } else {
+            candidates = []
+        }
+        var lastError: Error?
+        for candidate in candidates {
+            do {
+                return try await send(
+                    tracedRequest,
+                    requestURL: candidate.url
+                )
+            } catch {
+                if Task.isCancelled {
+                    throw error
+                }
+                lastError = error
+                if candidate.isLocal, let primary = candidate.primary {
+                    await endpointRouter?.markLocalUnavailable(for: primary)
+                    continue
+                }
+                throw error
+            }
+        }
+        if let lastError {
+            throw lastError
+        }
+        throw HTTPTransportError.nonHTTPResponse
+    }
+
+    private func send(
+        _ tracedRequest: TracedHTTPRequest,
+        requestURL: URL
+    ) async throws -> HTTPResponse {
+        var request = tracedRequest.request
+        request.url = requestURL
         let method = DiagnosticHTTPMethod(request.httpMethod)
         await diagnostics.record(
             .started(

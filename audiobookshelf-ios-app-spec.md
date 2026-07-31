@@ -123,6 +123,11 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can switch accounts without stopping current playback or unrelated background downloads.
 - I can see when an account requires reauthentication.
 - I can sign out or remove an account, with a clear choice about deleting its downloaded books.
+- I can tap a saved account to edit its primary URL, optional local-network URL,
+  username, and password.
+- The primary URL remains the account identity; matching requests prefer the
+  local URL and fall back to the primary URL when the local endpoint is
+  unavailable.
 
 ### 4.2 Library
 
@@ -300,6 +305,18 @@ The screen also provides year, month, and custom-range filters; per-account and 
    - relevant `authFormData`, including `authOpenIDButtonText`, `authOpenIDAutoLaunch`, and the sanitized custom login message.
 5. Reject versions older than 2.26.0 with a useful explanation.
 6. Present only authentication methods returned by the server.
+
+An account may additionally store a normalized local-network base URL. This is
+an endpoint alias for the same server, not another account. API requests and
+session-scoped media/download URLs may use the local base first and must fall
+back to the primary base after a local transport failure. Account identity,
+credentials, caches, downloads, and playback state remain keyed to the primary
+account. A changed local base must be authenticated directly with the supplied
+credentials and identify the existing remote user before it is enabled.
+Changing only the primary base must not require the unchanged local base to be
+reachable. If changed local validation fails or identifies a different user,
+the user may save the primary and local details with the local base disabled.
+An unvalidated local base must never receive an existing bearer credential.
 
 Endpoint URLs must be built relative to the normalized base URL. Never construct API URLs from an origin alone, because that drops an Audiobookshelf path prefix.
 

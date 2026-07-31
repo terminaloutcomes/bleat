@@ -116,6 +116,30 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(relaunchedActive?.id, second.id)
     }
 
+    func testLocalServerPersistsWithoutChangingPrimaryIdentity() async throws {
+        let fixture = try StoreFixture()
+        let account = try Self.account(
+            accountID: "local-server",
+            server: "https://books.example",
+            userID: "user",
+            username: "Reader"
+        )
+        try await fixture.store.save(account)
+
+        let local = try NormalizedServerURL("https://books.home")
+        try await fixture.store.setLocalServer(
+            local,
+            validated: true,
+            for: account.id
+        )
+
+        let storedAccount = try await fixture.store.account(id: account.id)
+        let stored = try XCTUnwrap(storedAccount)
+        XCTAssertEqual(stored.server, account.server)
+        XCTAssertEqual(stored.localServer, local)
+        XCTAssertTrue(stored.localServerValidated)
+    }
+
     func testRemovingActiveAccountSelectsDeterministicReplacement()
         async throws
     {

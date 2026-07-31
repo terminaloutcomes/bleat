@@ -109,7 +109,8 @@ public actor AuthCoordinator<
         accountID: AccountID,
         server: NormalizedServerURL,
         username: String,
-        password: String
+        password: String,
+        expectedUserID: UserID? = nil
     ) async throws -> AuthenticatedAccount {
         guard !accountID.rawValue.isEmpty else {
             throw LocalAuthenticationError.invalidAccountID
@@ -130,7 +131,8 @@ public actor AuthCoordinator<
             server: server,
             username: username,
             password: password,
-            expectedUserID: nil,
+            expectedUserID: expectedUserID,
+            persistCredentials: true,
             transport: transport,
             credentialStore: credentialStore
         )
@@ -139,12 +141,44 @@ public actor AuthCoordinator<
         return result.account
     }
 
+    public func validateLocalLogin(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        username: String,
+        password: String,
+        expectedUserID: UserID
+    ) async throws -> AuthenticatedAccount {
+        guard !accountID.rawValue.isEmpty else {
+            throw LocalAuthenticationError.invalidAccountID
+        }
+        guard !accountsLoggingIn.contains(accountID),
+            !accountsSigningOut.contains(accountID)
+        else {
+            throw LocalAuthenticationError.accountOperationInProgress
+        }
+        accountsLoggingIn.insert(accountID)
+        defer {
+            accountsLoggingIn.remove(accountID)
+        }
+        return try await Self.authenticateLocally(
+            accountID: accountID,
+            server: server,
+            username: username,
+            password: password,
+            expectedUserID: expectedUserID,
+            persistCredentials: false,
+            transport: transport,
+            credentialStore: credentialStore
+        ).account
+    }
+
     static func authenticateLocally(
         accountID: AccountID,
         server: NormalizedServerURL,
         username: String,
         password: String,
         expectedUserID: UserID?,
+        persistCredentials: Bool,
         transport: Transport,
         credentialStore: CredentialStore
     ) async throws -> LocalAuthenticationResult {
@@ -265,29 +299,30 @@ public actor AuthCoordinator<
             )
         }
 
-        let nativeLogin: NativeLoginCredentials
-        do {
-            nativeLogin = try NativeLoginCredentials(
-                userID: authorizationPayload.user.id,
-                username: username,
-                password: password
-            )
-            try await credentialStore.save(
-                tokens,
-                nativeLogin: nativeLogin,
-                for: accountID
-            )
-        } catch let error as TokenVaultError {
-            switch error {
-            case .missingEntitlement, .interactionNotAllowed:
-                throw LocalAuthenticationError
-                    .credentialStorageUnavailable
-            default:
-                throw LocalAuthenticationError
-                    .credentialPersistenceFailed
+        if persistCredentials {
+            do {
+                let nativeLogin = try NativeLoginCredentials(
+                    userID: authorizationPayload.user.id,
+                    username: username,
+                    password: password
+                )
+                try await credentialStore.save(
+                    tokens,
+                    nativeLogin: nativeLogin,
+                    for: accountID
+                )
+            } catch let error as TokenVaultError {
+                switch error {
+                case .missingEntitlement, .interactionNotAllowed:
+                    throw LocalAuthenticationError
+                        .credentialStorageUnavailable
+                default:
+                    throw LocalAuthenticationError
+                        .credentialPersistenceFailed
+                }
+            } catch {
+                throw LocalAuthenticationError.credentialPersistenceFailed
             }
-        } catch {
-            throw LocalAuthenticationError.credentialPersistenceFailed
         }
 
         return LocalAuthenticationResult(

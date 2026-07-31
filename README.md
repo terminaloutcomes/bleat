@@ -503,12 +503,21 @@ supports explicit **Mark Finished** and **Mark Unfinished** actions.
 ## Use multiple accounts
 
 Settings lists every saved username/server pair and marks the active browsing
-account. Choose another account to reload Home, Library, and Search in that
-account's isolated context, or use **Add Account** for another standard
-Audiobookshelf username/password login. **Sign In Again** replaces credentials
-for the active saved account using only its password while preserving its
-downloads and local state. Switching the browsing account does not stop current
-playback or unrelated background downloads.
+account. Tap a saved account to edit its primary server URL, optional local
+server URL, username, and password, or to make it the active account. Use
+**Add Account** for another standard Audiobookshelf username/password login.
+Switching the browsing account does not stop current playback or unrelated
+background downloads.
+
+Each account can also have an optional **Local Network** server URL. Bleat keeps
+the primary URL as the account identity, tries the local URL first for matching
+requests, and falls back to the primary URL when the local endpoint cannot be
+reached. A changed local URL is verified directly as the same saved
+Audiobookshelf user. Changing only the primary URL does not require the local
+server to be reachable. If changed local details cannot be verified, the edit
+can still be saved with that local URL disabled. The local URL is not treated
+as another account and does not split caches, credentials, downloads, or
+playback state.
 
 Settings also provides **Diagnostics**, which shows the app, operating-system,
 server, connection, resource, playback, sync, and download state. Development

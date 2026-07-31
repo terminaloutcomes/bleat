@@ -219,33 +219,82 @@ private struct OfflineDownloadsSheet: View {
     }
 }
 
-private struct ReauthenticationView: View {
+private struct AccountEditorView: View {
     @Bindable var model: AppModel
     let account: ServerAccount
-    let onSignedIn: () -> Void
+    let onSaved: () -> Void
     let onCancel: () -> Void
+    @State private var serverAddress: String
+    @State private var localServerAddress: String
+    @State private var username: String
     @State private var password = ""
+    @State private var localValidationFailure: AppFailure?
+
+    init(
+        model: AppModel,
+        account: ServerAccount,
+        onSaved: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.model = model
+        self.account = account
+        self.onSaved = onSaved
+        self.onCancel = onCancel
+        _serverAddress = State(initialValue: account.server.url.absoluteString)
+        _localServerAddress = State(
+            initialValue: account.localServer?.url.absoluteString ?? ""
+        )
+        _username = State(initialValue: account.user.username)
+    }
 
     private var isSubmitting: Bool {
         model.loginStatus == .submitting
     }
 
+    private var canSubmit: Bool {
+        !serverAddress.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty
+            && !username.isEmpty
+            && !password.isEmpty
+            && !isSubmitting
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Account") {
-                    LabeledContent("Username", value: account.user.username)
-                    LabeledContent(
-                        "Server",
-                        value: account.server.url.absoluteString
+                Section("Servers") {
+                    TextField(
+                        "Primary server URL",
+                        text: $serverAddress
                     )
+                    .textContentType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("accountEditor.server")
+
+                    TextField(
+                        "Local server URL (optional)",
+                        text: $localServerAddress
+                    )
+                    .textContentType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("accountEditor.localServer")
                 }
 
-                Section {
+                Section("Credentials") {
+                    TextField("Username", text: $username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("accountEditor.username")
                     SecureField("Password", text: $password)
                         .textContentType(.password)
                         .accessibilityIdentifier(
-                            "reauthentication.password"
+                            "accountEditor.password"
                         )
                 }
 
@@ -254,7 +303,7 @@ private struct ReauthenticationView: View {
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier(
-                                "reauthentication.error"
+                                "accountEditor.error"
                             )
                     }
                 }
@@ -267,29 +316,84 @@ private struct ReauthenticationView: View {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                         } else {
-                            Text("Sign In")
+                            Text("Save")
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(password.isEmpty || isSubmitting)
-                    .accessibilityIdentifier("reauthentication.submit")
+                    .disabled(!canSubmit)
+                    .accessibilityIdentifier("accountEditor.save")
+                }
+
+                if model.account?.id != account.id {
+                    Section {
+                        Button("Use This Account") {
+                            Task {
+                                await model.switchAccount(to: account)
+                                onSaved()
+                            }
+                        }
+                        .disabled(model.accountActionStatus == .switching)
+                        .accessibilityIdentifier("accountEditor.activate")
+                    }
                 }
             }
-            .navigationTitle("Sign In Again")
+            .navigationTitle("Edit Account")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                 }
             }
+            .confirmationDialog(
+                "Local server could not be verified",
+                isPresented: Binding(
+                    get: { localValidationFailure != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            localValidationFailure = nil
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Save Without Local Verification") {
+                    localValidationFailure = nil
+                    submit(allowUnvalidatedLocalServer: true)
+                }
+                Button("Cancel", role: .cancel) {
+                    localValidationFailure = nil
+                }
+            } message: {
+                if let localValidationFailure {
+                    Text(
+                        localValidationFailure.message
+                            + " The primary details can still be saved. The "
+                            + "local address will be kept but disabled until "
+                            + "it can be verified."
+                    )
+                }
+            }
         }
     }
 
-    private func submit() {
+    private func submit(allowUnvalidatedLocalServer: Bool = false) {
         let submittedPassword = password
-        password = ""
         Task {
-            if await model.reauthenticate(password: submittedPassword) {
-                onSignedIn()
+            let result = await model.updateAccount(
+                account,
+                serverAddress: serverAddress,
+                localServerAddress: localServerAddress,
+                username: username,
+                password: submittedPassword,
+                allowUnvalidatedLocalServer: allowUnvalidatedLocalServer
+            )
+            switch result {
+            case .saved:
+                password = ""
+                onSaved()
+            case .localServerValidationFailed(let failure):
+                localValidationFailure = failure
+            case .failed:
+                break
             }
         }
     }
@@ -2130,7 +2234,7 @@ private struct StatisticsView: View {
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var showAddAccount = false
-    @State private var showReauthentication = false
+    @State private var editingAccount: ServerAccount?
     @State private var showRemoveAccountConfirmation = false
     @State private var showDisableCloudSyncConfirmation = false
     @State private var pendingRemovalScope: AccountRemovalScope?
@@ -2143,9 +2247,8 @@ private struct SettingsView: View {
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.id) { account in
                         Button {
-                            Task {
-                                await model.switchAccount(to: account)
-                            }
+                            model.prepareAccountLogin()
+                            editingAccount = account
                         } label: {
                             HStack {
                                 VStack(alignment: .leading) {
@@ -2161,23 +2264,13 @@ private struct SettingsView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(
-                            account.id == model.account?.id
-                                || model.accountActionStatus == .switching
-                        )
+                        .disabled(model.accountActionStatus == .switching)
                     }
                     Button("Add Account", systemImage: "plus") {
                         model.prepareAccountLogin()
                         showAddAccount = true
                     }
                     .accessibilityIdentifier("settings.addAccount")
-                    Button("Sign In Again", systemImage: "key") {
-                        model.prepareAccountLogin()
-                        showReauthentication = true
-                    }
-                    .accessibilityIdentifier(
-                        "settings.reauthenticate"
-                    )
                 }
 
                 if case .failed(let failure) = model.accountActionStatus {
@@ -2373,16 +2466,14 @@ private struct SettingsView: View {
                     showAddAccount = false
                 }
             }
-            .sheet(isPresented: $showReauthentication) {
-                if let account = model.account {
-                    ReauthenticationView(
-                        model: model,
-                        account: account
-                    ) {
-                        showReauthentication = false
-                    } onCancel: {
-                        showReauthentication = false
-                    }
+            .sheet(item: $editingAccount) { account in
+                AccountEditorView(
+                    model: model,
+                    account: account
+                ) {
+                    editingAccount = nil
+                } onCancel: {
+                    editingAccount = nil
                 }
             }
             .confirmationDialog(

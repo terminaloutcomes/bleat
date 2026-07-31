@@ -52,6 +52,42 @@ enum AppServiceError: Error, Equatable, Sendable {
     case privateCloud(PrivateCloudSyncError)
 }
 
+enum LocalServerValidationPolicy: Equatable, Sendable {
+    case required
+    case allowUnvalidated
+}
+
+enum LocalServerValidationDecision: Equatable, Sendable {
+    case skip
+    case validate
+
+    static func decide(
+        account: ServerAccount,
+        primary: NormalizedServerURL,
+        local: NormalizedServerURL?,
+        username: String
+    ) -> Self {
+        guard local != nil else {
+            return .skip
+        }
+        let onlyPrimaryChanged =
+            primary != account.server
+            && local == account.localServer
+            && username == account.user.username
+        if local != account.localServer
+            || (!account.localServerValidated && !onlyPrimaryChanged)
+        {
+            return .validate
+        }
+        return .skip
+    }
+}
+
+enum AccountUpdateServiceOutcome: Equatable, Sendable {
+    case updated(ServerAccount)
+    case localServerValidationFailed(AppServiceError)
+}
+
 struct AppPlaybackTrack: Equatable, Sendable {
     let url: URL
     let startOffset: Double
@@ -98,6 +134,15 @@ protocol AppServicing: Sendable {
     func activateAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError)
+
+    func updateAccount(
+        _ account: ServerAccount,
+        serverAddress: String,
+        localServerAddress: String,
+        username: String,
+        password: String,
+        localServerValidation: LocalServerValidationPolicy
+    ) async throws(AppServiceError) -> AccountUpdateServiceOutcome
 
     func login(
         serverAddress: String,
@@ -306,6 +351,17 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func updateAccount(
+        _ account: ServerAccount,
+        serverAddress: String,
+        localServerAddress: String,
+        username: String,
+        password: String,
+        localServerValidation: LocalServerValidationPolicy
+    ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
+        .updated(account)
+    }
+
     func liveUpdates(
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
@@ -404,8 +460,11 @@ actor LiveAppService: AppServicing {
 
     private let modelContainer: ModelContainer
     private let transport: URLSessionHTTPTransport
+    private let directTransport: URLSessionHTTPTransport
+    private let endpointRouter: ServerEndpointRouter
     private let credentialStore: TokenVault
     private let coordinator: Coordinator
+    private let authenticationCoordinator: Coordinator
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
     private let statisticsRepository: StatisticsRepository
@@ -443,7 +502,13 @@ actor LiveAppService: AppServicing {
             throw .persistenceUnavailable
         }
 
-        transport = URLSessionHTTPTransport(diagnostics: diagnostics)
+        let endpointRouter = ServerEndpointRouter()
+        self.endpointRouter = endpointRouter
+        directTransport = URLSessionHTTPTransport(diagnostics: diagnostics)
+        transport = URLSessionHTTPTransport(
+            diagnostics: diagnostics,
+            endpointRouter: endpointRouter
+        )
         let privateCloudAvailable =
             BleatCloudKitBuildMode.current == .enabled
         let privateCloudEnabled =
@@ -462,6 +527,10 @@ actor LiveAppService: AppServicing {
         )
         coordinator = Coordinator(
             transport: transport,
+            credentialStore: credentialStore
+        )
+        authenticationCoordinator = Coordinator(
+            transport: directTransport,
             credentialStore: credentialStore
         )
         accountStore = AccountStore(modelContainer: modelContainer)
@@ -504,7 +573,17 @@ actor LiveAppService: AppServicing {
         async throws(AppServiceError) -> [ServerAccount]
     {
         do {
-            return try await accountStore.accounts()
+            let accounts = try await accountStore.accounts()
+            for account in accounts {
+                await endpointRouter.configure(
+                    primary: account.server,
+                    local:
+                        account.localServerValidated
+                        ? account.localServer
+                        : nil
+                )
+            }
+            return accounts
         } catch let error {
             throw .accountStore(error)
         }
@@ -517,6 +596,121 @@ actor LiveAppService: AppServicing {
             return try await accountStore.activeAccount()
         } catch let error {
             throw .accountStore(error)
+        }
+    }
+
+    func updateAccount(
+        _ account: ServerAccount,
+        serverAddress: String,
+        localServerAddress: String,
+        username: String,
+        password: String,
+        localServerValidation: LocalServerValidationPolicy
+    ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
+        let primary: NormalizedServerURL
+        let requestedLocal: NormalizedServerURL?
+        do {
+            primary = try NormalizedServerURL(serverAddress)
+            if localServerAddress.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty {
+                requestedLocal = nil
+            } else {
+                requestedLocal = try NormalizedServerURL(localServerAddress)
+            }
+        } catch let error {
+            throw .invalidServerURL(error)
+        }
+        let local = requestedLocal == primary ? nil : requestedLocal
+        let localValidationDecision = LocalServerValidationDecision.decide(
+            account: account,
+            primary: primary,
+            local: local,
+            username: username
+        )
+        let discoveredPrimary = try await discoverDirect(primary)
+        guard discoveredPrimary.authenticationMethods.contains(.local) else {
+            throw .onboarding(.localAuthenticationUnavailable)
+        }
+
+        var localWasValidated = false
+        if let local,
+            localValidationDecision == .validate,
+            localServerValidation == .required
+        {
+            do {
+                let discoveredLocal = try await discoverDirect(local)
+                guard discoveredLocal.authenticationMethods.contains(.local)
+                else {
+                    throw AccountOnboardingError.localAuthenticationUnavailable
+                }
+                _ = try await authenticationCoordinator.validateLocalLogin(
+                    accountID: account.id,
+                    server: local,
+                    username: username,
+                    password: password,
+                    expectedUserID: account.user.id
+                )
+                localWasValidated = true
+            } catch let error as AccountOnboardingError {
+                return .localServerValidationFailed(.onboarding(error))
+            } catch let error as LocalAuthenticationError {
+                return .localServerValidationFailed(
+                    .onboarding(.authenticationFailed(error))
+                )
+            } catch let error as AppServiceError {
+                return .localServerValidationFailed(error)
+            } catch {
+                return .localServerValidationFailed(
+                    .onboarding(.authenticationRequestFailed)
+                )
+            }
+        }
+        let localValidated =
+            local != nil
+            && (localWasValidated
+                || (localValidationDecision == .skip
+                    && account.localServerValidated))
+
+        let persisted: ServerAccount
+        do {
+            persisted = try await authenticationCoordinator
+                .loginAndPersistAccount(
+                    accountID: account.id,
+                    discoveredServer: discoveredPrimary,
+                    username: username,
+                    password: password,
+                    expectedUserID: account.user.id,
+                    accountStore: accountStore,
+                    makeActive: false
+                )
+            try await accountStore.setLocalServer(
+                local,
+                validated: localValidated,
+                for: account.id
+            )
+            let updated = try persisted.updatingLocalServer(
+                local,
+                validated: localValidated
+            )
+            await endpointRouter.configure(
+                primary: account.server,
+                local: nil
+            )
+            await endpointRouter.configure(
+                primary: updated.server,
+                local:
+                    updated.localServerValidated
+                    ? updated.localServer
+                    : nil
+            )
+            return .updated(updated)
+        } catch let error as AccountOnboardingError {
+            throw .onboarding(error)
+        } catch let error as AccountStoreError {
+            throw .accountStore(error)
+        } catch {
+            throw .accountStore(.profileEncodingFailed)
         }
     }
 
@@ -542,10 +736,10 @@ actor LiveAppService: AppServicing {
             throw .invalidServerURL(error)
         }
 
-        let discoveredServer = try await discover(server)
+        let discoveredServer = try await discoverDirect(server)
 
         do {
-            return try await coordinator.loginAndPersistAccount(
+            return try await authenticationCoordinator.loginAndPersistAccount(
                 accountID: AccountID(
                     rawValue: UUID().uuidString.lowercased()
                 ),
@@ -563,13 +757,14 @@ actor LiveAppService: AppServicing {
         _ account: ServerAccount,
         password: String
     ) async throws(AppServiceError) -> ServerAccount {
-        let discoveredServer = try await discover(account.server)
+        let discoveredServer = try await discoverDirect(account.server)
         do {
-            return try await coordinator.loginAndPersistAccount(
+            return try await authenticationCoordinator.loginAndPersistAccount(
                 accountID: account.id,
                 discoveredServer: discoveredServer,
                 username: account.user.username,
                 password: password,
+                expectedUserID: account.user.id,
                 accountStore: accountStore,
                 makeActive: false
             )
@@ -723,18 +918,19 @@ actor LiveAppService: AppServicing {
         do {
             switch try session.source(for: account.server) {
             case .direct(let tracks):
-                source = .direct(
-                    tracks.map { track in
-                        AppPlaybackTrack(
-                            url: track.url,
-                            startOffset: track.track.startOffset,
-                            duration: track.track.duration,
-                            title: track.track.title
-                        )
-                    }
-                )
+                var appTracks: [AppPlaybackTrack] = []
+                appTracks.reserveCapacity(tracks.count)
+                for track in tracks {
+                    appTracks.append(AppPlaybackTrack(
+                        url: await endpointRouter.preferredURL(for: track.url),
+                        startOffset: track.track.startOffset,
+                        duration: track.track.duration,
+                        title: track.track.title
+                    ))
+                }
+                source = .direct(appTracks)
             case .hls(let url):
-                source = .hls(url)
+                source = .hls(await endpointRouter.preferredURL(for: url))
             }
         } catch let error {
             try? await coordinator.closePlaybackSession(
@@ -906,10 +1102,16 @@ actor LiveAppService: AppServicing {
         identity: DownloadTaskIdentity
     ) async throws(AppServiceError) -> URLRequest {
         do {
-            return try await coordinator.makeAuthorizedDownloadRequest(
+            let request = try await coordinator.makeAuthorizedDownloadRequest(
                 identity: identity,
                 server: account.server
             )
+            guard let url = request.url else {
+                return request
+            }
+            var updated = request
+            updated.url = await endpointRouter.preferredURL(for: url)
+            return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
         } catch {
@@ -925,11 +1127,17 @@ actor LiveAppService: AppServicing {
         rejectedRequest: URLRequest
     ) async throws(AppServiceError) -> URLRequest {
         do {
-            return try await coordinator.makeReplacementDownloadRequest(
+            let request = try await coordinator.makeReplacementDownloadRequest(
                 identity: identity,
                 server: account.server,
                 rejectedRequest: rejectedRequest
             )
+            guard let url = request.url else {
+                return request
+            }
+            var updated = request
+            updated.url = await endpointRouter.preferredURL(for: url)
+            return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
         } catch {
@@ -1307,12 +1515,12 @@ actor LiveAppService: AppServicing {
         }
     }
 
-    private func discover(
+    private func discoverDirect(
         _ server: NormalizedServerURL
     ) async throws(AppServiceError) -> DiscoveredServer {
         do {
             return try await ServerDiscoveryClient(
-                transport: transport
+                transport: directTransport
             ).discover(server)
         } catch let error as ServerDiscoveryError {
             throw .discovery(error)

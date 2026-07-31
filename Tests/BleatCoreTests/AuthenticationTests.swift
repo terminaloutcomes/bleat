@@ -142,6 +142,83 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(saveCount, 1)
     }
 
+    func testCredentialValidationRequiresSameUserWithoutPersisting()
+        async throws
+    {
+        let transport = AuthenticationHTTPTransport(
+            responses: [
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "access-token",
+                        refreshToken: "refresh-token"
+                    )
+                ),
+                .json(Self.authenticationJSON()),
+            ]
+        )
+        let store = RecordingCredentialStore()
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let accountID = AccountID(rawValue: "edited-account")
+
+        _ = try await coordinator.validateLocalLogin(
+            accountID: accountID,
+            server: NormalizedServerURL("https://local.example"),
+            username: "reader",
+            password: "test-password",
+            expectedUserID: UserID(rawValue: "user-id")
+        )
+
+        let storedTokens = await store.credentials(for: accountID)
+        let storedLogin = await store.nativeLoginCredentials(for: accountID)
+        let saveCount = await store.saveCount()
+        XCTAssertNil(storedTokens)
+        XCTAssertNil(storedLogin)
+        XCTAssertEqual(saveCount, 0)
+    }
+
+    func testCredentialValidationRejectsADifferentSavedUser() async throws {
+        let transport = AuthenticationHTTPTransport(
+            responses: [
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "access-token",
+                        refreshToken: "refresh-token"
+                    )
+                ),
+                .json(Self.authenticationJSON()),
+            ]
+        )
+        let store = RecordingCredentialStore()
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.validateLocalLogin(
+                accountID: AccountID(rawValue: "edited-account"),
+                server: NormalizedServerURL("https://local.example"),
+                username: "reader",
+                password: "test-password",
+                expectedUserID: UserID(rawValue: "different-user")
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? LocalAuthenticationError,
+                .authorizedUserMismatch(
+                    expected: "different-user",
+                    actual: "user-id"
+                )
+            )
+        }
+
+        let saveCount = await store.saveCount()
+        XCTAssertEqual(saveCount, 0)
+    }
+
     func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting()
         async throws
     {
