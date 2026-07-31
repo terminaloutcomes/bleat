@@ -2,9 +2,16 @@
 
 set -euo pipefail
 
+
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_archive_path="${BLEAT_ARCHIVE_PATH:-${bleat_repository_root}/.build/Bleat.xcarchive}"
+
+BUILD_VERBOSE="${BUILD_VERBOSE:-false}"
+BUILD_VERBOSE_FLAG="-quiet"
+if [[ "${BUILD_VERBOSE}" == "true" ]]; then
+  BUILD_VERBOSE_FLAG=""
+fi
 
 typeset -a bleat_signing_arguments
 if [[ -n "${BLEAT_DEVELOPMENT_TEAM:-}" ]]; then
@@ -25,6 +32,7 @@ fi
 xcodebuild \
     -project "${bleat_repository_root}/Bleat.xcodeproj" \
     -scheme Bleat \
+    ${BUILD_VERBOSE_FLAG} \
     -configuration Release \
     -destination 'generic/platform=iOS' \
     -archivePath "${bleat_archive_path}" \
