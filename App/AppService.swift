@@ -11,9 +11,11 @@ enum BleatCloudKitBuildMode: String, Sendable {
     case disabled
 
     static var current: Self {
-        guard let value = Bundle.main.object(
-            forInfoDictionaryKey: "BleatCloudKitMode"
-        ) as? String else {
+        guard
+            let value = Bundle.main.object(
+                forInfoDictionaryKey: "BleatCloudKitMode"
+            ) as? String
+        else {
             return .disabled
         }
         return Self(rawValue: value) ?? .disabled
@@ -446,18 +448,16 @@ actor LiveAppService: AppServicing {
             BleatCloudKitBuildMode.current == .enabled
         let privateCloudEnabled =
             privateCloudAvailable
-            && (
-                UserDefaults.standard.object(
-                    forKey: "bleat.cloudKit.enabled.v1"
-                ) == nil
+            && (UserDefaults.standard.object(
+                forKey: "bleat.cloudKit.enabled.v1"
+            ) == nil
                 || UserDefaults.standard.bool(
                     forKey: "bleat.cloudKit.enabled.v1"
-                )
-            )
+                ))
         credentialStore = TokenVault(
-            tokenService: "com.yaleman.Bleat.session-tokens",
-            nativeLoginService: "com.yaleman.Bleat.native-login",
-            legacyService: "com.yaleman.Bleat.credentials",
+            tokenService: "com.terminaloutcomes.Bleat.session-tokens",
+            nativeLoginService: "com.terminaloutcomes.Bleat.native-login",
+            legacyService: "com.terminaloutcomes.Bleat.credentials",
             synchronizesNativeLogin: privateCloudEnabled
         )
         coordinator = Coordinator(

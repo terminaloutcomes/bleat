@@ -4,7 +4,7 @@ import XCTest
 final class KeychainEntitlementTests: XCTestCase {
     func testApplicationHostCanPersistCredentialsInKeychain() async throws {
         let store = TokenVault(
-            service: "com.yaleman.bleat.app-tests.\(UUID().uuidString)"
+            service: "com.terminaloutcomes.bleat.app-tests.\(UUID().uuidString)"
         )
         let accountID = AccountID(rawValue: "keychain-entitlement")
         let tokens = try AuthenticationTokens(

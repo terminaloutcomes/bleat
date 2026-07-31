@@ -405,7 +405,7 @@ public actor SystemDiagnosticRecorder: DiagnosticRecording {
 
     public func record(_ event: DiagnosticEvent) {
         let logger = Logger(
-            subsystem: "com.yaleman.Bleat",
+            subsystem: "com.terminaloutcomes.Bleat",
             category: event.category.rawValue
         )
         logger.log(

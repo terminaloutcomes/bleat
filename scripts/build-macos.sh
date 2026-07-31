@@ -9,7 +9,7 @@ if [[ "${BUILD_VERBOSE}" == "true" ]]; then
 fi
 
 : "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.yaleman.Bleat}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
 readonly bleat_app=".build/macos-signed/Build/Products/Release-maccatalyst/Bleat.app"
 # shellcheck disable=SC2155
 readonly entitlements_file="$(mktemp "${TMPDIR:-/tmp}/bleat-entitlements.XXXXXX")"

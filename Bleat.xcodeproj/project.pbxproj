@@ -55,7 +55,7 @@
 
 /* Begin PBXFileReference section */
 		003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStoreTests.swift; sourceTree = "<group>"; };
-		0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
 		167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStoreTests.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -80,7 +80,7 @@
 		C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.disabled.entitlements; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
-		C9A985B3A620C132DA9B6307 /* BleatApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BleatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9A985B3A620C132DA9B6307 /* Bleat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bleat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E12995342C7E6318A5F929A2 /* AppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppService.swift; sourceTree = "<group>"; };
@@ -177,7 +177,7 @@
 		B1FE776EA07A3A2C052FE1AA /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C9A985B3A620C132DA9B6307 /* BleatApp.app */,
+				C9A985B3A620C132DA9B6307 /* Bleat.app */,
 				B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */,
 				549E0D50852D5C5F631FB04D /* BleatUITests.xctest */,
 			);
@@ -248,7 +248,7 @@
 				05BA90A0AA1604ECD1B8BCC9 /* BleatCore */,
 			);
 			productName = BleatApp;
-			productReference = C9A985B3A620C132DA9B6307 /* BleatApp.app */;
+			productReference = C9A985B3A620C132DA9B6307 /* Bleat.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -503,7 +503,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.BleatUITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = BleatApp;
@@ -520,20 +520,23 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2LXKHMJ5XS;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.books";
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.Bleat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.Bleat;
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -548,7 +551,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.BleatUITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = BleatApp;
@@ -565,20 +568,23 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2LXKHMJ5XS;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Bleat;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.books";
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.Bleat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.Bleat;
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -594,7 +600,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.BleatTests;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
@@ -616,7 +622,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yaleman.BleatTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.terminaloutcomes.BleatTests;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;

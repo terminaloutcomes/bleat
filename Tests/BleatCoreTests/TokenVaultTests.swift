@@ -12,7 +12,8 @@ final class TokenVaultTests: XCTestCase {
                 "Requires the future app test host's Keychain entitlement"
             )
         #else
-            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let service =
+                "com.terminaloutcomes.bleat.tests.\(UUID().uuidString)"
             let store = TokenVault(service: service)
             let firstAccount = AccountID(rawValue: "first")
             let secondAccount = AccountID(rawValue: "second")
@@ -82,7 +83,7 @@ final class TokenVaultTests: XCTestCase {
 
     func testRejectsEmptyAccountID() async throws {
         let store = TokenVault(
-            service: "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            service: "com.terminaloutcomes.bleat.tests.\(UUID().uuidString)"
         )
         let emptyAccount = AccountID(rawValue: "")
 
@@ -139,7 +140,8 @@ final class TokenVaultTests: XCTestCase {
                 "Requires the future app test host's Keychain entitlement"
             )
         #else
-            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let service =
+                "com.terminaloutcomes.bleat.tests.\(UUID().uuidString)"
             let accountID = AccountID(rawValue: "malformed")
             let query: [CFString: Any] = [
                 kSecClass: kSecClassGenericPassword,
@@ -174,7 +176,8 @@ final class TokenVaultTests: XCTestCase {
                 "Requires the future app test host's Keychain entitlement"
             )
         #else
-            let service = "com.yaleman.bleat.tests.\(UUID().uuidString)"
+            let service =
+                "com.terminaloutcomes.bleat.tests.\(UUID().uuidString)"
             let accountID = AccountID(rawValue: "legacy")
             let tokens = try AuthenticationTokens(
                 accessToken: "legacy-access",

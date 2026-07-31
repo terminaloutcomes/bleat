@@ -286,9 +286,9 @@ CloudKit-free signing entitlements, hides iCloud synchronization, leaves
 statistics local, and stores native credentials in the device-only Keychain.
 Paid-team and distribution builds default to `enabled`.
 
-If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
+If Apple reports that `com.terminaloutcomes.Bleat` is unavailable for the selected team,
 set a stable alternative such as
-`BLEAT_BUNDLE_ID=com.yaleman.Bleat.personal` before running the tasks.
+`BLEAT_BUNDLE_ID=com.terminaloutcomes.Bleat.personal` before running the tasks.
 
 ## Sign in
 

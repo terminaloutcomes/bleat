@@ -1,7 +1,7 @@
 name: Bleat
 
 options:
-  bundleIdPrefix: com.yaleman
+  bundleIdPrefix: com.terminaloutcomes
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -63,7 +63,7 @@ targets:
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements
         CURRENT_PROJECT_VERSION: "1"
         MARKETING_VERSION: "0.1.0"
-        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.Bleat
+        PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.Bleat
         PRODUCT_NAME: Bleat
         "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -81,7 +81,7 @@ targets:
       - target: BleatApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.BleatTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.BleatTests
         GENERATE_INFOPLIST_FILE: true
         "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat"
@@ -96,7 +96,7 @@ targets:
       - target: BleatApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yaleman.BleatUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.BleatUITests
         GENERATE_INFOPLIST_FILE: true
         TEST_TARGET_NAME: BleatApp
 

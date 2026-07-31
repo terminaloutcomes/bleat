@@ -55,7 +55,7 @@ run = """
 set -euo pipefail
 
 : "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.yaleman.Bleat}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:-com.terminaloutcomes.Bleat}"
 
 xcrun devicectl device process launch \
   --device "${BLEAT_DEVICE_ID}" \
