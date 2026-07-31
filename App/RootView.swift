@@ -49,7 +49,8 @@ struct RootView: View {
             switch model.phase {
             case .launching:
                 ProgressView()
-                    .accessibilityIdentifier("app.launching").tint(colourScheme.color)
+                    .accessibilityIdentifier("app.launching")
+                    .tint(colourScheme.color)
             case .signedOut:
                 NativeLoginView(model: model).tint(colourScheme.color)
             case .signedIn:
@@ -60,7 +61,8 @@ struct RootView: View {
                     systemImage: "exclamationmark.triangle",
                     description: Text(failure.message)
                 )
-                .accessibilityIdentifier("app.unavailable").tint(colourScheme.color)
+                .accessibilityIdentifier("app.unavailable")
+                .tint(colourScheme.color)
             }
         }
         .task {
@@ -805,7 +807,6 @@ private struct HomeView: View {
     var body: some View {
         NavigationStack {
             HomeContent(model: model)
-                // .navigationTitle("Home")
                 .safeAreaInset(edge: .top, spacing: 0) {
                     homeContext
                 }

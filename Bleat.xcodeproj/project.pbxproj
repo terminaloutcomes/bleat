@@ -63,7 +63,7 @@
 		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
 		4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
-		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainEntitlementTests.swift; sourceTree = "<group>"; };
 		6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadModel.swift; sourceTree = "<group>"; };
 		70E1797402B69FE6551AC02B /* BleatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatUITests.swift; sourceTree = "<group>"; };
@@ -75,7 +75,7 @@
 		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.enabled.entitlements; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
-		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.enabled.entitlements; sourceTree = "<group>"; };
 		C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.disabled.entitlements; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
@@ -258,7 +258,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					45D306A60FA716FBBEF22F80 = {
 						ProvisioningStyle = Automatic;
@@ -406,6 +406,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -465,6 +466,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -522,6 +524,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = VCTJZZ2F3X;
 				INFOPLIST_FILE = App/Info.plist;
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
@@ -568,6 +571,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = VCTJZZ2F3X;
 				INFOPLIST_FILE = App/Info.plist;
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
@@ -591,6 +595,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -613,6 +618,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
