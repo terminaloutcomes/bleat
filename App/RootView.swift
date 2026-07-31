@@ -1954,7 +1954,7 @@ private struct BookDetailView: View {
                 if let record = model.downloads.record(
                     accountID: account.id,
                     itemID: detail.id
-                ) {
+                ) && !model.downloads.isFullBookAvailable(record) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Label(
@@ -2911,6 +2911,7 @@ private struct DownloadStorageView: View {
                         : downloadStateLabel(record)
                 )
                 Spacer()
+
                 Text(
                     "\(byteCount(model.downloads.downloadedByteLength(for: record))) of \(byteCount(model.downloads.expectedByteLength(for: record)))"
                 )
@@ -2927,16 +2928,19 @@ private struct DownloadStorageView: View {
             {
                 if let account = model.account,
                     account.id == record.manifest.accountID
+
                 {
-                    Button("Download Full Book") {
-                        Task {
-                            await model.downloads.downloadFullBook(
-                                record,
-                                account: account
-                            )
+                    if !model.downloads.isFullyDownloaded(for: record) {
+                        Button("Download Full Book") {
+                            Task {
+                                await model.downloads.downloadFullBook(
+                                    record,
+                                    account: account
+                                )
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                     if model.downloads.automaticCacheState(
                         for: record
                     ) == .failed {

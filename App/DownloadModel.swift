@@ -1500,6 +1500,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
     }
 
+    func isFullyDownloaded(for record: DownloadedBookRecord) -> Bool {
+        downloadedByteLength(for: record)
+            >= expectedByteLength(for: record)
+    }
+
     static func scopedDownloadedByteLength(
         for record: DownloadedBookRecord,
         transferredByteLengthsByTrack: [Int: Int64]
