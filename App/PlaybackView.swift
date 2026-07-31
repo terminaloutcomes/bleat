@@ -73,7 +73,8 @@ private struct PlaybackScrubberView: View {
             }
             .disabled(playback.state == .preparing)
             .accessibilityIdentifier("player.position")
-            .sliderThumbVisibility(Visibility.hidden)
+            // .sliderThumbVisibility(Visibility.hidden)
+            .hiddenSliderThumbIfAvailable()  // hack for when sliderThumbVisibility is not available on sequoia
             .tint(colourScheme.color)
 
             HStack {
@@ -870,6 +871,24 @@ private struct BookmarkEditorView: View {
                     .accessibilityIdentifier("bookmark.save")
                 }
             }
+        }
+    }
+}
+
+// This is a workaround for the fact that SwiftUI doesn't provide a way to hide the thumb of a Slider on sequoia, can get removed once we drop support for sequoia.
+extension View {
+    fileprivate func hiddenSliderThumbIfAvailable() -> some View {
+        modifier(HiddenSliderThumbModifier())
+    }
+}
+
+// This is a workaround for the fact that SwiftUI doesn't provide a way to hide the thumb of a Slider on sequoia, can get removed once we drop support for sequoia.
+private struct HiddenSliderThumbModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, macCatalyst 26.0, *) {
+            content.sliderThumbVisibility(.hidden)
+        } else {
+            content
         }
     }
 }

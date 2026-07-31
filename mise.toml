@@ -15,7 +15,7 @@ description = "Run app-hosted tests in a development-signed Mac Catalyst app"
 
 [tasks.macos]
 description = "Build and launch a development-signed Mac Catalyst app"
-run = ["./scripts/build_macos.sh"]
+run = ["./scripts/build-macos.sh"]
 
 [tasks.archive]
 description = "Create and validate the Release archive"

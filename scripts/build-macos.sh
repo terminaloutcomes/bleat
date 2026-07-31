@@ -28,12 +28,19 @@ xcodebuild \
   DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \
   CODE_SIGN_STYLE=Automatic \
   PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
-  BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
+  BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-disabled}" \
   build
 
-codesign --verify --deep --strict "${bleat_app}"
-codesign -d --entitlements :- "${bleat_app}" \
-  >"${entitlements_file}" 2>"${codesign_output}"
+codesign --verify --deep --strict "${bleat_app}" || {
+  echo "Failed to verify codesign for ${bleat_app}. Output:"
+  cat "${codesign_output}"
+  exit 1
+}
+codesign -d --entitlements :- "${bleat_app}" >"${entitlements_file}" 2>"${codesign_output}" || {
+  echo "Failed to verify codesign for ${bleat_app}. Output:"
+  cat "${codesign_output}"
+  exit 1
+}
 plutil -extract keychain-access-groups.0 raw \
   "${entitlements_file}" >/dev/null
 codesign -dvv "${bleat_app}" 2>&1 \

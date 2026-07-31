@@ -26,8 +26,8 @@ describe a proposed or partially implemented behavior as complete.
 
 The current targets are:
 
-- SwiftUI on iPhone and iPad;
-- iOS 26.0 or newer for the application;
+- SwiftUI on iPhone, iPad and macOS;
+- iOS 26.0 or newer for the application on mobile devices and Sequoia on mac;
 - Swift 6.2 or newer with complete strict-concurrency checking;
 - SwiftData for structured local state;
 - Security framework and Keychain references for secrets;

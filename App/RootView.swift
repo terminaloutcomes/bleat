@@ -73,7 +73,7 @@ struct RootView: View {
                     await model.synchronizePrivateCloud()
                 }
             }
-        }.tint(colourScheme.color)
+        }
     }
 }
 
@@ -1547,6 +1547,22 @@ private struct BookDetailView: View {
                                 showMetadataEditor = true
                             }
                             .accessibilityIdentifier("book.detail.edit")
+
+                            Button(
+                                detail.progress?.isFinished == true
+                                    ? "Mark Unfinished" : "Mark Finished"
+                            ) {
+                                Task {
+                                    await model.setFinished(
+                                        detail.progress?.isFinished != true,
+                                        detail: detail
+                                    )
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(model.bookProgressUpdateState == .saving)
+                            .accessibilityIdentifier("book.detail.finished")
+
                         } label: {
                             Image(systemName: "ellipsis")
                         }
@@ -1720,20 +1736,7 @@ private struct BookDetailView: View {
                 VStack(spacing: 12) {
                     playbackAction(detail)
                     downloadAction(detail)
-                    Button(
-                        detail.progress?.isFinished == true
-                            ? "Mark Unfinished" : "Mark Finished"
-                    ) {
-                        Task {
-                            await model.setFinished(
-                                detail.progress?.isFinished != true,
-                                detail: detail
-                            )
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.bookProgressUpdateState == .saving)
-                    .accessibilityIdentifier("book.detail.finished")
+
                 }
                 if case .failed(let failure) =
                     model.bookProgressUpdateState
@@ -1954,65 +1957,67 @@ private struct BookDetailView: View {
                 if let record = model.downloads.record(
                     accountID: account.id,
                     itemID: detail.id
-                ) && !model.downloads.isFullBookAvailable(record) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label(
-                                downloadStatus(record),
-                                systemImage: downloadStatusIcon(record)
-                            )
-                            .accessibilityIdentifier(
-                                "book.detail.downloadStatus"
-                            )
-                            Spacer()
-                            Text(downloadBytes(record))
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.subheadline)
+                ) {
+                    if !model.downloads.isFullBookAvailable(record) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label(
+                                    downloadStatus(record),
+                                    systemImage: downloadStatusIcon(record)
+                                )
+                                .accessibilityIdentifier(
+                                    "book.detail.downloadStatus"
+                                )
+                                Spacer()
+                                Text(downloadBytes(record))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.subheadline)
 
-                        if record.manifest.purpose == .automaticCache
-                            || !model.downloads.isFullBookAvailable(record)
-                        {
-                            ProgressView(
-                                value: model.downloads.progress[
-                                    record.manifest.downloadID
-                                ] ?? 0
-                            )
-                        }
+                            if record.manifest.purpose == .automaticCache
+                                || !model.downloads.isFullBookAvailable(record)
+                            {
+                                ProgressView(
+                                    value: model.downloads.progress[
+                                        record.manifest.downloadID
+                                    ] ?? 0
+                                )
+                            }
 
-                        HStack {
-                            downloadControls(record, account: account)
-                            Spacer()
-                            if downloadIsActive(record) {
-                                Button(
-                                    "Cancel",
-                                    systemImage: "xmark",
-                                    role: .destructive
-                                ) {
-                                    Task {
-                                        await model.downloads.cancel(record)
+                            HStack {
+                                downloadControls(record, account: account)
+                                Spacer()
+                                if downloadIsActive(record) {
+                                    Button(
+                                        "Cancel",
+                                        systemImage: "xmark",
+                                        role: .destructive
+                                    ) {
+                                        Task {
+                                            await model.downloads.cancel(record)
+                                        }
                                     }
+                                } else {
+                                    Button(
+                                        "Remove",
+                                        systemImage: "trash",
+                                        role: .destructive
+                                    ) {
+                                        showRemoveDownloadConfirmation = true
+                                    }
+                                    .disabled(
+                                        record.manifest.state == .deleting
+                                            || isDownloadedRecordPlaying
+                                    ).accessibilityLabel("Remove")
                                 }
-                            } else {
-                                Button(
-                                    "Remove",
-                                    systemImage: "trash",
-                                    role: .destructive
-                                ) {
-                                    showRemoveDownloadConfirmation = true
-                                }
-                                .disabled(
-                                    record.manifest.state == .deleting
-                                        || isDownloadedRecordPlaying
-                                ).accessibilityLabel("Remove")
                             }
                         }
+                        .padding()
+                        .background(
+                            .quaternary,
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
                     }
-                    .padding()
-                    .background(
-                        .quaternary,
-                        in: RoundedRectangle(cornerRadius: 12)
-                    )
                 } else {
                     Button {
                         Task {
