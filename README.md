@@ -359,9 +359,11 @@ Audiobookshelf playback session and uses its session-scoped direct-play or HLS
 URL without putting access tokens in media URLs. The mini-player remains at the
 top of the signed-in tab shell so tab navigation stays unobstructed; tap its
 title for whole-book seeking, configurable rewind and forward controls,
-previous/next chapter controls, speed control from 0.5× to 3×, and Stop. Rewind
-defaults to 15 seconds and forward defaults to 30 seconds;
-Settings offers 5, 10, 15, 30, 45, and 60-second choices for either direction.
+previous/next chapter controls, and speed control from 0.5× to 3×. Swipe the
+mini-player upward to stop playback and dismiss it, whether playback
+is active or paused. Rewind defaults to 15 seconds and forward defaults to 30
+seconds. Settings offers 5, 10, 15, 30, 45, and 60-second choices for either
+direction.
 Whole-book scrubber moves of 10 minutes or more in either direction require
 confirmation; skip, chapter, audio-file, and system commands remain immediate.
 Now Playing identifies the narrator and current chapter, offers a chapter list
@@ -418,7 +420,8 @@ never contain access tokens.
 
 ## Edit book metadata
 
-Accounts with Audiobookshelf's update permission see **Edit** on book detail.
+Accounts with Audiobookshelf's update permission see **Edit** in the top-right
+book actions menu on book detail.
 The editor supports title, subtitle, authors, narrators, series and sequence,
 genres, tags, publishing fields, description, explicit status, and abridged
 status. Saving sends only changed scalar fields and complete replacement arrays

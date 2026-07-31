@@ -219,6 +219,8 @@ Use a `TabView` with:
 
 A persistent mini-player appears at the top of the signed-in tab shell when a
 book is loaded, leaving every tab unobstructed. Tapping it opens the full player.
+Swiping it upward stops playback and dismisses it, whether it is playing or
+paused.
 
 ### 5.1 Full player
 
@@ -253,7 +255,7 @@ The detail screen contains:
 - metadata;
 - chapters with durations;
 - bookmarks;
-- Edit button gated by server permission;
+- Edit item in the top-right actions menu, gated by server permission;
 - a single Edit destination for metadata, cover, and server deletion;
 - server/account attribution when it could be ambiguous.
 - a typed failure reason that distinguishes missing or forbidden items,
