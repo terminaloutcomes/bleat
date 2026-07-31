@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Bleat",
+    name: "BleatCoreApp",
     platforms: [
         .iOS(.v26),
         .macCatalyst(.v18),
@@ -13,7 +13,7 @@ let package = Package(
         .library(
             name: "BleatCore",
             targets: ["BleatCore"]
-        ),
+        )
     ],
     targets: [
         .target(
@@ -23,7 +23,7 @@ let package = Package(
             name: "BleatCoreTests",
             dependencies: ["BleatCore"],
             resources: [
-                .process("Fixtures"),
+                .process("Fixtures")
             ]
         ),
         .testTarget(

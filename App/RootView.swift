@@ -49,18 +49,18 @@ struct RootView: View {
             switch model.phase {
             case .launching:
                 ProgressView()
-                    .accessibilityIdentifier("app.launching")
+                    .accessibilityIdentifier("app.launching").tint(colourScheme.color)
             case .signedOut:
-                NativeLoginView(model: model)
+                NativeLoginView(model: model).tint(colourScheme.color)
             case .signedIn:
-                SignedInView(model: model)
+                SignedInView(model: model).tint(colourScheme.color)
             case .unavailable(let failure):
                 ContentUnavailableView(
                     "Bleat is unavailable",
                     systemImage: "exclamationmark.triangle",
                     description: Text(failure.message)
                 )
-                .accessibilityIdentifier("app.unavailable")
+                .accessibilityIdentifier("app.unavailable").tint(colourScheme.color)
             }
         }
         .task {
