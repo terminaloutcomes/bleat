@@ -43,24 +43,6 @@ enum PlaybackSyncState: Equatable, Sendable {
     case failed
 }
 
-private enum PlaybackSeekOrigin: Sendable {
-    case local
-    case liveUpdate
-}
-
-enum ExternalProgressNotice: Equatable, Sendable {
-    case localChangesPending(String?)
-
-    var message: String {
-        let device = switch self {
-        case .localChangesPending(let value):
-            value.map { " on \($0)" } ?? ""
-        }
-        return
-            "Another session updated this book\(device). Your unsynced position was kept."
-    }
-}
-
 enum BookmarkState: Equatable, Sendable {
     case idle
     case loading
@@ -350,8 +332,6 @@ final class PlaybackModel {
     private var hasConfirmedPlaybackAdvance = false
     private var lastObservedWholeBookTime: Double?
     private var lastConfirmedAdvanceAt: TimeInterval?
-    private var lastExternalProgressUpdate: Int64 = -1
-    private var localPositionChangeCount = 0
     private var stablePlaybackStartedAt: TimeInterval?
     private var playbackRecoveryPolicy = PlaybackRecoveryPolicy()
     private let monotonicNow: @MainActor @Sendable () -> TimeInterval
@@ -377,7 +357,6 @@ final class PlaybackModel {
     private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
     private(set) var positionConflict: PlaybackPositionConflict?
-    private(set) var externalProgressNotice: ExternalProgressNotice?
 
     var canSyncBookmarks: Bool {
         activeAccount != nil
@@ -395,42 +374,14 @@ final class PlaybackModel {
         state == .playing
     }
 
-    var activeSessionID: PlaybackSessionID? {
-        preparation?.sessionID
-    }
-
-    func handleLiveProgress(
+    func observeLiveProgress(
         _ progress: AudiobookshelfLivePlaybackProgress
-    ) async {
-        guard itemID == progress.itemID,
-            progress.sessionID != activeSessionID,
-            progress.lastUpdateMilliseconds > lastExternalProgressUpdate
-        else {
+    ) {
+        guard itemID == progress.itemID else {
             return
         }
-        lastExternalProgressUpdate = progress.lastUpdateMilliseconds
-        guard localPositionChangeCount == 0 else {
-            return
-        }
-        if isPlaybackRequested {
-            externalProgressNotice = nil
-            return
-        }
-        guard localPlaybackSession == nil, positionConflict == nil else {
-            externalProgressNotice = .localChangesPending(
-                progress.deviceDescription
-            )
-            return
-        }
-        guard state == .paused || state == .ready else {
-            return
-        }
-        externalProgressNotice = nil
-        await performSeek(to: progress.currentTime, origin: .liveUpdate)
-    }
-
-    func dismissExternalProgressNotice() {
-        externalProgressNotice = nil
+        // The foreground player owns its timeline. AppModel refreshes browse
+        // data from this event, but it must never rebuild or pause the player.
     }
 
     var isPlaybackRequested: Bool {
@@ -1158,7 +1109,6 @@ final class PlaybackModel {
             return
         }
         pausedAt = nil
-        externalProgressNotice = nil
         playbackRequested = true
         hasConfirmedPlaybackAdvance = false
         stablePlaybackStartedAt = nil
@@ -1337,13 +1287,10 @@ final class PlaybackModel {
     }
 
     func seek(to requestedTime: Double) async {
-        await performSeek(to: requestedTime, origin: .local)
+        await performSeek(to: requestedTime)
     }
 
-    private func performSeek(
-        to requestedTime: Double,
-        origin: PlaybackSeekOrigin
-    ) async {
+    private func performSeek(to requestedTime: Double) async {
         guard let preparation else {
             return
         }
@@ -1354,14 +1301,6 @@ final class PlaybackModel {
         recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         let operationGeneration = generation
-        if origin == .local {
-            localPositionChangeCount += 1
-        }
-        defer {
-            if origin == .local {
-                localPositionChangeCount -= 1
-            }
-        }
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -2722,10 +2661,6 @@ final class PlaybackModel {
     }
 
     private func resumePlayback(afterRewindingTo target: Double) async {
-        localPositionChangeCount += 1
-        defer {
-            localPositionChangeCount -= 1
-        }
         await seek(to: target)
         guard state == .paused || state == .ready else {
             return

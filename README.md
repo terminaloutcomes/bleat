@@ -34,10 +34,10 @@ Listening-history import/export remains deferred. Bookmark creates, renames,
 and deletes also use a durable local
 outbox when the server is unavailable.
 While the app is active, an authenticated Socket.IO subscription refreshes
-visible libraries and progress after server-side changes. Progress events are
-ignored without an alert while this device is actively playing or completing a
-local seek (including resume rewind); paused playback adopts a newer remote
-position unless local offline progress is still pending.
+visible libraries and progress after server-side changes. Progress events
+refresh browse data, but never move or warn the foreground player: its local
+timeline remains authoritative through pausing, rewinding, seeking, and
+resuming.
 
 ## Requirements
 

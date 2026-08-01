@@ -3359,7 +3359,7 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
-    func testActivePlaybackIgnoresEchoedProgressWithoutAlert() async throws {
+    func testPausedPlaybackIgnoresLiveProgress() async throws {
         let fixture = try playbackRecoveryFixture()
         defer {
             fixture.cleanUp()
@@ -3389,8 +3389,10 @@ final class AppModelTests: XCTestCase {
             )
         )
         await playback.start(detail: fixture.detail, account: account)
+        playback.pause()
+        let pausedTime = playback.currentTime
 
-        await playback.handleLiveProgress(
+        playback.observeLiveProgress(
             AudiobookshelfLivePlaybackProgress(
                 itemID: fixture.detail.id,
                 sessionID: PlaybackSessionID(rawValue: "stale-session"),
@@ -3402,64 +3404,8 @@ final class AppModelTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(playback.isPlaybackRequested)
-        XCTAssertNil(playback.externalProgressNotice)
-        await playback.stop()
-    }
-
-    func testLocalSeekIgnoresLiveProgressUntilTheSeekCompletes() async throws {
-        let fixture = try playbackRecoveryFixture()
-        defer {
-            fixture.cleanUp()
-        }
-        let account = try fixtureAccount()
-        let playbackSyncGate = AsyncGate()
-        let preparation = AppPlaybackPreparation(
-            sessionID: PlaybackSessionID(rawValue: "active-session"),
-            itemID: fixture.detail.id,
-            title: fixture.detail.title,
-            duration: 1,
-            currentTime: 0,
-            chapters: fixture.detail.chapters,
-            source: .direct([
-                AppPlaybackTrack(
-                    url: fixture.audioURL,
-                    startOffset: 0,
-                    duration: 1,
-                    title: "Track 1"
-                )
-            ])
-        )
-        let playback = fixture.model(
-            activation: TestAudioSessionActivation(),
-            service: TestAppService(
-                activeAccount: .success(account),
-                playback: [.success(preparation)],
-                playbackSyncGate: playbackSyncGate
-            )
-        )
-        await playback.start(detail: fixture.detail, account: account)
-
-        let seek = Task { @MainActor in
-            await playback.seek(to: 0.75)
-        }
-        await playbackSyncGate.waitUntilEntered()
-        await playback.handleLiveProgress(
-            AudiobookshelfLivePlaybackProgress(
-                itemID: fixture.detail.id,
-                sessionID: PlaybackSessionID(rawValue: "other-session"),
-                deviceDescription: "Other Phone",
-                currentTime: 0.25,
-                duration: 1,
-                isFinished: false,
-                lastUpdateMilliseconds: 1
-            )
-        )
-        await playbackSyncGate.release()
-        await seek.value
-
-        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.001)
         XCTAssertEqual(playback.state, .paused)
+        XCTAssertEqual(playback.currentTime, pausedTime, accuracy: 0.001)
         await playback.stop()
     }
 
@@ -5192,7 +5138,6 @@ private actor TestAppService: AppServicing {
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
     private let searchGate: AsyncGate?
-    private let playbackSyncGate: AsyncGate?
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
@@ -5263,7 +5208,6 @@ private actor TestAppService: AppServicing {
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil,
-        playbackSyncGate: AsyncGate? = nil,
         privateCloudSyncAvailable: Bool = true,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
@@ -5287,7 +5231,6 @@ private actor TestAppService: AppServicing {
         self.loginGate = loginGate
         self.removeGate = removeGate
         self.searchGate = searchGate
-        self.playbackSyncGate = playbackSyncGate
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
         configuredEndpointDiagnostics = endpointDiagnostics
     }
@@ -5513,11 +5456,7 @@ private actor TestAppService: AppServicing {
         sessionID: PlaybackSessionID,
         currentTime: Double,
         duration: Double
-    ) async throws(AppServiceError) {
-        if let playbackSyncGate {
-            await playbackSyncGate.enterAndWait()
-        }
-    }
+    ) async throws(AppServiceError) {}
 
     func syncLocalPlaybackSessions(
         for account: ServerAccount,

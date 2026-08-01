@@ -973,11 +973,11 @@ Direct progress changes use `PATCH /api/me/progress/<library-item-id>` with the 
 
 Track a local `lastCommonServerUpdate` and position for each item.
 
-- While this device is actively playing or has a local seek in flight, ignore
-  remote progress without moving playback or presenting a conflict alert.
-  Session progress is echoed over the user's Socket.IO subscription, including
-  late events from stale sessions. A local seek includes the rewind before
-  playback resumes, even while the player is temporarily paused.
+- Socket.IO playback-progress events refresh browsing data only. A foreground
+  player never lets those events move playback or present a conflict alert.
+  Session progress is echoed over the user's subscription, including late
+  events from stale sessions, so the active player owns its timeline through
+  pausing, rewinding, seeking, and resuming.
 - If only the local position changed since the last common update, upload it.
 - If only the server position changed, adopt it while idle.
 - If both changed, show a non-destructive conflict prompt with:

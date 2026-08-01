@@ -1885,7 +1885,7 @@ final class AppModel {
                         itemIDs: change.itemIDs
                     )
                 case .playbackProgress(let progress):
-                    await playback.handleLiveProgress(progress)
+                    playback.observeLiveProgress(progress)
                     scheduleLiveRefresh(
                         libraryChanged: false,
                         itemIDs: [progress.itemID]
