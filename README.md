@@ -359,13 +359,13 @@ Open a book from Home, Library, or Search and tap **Play**. Bleat opens a native
 Audiobookshelf playback session and uses its session-scoped direct-play or HLS
 URL without putting access tokens in media URLs. The mini-player remains at the
 top of the signed-in tab shell so tab navigation stays unobstructed; tap its
-title for whole-book seeking, configurable rewind and forward controls,
+title for current-chapter seeking, configurable rewind and forward controls,
 previous/next chapter controls, and speed control from 0.5× to 3×. Swipe the
 mini-player upward to stop playback and dismiss it, whether playback
 is active or paused. Rewind defaults to 15 seconds and forward defaults to 30
 seconds. Settings offers 5, 10, 15, 30, 45, and 60-second choices for either
 direction.
-Whole-book scrubber moves of 10 minutes or more in either direction require
+Current-chapter scrubber moves of 10 minutes or more in either direction require
 confirmation; skip, chapter, audio-file, and system commands remain immediate.
 Now Playing identifies the narrator and current chapter, offers a chapter list
 for direct navigation, and shows an Audio Files menu for multi-file direct or

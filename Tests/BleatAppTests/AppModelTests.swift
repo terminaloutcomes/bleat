@@ -260,6 +260,46 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPlaybackScrubberChapterWindowUsesActiveChapterBounds() {
+        let window = PlaybackScrubberChapterWindow.select(
+            chapter: PlaybackChapter(
+                id: 1,
+                start: 600,
+                end: 900,
+                title: "Chapter Two"
+            ),
+            duration: 1_800
+        )
+
+        XCTAssertEqual(window.range, 600...900)
+        XCTAssertEqual(window.elapsed(at: 720), 120)
+        XCTAssertEqual(window.remaining(at: 720), 180)
+        XCTAssertEqual(window.elapsed(at: 500), 0)
+        XCTAssertEqual(window.remaining(at: 1_000), 0)
+    }
+
+    func testPlaybackScrubberChapterWindowFallsBackToBookBounds() {
+        XCTAssertEqual(
+            PlaybackScrubberChapterWindow.select(
+                chapter: nil,
+                duration: 1_800
+            ).range,
+            0...1_800
+        )
+        XCTAssertEqual(
+            PlaybackScrubberChapterWindow.select(
+                chapter: PlaybackChapter(
+                    id: 1,
+                    start: 900,
+                    end: 900,
+                    title: "Broken Chapter"
+                ),
+                duration: 1_800
+            ).range,
+            0...1_800
+        )
+    }
+
     func
         testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
     {

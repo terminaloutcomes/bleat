@@ -235,8 +235,8 @@ paused.
 The full player contains:
 
 - cover art, title, author, narrator, and current chapter;
-- whole-book elapsed and remaining time;
-- accessible scrubber with chapter markers where practical;
+- active-chapter elapsed and remaining time;
+- accessible scrubber limited to the active chapter;
 - play/pause;
 - configurable skip back and forward controls, defaulting to 15 and 30 seconds;
 - previous/next chapter;
@@ -247,7 +247,7 @@ The full player contains:
 - AirPlay route picker;
 - sync/error indicator that explains pending offline state when tapped.
 
-Seeking must require an intentional drag or explicit tap target. Whole-book
+Seeking must require an intentional drag or explicit tap target. Chapter
 scrubber moves of at least 10 minutes from the position where the drag began
 require explicit confirmation in either direction. Skip, chapter, audio-file,
 and system position commands remain direct. Tiny accidental touches must not

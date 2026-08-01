@@ -33,6 +33,43 @@ enum ScrubberSeekDecision: Equatable {
     }
 }
 
+struct PlaybackScrubberChapterWindow: Equatable {
+    let start: Double
+    let end: Double
+
+    var range: ClosedRange<Double> {
+        start...end
+    }
+
+    static func select(
+        chapter: PlaybackChapter?,
+        duration: Double
+    ) -> Self {
+        let bookEnd = max(duration.isFinite ? duration : 0, 1)
+        guard let chapter,
+            chapter.start.isFinite,
+            chapter.end.isFinite,
+            chapter.start >= 0,
+            chapter.end > chapter.start,
+            chapter.start < bookEnd
+        else {
+            return Self(start: 0, end: bookEnd)
+        }
+        return Self(
+            start: chapter.start,
+            end: min(chapter.end, bookEnd)
+        )
+    }
+
+    func elapsed(at wholeBookTime: Double) -> Double {
+        min(max(wholeBookTime, start), end) - start
+    }
+
+    func remaining(at wholeBookTime: Double) -> Double {
+        end - min(max(wholeBookTime, start), end)
+    }
+}
+
 enum MiniPlayerSwipeDecision: Equatable {
     static let dismissalDistance: CGFloat = 36
 
@@ -59,10 +96,14 @@ private struct PlaybackScrubberView: View {
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
+        let chapterWindow = PlaybackScrubberChapterWindow.select(
+            chapter: playback.currentChapter,
+            duration: playback.duration
+        )
         VStack(spacing: 6) {
             Slider(
                 value: $scrubTime,
-                in: 0...max(playback.duration, 1)
+                in: chapterWindow.range
             ) { editing in
                 isScrubbing = editing
                 if editing {
@@ -78,12 +119,16 @@ private struct PlaybackScrubberView: View {
             .tint(colourScheme.color)
 
             HStack {
-                Text(playbackTime(scrubTime))
+                Text(
+                    playbackTime(
+                        chapterWindow.elapsed(at: scrubTime)
+                    )
+                )
                 Spacer()
                 Text(
                     "-"
                         + playbackTime(
-                            max(playback.duration - scrubTime, 0)
+                            chapterWindow.remaining(at: scrubTime)
                         )
                 )
             }
