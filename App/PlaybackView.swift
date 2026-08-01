@@ -489,33 +489,16 @@ struct NowPlaying: View {
                         .equatable()
 
                         if !playback.chapters.isEmpty {
-                            Menu {
-                                ForEach(playback.chapters, id: \.id) {
-                                    chapter in
-                                    Button {
-                                        Task {
-                                            await playback.seek(
-                                                to: chapter.start
-                                            )
-                                        }
-                                    } label: {
-                                        if chapter.id
-                                            == playback.currentChapter?.id
-                                        {
-                                            Label(
-                                                chapter.title,
-                                                systemImage: "checkmark"
-                                            )
-                                        } else {
-                                            Text(chapter.title)
-                                        }
-                                    }
+                            PlaybackChaptersMenu(
+                                sourceID: ObjectIdentifier(playback),
+                                chapters: playback.chapters,
+                                currentChapterID: playback.currentChapter?.id
+                            ) { time in
+                                Task {
+                                    await playback.seek(to: time)
                                 }
-                            } label: {
-                                Image(systemName: "list.bullet")
                             }
-                            .accessibilityLabel("Chapters")
-                            .accessibilityIdentifier("player.chapters")
+                            .equatable()
                         }
 
                         if playback.audioFiles.count > 1 {
@@ -565,116 +548,58 @@ struct NowPlaying: View {
                             .accessibilityIdentifier("player.audioFiles")
                         }
 
-                        Menu {
-                            ForEach(
-                                [5, 10, 15, 30, 45, 60, 90, 120],
-                                id: \.self
-                            ) {
-                                minutes in
-                                Button("\(minutes) minutes") {
-                                    playback.setSleepTimer(
-                                        minutes: minutes
-                                    )
-                                }
+                        PlaybackSleepTimerMenu(
+                            sourceID: ObjectIdentifier(playback),
+                            hasTimer: playback.sleepTimer != nil,
+                            canSetEndOfChapter:
+                                playback.canSetEndOfChapterSleepTimer,
+                            onSetDuration: { minutes in
+                                playback.setSleepTimer(minutes: minutes)
+                            },
+                            onSetEndOfChapter: {
+                                playback.setSleepTimerToEndOfChapter()
                             }
-                            if playback.canSetEndOfChapterSleepTimer {
-                                Button("End of Chapter") {
-                                    playback.setSleepTimerToEndOfChapter()
-                                }
-                            }
-                            if playback.sleepTimer != nil {
-                                Button(
-                                    "Cancel Timer",
-                                    role: .destructive
-                                ) {
-                                    playback.setSleepTimer(minutes: nil)
-                                }
-                            }
-                        } label: {
-                            Image(
-                                systemName:
-                                    playback.sleepTimer == nil
-                                    ? "moon.zzz"
-                                    : "moon.zzz.fill"
-                            )
-                        }
-                        .accessibilityLabel(
-                            playback.sleepTimer == nil
-                                ? "Sleep Timer"
-                                : "Timer Set"
                         )
-                        .accessibilityIdentifier("player.sleepTimer")
+                        .equatable()
 
-                        Menu {
-                            Button(
-                                "Add at \(playbackTime(playback.currentTime))"
-                            ) {
+                        PlaybackBookmarksMenu(
+                            sourceID: ObjectIdentifier(playback),
+                            bookmarks: playback.bookmarks,
+                            state: playback.bookmarkState,
+                            pendingMutations:
+                                playback.pendingBookmarkMutations,
+                            canSync: playback.canSyncBookmarks,
+                            onAdd: {
+                                let time = playback.currentTime
                                 bookmarkDraft = BookmarkDraft(
                                     bookmark: nil,
-                                    title: "Bookmark at "
-                                        + playbackTime(playback.currentTime)
+                                    title: "Bookmark at " + playbackTime(time)
                                 )
-                            }
-                            if !playback.bookmarks.isEmpty {
-                                Divider()
-                            }
-                            ForEach(playback.bookmarks) { bookmark in
-                                Menu {
-                                    Button("Rename") {
-                                        bookmarkDraft = BookmarkDraft(
-                                            bookmark: bookmark,
-                                            title: bookmark.title
-                                        )
-                                    }
-                                    Button("Delete", role: .destructive) {
-                                        Task {
-                                            await playback.deleteBookmark(
-                                                bookmark
-                                            )
-                                        }
-                                    }
-                                } label: {
-                                    Text(
-                                        playbackTime(bookmark.time)
-                                            + "  " + bookmark.title
-                                    )
-                                }
-                            }
-                            if case .failed = playback.bookmarkState {
-                                Divider()
-                                Button("Retry Loading") {
-                                    Task {
-                                        await playback.loadBookmarks()
-                                    }
-                                }
-                            }
-                            if !playback.pendingBookmarkMutations.isEmpty {
-                                Divider()
-                                Text(
-                                    "\(playback.pendingBookmarkMutations.count) stored locally"
+                            },
+                            onRename: { bookmark in
+                                bookmarkDraft = BookmarkDraft(
+                                    bookmark: bookmark,
+                                    title: bookmark.title
                                 )
-                                if playback.pendingBookmarkMutations
-                                    .contains(
-                                        where: { $0.status == .failed }
-                                    ), playback.canSyncBookmarks
-                                {
-                                    Button("Retry Pending Changes") {
-                                        Task {
-                                            await playback
-                                                .retryPendingBookmarks()
-                                        }
-                                    }
+                            },
+                            onDelete: { bookmark in
+                                Task {
+                                    await playback.deleteBookmark(bookmark)
                                 }
-                            }
-                        } label: {
-                            Image(systemName: "bookmark")
-                        }
-                        .accessibilityLabel("Bookmarks")
-                        .disabled(
-                            playback.bookmarkState == .loading
-                                || playback.bookmarkState == .saving
+                            },
+                            onRetryLoading: {
+                                Task {
+                                    await playback.loadBookmarks()
+                                }
+                            },
+                            onRetryPending: {
+                                Task {
+                                    await playback.retryPendingBookmarks()
+                                }
+                            },
+                            formatTime: playbackTime
                         )
-                        .accessibilityIdentifier("player.bookmarks")
+                        .equatable()
 
                         AirPlayRoutePicker()
                             .frame(width: 44, height: 44)
@@ -776,6 +701,145 @@ struct NowPlaying: View {
         )
         let displayTitle = title.isEmpty ? "File \(index + 1)" : title
         return "\(displayTitle) · \(playbackTime(file.duration))"
+    }
+}
+
+private struct PlaybackChaptersMenu: View, @MainActor Equatable {
+    let sourceID: ObjectIdentifier
+    let chapters: [PlaybackChapter]
+    let currentChapterID: Int?
+    let onSelect: (Double) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.sourceID == rhs.sourceID
+            && lhs.chapters == rhs.chapters
+            && lhs.currentChapterID == rhs.currentChapterID
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(chapters, id: \.id) { chapter in
+                Button {
+                    onSelect(chapter.start)
+                } label: {
+                    if chapter.id == currentChapterID {
+                        Label(chapter.title, systemImage: "checkmark")
+                    } else {
+                        Text(chapter.title)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "list.bullet")
+        }
+        .accessibilityLabel("Chapters")
+        .accessibilityIdentifier("player.chapters")
+    }
+}
+
+private struct PlaybackSleepTimerMenu: View, @MainActor Equatable {
+    let sourceID: ObjectIdentifier
+    let hasTimer: Bool
+    let canSetEndOfChapter: Bool
+    let onSetDuration: (Int?) -> Void
+    let onSetEndOfChapter: () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.sourceID == rhs.sourceID
+            && lhs.hasTimer == rhs.hasTimer
+            && lhs.canSetEndOfChapter == rhs.canSetEndOfChapter
+    }
+
+    var body: some View {
+        Menu {
+            ForEach([5, 10, 15, 30, 45, 60, 90, 120], id: \.self) {
+                minutes in
+                Button("\(minutes) minutes") {
+                    onSetDuration(minutes)
+                }
+            }
+            if canSetEndOfChapter {
+                Button("End of Chapter") {
+                    onSetEndOfChapter()
+                }
+            }
+            if hasTimer {
+                Button("Cancel Timer", role: .destructive) {
+                    onSetDuration(nil)
+                }
+            }
+        } label: {
+            Image(systemName: hasTimer ? "moon.zzz.fill" : "moon.zzz")
+        }
+        .accessibilityLabel(hasTimer ? "Timer Set" : "Sleep Timer")
+        .accessibilityIdentifier("player.sleepTimer")
+    }
+}
+
+private struct PlaybackBookmarksMenu: View, @MainActor Equatable {
+    let sourceID: ObjectIdentifier
+    let bookmarks: [AudioBookmark]
+    let state: BookmarkState
+    let pendingMutations: [QueuedBookmarkMutation]
+    let canSync: Bool
+    let onAdd: () -> Void
+    let onRename: (AudioBookmark) -> Void
+    let onDelete: (AudioBookmark) -> Void
+    let onRetryLoading: () -> Void
+    let onRetryPending: () -> Void
+    let formatTime: (Double) -> String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.sourceID == rhs.sourceID
+            && lhs.bookmarks == rhs.bookmarks
+            && lhs.state == rhs.state
+            && lhs.pendingMutations == rhs.pendingMutations
+            && lhs.canSync == rhs.canSync
+    }
+
+    var body: some View {
+        Menu {
+            Button("Add Bookmark") {
+                onAdd()
+            }
+            if !bookmarks.isEmpty {
+                Divider()
+            }
+            ForEach(bookmarks) { bookmark in
+                Menu {
+                    Button("Rename") {
+                        onRename(bookmark)
+                    }
+                    Button("Delete", role: .destructive) {
+                        onDelete(bookmark)
+                    }
+                } label: {
+                    Text(formatTime(bookmark.time) + "  " + bookmark.title)
+                }
+            }
+            if case .failed = state {
+                Divider()
+                Button("Retry Loading") {
+                    onRetryLoading()
+                }
+            }
+            if !pendingMutations.isEmpty {
+                Divider()
+                Text("\(pendingMutations.count) stored locally")
+                if pendingMutations.contains(
+                    where: { $0.status == .failed }
+                ), canSync {
+                    Button("Retry Pending Changes") {
+                        onRetryPending()
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "bookmark")
+        }
+        .accessibilityLabel("Bookmarks")
+        .disabled(state == .loading || state == .saving)
+        .accessibilityIdentifier("player.bookmarks")
     }
 }
 

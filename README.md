@@ -35,8 +35,9 @@ and deletes also use a durable local
 outbox when the server is unavailable.
 While the app is active, an authenticated Socket.IO subscription refreshes
 visible libraries and progress after server-side changes. Progress events are
-ignored without an alert while this device is actively playing; paused playback
-adopts a newer remote position unless local offline progress is still pending.
+ignored without an alert while this device is actively playing or completing a
+local seek (including resume rewind); paused playback adopts a newer remote
+position unless local offline progress is still pending.
 
 ## Requirements
 

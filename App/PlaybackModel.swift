@@ -43,6 +43,11 @@ enum PlaybackSyncState: Equatable, Sendable {
     case failed
 }
 
+private enum PlaybackSeekOrigin: Sendable {
+    case local
+    case liveUpdate
+}
+
 enum ExternalProgressNotice: Equatable, Sendable {
     case localChangesPending(String?)
 
@@ -346,6 +351,7 @@ final class PlaybackModel {
     private var lastObservedWholeBookTime: Double?
     private var lastConfirmedAdvanceAt: TimeInterval?
     private var lastExternalProgressUpdate: Int64 = -1
+    private var localPositionChangeCount = 0
     private var stablePlaybackStartedAt: TimeInterval?
     private var playbackRecoveryPolicy = PlaybackRecoveryPolicy()
     private let monotonicNow: @MainActor @Sendable () -> TimeInterval
@@ -403,6 +409,9 @@ final class PlaybackModel {
             return
         }
         lastExternalProgressUpdate = progress.lastUpdateMilliseconds
+        guard localPositionChangeCount == 0 else {
+            return
+        }
         if isPlaybackRequested {
             externalProgressNotice = nil
             return
@@ -417,7 +426,7 @@ final class PlaybackModel {
             return
         }
         externalProgressNotice = nil
-        await seek(to: progress.currentTime)
+        await performSeek(to: progress.currentTime, origin: .liveUpdate)
     }
 
     func dismissExternalProgressNotice() {
@@ -1328,6 +1337,13 @@ final class PlaybackModel {
     }
 
     func seek(to requestedTime: Double) async {
+        await performSeek(to: requestedTime, origin: .local)
+    }
+
+    private func performSeek(
+        to requestedTime: Double,
+        origin: PlaybackSeekOrigin
+    ) async {
         guard let preparation else {
             return
         }
@@ -1338,6 +1354,14 @@ final class PlaybackModel {
         recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         let operationGeneration = generation
+        if origin == .local {
+            localPositionChangeCount += 1
+        }
+        defer {
+            if origin == .local {
+                localPositionChangeCount -= 1
+            }
+        }
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -2698,6 +2722,10 @@ final class PlaybackModel {
     }
 
     private func resumePlayback(afterRewindingTo target: Double) async {
+        localPositionChangeCount += 1
+        defer {
+            localPositionChangeCount -= 1
+        }
         await seek(to: target)
         guard state == .paused || state == .ready else {
             return

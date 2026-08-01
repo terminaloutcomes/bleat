@@ -615,6 +615,58 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testPlaybackActionMenusRemainStableAcrossTimeUpdates() async throws {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.buttons.matching(
+            NSPredicate(
+                format: "label CONTAINS %@ AND label CONTAINS %@",
+                "The Test Audiobook",
+                "Test Author"
+            )
+        ).firstMatch
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+
+        let chapters = app.buttons["player.chapters"]
+        XCTAssertTrue(chapters.waitForExistence(timeout: 3))
+        chapters.tap()
+        let chapter = app.collectionViews.buttons["Chapter One"].firstMatch
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertTrue(chapter.exists)
+        XCTAssertTrue(chapter.isHittable)
+        chapter.tap()
+
+        let sleepTimer = app.buttons["player.sleepTimer"]
+        XCTAssertTrue(sleepTimer.waitForExistence(timeout: 3))
+        sleepTimer.tap()
+        let fiveMinutes = app.collectionViews.buttons["5 minutes"].firstMatch
+        XCTAssertTrue(fiveMinutes.waitForExistence(timeout: 3))
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertTrue(fiveMinutes.exists)
+        XCTAssertTrue(fiveMinutes.isHittable)
+        fiveMinutes.tap()
+
+        let bookmarks = app.buttons["player.bookmarks"]
+        XCTAssertTrue(bookmarks.waitForExistence(timeout: 3))
+        bookmarks.tap()
+        let addBookmark = app.collectionViews.buttons["Add Bookmark"].firstMatch
+        XCTAssertTrue(addBookmark.waitForExistence(timeout: 3))
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertTrue(addBookmark.exists)
+        XCTAssertTrue(addBookmark.isHittable)
+    }
+
+    @MainActor
     func testLimitedPermissionsShowPlayWithoutEditOrDownload() {
         let app = launch(scenario: "--ui-testing-limited-permissions")
 

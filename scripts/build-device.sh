@@ -31,7 +31,16 @@ xcodebuild \
   CODE_SIGN_STYLE=Automatic \
   PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
-  build | rg -v "Supported platforms for the buildables in the current scheme is empty"
+  build | {
+    # rg exits 1 when it filters every line; the successful build must remain
+    # successful in that quiet-output case.
+    if rg -v "Supported platforms for the buildables in the current scheme is empty"; then
+      :
+    else
+      rg_status=$?
+      [[ "${rg_status}" -eq 1 ]]
+    fi
+  }
 
 if [[ ! -d "${bleat_app}" ]]; then
   echo "xcodebuild succeeded without producing ${bleat_app}" >&2
