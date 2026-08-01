@@ -680,6 +680,7 @@ struct NowPlaying: View {
                             .frame(width: 44, height: 44)
                             .accessibilityLabel("AirPlay")
                             .accessibilityIdentifier("player.airPlay")
+                            .tint(colourScheme.color)
                     }
 
                     if case .failed(let failure) = playback.bookmarkState {
