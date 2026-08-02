@@ -101,6 +101,28 @@ enum PlaybackObservationDecision: Equatable, Sendable {
     }
 }
 
+enum PlaybackSeekContinuation: Equatable, Sendable {
+    case resume
+    case remainPaused
+
+    static func decide(
+        isPlaybackRequested: Bool,
+        state: PlaybackState
+    ) -> Self {
+        if isPlaybackRequested {
+            return .resume
+        }
+        switch state {
+        case .playing, .buffering:
+            // AVPlayer callbacks can lag the user's transport action. Keep
+            // an active player active even if its intent flag has just reset.
+            return .resume
+        case .idle, .preparing, .ready, .paused, .ended, .failed:
+            return .remainPaused
+        }
+    }
+}
+
 enum PlaybackWatchdogDecision: Equatable, Sendable {
     case none
     case showBuffering
@@ -1297,7 +1319,10 @@ final class PlaybackModel {
         await diagnostics.record(
             .started(.seek, category: .playback)
         )
-        let shouldResume = isPlaybackRequested
+        let continuation = PlaybackSeekContinuation.decide(
+            isPlaybackRequested: isPlaybackRequested,
+            state: state
+        )
         recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         let operationGeneration = generation
@@ -1311,7 +1336,7 @@ final class PlaybackModel {
             return
         }
         let target = min(max(requestedTime, 0), preparation.duration)
-        if !shouldResume {
+        if continuation == .remainPaused {
             pausedAt = nil
         }
         state = .preparing
@@ -1322,7 +1347,7 @@ final class PlaybackModel {
             }
             currentTime = target
             persistLocalPosition()
-            if shouldResume {
+            if continuation == .resume {
                 state = .ready
                 play()
             } else {

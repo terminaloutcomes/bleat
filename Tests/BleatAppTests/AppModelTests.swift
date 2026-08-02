@@ -1403,6 +1403,37 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testSeekContinuationPreservesAnActivePlayer() {
+        XCTAssertEqual(
+            PlaybackSeekContinuation.decide(
+                isPlaybackRequested: true,
+                state: .playing
+            ),
+            .resume
+        )
+        XCTAssertEqual(
+            PlaybackSeekContinuation.decide(
+                isPlaybackRequested: false,
+                state: .playing
+            ),
+            .resume
+        )
+        XCTAssertEqual(
+            PlaybackSeekContinuation.decide(
+                isPlaybackRequested: false,
+                state: .buffering
+            ),
+            .resume
+        )
+        XCTAssertEqual(
+            PlaybackSeekContinuation.decide(
+                isPlaybackRequested: false,
+                state: .paused
+            ),
+            .remainPaused
+        )
+    }
+
     func testPlaybackWatchdogBuffersThenRecoversAtExactDeadlines() {
         XCTAssertEqual(
             PlaybackWatchdogDecision.decide(
