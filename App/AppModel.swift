@@ -815,6 +815,15 @@ final class AppModel {
         }
     }
 
+    func retryStart() async {
+        guard case .unavailable = phase else {
+            return
+        }
+        hasStarted = false
+        phase = .launching
+        await start()
+    }
+
     @discardableResult
     func login(
         serverAddress: String,

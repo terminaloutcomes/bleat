@@ -2116,6 +2116,58 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requestCount, 0)
     }
 
+    func testRetryStartReattemptsBootstrapWhenUnavailable() async {
+        let service = TestAppService(
+            accounts: .success([]),
+            activeAccount: .failure(.accountStore(.persistenceFailed))
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        XCTAssertEqual(model.phase, .unavailable(.accountUnavailable))
+        let afterStart = await service.activeAccountRequestCount()
+        XCTAssertEqual(afterStart, 1)
+
+        await model.retryStart()
+
+        let afterRetry = await service.activeAccountRequestCount()
+        XCTAssertEqual(afterRetry, 2)
+        XCTAssertEqual(model.phase, .unavailable(.accountUnavailable))
+    }
+
+    func testRetryStartRecoversWhenServiceSucceeds() async {
+        let service = TestAppService(
+            activeAccount: .failure(.accountStore(.persistenceFailed))
+        )
+        let model = AppModel(
+            service: service,
+            bootstrapError: .persistenceUnavailable
+        )
+
+        await service.setActiveAccountResult(.success(nil))
+        await model.retryStart()
+
+        XCTAssertEqual(model.phase, .signedOut)
+    }
+
+    func testRetryStartIsNoOpOutsideUnavailable() async {
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        XCTAssertEqual(model.phase, .signedOut)
+        let afterStart = await service.activeAccountRequestCount()
+        XCTAssertEqual(afterStart, 1)
+
+        await model.retryStart()
+
+        let afterRetry = await service.activeAccountRequestCount()
+        XCTAssertEqual(afterRetry, 1)
+        XCTAssertEqual(model.phase, .signedOut)
+    }
+
     func testNativeLoginForwardsUsernamePasswordAndLoadsLibrary() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -5675,6 +5727,12 @@ private actor TestAppService: AppServicing {
         _ result: Result<[LibrarySummary], AppServiceError>
     ) {
         librariesResult = result
+    }
+
+    func setActiveAccountResult(
+        _ result: Result<ServerAccount?, AppServiceError>
+    ) {
+        activeAccountResult = result
     }
 
     func enqueueAccountUpdateOutcome(

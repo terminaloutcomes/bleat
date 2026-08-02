@@ -56,11 +56,18 @@ struct RootView: View {
             case .signedIn:
                 SignedInView(model: model).tint(colourScheme.color)
             case .unavailable(let failure):
-                ContentUnavailableView(
-                    "Bleat is unavailable",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(failure.message)
-                )
+                ContentUnavailableView {
+                    Label(failure.title, systemImage: failure.systemImage)
+                } description: {
+                    Text(failure.message)
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await model.retryStart()
+                        }
+                    }
+                    .accessibilityIdentifier("app.retry")
+                }
                 .accessibilityIdentifier("app.unavailable")
                 .tint(colourScheme.color)
             }
