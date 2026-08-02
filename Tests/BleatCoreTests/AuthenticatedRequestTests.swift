@@ -146,6 +146,242 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertTrue(requiresReauthentication)
     }
 
+    func testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead()
+        async throws
+    {
+        let accountID = AccountID(rawValue: "join-in-flight")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let midTokens = try AuthenticationTokens(
+            accessToken: "mid-access",
+            refreshToken: "mid-refresh"
+        )
+        let finalTokens = try AuthenticationTokens(
+            accessToken: "final-access",
+            refreshToken: "final-refresh"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens]
+        )
+        let transport = GatedMidFlightRefreshTransport(
+            store: store,
+            accountID: accountID,
+            midTokens: midTokens,
+            finalTokens: finalTokens,
+            refreshSucceeds: true
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let request = try Self.request(for: .libraries, server: server)
+
+        let taskA = Task { () -> HTTPResponse in
+            try await coordinator.sendAuthenticated(
+                request,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilRefreshStarted()
+
+        let taskB = Task { () -> HTTPResponse in
+            try await coordinator.sendAuthenticated(
+                request,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilInitialSendBlocked()
+
+        await transport.releaseRefresh()
+        await transport.waitUntilMidSaved()
+        await transport.releaseInitialSend()
+        await transport.releaseMidSave()
+
+        let responseA = try await taskA.value
+        let responseB = try await taskB.value
+        let counts = await transport.counts()
+        let storedTokens = try await store.credentials(for: accountID)
+
+        XCTAssertEqual(responseA.statusCode, 200)
+        XCTAssertEqual(responseB.statusCode, 200)
+        XCTAssertEqual(counts.refreshRequests, 1)
+        XCTAssertEqual(counts.midAccessRequests, 0)
+        XCTAssertEqual(counts.finalAccessRequests, 2)
+        XCTAssertEqual(storedTokens, finalTokens)
+    }
+
+    func testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh()
+        async throws
+    {
+        let accountID = AccountID(rawValue: "originator-token")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let midTokens = try AuthenticationTokens(
+            accessToken: "mid-access",
+            refreshToken: "mid-refresh"
+        )
+        let finalTokens = try AuthenticationTokens(
+            accessToken: "final-access",
+            refreshToken: "final-refresh"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens]
+        )
+        let transport = GatedMidFlightRefreshTransport(
+            store: store,
+            accountID: accountID,
+            midTokens: midTokens,
+            finalTokens: finalTokens,
+            refreshSucceeds: false
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let request = try Self.request(for: .libraries, server: server)
+
+        let taskA = Task { () -> HTTPResponse in
+            try await coordinator.sendAuthenticated(
+                request,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilRefreshStarted()
+
+        let taskB = Task { () -> String in
+            try await coordinator.recoverAccessToken(
+                for: accountID,
+                server: server,
+                rejectedAccessToken: "other-token"
+            )
+        }
+        await transport.releaseRefresh()
+        await transport.waitUntilMidSaved()
+        await transport.releaseMidSave()
+
+        await XCTAssertThrowsErrorAsync(try await taskA.value) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshRejected
+            )
+        }
+        await XCTAssertThrowsErrorAsync(try await taskB.value) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshRejected
+            )
+        }
+
+        let recordedToken = await coordinator.completedRefreshes[
+            accountID
+        ]?.rejectedAccessToken
+        XCTAssertEqual(recordedToken, "old-access")
+
+        await XCTAssertThrowsErrorAsync(
+            try await coordinator.recoverAccessToken(
+                for: accountID,
+                server: server,
+                rejectedAccessToken: "old-access"
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshRejected
+            )
+        }
+        let counts = await transport.counts()
+        XCTAssertEqual(counts.refreshRequests, 1)
+    }
+
+    func testConcurrentRejectionJoinsFailingInFlightRefresh() async throws {
+        let accountID = AccountID(rawValue: "join-failing-refresh")
+        let server = try NormalizedServerURL("https://example.net")
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access",
+            refreshToken: "old-refresh"
+        )
+        let midTokens = try AuthenticationTokens(
+            accessToken: "mid-access",
+            refreshToken: "mid-refresh"
+        )
+        let finalTokens = try AuthenticationTokens(
+            accessToken: "final-access",
+            refreshToken: "final-refresh"
+        )
+        let store = RequestCredentialStore(
+            credentials: [accountID: oldTokens]
+        )
+        let transport = GatedMidFlightRefreshTransport(
+            store: store,
+            accountID: accountID,
+            midTokens: midTokens,
+            finalTokens: finalTokens,
+            refreshSucceeds: false
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let request = try Self.request(for: .libraries, server: server)
+
+        let taskA = Task { () -> HTTPResponse in
+            try await coordinator.sendAuthenticated(
+                request,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilRefreshStarted()
+
+        let taskB = Task { () -> HTTPResponse in
+            try await coordinator.sendAuthenticated(
+                request,
+                route: .libraries,
+                accountID: accountID,
+                server: server
+            )
+        }
+        await transport.waitUntilInitialSendBlocked()
+
+        await transport.releaseRefresh()
+        await transport.waitUntilMidSaved()
+        await transport.releaseInitialSend()
+        await transport.releaseMidSave()
+
+        await XCTAssertThrowsErrorAsync(try await taskA.value) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshRejected
+            )
+        }
+        await XCTAssertThrowsErrorAsync(try await taskB.value) { error in
+            XCTAssertEqual(
+                error as? AuthenticatedRequestError,
+                .refreshRejected
+            )
+        }
+        let counts = await transport.counts()
+        let requiresReauthentication =
+            await coordinator.requiresReauthentication(for: accountID)
+
+        XCTAssertEqual(counts.refreshRequests, 1)
+        XCTAssertEqual(counts.midAccessRequests, 0)
+        XCTAssertTrue(requiresReauthentication)
+    }
+
     func testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery()
         async throws
     {
@@ -1760,6 +1996,153 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         refreshRequests: Int
     ) {
         (ordinaryRequests, refreshRequests)
+    }
+}
+
+private actor GatedMidFlightRefreshTransport: HTTPTransport {
+    private let store: RequestCredentialStore
+    private let accountID: AccountID
+    private let midTokens: AuthenticationTokens
+    private let finalTokens: AuthenticationTokens
+    private let refreshSucceeds: Bool
+    private var refreshRequests = 0
+    private var midAccessRequests = 0
+    private var finalAccessRequests = 0
+    private var oldAccessSends = 0
+    private var refreshStarted = false
+    private var midSaved = false
+    private var refreshStartedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var midSavedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var initialSendWaiters: [CheckedContinuation<Void, Never>] = []
+    private var refreshGate: CheckedContinuation<Void, Never>?
+    private var midSaveGate: CheckedContinuation<HTTPResponse, Never>?
+    private var initialSendGate: CheckedContinuation<Void, Never>?
+
+    init(
+        store: RequestCredentialStore,
+        accountID: AccountID,
+        midTokens: AuthenticationTokens,
+        finalTokens: AuthenticationTokens,
+        refreshSucceeds: Bool
+    ) {
+        self.store = store
+        self.accountID = accountID
+        self.midTokens = midTokens
+        self.finalTokens = finalTokens
+        self.refreshSucceeds = refreshSucceeds
+    }
+
+    func send(
+        _ tracedRequest: TracedHTTPRequest
+    ) async throws -> HTTPResponse {
+        let request = tracedRequest.request
+        if request.url?.path.hasSuffix("/auth/refresh") == true {
+            refreshRequests += 1
+            refreshStarted = true
+            let startedWaiters = refreshStartedWaiters
+            refreshStartedWaiters.removeAll()
+            for waiter in startedWaiters {
+                waiter.resume()
+            }
+            await withCheckedContinuation { continuation in
+                refreshGate = continuation
+            }
+            try await store.save(midTokens, for: accountID)
+            midSaved = true
+            let savedWaiters = midSavedWaiters
+            midSavedWaiters.removeAll()
+            for waiter in savedWaiters {
+                waiter.resume()
+            }
+            return await withCheckedContinuation { continuation in
+                midSaveGate = continuation
+            }
+        }
+        switch request.value(forHTTPHeaderField: "Authorization") {
+        case "Bearer old-access":
+            oldAccessSends += 1
+            if oldAccessSends == 1 {
+                return .init(data: Data(), statusCode: 401)
+            }
+            await withCheckedContinuation { continuation in
+                let waiters = initialSendWaiters
+                initialSendWaiters.removeAll()
+                for waiter in waiters {
+                    waiter.resume()
+                }
+                initialSendGate = continuation
+            }
+            return .init(data: Data(), statusCode: 401)
+        case "Bearer \(midTokens.accessToken)":
+            midAccessRequests += 1
+            return .init(data: Data(), statusCode: 401)
+        case "Bearer \(finalTokens.accessToken)":
+            finalAccessRequests += 1
+            return .init(data: Data(), statusCode: 200)
+        default:
+            throw RequestTestError.unexpectedAuthorization
+        }
+    }
+
+    func waitUntilRefreshStarted() async {
+        if refreshStarted {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            refreshStartedWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilMidSaved() async {
+        if midSaved {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            midSavedWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilInitialSendBlocked() async {
+        if initialSendGate != nil {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            initialSendWaiters.append(continuation)
+        }
+    }
+
+    func releaseRefresh() {
+        refreshGate?.resume()
+        refreshGate = nil
+    }
+
+    func releaseMidSave() {
+        let response: HTTPResponse
+        if refreshSucceeds {
+            response = .json(
+                AuthenticatedRequestTests.authenticationJSON(
+                    accessToken: finalTokens.accessToken,
+                    refreshToken: finalTokens.refreshToken
+                )
+            )
+        } else {
+            response = .init(data: Data(), statusCode: 401)
+        }
+        midSaveGate?.resume(returning: response)
+        midSaveGate = nil
+    }
+
+    func releaseInitialSend() {
+        initialSendGate?.resume()
+        initialSendGate = nil
+    }
+
+    func counts() -> (
+        refreshRequests: Int,
+        midAccessRequests: Int,
+        finalAccessRequests: Int
+    ) {
+        (refreshRequests, midAccessRequests, finalAccessRequests)
     }
 }
 

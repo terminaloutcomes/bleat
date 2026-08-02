@@ -27,6 +27,7 @@ public enum AuthenticatedRequestError: Error, Equatable, Sendable {
 
 struct RefreshAttempt: Sendable {
     let id: UInt64
+    let rejectedAccessToken: String
     let task:
         Task<
             Result<AuthenticationTokens, AuthenticationRecoveryFailure>,
@@ -255,9 +256,22 @@ extension AuthCoordinator {
         else {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
-        if currentTokens.accessToken != rejectedAccessToken {
-            return currentTokens
+        if let attempt = refreshAttempts[accountID] {
+            let tokens = try await finishRefresh(
+                attempt,
+                accountID: accountID
+            )
+            guard
+                accountOperationIsCurrent(
+                    accountID,
+                    generation: operationGeneration
+                )
+            else {
+                throw AuthenticatedRequestError.accountOperationInProgress
+            }
+            return tokens
         }
+
         if let completed = completedRefreshes[accountID],
             completed.rejectedAccessToken == rejectedAccessToken
         {
@@ -273,21 +287,8 @@ extension AuthCoordinator {
             return tokens
         }
 
-        if let attempt = refreshAttempts[accountID] {
-            let tokens = try await finishRefresh(
-                attempt,
-                accountID: accountID,
-                rejectedAccessToken: rejectedAccessToken
-            )
-            guard
-                accountOperationIsCurrent(
-                    accountID,
-                    generation: operationGeneration
-                )
-            else {
-                throw AuthenticatedRequestError.accountOperationInProgress
-            }
-            return tokens
+        if currentTokens.accessToken != rejectedAccessToken {
+            return currentTokens
         }
 
         nextRefreshAttemptID &+= 1
@@ -320,12 +321,15 @@ extension AuthCoordinator {
                     )
                 }
             }
-        let attempt = RefreshAttempt(id: attemptID, task: task)
+        let attempt = RefreshAttempt(
+            id: attemptID,
+            rejectedAccessToken: rejectedAccessToken,
+            task: task
+        )
         refreshAttempts[accountID] = attempt
         let tokens = try await finishRefresh(
             attempt,
-            accountID: accountID,
-            rejectedAccessToken: rejectedAccessToken
+            accountID: accountID
         )
         guard
             accountOperationIsCurrent(
@@ -349,8 +353,7 @@ extension AuthCoordinator {
 
     private func finishRefresh(
         _ attempt: RefreshAttempt,
-        accountID: AccountID,
-        rejectedAccessToken: String
+        accountID: AccountID
     ) async throws -> AuthenticationTokens {
         let result = await attempt.task.value
         let isCurrentAttempt =
@@ -360,7 +363,7 @@ extension AuthCoordinator {
         case .success(let tokens):
             if isCurrentAttempt {
                 completedRefreshes[accountID] = CompletedRefresh(
-                    rejectedAccessToken: rejectedAccessToken,
+                    rejectedAccessToken: attempt.rejectedAccessToken,
                     result: .success(tokens)
                 )
                 clearRefreshAttempt(attempt, accountID: accountID)
@@ -374,7 +377,7 @@ extension AuthCoordinator {
                     completedRefreshes[accountID] = nil
                 case .reauthenticationRequired:
                     completedRefreshes[accountID] = CompletedRefresh(
-                        rejectedAccessToken: rejectedAccessToken,
+                        rejectedAccessToken: attempt.rejectedAccessToken,
                         result: .failure(failure.error)
                     )
                     reauthenticationRequiredAccounts.insert(accountID)

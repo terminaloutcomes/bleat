@@ -97,6 +97,7 @@ private struct NativeLoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
+    @State private var invalidURLErrorMessage: String?
 
     private var isSubmitting: Bool {
         model.loginStatus == .submitting
@@ -112,108 +113,130 @@ private struct NativeLoginView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Server") {
-                    TextField(
-                        "Server Url (e.g. https://bleat.example.com)",
-                        text: $serverAddress
-                    )
-                    .textContentType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("login.server")
-                }
-
-Section("Account") {
-                     TextField("Username", text: $username)
-                         .textContentType(.username)
-                         .textInputAutocapitalization(.never)
-                         .autocorrectionDisabled()
-                         .accessibilityIdentifier("login.username")
-                     if isPasswordVisible {
-                         TextField("Password", text: $password)
-                             .textContentType(.password)
-                             .accessibilityIdentifier("login.password")
-                     } else {
-                         SecureField("Password", text: $password)
-                             .textContentType(.password)
-                             .accessibilityIdentifier("login.password")
-                     }
-                     Button {
-                         isPasswordVisible.toggle()
-                     } label: {
-                         Image(
-                             systemName: isPasswordVisible
-                                 ? "eye.slash" : "eye"
-                         )
-                     }
-                     .accessibilityLabel(
-                         isPasswordVisible
-                             ? "Hide password" : "Show password"
+NavigationStack {
+             Form {
+                 Section("Server") {
+                     TextField(
+                         "Server Url (e.g. https://bleat.example.com)",
+                         text: $serverAddress
                      )
+                     .textContentType(.URL)
+                     .textInputAutocapitalization(.never)
+                     .keyboardType(.URL)
+                     .autocorrectionDisabled()
+                     .accessibilityIdentifier("login.server")
                  }
 
-                if case .failed(let failure) = model.loginStatus {
-                    Section {
-                        Text(failure.message)
-                            .foregroundStyle(.red)
-                            .accessibilityIdentifier("login.error")
-                    }
-                }
+ Section("Account") {
+                      TextField("Username", text: $username)
+                          .textContentType(.username)
+                          .textInputAutocapitalization(.never)
+                          .autocorrectionDisabled()
+                          .accessibilityIdentifier("login.username")
+                      if isPasswordVisible {
+                          TextField("Password", text: $password)
+                              .textContentType(.password)
+                              .accessibilityIdentifier("login.password")
+                      } else {
+                          SecureField("Password", text: $password)
+                              .textContentType(.password)
+                              .accessibilityIdentifier("login.password")
+                      }
+                      Button {
+                          isPasswordVisible.toggle()
+                      } label: {
+                          Image(
+                              systemName: isPasswordVisible
+                                  ? "eye.slash" : "eye"
+                          )
+                      }
+                      .accessibilityLabel(
+                          isPasswordVisible
+                              ? "Hide password" : "Show password"
+                      )
+                  }
 
-                Section {
-                    Button {
-                        submit()
-                    } label: {
-                        if isSubmitting {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Sign In")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(!canSubmit)
-                    .accessibilityIdentifier("login.submit")
-                }
+                 if case .failed(let failure) = model.loginStatus {
+                     Section {
+                         Text(failure.message)
+                             .foregroundStyle(.red)
+                             .accessibilityIdentifier("login.error")
+                     }
+                 }
 
-                if showsOfflineDownloads,
-                    !model.downloads.records.isEmpty
-                {
-                    Section {
-                        Button(
-                            "Offline Downloads",
-                            systemImage: "arrow.down.circle"
-                        ) {
-                            showOfflineDownloads = true
-                        }
-                        .accessibilityIdentifier(
-                            "login.offlineDownloads"
-                        )
-                    }
-                }
-            }
-            .navigationTitle(navigationTitle)
-            .toolbar {
-                if let onCancel {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel", action: onCancel)
-                    }
-                }
-            }
-            .sheet(isPresented: $showOfflineDownloads) {
-                OfflineDownloadsSheet(model: model)
-            }
-        }
+                 Section {
+                     Button {
+                         submit()
+                     } label: {
+                         if isSubmitting {
+                             ProgressView()
+                                 .frame(maxWidth: .infinity)
+                         } else {
+                             Text("Sign In")
+                                 .frame(maxWidth: .infinity)
+                         }
+                     }
+                     .disabled(!canSubmit)
+                     .accessibilityIdentifier("login.submit")
+                 }
+
+                 if showsOfflineDownloads,
+                     !model.downloads.records.isEmpty
+                 {
+                     Section {
+                         Button(
+                             "Offline Downloads",
+                             systemImage: "arrow.down.circle"
+                         ) {
+                             showOfflineDownloads = true
+                         }
+                         .accessibilityIdentifier(
+                             "login.offlineDownloads"
+                         )
+                     }
+                 }
+             }
+             .navigationTitle(navigationTitle)
+             .toolbar {
+                 if let onCancel {
+                     ToolbarItem(placement: .cancellationAction) {
+                         Button("Cancel", action: onCancel)
+                     }
+                 }
+             }
+             .sheet(isPresented: $showOfflineDownloads) {
+                 OfflineDownloadsSheet(model: model)
+             }
+             .alert(
+                 "Invalid URL",
+                 isPresented: .constant(invalidURLErrorMessage != nil),
+                 actions: {
+                     Button("OK") {
+                         invalidURLErrorMessage = nil
+                     }
+                 },
+                 message: {
+                     if let message = invalidURLErrorMessage {
+                         Text(message)
+                     }
+                 }
+             )
+         }
     }
 
     private func submit() {
         let submittedServerAddress = serverAddress
         let submittedUsername = username
         let submittedPassword = password
-
+        
+        // Client-side URL validation: must start with https://
+        guard let url = URL(string: submittedServerAddress),
+              url.scheme?.lowercased() == "https",
+              let host = url.host, !host.isEmpty else {
+            invalidURLErrorMessage = "URL must start with https://"
+            return
+        }
+        
         Task {
             let signedIn = await model.login(
                 serverAddress: submittedServerAddress,

@@ -286,7 +286,7 @@ struct AppFailure: Equatable, Sendable {
     static let mediaUnavailable = AppFailure(.localPlayback, .mediaUnavailable)
     static let invalidServerAddress = AppFailure(.login, .invalidInput)
     static let serverUnavailable = AppFailure(.login, .serverUnavailable)
-    static let serverRequiresHTTPS = AppFailure(.login, .serverRequiresHTTPS)
+    static let invalidServerScheme = AppFailure(.login, .serverRequiresHTTPS)
     static let serverNotReady = AppFailure(.login, .serverNotReady)
     static let serverUnsupported = AppFailure(.login, .serverUnsupported)
     static let localLoginUnavailable = AppFailure(
