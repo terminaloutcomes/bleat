@@ -226,36 +226,77 @@ final class AppModelTests: XCTestCase {
     }
 
     func testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection() {
+        // under the 300 second limit
+        let initialTime: Double = 1_000.0
+        // just under, seek fine
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 1_599.999),
-            .seekImmediately(1_599.999)
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: initialTime + ScrubberSeekDecision.confirmationThreshold
+                    - 0.01),
+            .seekImmediately(
+                initialTime + ScrubberSeekDecision.confirmationThreshold - 0.01)
         )
+        // at it, confirm
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 1_600),
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: initialTime + ScrubberSeekDecision.confirmationThreshold
+            ),
             .confirm(
-                PendingScrubberSeek(origin: 1_000, target: 1_600)
+                PendingScrubberSeek(
+                    origin: initialTime,
+                    target: initialTime
+                        + ScrubberSeekDecision.confirmationThreshold)
             )
         )
+        // just over, confirm
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 1_600.001),
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: initialTime + ScrubberSeekDecision.confirmationThreshold
+                    + 0.001),
             .confirm(
-                PendingScrubberSeek(origin: 1_000, target: 1_600.001)
+                PendingScrubberSeek(
+                    origin: initialTime,
+                    target: initialTime
+                        + ScrubberSeekDecision.confirmationThreshold + 0.001)
             )
         )
+        // going backwards but just under the threshold, seek fine
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 400.001),
-            .seekImmediately(400.001)
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: (initialTime
+                    - ScrubberSeekDecision.confirmationThreshold) + 0.01),
+            .seekImmediately(
+                (initialTime - ScrubberSeekDecision.confirmationThreshold)
+                    + 0.01)
         )
+        // going backwards and at the threshold, confirm
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 400),
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: initialTime + ScrubberSeekDecision.confirmationThreshold
+            ),
             .confirm(
-                PendingScrubberSeek(origin: 1_000, target: 400)
+                PendingScrubberSeek(
+                    origin: initialTime,
+                    target: initialTime
+                        + ScrubberSeekDecision.confirmationThreshold)
             )
         )
+        // going backwards and just over the threshold, confirm
         XCTAssertEqual(
-            ScrubberSeekDecision.decide(origin: 1_000, target: 399.999),
+            ScrubberSeekDecision.decide(
+                origin: initialTime,
+                target: initialTime
+                    - (ScrubberSeekDecision.confirmationThreshold + 0.001)),
             .confirm(
-                PendingScrubberSeek(origin: 1_000, target: 399.999)
+                PendingScrubberSeek(
+                    origin: initialTime,
+                    target: initialTime
+                        - (ScrubberSeekDecision.confirmationThreshold + 0.001))
             )
         )
     }
@@ -4966,7 +5007,8 @@ private actor TestBookCoverFetcher {
                 statusCode: failingRequestCount > 0 ? 503 : 200,
                 httpVersion: "HTTP/1.1",
                 headerFields: ["Content-Type": "image/png"]
-            ) else {
+            )
+        else {
             throw URLError(.badServerResponse)
         }
         failingRequestCount = max(0, failingRequestCount - 1)
@@ -5224,10 +5266,8 @@ private actor TestAppService: AppServicing {
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
-        [
-            UUID:
-                AsyncStream<AppEndpointDiagnostics>.Continuation
-        ] = [:]
+        [UUID:
+            AsyncStream<AppEndpointDiagnostics>.Continuation] = [:]
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -5438,14 +5478,15 @@ private actor TestAppService: AppServicing {
         password: String,
         localServerValidation: LocalServerValidationPolicy
     ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
-        recordedAccountUpdates.append(AccountUpdateRequest(
-            accountID: account.id,
-            serverAddress: serverAddress,
-            localServerAddress: localServerAddress,
-            username: username,
-            password: password,
-            localServerValidation: localServerValidation
-        ))
+        recordedAccountUpdates.append(
+            AccountUpdateRequest(
+                accountID: account.id,
+                serverAddress: serverAddress,
+                localServerAddress: localServerAddress,
+                username: username,
+                password: password,
+                localServerValidation: localServerValidation
+            ))
         if !accountUpdateOutcomes.isEmpty {
             return accountUpdateOutcomes.removeFirst()
         }
