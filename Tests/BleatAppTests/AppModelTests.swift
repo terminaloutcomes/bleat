@@ -46,33 +46,68 @@ final class AppModelTests: XCTestCase {
     }
 
     func testMiniPlayerSwipeDismissesOnlyForUpwardVerticalDrag() {
+        let height: CGFloat = 844
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
-                translation: CGSize(width: 0, height: -36)
+                translation: CGSize(width: 0, height: -50),
+                predictedEndTranslation: CGSize(width: 0, height: -60),
+                height: height
             ),
             .dismiss
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
-                translation: CGSize(width: 10, height: -80)
+                translation: CGSize(width: 10, height: -80),
+                predictedEndTranslation: CGSize(width: 12, height: -90),
+                height: height
             ),
             .dismiss
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
-                translation: CGSize(width: 0, height: -35)
+                translation: CGSize(width: 0, height: -35),
+                predictedEndTranslation: CGSize(width: 0, height: -40),
+                height: height
             ),
             .ignore
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
-                translation: CGSize(width: 0, height: 80)
+                translation: CGSize(width: 0, height: -20),
+                predictedEndTranslation: CGSize(width: 0, height: -180),
+                height: height
+            ),
+            .dismiss
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: -20),
+                predictedEndTranslation: CGSize(width: 300, height: -180),
+                height: height
             ),
             .ignore
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
-                translation: CGSize(width: 80, height: -40)
+                translation: CGSize(width: 0, height: -20),
+                predictedEndTranslation: CGSize(width: 0, height: -180),
+                height: 0
+            ),
+            .ignore
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: 80),
+                predictedEndTranslation: CGSize(width: 0, height: 90),
+                height: height
+            ),
+            .ignore
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 80, height: -40),
+                predictedEndTranslation: CGSize(width: 90, height: -50),
+                height: height
             ),
             .ignore
         )

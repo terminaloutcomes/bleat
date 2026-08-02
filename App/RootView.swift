@@ -256,14 +256,19 @@ private struct OfflineDownloadsSheet: View {
     @State private var showPlayer = false
 
     var body: some View {
-        DownloadsView(model: model)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if model.playback.hasActiveBook {
-                    MiniPlayerView(playback: model.playback) {
-                        showPlayer = true
+        GeometryReader { geometry in
+            DownloadsView(model: model)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if model.playback.hasActiveBook {
+                        MiniPlayerView(
+                            playback: model.playback,
+                            containerHeight: geometry.size.height
+                        ) {
+                            showPlayer = true
+                        }
                     }
                 }
-            }
+        }
             .sheet(isPresented: $showPlayer) {
                 NowPlaying(playback: model.playback)
             }
@@ -794,27 +799,32 @@ private struct SignedInView: View {
     @State private var showPlayer = false
 
     var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house") {
-                HomeView(model: model)
+        GeometryReader { geometry in
+            TabView {
+                Tab("Home", systemImage: "house") {
+                    HomeView(model: model)
+                }
+                Tab("Library", systemImage: "books.vertical") {
+                    LibraryView(model: model)
+                }
+                Tab("Search", systemImage: "magnifyingglass") {
+                    SearchView(model: model)
+                }
+                Tab("Downloads", systemImage: "arrow.down.circle") {
+                    DownloadsView(model: model)
+                }
+                Tab("Settings", systemImage: "gearshape") {
+                    SettingsView(model: model)
+                }
             }
-            Tab("Library", systemImage: "books.vertical") {
-                LibraryView(model: model)
-            }
-            Tab("Search", systemImage: "magnifyingglass") {
-                SearchView(model: model)
-            }
-            Tab("Downloads", systemImage: "arrow.down.circle") {
-                DownloadsView(model: model)
-            }
-            Tab("Settings", systemImage: "gearshape") {
-                SettingsView(model: model)
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if model.playback.hasActiveBook {
-                MiniPlayerView(playback: model.playback) {
-                    showPlayer = true
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if model.playback.hasActiveBook {
+                    MiniPlayerView(
+                        playback: model.playback,
+                        containerHeight: geometry.size.height
+                    ) {
+                        showPlayer = true
+                    }
                 }
             }
         }

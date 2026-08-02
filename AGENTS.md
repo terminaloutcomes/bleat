@@ -182,6 +182,36 @@ remote filenames, keep filesystem destinations app-owned, and preserve
 downloaded playback when the server is unavailable or the account requires
 reauthentication.
 
+## Sandbox and execution environment
+
+Bleat's supported development and validation workflows routinely need host
+resources that restricted sandboxes block. These include Xcode, SwiftPM and
+Clang caches, CoreSimulator and other system services, device tooling, Keychain
+and signing state, the Docker daemon, local ports, network access, package
+resolution, and temporary directories outside the repository.
+
+- Request or enable the required expanded execution permissions on the first
+  attempt for commands known to need host resources. Do not knowingly run them
+  in a restricted sandbox merely to produce a predictable permission failure.
+- Apply this broadly to `swift`, `xcodebuild`, `xcrun`, supported `mise` tasks,
+  repository build/test/archive scripts, Docker and live-test harnesses,
+  package resolution, signing, and physical-device workflows.
+- Run the repository-supported command unchanged with the access it requires.
+  Do not redirect home directories or tool caches into the repository, weaken
+  security settings, or modify source and project configuration to work around
+  sandbox restrictions.
+- If a command reports `Operation not permitted`, `sandbox_apply`, inaccessible
+  caches, CoreSimulator connection failures, an unavailable Docker daemon,
+  Keychain/signing access failures, or restricted DNS, network, or local-port
+  access, rerun the same relevant command with normal host access before
+  diagnosing a source failure.
+- If the necessary access cannot be granted, report the exact command and the
+  environment blocker as an unexecuted validation gate. Do not present it as a
+  code failure or claim that the affected behavior passed.
+- Expanded execution permissions do not authorize destructive operations or
+  broaden the requested task scope. Preserve user-managed processes, devices,
+  credentials, containers, and unrelated local state.
+
 ## Tests and validation
 
 Put tests in test targets, not production entry points. Add focused tests with

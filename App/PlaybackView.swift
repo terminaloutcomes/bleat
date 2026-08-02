@@ -72,18 +72,42 @@ struct PlaybackScrubberChapterWindow: Equatable {
 }
 
 enum MiniPlayerSwipeDecision: Equatable {
-    static let dismissalDistance: CGFloat = 36
+    static let dismissalDistanceFraction: CGFloat = 0.05
+    static let minimumDismissalDistance: CGFloat = 28
+    static let flickPredictionDistanceFraction: CGFloat = 0.12
 
     case ignore
     case dismiss
 
-    static func decide(translation: CGSize) -> Self {
-        guard translation.height <= -dismissalDistance,
-            abs(translation.height) > abs(translation.width)
-        else {
+    static func decide(
+        translation: CGSize,
+        predictedEndTranslation: CGSize,
+        height: CGFloat
+    ) -> Self {
+        let isUpwardVertical = translation.height < 0
+            && abs(translation.height) > abs(translation.width)
+        guard isUpwardVertical else {
             return .ignore
         }
-        return .dismiss
+        let dismissalDistance = max(
+            minimumDismissalDistance,
+            height * dismissalDistanceFraction
+        )
+        if translation.height <= -dismissalDistance {
+            return .dismiss
+        }
+        guard height > 0 else {
+            return .ignore
+        }
+        let flickDistance = height * flickPredictionDistanceFraction
+        if predictedEndTranslation.height < 0,
+            abs(predictedEndTranslation.height)
+                > abs(predictedEndTranslation.width),
+            predictedEndTranslation.height <= -flickDistance
+        {
+            return .dismiss
+        }
+        return .ignore
     }
 }
 
@@ -220,6 +244,7 @@ private struct PlaybackScrubberView: View {
 
 struct MiniPlayerView: View {
     @Bindable var playback: PlaybackModel
+    let containerHeight: CGFloat
     let showPlayer: () -> Void
     @State private var isDismissing = false
 
@@ -291,7 +316,9 @@ struct MiniPlayerView: View {
             .onEnded { value in
                 guard
                     MiniPlayerSwipeDecision.decide(
-                        translation: value.translation
+                        translation: value.translation,
+                        predictedEndTranslation: value.predictedEndTranslation,
+                        height: containerHeight
                     ) == .dismiss
                 else {
                     return
