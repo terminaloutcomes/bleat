@@ -1844,6 +1844,70 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(playback.currentTime, boundary, accuracy: 0.1)
     }
 
+    func testSeekToAudioFileMovesToRequestedTrack() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL, fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        XCTAssertEqual(playback.currentAudioFileIndex, 0)
+        let targetOffset = playback.audioFiles[1].startOffset
+
+        await playback.seekToAudioFile(at: 1)
+
+        XCTAssertEqual(playback.currentAudioFileIndex, 1)
+        XCTAssertEqual(
+            playback.currentTime,
+            targetOffset,
+            accuracy: 0.1
+        )
+        await playback.stop()
+    }
+
+    func testSeekToAudioFileIgnoresOutOfBoundsIndex() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL, fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        let originalTime = playback.currentTime
+
+        await playback.seekToAudioFile(at: 5)
+
+        XCTAssertEqual(playback.currentTime, originalTime)
+        XCTAssertEqual(playback.currentAudioFileIndex, 0)
+        await playback.stop()
+    }
+
+    func testSeekToAudioFileIsNoopWithoutActiveBook() async {
+        let playback = PlaybackModel(
+            service: TestAppService(
+                activeAccount: .success(nil)
+            )
+        )
+
+        await playback.seekToAudioFile(at: 0)
+
+        XCTAssertEqual(playback.state, .idle)
+        XCTAssertEqual(playback.currentTime, 0)
+    }
+
     func testMediaServicesResetRebuildFailureIsTyped() async throws {
         let fixture = try playbackRecoveryFixture()
         defer {

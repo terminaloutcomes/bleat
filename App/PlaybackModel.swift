@@ -1211,11 +1211,13 @@ final class PlaybackModel {
     }
 
     func seekToAudioFile(at index: Int) async {
-        let files = audioFiles
-        guard files.indices.contains(index) else {
+        guard let preparation = preparation,
+            case .direct(let tracks) = preparation.source,
+            tracks.indices.contains(index)
+        else {
             return
         }
-        await seek(to: files[index].startOffset)
+        await seek(to: tracks[index].startOffset)
     }
 
     func fail(_ failure: AppFailure) {
