@@ -212,6 +212,11 @@ Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 unit and UI suites. Core package tests run through `swift test` or
 `scripts/test-core.sh`.
 
+If `xcodebuild -scheme Bleat` resolves to the Swift package's tests instead of
+the app suites, a locally generated scheme is shadowing the project scheme.
+Delete `.swiftpm/xcode/xcshareddata/xcschemes/Bleat.xcscheme` (a git-ignored
+artifact created when the package is opened directly in Xcode) and retry.
+
 Select the `BleatMac` scheme and **My Mac (Mac Catalyst)** to run the shared
 application target or its app-hosted unit tests on macOS 15 or newer. UI tests
 remain iOS-only.

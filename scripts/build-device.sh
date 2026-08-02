@@ -20,7 +20,7 @@ fi
 
 xcodebuild \
   -project Bleat.xcodeproj \
-  -scheme "Bleat (Bleat project)" \
+  -scheme Bleat \
   ${BUILD_VERBOSE_FLAG} \
   -configuration Release \
   -destination "platform=iOS,id=${BLEAT_DEVICE_ID}" \
