@@ -647,6 +647,7 @@ final class AppModel {
 
     init(
         service: any AppServicing,
+        bootstrapError: AppBootstrapError? = nil,
         downloadsStorageRootURL: URL? = nil,
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
@@ -654,6 +655,33 @@ final class AppModel {
     ) {
         self.service = service
         self.diagnostics = diagnostics
+        let subsystems = Self.makePlaybackAndDownloads(
+            service: service,
+            downloadsStorageRootURL: downloadsStorageRootURL,
+            diagnostics: diagnostics
+        )
+        self.playback = subsystems.playback
+        self.downloads = subsystems.downloads
+        #if DEBUG
+            self.diagnosticLogStore =
+                diagnosticLogStore as? PersistentDiagnosticLogStore
+        #endif
+        if let bootstrapError {
+            hasStarted = true
+            switch bootstrapError {
+            case .persistenceUnavailable:
+                phase = .unavailable(.persistenceUnavailable)
+            }
+        } else {
+            phase = .launching
+        }
+    }
+
+    private static func makePlaybackAndDownloads(
+        service: any AppServicing,
+        downloadsStorageRootURL: URL?,
+        diagnostics: any DiagnosticRecording
+    ) -> (playback: PlaybackModel, downloads: DownloadModel) {
         let playback = PlaybackModel(
             service: service,
             diagnostics: diagnostics
@@ -663,49 +691,10 @@ final class AppModel {
             storageRootURL: downloadsStorageRootURL,
             diagnostics: diagnostics
         )
-        self.playback = playback
-        self.downloads = downloads
-        #if DEBUG
-            self.diagnosticLogStore =
-                diagnosticLogStore as? PersistentDiagnosticLogStore
-        #endif
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
         }
-        phase = .launching
-    }
-
-    init(
-        service: any AppServicing,
-        bootstrapError: AppBootstrapError,
-        diagnostics: any DiagnosticRecording =
-            SystemDiagnosticRecorder.shared,
-        diagnosticLogStore: (any DiagnosticRecording)? = nil
-    ) {
-        self.service = service
-        self.diagnostics = diagnostics
-        let playback = PlaybackModel(
-            service: service,
-            diagnostics: diagnostics
-        )
-        let downloads = DownloadModel(
-            service: service,
-            diagnostics: diagnostics
-        )
-        self.playback = playback
-        self.downloads = downloads
-        #if DEBUG
-            self.diagnosticLogStore =
-                diagnosticLogStore as? PersistentDiagnosticLogStore
-        #endif
-        playback.setAutomaticDownloadHandler { [weak downloads] activity in
-            await downloads?.handleAutomaticPlaybackActivity(activity)
-        }
-        hasStarted = true
-        switch bootstrapError {
-        case .persistenceUnavailable:
-            phase = .unavailable(.persistenceUnavailable)
-        }
+        return (playback, downloads)
     }
 
     func start() async {
