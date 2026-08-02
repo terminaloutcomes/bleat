@@ -96,6 +96,7 @@ private struct NativeLoginView: View {
     @State private var serverAddress = ""
     @State private var username = ""
     @State private var password = ""
+    @State private var isPasswordVisible = false
 
     private var isSubmitting: Bool {
         model.loginStatus == .submitting
@@ -125,16 +126,34 @@ private struct NativeLoginView: View {
                     .accessibilityIdentifier("login.server")
                 }
 
-                Section("Account") {
-                    TextField("Username", text: $username)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("login.username")
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                        .accessibilityIdentifier("login.password")
-                }
+Section("Account") {
+                     TextField("Username", text: $username)
+                         .textContentType(.username)
+                         .textInputAutocapitalization(.never)
+                         .autocorrectionDisabled()
+                         .accessibilityIdentifier("login.username")
+                     if isPasswordVisible {
+                         TextField("Password", text: $password)
+                             .textContentType(.password)
+                             .accessibilityIdentifier("login.password")
+                     } else {
+                         SecureField("Password", text: $password)
+                             .textContentType(.password)
+                             .accessibilityIdentifier("login.password")
+                     }
+                     Button {
+                         isPasswordVisible.toggle()
+                     } label: {
+                         Image(
+                             systemName: isPasswordVisible
+                                 ? "eye.slash" : "eye"
+                         )
+                     }
+                     .accessibilityLabel(
+                         isPasswordVisible
+                             ? "Hide password" : "Show password"
+                     )
+                 }
 
                 if case .failed(let failure) = model.loginStatus {
                     Section {
@@ -194,7 +213,6 @@ private struct NativeLoginView: View {
         let submittedServerAddress = serverAddress
         let submittedUsername = username
         let submittedPassword = password
-        password = ""
 
         Task {
             let signedIn = await model.login(
@@ -204,6 +222,7 @@ private struct NativeLoginView: View {
             )
             if signedIn {
                 onSignedIn()
+                password = ""
             }
         }
     }
