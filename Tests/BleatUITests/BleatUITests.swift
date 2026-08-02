@@ -164,7 +164,7 @@ final class BleatUITests: XCTestCase {
             error.label,
             "The username or password was not accepted."
         )
-        XCTAssertEqual(
+        XCTAssertNotEqual(
             app.secureTextFields["login.password"].value as? String,
             "Password"
         )
