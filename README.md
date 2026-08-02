@@ -172,8 +172,8 @@ BLEAT_SIMULATOR_DESTINATION='platform=iOS Simulator,name=iPad (A16)' \
   ./scripts/test-core.sh
 ```
 
-UI tests run across four independent Simulator workers by default. Adjust the
-worker count when the host is resource-constrained:
+UI tests use one Simulator worker by default for stable isolation. Opt into
+additional workers when the host and test environment support it:
 
 ```sh
 BLEAT_SIMULATOR_TEST_WORKERS=2 ./scripts/test-core.sh
