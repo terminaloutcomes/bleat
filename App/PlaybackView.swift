@@ -15,8 +15,9 @@ struct PendingScrubberSeek: Equatable {
     }
 }
 
+// How long (in seconds) the user must scrub before we ask for confirmation
 enum ScrubberSeekDecision: Equatable {
-    static let confirmationThreshold: TimeInterval = 600
+    static let confirmationThreshold: TimeInterval = 300
 
     case seekImmediately(Double)
     case confirm(PendingScrubberSeek)
