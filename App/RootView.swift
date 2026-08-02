@@ -823,7 +823,7 @@ private struct HomeView: View {
                 Image(systemName: "person.crop.circle")
                 Text(account.user.username)
                     .lineLimit(1)
-                Text("·")
+                Text("@")
                     .foregroundStyle(.tertiary)
                 Text(
                     account.server.url.host
