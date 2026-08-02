@@ -3700,10 +3700,6 @@ final class AppModelTests: XCTestCase {
                 .serverUnavailable
             ),
             (
-                .openPlayback, .playbackSource(.missingAudioTracks),
-                .mediaUnavailable
-            ),
-            (
                 .updateProgress, .playbackSync(.unexpectedStatus(503)),
                 .serverUnavailable
             ),
@@ -3755,7 +3751,7 @@ final class AppModelTests: XCTestCase {
             .persistenceUnavailable,
             .invalidServerAddress,
             .serverUnavailable,
-            .serverRequiresHTTPS,
+            .invalidServerScheme,
             .serverNotReady,
             .serverUnsupported,
             .localLoginUnavailable,

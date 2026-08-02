@@ -150,6 +150,34 @@ public struct PlaybackSession: Hashable, Sendable {
     public let libraryItem: PlaybackLibraryItem
     public let audioTracks: [PlaybackAudioTrack]
 
+    fileprivate init(
+        id: PlaybackSessionID,
+        libraryID: LibraryID,
+        libraryItemID: LibraryItemID,
+        bookID: BookID?,
+        mediaType: String,
+        duration: Double,
+        method: PlaybackMethod,
+        startTime: Double,
+        currentTime: Double,
+        chapters: [PlaybackChapter],
+        libraryItem: PlaybackLibraryItem,
+        audioTracks: [PlaybackAudioTrack]
+    ) {
+        self.id = id
+        self.libraryID = libraryID
+        self.libraryItemID = libraryItemID
+        self.bookID = bookID
+        self.mediaType = mediaType
+        self.duration = duration
+        self.method = method
+        self.startTime = startTime
+        self.currentTime = currentTime
+        self.chapters = chapters
+        self.libraryItem = libraryItem
+        self.audioTracks = audioTracks
+    }
+
     public func source(
         for server: NormalizedServerURL
     ) throws(PlaybackSourceError) -> PlaybackSource {
@@ -175,9 +203,7 @@ public struct PlaybackSession: Hashable, Sendable {
             }
             return .direct(resolvedTracks)
         case .transcode:
-            guard let returnedPath = audioTracks.first?.contentURL else {
-                throw .missingAudioTracks
-            }
+            let returnedPath = audioTracks.first?.contentURL ?? ""
             do {
                 return .hls(
                     try routeBuilder.serverRelativeContentURL(returnedPath)
@@ -207,7 +233,6 @@ public enum PlaybackSource: Hashable, Sendable {
 }
 
 public enum PlaybackSourceError: Error, Equatable, Sendable {
-    case missingAudioTracks
     case unsupportedMethod(PlaybackMethod)
     case routeConstructionFailed(RouteConstructionError)
 }

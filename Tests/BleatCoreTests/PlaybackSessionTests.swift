@@ -364,50 +364,34 @@ final class PlaybackSessionTests: XCTestCase {
         let unknownSession = try await Self.decodeSession(
             Self.sessionJSON(method: 99)
         )
-        var missingTracksSession = try await Self.decodeSession(
-            Self.sessionJSON(method: 2)
-        )
-        var invalidDirectSession = try await Self.decodeSession(
-            Self.sessionJSON()
-        )
-        missingTracksSession = PlaybackSession(
-            id: missingTracksSession.id,
-            libraryID: missingTracksSession.libraryID,
-            libraryItemID: missingTracksSession.libraryItemID,
-            bookID: missingTracksSession.bookID,
-            mediaType: missingTracksSession.mediaType,
-            duration: missingTracksSession.duration,
-            method: missingTracksSession.method,
-            startTime: missingTracksSession.startTime,
-            currentTime: missingTracksSession.currentTime,
-            chapters: missingTracksSession.chapters,
-            libraryItem: missingTracksSession.libraryItem,
-            audioTracks: []
-        )
-        invalidDirectSession = PlaybackSession(
-            id: invalidDirectSession.id,
-            libraryID: invalidDirectSession.libraryID,
-            libraryItemID: invalidDirectSession.libraryItemID,
-            bookID: invalidDirectSession.bookID,
-            mediaType: invalidDirectSession.mediaType,
-            duration: invalidDirectSession.duration,
-            method: invalidDirectSession.method,
-            startTime: invalidDirectSession.startTime,
-            currentTime: invalidDirectSession.currentTime,
-            chapters: invalidDirectSession.chapters,
-            libraryItem: invalidDirectSession.libraryItem,
-            audioTracks: [
-                PlaybackAudioTrack(
-                    index: -1,
-                    startOffset: 0,
-                    duration: 1,
-                    title: "Invalid",
-                    contentURL: "/invalid",
-                    mimeType: "audio/mp4",
-                    codec: "aac"
-                )
-            ]
-        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await Self.decodeSession(
+                Self.sessionJSON(method: 2, audioTracks: [])
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? PlaybackSessionError,
+                .invalidSessionResponse
+            )
+        }
+
+        await XCTAssertThrowsErrorAsync(
+            try await Self.decodeSession(
+                Self.sessionJSON(audioTracks: [
+                    Self.track(
+                        index: -1,
+                        contentURL: "/invalid",
+                        mimeType: "audio/mp4"
+                    )
+                ])
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? PlaybackSessionError,
+                .invalidSessionResponse
+            )
+        }
 
         XCTAssertThrowsError(try localSession.source(for: server)) { error in
             XCTAssertEqual(
@@ -419,22 +403,6 @@ final class PlaybackSessionTests: XCTestCase {
             XCTAssertEqual(
                 error as? PlaybackSourceError,
                 .unsupportedMethod(.unknown(99))
-            )
-        }
-        XCTAssertThrowsError(
-            try missingTracksSession.source(for: server)
-        ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSourceError,
-                .missingAudioTracks
-            )
-        }
-        XCTAssertThrowsError(
-            try invalidDirectSession.source(for: server)
-        ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSourceError,
-                .routeConstructionFailed(.invalidTrackIndex(-1))
             )
         }
     }

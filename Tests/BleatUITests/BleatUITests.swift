@@ -68,6 +68,7 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(
                 timeout: 3
             ))
+        Self.dismissSavePasswordPromptIfNeeded(app: app)
         let screenSize = XCUIScreen.main.screenshot().image.size
         XCTAssertEqual(
             app.frame.size.width,
@@ -99,7 +100,6 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["book.detail.play"].exists)
         XCTAssertTrue(app.buttons["book.detail.play"].isHittable)
         XCTAssertTrue(app.buttons["book.detail.download"].exists)
-        XCTAssertTrue(app.buttons["book.detail.finished"].exists)
         XCTAssertEqual(
             app.staticTexts["book.detail.series"].label,
             "Test Series #1"
@@ -119,7 +119,11 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(actions.exists)
         actions.tap()
         let edit = app.buttons["book.detail.edit"]
-        XCTAssertTrue(edit.exists)
+        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.buttons["book.detail.finished"]
+                .waitForExistence(timeout: 3)
+        )
         edit.tap()
         XCTAssertTrue(
             app.textFields["metadata.title"].waitForExistence(
@@ -173,7 +177,7 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testRestoredAccountCanBeRemoved() {
+    func testRestoredAccountCanBeRemoved() async throws {
         let app = launch(scenario: "--ui-testing-signed-in")
 
         XCTAssertTrue(
@@ -188,19 +192,43 @@ final class BleatUITests: XCTestCase {
         let filesAhead = app.steppers["settings.downloads.filesAhead"]
         XCTAssertTrue(filesAhead.waitForExistence(timeout: 3))
         XCTAssertTrue(filesAhead.label.contains("Files Ahead: 5"))
-        XCTAssertTrue(
-            app.buttons["settings.downloads.automaticCleanup"]
-                .waitForExistence(timeout: 3)
+
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.downloads.automaticCleanup",
+            direction: .up
         )
-        let reauthenticate = app.buttons["settings.reauthenticate"]
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "settings.downloads.automaticCleanup"
+            ].waitForExistence(timeout: 3)
+        )
+
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.account.ui-account",
+            direction: .down
+        )
+        let reauthenticate = app.buttons["settings.account.ui-account"]
         XCTAssertTrue(reauthenticate.waitForExistence(timeout: 3))
-        reauthenticate.tap()
+        // SwiftUI plain Button labels with trailing images can intercept the
+        // default center tap target; tap on the leading edge instead.
+        reauthenticate.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
+        ).tap()
         XCTAssertTrue(
-            app.secureTextFields["reauthentication.password"]
+            app.secureTextFields["accountEditor.password"]
                 .waitForExistence(timeout: 3)
         )
-        XCTAssertTrue(app.staticTexts["reader"].exists)
-        XCTAssertTrue(app.staticTexts["https://books.example"].exists)
+        let usernameField = app.textFields["accountEditor.username"]
+        XCTAssertTrue(usernameField.waitForExistence(timeout: 3))
+        XCTAssertEqual(usernameField.value as? String, "reader")
+        let serverField = app.textFields["accountEditor.server"]
+        XCTAssertTrue(serverField.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            serverField.value as? String,
+            "https://books.example"
+        )
         app.buttons["Cancel"].tap()
 
         let addAccount = app.buttons["settings.addAccount"]
@@ -237,7 +265,11 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
-        app.swipeUp()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.serverVersion",
+            direction: .up
+        )
         XCTAssertTrue(
             app.descendants(matching: .any)[
                 "diagnostics.serverVersion"
@@ -258,7 +290,11 @@ final class BleatUITests: XCTestCase {
                 "diagnostics.webSocketState"
             ].waitForExistence(timeout: 3)
         )
-        app.swipeUp()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.export",
+            direction: .up
+        )
         XCTAssertTrue(
             app.buttons["diagnostics.export"].waitForExistence(timeout: 3)
         )
@@ -273,9 +309,16 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(activityView.waitForNonExistence(timeout: 3))
         app.navigationBars.buttons.firstMatch.tap()
 
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.account.ui-account",
+            direction: .down
+        )
         let account = app.buttons["settings.account.ui-account"]
         XCTAssertTrue(account.waitForExistence(timeout: 3))
-        account.tap()
+        account.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
+        ).tap()
         let removeAccount = app.buttons["accountEditor.removeAccount"]
         XCTAssertTrue(removeAccount.waitForExistence(timeout: 3))
         removeAccount.tap()
@@ -758,6 +801,41 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    @MainActor
+    private static func dismissSavePasswordPromptIfNeeded(
+        app: XCUIApplication
+    ) {
+        let notNow = app.buttons["Not Now"]
+        if notNow.waitForExistence(timeout: 5) {
+            notNow.tap()
+            _ = notNow.waitForNonExistence(timeout: 3)
+        }
+    }
+
+    enum ScrollDirection {
+        case up, down
+    }
+
+    @MainActor
+    private static func scrollUntilHittable(
+        app: XCUIApplication,
+        identifier: String,
+        direction: ScrollDirection,
+        maxAttempts: Int = 20
+    ) {
+        let element = app.descendants(matching: .any)[identifier]
+        for _ in 0..<maxAttempts {
+            if element.waitForExistence(timeout: 0.5) && element.isHittable {
+                return
+            }
+            if direction == .up {
+                app.swipeUp()
+            } else {
+                app.swipeDown()
+            }
+        }
     }
 }
 
