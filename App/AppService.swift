@@ -578,19 +578,7 @@ actor LiveAppService: AppServicing {
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared
     ) throws(AppBootstrapError) {
-        let schema = Schema([
-            ServerAccountRecord.self,
-            CachedLibraryCollectionRecord.self,
-            CachedLibraryRecord.self,
-            CachedLibraryPageRecord.self,
-            CachedLibrarySearchRecord.self,
-            CachedLibraryHomeRecord.self,
-            CachedLibraryBookDetailRecord.self,
-            ListeningSliceRecord.self,
-            CompletionMilestoneRecord.self,
-            RemoteListeningSessionRecord.self,
-            StatisticsSessionAccountingRecord.self,
-        ])
+        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         do {
             modelContainer = try ModelContainer(
                 for: schema,
