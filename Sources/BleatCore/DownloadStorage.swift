@@ -478,6 +478,33 @@ public actor DownloadStorage {
         return record
     }
 
+    public func removeTrackFiles(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) {
+        let directory = layout.bookDirectory(
+            accountID: identity.accountID,
+            itemID: identity.itemID
+        )
+        let destination = directory.appendingPathComponent(
+            identity.destinationEntry,
+            isDirectory: false
+        )
+        let partial = directory.appendingPathComponent(
+            identity.destinationEntry + ".partial",
+            isDirectory: false
+        )
+        do {
+            if FileManager.default.fileExists(atPath: partial.path) {
+                try FileManager.default.removeItem(at: partial)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     public func records() throws(DownloadStorageError)
         -> [DownloadedBookRecord]
     {

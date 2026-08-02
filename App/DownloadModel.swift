@@ -1037,7 +1037,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             task.cancel()
             if states[identity.trackIndex] == .downloading {
-                _ = try? await storage.markQueued(identity)
+                _ = try? await storage.removeTrackFiles(identity)
+                _ = try? await storage.markFailed(identity)
             }
             clearTransferredBytes(for: identity)
         }

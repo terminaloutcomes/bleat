@@ -593,6 +593,192 @@ final class DownloadStorageTests: XCTestCase {
             FileManager.default.fileExists(atPath: sibling.path)
         )
     }
+
+    func testRemoveTrackFilesDeletesPartialAndFinalFiles()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "101",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                ),
+                DownloadTrackPlan(
+                    index: 1,
+                    inode: "102",
+                    expectedByteLength: 2,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00001.mp3"
+                ),
+            ]
+        )
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail
+        )
+
+        let identity0 = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+        let identity1 = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[1]
+        )
+
+        let tempURL0 = fixture.rootURL.appendingPathComponent("temp0")
+        let tempURL1 = fixture.rootURL.appendingPathComponent("temp1")
+        try Data([1, 2, 3, 4]).write(to: tempURL0)
+        try Data([5, 6]).write(to: tempURL1)
+
+        let observed0 = try fixture.layout.placeDownloadedFile(
+            from: tempURL0,
+            identity: identity0
+        )
+        let observed1 = try fixture.layout.placeDownloadedFile(
+            from: tempURL1,
+            identity: identity1
+        )
+
+        _ = try await fixture.storage.markComplete(
+            identity0,
+            observedByteLength: observed0
+        )
+        _ = try await fixture.storage.markComplete(
+            identity1,
+            observedByteLength: observed1
+        )
+
+        let destination0 = fixture.layout.destinationURL(for: identity0)
+        let destination1 = fixture.layout.destinationURL(for: identity1)
+        let partial0 = destination0.deletingPathExtension().appendingPathExtension("mp3.partial")
+        let partial1 = destination1.deletingPathExtension().appendingPathExtension("mp3.partial")
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination0.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial0.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial1.path))
+
+        try await fixture.storage.removeTrackFiles(identity0)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination0.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial0.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial1.path))
+
+        let record = try await fixture.storage.records().first!
+        XCTAssertEqual(record.manifest.entries[1].state, .complete)
+    }
+
+    func testRemoveTrackFilesDeletesPartialFileWhenDownloadInProgress()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "101",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail
+        )
+
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+
+        let directory = fixture.layout.bookDirectory(
+            accountID: identity.accountID,
+            itemID: identity.itemID
+        )
+        let partial = directory.appendingPathComponent(
+            identity.destinationEntry + ".partial",
+            isDirectory: false
+        )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try Data([1, 2]).write(to: partial)
+
+        let destination = fixture.layout.destinationURL(for: identity)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: partial.path))
+
+        try await fixture.storage.removeTrackFiles(identity)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testRemoveTrackFilesIgnoresMissingFiles()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "101",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail
+        )
+
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+
+        try await fixture.storage.removeTrackFiles(identity)
+
+        let destination = fixture.layout.destinationURL(for: identity)
+        let partial = destination.deletingPathExtension().appendingPathExtension("mp3.partial")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+    }
 }
 
 private struct Fixture {
