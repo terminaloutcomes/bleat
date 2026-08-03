@@ -5,8 +5,11 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_environment_script="${bleat_script_dir}/live-test-environment.sh"
-readonly bleat_artifact_dir="${bleat_repository_root}/TestSupport/ServerHarness/app-live-artifacts"
-readonly bleat_derived_data="${bleat_repository_root}/.build/live-xcode-derived"
+readonly bleat_run_id="$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
+readonly bleat_artifact_root="${bleat_repository_root}/TestSupport/ServerHarness/app-live-artifacts"
+readonly bleat_artifact_dir="${bleat_artifact_root}/${bleat_run_id}"
+readonly bleat_derived_data="${bleat_repository_root}/.build/live-xcode-derived-${bleat_run_id}"
+readonly bleat_compose_project_name="bleat-app-live-${bleat_run_id}"
 readonly bleat_https_prefix_port="${BLEAT_HTTPS_PREFIX_PORT:-13479}"
 readonly bleat_test_username="${BLEAT_TEST_USERNAME:-bleat-$(/usr/bin/uuidgen)}"
 readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-$(/usr/bin/uuidgen)}"
@@ -14,11 +17,27 @@ readonly bleat_device_type="${BLEAT_LIVE_DEVICE_TYPE:-com.apple.CoreSimulator.Si
 
 bleat_simulator_id=""
 bleat_ca_file=""
+bleat_harness_started=0
+
+bleat_require_result_bundle() {
+    local result_bundle="$1"
+    if [[ ! -f "${result_bundle}/Info.plist" ]]; then
+        print -u2 "Expected complete result bundle at ${result_bundle}"
+        return 1
+    fi
+    plutil -lint "${result_bundle}/Info.plist" >/dev/null
+}
+
+bleat_abort() {
+    local exit_code="$1"
+    trap - HUP INT QUIT TERM
+    exit "${exit_code}"
+}
 
 bleat_cleanup() {
     local exit_code=$?
-    trap - EXIT INT TERM
-    if (( exit_code != 0 )); then
+    trap - EXIT HUP INT QUIT TERM
+    if (( exit_code != 0 && bleat_harness_started )); then
         "${bleat_environment_script}" artifacts "${bleat_artifact_dir}" \
             || true
         if [[ -n "${bleat_simulator_id}" ]]; then
@@ -40,18 +59,33 @@ bleat_cleanup() {
         rm -f "${bleat_ca_file}"
     fi
     rm -rf "${bleat_derived_data}"
-    "${bleat_environment_script}" down >/dev/null 2>&1 || true
+    if (( bleat_harness_started )); then
+        "${bleat_environment_script}" down >/dev/null 2>&1 || true
+    fi
     exit "${exit_code}"
 }
 
-trap bleat_cleanup EXIT INT TERM
+trap bleat_cleanup EXIT
+trap 'bleat_abort 129' HUP
+trap 'bleat_abort 130' INT
+trap 'bleat_abort 131' QUIT
+trap 'bleat_abort 143' TERM
 
-rm -rf "${bleat_artifact_dir}"
-rm -rf "${bleat_derived_data}"
+if [[ -n "${BLEAT_COMPOSE_PROJECT_NAME:-}" ]]; then
+    print -u2 "BLEAT_COMPOSE_PROJECT_NAME is not supported by test-app-live.sh"
+    exit 64
+fi
+if [[ -e "${bleat_artifact_dir}" || -e "${bleat_derived_data}" ]]; then
+    print -u2 "Live app test workspace already exists for this run"
+    exit 1
+fi
+
 mkdir -p "${bleat_artifact_dir}"
+export BLEAT_COMPOSE_PROJECT_NAME="${bleat_compose_project_name}"
 
 export BLEAT_TEST_USERNAME="${bleat_test_username}"
 export BLEAT_TEST_PASSWORD="${bleat_test_password}"
+bleat_harness_started=1
 "${bleat_environment_script}" reset
 
 bleat_runtime="$(
@@ -117,14 +151,22 @@ plutil -insert \
     -string "${BLEAT_LIVE_PASSWORD}" \
     "${bleat_xctestrun}"
 
+bleat_online_result_bundle="${bleat_artifact_dir}/online.xcresult"
+bleat_offline_result_bundle="${bleat_artifact_dir}/offline.xcresult"
+if [[ -e "${bleat_online_result_bundle}" || -e "${bleat_offline_result_bundle}" ]]; then
+    print -u2 "Live app test result bundle already exists"
+    exit 1
+fi
+
 xcodebuild \
     -quiet \
     -xctestrun "${bleat_xctestrun}" \
     -destination "id=${bleat_simulator_id}" \
     -parallel-testing-enabled NO \
-    -resultBundlePath "${bleat_artifact_dir}/online.xcresult" \
+    -resultBundlePath "${bleat_online_result_bundle}" \
     -only-testing:BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload \
     test-without-building
+bleat_require_result_bundle "${bleat_online_result_bundle}"
 
 "${bleat_environment_script}" stop
 
@@ -133,6 +175,7 @@ xcodebuild \
     -xctestrun "${bleat_xctestrun}" \
     -destination "id=${bleat_simulator_id}" \
     -parallel-testing-enabled NO \
-    -resultBundlePath "${bleat_artifact_dir}/offline.xcresult" \
+    -resultBundlePath "${bleat_offline_result_bundle}" \
     -only-testing:BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress \
     test-without-building
+bleat_require_result_bundle "${bleat_offline_result_bundle}"
