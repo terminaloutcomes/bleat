@@ -185,56 +185,56 @@ private struct NativeLoginView: View {
     }
 
     var body: some View {
-NavigationStack {
-             Form {
-                 Section("Server") {
-                     TextField(
-                         "Server Url (e.g. https://bleat.example.com)",
-                         text: $serverAddress
-                     )
-                     .textContentType(.URL)
-                     .textInputAutocapitalization(.never)
-                     .keyboardType(.URL)
-                     .autocorrectionDisabled()
-                     .accessibilityIdentifier("login.server")
-                 }
+        NavigationStack {
+            Form {
+                Section("Server") {
+                    TextField(
+                        "Server Url (e.g. https://bleat.example.com)",
+                        text: $serverAddress
+                    )
+                    .textContentType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("login.server")
+                }
 
- Section("Account") {
-                      TextField("Username", text: $username)
-                          .textContentType(.username)
-                          .textInputAutocapitalization(.never)
-                          .autocorrectionDisabled()
-                          .accessibilityIdentifier("login.username")
-                      if isPasswordVisible {
-                          TextField("Password", text: $password)
-                              .textContentType(.password)
-                              .accessibilityIdentifier("login.password")
-                      } else {
-                          SecureField("Password", text: $password)
-                              .textContentType(.password)
-                              .accessibilityIdentifier("login.password")
-                      }
-                      Button {
-                          isPasswordVisible.toggle()
-                      } label: {
-                          Image(
-                              systemName: isPasswordVisible
-                                  ? "eye.slash" : "eye"
-                          )
-                      }
-                      .accessibilityLabel(
-                          isPasswordVisible
-                              ? "Hide password" : "Show password"
-                      )
-                  }
+                Section("Account") {
+                    TextField("Username", text: $username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("login.username")
+                    if isPasswordVisible {
+                        TextField("Password", text: $password)
+                            .textContentType(.password)
+                            .accessibilityIdentifier("login.password")
+                    } else {
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
+                            .accessibilityIdentifier("login.password")
+                    }
+                    Button {
+                        isPasswordVisible.toggle()
+                    } label: {
+                        Image(
+                            systemName: isPasswordVisible
+                                ? "eye.slash" : "eye"
+                        )
+                    }
+                    .accessibilityLabel(
+                        isPasswordVisible
+                            ? "Hide password" : "Show password"
+                    )
+                }
 
-                 if case .failed(let failure) = model.loginStatus {
-                     Section {
-                         Text(failure.message)
-                             .foregroundStyle(.red)
-                             .accessibilityIdentifier("login.error")
-                     }
-                 }
+                if case .failed(let failure) = model.loginStatus {
+                    Section {
+                        Text(failure.message)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("login.error")
+                    }
+                }
 
                 Section {
                     AccountSubmissionButton(
@@ -246,63 +246,64 @@ NavigationStack {
                     )
                 }
 
-                 if showsOfflineDownloads,
-                     !model.downloads.records.isEmpty
-                 {
-                     Section {
-                         Button(
-                             "Offline Downloads",
-                             systemImage: "arrow.down.circle"
-                         ) {
-                             showOfflineDownloads = true
-                         }
-                         .accessibilityIdentifier(
-                             "login.offlineDownloads"
-                         )
-                     }
-                 }
-             }
-             .navigationTitle(navigationTitle)
-             .toolbar {
-                 if let onCancel {
-                     ToolbarItem(placement: .cancellationAction) {
-                         Button("Cancel", action: onCancel)
-                     }
-                 }
-             }
-             .sheet(isPresented: $showOfflineDownloads) {
-                 OfflineDownloadsSheet(model: model)
-             }
-             .alert(
-                 "Invalid URL",
-                 isPresented: .constant(invalidURLErrorMessage != nil),
-                 actions: {
-                     Button("OK") {
-                         invalidURLErrorMessage = nil
-                     }
-                 },
-                 message: {
-                     if let message = invalidURLErrorMessage {
-                         Text(message)
-                     }
-                 }
-             )
-         }
+                if showsOfflineDownloads,
+                    !model.downloads.records.isEmpty
+                {
+                    Section {
+                        Button(
+                            "Offline Downloads",
+                            systemImage: "arrow.down.circle"
+                        ) {
+                            showOfflineDownloads = true
+                        }
+                        .accessibilityIdentifier(
+                            "login.offlineDownloads"
+                        )
+                    }
+                }
+            }
+            .navigationTitle(navigationTitle)
+            .toolbar {
+                if let onCancel {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onCancel)
+                    }
+                }
+            }
+            .sheet(isPresented: $showOfflineDownloads) {
+                OfflineDownloadsSheet(model: model)
+            }
+            .alert(
+                "Invalid URL",
+                isPresented: .constant(invalidURLErrorMessage != nil),
+                actions: {
+                    Button("OK") {
+                        invalidURLErrorMessage = nil
+                    }
+                },
+                message: {
+                    if let message = invalidURLErrorMessage {
+                        Text(message)
+                    }
+                }
+            )
+        }
     }
 
     private func submit() {
         let submittedServerAddress = serverAddress
         let submittedUsername = username
         let submittedPassword = password
-        
+
         // Client-side URL validation: must start with https://
         guard let url = URL(string: submittedServerAddress),
-              url.scheme?.lowercased() == "https",
-              let host = url.host, !host.isEmpty else {
+            url.scheme?.lowercased() == "https",
+            let host = url.host, !host.isEmpty
+        else {
             invalidURLErrorMessage = "URL must start with https://"
             return
         }
-        
+
         Task {
             let signedIn = await model.login(
                 serverAddress: submittedServerAddress,
@@ -335,9 +336,9 @@ private struct OfflineDownloadsSheet: View {
                     }
                 }
         }
-            .sheet(isPresented: $showPlayer) {
-                NowPlaying(playback: model.playback)
-            }
+        .sheet(isPresented: $showPlayer) {
+            NowPlaying(playback: model.playback)
+        }
     }
 }
 
@@ -2442,7 +2443,7 @@ private struct StatisticsView: View {
                 )
             case .loaded(let summary):
                 List {
-                    Section("Listening") {
+                    Section("") {
                         LabeledContent(
                             "Time Listening",
                             value: duration(summary.realSeconds)
@@ -2471,10 +2472,10 @@ private struct StatisticsView: View {
                             "Completed",
                             value: summary.booksCompleted.formatted()
                         )
-                        LabeledContent(
-                            "Completed Runtime",
-                            value: duration(summary.finishedRuntime)
-                        )
+                        // LabeledContent(
+                        //     "Completed Runtime",
+                        //     value: duration(summary.finishedRuntime)
+                        // )
                     }
                     Section("Chapters and Sessions") {
                         LabeledContent(
@@ -2576,7 +2577,6 @@ private struct SettingsView: View {
                 if model.privateCloudSyncAvailable {
                     cloudSection
                 }
-                statisticsSection
 
                 Section("Appearance") {
                     Picker("Colour Scheme", selection: $colourScheme) {
@@ -2720,6 +2720,18 @@ private struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        StatisticsView(model: model)
+                    } label: {
+                        Label("Listening Stats", systemImage: "chart.bar")
+                    }
+                    .accessibilityIdentifier("settings.statistics")
+                    NavigationLink {
+                        AboutView()
+                    } label: {
+                        Label("About", systemImage: "info.circle")
+                    }
+                    .accessibilityIdentifier("settings.about")
+                    NavigationLink {
                         DiagnosticsView(model: model)
                     } label: {
                         Label(
@@ -2728,13 +2740,6 @@ private struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.diagnostics")
-
-                    NavigationLink {
-                        AboutView()
-                    } label: {
-                        Label("About", systemImage: "info.circle")
-                    }
-                    .accessibilityIdentifier("settings.about")
                 }
 
             }
@@ -2837,17 +2842,6 @@ private struct SettingsView: View {
             Text(
                 "Syncs listening statistics, account details, preferences, and native usernames and passwords. Access and refresh tokens stay on this device."
             )
-        }
-    }
-
-    private var statisticsSection: some View {
-        Section {
-            NavigationLink {
-                StatisticsView(model: model)
-            } label: {
-                Label("Listening Statistics", systemImage: "chart.bar")
-            }
-            .accessibilityIdentifier("settings.statistics")
         }
     }
 
