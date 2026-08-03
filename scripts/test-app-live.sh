@@ -134,5 +134,5 @@ xcodebuild \
     -destination "id=${bleat_simulator_id}" \
     -parallel-testing-enabled NO \
     -resultBundlePath "${bleat_artifact_dir}/offline.xcresult" \
-    -only-testing:BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndPendingSync \
+    -only-testing:BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress \
     test-without-building

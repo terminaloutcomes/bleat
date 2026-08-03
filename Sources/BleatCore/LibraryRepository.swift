@@ -14,7 +14,7 @@ public protocol LibraryRemoteDataSource: Sendable {
         in libraryID: LibraryID,
         request: LibrarySearchRequest
     ) async throws(AudiobookshelfAPIError)
-        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+        -> AudiobookshelfAPIResult<LibrarySearchResults>
 
     func personalizedShelves(
         in libraryID: LibraryID,
@@ -179,7 +179,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         request: LibrarySearchRequest,
         policy: LibraryFetchPolicy = .remoteElseCache
     ) async throws(LibraryRepositoryError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
     {
         if policy == .cacheOnly {
             return try await cachedSearch(
@@ -188,7 +188,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
             )
         }
 
-        let result: AudiobookshelfAPIResult<[LibraryBookSummary]>
+        let result: AudiobookshelfAPIResult<LibrarySearchResults>
         do {
             result = try await remote.search(
                 in: libraryID,
@@ -369,7 +369,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         request: LibrarySearchRequest,
         libraryID: LibraryID
     ) async throws(LibraryRepositoryError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
     {
         let cached: CachedLibrarySearchSnapshot?
         do {
@@ -385,7 +385,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
             throw .noCachedValue
         }
         return LibraryRepositoryResult(
-            value: snapshot.items,
+            value: snapshot.results,
             source: .cache,
             refreshedAt: snapshot.refreshedAt,
             correlationID: nil
@@ -502,7 +502,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         after remoteError: AudiobookshelfAPIError,
         policy: LibraryFetchPolicy
     ) async throws(LibraryRepositoryError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
     {
         if remoteError == .cancelled || Task.isCancelled {
             throw .cancelled

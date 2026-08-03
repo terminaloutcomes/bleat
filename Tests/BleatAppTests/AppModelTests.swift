@@ -3341,7 +3341,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.librarySort, .addedAt)
         XCTAssertTrue(model.librarySortDescending)
-        XCTAssertEqual(model.libraryProgressFilter, .inProgress)
+        XCTAssertEqual(model.libraryBrowseFilter, .progress(.inProgress))
         let selections = await service.pageSelections()
         XCTAssertEqual(
             selections,
@@ -3375,6 +3375,351 @@ final class AppModelTests: XCTestCase {
                     sort: .addedAt,
                     descending: true,
                     filter: LibraryItemFilter(progress: .inProgress)
+                ),
+            ]
+        )
+    }
+
+    func testAuthorBrowsePreservesSortAndClearsForAnotherLibrary()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let firstLibrary = fixtureLibrary()
+        let secondLibrary = LibrarySummary(
+            id: LibraryID(rawValue: "library-2"),
+            name: "Second Library",
+            mediaType: .book
+        )
+        let authorID = try XCTUnwrap(AuthorID(rawValue: "author-1"))
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([firstLibrary, secondLibrary]),
+            firstPage: .success(fixturePage(libraryID: firstLibrary.id))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setLibrarySort(.updatedAt)
+        await model.setLibrarySortDescending(true)
+        await model.setLibraryBrowseFilter(
+            .author(id: authorID, name: "First Author")
+        )
+
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections.last,
+            PageSelection(
+                page: 0,
+                sort: .updatedAt,
+                descending: true,
+                filter: LibraryItemFilter(authorID: authorID)
+            )
+        )
+
+        await model.selectLibrary(secondLibrary)
+        XCTAssertEqual(model.libraryBrowseFilter, .all)
+    }
+
+    func testRefreshingLibrariesPreservesAuthorBrowseFilter()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let authorID = try XCTUnwrap(AuthorID(rawValue: "author-1"))
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setLibraryBrowseFilter(
+            .author(id: authorID, name: "First Author")
+        )
+
+        await model.loadLibraries()
+
+        XCTAssertEqual(model.selectedLibrary?.id, library.id)
+        XCTAssertEqual(
+            model.libraryBrowseFilter,
+            .author(id: authorID, name: "First Author")
+        )
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections.last?.filter,
+            LibraryItemFilter(authorID: authorID)
+        )
+    }
+
+    func testLatestDeepLinkDoesNotNavigateAfterNewerLinkArrives()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(fixtureBookDetail(item: page.items[0])),
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let coordinator = AppNavigationCoordinator()
+        let bookURL = try XCTUnwrap(
+            URL(string: "bleat://book/item-1?library=library-1")
+        )
+        let settingsURL = try XCTUnwrap(
+            URL(string: "bleat://settings/diagnostics")
+        )
+
+        coordinator.receive(url: bookURL)
+        let firstApplication = Task { @MainActor in
+            await coordinator.applyPendingRoute(model: model)
+        }
+        await gate.waitUntilEntered()
+
+        coordinator.receive(url: settingsURL)
+        await coordinator.applyPendingRoute(model: model)
+        await gate.release()
+        await firstApplication.value
+
+        XCTAssertEqual(coordinator.selectedTab, .settings)
+        XCTAssertNil(coordinator.pendingRoute)
+    }
+
+    func testSupersededAccountQualifiedDeepLinkRestoresBrowsingAccount()
+        async throws
+    {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "other-reader"
+        )
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let gate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(fixtureBookDetail(item: page.items[0])),
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let coordinator = AppNavigationCoordinator()
+        let accountQualifiedBookURL = try XCTUnwrap(
+            URL(
+                string: "bleat://book/item-1?account=account-2&library=library-1"
+            )
+        )
+        let settingsURL = try XCTUnwrap(
+            URL(string: "bleat://settings/diagnostics")
+        )
+
+        coordinator.receive(url: accountQualifiedBookURL)
+        let firstApplication = Task { @MainActor in
+            await coordinator.applyPendingRoute(model: model)
+        }
+        await gate.waitUntilEntered()
+        XCTAssertEqual(model.account?.id, second.id)
+
+        coordinator.receive(url: settingsURL)
+        await coordinator.applyPendingRoute(model: model)
+        await gate.release()
+        await firstApplication.value
+
+        XCTAssertEqual(model.account?.id, first.id)
+        XCTAssertEqual(model.selectedLibrary?.id, library.id)
+        XCTAssertEqual(model.libraryBrowseFilter, .all)
+        XCTAssertEqual(coordinator.selectedTab, .settings)
+        XCTAssertNil(coordinator.pendingRoute)
+    }
+
+    func testSupersededAuthorDeepLinkRestoresBrowseFilter() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let authorID = try XCTUnwrap(AuthorID(rawValue: "author-1"))
+        let book = fixtureBook(
+            id: "item-1",
+            title: "A Book",
+            libraryID: library.id,
+            authors: [
+                LibraryBookContributor(id: authorID, name: "An Author"),
+            ]
+        )
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(items: [book], total: 1, page: 0, limit: 20)
+            ),
+            bookDetail: .success(
+                fixtureBookDetail(item: book, authors: book.authors)
+            ),
+            browsePageGate: gate,
+            browsePageGateFilter: LibraryItemFilter(authorID: authorID)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let coordinator = AppNavigationCoordinator()
+        let authorURL = try XCTUnwrap(
+            URL(string: "bleat://author/author-1?library=library-1")
+        )
+        let settingsURL = try XCTUnwrap(
+            URL(string: "bleat://settings/diagnostics")
+        )
+
+        coordinator.receive(url: authorURL)
+        let firstApplication = Task { @MainActor in
+            await coordinator.applyPendingRoute(model: model)
+        }
+        await gate.waitUntilEntered()
+        XCTAssertEqual(
+            model.libraryBrowseFilter,
+            .author(id: authorID, name: "An Author")
+        )
+
+        coordinator.receive(url: settingsURL)
+        await coordinator.applyPendingRoute(model: model)
+        await gate.release()
+        await firstApplication.value
+
+        XCTAssertEqual(model.libraryBrowseFilter, .all)
+        XCTAssertEqual(coordinator.selectedTab, .settings)
+        XCTAssertNil(coordinator.pendingRoute)
+    }
+
+    func testSeriesPagesAlwaysUseServerSequenceWithoutCollapsing()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let first = fixtureBook(
+            id: "series-item-1",
+            title: "Volume One",
+            libraryID: library.id
+        )
+        let second = fixtureBook(
+            id: "series-item-2",
+            title: "Volume Two",
+            libraryID: library.id
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(
+                    items: [first], total: 2, page: 0, limit: 1
+                )
+            ),
+            nextPage: .success(
+                LibraryItemsPage(
+                    items: [second], total: 2, page: 1, limit: 1
+                )
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: seriesID,
+            name: "A Series"
+        )
+
+        await model.loadSeries(destination)
+        await model.loadNextSeriesPage()
+
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            Array(selections.suffix(2)),
+            [
+                PageSelection(
+                    page: 0,
+                    sort: .sequence,
+                    descending: false,
+                    filter: LibraryItemFilter(seriesID: seriesID),
+                    collapseSeries: false
+                ),
+                PageSelection(
+                    page: 1,
+                    sort: .sequence,
+                    descending: false,
+                    filter: LibraryItemFilter(seriesID: seriesID),
+                    collapseSeries: false
+                ),
+            ]
+        )
+    }
+
+    func testDirectEntityResolutionUsesExpandedFilteredPage() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let authorID = try XCTUnwrap(AuthorID(rawValue: "author-1"))
+        let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let book = fixtureBook(
+            id: "series-item-1",
+            title: "Volume One",
+            libraryID: library.id,
+            authors: [
+                LibraryBookContributor(id: authorID, name: "First Author"),
+            ],
+            series: [
+                LibraryBookSeries(
+                    id: seriesID,
+                    name: "A Series",
+                    sequence: "1"
+                ),
+            ]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(items: [book], total: 1, page: 0, limit: 1)
+            ),
+            bookDetail: .success(
+                fixtureBookDetail(item: book, authors: book.authors)
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let author = await model.resolveAuthor(authorID, in: library.id)
+        let series = await model.resolveSeries(seriesID, in: library.id)
+
+        XCTAssertEqual(author, LibrarySearchAuthorMatch(
+            id: authorID,
+            name: "First Author"
+        ))
+        XCTAssertEqual(series, LibrarySearchSeriesMatch(
+            id: seriesID,
+            name: "A Series"
+        ))
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            Array(selections.suffix(2)),
+            [
+                PageSelection(
+                    page: 0,
+                    sort: .addedAt,
+                    descending: false,
+                    filter: LibraryItemFilter(authorID: authorID),
+                    collapseSeries: false
+                ),
+                PageSelection(
+                    page: 0,
+                    sort: .sequence,
+                    descending: false,
+                    filter: LibraryItemFilter(seriesID: seriesID),
+                    collapseSeries: false
                 ),
             ]
         )
@@ -3474,7 +3819,10 @@ final class AppModelTests: XCTestCase {
         await model.search(query: "  A Book  ")
 
         XCTAssertEqual(model.searchQuery, "  A Book  ")
-        XCTAssertEqual(model.searchResults, .loaded(result))
+        XCTAssertEqual(
+            model.searchResults,
+            .loaded(LibrarySearchResults(books: result))
+        )
         let requests = await service.searchRequests()
         XCTAssertEqual(
             requests,
@@ -3574,7 +3922,10 @@ final class AppModelTests: XCTestCase {
         await oldSearch.value
 
         XCTAssertEqual(model.searchQuery, "new")
-        XCTAssertEqual(model.searchResults, .loaded(newResult))
+        XCTAssertEqual(
+            model.searchResults,
+            .loaded(LibrarySearchResults(books: newResult))
+        )
     }
 
     func testChangingLibraryResetsSearchState() async throws {
@@ -5203,16 +5554,20 @@ final class AppModelTests: XCTestCase {
         id: String,
         title: String,
         libraryID: LibraryID,
-        isExplicit: Bool = false
+        isExplicit: Bool = false,
+        authors: [LibraryBookContributor] = [],
+        series: [LibraryBookSeries] = []
     ) -> LibraryBookSummary {
         LibraryBookSummary(
             id: LibraryItemID(rawValue: id),
             libraryID: libraryID,
             title: title,
             subtitle: nil,
-            authorName: "An Author",
+            authorName: authors.first?.name ?? "An Author",
             narratorName: "A Narrator",
-            seriesName: nil,
+            seriesName: series.first?.name,
+            authors: authors,
+            series: series,
             genres: ["Fiction"],
             publisher: nil,
             publishedYear: "2026",
@@ -5227,7 +5582,8 @@ final class AppModelTests: XCTestCase {
     }
 
     private func fixtureBookDetail(
-        item: LibraryBookSummary
+        item: LibraryBookSummary,
+        authors: [LibraryBookContributor]? = nil
     ) -> LibraryBookDetail {
         LibraryBookDetail(
             id: item.id,
@@ -5235,9 +5591,9 @@ final class AppModelTests: XCTestCase {
             bookID: BookID(rawValue: "book-1"),
             title: item.title,
             subtitle: "A subtitle",
-            authors: [
+            authors: authors ?? [
                 LibraryBookContributor(
-                    id: "author-1",
+                    id: AuthorID(rawValue: "author-1")!,
                     name: "An Author"
                 )
             ],
@@ -5689,6 +6045,24 @@ private struct PageSelection: Equatable, Sendable {
     let sort: LibraryItemSort
     let descending: Bool
     let filter: LibraryItemFilter?
+    let collapseSeries: Bool
+    let minified: Bool
+
+    init(
+        page: Int,
+        sort: LibraryItemSort,
+        descending: Bool,
+        filter: LibraryItemFilter?,
+        collapseSeries: Bool = true,
+        minified: Bool = true
+    ) {
+        self.page = page
+        self.sort = sort
+        self.descending = descending
+        self.filter = filter
+        self.collapseSeries = collapseSeries
+        self.minified = minified
+    }
 }
 
 private struct BookDetailRequest: Equatable, Sendable {
@@ -5764,7 +6138,7 @@ private actor TestAppService: AppServicing {
         >
     private var searchResult:
         Result<
-            [LibraryBookSummary],
+            LibrarySearchResults,
             AppServiceError
         >
     private var bookDetailResult:
@@ -5800,6 +6174,9 @@ private actor TestAppService: AppServicing {
     private let bookmarksGate: AsyncGate?
     private let bookProgressGate: AsyncGate?
     private let localSessionSyncGate: AsyncGate?
+    private let bookDetailGate: AsyncGate?
+    private let browsePageGate: AsyncGate?
+    private let browsePageGateFilter: LibraryItemFilter?
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
@@ -5880,6 +6257,9 @@ private actor TestAppService: AppServicing {
         bookmarksGate: AsyncGate? = nil,
         bookProgressGate: AsyncGate? = nil,
         localSessionSyncGate: AsyncGate? = nil,
+        bookDetailGate: AsyncGate? = nil,
+        browsePageGate: AsyncGate? = nil,
+        browsePageGateFilter: LibraryItemFilter? = nil,
         privateCloudSyncAvailable: Bool = true,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
@@ -5890,7 +6270,7 @@ private actor TestAppService: AppServicing {
         firstPageResult = firstPage
         nextPageResult = nextPage
         homeShelvesResult = homeShelves
-        searchResult = search
+        searchResult = search.map { LibrarySearchResults(books: $0) }
         bookDetailResult = bookDetail
         bookmarksResult = bookmarks
         metadataSaveResult = metadataSave
@@ -5911,6 +6291,9 @@ private actor TestAppService: AppServicing {
         self.bookmarksGate = bookmarksGate
         self.bookProgressGate = bookProgressGate
         self.localSessionSyncGate = localSessionSyncGate
+        self.bookDetailGate = bookDetailGate
+        self.browsePageGate = browsePageGate
+        self.browsePageGateFilter = browsePageGateFilter
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
         configuredEndpointDiagnostics = endpointDiagnostics
     }
@@ -6115,21 +6498,27 @@ private actor TestAppService: AppServicing {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int,
-        sort: LibraryItemSort,
-        descending: Bool,
-        filter: LibraryItemFilter?
+        request: LibraryItemsPageRequest
     ) async throws(AppServiceError) -> LibraryItemsPage {
         recordedPageRequests.append(libraryID)
         recordedPageSelections.append(
             PageSelection(
-                page: page,
-                sort: sort,
-                descending: descending,
-                filter: filter
+                page: request.page,
+                sort: request.sort,
+                descending: request.descending,
+                filter: request.filter,
+                collapseSeries: request.collapseSeries,
+                minified: request.minified
             )
         )
-        if page == 0 {
+        if request.collapseSeries,
+           let browsePageGate,
+           let browsePageGateFilter,
+           request.filter == browsePageGateFilter
+        {
+            await browsePageGate.enterAndWait()
+        }
+        if request.page == 0 {
             return try value(from: firstPageResult)
         }
         return try value(from: nextPageResult)
@@ -6147,7 +6536,7 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         libraryID: LibraryID,
         query: String
-    ) async throws(AppServiceError) -> [LibraryBookSummary] {
+    ) async throws(AppServiceError) -> LibrarySearchResults {
         recordedSearchRequests.append(
             SearchRequest(
                 accountID: account.id,
@@ -6227,6 +6616,9 @@ private actor TestAppService: AppServicing {
                 itemID: itemID
             )
         )
+        if let bookDetailGate {
+            await bookDetailGate.enterAndWait()
+        }
         return try value(from: bookDetailResult)
     }
 
@@ -6416,7 +6808,7 @@ private actor TestAppService: AppServicing {
     func setSearch(
         _ result: Result<[LibraryBookSummary], AppServiceError>
     ) {
-        searchResult = result
+        searchResult = result.map { LibrarySearchResults(books: $0) }
     }
 
     func setBookDetail(

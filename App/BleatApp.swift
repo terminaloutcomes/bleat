@@ -125,10 +125,7 @@ struct UnavailableAppService: AppServicing {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int,
-        sort: LibraryItemSort,
-        descending: Bool,
-        filter: LibraryItemFilter?
+        request: LibraryItemsPageRequest
     ) async throws(AppServiceError) -> LibraryItemsPage {
         throw .accountStore(.persistenceFailed)
     }
@@ -144,7 +141,7 @@ struct UnavailableAppService: AppServicing {
         for account: ServerAccount,
         libraryID: LibraryID,
         query: String
-    ) async throws(AppServiceError) -> [LibraryBookSummary] {
+    ) async throws(AppServiceError) -> LibrarySearchResults {
         throw .accountStore(.persistenceFailed)
     }
 

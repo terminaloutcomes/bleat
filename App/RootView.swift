@@ -41,6 +41,7 @@ enum BookDetailPlaybackAction: Equatable {
 
 struct RootView: View {
     @Bindable var model: AppModel
+    @State private var navigation = AppNavigationCoordinator()
     @Environment(\.scenePhase) private var scenePhase
     @ColourSchemePreference private var colourScheme
 
@@ -53,7 +54,8 @@ struct RootView: View {
             case .signedOut:
                 NativeLoginView(model: model).tint(colourScheme.color)
             case .signedIn:
-                SignedInView(model: model).tint(colourScheme.color)
+                SignedInView(model: model, navigation: navigation)
+                    .tint(colourScheme.color)
             case .unavailable(let failure):
                 ContentUnavailableView {
                     Label(failure.title, systemImage: failure.systemImage)
@@ -73,6 +75,30 @@ struct RootView: View {
         }
         .task {
             await model.start()
+            await navigation.applyPendingRoute(model: model)
+        }
+        .onOpenURL { url in
+            navigation.receive(url: url)
+            Task { await navigation.applyPendingRoute(model: model) }
+        }
+        .onChange(of: model.isNavigationReady) { _, ready in
+            guard ready else { return }
+            Task { await navigation.applyPendingRoute(model: model) }
+        }
+        .alert(
+            "Cannot Open Link",
+            isPresented: Binding(
+                get: { navigation.deepLinkFailure != nil },
+                set: { isPresented in
+                    if !isPresented { navigation.deepLinkFailure = nil }
+                }
+            )
+        ) {
+            Button("OK") { navigation.deepLinkFailure = nil }
+        } message: {
+            if let failure = navigation.deepLinkFailure {
+                Text(failure.message)
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             model.setLiveUpdatesActive(phase == .active)
@@ -857,39 +883,39 @@ private struct DiagnosticsView: View {
 
 private struct SignedInView: View {
     @Bindable var model: AppModel
-    @State private var showPlayer = false
+    @Bindable var navigation: AppNavigationCoordinator
 
     var body: some View {
         GeometryReader { geometry in
-            TabView {
-                Tab("Home", systemImage: "house") {
+            TabView(selection: $navigation.selectedTab) {
+                Tab("Home", systemImage: "house", value: .home) {
                     tabContent(containerHeight: geometry.size.height) {
-                        HomeView(model: model)
+                        HomeView(model: model, navigation: navigation)
                     }
                 }
-                Tab("Library", systemImage: "books.vertical") {
+                Tab("Library", systemImage: "books.vertical", value: .library) {
                     tabContent(containerHeight: geometry.size.height) {
-                        LibraryView(model: model)
+                        LibraryView(model: model, navigation: navigation)
                     }
                 }
-                Tab("Search", systemImage: "magnifyingglass") {
+                Tab("Search", systemImage: "magnifyingglass", value: .search) {
                     tabContent(containerHeight: geometry.size.height) {
-                        SearchView(model: model)
+                        SearchView(model: model, navigation: navigation)
                     }
                 }
-                Tab("Downloads", systemImage: "arrow.down.circle") {
+                Tab("Downloads", systemImage: "arrow.down.circle", value: .downloads) {
                     tabContent(containerHeight: geometry.size.height) {
                         DownloadsView(model: model)
                     }
                 }
-                Tab("Settings", systemImage: "gearshape") {
+                Tab("Settings", systemImage: "gearshape", value: .settings) {
                     tabContent(containerHeight: geometry.size.height) {
-                        SettingsView(model: model)
+                        SettingsView(model: model, navigation: navigation)
                     }
                 }
             }
         }
-        .sheet(isPresented: $showPlayer) {
+        .sheet(isPresented: $navigation.showsPlayer) {
             NowPlaying(playback: model.playback)
 
         }
@@ -931,7 +957,7 @@ private struct SignedInView: View {
                         playback: model.playback,
                         containerHeight: containerHeight
                     ) {
-                        showPlayer = true
+                        navigation.showsPlayer = true
                     }
                 }
             }
@@ -940,15 +966,29 @@ private struct SignedInView: View {
 
 private struct HomeView: View {
     @Bindable var model: AppModel
+    @Bindable var navigation: AppNavigationCoordinator
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigation.pathBinding(for: .home)) {
             HomeContent(model: model)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     homeContext
                 }
                 .navigationDestination(for: LibraryBookSummary.self) { book in
-                    BookDetailView(model: model, book: book)
+                    BookDetailView(
+                        model: model,
+                        book: book,
+                        navigation: navigation,
+                        origin: .home
+                    )
+                }
+                .navigationDestination(for: SeriesDestination.self) { series in
+                    SeriesDetailView(
+                        model: model,
+                        destination: series,
+                        navigation: navigation,
+                        origin: .home
+                    )
                 }
         }
     }
@@ -1222,6 +1262,9 @@ private struct HomeContent: View {
                             .frame(width: 148, alignment: .leading)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier(
+                            "home.book.\(book.id.rawValue)"
+                        )
                     }
                 }
                 .padding(.horizontal)
@@ -1233,13 +1276,18 @@ private struct HomeContent: View {
 
 private struct LibraryView: View {
     @Bindable var model: AppModel
+    @Bindable var navigation: AppNavigationCoordinator
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigation.pathBinding(for: .library)) {
             VStack(spacing: 0) {
                 libraryPicker
                 libraryControls
-                BookListContent(model: model)
+                BookListContent(
+                    model: model,
+                    navigation: navigation,
+                    origin: .library
+                )
             }
             .navigationTitle("Library")
         }
@@ -1248,7 +1296,26 @@ private struct LibraryView: View {
     @ViewBuilder
     private var libraryControls: some View {
         if model.selectedLibrary != nil {
-            HStack {
+            VStack(spacing: 4) {
+                if model.libraryBrowseFilter.isEntityScoped {
+                    HStack(spacing: 8) {
+                        Label(
+                            model.libraryBrowseFilter.label,
+                            systemImage: "line.3.horizontal.decrease.circle"
+                        )
+                        .font(.subheadline)
+                        Spacer()
+                        Button("Clear") {
+                            Task {
+                                await model.setLibraryBrowseFilter(.all)
+                            }
+                        }
+                        .accessibilityIdentifier("library.activeFilter.clear")
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+                }
+                HStack {
                 Menu {
                     ForEach(
                         [
@@ -1309,7 +1376,7 @@ private struct LibraryView: View {
                             await model.setLibraryProgressFilter(nil)
                         }
                     } label: {
-                        if model.libraryProgressFilter == nil {
+                        if model.libraryBrowseFilter == .all {
                             Label("All Books", systemImage: "checkmark")
                         } else {
                             Text("All Books")
@@ -1325,7 +1392,7 @@ private struct LibraryView: View {
                                 )
                             }
                         } label: {
-                            if model.libraryProgressFilter == filter {
+                            if model.libraryBrowseFilter == .progress(filter) {
                                 Label(
                                     filter.label,
                                     systemImage: "checkmark"
@@ -1337,14 +1404,15 @@ private struct LibraryView: View {
                     }
                 } label: {
                     Label(
-                        model.libraryProgressFilter?.label ?? "All Books",
+                        model.libraryBrowseFilter.label,
                         systemImage: "line.3.horizontal.decrease.circle"
                     )
                 }
                 .accessibilityIdentifier("library.filter")
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
         }
     }
 
@@ -1398,6 +1466,8 @@ extension LibraryItemSort {
             "Recently Updated"
         case .duration:
             "Duration"
+        case .sequence:
+            "Series Sequence"
         }
     }
 }
@@ -1419,6 +1489,8 @@ extension LibraryProgressFilter {
 
 private struct BookListContent: View {
     @Bindable var model: AppModel
+    @Bindable var navigation: AppNavigationCoordinator
+    let origin: AppRootTab
 
     var body: some View {
         Group {
@@ -1446,7 +1518,20 @@ private struct BookListContent: View {
             }
         }
         .navigationDestination(for: LibraryBookSummary.self) { book in
-            BookDetailView(model: model, book: book)
+            BookDetailView(
+                model: model,
+                book: book,
+                navigation: navigation,
+                origin: origin
+            )
+        }
+        .navigationDestination(for: SeriesDestination.self) { series in
+            SeriesDetailView(
+                model: model,
+                destination: series,
+                navigation: navigation,
+                origin: origin
+            )
         }
     }
 
@@ -1472,13 +1557,34 @@ private struct BookListContent: View {
                 }
             } else {
                 List {
-                    ForEach(page.items, id: \.id.rawValue) { book in
-                        NavigationLink(value: book) {
-                            BookSummaryRow(
-                                book: book,
-                                accountID: model.account?.id,
-                                server: model.account?.server
+                    ForEach(page.browseEntries, id: \.book.id.rawValue) { entry in
+                        switch entry {
+                        case let .book(book):
+                            NavigationLink(value: book) {
+                                BookSummaryRow(
+                                    book: book,
+                                    accountID: model.account?.id,
+                                    server: model.account?.server
+                                )
+                            }
+                            .accessibilityIdentifier(
+                                "library.book.\(book.id.rawValue)"
                             )
+                        case let .series(series, representative: book):
+                            NavigationLink(
+                                value: SeriesDestination(
+                                    libraryID: book.libraryID,
+                                    id: series.id,
+                                    name: series.name
+                                )
+                            ) {
+                                SeriesSummaryRow(
+                                    series: series,
+                                    representative: book,
+                                    accountID: model.account?.id,
+                                    server: model.account?.server
+                                )
+                            }
                         }
                     }
                     if page.hasNextPage {
@@ -1547,29 +1653,42 @@ private struct BookListContent: View {
 
 private struct SearchView: View {
     @Bindable var model: AppModel
-    @State private var query = ""
+    @Bindable var navigation: AppNavigationCoordinator
 
     private var taskContext: SearchTaskContext {
         SearchTaskContext(
-            query: query,
+            query: navigation.searchQuery,
             libraryID: model.selectedLibrary?.id
         )
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigation.pathBinding(for: .search)) {
             content
                 .navigationTitle("Search")
                 .navigationDestination(for: LibraryBookSummary.self) { book in
-                    BookDetailView(model: model, book: book)
+                    BookDetailView(
+                        model: model,
+                        book: book,
+                        navigation: navigation,
+                        origin: .search
+                    )
+                }
+                .navigationDestination(for: SeriesDestination.self) { series in
+                    SeriesDetailView(
+                        model: model,
+                        destination: series,
+                        navigation: navigation,
+                        origin: .search
+                    )
                 }
         }
         .searchable(
-            text: $query,
+            text: $navigation.searchQuery,
             prompt: "Books, authors, or series"
         )
         .task(id: taskContext) {
-            await model.search(query: query)
+            await model.search(query: navigation.searchQuery)
         }
         .accessibilityIdentifier("search.screen")
     }
@@ -1594,16 +1713,79 @@ private struct SearchView: View {
             .accessibilityIdentifier("search.error")
         case .loaded(let results):
             if results.isEmpty {
-                ContentUnavailableView.search(text: query)
+                ContentUnavailableView.search(text: navigation.searchQuery)
                     .accessibilityIdentifier("search.empty")
             } else {
-                List(results, id: \.id.rawValue) { book in
-                    NavigationLink(value: book) {
-                        BookSummaryRow(
-                            book: book,
-                            accountID: model.account?.id,
-                            server: model.account?.server
-                        )
+                List {
+                    if !results.books.isEmpty,
+                       navigation.searchScope == .all || navigation.searchScope == .book
+                    {
+                        Section("Books") {
+                            ForEach(results.books, id: \.id) { book in
+                                NavigationLink(value: book) {
+                                    BookSummaryRow(
+                                        book: book,
+                                        accountID: model.account?.id,
+                                        server: model.account?.server
+                                    )
+                                }
+                                .accessibilityIdentifier(
+                                    "search.book.\(book.id.rawValue)"
+                                )
+                            }
+                        }
+                    }
+                    if !results.authors.isEmpty,
+                       navigation.searchScope == .all || navigation.searchScope == .author
+                    {
+                        Section("Authors") {
+                            ForEach(results.authors, id: \.id) { author in
+                                Button(author.name) {
+                                    guard let libraryID = model.selectedLibrary?.id else {
+                                        return
+                                    }
+                                    Task {
+                                        await navigation.showAuthor(
+                                            id: author.id,
+                                            name: author.name,
+                                            libraryID: libraryID,
+                                            model: model
+                                        )
+                                    }
+                                }
+                                .accessibilityLabel(
+                                    "Show books by \(author.name)"
+                                )
+                                .accessibilityIdentifier(
+                                    "search.author.\(author.id.rawValue)"
+                                )
+                            }
+                        }
+                    }
+                    if !results.series.isEmpty,
+                       navigation.searchScope == .all || navigation.searchScope == .series
+                    {
+                        Section("Series") {
+                            ForEach(results.series, id: \.id) { series in
+                                Button(series.name) {
+                                    guard let libraryID = model.selectedLibrary?.id else {
+                                        return
+                                    }
+                                    navigation.showSeries(
+                                        id: series.id,
+                                        name: series.name,
+                                        libraryID: libraryID,
+                                        from: .search
+                                    )
+                                }
+                                .accessibilityLabel(
+                                    "Open \(series.name) series"
+                                )
+                                .accessibilityIdentifier(
+                                    "search.series.\(series.id.rawValue)"
+                                )
+                            }
+                        }
                     }
                 }
                 .accessibilityIdentifier("search.results")
@@ -1645,9 +1827,207 @@ private struct BookSummaryRow: View {
     }
 }
 
+private struct SeriesSummaryRow: View {
+    let series: LibraryCollapsedSeries
+    let representative: LibraryBookSummary
+    let accountID: AccountID?
+    let server: NormalizedServerURL?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                BookCoverView(
+                    accountID: accountID,
+                    server: server,
+                    itemID: representative.id,
+                    updatedAtMilliseconds: representative.updatedAtMilliseconds,
+                    width: 128,
+                    height: 128
+                )
+                .frame(width: 64, height: 64)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.secondary.opacity(0.35), lineWidth: 1)
+                )
+                Image(systemName: "books.vertical.fill")
+                    .font(.caption)
+                    .padding(4)
+                    .background(.thinMaterial, in: Circle())
+                    .offset(x: 4, y: 4)
+            }
+            VStack(alignment: .leading) {
+                Text(series.name)
+                Text("\(series.numBooks) books")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(series.name), series, \(series.numBooks) books"
+        )
+    }
+}
+
+private struct SeriesDetailView: View {
+    @Bindable var model: AppModel
+    let destination: SeriesDestination
+    @Bindable var navigation: AppNavigationCoordinator
+    let origin: AppRootTab
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var coverSwipeOffset: CGFloat = 0
+
+    var body: some View {
+        content
+            .navigationTitle(destination.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: destination) {
+                await model.loadSeries(destination)
+            }
+            .refreshable {
+                await model.loadSeries(destination)
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.seriesBooks {
+        case .idle, .loading:
+            ProgressView()
+                .accessibilityIdentifier("series.loading")
+        case .failed(let failure):
+            ContentUnavailableView {
+                Label(failure.title, systemImage: failure.systemImage)
+            } description: {
+                Text(failure.message)
+            } actions: {
+                if failure.allowsRetry {
+                    Button("Try Again") {
+                        Task { await model.loadSeries(destination) }
+                    }
+                }
+            }
+            .accessibilityIdentifier("series.error")
+        case .loaded(let page):
+            List {
+                if !page.items.isEmpty {
+                    Section {
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 0) {
+                            ForEach(page.items, id: \.id) { book in
+                                NavigationLink(value: book) {
+                                    VStack(spacing: 8) {
+                                        BookCoverView(
+                                            accountID: model.account?.id,
+                                            server: model.account?.server,
+                                            itemID: book.id,
+                                            updatedAtMilliseconds: book.updatedAtMilliseconds,
+                                            width: 480,
+                                            height: 480,
+                                            cornerRadius: 14
+                                        )
+                                        .frame(width: 180, height: 180)
+                                        Text(book.title)
+                                            .font(.headline)
+                                        Text(sequenceLabel(for: book))
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .rotation3DEffect(
+                                        .degrees(coverDepthAngle),
+                                        axis: (x: 0, y: 1, z: 0)
+                                    )
+                                }
+                                .containerRelativeFrame(.horizontal)
+                            }
+                        }
+                        .scrollTargetLayout()
+                        }
+                        .scrollTargetBehavior(.paging)
+                        .scrollIndicators(.hidden)
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    guard !reduceMotion else { return }
+                                    coverSwipeOffset = value.translation.width
+                                }
+                                .onEnded { _ in
+                                    coverSwipeOffset = 0
+                                }
+                        )
+                        .frame(height: 270)
+                    }
+                    .listRowInsets(EdgeInsets())
+
+                    Section("Books") {
+                        ForEach(page.items.indices, id: \.self) { index in
+                            let book = page.items[index]
+                            NavigationLink(value: book) {
+                                BookSummaryRow(
+                                    book: book,
+                                    accountID: model.account?.id,
+                                    server: model.account?.server
+                                )
+                            }
+                            .accessibilityLabel(
+                                "\(book.title), \(sequenceLabel(for: book))"
+                            )
+                            .accessibilityIdentifier(
+                                "series.book.\(index)"
+                            )
+                        }
+                    }
+                }
+                if page.hasNextPage {
+                    seriesLoadMore
+                }
+            }
+            .accessibilityIdentifier("series.results")
+        }
+    }
+
+    @ViewBuilder
+    private var seriesLoadMore: some View {
+        switch model.seriesPaginationState {
+        case .idle:
+            Button("Load More") {
+                Task { await model.loadNextSeriesPage() }
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("series.loadMore")
+        case .loading:
+            HStack { Spacer(); ProgressView(); Spacer() }
+        case .failed:
+            Button("Try Again") {
+                Task { await model.loadNextSeriesPage() }
+            }
+        }
+    }
+
+    private func sequenceLabel(for book: LibraryBookSummary) -> String {
+        guard let series = book.series.first(where: {
+            $0.id == destination.id
+        }) else {
+            return "Unnumbered"
+        }
+        guard let sequence = series.sequence, !sequence.isEmpty else {
+            return "Unnumbered"
+        }
+        return "Book \(sequence)"
+    }
+
+    private var coverDepthAngle: Double {
+        guard !reduceMotion else { return 0 }
+        return Double(min(max(coverSwipeOffset / 20, -12), 12))
+    }
+}
+
 private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
+    @Bindable var navigation: AppNavigationCoordinator
+    let origin: AppRootTab
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
     @State private var showRemoveDownloadConfirmation = false
@@ -1827,14 +2207,75 @@ private struct BookDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     if !detail.authors.isEmpty {
-                        Text(detail.authors.map(\.name).joined(separator: ", "))
-                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(
+                                Array(detail.authors.enumerated()),
+                                id: \.offset
+                            ) { index, author in
+                                Button {
+                                    Task {
+                                        await navigation.showAuthor(
+                                            id: author.id,
+                                            name: author.name,
+                                            libraryID: detail.libraryID,
+                                            model: model
+                                        )
+                                    }
+                                } label: {
+                                    Text(author.name)
+                                        .underline()
+                                        .frame(
+                                            maxWidth: .infinity,
+                                            minHeight: 44,
+                                            alignment: .leading
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .font(.headline)
+                                .accessibilityLabel(
+                                    "Show books by \(author.name)"
+                                )
+                                .accessibilityIdentifier(
+                                    "book.detail.author.\(index)"
+                                )
+                            }
+                        }
                     }
                     if !detail.series.isEmpty {
-                        Text(seriesText(detail.series))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("book.detail.series")
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(
+                                Array(detail.series.enumerated()),
+                                id: \.offset
+                            ) { index, series in
+                                Button {
+                                    navigation.showSeries(
+                                        id: series.id,
+                                        name: series.name,
+                                        libraryID: detail.libraryID,
+                                        from: origin
+                                    )
+                                } label: {
+                                    Text(seriesLinkLabel(series))
+                                        .underline()
+                                        .frame(
+                                            maxWidth: .infinity,
+                                            minHeight: 44,
+                                            alignment: .leading
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel(
+                                    series.sequence.map {
+                                        "Open \(series.name) series, book \($0)"
+                                    } ?? "Open \(series.name) series"
+                                )
+                                .accessibilityIdentifier(
+                                    "book.detail.series.\(index)"
+                                )
+                            }
+                        }
                     }
                     if !detail.narrators.isEmpty {
                         Text(
@@ -2433,16 +2874,11 @@ private struct BookDetailView: View {
         return "\(hours) hr \(remainingMinutes) min"
     }
 
-    private func seriesText(
-        _ series: [LibraryBookSeries]
-    ) -> String {
-        series.map {
-            guard let sequence = $0.sequence, !sequence.isEmpty else {
-                return $0.name
-            }
-            return "\($0.name) #\(sequence)"
+    private func seriesLinkLabel(_ series: LibraryBookSeries) -> String {
+        guard let sequence = series.sequence, !sequence.isEmpty else {
+            return series.name
         }
-        .joined(separator: ", ")
+        return "\(series.name) #\(sequence)"
     }
 }
 
@@ -2545,6 +2981,7 @@ private struct StatisticsView: View {
 
 private struct SettingsView: View {
     @Bindable var model: AppModel
+    @Bindable var navigation: AppNavigationCoordinator
     @State private var showAddAccount = false
     @State private var editingAccount: ServerAccount?
     @State private var showDisableCloudSyncConfirmation = false
@@ -2552,7 +2989,7 @@ private struct SettingsView: View {
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigation.pathBinding(for: .settings)) {
             Form {
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.id) { account in
@@ -2738,21 +3175,15 @@ private struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink {
-                        StatisticsView(model: model)
-                    } label: {
+                    NavigationLink(value: DeepLinkSettingsDestination.statistics) {
                         Label("Listening Stats", systemImage: "chart.bar")
                     }
                     .accessibilityIdentifier("settings.statistics")
-                    NavigationLink {
-                        AboutView()
-                    } label: {
+                    NavigationLink(value: DeepLinkSettingsDestination.about) {
                         Label("About", systemImage: "info.circle")
                     }
                     .accessibilityIdentifier("settings.about")
-                    NavigationLink {
-                        DiagnosticsView(model: model)
-                    } label: {
+                    NavigationLink(value: DeepLinkSettingsDestination.diagnostics) {
                         Label(
                             "Diagnostics",
                             systemImage: "stethoscope"
@@ -2763,6 +3194,19 @@ private struct SettingsView: View {
 
             }
             .navigationTitle("Settings")
+            .navigationDestination(for: DeepLinkSettingsDestination.self) {
+                destination in
+                switch destination {
+                case .root:
+                    EmptyView()
+                case .diagnostics:
+                    DiagnosticsView(model: model)
+                case .statistics:
+                    StatisticsView(model: model)
+                case .about:
+                    AboutView()
+                }
+            }
             .sheet(isPresented: $showAddAccount) {
                 NativeLoginView(
                     model: model,

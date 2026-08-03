@@ -305,7 +305,7 @@ final class MetadataEditingTests: XCTestCase {
             subtitle: "Original subtitle",
             authors: [
                 LibraryBookContributor(
-                    id: "author-1",
+                    id: AuthorID(rawValue: "author-1")!,
                     name: "First Author"
                 )
             ],

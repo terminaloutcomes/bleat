@@ -40,6 +40,11 @@ targets:
         CFBundleDisplayName: Bleat
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Viewer
+            CFBundleURLName: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+            CFBundleURLSchemes:
+              - bleat
         BleatBuildDate: Unavailable
         BleatCloudKitMode: "$(BLEAT_CLOUDKIT_MODE)"
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"

@@ -113,12 +113,9 @@
         func page(
             for account: ServerAccount,
             libraryID: LibraryID,
-            page: Int,
-            sort: LibraryItemSort,
-            descending: Bool,
-            filter: LibraryItemFilter?
+            request: LibraryItemsPageRequest
         ) async throws(AppServiceError) -> LibraryItemsPage {
-            if page == 1 {
+            if request.page == 1 {
                 return LibraryItemsPage(
                     items: [
                         Self.book(
@@ -181,11 +178,30 @@
             for account: ServerAccount,
             libraryID: LibraryID,
             query: String
-        ) async throws(AppServiceError) -> [LibraryBookSummary] {
+        ) async throws(AppServiceError) -> LibrarySearchResults {
             guard query == "Test" else {
-                return []
+                return LibrarySearchResults(books: [])
             }
-            return firstPageItem(libraryID: libraryID)
+            guard let authorID = AuthorID(rawValue: "author-1"),
+                  let seriesID = SeriesID(rawValue: "series-1")
+            else {
+                throw .pageRequest(.invalidFilter)
+            }
+            return LibrarySearchResults(
+                books: firstPageItem(libraryID: libraryID),
+                authors: [
+                    LibrarySearchAuthorMatch(
+                        id: authorID,
+                        name: "Test Author"
+                    ),
+                ],
+                series: [
+                    LibrarySearchSeriesMatch(
+                        id: seriesID,
+                        name: "Test Series"
+                    ),
+                ]
+            )
         }
 
         func bookDetail(
@@ -193,7 +209,12 @@
             libraryID: LibraryID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookDetail {
-            LibraryBookDetail(
+            guard let authorID = AuthorID(rawValue: "author-1"),
+                  let seriesID = SeriesID(rawValue: "series-1")
+            else {
+                throw .pageRequest(.invalidFilter)
+            }
+            return LibraryBookDetail(
                 id: itemID,
                 libraryID: libraryID,
                 bookID: BookID(rawValue: "ui-book"),
@@ -203,14 +224,14 @@
                 subtitle: "A complete test story",
                 authors: [
                     LibraryBookContributor(
-                        id: "author-1",
+                        id: authorID,
                         name: "Test Author"
                     )
                 ],
                 narrators: ["Test Narrator"],
                 series: [
                     LibraryBookSeries(
-                        id: "series-1",
+                        id: seriesID,
                         name: "Test Series",
                         sequence: "1"
                     )

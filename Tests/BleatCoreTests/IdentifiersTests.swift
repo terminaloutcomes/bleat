@@ -29,4 +29,21 @@ final class IdentifiersTests: XCTestCase {
 
         XCTAssertEqual(libraryID.rawValue, itemID.rawValue)
     }
+
+    func testAuthorAndSeriesIDsRejectEmptyAndControlCharacters() throws {
+        XCTAssertNil(AuthorID(rawValue: ""))
+        XCTAssertNil(AuthorID(rawValue: "author\n1"))
+        XCTAssertNil(SeriesID(rawValue: ""))
+        XCTAssertNil(SeriesID(rawValue: "series\u{0000}1"))
+
+        XCTAssertEqual(AuthorID(rawValue: "author-1")?.rawValue, "author-1")
+        XCTAssertEqual(SeriesID(rawValue: "series-1")?.rawValue, "series-1")
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AuthorID.self, from: Data("\"\"".utf8))
+        )
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(SeriesID.self, from: Data("\"series\\n1\"".utf8))
+        )
+    }
 }

@@ -117,7 +117,9 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(app.staticTexts["The Test Audiobook"].exists)
 
-        app.staticTexts["The Test Audiobook"].tap()
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
         let description = app.staticTexts["book.detail.description"]
         XCTAssertTrue(description.waitForExistence(timeout: 3))
         XCTAssertEqual(
@@ -127,10 +129,14 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["book.detail.play"].exists)
         XCTAssertTrue(app.buttons["book.detail.play"].isHittable)
         XCTAssertTrue(app.buttons["book.detail.download"].exists)
-        XCTAssertEqual(
-            app.staticTexts["book.detail.series"].label,
-            "Test Series #1"
+        XCTAssertTrue(
+            app.buttons["book.detail.author.0"].waitForExistence(timeout: 3)
         )
+        XCTAssertTrue(app.buttons["book.detail.author.0"].isHittable)
+        XCTAssertTrue(
+            app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["book.detail.series.0"].isHittable)
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.chapter.0"]
                 .waitForExistence(timeout: 3)
@@ -175,6 +181,91 @@ final class BleatUITests: XCTestCase {
             app.staticTexts["The Search Result"].waitForExistence(
                 timeout: 3
             ))
+        let author = app.buttons["search.author.author-1"]
+        XCTAssertTrue(author.waitForExistence(timeout: 3))
+        let series = app.buttons["search.series.series-1"]
+        if !series.waitForExistence(timeout: 1) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testAuthorAndSeriesControlsUseTheirBrowseDestinations() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+        let author = app.buttons["book.detail.author.0"]
+        XCTAssertTrue(author.waitForExistence(timeout: 3))
+        author.tap()
+
+        let clear = app.buttons["library.activeFilter.clear"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Author: Test Author"].exists)
+        clear.tap()
+        XCTAssertTrue(clear.waitForNonExistence(timeout: 3))
+
+        let libraryBook = app.descendants(matching: .any)[
+            "library.book.ui-book"
+        ]
+        XCTAssertTrue(libraryBook.waitForExistence(timeout: 3))
+        libraryBook.tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["series.results"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.navigationBars["Test Series"].exists)
+        app.navigationBars["Test Series"].buttons.firstMatch.tap()
+        XCTAssertTrue(
+            app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testGroupedSearchSelectionsReachAuthorAndSeriesDestinations() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+
+        tabButton("Search", in: app).tap()
+        let searchField = app.searchFields.firstMatch
+        if !searchField.waitForExistence(timeout: 1) {
+            let presentSearch = app.navigationBars["Search"].buttons["Search"]
+            XCTAssertTrue(presentSearch.waitForExistence(timeout: 3))
+            presentSearch.tap()
+        }
+        XCTAssertTrue(searchField.waitForExistence(timeout: 3))
+        searchField.tap()
+        searchField.typeText("Test")
+
+        let author = app.buttons["search.author.author-1"]
+        XCTAssertTrue(author.waitForExistence(timeout: 3))
+        author.tap()
+        let clear = app.buttons["library.activeFilter.clear"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Author: Test Author"].exists)
+        clear.tap()
+
+        tabButton("Search", in: app).tap()
+        let series = app.buttons["search.series.series-1"]
+        if !series.waitForExistence(timeout: 1) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["series.results"]
+                .waitForExistence(timeout: 3)
+        )
     }
 
     @MainActor
@@ -944,7 +1035,7 @@ final class BleatLiveUITests: XCTestCase {
         )
         app.buttons["book.detail.play"].tap()
 
-        let miniPlayer = app.buttons["multi-track"]
+        let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
         miniPlayer.tap()
         XCTAssertTrue(
@@ -986,7 +1077,7 @@ final class BleatLiveUITests: XCTestCase {
     }
 
     @MainActor
-    func testLiveOfflineCachedDownloadAndPendingSync() throws {
+    func testLiveOfflineCachedDownloadAndLocalProgress() throws {
         _ = try liveEnvironment()
         let app = XCUIApplication()
         app.launch()
@@ -1002,7 +1093,7 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertEqual(play.label, "Play")
         play.tap()
 
-        let miniPlayer = app.buttons["multi-track"]
+        let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
         miniPlayer.tap()
         XCTAssertTrue(
@@ -1010,9 +1101,9 @@ final class BleatLiveUITests: XCTestCase {
         )
         app.buttons["player.skipForward"].tap()
         app.buttons["player.toggle"].tap()
-        XCTAssertTrue(
+        XCTAssertFalse(
             app.descendants(matching: .any)["player.syncError"]
-                .waitForExistence(timeout: 20)
+                .waitForExistence(timeout: 2)
         )
         app.buttons["player.toggle"].tap()
         app.buttons["Close"].tap()
@@ -1030,7 +1121,14 @@ final class BleatLiveUITests: XCTestCase {
         tabButton("Library", in: app).tap()
         let library = app.descendants(matching: .any)["books.list"]
         XCTAssertTrue(library.waitForExistence(timeout: 20))
-        let book = library.staticTexts["multi-track"]
+        let series = library.buttons["Fixture Series, series, 2 books"]
+        XCTAssertTrue(series.waitForExistence(timeout: 20))
+        series.tap()
+        let seriesResults = app.descendants(matching: .any)["series.results"]
+        XCTAssertTrue(seriesResults.waitForExistence(timeout: 20))
+        let book = seriesResults.descendants(matching: .any)[
+            "series.book.1"
+        ]
         XCTAssertTrue(book.waitForExistence(timeout: 20))
         book.tap()
     }

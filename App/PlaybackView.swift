@@ -271,6 +271,7 @@ struct MiniPlayerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("player.mini.open")
                 .simultaneousGesture(miniPlayerGesture)
 
                 if playback.state == .preparing {

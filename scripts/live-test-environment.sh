@@ -142,6 +142,72 @@ bleat_login_access_token() {
         '.user.accessToken | select(type == "string" and length > 0)'
 }
 
+bleat_seed_navigation_metadata() {
+    local base_url="$1"
+    local access_token="$2"
+    local items_payload="$3"
+    local -a item_ids
+    local fixture_count
+
+    item_ids=(
+        "${(@f)$(
+            print -r -- "${items_payload}" \
+                | jq --exit-status --raw-output '.results[]?.id'
+        )}"
+    )
+    if (( ${#item_ids} != 3 )); then
+        print -u2 "Expected exactly 3 fixture item IDs from ${base_url}"
+        return 1
+    fi
+
+    local -a metadata_payloads=(
+        '{"metadata":{"authors":[{"name":"Fixture Author One"},{"name":"Fixture Author Two"}],"series":[{"name":"Fixture Series","sequence":"1"},{"name":"Fixture Companion","sequence":"1"}]}}'
+        '{"metadata":{"authors":[{"name":"Fixture Author One"}],"series":[{"name":"Fixture Series","sequence":"2"}]}}'
+        '{"metadata":{"authors":[{"name":"Fixture Author Three"}],"series":[{"name":"Fixture Companion","sequence":"2"}]}}'
+    )
+    local index
+    for index in {1..3}; do
+        /usr/bin/curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --request PATCH \
+            --header "Authorization: Bearer ${access_token}" \
+            --header 'Content-Type: application/json' \
+            --data "${metadata_payloads[index]}" \
+            "${base_url}/api/items/${item_ids[index]}/media" \
+            >/dev/null
+    done
+
+    fixture_count=0
+    local item_metadata
+    for item_id in "${item_ids[@]}"; do
+        item_metadata="$(
+            /usr/bin/curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                --header "Authorization: Bearer ${access_token}" \
+                "${base_url}/api/items/${item_id}?expanded=1"
+        )"
+        if [[ "$(
+            print -r -- "${item_metadata}" \
+                | jq --raw-output \
+                    'if (.media.metadata.authors | length) >= 2
+                        and (.media.metadata.series | length) >= 2
+                    then "yes" else "no" end'
+        )" == "yes" ]]; then
+            (( fixture_count += 1 ))
+        fi
+    done
+    if [[ "${fixture_count}" != "1" ]]; then
+        print -u2 "Navigation metadata was not seeded for ${base_url}"
+        return 1
+    fi
+}
+
 bleat_seed_library() {
     local base_url="$1"
     local access_token
@@ -210,6 +276,10 @@ bleat_seed_library() {
                 | jq --exit-status --raw-output '.total'
         )"
         if [[ "${item_count}" == "3" ]]; then
+            bleat_seed_navigation_metadata \
+                "${base_url}" \
+                "${access_token}" \
+                "${items_payload}"
             return 0
         fi
         sleep 1

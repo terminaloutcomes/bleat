@@ -33,4 +33,59 @@ public typealias PlaybackSessionID = TypedID<PlaybackSessionIDKind>
 public typealias DownloadID = TypedID<DownloadIDKind>
 public typealias ChapterID = TypedID<ChapterIDKind>
 
+/// A server-scoped author identifier. Unlike the older generic ID aliases,
+/// author and series IDs are validated at every remote boundary because they
+/// are used to construct server-side browse filters.
+public struct AuthorID: RawRepresentable, Hashable, Codable, Sendable {
+    public let rawValue: String
+
+    public init?(rawValue: String) {
+        guard Self.isValid(rawValue) else {
+            return nil
+        }
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        guard let value = Self(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: try decoder.singleValueContainer(),
+                debugDescription: "Invalid author identifier"
+            )
+        }
+        self = value
+    }
+
+    private static func isValid(_ value: String) -> Bool {
+        !value.isEmpty && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
+public struct SeriesID: RawRepresentable, Hashable, Codable, Sendable {
+    public let rawValue: String
+
+    public init?(rawValue: String) {
+        guard Self.isValid(rawValue) else {
+            return nil
+        }
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        guard let value = Self(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: try decoder.singleValueContainer(),
+                debugDescription: "Invalid series identifier"
+            )
+        }
+        self = value
+    }
+
+    private static func isValid(_ value: String) -> Bool {
+        !value.isEmpty && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+}
+
 public let AppIdentifier: String = "com.yaleman.Bleat"

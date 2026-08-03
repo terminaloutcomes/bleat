@@ -243,10 +243,7 @@ protocol AppServicing: Sendable {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int,
-        sort: LibraryItemSort,
-        descending: Bool,
-        filter: LibraryItemFilter?
+        request: LibraryItemsPageRequest
     ) async throws(AppServiceError) -> LibraryItemsPage
 
     func homeShelves(
@@ -258,7 +255,7 @@ protocol AppServicing: Sendable {
         for account: ServerAccount,
         libraryID: LibraryID,
         query: String
-    ) async throws(AppServiceError) -> [LibraryBookSummary]
+    ) async throws(AppServiceError) -> LibrarySearchResults
 
     func bookDetail(
         for account: ServerAccount,
@@ -1234,23 +1231,8 @@ actor LiveAppService: AppServicing {
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
-        page: Int,
-        sort: LibraryItemSort,
-        descending: Bool,
-        filter: LibraryItemFilter?
+        request: LibraryItemsPageRequest
     ) async throws(AppServiceError) -> LibraryItemsPage {
-        let request: LibraryItemsPageRequest
-        do {
-            request = try LibraryItemsPageRequest(
-                page: page,
-                sort: sort,
-                descending: descending,
-                filter: filter
-            )
-        } catch let error {
-            throw .pageRequest(error)
-        }
-
         let repository = repository(for: account)
         do {
             return try await repository.libraryItems(
@@ -1287,7 +1269,7 @@ actor LiveAppService: AppServicing {
         for account: ServerAccount,
         libraryID: LibraryID,
         query: String
-    ) async throws(AppServiceError) -> [LibraryBookSummary] {
+    ) async throws(AppServiceError) -> LibrarySearchResults {
         let request: LibrarySearchRequest
         do {
             request = try LibrarySearchRequest(query: query)

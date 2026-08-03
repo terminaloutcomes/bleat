@@ -81,6 +81,7 @@ public enum LibraryItemSort: Hashable, Sendable {
     case addedAt
     case updatedAt
     case duration
+    case sequence
 
     var queryValue: String {
         switch self {
@@ -94,6 +95,8 @@ public enum LibraryItemSort: Hashable, Sendable {
             "updatedAt"
         case .duration:
             "media.duration"
+        case .sequence:
+            "sequence"
         }
     }
 }
@@ -102,8 +105,15 @@ public struct LibraryItemFilter: Hashable, Sendable {
     public let rawValue: String
 
     public init(progress: LibraryProgressFilter) {
-        let encoded = Data(progress.rawValue.utf8).base64EncodedString()
-        rawValue = "progress.\(encoded)"
+        rawValue = Self.encoded("progress", value: progress.rawValue)
+    }
+
+    public init(authorID: AuthorID) {
+        rawValue = Self.encoded("authors", value: authorID.rawValue)
+    }
+
+    public init(seriesID: SeriesID) {
+        rawValue = Self.encoded("series", value: seriesID.rawValue)
     }
 
     public init(_ rawValue: String) throws(LibraryPageRequestError) {
@@ -115,6 +125,10 @@ public struct LibraryItemFilter: Hashable, Sendable {
             throw .invalidFilter
         }
         self.rawValue = rawValue
+    }
+
+    private static func encoded(_ kind: String, value: String) -> String {
+        "\(kind).\(Data(value.utf8).base64EncodedString())"
     }
 }
 
@@ -139,6 +153,7 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
     public let filter: LibraryItemFilter?
     public let includeProgress: Bool
     public let collapseSeries: Bool
+    public let minified: Bool
 
     public init(
         page: Int,
@@ -147,7 +162,8 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
         descending: Bool = false,
         filter: LibraryItemFilter? = nil,
         includeProgress: Bool = true,
-        collapseSeries: Bool = true
+        collapseSeries: Bool = true,
+        minified: Bool = true
     ) throws(LibraryPageRequestError) {
         guard page >= 0 else {
             throw .invalidPage
@@ -162,6 +178,7 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
         self.filter = filter
         self.includeProgress = includeProgress
         self.collapseSeries = collapseSeries
+        self.minified = minified
     }
 
     var queryItems: [URLQueryItem] {
@@ -178,7 +195,9 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
                 URLQueryItem(name: "filter", value: filter.rawValue)
             )
         }
-        items.append(URLQueryItem(name: "minified", value: "1"))
+        items.append(
+            URLQueryItem(name: "minified", value: minified ? "1" : "0")
+        )
         if collapseSeries {
             items.append(
                 URLQueryItem(name: "collapseseries", value: "1")
@@ -230,6 +249,50 @@ public struct LibrarySearchRequest: Hashable, Sendable {
     }
 }
 
+public struct LibrarySearchAuthorMatch: Codable, Hashable, Sendable {
+    public let id: AuthorID
+    public let name: String
+
+    public init(id: AuthorID, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+public struct LibrarySearchSeriesMatch: Codable, Hashable, Sendable {
+    public let id: SeriesID
+    public let name: String
+
+    public init(id: SeriesID, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+public struct LibrarySearchResults: Codable, Hashable, Sendable {
+    public let books: [LibraryBookSummary]
+    public let authors: [LibrarySearchAuthorMatch]
+    public let series: [LibrarySearchSeriesMatch]
+
+    public init(
+        books: [LibraryBookSummary],
+        authors: [LibrarySearchAuthorMatch] = [],
+        series: [LibrarySearchSeriesMatch] = []
+    ) {
+        self.books = books
+        self.authors = authors
+        self.series = series
+    }
+
+    public var isEmpty: Bool {
+        books.isEmpty && authors.isEmpty && series.isEmpty
+    }
+
+    /// Compatibility accessors for existing book-only clients.
+    public var count: Int { books.count }
+    public var first: LibraryBookSummary? { books.first }
+}
+
 public enum LibraryHomeRequestError: Error, Equatable, Sendable {
     case invalidLimit
 }
@@ -270,6 +333,9 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let authorName: String?
     public let narratorName: String?
     public let seriesName: String?
+    public let authors: [LibraryBookContributor]
+    public let series: [LibraryBookSeries]
+    public let collapsedSeries: LibraryCollapsedSeries?
     public let genres: [String]
     public let publisher: String?
     public let publishedYear: String?
@@ -289,6 +355,9 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         authorName: String?,
         narratorName: String?,
         seriesName: String?,
+        authors: [LibraryBookContributor] = [],
+        series: [LibraryBookSeries] = [],
+        collapsedSeries: LibraryCollapsedSeries? = nil,
         genres: [String],
         publisher: String?,
         publishedYear: String?,
@@ -307,6 +376,9 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         self.authorName = authorName
         self.narratorName = narratorName
         self.seriesName = seriesName
+        self.authors = authors
+        self.series = series
+        self.collapsedSeries = collapsedSeries
         self.genres = genres
         self.publisher = publisher
         self.publishedYear = publishedYear
@@ -318,27 +390,92 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         self.isExplicit = isExplicit
         self.isAbridged = isAbridged
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, libraryID, title, subtitle, authorName, narratorName, seriesName
+        case authors, series, collapsedSeries, genres, publisher, publishedYear
+        case duration, trackCount, chapterCount, addedAtMilliseconds
+        case updatedAtMilliseconds, isExplicit, isAbridged
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(LibraryItemID.self, forKey: .id)
+        libraryID = try values.decode(LibraryID.self, forKey: .libraryID)
+        title = try values.decode(String.self, forKey: .title)
+        subtitle = try values.decodeIfPresent(String.self, forKey: .subtitle)
+        authorName = try values.decodeIfPresent(String.self, forKey: .authorName)
+        narratorName = try values.decodeIfPresent(String.self, forKey: .narratorName)
+        seriesName = try values.decodeIfPresent(String.self, forKey: .seriesName)
+        authors = try values.decodeIfPresent([LibraryBookContributor].self, forKey: .authors) ?? []
+        series = try values.decodeIfPresent([LibraryBookSeries].self, forKey: .series) ?? []
+        collapsedSeries = try values.decodeIfPresent(LibraryCollapsedSeries.self, forKey: .collapsedSeries)
+        genres = try values.decode([String].self, forKey: .genres)
+        publisher = try values.decodeIfPresent(String.self, forKey: .publisher)
+        publishedYear = try values.decodeIfPresent(String.self, forKey: .publishedYear)
+        duration = try values.decode(Double.self, forKey: .duration)
+        trackCount = try values.decode(Int.self, forKey: .trackCount)
+        chapterCount = try values.decode(Int.self, forKey: .chapterCount)
+        addedAtMilliseconds = try values.decode(Int64.self, forKey: .addedAtMilliseconds)
+        updatedAtMilliseconds = try values.decode(Int64.self, forKey: .updatedAtMilliseconds)
+        isExplicit = try values.decode(Bool.self, forKey: .isExplicit)
+        isAbridged = try values.decode(Bool.self, forKey: .isAbridged)
+    }
 }
 
 public struct LibraryBookContributor: Codable, Hashable, Sendable {
-    public let id: String
+    public let id: AuthorID
     public let name: String
 
-    public init(id: String, name: String) {
+    public init(id: AuthorID, name: String) {
         self.id = id
         self.name = name
     }
 }
 
 public struct LibraryBookSeries: Codable, Hashable, Sendable {
-    public let id: String
+    public let id: SeriesID
     public let name: String
     public let sequence: String?
 
-    public init(id: String, name: String, sequence: String?) {
+    public init(id: SeriesID, name: String, sequence: String?) {
         self.id = id
         self.name = name
         self.sequence = sequence
+    }
+}
+
+public struct LibraryCollapsedSeries: Codable, Hashable, Sendable {
+    public let id: SeriesID
+    public let name: String
+    public let libraryItemIDs: [LibraryItemID]
+    public let numBooks: Int
+    public let sequenceList: [String]?
+
+    public init(
+        id: SeriesID,
+        name: String,
+        libraryItemIDs: [LibraryItemID],
+        numBooks: Int,
+        sequenceList: [String]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.libraryItemIDs = libraryItemIDs
+        self.numBooks = numBooks
+        self.sequenceList = sequenceList
+    }
+}
+
+public enum LibraryBrowseEntry: Hashable, Sendable {
+    case book(LibraryBookSummary)
+    case series(LibraryCollapsedSeries, representative: LibraryBookSummary)
+
+    public var book: LibraryBookSummary {
+        switch self {
+        case let .book(book), let .series(_, representative: book):
+            book
+        }
     }
 }
 
@@ -481,12 +618,12 @@ extension LibraryBookDetail {
             && Self.isValidDisplayString(title)
             && Self.isValidOptionalString(subtitle)
             && authors.allSatisfy {
-                Self.isValidDisplayString($0.id)
+                Self.isValidDisplayString($0.id.rawValue)
                     && Self.isValidDisplayString($0.name)
             }
             && narrators.allSatisfy(Self.isValidDisplayString)
             && series.allSatisfy {
-                Self.isValidDisplayString($0.id)
+                Self.isValidDisplayString($0.id.rawValue)
                     && Self.isValidDisplayString($0.name)
                     && Self.isValidOptionalString($0.sequence)
             }
@@ -677,6 +814,16 @@ public struct LibraryItemsPage: Codable, Hashable, Sendable {
             return false
         }
         return page < (total - 1) / limit
+    }
+
+    public var browseEntries: [LibraryBrowseEntry] {
+        items.map { item in
+            if let series = item.collapsedSeries {
+                .series(series, representative: item)
+            } else {
+                .book(item)
+            }
+        }
     }
 
     func isValidForStorage(

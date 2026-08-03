@@ -218,7 +218,7 @@
                     completionHandler([])
                     return
                 }
-                let items = books.map {
+                let items = books.books.map {
                     makeSearchResultItem(book: $0)
                 }
                 completionHandler(items)

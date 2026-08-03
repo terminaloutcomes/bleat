@@ -667,6 +667,7 @@ final class AppModel {
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
     private var libraryPageGeneration: UInt64 = 0
+    private var seriesPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
     @ObservationIgnored
@@ -696,14 +697,18 @@ final class AppModel {
     private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
     private(set) var selectedLibrary: LibrarySummary?
+    private(set) var isNavigationReady = false
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
     private(set) var libraryPaginationState: LibraryPaginationState = .idle
     private(set) var librarySort: LibraryItemSort = .title
     private(set) var librarySortDescending = false
-    private(set) var libraryProgressFilter: LibraryProgressFilter?
+    private(set) var libraryBrowseFilter: LibraryBrowseFilter = .all
+    private(set) var seriesBooks: ResourceState<LibraryItemsPage> = .idle
+    private(set) var seriesPaginationState: LibraryPaginationState = .idle
+    private(set) var selectedSeries: SeriesDestination?
     private(set) var homeShelves: ResourceState<[LibraryBookShelf]> = .idle
     private(set) var searchQuery = ""
-    private(set) var searchResults: ResourceState<[LibraryBookSummary]> = .idle
+    private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
@@ -1094,6 +1099,8 @@ final class AppModel {
         do {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
+            selectedLibrary = nil
+            clearEntityBrowseFilter()
             await downloads.start(account: selectedAccount)
             schedulePendingLocalSessionSync(for: selectedAccount)
             await loadLibraries()
@@ -1132,13 +1139,15 @@ final class AppModel {
             .started(.loadLibraries, category: .api)
         )
         libraries = .loading
-        selectedLibrary = nil
+        isNavigationReady = false
+        let previouslySelectedLibraryID = selectedLibrary?.id
         libraryPageGeneration &+= 1
         books = .idle
         libraryPaginationState = .idle
         homeShelves = .idle
         resetSearch()
         resetBookDetail()
+        resetSeriesBrowse()
 
         do {
             let loadedLibraries = try await service.libraries(for: account)
@@ -1153,10 +1162,21 @@ final class AppModel {
                     count: loadedLibraries.count
                 )
             )
-            guard let firstLibrary = loadedLibraries.first else {
+            guard let library = previouslySelectedLibraryID.flatMap({ id in
+                loadedLibraries.first(where: { $0.id == id })
+            }) ?? loadedLibraries.first else {
+                selectedLibrary = nil
+                if previouslySelectedLibraryID != nil {
+                    clearEntityBrowseFilter()
+                }
                 return
             }
-            await selectLibrary(firstLibrary)
+            if previouslySelectedLibraryID != nil,
+               library.id != previouslySelectedLibraryID
+            {
+                selectedLibrary = nil
+            }
+            await selectLibrary(library)
         } catch let error {
             let failure = AppFailure(
                 operation: .loadLibraries, serviceError: error)
@@ -1182,8 +1202,10 @@ final class AppModel {
             return
         }
         if selectedLibrary?.id != library.id {
+            clearEntityBrowseFilter()
             resetSearch()
             resetBookDetail()
+            resetSeriesBrowse()
         }
         selectedLibrary = library
         homeShelves = .loading
@@ -1197,6 +1219,7 @@ final class AppModel {
         else {
             return
         }
+        isNavigationReady = true
         do {
             homeShelves = .loaded(
                 try await service.homeShelves(
@@ -1249,10 +1272,14 @@ final class AppModel {
     func setLibraryProgressFilter(
         _ filter: LibraryProgressFilter?
     ) async {
-        guard libraryProgressFilter != filter else {
+        await setLibraryBrowseFilter(filter.map(LibraryBrowseFilter.progress) ?? .all)
+    }
+
+    func setLibraryBrowseFilter(_ filter: LibraryBrowseFilter) async {
+        guard libraryBrowseFilter != filter else {
             return
         }
-        libraryProgressFilter = filter
+        libraryBrowseFilter = filter
         await reloadBooks()
     }
 
@@ -1267,24 +1294,27 @@ final class AppModel {
         }
         books = .loading
         libraryPaginationState = .idle
+        let filter = libraryBrowseFilter
         await diagnostics.record(
             .started(.loadLibraryPage, category: .api)
         )
 
         do {
-            let page = try await service.page(
-                for: account,
-                libraryID: library.id,
+            let request = try makeLibraryItemsPageRequest(
                 page: 0,
                 sort: librarySort,
                 descending: librarySortDescending,
-                filter: libraryProgressFilter.map(
-                    LibraryItemFilter.init(progress:)
-                )
+                filter: filter.itemFilter
+            )
+            let page = try await service.page(
+                for: account,
+                libraryID: library.id,
+                request: request
             )
             guard operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
-                selectedLibrary?.id == library.id
+                selectedLibrary?.id == library.id,
+                libraryBrowseFilter == filter
             else {
                 return
             }
@@ -1328,21 +1358,24 @@ final class AppModel {
         libraryPaginationState = .loading
         let operationGeneration = libraryPageGeneration
         let nextPageNumber = currentPage.page + 1
+        let filter = libraryBrowseFilter
 
         do {
-            let nextPage = try await service.page(
-                for: account,
-                libraryID: library.id,
+            let request = try makeLibraryItemsPageRequest(
                 page: nextPageNumber,
                 sort: librarySort,
                 descending: librarySortDescending,
-                filter: libraryProgressFilter.map(
-                    LibraryItemFilter.init(progress:)
-                )
+                filter: filter.itemFilter
+            )
+            let nextPage = try await service.page(
+                for: account,
+                libraryID: library.id,
+                request: request
             )
             guard operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
+                libraryBrowseFilter == filter,
                 case .loaded(let latestPage) = books,
                 latestPage.page == currentPage.page
             else {
@@ -1369,6 +1402,216 @@ final class AppModel {
                 return
             }
             libraryPaginationState = .failed(
+                AppFailure(operation: .loadLibraryPage, serviceError: error)
+            )
+        }
+    }
+
+    func loadSeries(_ destination: SeriesDestination) async {
+        seriesPageGeneration &+= 1
+        let generation = seriesPageGeneration
+        selectedSeries = destination
+        seriesBooks = .loading
+        seriesPaginationState = .idle
+        guard let account else {
+            seriesBooks = .failed(
+                AppFailure(.loadLibraryPage, .authenticationRequired)
+            )
+            return
+        }
+        do {
+            let request = try makeLibraryItemsPageRequest(
+                page: 0,
+                sort: .sequence,
+                filter: LibraryItemFilter(seriesID: destination.id),
+                collapseSeries: false
+            )
+            let page = try await service.page(
+                for: account,
+                libraryID: destination.libraryID,
+                request: request
+            )
+            guard generation == seriesPageGeneration,
+                  self.account?.id == account.id,
+                  selectedSeries == destination
+            else {
+                return
+            }
+            seriesBooks = .loaded(page)
+        } catch let error {
+            guard generation == seriesPageGeneration,
+                  selectedSeries == destination
+            else {
+                return
+            }
+            seriesBooks = .failed(
+                AppFailure(operation: .loadLibraryPage, serviceError: error)
+            )
+        }
+    }
+
+    func resolveAuthor(
+        _ id: AuthorID,
+        in libraryID: LibraryID
+    ) async -> LibrarySearchAuthorMatch? {
+        guard let account else { return nil }
+        do {
+            let request = try makeLibraryItemsPageRequest(
+                page: 0,
+                limit: 1,
+                filter: LibraryItemFilter(authorID: id),
+                collapseSeries: false
+            )
+            let page = try await service.page(
+                for: account,
+                libraryID: libraryID,
+                request: request
+            )
+            guard self.account?.id == account.id,
+                  let item = page.items.first
+            else {
+                return nil
+            }
+            let detail = try await service.bookDetail(
+                for: account,
+                libraryID: libraryID,
+                itemID: item.id
+            )
+            guard self.account?.id == account.id,
+                  detail.libraryID == libraryID,
+                  detail.id == item.id
+            else {
+                return nil
+            }
+            return detail.authors
+                .first(where: { $0.id == id })
+                .map { LibrarySearchAuthorMatch(id: $0.id, name: $0.name) }
+        } catch {
+            return nil
+        }
+    }
+
+    func resolveSeries(
+        _ id: SeriesID,
+        in libraryID: LibraryID
+    ) async -> LibrarySearchSeriesMatch? {
+        guard let account else { return nil }
+        do {
+            let request = try LibraryItemsPageRequest(
+                page: 0,
+                limit: 1,
+                sort: .sequence,
+                filter: LibraryItemFilter(seriesID: id),
+                collapseSeries: false
+            )
+            let page = try await service.page(
+                for: account,
+                libraryID: libraryID,
+                request: request
+            )
+            guard self.account?.id == account.id else { return nil }
+            return page.items.lazy
+                .flatMap(\.series)
+                .first(where: { $0.id == id })
+                .map { LibrarySearchSeriesMatch(id: $0.id, name: $0.name) }
+        } catch {
+            return nil
+        }
+    }
+
+    func resolveBook(
+        _ id: LibraryItemID,
+        in libraryID: LibraryID
+    ) async -> LibraryBookSummary? {
+        guard let account else { return nil }
+        do {
+            let detail = try await service.bookDetail(
+                for: account,
+                libraryID: libraryID,
+                itemID: id
+            )
+            guard self.account?.id == account.id,
+                  detail.id == id,
+                  detail.libraryID == libraryID
+            else {
+                return nil
+            }
+            return LibraryBookSummary(
+                id: detail.id,
+                libraryID: detail.libraryID,
+                title: detail.title,
+                subtitle: detail.subtitle,
+                authorName: detail.authors.first?.name,
+                narratorName: detail.narrators.first,
+                seriesName: detail.series.first?.name,
+                authors: detail.authors,
+                series: detail.series,
+                genres: detail.genres,
+                publisher: detail.publisher,
+                publishedYear: detail.publishedYear,
+                duration: detail.duration,
+                trackCount: detail.trackCount,
+                chapterCount: detail.chapters.count,
+                addedAtMilliseconds: detail.addedAtMilliseconds,
+                updatedAtMilliseconds: detail.updatedAtMilliseconds,
+                isExplicit: detail.isExplicit,
+                isAbridged: detail.isAbridged
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    func loadNextSeriesPage() async {
+        guard let destination = selectedSeries,
+              let account,
+              case .loaded(let currentPage) = seriesBooks,
+              currentPage.hasNextPage,
+              seriesPaginationState != .loading
+        else {
+            return
+        }
+        seriesPaginationState = .loading
+        let generation = seriesPageGeneration
+        do {
+            let request = try makeLibraryItemsPageRequest(
+                page: currentPage.page + 1,
+                sort: .sequence,
+                filter: LibraryItemFilter(seriesID: destination.id),
+                collapseSeries: false
+            )
+            let nextPage = try await service.page(
+                for: account,
+                libraryID: destination.libraryID,
+                request: request
+            )
+            guard generation == seriesPageGeneration,
+                  selectedSeries == destination,
+                  case .loaded(let latest) = seriesBooks,
+                  latest.page == currentPage.page
+            else {
+                return
+            }
+            let existingIDs = Set(latest.items.map(\.id))
+            let additions = nextPage.items.filter {
+                !existingIDs.contains($0.id)
+            }
+            seriesBooks = .loaded(
+                LibraryItemsPage(
+                    items: latest.items + additions,
+                    total: nextPage.total,
+                    page: nextPage.page,
+                    limit: nextPage.limit
+                )
+            )
+            seriesPaginationState = .idle
+        } catch let error {
+            guard generation == seriesPageGeneration,
+                  selectedSeries == destination
+            else {
+                return
+            }
+            seriesPaginationState = .failed(
                 AppFailure(operation: .loadLibraryPage, serviceError: error)
             )
         }
@@ -1411,7 +1654,8 @@ final class AppModel {
                 .completed(
                     .search,
                     category: .api,
-                    count: results.count
+                    count: results.books.count + results.authors.count
+                        + results.series.count
                 )
             )
         } catch let error {
@@ -1979,6 +2223,13 @@ final class AppModel {
         searchResults = .idle
     }
 
+    private func clearEntityBrowseFilter() {
+        guard libraryBrowseFilter.isEntityScoped else {
+            return
+        }
+        libraryBrowseFilter = .all
+    }
+
     func setLiveUpdatesActive(_ active: Bool) {
         liveUpdatesAreActive = active
         if active, let account {
@@ -2143,6 +2394,30 @@ final class AppModel {
         }
     }
 
+    private func makeLibraryItemsPageRequest(
+        page: Int,
+        limit: Int = 20,
+        sort: LibraryItemSort = .addedAt,
+        descending: Bool = false,
+        filter: LibraryItemFilter? = nil,
+        collapseSeries: Bool = true,
+        minified: Bool = true
+    ) throws(AppServiceError) -> LibraryItemsPageRequest {
+        do {
+            return try LibraryItemsPageRequest(
+                page: page,
+                limit: limit,
+                sort: sort,
+                descending: descending,
+                filter: filter,
+                collapseSeries: collapseSeries,
+                minified: minified
+            )
+        } catch let error {
+            throw .pageRequest(error)
+        }
+    }
+
     private func resetBookDetail() {
         bookDetailGeneration &+= 1
         selectedBookID = nil
@@ -2150,6 +2425,13 @@ final class AppModel {
         bookBookmarks = .idle
         bookEditSaveState = .idle
         bookDeletionState = .idle
+    }
+
+    private func resetSeriesBrowse() {
+        seriesPageGeneration &+= 1
+        selectedSeries = nil
+        seriesBooks = .idle
+        seriesPaginationState = .idle
     }
 
     private static func sortAccounts(

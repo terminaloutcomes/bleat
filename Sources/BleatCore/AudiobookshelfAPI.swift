@@ -133,7 +133,7 @@ public actor AudiobookshelfAPI<
         in libraryID: LibraryID,
         request: LibrarySearchRequest
     ) async throws(AudiobookshelfAPIError)
-        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+        -> AudiobookshelfAPIResult<LibrarySearchResults>
     {
         guard !libraryID.rawValue.isEmpty else {
             throw .invalidLibrary
@@ -144,20 +144,37 @@ public actor AudiobookshelfAPI<
                 queryItems: request.queryItems,
                 as: LibrarySearchResponseDTO.self
             )
-        guard result.value.book.count <= request.limit else {
+        guard result.value.book.count <= request.limit,
+              result.value.authors.count <= request.limit,
+              result.value.series.count <= request.limit
+        else {
             throw .invalidSearchResults
         }
-        var items: [LibraryBookSummary] = []
-        items.reserveCapacity(result.value.book.count)
+        var books: [LibraryBookSummary] = []
+        books.reserveCapacity(result.value.book.count)
         for match in result.value.book {
-            items.append(
+            books.append(
                 try match.libraryItem.domainValue(
                     expectedLibraryID: libraryID
                 )
             )
         }
+        var authors: [LibrarySearchAuthorMatch] = []
+        authors.reserveCapacity(result.value.authors.count)
+        for author in result.value.authors {
+            authors.append(try author.domainValue())
+        }
+        var series: [LibrarySearchSeriesMatch] = []
+        series.reserveCapacity(result.value.series.count)
+        for value in result.value.series {
+            series.append(try value.domainValue())
+        }
         return AudiobookshelfAPIResult(
-            value: items,
+            value: LibrarySearchResults(
+                books: books,
+                authors: authors,
+                series: series
+            ),
             correlationID: result.correlationID
         )
     }
@@ -380,10 +397,87 @@ private struct LibraryItemsPageDTO: Decodable, Sendable {
 
 private struct LibrarySearchResponseDTO: Decodable, Sendable {
     let book: [LibrarySearchBookMatchDTO]
+    let authors: [LibrarySearchAuthorMatchDTO]
+    let series: [LibrarySearchSeriesMatchDTO]
+
+    enum CodingKeys: String, CodingKey {
+        case book
+        case authors
+        case series
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        book = try values.decode(
+            [LibrarySearchBookMatchDTO].self,
+            forKey: .book
+        )
+        authors = try values.decodeIfPresent(
+            [LibrarySearchAuthorMatchDTO].self,
+            forKey: .authors
+        ) ?? []
+        series = try values.decodeIfPresent(
+            [LibrarySearchSeriesMatchDTO].self,
+            forKey: .series
+        ) ?? []
+    }
 }
 
 private struct LibrarySearchBookMatchDTO: Decodable, Sendable {
     let libraryItem: LibraryItemDTO
+}
+
+private struct LibrarySearchAuthorMatchDTO: Decodable, Sendable {
+    let id: AuthorID
+    let name: String
+
+    func domainValue() throws(AudiobookshelfAPIError) -> LibrarySearchAuthorMatch {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.rangeOfCharacter(from: .controlCharacters) == nil
+        else {
+            throw .invalidSearchResults
+        }
+        return LibrarySearchAuthorMatch(id: id, name: name)
+    }
+}
+
+private struct LibrarySearchSeriesMatchDTO: Decodable, Sendable {
+    let id: SeriesID
+    let name: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case series
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        if let nestedSeries = try values.decodeIfPresent(
+            LibrarySearchSeriesIdentityDTO.self,
+            forKey: .series
+        ) {
+            id = nestedSeries.id
+            name = nestedSeries.name
+        } else {
+            id = try values.decode(SeriesID.self, forKey: .id)
+            name = try values.decode(String.self, forKey: .name)
+        }
+    }
+
+    func domainValue() throws(AudiobookshelfAPIError) -> LibrarySearchSeriesMatch {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.rangeOfCharacter(from: .controlCharacters) == nil
+        else {
+            throw .invalidSearchResults
+        }
+        return LibrarySearchSeriesMatch(id: id, name: name)
+    }
+}
+
+private struct LibrarySearchSeriesIdentityDTO: Decodable, Sendable {
+    let id: SeriesID
+    let name: String
 }
 
 private struct PersonalizedShelfDTO: Decodable, Sendable {
@@ -432,6 +526,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
     let updatedAt: Int64
     let mediaType: String
     let media: LibraryBookDTO
+    let collapsedSeries: LibraryCollapsedSeriesDTO?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -440,6 +535,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
         case updatedAt
         case mediaType
         case media
+        case collapsedSeries
     }
 
     func domainValue(
@@ -457,6 +553,13 @@ private struct LibraryItemDTO: Decodable, Sendable {
               Self.isValidOptionalDisplayString(
                   media.metadata.publishedYear
               ),
+              (media.metadata.authors ?? []).allSatisfy({
+                  Self.isValidDisplayString($0.name)
+              }),
+              (media.metadata.series ?? []).allSatisfy({
+                  Self.isValidDisplayString($0.name)
+                      && Self.isValidOptionalDisplayString($0.sequence)
+              }),
               media.metadata.genres.allSatisfy(Self.isValidDisplayString),
               media.duration.isFinite,
               media.duration >= 0,
@@ -475,6 +578,9 @@ private struct LibraryItemDTO: Decodable, Sendable {
             authorName: Self.nonEmpty(media.metadata.authorName),
             narratorName: Self.nonEmpty(media.metadata.narratorName),
             seriesName: Self.nonEmpty(media.metadata.seriesName),
+            authors: media.metadata.authors ?? [],
+            series: media.metadata.series ?? [],
+            collapsedSeries: try collapsedSeries?.domainValue(),
             genres: media.metadata.genres,
             publisher: Self.nonEmpty(media.metadata.publisher),
             publishedYear: Self.nonEmpty(media.metadata.publishedYear),
@@ -527,11 +633,141 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
     let authorName: String?
     let narratorName: String?
     let seriesName: String?
+    let authors: [LibraryBookContributor]?
+    let series: [LibraryBookSeries]?
     let genres: [String]
     let publishedYear: String?
     let publisher: String?
     let explicit: Bool
     let abridged: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case subtitle
+        case authorName
+        case narratorName
+        case seriesName
+        case authors
+        case series
+        case genres
+        case publishedYear
+        case publisher
+        case explicit
+        case abridged
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        title = try values.decode(String.self, forKey: .title)
+        subtitle = try values.decodeIfPresent(String.self, forKey: .subtitle)
+        authorName = try values.decodeIfPresent(
+            String.self,
+            forKey: .authorName
+        )
+        narratorName = try values.decodeIfPresent(
+            String.self,
+            forKey: .narratorName
+        )
+        seriesName = try values.decodeIfPresent(
+            String.self,
+            forKey: .seriesName
+        )
+        authors = try values.decodeIfPresent(
+            [LibraryBookContributor].self,
+            forKey: .authors
+        )
+        if values.contains(.series),
+           try !values.decodeNil(forKey: .series)
+        {
+            if let seriesList = try? values.decode(
+                [LibraryBookSeries].self,
+                forKey: .series
+            ) {
+                series = seriesList
+            } else {
+                series = [
+                    try values.decode(
+                        LibraryBookSeries.self,
+                        forKey: .series
+                    ),
+                ]
+            }
+        } else {
+            series = nil
+        }
+        genres = try values.decode([String].self, forKey: .genres)
+        publishedYear = try values.decodeIfPresent(
+            String.self,
+            forKey: .publishedYear
+        )
+        publisher = try values.decodeIfPresent(
+            String.self,
+            forKey: .publisher
+        )
+        explicit = try values.decode(Bool.self, forKey: .explicit)
+        abridged = try values.decode(Bool.self, forKey: .abridged)
+    }
+}
+
+private struct LibraryCollapsedSeriesDTO: Decodable, Sendable {
+    let id: SeriesID
+    let name: String
+    let libraryItemIDs: [LibraryItemID]
+    let numBooks: Int
+    let sequenceList: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case libraryItemIDs = "libraryItemIds"
+        case numBooks
+        case sequenceList = "seriesSequenceList"
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(SeriesID.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        libraryItemIDs = try values.decodeIfPresent(
+            [LibraryItemID].self,
+            forKey: .libraryItemIDs
+        ) ?? []
+        numBooks = try values.decode(Int.self, forKey: .numBooks)
+        if let values = try? values.decode(
+            [String].self,
+            forKey: .sequenceList
+        ) {
+            sequenceList = values
+        } else if let value = try values.decodeIfPresent(
+            String.self,
+            forKey: .sequenceList
+        ) {
+            sequenceList = [value]
+        } else {
+            sequenceList = nil
+        }
+    }
+
+    func domainValue() throws(AudiobookshelfAPIError) -> LibraryCollapsedSeries {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.rangeOfCharacter(from: .controlCharacters) == nil,
+              numBooks >= 1,
+              libraryItemIDs.count <= numBooks,
+              libraryItemIDs.allSatisfy({ !$0.rawValue.isEmpty }),
+              sequenceList?.allSatisfy({
+                  $0.rangeOfCharacter(from: .controlCharacters) == nil
+              }) ?? true
+        else {
+            throw .invalidLibraryItem
+        }
+        return LibraryCollapsedSeries(
+            id: id,
+            name: name,
+            libraryItemIDs: libraryItemIDs,
+            numBooks: numBooks,
+            sequenceList: sequenceList
+        )
+    }
 }
 
 private struct LibraryBookDetailDTO: Decodable, Sendable {
@@ -677,7 +913,7 @@ private struct ExpandedLibraryBookMetadataDTO: Decodable, Sendable {
 }
 
 private struct ExpandedLibraryBookSeriesDTO: Decodable, Sendable {
-    let id: String
+    let id: SeriesID
     let name: String
     let sequence: String?
 }

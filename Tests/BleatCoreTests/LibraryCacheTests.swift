@@ -205,6 +205,63 @@ final class LibraryCacheTests: XCTestCase {
         )
     }
 
+    func testPageCacheSeparatesMinifiedRequests() async throws {
+        let fixture = try LibraryCacheFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let minifiedRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1,
+            minified: true
+        )
+        let expandedRequest = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1,
+            minified: false
+        )
+
+        try await fixture.cache.savePage(
+            Self.page(
+                libraryID: libraryID,
+                request: expandedRequest,
+                itemID: "expanded"
+            ),
+            request: expandedRequest,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        let minifiedBeforeSave = try await fixture.cache.page(
+            request: minifiedRequest,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        XCTAssertNil(minifiedBeforeSave)
+
+        try await fixture.cache.savePage(
+            Self.page(
+                libraryID: libraryID,
+                request: minifiedRequest,
+                itemID: "minified"
+            ),
+            request: minifiedRequest,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+
+        let expanded = try await fixture.cache.page(
+            request: expandedRequest,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        let minified = try await fixture.cache.page(
+            request: minifiedRequest,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+        XCTAssertEqual(expanded?.page.items.first?.id.rawValue, "expanded")
+        XCTAssertEqual(minified?.page.items.first?.id.rawValue, "minified")
+    }
+
     func testPageReplacementUpdatesPayloadAndRefreshTime() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -345,6 +402,54 @@ final class LibraryCacheTests: XCTestCase {
             "other-library"
         )
         XCTAssertEqual(empty?.items, [])
+    }
+
+    func testLegacyBookOnlySearchCacheDecodesAsGroupedResults()
+        async throws
+    {
+        let fixture = try LibraryCacheFixture()
+        let accountID = AccountID(rawValue: "account")
+        let libraryID = LibraryID(rawValue: "library")
+        let request = try LibrarySearchRequest(query: "legacy", limit: 1)
+        let pageRequest = try LibraryItemsPageRequest(page: 0, limit: 1)
+        let book = Self.page(
+            libraryID: libraryID,
+            request: pageRequest,
+            itemID: "legacy-item"
+        ).items[0]
+        try await fixture.cache.saveSearchResults(
+            LibrarySearchResults(books: [book]),
+            request: request,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+
+        let context = ModelContext(fixture.container)
+        let record = try XCTUnwrap(
+            context.fetch(FetchDescriptor<CachedLibrarySearchRecord>()).first
+        )
+        let currentPayload = try JSONEncoder().encode([book])
+        var legacyBooks = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: currentPayload)
+                as? [[String: Any]]
+        )
+        legacyBooks[0].removeValue(forKey: "authors")
+        legacyBooks[0].removeValue(forKey: "series")
+        legacyBooks[0].removeValue(forKey: "collapsedSeries")
+        record.payload = try JSONSerialization.data(withJSONObject: legacyBooks)
+        try context.save()
+
+        let cached = try await LibraryCache(
+            modelContainer: fixture.container
+        ).searchResults(
+            request: request,
+            libraryID: libraryID,
+            accountID: accountID
+        )
+
+        XCTAssertEqual(cached?.results.books, [book])
+        XCTAssertEqual(cached?.results.authors, [])
+        XCTAssertEqual(cached?.results.series, [])
     }
 
     func testHomeShelvesAreExactScopedAndPersistEmptyResults()
@@ -1068,7 +1173,10 @@ final class LibraryCacheTests: XCTestCase {
             title: title,
             subtitle: nil,
             authors: [
-                LibraryBookContributor(id: "author", name: "Author"),
+                LibraryBookContributor(
+                    id: AuthorID(rawValue: "author")!,
+                    name: "Author"
+                ),
             ],
             narrators: ["Narrator"],
             series: [],

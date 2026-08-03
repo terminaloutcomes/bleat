@@ -220,7 +220,7 @@ final class LibraryRepositoryTests: XCTestCase {
         let items = Self.page(request: pageRequest).items
         let correlationID = APICorrelationID()
         let online = RepositoryRemote(
-            searches: [.success(items, correlationID)]
+            searches: [.success(LibrarySearchResults(books: items), correlationID)]
         )
         let repository = LibraryRepository(
             accountID: accountID,
@@ -234,7 +234,7 @@ final class LibraryRepositoryTests: XCTestCase {
             request: request,
             policy: .remoteOnly
         )
-        XCTAssertEqual(remote.value, items)
+        XCTAssertEqual(remote.value.books, items)
         XCTAssertEqual(remote.source, .remote)
         XCTAssertEqual(remote.correlationID, correlationID)
 
@@ -252,7 +252,7 @@ final class LibraryRepositoryTests: XCTestCase {
             in: libraryID,
             request: request
         )
-        XCTAssertEqual(fallback.value, items)
+        XCTAssertEqual(fallback.value.books, items)
         XCTAssertEqual(fallback.source, .cache)
         XCTAssertNil(fallback.correlationID)
         XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
@@ -637,7 +637,10 @@ final class LibraryRepositoryTests: XCTestCase {
             title: "Book",
             subtitle: nil,
             authors: [
-                LibraryBookContributor(id: "author", name: "Author"),
+                LibraryBookContributor(
+                    id: AuthorID(rawValue: "author")!,
+                    name: "Author"
+                ),
             ],
             narrators: ["Narrator"],
             series: [],
@@ -692,7 +695,7 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
     private var librarySteps: [RepositoryRemoteStep<[LibrarySummary]>]
     private var pageSteps: [RepositoryRemoteStep<LibraryItemsPage>]
     private var searchSteps: [
-        RepositoryRemoteStep<[LibraryBookSummary]>
+        RepositoryRemoteStep<LibrarySearchResults>
     ]
     private var homeSteps: [
         RepositoryRemoteStep<[LibraryBookShelf]>
@@ -709,9 +712,7 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
     init(
         libraries: [RepositoryRemoteStep<[LibrarySummary]>] = [],
         pages: [RepositoryRemoteStep<LibraryItemsPage>] = [],
-        searches: [
-            RepositoryRemoteStep<[LibraryBookSummary]>
-        ] = [],
+        searches: [RepositoryRemoteStep<LibrarySearchResults>] = [],
         homes: [
             RepositoryRemoteStep<[LibraryBookShelf]>
         ] = [],
@@ -747,7 +748,7 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         in libraryID: LibraryID,
         request: LibrarySearchRequest
     ) async throws(AudiobookshelfAPIError)
-        -> AudiobookshelfAPIResult<[LibraryBookSummary]>
+        -> AudiobookshelfAPIResult<LibrarySearchResults>
     {
         searchCallCount += 1
         return try Self.result(from: next(&searchSteps))

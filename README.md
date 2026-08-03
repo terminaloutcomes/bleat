@@ -375,7 +375,23 @@ title, author, recently added, recently updated, or duration in either
 direction. The progress filter shows all, finished, in-progress, not-started,
 or not-finished books without downloading the entire library first. Pull down
 to reload accessible libraries and the selected library's content. **Load More**
-fetches the next page using the active sort and filter.
+fetches the next page using the active sort and filter. Collapsed server series
+are shown as series entries; opening one uses the server's uncollapsed sequence
+order, supports cached pages and pagination, and provides a swipeable cover
+browser. A book's authors and series are separate accessible controls: an
+author opens a named Library filter that can be cleared, while a series opens
+its ordered series detail. Search presents separate Books, Authors, and Series
+groups, with the same destinations.
+
+## Open a Bleat link
+
+Bleat registers the `bleat` URL scheme for scene-local navigation. It accepts
+Home, Library, Downloads, Now Playing, Settings (including Diagnostics,
+Listening Stats, and About), Search, and account/library-qualified Book,
+Author, and Series routes. Entity routes resolve their display labels using the
+selected account and library; they never search other accounts. Malformed links
+leave the current screen unchanged, and a link received while the app is
+starting opens once its account and library context is ready.
 
 ## Play an audiobook
 

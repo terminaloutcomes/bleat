@@ -311,7 +311,7 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
 
     private static func assertFailure(
         _ result: Result<
-            LibraryRepositoryResult<[LibraryBookSummary]>,
+            LibraryRepositoryResult<LibrarySearchResults>,
             LibrarySearchCoordinatorError
         >,
         equals expected: LibrarySearchCoordinatorError,
@@ -354,7 +354,7 @@ private func performSearchForTest(
     request: LibrarySearchRequest,
     service: SearchTestService
 ) async -> Result<
-    LibraryRepositoryResult<[LibraryBookSummary]>,
+    LibraryRepositoryResult<LibrarySearchResults>,
     LibrarySearchCoordinatorError
 > {
     do {
@@ -440,7 +440,7 @@ private actor SearchTestService {
         context: LibrarySearchContext,
         request: LibrarySearchRequest
     ) async throws(LibraryRepositoryError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
     {
         recordedCalls.append(Call(
             context: context,
@@ -465,7 +465,7 @@ private actor SearchTestService {
             throw failure
         }
         return LibraryRepositoryResult(
-            value: [],
+            value: LibrarySearchResults(books: []),
             source: .remote,
             refreshedAt: Date(timeIntervalSince1970: 1),
             correlationID: nil

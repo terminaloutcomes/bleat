@@ -46,12 +46,15 @@ final class AudiobookshelfAPITests: XCTestCase {
         XCTAssertEqual(detail.title, "Expanded Book")
         XCTAssertEqual(detail.subtitle, "A Subtitle")
         XCTAssertEqual(detail.authors, [
-            LibraryBookContributor(id: "author", name: "An Author"),
+            LibraryBookContributor(
+                id: AuthorID(rawValue: "author")!,
+                name: "An Author"
+            ),
         ])
         XCTAssertEqual(detail.narrators, ["A Narrator"])
         XCTAssertEqual(detail.series, [
             LibraryBookSeries(
-                id: "series",
+                id: SeriesID(rawValue: "series")!,
                 name: "A Series",
                 sequence: "2"
             ),
@@ -168,6 +171,19 @@ final class AudiobookshelfAPITests: XCTestCase {
             URLQueryItem(name: "limit", value: "12"),
             URLQueryItem(name: "include", value: "progress"),
         ])
+
+        let expandedRequest = try LibraryItemsPageRequest(
+            page: 0,
+            filter: LibraryItemFilter(authorID: try XCTUnwrap(
+                AuthorID(rawValue: "author-1")
+            )),
+            collapseSeries: false,
+            minified: false
+        )
+        XCTAssertEqual(
+            expandedRequest.queryItems.first { $0.name == "minified" }?.value,
+            "0"
+        )
         XCTAssertEqual(
             try LibraryHomeRequest(
                 limit: 8,
@@ -412,14 +428,14 @@ final class AudiobookshelfAPITests: XCTestCase {
             )?.queryItems
         )
 
-        XCTAssertEqual(result.value.count, 1)
+        XCTAssertEqual(result.value.books.count, 1)
         XCTAssertEqual(
-            result.value.first?.id,
+            result.value.books.first?.id,
             LibraryItemID(rawValue: "search-item-0")
         )
-        XCTAssertEqual(result.value.first?.title, "Search Book 0")
+        XCTAssertEqual(result.value.books.first?.title, "Search Book 0")
         XCTAssertEqual(
-            result.value.first?.libraryID,
+            result.value.books.first?.libraryID,
             LibraryID(rawValue: "library")
         )
         XCTAssertEqual(
@@ -427,6 +443,57 @@ final class AudiobookshelfAPITests: XCTestCase {
             "/audiobookshelf/api/libraries/library/search"
         )
         XCTAssertEqual(queryItems, request.queryItems)
+    }
+
+    func testSearchMapsTypedAuthorAndSeriesGroups() async throws {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Data(
+                        """
+                        {
+                          "book": [],
+                          "authors": [{"id": "author-1", "name": "First Author"}],
+                          "series": [{
+                            "series": {
+                              "id": "series-1",
+                              "name": "First Series"
+                            },
+                            "books": []
+                          }]
+                        }
+                        """.utf8
+                    ),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let request = try LibrarySearchRequest(query: "first", limit: 5)
+
+        let result = try await fixture.api.search(
+            in: LibraryID(rawValue: "library"),
+            request: request
+        )
+
+        XCTAssertEqual(result.value.books, [])
+        XCTAssertEqual(
+            result.value.authors,
+            [
+                LibrarySearchAuthorMatch(
+                    id: try XCTUnwrap(AuthorID(rawValue: "author-1")),
+                    name: "First Author"
+                ),
+            ]
+        )
+        XCTAssertEqual(
+            result.value.series,
+            [
+                LibrarySearchSeriesMatch(
+                    id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
+                    name: "First Series"
+                ),
+            ]
+        )
     }
 
     func testSearchFailuresRemainTyped() async throws {
@@ -544,6 +611,7 @@ final class AudiobookshelfAPITests: XCTestCase {
             .addedAt,
             .updatedAt,
             .duration,
+            .sequence,
         ].map {
             try LibraryItemsPageRequest(
                 page: 0,
@@ -560,6 +628,7 @@ final class AudiobookshelfAPITests: XCTestCase {
             "addedAt",
             "updatedAt",
             "media.duration",
+            "sequence",
         ])
         XCTAssertEqual(
             LibraryProgressFilter.allCases.map {
@@ -571,6 +640,18 @@ final class AudiobookshelfAPITests: XCTestCase {
                 "progress.bm90LXN0YXJ0ZWQ=",
                 "progress.bm90LWZpbmlzaGVk",
             ]
+        )
+        XCTAssertEqual(
+            LibraryItemFilter(
+                authorID: try XCTUnwrap(AuthorID(rawValue: "author-1"))
+            ).rawValue,
+            "authors.YXV0aG9yLTE="
+        )
+        XCTAssertEqual(
+            LibraryItemFilter(
+                seriesID: try XCTUnwrap(SeriesID(rawValue: "series-1"))
+            ).rawValue,
+            "series.c2VyaWVzLTE="
         )
     }
 
@@ -634,6 +715,138 @@ final class AudiobookshelfAPITests: XCTestCase {
             "/audiobookshelf/api/libraries/library/items"
         )
         XCTAssertEqual(queryItems, request.queryItems)
+    }
+
+    func testLibraryItemsMapsCollapsedSeriesBrowseEntry() async throws {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Data(
+                        """
+                        {
+                          "results": [{
+                            "id": "item-1",
+                            "libraryId": "library",
+                            "addedAt": 1,
+                            "updatedAt": 2,
+                            "mediaType": "book",
+                            "collapsedSeries": {
+                              "id": "series-1",
+                              "name": "A Series",
+                              "numBooks": 2,
+                              "seriesSequenceList": "1, 2"
+                            },
+                            "media": {
+                              "metadata": {
+                                "title": "A Series Volume One",
+                                "authorName": "First Author",
+                                "seriesName": "A Series #1",
+                                "genres": [],
+                                "explicit": false,
+                                "abridged": false
+                              },
+                              "numTracks": 1,
+                              "numChapters": 1,
+                              "duration": 60
+                            }
+                          }],
+                          "total": 1,
+                          "limit": 1,
+                          "page": 0
+                        }
+                        """.utf8
+                    ),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let request = try LibraryItemsPageRequest(page: 0, limit: 1)
+
+        let result = try await fixture.api.libraryItems(
+            in: LibraryID(rawValue: "library"),
+            request: request
+        )
+        let entry = try XCTUnwrap(result.value.browseEntries.first)
+        guard case let .series(series, representative: representative) = entry else {
+            return XCTFail("Expected a collapsed series browse entry")
+        }
+        XCTAssertEqual(
+            series.id,
+            try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        )
+        XCTAssertEqual(series.name, "A Series")
+        XCTAssertEqual(series.numBooks, 2)
+        XCTAssertEqual(series.sequenceList, ["1, 2"])
+        XCTAssertEqual(representative.id, LibraryItemID(rawValue: "item-1"))
+    }
+
+    func testSeriesFilteredExpandedPageMapsTheMatchingSequence() async throws {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: Data(
+                        """
+                        {
+                          "results": [{
+                            "id": "item-1",
+                            "libraryId": "library",
+                            "addedAt": 1,
+                            "updatedAt": 2,
+                            "mediaType": "book",
+                            "media": {
+                              "metadata": {
+                                "title": "A Series Volume One",
+                                "authorName": "First Author",
+                                "seriesName": "A Series",
+                                "series": {
+                                  "id": "series-1",
+                                  "name": "A Series",
+                                  "sequence": "1"
+                                },
+                                "genres": [],
+                                "explicit": false,
+                                "abridged": false
+                              },
+                              "numTracks": 1,
+                              "numChapters": 1,
+                              "duration": 60
+                            }
+                          }],
+                          "total": 1,
+                          "limit": 1,
+                          "page": 0
+                        }
+                        """.utf8
+                    ),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let request = try LibraryItemsPageRequest(
+            page: 0,
+            limit: 1,
+            sort: .sequence,
+            filter: LibraryItemFilter(seriesID: seriesID),
+            collapseSeries: false,
+            minified: false
+        )
+
+        let result = try await fixture.api.libraryItems(
+            in: LibraryID(rawValue: "library"),
+            request: request
+        )
+
+        XCTAssertEqual(
+            result.value.items.first?.series,
+            [
+                LibraryBookSeries(
+                    id: seriesID,
+                    name: "A Series",
+                    sequence: "1"
+                ),
+            ]
+        )
     }
 
     func testLibraryItemPageAndItemFailuresRemainTyped() async throws {

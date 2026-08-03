@@ -153,8 +153,10 @@ public struct CachedLibraryPageSnapshot: Equatable, Sendable {
 }
 
 public struct CachedLibrarySearchSnapshot: Equatable, Sendable {
-    public let items: [LibraryBookSummary]
+    public let results: LibrarySearchResults
     public let refreshedAt: Date
+
+    public var items: [LibraryBookSummary] { results.books }
 }
 
 public struct CachedLibraryHomeSnapshot: Equatable, Sendable {
@@ -411,7 +413,7 @@ public actor LibraryCache {
     }
 
     public func saveSearchResults(
-        _ items: [LibraryBookSummary],
+        _ results: LibrarySearchResults,
         request: LibrarySearchRequest,
         libraryID: LibraryID,
         accountID: AccountID,
@@ -423,8 +425,10 @@ public actor LibraryCache {
         guard !libraryID.rawValue.isEmpty else {
             throw .invalidLibraryID
         }
-        guard items.count <= request.limit,
-              items.allSatisfy({
+        guard results.books.count <= request.limit,
+              results.authors.count <= request.limit,
+              results.series.count <= request.limit,
+              results.books.allSatisfy({
                   $0.isValidForStorage(in: libraryID)
               })
         else {
@@ -435,7 +439,7 @@ public actor LibraryCache {
             libraryID: libraryID,
             request: request
         )
-        let payload = try encode(items)
+        let payload = try encode(results)
         let records = try searchRecords()
         if let record = records.first(where: { $0.cacheKey == key }) {
             record.payload = payload
@@ -450,6 +454,22 @@ public actor LibraryCache {
             ))
         }
         try save()
+    }
+
+    public func saveSearchResults(
+        _ items: [LibraryBookSummary],
+        request: LibrarySearchRequest,
+        libraryID: LibraryID,
+        accountID: AccountID,
+        refreshedAt: Date = Date()
+    ) throws(LibraryCacheError) {
+        try saveSearchResults(
+            LibrarySearchResults(books: items),
+            request: request,
+            libraryID: libraryID,
+            accountID: accountID,
+            refreshedAt: refreshedAt
+        )
     }
 
     public func searchResults(
@@ -473,24 +493,35 @@ public actor LibraryCache {
         }) else {
             return nil
         }
-        let items: [LibraryBookSummary]
+        let results: LibrarySearchResults
         do {
-            items = try JSONDecoder().decode(
-                [LibraryBookSummary].self,
+            results = try JSONDecoder().decode(
+                LibrarySearchResults.self,
                 from: record.payload
             )
         } catch {
-            throw .invalidStoredSearchResults
+            do {
+                results = LibrarySearchResults(
+                    books: try JSONDecoder().decode(
+                        [LibraryBookSummary].self,
+                        from: record.payload
+                    )
+                )
+            } catch {
+                throw .invalidStoredSearchResults
+            }
         }
-        guard items.count <= request.limit,
-              items.allSatisfy({
+        guard results.books.count <= request.limit,
+              results.authors.count <= request.limit,
+              results.series.count <= request.limit,
+              results.books.allSatisfy({
                   $0.isValidForStorage(in: libraryID)
               })
         else {
             throw .invalidStoredSearchResults
         }
         return CachedLibrarySearchSnapshot(
-            items: items,
+            results: results,
             refreshedAt: record.refreshedAt
         )
     }
@@ -869,6 +900,7 @@ public actor LibraryCache {
             request.filter?.rawValue ?? "",
             request.includeProgress ? "1" : "0",
             request.collapseSeries ? "1" : "0",
+            request.minified ? "1" : "0",
         ])
     }
 

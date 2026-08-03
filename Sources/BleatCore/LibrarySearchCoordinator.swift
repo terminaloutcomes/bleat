@@ -25,7 +25,7 @@ public enum LibrarySearchCoordinatorError:
 
 private enum LibrarySearchTaskResult: Sendable {
     case success(
-        LibraryRepositoryResult<[LibraryBookSummary]>
+        LibraryRepositoryResult<LibrarySearchResults>
     )
     case repositoryFailure(LibraryRepositoryError)
     case cancelled
@@ -37,7 +37,7 @@ public actor LibrarySearchCoordinator {
         LibrarySearchContext,
         LibrarySearchRequest
     ) async throws(LibraryRepositoryError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
 
     private let debounceDuration: Duration
     private let sleep: Sleep
@@ -59,7 +59,7 @@ public actor LibrarySearchCoordinator {
         request: LibrarySearchRequest,
         operation: @escaping Operation
     ) async throws(LibrarySearchCoordinatorError)
-        -> LibraryRepositoryResult<[LibraryBookSummary]>
+        -> LibraryRepositoryResult<LibrarySearchResults>
     {
         generation &+= 1
         let operationGeneration = generation

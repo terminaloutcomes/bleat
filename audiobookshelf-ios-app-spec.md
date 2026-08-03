@@ -138,6 +138,8 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can see Continue Listening, Recently Added, Downloaded, and library contents.
 - I can search by title, author, narrator, and series using server-side search.
 - I can sort and filter without loading the entire library into memory.
+- Collapsed server series open an uncollapsed, server-sequenced series detail;
+  author and series navigation always uses the server's opaque identifiers.
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
 - In CarPlay I can browse Home shelves, choose an audiobook library, page and
@@ -233,6 +235,18 @@ tab bar when a book is loaded, leaving every tab unobstructed. Tapping it or
 swiping upward opens the full player. Swiping it downward stops playback and
 dismisses it, whether it is playing or paused.
 
+### 5.4 Scene-local deep links
+
+Register the `bleat` URL scheme and parse only canonical Home, Library,
+Downloads, Now Playing, Settings, Search, Book, Author, and Series routes.
+Routes may qualify Search and entity destinations with an account and library.
+Keep navigation state scene-local, queue only the latest valid incoming route
+until the signed-in browse context is ready, and leave the current UI unchanged
+for malformed routes. Resolve book, author, and series routes only in their
+qualified or selected account/library; never probe another account. Resolve a
+book's detail and validate its returned library before navigation. A missing
+player or unavailable entity produces a typed, safe presentation failure.
+
 ### 5.1 Full player
 
 The full player contains:
@@ -264,6 +278,9 @@ The detail screen contains:
 - Download, pause, retry, or remove download;
 - progress and finished state;
 - metadata;
+- separate 44-point-or-larger author and series controls that retain their
+  position-based accessibility identifiers; authors select a clearable Library
+  filter and series push a series detail above the book;
 - chapters with durations;
 - bookmarks;
 - Edit item in the top-right actions menu, gated by server permission;
@@ -497,6 +514,10 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
 
 - List libraries with `GET /api/libraries`.
 - Load a page with `GET /api/libraries/<id>/items` using the current query names: `limit`, zero-based `page`, `sort`, `desc=1`, `filter`, `minified=1`, `collapseseries=1`, and comma-separated `include` where needed.
+- Use padded standard-Base64 `authors.<id>` and `series.<id>` filters for typed
+  author and series IDs. A normal Library request asks the server to collapse
+  series; a series detail omits `collapseseries`, filters by its series ID, and
+  uses server sequence order without inheriting a Library progress filter.
 - Load home shelves from `GET /api/libraries/<id>/personalized?limit=<n>&include=progress`.
 - Search with `GET /api/libraries/<id>/search?q=<query>&limit=<n>`.
 - Load book detail with `GET /api/items/<id>?expanded=1&include=progress`.
@@ -1470,6 +1491,9 @@ Use a disposable Audiobookshelf container with a seeded library:
 - offline playback and pending-sync indicators;
 - metadata conflict choice;
 - accidental scrub protection.
+- multiple author and series controls, clearable author browsing, grouped
+  search selection, series navigation with Reduce Motion and large Dynamic
+  Type, and valid/malformed cold and warm `bleat` links.
 
 ## 21. Delivery phases
 
