@@ -203,7 +203,7 @@ public actor TokenVault: AccountCredentialStore {
         }
     }
 
-    public func deleteSessionTokens(
+    nonisolated func deleteSessionTokens(
         for accountID: AccountID
     ) throws {
         try deleteItem(
@@ -219,7 +219,7 @@ public actor TokenVault: AccountCredentialStore {
         try deleteSessionTokens(for: accountID)
     }
 
-    public func deleteNativeLoginCredentials(
+    func deleteNativeLoginCredentials(
         for accountID: AccountID
     ) throws {
         guard tokenService != nativeLoginService else {
@@ -479,7 +479,7 @@ public actor TokenVault: AccountCredentialStore {
         try Self.check(addStatus)
     }
 
-    private func deleteItem(
+    private nonisolated func deleteItem(
         service: String,
         accountID: AccountID,
         synchronizable: Bool
@@ -497,7 +497,7 @@ public actor TokenVault: AccountCredentialStore {
         try Self.check(status)
     }
 
-    private func baseQuery(
+    private nonisolated func baseQuery(
         service: String,
         accountID: AccountID,
         synchronizable: Bool
