@@ -396,6 +396,12 @@ final class PlaybackModel {
         state == .playing
     }
 
+    var coverLoadPolicy: BookCoverLoadPolicy {
+        preparation?.sessionID == nil
+            ? .cacheOnly
+            : .allowNetwork
+    }
+
     func observeLiveProgress(
         _ progress: AudiobookshelfLivePlaybackProgress
     ) {
@@ -715,7 +721,7 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
-        await syncProgress()
+        persistLocalPosition()
         guard generation == operationGeneration else {
             return
         }
@@ -801,19 +807,10 @@ final class PlaybackModel {
                 accountID: accountID,
                 itemID: detail.id
             )
-            let remoteProgress: LibraryBookProgress?
-            if let account {
-                remoteProgress = try? await service.bookProgress(
-                    for: account,
-                    itemID: detail.id
-                )
-            } else {
-                remoteProgress = nil
-            }
             currentTime = reconciledDownloadedPosition(
                 savedPosition: savedPosition,
                 baseline: detail.progress,
-                remote: remoteProgress,
+                remote: nil,
                 duration: prepared.duration
             )
             lastAttemptedSyncTime = currentTime
@@ -832,7 +829,6 @@ final class PlaybackModel {
             )
             if positionConflict == nil {
                 play()
-                await syncProgress()
             } else {
                 state = .paused
             }
@@ -871,9 +867,7 @@ final class PlaybackModel {
             positionConflict = nil
             persistLocalPosition()
             state = .ready
-            if useLocalPosition {
-                await syncProgress()
-            } else {
+            if !useLocalPosition {
                 syncState = .idle
             }
             play()
@@ -890,8 +884,11 @@ final class PlaybackModel {
             return
         }
         bookmarkState = .loading
+        let isDownloadedPlayback = preparation?.sessionID == nil
         if let activeAccount {
-            await syncPendingBookmarks(for: activeAccount)
+            if !isDownloadedPlayback {
+                await syncPendingBookmarks(for: activeAccount)
+            }
         }
         do {
             let queued = try bookmarkMutationStore.mutations(
@@ -899,6 +896,14 @@ final class PlaybackModel {
                 itemID: itemID
             )
             pendingBookmarkMutations = queued
+            guard !isDownloadedPlayback else {
+                bookmarks = bookmarkMutationStore.applying(
+                    queued,
+                    to: []
+                )
+                bookmarkState = .ready
+                return
+            }
             let remote: [AudioBookmark]
             if let activeAccount {
                 remote = try await service.bookmarks(
@@ -938,6 +943,15 @@ final class PlaybackModel {
             createdAtMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
         )
         bookmarkState = .saving
+        guard preparation?.sessionID != nil else {
+            return queueBookmarkMutation(
+                accountID: accountID,
+                bookmark: bookmark,
+                kind: .create,
+                title: title,
+                status: .pending
+            )
+        }
         if let activeAccount {
             do {
                 let saved = try await service.createBookmark(
@@ -1000,6 +1014,15 @@ final class PlaybackModel {
             return false
         }
         bookmarkState = .saving
+        guard preparation?.sessionID != nil else {
+            return queueBookmarkMutation(
+                accountID: accountID,
+                bookmark: bookmark,
+                kind: .rename,
+                title: title,
+                status: .pending
+            )
+        }
         if let activeAccount {
             do {
                 let updated = try await service.renameBookmark(
@@ -1038,6 +1061,15 @@ final class PlaybackModel {
             return
         }
         bookmarkState = .saving
+        guard preparation?.sessionID != nil else {
+            _ = queueBookmarkMutation(
+                accountID: accountID,
+                bookmark: bookmark,
+                kind: .delete,
+                status: .pending
+            )
+            return
+        }
         if let activeAccount {
             do {
                 try await service.deleteBookmark(
@@ -1197,8 +1229,10 @@ final class PlaybackModel {
         }
         updateNowPlaying()
         persistLocalPosition()
-        Task { @MainActor [weak self] in
-            await self?.syncProgress()
+        if preparation?.sessionID != nil {
+            Task { @MainActor [weak self] in
+                await self?.syncProgress()
+            }
         }
     }
 
@@ -1333,7 +1367,11 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
-        await syncProgress()
+        if preparation.sessionID != nil {
+            await syncProgress()
+        } else {
+            persistLocalPosition()
+        }
         guard generation == operationGeneration else {
             return
         }
@@ -1357,7 +1395,9 @@ final class PlaybackModel {
             }
             updateNowPlaying()
             updateAutomaticDownloadBandwidth()
-            await syncProgress()
+            if preparation.sessionID != nil {
+                await syncProgress()
+            }
             await diagnostics.record(
                 .completed(.seek, category: .playback)
             )
@@ -1424,7 +1464,11 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
-        await syncProgress()
+        if preparation?.sessionID != nil {
+            await syncProgress()
+        } else {
+            persistLocalPosition()
+        }
         guard generation == operationGeneration else {
             return
         }
@@ -1551,7 +1595,9 @@ final class PlaybackModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.persistLocalPosition()
-                    await self?.syncProgress()
+                    if self?.preparation?.sessionID != nil {
+                        await self?.syncProgress()
+                    }
                 }
             }
         )
@@ -1730,7 +1776,8 @@ final class PlaybackModel {
         if abs(currentTime - lastPersistedLocalTime) >= 5 {
             persistLocalPosition()
         }
-        if isPlaying,
+        if preparation?.sessionID != nil,
+            isPlaying,
             currentTime - lastAttemptedSyncTime >= 15
         {
             lastAttemptedSyncTime = currentTime
@@ -2347,7 +2394,9 @@ final class PlaybackModel {
             guard let self else {
                 return
             }
-            await self.syncProgress()
+            if self.preparation?.sessionID != nil {
+                await self.syncProgress()
+            }
             await self.recordNaturalCompletion()
             await self.finishStatisticsSession()
         }
@@ -2458,120 +2507,14 @@ final class PlaybackModel {
         else {
             return
         }
+        guard preparation.sessionID != nil else {
+            persistLocalPosition()
+            return
+        }
         await diagnostics.record(
             .started(.syncPlayback, category: .sync)
         )
         let position = min(max(currentTime, 0), preparation.duration)
-        if preparation.sessionID == nil {
-            guard let localAccountID else {
-                return
-            }
-            syncState = .syncing
-            persistLocalPosition()
-            guard syncState != .failed else {
-                return
-            }
-            guard let activeAccount else {
-                lastAttemptedSyncTime = position
-                syncState = .idle
-                await diagnostics.record(
-                    .completed(.syncPlayback, category: .sync)
-                )
-                return
-            }
-            do {
-                await finishStatisticsSession()
-                let pending = try localSessionStore.pending(
-                    accountID: localAccountID
-                )
-                guard !pending.isEmpty else {
-                    syncState = .idle
-                    await diagnostics.record(
-                        .completed(
-                            .syncPlayback,
-                            category: .sync,
-                            count: 0
-                        )
-                    )
-                    return
-                }
-                let measured = try await localSessionsWithListeningTime(
-                    pending,
-                    accountID: localAccountID
-                )
-                let results = try await service.syncLocalPlaybackSessions(
-                    for: activeAccount,
-                    sessions: measured.sessions,
-                    deviceInfo: Self.deviceInfo()
-                )
-                guard self.preparation?.itemID == preparation.itemID,
-                    self.preparation?.sessionID == nil
-                else {
-                    return
-                }
-                let acknowledged = Set(
-                    results.filter(\.success).map(\.id)
-                )
-                for sessionID in acknowledged {
-                    try await service.confirmStatisticsSync(
-                        accountID: localAccountID,
-                        sessionID: sessionID,
-                        realSeconds: measured.deltas[sessionID] ?? 0
-                    )
-                }
-                try localSessionStore.removeAcknowledged(
-                    accountID: localAccountID,
-                    sessionIDs: acknowledged
-                )
-                lastAttemptedSyncTime = position
-                syncState =
-                    results.allSatisfy(\.success) ? .idle : .failed
-                if results.allSatisfy(\.success) {
-                    await diagnostics.record(
-                        .completed(
-                            .syncPlayback,
-                            category: .sync,
-                            count: results.count
-                        )
-                    )
-                } else {
-                    await diagnostics.record(
-                        .failed(
-                            .syncPlayback,
-                            category: .sync,
-                            failureCode: .progressUnavailable
-                        )
-                    )
-                }
-                if let localPlaybackSession,
-                    let currentResult = results.first(where: {
-                        $0.id == localPlaybackSession.id
-                    }),
-                    currentResult.success,
-                    !currentResult.progressSynced
-                {
-                    await refreshConflictAfterRejectedLocalProgress(
-                        account: activeAccount,
-                        session: localPlaybackSession
-                    )
-                }
-            } catch {
-                guard self.preparation?.itemID == preparation.itemID,
-                    self.preparation?.sessionID == nil
-                else {
-                    return
-                }
-                syncState = .failed
-                await diagnostics.record(
-                    .failed(
-                        .syncPlayback,
-                        category: .sync,
-                        failureCode: .progressUnavailable
-                    )
-                )
-            }
-            return
-        }
         guard let activeAccount,
             let sessionID = preparation.sessionID
         else {
@@ -3028,6 +2971,7 @@ final class PlaybackModel {
                 author: author,
                 narrator: narrator,
                 coverURL: coverURL,
+                coverLoadPolicy: coverLoadPolicy,
                 currentTime: currentTime,
                 duration: duration,
                 rate: rate,

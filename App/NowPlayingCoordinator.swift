@@ -39,6 +39,7 @@ struct NowPlayingSnapshot: Equatable, Sendable {
     let author: String
     let narrator: String
     let coverURL: URL?
+    let coverLoadPolicy: BookCoverLoadPolicy
     let currentTime: Double
     let duration: Double
     let rate: Float
@@ -105,6 +106,7 @@ enum NowPlayingArtwork {
 private struct NowPlayingArtworkIdentity: Equatable {
     let accountID: AccountID?
     let url: URL
+    let policy: BookCoverLoadPolicy
 }
 
 @MainActor
@@ -165,7 +167,8 @@ final class NowPlayingCoordinator {
         let nextArtworkIdentity = snapshot.coverURL.map {
             NowPlayingArtworkIdentity(
                 accountID: snapshot.accountID,
-                url: $0
+                url: $0,
+                policy: snapshot.coverLoadPolicy
             )
         }
         latestSnapshot = snapshot
@@ -190,7 +193,8 @@ final class NowPlayingCoordinator {
             guard let self,
                 let image = await coverLoader.image(
                     for: nextArtworkIdentity.url,
-                    accountID: nextArtworkIdentity.accountID
+                    accountID: nextArtworkIdentity.accountID,
+                    policy: nextArtworkIdentity.policy
                 ),
                 !Task.isCancelled,
                 generation == artworkGeneration,

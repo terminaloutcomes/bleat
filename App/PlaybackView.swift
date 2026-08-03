@@ -371,7 +371,8 @@ struct NowPlaying: View {
                     BookCoverView(
                         accountID: playback.accountID,
                         url: playback.coverURL,
-                        cornerRadius: 16
+                        cornerRadius: 16,
+                        loadPolicy: playback.coverLoadPolicy
                     )
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: 320)

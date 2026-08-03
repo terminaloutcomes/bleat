@@ -173,7 +173,10 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   its verified files again.
 - The app checks available storage before starting and never leaves a completed book pointing at partial files.
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
-- Offline listening sessions and progress synchronize after reconnection.
+- A whole-book-complete download prepares from its persisted detail, verified local files, and account/item-scoped local position. Play, pause, seek, skip, chapter navigation, rate changes, resume, stop, backgrounding, and bookmark edits persist local state without opening a playback session, fetching progress, bookmarks, authentication, or artwork, or uploading progress.
+- Missing, partial, or invalid local media fails immediately as media unavailable and never falls back to streamed playback.
+- Downloaded artwork is cache-only; a cache miss uses the normal placeholder rather than fetching from the server.
+- Offline listening sessions and progress synchronize in a coalesced background retry after a later app lifecycle event or network-path update; a failed or timed-out retry retains the durable records and never blocks launch or playback.
 
 ### 4.5 Book editing and deletion
 
@@ -929,6 +932,15 @@ Downloaded playback creates UUIDv4 local sessions. Persist them until acknowledg
 
 - `POST /api/session/local`, or
 - `POST /api/session/local-all`.
+
+The persisted local position and session are authoritative while the download is
+active. Do not look up remote progress or open a server playback session before
+local playback starts. Control actions write local state first and do not await
+network work. A single coalesced worker retries pending sessions after account
+restoration, login or reauthentication, foreground restoration, or a new
+network-path event. It uses normal request timeouts and leaves records intact
+unless their exact IDs are acknowledged; conflict detection occurs only after a
+successful local-session synchronization.
 
 Prefer the batch endpoint with:
 

@@ -32,6 +32,11 @@ enum BookCoverURL {
     }
 }
 
+enum BookCoverLoadPolicy: Equatable, Sendable {
+    case allowNetwork
+    case cacheOnly
+}
+
 private struct BookCoverCacheKey: Hashable, Sendable {
     let accountID: AccountID
     let url: URL
@@ -81,9 +86,13 @@ actor BookCoverImageLoader {
 
     func image(
         for url: URL,
-        accountID: AccountID?
+        accountID: AccountID?,
+        policy: BookCoverLoadPolicy = .allowNetwork
     ) async -> UIImage? {
         guard let accountID else {
+            guard policy == .allowNetwork else {
+                return nil
+            }
             return await Self.fetchImage(
                 URLRequest(
                     url: url,
@@ -105,6 +114,10 @@ actor BookCoverImageLoader {
         if let image = loadFromDisk(for: key) {
             storeInMemory(image, for: key)
             return image
+        }
+
+        guard policy == .allowNetwork else {
+            return nil
         }
 
         if let task = inFlight[key] {
@@ -389,6 +402,7 @@ struct BookCoverView: View {
     let accountID: AccountID?
     let url: URL?
     let cornerRadius: CGFloat
+    let loadPolicy: BookCoverLoadPolicy
     @State private var state = BookCoverLoadState.idle
 
     init(
@@ -398,7 +412,8 @@ struct BookCoverView: View {
         updatedAtMilliseconds: Int64,
         width: Int,
         height: Int,
-        cornerRadius: CGFloat = 8
+        cornerRadius: CGFloat = 8,
+        loadPolicy: BookCoverLoadPolicy = .allowNetwork
     ) {
         self.accountID = accountID
         url = BookCoverURL.make(
@@ -409,16 +424,19 @@ struct BookCoverView: View {
             height: height
         )
         self.cornerRadius = cornerRadius
+        self.loadPolicy = loadPolicy
     }
 
     init(
         accountID: AccountID?,
         url: URL?,
-        cornerRadius: CGFloat = 8
+        cornerRadius: CGFloat = 8,
+        loadPolicy: BookCoverLoadPolicy = .allowNetwork
     ) {
         self.accountID = accountID
         self.url = url
         self.cornerRadius = cornerRadius
+        self.loadPolicy = loadPolicy
     }
 
     var body: some View {
@@ -447,7 +465,8 @@ struct BookCoverView: View {
             state = .loading
             let image = await BookCoverImageLoader.shared.image(
                 for: url,
-                accountID: accountID
+                accountID: accountID,
+                policy: loadPolicy
             )
             guard !Task.isCancelled else {
                 return

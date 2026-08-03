@@ -1855,6 +1855,103 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    func testDownloadedPlaybackControlsNeverStartNetworkRequests()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let account = try fixtureAccount()
+        let bookmarksGate = AsyncGate()
+        let bookProgressGate = AsyncGate()
+        let localSessionSyncGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookmarksGate: bookmarksGate,
+            bookProgressGate: bookProgressGate,
+            localSessionSyncGate: localSessionSyncGate
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+        let prepared = expectation(
+            description: "Downloaded playback prepares without network"
+        )
+        let start = Task { @MainActor in
+            await playback.startDownloaded(
+                detail: fixture.detail,
+                trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID,
+                account: account
+            )
+            prepared.fulfill()
+        }
+
+        await fulfillment(of: [prepared], timeout: 2)
+        await start.value
+
+        playback.pause()
+        await playback.seek(to: 0.25)
+        await playback.skipBackward()
+        await playback.skipForward()
+        await playback.previousChapter()
+        await playback.nextChapter()
+        playback.setRate(1.25)
+        playback.play()
+        await playback.stop()
+
+        let playbackRequests = await service.playbackOpenRequests()
+        let progressRequests = await service.bookProgressRequests()
+        let bookmarkRequests = await service.bookmarkRequests()
+        let playbackSyncRequests = await service.playbackSyncSessionIDs()
+        let progressUpdateRequests = await service.progressUpdateRequests()
+        let localSessionSyncRequests =
+            await service.localSessionSyncRequests()
+        XCTAssertTrue(playbackRequests.isEmpty)
+        XCTAssertTrue(progressRequests.isEmpty)
+        XCTAssertTrue(bookmarkRequests.isEmpty)
+        XCTAssertTrue(playbackSyncRequests.isEmpty)
+        XCTAssertTrue(progressUpdateRequests.isEmpty)
+        XCTAssertTrue(localSessionSyncRequests.isEmpty)
+        XCTAssertEqual(playback.coverLoadPolicy, .cacheOnly)
+        XCTAssertNotNil(
+            PlaybackPositionStore(defaults: fixture.defaults).position(
+                accountID: fixture.accountID,
+                itemID: fixture.detail.id
+            )
+        )
+        XCTAssertFalse(
+            try LocalPlaybackSessionStore(defaults: fixture.defaults)
+                .pending(accountID: fixture.accountID)
+                .isEmpty
+        )
+    }
+
+    func testCacheOnlyCoverLoadDoesNotFetchOnCacheMiss() async throws {
+        let url = try XCTUnwrap(
+            URL(string: "https://books.example/cover?ts=3")
+        )
+        let fetcher = TestBookCoverFetcher(data: Data())
+        let loader = BookCoverImageLoader(
+            diskCapacity: 0,
+            fetch: { request in
+                try await fetcher.fetch(request)
+            }
+        )
+
+        let image = await loader.image(
+            for: url,
+            accountID: AccountID(rawValue: "account"),
+            policy: .cacheOnly
+        )
+
+        XCTAssertNil(image)
+        let requestCount = await fetcher.requestCount
+        XCTAssertEqual(requestCount, 0)
+    }
+
     func testMediaServicesResetRebuildsAcrossAudioFileBoundary()
         async throws
     {
@@ -2092,6 +2189,155 @@ final class AppModelTests: XCTestCase {
                 [second.id],
             ]
         )
+    }
+
+    func testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch()
+        async throws
+    {
+        let storageKey = "bleat.localPlaybackSessions.v1"
+        let defaults = UserDefaults.standard
+        let existing = defaults.data(forKey: storageKey)
+        defaults.removeObject(forKey: storageKey)
+        defer {
+            if let existing {
+                defaults.set(existing, forKey: storageKey)
+            } else {
+                defaults.removeObject(forKey: storageKey)
+            }
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatReconnectSync-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let session = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169",
+            itemID: "item-reconnect"
+        )
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(session, accountID: account.id)
+        let service = TestAppService(
+            accounts: .success([account]),
+            activeAccount: .success(account),
+            localSessionSync: .failure(
+                .localPlaybackSession(.requestFailed)
+            )
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+
+        await model.start()
+        XCTAssertEqual(model.phase, .signedIn)
+        for _ in 0..<100 {
+            if await service.localSessionSyncRequests().count == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let initialRequests = await service.localSessionSyncRequests()
+        XCTAssertEqual(initialRequests.count, 1)
+
+        await service.setLocalSessionSync(
+            .success([
+                LocalPlaybackSessionSyncResult(
+                    id: session.id,
+                    success: true,
+                    progressSynced: true,
+                    error: nil
+                )
+            ])
+        )
+        for _ in 0..<100 {
+            if await service.networkPathObserverCount() == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let observerCount = await service.networkPathObserverCount()
+        XCTAssertEqual(observerCount, 1)
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            if try store.pending(accountID: account.id).isEmpty {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(try store.pending(accountID: account.id).isEmpty)
+        let finalRequests = await service.localSessionSyncRequests()
+        XCTAssertEqual(finalRequests.count, 2)
+    }
+
+    func testPendingLocalSessionUploadDoesNotBlockLaunch() async throws {
+        let storageKey = "bleat.localPlaybackSessions.v1"
+        let defaults = UserDefaults.standard
+        let existing = defaults.data(forKey: storageKey)
+        defaults.removeObject(forKey: storageKey)
+        defer {
+            if let existing {
+                defaults.set(existing, forKey: storageKey)
+            } else {
+                defaults.removeObject(forKey: storageKey)
+            }
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatHungLocalSessionSync-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let session = try localSession(
+            id: "8b0da0fd-889a-4d97-b8f6-c0a2efac6af5",
+            itemID: "item-hanging-sync"
+        )
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(session, accountID: account.id)
+        let syncGate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([account]),
+            activeAccount: .success(account),
+            localSessionSyncGate: syncGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        let launchFinished = expectation(
+            description: "Launch does not await local session upload"
+        )
+        Task { @MainActor in
+            await model.start()
+            launchFinished.fulfill()
+        }
+
+        await fulfillment(of: [launchFinished], timeout: 2)
+        XCTAssertEqual(model.phase, .signedIn)
+
+        let uploadStarted = expectation(
+            description: "Background local session upload starts"
+        )
+        Task {
+            await syncGate.waitUntilEntered()
+            uploadStarted.fulfill()
+        }
+        await fulfillment(of: [uploadStarted], timeout: 2)
+
+        XCTAssertEqual(
+            try store.pending(accountID: account.id).map(\.id),
+            [session.id]
+        )
+        let requests = await service.localSessionSyncRequests()
+        XCTAssertEqual(requests.count, 1)
+        await syncGate.release()
     }
 
     func testStartWithoutSavedAccountShowsLogin() async {
@@ -4119,6 +4365,7 @@ final class AppModelTests: XCTestCase {
             author: "The Author",
             narrator: "The Narrator",
             coverURL: nil,
+            coverLoadPolicy: .allowNetwork,
             currentTime: 125,
             duration: 3_600,
             rate: 1.25,
@@ -4267,6 +4514,7 @@ final class AppModelTests: XCTestCase {
                 author: "",
                 narrator: "",
                 coverURL: nil,
+                coverLoadPolicy: .allowNetwork,
                 currentTime: 0,
                 duration: 100,
                 rate: 1,
@@ -5217,6 +5465,7 @@ private func nowPlayingSnapshot(
         author: "",
         narrator: "",
         coverURL: coverURL,
+        coverLoadPolicy: .allowNetwork,
         currentTime: 0,
         duration: 100,
         rate: 1,
@@ -5548,11 +5797,16 @@ private actor TestAppService: AppServicing {
     private let privateCloudSyncGate: AsyncGate?
     private let accountsGate: AsyncGate?
     private let activeAccountGate: AsyncGate?
+    private let bookmarksGate: AsyncGate?
+    private let bookProgressGate: AsyncGate?
+    private let localSessionSyncGate: AsyncGate?
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
             AsyncStream<AppEndpointDiagnostics>.Continuation] = [:]
+    private var networkPathContinuations:
+        [UUID: AsyncStream<Void>.Continuation] = [:]
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -5565,7 +5819,9 @@ private actor TestAppService: AppServicing {
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
+    private var recordedPlaybackSyncSessionIDs: [PlaybackSessionID] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
+    private var recordedBookProgressRequests: [LibraryItemID] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedCoverReplacementRequests: [CoverReplacementRequest] = []
     private var recordedBookDeletionRequests: [BookDeletionRequest] = []
@@ -5621,6 +5877,9 @@ private actor TestAppService: AppServicing {
         privateCloudSyncGate: AsyncGate? = nil,
         accountsGate: AsyncGate? = nil,
         activeAccountGate: AsyncGate? = nil,
+        bookmarksGate: AsyncGate? = nil,
+        bookProgressGate: AsyncGate? = nil,
+        localSessionSyncGate: AsyncGate? = nil,
         privateCloudSyncAvailable: Bool = true,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
@@ -5649,6 +5908,9 @@ private actor TestAppService: AppServicing {
         self.privateCloudSyncGate = privateCloudSyncGate
         self.accountsGate = accountsGate
         self.activeAccountGate = activeAccountGate
+        self.bookmarksGate = bookmarksGate
+        self.bookProgressGate = bookProgressGate
+        self.localSessionSyncGate = localSessionSyncGate
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
         configuredEndpointDiagnostics = endpointDiagnostics
     }
@@ -5662,6 +5924,32 @@ private actor TestAppService: AppServicing {
             await serverEndpointRouterGate.enterAndWait()
         }
         return nil
+    }
+
+    func networkPathUpdates() async -> AsyncStream<Void> {
+        AsyncStream { continuation in
+            let token = UUID()
+            networkPathContinuations[token] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task {
+                    await self?.removeNetworkPathContinuation(token)
+                }
+            }
+        }
+    }
+
+    func emitNetworkPathUpdate() {
+        for continuation in networkPathContinuations.values {
+            continuation.yield()
+        }
+    }
+
+    func networkPathObserverCount() -> Int {
+        networkPathContinuations.count
+    }
+
+    private func removeNetworkPathContinuation(_ token: UUID) {
+        networkPathContinuations[token] = nil
     }
 
     func synchronizePrivateCloud() async throws(AppServiceError) {
@@ -5905,7 +6193,9 @@ private actor TestAppService: AppServicing {
         sessionID: PlaybackSessionID,
         currentTime: Double,
         duration: Double
-    ) async throws(AppServiceError) {}
+    ) async throws(AppServiceError) {
+        recordedPlaybackSyncSessionIDs.append(sessionID)
+    }
 
     func syncLocalPlaybackSessions(
         for account: ServerAccount,
@@ -5919,6 +6209,9 @@ private actor TestAppService: AppServicing {
                 deviceInfo: deviceInfo
             )
         )
+        if let localSessionSyncGate {
+            await localSessionSyncGate.enterAndWait()
+        }
         return try value(from: localSessionSyncResult)
     }
 
@@ -6022,6 +6315,9 @@ private actor TestAppService: AppServicing {
                 itemID: itemID
             )
         )
+        if let bookmarksGate {
+            await bookmarksGate.enterAndWait()
+        }
         return try value(from: bookmarksResult)
     }
 
@@ -6061,7 +6357,11 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookProgress? {
-        nil
+        recordedBookProgressRequests.append(itemID)
+        if let bookProgressGate {
+            await bookProgressGate.enterAndWait()
+        }
+        return nil
     }
 
     func updateBookProgress(
@@ -6169,8 +6469,16 @@ private actor TestAppService: AppServicing {
         recordedPlaybackOpenRequests
     }
 
+    func playbackSyncSessionIDs() -> [PlaybackSessionID] {
+        recordedPlaybackSyncSessionIDs
+    }
+
     func bookmarkRequests() -> [BookmarkRequest] {
         recordedBookmarkRequests
+    }
+
+    func bookProgressRequests() -> [LibraryItemID] {
+        recordedBookProgressRequests
     }
 
     func metadataSaveRequests() -> [MetadataSaveRequest] {

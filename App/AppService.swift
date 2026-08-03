@@ -197,6 +197,8 @@ protocol AppServicing: Sendable {
 
     func serverEndpointRouter() async -> ServerEndpointRouter?
 
+    func networkPathUpdates() async -> AsyncStream<Void>
+
     func recordServerActivity(
         url: URL,
         purpose: ServerConnectionPurpose
@@ -456,6 +458,10 @@ extension AppServicing {
         nil
     }
 
+    func networkPathUpdates() async -> AsyncStream<Void> {
+        AsyncStream { $0.finish() }
+    }
+
     func recordServerActivity(
         url: URL,
         purpose: ServerConnectionPurpose
@@ -589,6 +595,8 @@ actor LiveAppService: AppServicing {
     private var liveClients: [AccountID: LiveClientRegistration] = [:]
     private var networkProbeGeneration = 0
     private var networkProbeTask: Task<Void, Never>?
+    private var networkPathContinuations:
+        [UUID: AsyncStream<Void>.Continuation] = [:]
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
@@ -760,6 +768,9 @@ actor LiveAppService: AppServicing {
     private func networkPathChanged() {
         networkProbeGeneration &+= 1
         let generation = networkProbeGeneration
+        for continuation in networkPathContinuations.values {
+            continuation.yield()
+        }
         networkProbeTask?.cancel()
         networkProbeTask = Task { [weak self] in
             await self?.probeNetworkEndpoints(generation: generation)
@@ -866,6 +877,23 @@ actor LiveAppService: AppServicing {
 
     func serverEndpointRouter() async -> ServerEndpointRouter? {
         endpointRouter
+    }
+
+    func networkPathUpdates() async -> AsyncStream<Void> {
+        startNetworkPathMonitoring()
+        return AsyncStream { continuation in
+            let token = UUID()
+            networkPathContinuations[token] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task {
+                    await self?.removeNetworkPathContinuation(token)
+                }
+            }
+        }
+    }
+
+    private func removeNetworkPathContinuation(_ token: UUID) {
+        networkPathContinuations[token] = nil
     }
 
     func recordServerActivity(

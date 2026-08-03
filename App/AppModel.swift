@@ -675,9 +675,15 @@ final class AppModel {
     private var endpointDiagnosticsTask: Task<Void, Never>?
     @ObservationIgnored
     private var liveRefreshTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var localSessionSyncTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var networkPathUpdatesTask: Task<Void, Never>?
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
+    private var pendingLocalSessionSyncAccounts:
+        [AccountID: ServerAccount] = [:]
 
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
@@ -827,10 +833,9 @@ final class AppModel {
             await downloads.start(account: nil)
             for storedAccount in accounts {
                 await downloads.start(account: storedAccount)
-                await playback.syncPendingLocalSessions(
-                    for: storedAccount
-                )
             }
+            startNetworkPathUpdates()
+            schedulePendingLocalSessionSync(for: accounts)
             guard let restoredAccount = try await service.activeAccount()
             else {
                 phase = .signedOut
@@ -931,9 +936,7 @@ final class AppModel {
                 )
             )
             await downloads.start(account: authenticatedAccount)
-            await playback.syncPendingLocalSessions(
-                for: authenticatedAccount
-            )
+            schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
             await synchronizePrivateCloud()
@@ -1057,9 +1060,7 @@ final class AppModel {
                 .completed(.reauthenticate, category: .auth)
             )
             await downloads.start(account: authenticatedAccount)
-            await playback.syncPendingLocalSessions(
-                for: authenticatedAccount
-            )
+            schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             startLiveUpdates(for: authenticatedAccount)
             return true
@@ -1094,7 +1095,7 @@ final class AppModel {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
             await downloads.start(account: selectedAccount)
-            await playback.syncPendingLocalSessions(for: selectedAccount)
+            schedulePendingLocalSessionSync(for: selectedAccount)
             await loadLibraries()
             startLiveUpdates(for: selectedAccount)
             accountActionStatus = .idle
@@ -1866,6 +1867,7 @@ final class AppModel {
                 )
             }
             accounts.removeAll { $0.id == account.id }
+            pendingLocalSessionSyncAccounts[account.id] = nil
             if removingBrowsingAccount {
                 self.account = accounts.first
                 selectedLibrary = nil
@@ -1915,6 +1917,59 @@ final class AppModel {
                 )
             )
             return false
+        }
+    }
+
+    private func startNetworkPathUpdates() {
+        guard networkPathUpdatesTask == nil else {
+            return
+        }
+        networkPathUpdatesTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            let updates = await service.networkPathUpdates()
+            for await _ in updates {
+                guard !Task.isCancelled else {
+                    return
+                }
+                schedulePendingLocalSessionSync(for: accounts)
+            }
+        }
+    }
+
+    private func schedulePendingLocalSessionSync(
+        for accounts: [ServerAccount]
+    ) {
+        for account in accounts {
+            pendingLocalSessionSyncAccounts[account.id] = account
+        }
+        schedulePendingLocalSessionSyncWork()
+    }
+
+    private func schedulePendingLocalSessionSync(
+        for account: ServerAccount
+    ) {
+        pendingLocalSessionSyncAccounts[account.id] = account
+        schedulePendingLocalSessionSyncWork()
+    }
+
+    private func schedulePendingLocalSessionSyncWork() {
+        guard localSessionSyncTask == nil else {
+            return
+        }
+        localSessionSyncTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            while let next = pendingLocalSessionSyncAccounts.values.first {
+                pendingLocalSessionSyncAccounts[next.id] = nil
+                await playback.syncPendingLocalSessions(for: next)
+            }
+            localSessionSyncTask = nil
+            if !pendingLocalSessionSyncAccounts.isEmpty {
+                schedulePendingLocalSessionSyncWork()
+            }
         }
     }
 
