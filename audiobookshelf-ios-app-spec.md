@@ -225,10 +225,10 @@ Use a `TabView` with:
    - storage management
    - diagnostics
 
-A persistent mini-player appears at the top of the signed-in tab shell when a
-book is loaded, leaving every tab unobstructed. Tapping it opens the full player.
-Swiping it upward stops playback and dismisses it, whether it is playing or
-paused.
+A persistent mini-player appears in a rounded material bar above the signed-in
+tab bar when a book is loaded, leaving every tab unobstructed. Tapping it or
+swiping upward opens the full player. Swiping it downward stops playback and
+dismisses it, whether it is playing or paused.
 
 ### 5.1 Full player
 

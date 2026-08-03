@@ -45,7 +45,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testMiniPlayerSwipeDismissesOnlyForUpwardVerticalDrag() {
+    func testMiniPlayerSwipeDecidesDirectionalActions() {
         let height: CGFloat = 844
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
@@ -53,7 +53,7 @@ final class AppModelTests: XCTestCase {
                 predictedEndTranslation: CGSize(width: 0, height: -60),
                 height: height
             ),
-            .dismiss
+            .showPlayer
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
@@ -61,7 +61,7 @@ final class AppModelTests: XCTestCase {
                 predictedEndTranslation: CGSize(width: 12, height: -90),
                 height: height
             ),
-            .dismiss
+            .showPlayer
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
@@ -77,7 +77,7 @@ final class AppModelTests: XCTestCase {
                 predictedEndTranslation: CGSize(width: 0, height: -180),
                 height: height
             ),
-            .dismiss
+            .showPlayer
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
@@ -86,6 +86,14 @@ final class AppModelTests: XCTestCase {
                 height: height
             ),
             .ignore
+        )
+        XCTAssertEqual(
+            MiniPlayerSwipeDecision.decide(
+                translation: CGSize(width: 0, height: 20),
+                predictedEndTranslation: CGSize(width: 0, height: 180),
+                height: height
+            ),
+            .stopAndDismiss
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(
@@ -101,7 +109,7 @@ final class AppModelTests: XCTestCase {
                 predictedEndTranslation: CGSize(width: 0, height: 90),
                 height: height
             ),
-            .ignore
+            .stopAndDismiss
         )
         XCTAssertEqual(
             MiniPlayerSwipeDecision.decide(

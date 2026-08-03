@@ -863,28 +863,28 @@ private struct SignedInView: View {
         GeometryReader { geometry in
             TabView {
                 Tab("Home", systemImage: "house") {
-                    HomeView(model: model)
+                    tabContent(containerHeight: geometry.size.height) {
+                        HomeView(model: model)
+                    }
                 }
                 Tab("Library", systemImage: "books.vertical") {
-                    LibraryView(model: model)
+                    tabContent(containerHeight: geometry.size.height) {
+                        LibraryView(model: model)
+                    }
                 }
                 Tab("Search", systemImage: "magnifyingglass") {
-                    SearchView(model: model)
+                    tabContent(containerHeight: geometry.size.height) {
+                        SearchView(model: model)
+                    }
                 }
                 Tab("Downloads", systemImage: "arrow.down.circle") {
-                    DownloadsView(model: model)
+                    tabContent(containerHeight: geometry.size.height) {
+                        DownloadsView(model: model)
+                    }
                 }
                 Tab("Settings", systemImage: "gearshape") {
-                    SettingsView(model: model)
-                }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if model.playback.hasActiveBook {
-                    MiniPlayerView(
-                        playback: model.playback,
-                        containerHeight: geometry.size.height
-                    ) {
-                        showPlayer = true
+                    tabContent(containerHeight: geometry.size.height) {
+                        SettingsView(model: model)
                     }
                 }
             }
@@ -918,6 +918,23 @@ private struct SignedInView: View {
             }
         }
         .accessibilityIdentifier("app.signedIn")
+    }
+
+    private func tabContent<Content: View>(
+        containerHeight: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if model.playback.hasActiveBook {
+                    MiniPlayerView(
+                        playback: model.playback,
+                        containerHeight: containerHeight
+                    ) {
+                        showPlayer = true
+                    }
+                }
+            }
     }
 }
 

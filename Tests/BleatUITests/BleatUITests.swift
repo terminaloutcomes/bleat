@@ -455,7 +455,7 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testTopMiniPlayerLeavesTabsNavigable() {
+    func testBottomMiniPlayerLeavesTabsNavigable() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: [
@@ -482,11 +482,14 @@ final class BleatUITests: XCTestCase {
             )
         ).firstMatch
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
-        XCTAssertLessThan(miniPlayer.frame.midY, app.frame.midY)
+        XCTAssertGreaterThan(miniPlayer.frame.midY, app.frame.midY)
         let usesBottomTabBar = app.frame.width < 600
 
         let library = tabButton("Library", in: app)
         XCTAssertTrue(library.isHittable)
+        if usesBottomTabBar {
+            XCTAssertLessThan(miniPlayer.frame.maxY, library.frame.minY)
+        }
         library.tap()
         if usesBottomTabBar {
             XCTAssertTrue(
@@ -534,7 +537,7 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testMiniPlayerSwipesAwayWhilePlayingAndPaused() {
+    func testMiniPlayerSwipesDownToStopWhilePlayingAndPaused() {
         let app = launch(scenario: "--ui-testing-playback")
 
         XCTAssertTrue(
@@ -547,7 +550,7 @@ final class BleatUITests: XCTestCase {
 
         var miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
-        swipeUpToDismiss(miniToggle)
+        swipeDownToStop(miniToggle)
         let playingDismissed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "hittable == false"),
             object: miniToggle
@@ -584,7 +587,7 @@ final class BleatUITests: XCTestCase {
             .completed
         )
         XCTAssertEqual(miniToggle.label, "Play")
-        swipeUpToDismiss(miniToggle)
+        swipeDownToStop(miniToggle)
         let pausedDismissed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "hittable == false"),
             object: miniToggle
@@ -597,7 +600,40 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    private func swipeUpToDismiss(_ element: XCUIElement) {
+    func testMiniPlayerSwipesUpToOpenNowPlaying() {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        swipeUpToOpenNowPlaying(miniToggle)
+        let playerScreen = app.otherElements["player.screen"]
+        XCTAssertTrue(playerScreen.waitForExistence(timeout: 3))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(playerScreen.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func swipeDownToStop(_ element: XCUIElement) {
+        let start = element.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80))
+        )
+    }
+
+    @MainActor
+    private func swipeUpToOpenNowPlaying(_ element: XCUIElement) {
         let start = element.coordinate(
             withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
         )

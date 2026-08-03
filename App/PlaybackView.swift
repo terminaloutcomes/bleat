@@ -77,35 +77,38 @@ enum MiniPlayerSwipeDecision: Equatable {
     static let flickPredictionDistanceFraction: CGFloat = 0.12
 
     case ignore
-    case dismiss
+    case showPlayer
+    case stopAndDismiss
 
     static func decide(
         translation: CGSize,
         predictedEndTranslation: CGSize,
         height: CGFloat
     ) -> Self {
-        let isUpwardVertical = translation.height < 0
-            && abs(translation.height) > abs(translation.width)
-        guard isUpwardVertical else {
+        guard height > 0 else {
             return .ignore
         }
+        let isVertical = abs(translation.height) > abs(translation.width)
+        guard isVertical else {
+            return .ignore
+        }
+        let action: Self = translation.height < 0
+            ? .showPlayer
+            : .stopAndDismiss
         let dismissalDistance = max(
             minimumDismissalDistance,
             height * dismissalDistanceFraction
         )
-        if translation.height <= -dismissalDistance {
-            return .dismiss
-        }
-        guard height > 0 else {
-            return .ignore
+        if abs(translation.height) >= dismissalDistance {
+            return action
         }
         let flickDistance = height * flickPredictionDistanceFraction
-        if predictedEndTranslation.height < 0,
+        if (translation.height < 0) == (predictedEndTranslation.height < 0),
             abs(predictedEndTranslation.height)
                 > abs(predictedEndTranslation.width),
-            predictedEndTranslation.height <= -flickDistance
+            abs(predictedEndTranslation.height) >= flickDistance
         {
-            return .dismiss
+            return action
         }
         return .ignore
     }
@@ -268,7 +271,7 @@ struct MiniPlayerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .simultaneousGesture(dismissalGesture)
+                .simultaneousGesture(miniPlayerGesture)
 
                 if playback.state == .preparing {
                     ProgressView()
@@ -294,40 +297,48 @@ struct MiniPlayerView: View {
                         playback.isPlaybackRequested ? "Pause" : "Play"
                     )
                     .accessibilityIdentifier("player.mini.toggle")
-                    .simultaneousGesture(dismissalGesture).tint(
+                    .simultaneousGesture(miniPlayerGesture).tint(
                         colourScheme.color)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.regularMaterial)
-            .transition(.move(edge: .top).combined(with: .opacity))
-            .highPriorityGesture(dismissalGesture)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .highPriorityGesture(miniPlayerGesture)
             .accessibilityElement(children: .contain)
-            .accessibilityAction(named: "Dismiss Now Playing") {
-                dismissMiniPlayer()
+            .accessibilityAction(named: "Stop and Dismiss Playback") {
+                stopAndDismiss()
             }
             .accessibilityIdentifier("player.mini")
         }
     }
 
-    private var dismissalGesture: some Gesture {
+    private var miniPlayerGesture: some Gesture {
         DragGesture(minimumDistance: 12)
             .onEnded { value in
-                guard
-                    MiniPlayerSwipeDecision.decide(
-                        translation: value.translation,
-                        predictedEndTranslation: value.predictedEndTranslation,
-                        height: containerHeight
-                    ) == .dismiss
-                else {
-                    return
+                switch MiniPlayerSwipeDecision.decide(
+                    translation: value.translation,
+                    predictedEndTranslation: value.predictedEndTranslation,
+                    height: containerHeight
+                ) {
+                case .ignore:
+                    break
+                case .showPlayer:
+                    showPlayer()
+                case .stopAndDismiss:
+                    stopAndDismiss()
                 }
-                dismissMiniPlayer()
             }
     }
 
-    private func dismissMiniPlayer() {
+    private func stopAndDismiss() {
         guard !isDismissing else {
             return
         }
