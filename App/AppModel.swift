@@ -1008,7 +1008,7 @@ final class AppModel {
             accounts.append(updated)
             accounts.sort(by: Self.sortAccounts)
             if self.account?.id == updated.id {
-                stopLiveUpdates()
+                await stopLiveUpdatesAndWait()
                 self.account = updated
                 await downloads.start(account: updated)
                 await loadLibraries()
@@ -1086,7 +1086,7 @@ final class AppModel {
             return
         }
         accountActionStatus = .switching
-        stopLiveUpdates()
+        await stopLiveUpdatesAndWait()
         await diagnostics.record(
             .started(.switchAccount, category: .auth)
         )
@@ -1822,7 +1822,9 @@ final class AppModel {
         let removingBrowsingAccount = account.id == self.account?.id
         accountActionStatus = .removing
         if removingBrowsingAccount {
-            stopLiveUpdates()
+            await stopLiveUpdatesAndWait()
+        } else {
+            await service.stopLiveUpdates(for: account.id)
         }
         await diagnostics.record(
             .started(.removeAccount, category: .auth)
@@ -1992,6 +1994,14 @@ final class AppModel {
         liveUpdateConnectionState = .disconnected
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
+    }
+
+    private func stopLiveUpdatesAndWait() async {
+        let accountID = account?.id
+        stopLiveUpdates()
+        if let accountID {
+            await service.stopLiveUpdates(for: accountID)
+        }
     }
 
     private func startEndpointDiagnostics(for account: ServerAccount) {

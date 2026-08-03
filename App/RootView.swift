@@ -2079,7 +2079,9 @@ private struct BookDetailView: View {
                     accountID: account.id,
                     itemID: detail.id
                 ) {
-                    if !model.downloads.isFullBookAvailable(record) {
+                    if record.manifest.purpose == .automaticCache
+                        || !model.downloads.isFullBookAvailable(record)
+                    {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Label(

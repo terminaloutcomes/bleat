@@ -13,6 +13,26 @@ run = "./scripts/compile-macos.sh"
 run = ["./scripts/test-macos.sh"]
 description = "Run app-hosted tests in a development-signed Mac Catalyst app"
 
+[tasks."test:local"]
+description = "Run host, Release build, and iOS Simulator tests"
+run = ["./scripts/test-core.sh"]
+
+[tasks."test:live"]
+description = "Run core tests against disposable Audiobookshelf servers"
+run = ["./scripts/test-live.sh"]
+
+[tasks."test:app-live"]
+description = "Run live app journeys on a disposable iOS Simulator"
+run = ["./scripts/test-app-live.sh"]
+
+[tasks.check]
+description = "Run every automated test that does not require a physical device"
+run = [
+  { task = "test:local" },
+  { task = "test:live" },
+  { task = "test:app-live" },
+]
+
 [tasks.macos]
 description = "Build and launch a development-signed Mac Catalyst app"
 run = ["./scripts/build-macos.sh"]

@@ -45,6 +45,41 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(candidates[0].url, requestURL)
     }
 
+    func testEndpointRouterRetriesLocalAfterNetworkPathChange()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        await router.markLocalUnavailable(for: primary, duration: 60)
+
+        let failedPreferredServer = await router.preferredServer(
+            for: primary
+        )
+        XCTAssertEqual(failedPreferredServer, primary)
+
+        await router.networkPathDidChange()
+
+        let recoveredPreferredServer = await router.preferredServer(
+            for: primary
+        )
+        XCTAssertEqual(recoveredPreferredServer, local)
+    }
+
+    func testSuccessfulLocalUseClearsLocalCooldown() async throws {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        await router.markLocalUnavailable(for: primary, duration: 60)
+
+        await router.markLocalAvailable(for: primary)
+
+        let preferredServer = await router.preferredServer(for: primary)
+        XCTAssertEqual(preferredServer, local)
+    }
+
     func testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()
         async throws
     {

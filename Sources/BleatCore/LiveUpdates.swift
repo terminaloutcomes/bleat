@@ -203,26 +203,39 @@ public struct AudiobookshelfSocketCodec: Sendable {
 }
 
 public actor AudiobookshelfLiveEventClient {
+    public typealias ServerProvider =
+        @Sendable () async -> NormalizedServerURL
     public typealias AccessTokenProvider =
         @Sendable () async throws -> String
     public typealias AccessTokenRecovery =
         @Sendable (_ rejectedToken: String) async throws -> String
 
-    private let server: NormalizedServerURL
+    public typealias TransportFailureHandler =
+        @Sendable (_ server: NormalizedServerURL) async -> Void
+    public typealias AuthenticationHandler =
+        @Sendable (_ server: NormalizedServerURL) async -> Void
+
+    private let serverProvider: ServerProvider
     private let tokenProvider: AccessTokenProvider
     private let tokenRecovery: AccessTokenRecovery
+    private let onTransportFailure: TransportFailureHandler
+    private let onAuthenticated: AuthenticationHandler
     private let codec = AudiobookshelfSocketCodec()
     private var task: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
 
     public init(
-        server: NormalizedServerURL,
+        serverProvider: @escaping ServerProvider,
         tokenProvider: @escaping AccessTokenProvider,
-        tokenRecovery: @escaping AccessTokenRecovery
+        tokenRecovery: @escaping AccessTokenRecovery,
+        onTransportFailure: @escaping TransportFailureHandler = { _ in },
+        onAuthenticated: @escaping AuthenticationHandler = { _ in }
     ) {
-        self.server = server
+        self.serverProvider = serverProvider
         self.tokenProvider = tokenProvider
         self.tokenRecovery = tokenRecovery
+        self.onTransportFailure = onTransportFailure
+        self.onAuthenticated = onAuthenticated
     }
 
     public func updates() -> AsyncStream<AudiobookshelfLiveUpdate> {
@@ -240,6 +253,11 @@ public actor AudiobookshelfLiveEventClient {
     public func stop() {
         task?.cancel()
         task = nil
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+    }
+
+    public func reconnect() {
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
     }
@@ -270,6 +288,7 @@ public actor AudiobookshelfLiveEventClient {
     private func connectOnce(
         continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation
     ) async -> Bool {
+        let server = await serverProvider()
         let url: URL
         let initialToken: String
         do {
@@ -317,6 +336,7 @@ public actor AudiobookshelfLiveEventClient {
                     try await socket.send(.string("3" + payload))
                 case .initialized:
                     authenticated = true
+                    await onAuthenticated(server)
                     continuation.yield(.connection(.authenticated))
                 case .authenticationRejected:
                     guard !didRecoverAuthentication else {
@@ -352,6 +372,7 @@ public actor AudiobookshelfLiveEventClient {
             continuation.yield(.connection(.failed(failure)))
         } catch {
             continuation.yield(.connection(.failed(.transportUnavailable)))
+            await onTransportFailure(server)
         }
         socket.cancel(with: .goingAway, reason: nil)
         if self.socket === socket {

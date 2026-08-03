@@ -151,6 +151,18 @@ xcodegen generate
 
 ## Test
 
+Run every automated test that does not require a physical device:
+
+```sh
+mise run check
+```
+
+The exhaustive check runs the local host and Simulator gate, disposable-server
+core integration tests, and disposable-server app journeys sequentially. It
+requires Xcode with an iOS Simulator runtime and Docker, but does not require
+development signing or a connected iPhone. Run an individual stage with
+`mise run test:local`, `mise run test:live`, or `mise run test:app-live`.
+
 Run the host test suite with code coverage:
 
 ```sh
@@ -203,7 +215,7 @@ disposable Caddy certificate, and runs against a freshly seeded
 Audiobookshelf instance:
 
 ```sh
-./scripts/test-app-live.sh
+mise run test:app-live
 ```
 
 ## Open in Xcode
@@ -527,7 +539,10 @@ background downloads.
 Each account can also have an optional **Local Network** server URL. Bleat keeps
 the primary URL as the account identity, tries the local URL first for matching
 requests, and falls back to the primary URL when the local endpoint cannot be
-reached. A changed local URL is verified directly as the same saved
+reached. A network-path change clears the local failure cooldown and performs a
+safe status probe so the local endpoint can be selected again. This applies to
+all supported iOS and Mac Catalyst network interfaces; it does not assume that
+the current path is Wi-Fi. A changed local URL is verified directly as the same saved
 Audiobookshelf user. Changing only the primary URL does not require the local
 server to be reachable. If changed local details cannot be verified, the edit
 can still be saved with that local URL disabled. The local URL is not treated

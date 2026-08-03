@@ -321,6 +321,14 @@ reachable. If changed local validation fails or identifies a different user,
 the user may save the primary and local details with the local base disabled.
 An unvalidated local base must never receive an existing bearer credential.
 
+The app monitors changes to the available network path using the platform
+Network framework on iOS and Mac Catalyst. A path change clears the temporary
+local-endpoint failure state and performs a non-mutating `GET <local>/status`
+probe for each validated local alias. The app does not infer home-network
+identity from Wi-Fi, DNS search domains, or interface names. A successful probe
+restores local-first routing; a failed probe keeps the bounded primary fallback.
+Live WebSocket connections use the same endpoint selection and fallback policy.
+
 Endpoint URLs must be built relative to the normalized base URL. Never construct API URLs from an origin alone, because that drops an Audiobookshelf path prefix.
 
 Cross-origin redirects during status discovery must not be followed silently. An HTTP-to-HTTPS upgrade on the same host may be accepted; any other origin change requires the user to confirm the resulting server URL.

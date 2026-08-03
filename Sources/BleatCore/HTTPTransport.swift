@@ -238,6 +238,32 @@ public actor ServerEndpointRouter {
         preferredCandidate(for: url).url
     }
 
+    public func preferredServer(
+        for primary: NormalizedServerURL
+    ) -> NormalizedServerURL {
+        guard let route = routes[primary], let local = route.local else {
+            return primary
+        }
+        if let failedUntil = localFailures[primary],
+           failedUntil > Date()
+        {
+            return primary
+        }
+        return local
+    }
+
+    public func networkPathDidChange() {
+        for primary in routes.keys {
+            localFailures[primary] = nil
+        }
+    }
+
+    public func markLocalAvailable(
+        for primary: NormalizedServerURL
+    ) {
+        localFailures[primary] = nil
+    }
+
     public func markLocalUnavailable(
         for primary: NormalizedServerURL,
         duration: TimeInterval = 30
@@ -261,6 +287,9 @@ public actor ServerEndpointRouter {
         _ candidate: ServerEndpointCandidate,
         purpose: ServerConnectionPurpose
     ) {
+        if candidate.isLocal, let primary = candidate.primary {
+            markLocalAvailable(for: primary)
+        }
         guard let primary = candidate.primary else {
             return
         }

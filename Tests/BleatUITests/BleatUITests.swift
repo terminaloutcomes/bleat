@@ -42,6 +42,15 @@ private func pullToRefresh(_ element: XCUIElement) {
     start.press(forDuration: 0.1, thenDragTo: end)
 }
 
+@MainActor
+private func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
+    let notNow = app.buttons["Not Now"]
+    if notNow.waitForExistence(timeout: 5) {
+        notNow.tap()
+        _ = notNow.waitForNonExistence(timeout: 3)
+    }
+}
+
 final class BleatUITests: XCTestCase {
     @MainActor
     func testLaunchingScreenDescribesStartupWork() {
@@ -86,7 +95,7 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(
                 timeout: 3
             ))
-        Self.dismissSavePasswordPromptIfNeeded(app: app)
+        dismissSavePasswordPromptIfNeeded(app: app)
         let screenSize = XCUIScreen.main.screenshot().image.size
         XCTAssertEqual(
             app.frame.size.width,
@@ -842,17 +851,6 @@ final class BleatUITests: XCTestCase {
         return app
     }
 
-    @MainActor
-    private static func dismissSavePasswordPromptIfNeeded(
-        app: XCUIApplication
-    ) {
-        let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: 5) {
-            notNow.tap()
-            _ = notNow.waitForNonExistence(timeout: 3)
-        }
-    }
-
     enum ScrollDirection {
         case up, down
     }
@@ -903,11 +901,8 @@ final class BleatLiveUITests: XCTestCase {
                 timeout: 30
             )
         )
-        tabButton("Library", in: app).tap()
-        XCTAssertTrue(
-            app.staticTexts["multi-track"].waitForExistence(timeout: 20)
-        )
-        app.staticTexts["multi-track"].tap()
+        dismissSavePasswordPromptIfNeeded(app: app)
+        openLiveLibraryBook(in: app)
         XCTAssertTrue(
             app.buttons["book.detail.play"].waitForExistence(timeout: 20)
         )
@@ -922,6 +917,7 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["player.skipBackward"].waitForExistence(timeout: 10)
         )
+        try await Task.sleep(for: .seconds(12))
         app.buttons["player.skipForward"].tap()
         app.buttons["player.toggle"].tap()
         app.buttons["player.toggle"].tap()
@@ -937,8 +933,7 @@ final class BleatLiveUITests: XCTestCase {
         let secondFile = app.buttons["player.audioFile.1"]
         XCTAssertTrue(secondFile.waitForExistence(timeout: 10))
         secondFile.tap()
-        try await Task.sleep(for: .seconds(12))
-        app.buttons["Stop"].tap()
+        app.buttons["Close"].tap()
 
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.downloadStatus"]
@@ -965,11 +960,7 @@ final class BleatLiveUITests: XCTestCase {
                 timeout: 30
             )
         )
-        tabButton("Library", in: app).tap()
-        XCTAssertTrue(
-            app.staticTexts["multi-track"].waitForExistence(timeout: 20)
-        )
-        app.staticTexts["multi-track"].tap()
+        openLiveLibraryBook(in: app)
         let play = app.buttons["book.detail.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 20))
         XCTAssertEqual(play.label, "Play")
@@ -988,7 +979,7 @@ final class BleatLiveUITests: XCTestCase {
                 .waitForExistence(timeout: 20)
         )
         app.buttons["player.toggle"].tap()
-        app.buttons["Done"].tap()
+        app.buttons["Close"].tap()
 
         tabButton("Downloads", in: app).tap()
         XCTAssertTrue(
@@ -996,6 +987,16 @@ final class BleatLiveUITests: XCTestCase {
         )
         XCTAssertFalse(app.buttons["Play Offline"].exists)
         app.terminate()
+    }
+
+    @MainActor
+    private func openLiveLibraryBook(in app: XCUIApplication) {
+        tabButton("Library", in: app).tap()
+        let library = app.descendants(matching: .any)["books.list"]
+        XCTAssertTrue(library.waitForExistence(timeout: 20))
+        let book = library.staticTexts["multi-track"]
+        XCTAssertTrue(book.waitForExistence(timeout: 20))
+        book.tap()
     }
 
     private func liveEnvironment() throws -> (

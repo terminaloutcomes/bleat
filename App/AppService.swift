@@ -430,6 +430,8 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func stopLiveUpdates(for accountID: AccountID) async {}
+
     func endpointDiagnostics(
         for account: ServerAccount
     ) async -> AppEndpointDiagnostics {
@@ -578,6 +580,15 @@ actor LiveAppService: AppServicing {
     private let libraryCache: LibraryCache
     private let statisticsRepository: StatisticsRepository
     private let privateCloudSync: PrivateCloudSyncCoordinator?
+    private var networkPathMonitor: AppNetworkPathMonitor?
+    private struct LiveClientRegistration: Sendable {
+        let token: UUID
+        let client: AudiobookshelfLiveEventClient
+    }
+
+    private var liveClients: [AccountID: LiveClientRegistration] = [:]
+    private var networkProbeGeneration = 0
+    private var networkProbeTask: Task<Void, Never>?
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
@@ -654,13 +665,15 @@ actor LiveAppService: AppServicing {
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
         let coordinator = coordinator
-        await endpointRouter.recordConnection(
-            primary: account.server,
-            usage: .primary,
-            purpose: .webSocket
-        )
+        let endpointRouter = self.endpointRouter
+        if let existing = liveClients.removeValue(forKey: account.id) {
+            await existing.client.stop()
+        }
+        let clientToken = UUID()
         let client = AudiobookshelfLiveEventClient(
-            server: account.server,
+            serverProvider: {
+                await endpointRouter.preferredServer(for: account.server)
+            },
             tokenProvider: {
                 try await coordinator.accessToken(for: account.id)
             },
@@ -670,9 +683,151 @@ actor LiveAppService: AppServicing {
                     server: account.server,
                     rejectedAccessToken: rejectedToken
                 )
+            },
+            onTransportFailure: { server in
+                guard let localServer = account.localServer,
+                      server == localServer
+                else {
+                    return
+                }
+                await endpointRouter.markLocalUnavailable(
+                    for: account.server
+                )
+            },
+            onAuthenticated: { server in
+                let isLocal = account.localServer.map {
+                    server == $0
+                } ?? false
+                let usage: ServerEndpointUsage =
+                    isLocal ? .local : .primary
+                await endpointRouter.recordConnection(
+                    primary: account.server,
+                    usage: usage,
+                    purpose: .webSocket
+                )
             }
         )
-        return await client.updates()
+        liveClients[account.id] = LiveClientRegistration(
+            token: clientToken,
+            client: client
+        )
+        let source = await client.updates()
+        return AsyncStream { continuation in
+            let forwardingTask = Task {
+                for await update in source {
+                    guard !Task.isCancelled else {
+                        break
+                    }
+                    continuation.yield(update)
+                }
+                continuation.finish()
+                self.removeLiveClient(
+                    accountID: account.id,
+                    token: clientToken
+                )
+            }
+            continuation.onTermination = { _ in
+                forwardingTask.cancel()
+                Task {
+                    await client.stop()
+                    await self.removeLiveClient(
+                        accountID: account.id,
+                        token: clientToken
+                    )
+                }
+            }
+        }
+    }
+
+    func stopLiveUpdates(for accountID: AccountID) async {
+        guard let registration = liveClients.removeValue(forKey: accountID)
+        else {
+            return
+        }
+        await registration.client.stop()
+    }
+
+    private func removeLiveClient(
+        accountID: AccountID,
+        token: UUID
+    ) {
+        guard liveClients[accountID]?.token == token else {
+            return
+        }
+        liveClients.removeValue(forKey: accountID)
+    }
+
+    private func networkPathChanged() {
+        networkProbeGeneration &+= 1
+        let generation = networkProbeGeneration
+        networkProbeTask?.cancel()
+        networkProbeTask = Task { [weak self] in
+            await self?.probeNetworkEndpoints(generation: generation)
+        }
+    }
+
+    private func probeNetworkEndpoints(generation: Int) async {
+        guard generation == networkProbeGeneration else {
+            return
+        }
+        await endpointRouter.networkPathDidChange()
+        do {
+            let accounts = try await accountStore.accounts()
+            for account in accounts {
+                guard generation == networkProbeGeneration,
+                      !Task.isCancelled
+                else {
+                    return
+                }
+                guard account.localServerValidated,
+                      let localServer = account.localServer
+                else {
+                    continue
+                }
+                do {
+                    _ = try await ServerDiscoveryClient(
+                        transport: directTransport
+                    ).discover(localServer)
+                    guard generation == networkProbeGeneration,
+                          !Task.isCancelled
+                    else {
+                        return
+                    }
+                    await endpointRouter.markLocalAvailable(
+                        for: account.server
+                    )
+                } catch {
+                    guard generation == networkProbeGeneration,
+                          !Task.isCancelled
+                    else {
+                        return
+                    }
+                    await endpointRouter.markLocalUnavailable(
+                        for: account.server
+                    )
+                }
+            }
+        } catch {
+            // The next routed request will still perform normal local-first
+            // selection if the account list cannot be read here.
+        }
+        guard generation == networkProbeGeneration,
+              !Task.isCancelled
+        else {
+            return
+        }
+        let clients = liveClients.values.map(\.client)
+        for client in clients {
+            guard generation == networkProbeGeneration,
+                  !Task.isCancelled
+            else {
+                return
+            }
+            await client.reconnect()
+        }
+        if generation == networkProbeGeneration {
+            networkProbeTask = nil
+        }
     }
 
     func endpointDiagnostics(
@@ -761,6 +916,7 @@ actor LiveAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
+        startNetworkPathMonitoring()
         do {
             let accounts = try await accountStore.accounts()
             for account in accounts {
@@ -775,6 +931,17 @@ actor LiveAppService: AppServicing {
             return accounts
         } catch let error {
             throw .accountStore(error)
+        }
+    }
+
+    private func startNetworkPathMonitoring() {
+        guard networkPathMonitor == nil else {
+            return
+        }
+        networkPathMonitor = AppNetworkPathMonitor { [weak self] in
+            Task {
+                await self?.networkPathChanged()
+            }
         }
     }
 
@@ -1572,6 +1739,7 @@ actor LiveAppService: AppServicing {
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
+        await stopLiveUpdates(for: account.id)
         do {
             try await libraryCache.removeAccount(account.id)
         } catch let error {
@@ -1592,6 +1760,7 @@ actor LiveAppService: AppServicing {
         _ account: ServerAccount,
         includeStatistics: Bool
     ) async throws(AppServiceError) {
+        await stopLiveUpdates(for: account.id)
         do {
             try await libraryCache.removeAccount(account.id)
         } catch let error {
