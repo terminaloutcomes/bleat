@@ -44,6 +44,24 @@ private func pullToRefresh(_ element: XCUIElement) {
 
 final class BleatUITests: XCTestCase {
     @MainActor
+    func testLaunchingScreenDescribesStartupWork() {
+        let app = launch(scenario: "--ui-testing-launching")
+        let launchScreen = app.descendants(matching: .any)["app.launching"]
+        let expectedLabel = "Starting Bleat. Restoring downloads"
+
+        XCTAssertTrue(launchScreen.waitForExistence(timeout: 3))
+        let launchStatus = expectation(
+            for: NSPredicate(format: "label == %@", expectedLabel),
+            evaluatedWith: launchScreen
+        )
+        wait(for: [launchStatus], timeout: 3)
+        XCTAssertEqual(
+            launchScreen.label,
+            expectedLabel
+        )
+    }
+
+    @MainActor
     func testNativeLoginShowsSignedInTabs() {
         let app = launch(scenario: "--ui-testing-signed-out")
         let server = app.textFields["login.server"]

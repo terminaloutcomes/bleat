@@ -9,6 +9,7 @@
         case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
         case playback = "--ui-testing-playback"
+        case launching = "--ui-testing-launching"
     }
 
     actor UITestAppService: AppServicing {
@@ -50,6 +51,10 @@
         func activeAccount()
             async throws(AppServiceError) -> ServerAccount?
         {
+            if scenario == .launching {
+                try? await Task.sleep(for: .seconds(5))
+                return nil
+            }
             guard
                 [.signedIn, .refresh, .limitedPermissions, .playback]
                     .contains(scenario)

@@ -48,8 +48,7 @@ struct RootView: View {
         Group {
             switch model.phase {
             case .launching:
-                ProgressView()
-                    .accessibilityIdentifier("app.launching")
+                LaunchingView(stage: model.launchStage)
                     .tint(colourScheme.color)
             case .signedOut:
                 NativeLoginView(model: model).tint(colourScheme.color)
@@ -83,6 +82,54 @@ struct RootView: View {
                 }
             }
         }
+    }
+}
+
+private struct LaunchingView: View {
+    let stage: AppLaunchStage
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isLogoPulsing = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image("LaunchLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 96, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 21))
+                .scaleEffect(isLogoPulsing ? 1.04 : 1)
+                .opacity(isLogoPulsing ? 1 : 0.94)
+                .accessibilityHidden(true)
+
+            Text("Bleat")
+                .font(.title.bold())
+
+            ProgressView()
+
+            Text(stage.message)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Starting Bleat. \(stage.message)")
+        .accessibilityIdentifier("app.launching")
+        .onAppear {
+            updateLogoAnimation()
+        }
+        .onChange(of: reduceMotion) {
+            updateLogoAnimation()
+        }
+        .animation(
+            reduceMotion
+                ? nil
+                : .easeInOut(duration: 1.4).repeatForever(autoreverses: true),
+            value: isLogoPulsing
+        )
+    }
+
+    private func updateLogoAnimation() {
+        isLogoPulsing = !reduceMotion
     }
 }
 

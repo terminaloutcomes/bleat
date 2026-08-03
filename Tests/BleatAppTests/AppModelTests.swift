@@ -2097,6 +2097,120 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.libraries, .idle)
     }
 
+    func testAppLaunchStageUsesUserFacingMessages() {
+        XCTAssertEqual(AppLaunchStage.preparing.message, "Preparing Bleat")
+        XCTAssertEqual(
+            AppLaunchStage.reticulatingSplines.message,
+            "reticulating splines…"
+        )
+        XCTAssertEqual(
+            AppLaunchStage.syncingData.message,
+            "Syncing your data"
+        )
+        XCTAssertEqual(
+            AppLaunchStage.restoringAccount.message,
+            "Restoring your account"
+        )
+        XCTAssertEqual(
+            AppLaunchStage.restoringDownloads.message,
+            "Restoring downloads"
+        )
+    }
+
+    func testStartPublishesStagesAsStartupWorkBegins() async {
+        let privateCloudGate = AsyncGate()
+        let accountsGate = AsyncGate()
+        let activeAccountGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncGate: privateCloudGate,
+            accountsGate: accountsGate,
+            activeAccountGate: activeAccountGate
+        )
+        let model = AppModel(
+            service: service,
+            initialLaunchStage: .reticulatingSplines
+        )
+
+        let start = Task { @MainActor in
+            await model.start()
+        }
+
+        await privateCloudGate.waitUntilEntered()
+        XCTAssertEqual(model.phase, .launching)
+        XCTAssertEqual(model.launchStage, .syncingData)
+
+        await privateCloudGate.release()
+        await accountsGate.waitUntilEntered()
+        XCTAssertEqual(model.launchStage, .restoringAccount)
+
+        await accountsGate.release()
+        await activeAccountGate.waitUntilEntered()
+        XCTAssertEqual(model.launchStage, .restoringDownloads)
+
+        await activeAccountGate.release()
+        await start.value
+        XCTAssertEqual(model.phase, .signedOut)
+    }
+
+    func testStartSkipsSyncingStageWhenPrivateCloudIsUnavailable() async {
+        let accountsGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            accountsGate: accountsGate,
+            privateCloudSyncAvailable: false
+        )
+        let model = AppModel(
+            service: service,
+            initialLaunchStage: .reticulatingSplines
+        )
+
+        let start = Task { @MainActor in
+            await model.start()
+        }
+
+        await accountsGate.waitUntilEntered()
+        XCTAssertEqual(model.launchStage, .restoringAccount)
+        XCTAssertNotEqual(model.launchStage, .syncingData)
+
+        await accountsGate.release()
+        await start.value
+        XCTAssertEqual(model.phase, .signedOut)
+    }
+
+    func testRetryStartResetsTheInitialLaunchStage() async {
+        let preparationGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .failure(.accountStore(.persistenceFailed)),
+            serverEndpointRouterGate: preparationGate
+        )
+        let model = AppModel(
+            service: service,
+            initialLaunchStage: .reticulatingSplines
+        )
+
+        let firstStart = Task { @MainActor in
+            await model.start()
+        }
+        await preparationGate.waitUntilEntered()
+        XCTAssertEqual(model.launchStage, .reticulatingSplines)
+        await preparationGate.release()
+        await firstStart.value
+        XCTAssertEqual(model.phase, .unavailable(.accountUnavailable))
+
+        await preparationGate.reset()
+        await service.setActiveAccountResult(.success(nil))
+        let retry = Task { @MainActor in
+            await model.retryStart()
+        }
+        await preparationGate.waitUntilEntered()
+        XCTAssertEqual(model.phase, .launching)
+        XCTAssertEqual(model.launchStage, .reticulatingSplines)
+        await preparationGate.release()
+        await retry.value
+        XCTAssertEqual(model.phase, .signedOut)
+    }
+
     func testCloudKitDisabledBuildKeepsSynchronizationUnavailable() async {
         let service = TestAppService(
             activeAccount: .success(nil),
@@ -5358,6 +5472,10 @@ private actor TestAppService: AppServicing {
     private let loginGate: AsyncGate?
     private let removeGate: AsyncGate?
     private let searchGate: AsyncGate?
+    private let serverEndpointRouterGate: AsyncGate?
+    private let privateCloudSyncGate: AsyncGate?
+    private let accountsGate: AsyncGate?
+    private let activeAccountGate: AsyncGate?
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
@@ -5426,6 +5544,10 @@ private actor TestAppService: AppServicing {
         loginGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil,
+        serverEndpointRouterGate: AsyncGate? = nil,
+        privateCloudSyncGate: AsyncGate? = nil,
+        accountsGate: AsyncGate? = nil,
+        activeAccountGate: AsyncGate? = nil,
         privateCloudSyncAvailable: Bool = true,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
@@ -5449,12 +5571,29 @@ private actor TestAppService: AppServicing {
         self.loginGate = loginGate
         self.removeGate = removeGate
         self.searchGate = searchGate
+        self.serverEndpointRouterGate = serverEndpointRouterGate
+        self.privateCloudSyncGate = privateCloudSyncGate
+        self.accountsGate = accountsGate
+        self.activeAccountGate = activeAccountGate
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
         configuredEndpointDiagnostics = endpointDiagnostics
     }
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSyncAvailable
+    }
+
+    func serverEndpointRouter() async -> ServerEndpointRouter? {
+        if let serverEndpointRouterGate {
+            await serverEndpointRouterGate.enterAndWait()
+        }
+        return nil
+    }
+
+    func synchronizePrivateCloud() async throws(AppServiceError) {
+        if let privateCloudSyncGate {
+            await privateCloudSyncGate.enterAndWait()
+        }
     }
 
     func endpointDiagnostics(
@@ -5510,6 +5649,9 @@ private actor TestAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
+        if let accountsGate {
+            await accountsGate.enterAndWait()
+        }
         if let accountsResult {
             return try value(from: accountsResult)
         }
@@ -5524,6 +5666,9 @@ private actor TestAppService: AppServicing {
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
     {
+        if let activeAccountGate {
+            await activeAccountGate.enterAndWait()
+        }
         activeAccountRequests += 1
         return try value(from: activeAccountResult)
     }
@@ -6039,5 +6184,10 @@ private actor AsyncGate {
         for continuation in continuations {
             continuation.resume()
         }
+    }
+
+    func reset() {
+        entered = false
+        released = false
     }
 }

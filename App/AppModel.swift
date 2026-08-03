@@ -61,6 +61,33 @@ enum AppPhase: Equatable, Sendable {
     case unavailable(AppFailure)
 }
 
+enum AppLaunchStage: Equatable, Sendable {
+    case preparing
+    case reticulatingSplines
+    case syncingData
+    case restoringAccount
+    case restoringDownloads
+
+    var message: String {
+        switch self {
+        case .preparing:
+            "Preparing Bleat"
+        case .reticulatingSplines:
+            "reticulating splines…"
+        case .syncingData:
+            "Syncing your data"
+        case .restoringAccount:
+            "Restoring your account"
+        case .restoringDownloads:
+            "Restoring downloads"
+        }
+    }
+
+    static func randomlySelectedInitialStage() -> Self {
+        Int.random(in: 0..<8) == 0 ? .reticulatingSplines : .preparing
+    }
+}
+
 enum LoginStatus: Equatable, Sendable {
     case idle
     case submitting
@@ -597,6 +624,7 @@ struct AppFailure: Equatable, Sendable {
 final class AppModel {
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
+    private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
     private var libraryPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
@@ -612,6 +640,7 @@ final class AppModel {
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
 
     private(set) var phase: AppPhase
+    private(set) var launchStage: AppLaunchStage
     private(set) var loginStatus: LoginStatus = .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
     private(set) var endpointDiagnostics: AppEndpointDiagnostics?
@@ -651,10 +680,15 @@ final class AppModel {
         downloadsStorageRootURL: URL? = nil,
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
-        diagnosticLogStore: (any DiagnosticRecording)? = nil
+        diagnosticLogStore: (any DiagnosticRecording)? = nil,
+        initialLaunchStage: AppLaunchStage? = nil
     ) {
         self.service = service
         self.diagnostics = diagnostics
+        let launchStage = initialLaunchStage
+            ?? AppLaunchStage.randomlySelectedInitialStage()
+        self.initialLaunchStage = launchStage
+        self.launchStage = launchStage
         let subsystems = Self.makePlaybackAndDownloads(
             service: service,
             downloadsStorageRootURL: downloadsStorageRootURL,
@@ -721,6 +755,7 @@ final class AppModel {
                 privateCloudSyncEnabled = false
             }
             if privateCloudSyncEnabled {
+                launchStage = .syncingData
                 privateCloudState = .syncing
                 do {
                     try await service.synchronizePrivateCloud()
@@ -736,6 +771,7 @@ final class AppModel {
             } else {
                 privateCloudState = .disabled
             }
+            launchStage = .restoringAccount
             await diagnostics.record(
                 .started(.restoreAccounts, category: .auth)
             )
@@ -747,6 +783,7 @@ final class AppModel {
                     count: accounts.count
                 )
             )
+            launchStage = .restoringDownloads
             await downloads.start(account: nil)
             for storedAccount in accounts {
                 await downloads.start(account: storedAccount)
@@ -810,6 +847,7 @@ final class AppModel {
         }
         hasStarted = false
         phase = .launching
+        launchStage = initialLaunchStage
         await start()
     }
 
