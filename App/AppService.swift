@@ -89,6 +89,9 @@ enum AccountUpdateServiceOutcome: Equatable, Sendable {
     case localServerValidationFailed(AppServiceError)
 }
 
+typealias AccountSubmissionProgress =
+    @Sendable (AccountSubmissionStage) async -> Void
+
 struct AppEndpointDescription: Equatable, Sendable {
     let usage: ServerEndpointUsage
     let host: String
@@ -215,13 +218,15 @@ protocol AppServicing: Sendable {
         localServerAddress: String,
         username: String,
         password: String,
-        localServerValidation: LocalServerValidationPolicy
+        localServerValidation: LocalServerValidationPolicy,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> AccountUpdateServiceOutcome
 
     func login(
         serverAddress: String,
         username: String,
-        password: String
+        password: String,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount
 
     func reauthenticate(
@@ -460,7 +465,8 @@ extension AppServicing {
         localServerAddress: String,
         username: String,
         password: String,
-        localServerValidation: LocalServerValidationPolicy
+        localServerValidation: LocalServerValidationPolicy,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
         .updated(account)
     }
@@ -788,7 +794,8 @@ actor LiveAppService: AppServicing {
         localServerAddress: String,
         username: String,
         password: String,
-        localServerValidation: LocalServerValidationPolicy
+        localServerValidation: LocalServerValidationPolicy,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
         let primary: NormalizedServerURL
         let requestedLocal: NormalizedServerURL?
@@ -814,6 +821,7 @@ actor LiveAppService: AppServicing {
             local: local,
             username: username
         )
+        await progress(.checkingServer)
         let discoveredPrimary = try await discoverDirect(primary)
         guard discoveredPrimary.authenticationMethods.contains(.local) else {
             throw .onboarding(.localAuthenticationUnavailable)
@@ -830,11 +838,13 @@ actor LiveAppService: AppServicing {
                 )
             }
             do {
+                await progress(.checkingLocalServer)
                 let discoveredLocal = try await discoverDirect(local)
                 guard discoveredLocal.authenticationMethods.contains(.local)
                 else {
                     throw AccountOnboardingError.localAuthenticationUnavailable
                 }
+                await progress(.verifyingLocalCredentials)
                 _ = try await authenticationCoordinator.validateLocalLogin(
                     accountID: account.id,
                     server: local,
@@ -866,6 +876,7 @@ actor LiveAppService: AppServicing {
         let persisted: ServerAccount
         do {
             if password.isEmpty {
+                await progress(.verifyingSavedCredentials)
                 let authenticated =
                     try await authenticationCoordinator
                     .validateStoredAuthentication(
@@ -882,8 +893,10 @@ actor LiveAppService: AppServicing {
                     user: authenticated.user,
                     connectionState: account.connectionState
                 )
+                await progress(.savingAccount)
                 try await accountStore.save(persisted)
             } else {
+                await progress(.signingIn)
                 persisted =
                     try await authenticationCoordinator
                     .loginAndPersistAccount(
@@ -893,7 +906,10 @@ actor LiveAppService: AppServicing {
                         password: password,
                         expectedUserID: account.user.id,
                         accountStore: accountStore,
-                        makeActive: false
+                        makeActive: false,
+                        onAuthenticationCompleted: {
+                            await progress(.savingAccount)
+                        }
                     )
             }
             try await accountStore.setLocalServer(
@@ -945,7 +961,8 @@ actor LiveAppService: AppServicing {
     func login(
         serverAddress: String,
         username: String,
-        password: String
+        password: String,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount {
         let server: NormalizedServerURL
         do {
@@ -954,9 +971,11 @@ actor LiveAppService: AppServicing {
             throw .invalidServerURL(error)
         }
 
+        await progress(.checkingServer)
         let discoveredServer = try await discoverDirect(server)
 
         do {
+            await progress(.signingIn)
             let account =
                 try await authenticationCoordinator.loginAndPersistAccount(
                     accountID: AccountID(
@@ -965,7 +984,10 @@ actor LiveAppService: AppServicing {
                     discoveredServer: discoveredServer,
                     username: username,
                     password: password,
-                    accountStore: accountStore
+                    accountStore: accountStore,
+                    onAuthenticationCompleted: {
+                        await progress(.savingAccount)
+                    }
                 )
             await endpointRouter.recordAuthenticationUse(
                 primary: account.server,

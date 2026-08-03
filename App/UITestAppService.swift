@@ -8,6 +8,7 @@
         case refresh = "--ui-testing-refresh"
         case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
+        case submissionProgress = "--ui-testing-submission-progress"
         case playback = "--ui-testing-playback"
         case launching = "--ui-testing-launching"
     }
@@ -71,7 +72,8 @@
         func login(
             serverAddress: String,
             username: String,
-            password: String
+            password: String,
+            progress: @escaping AccountSubmissionProgress
         ) async throws(AppServiceError) -> ServerAccount {
             guard scenario != .rejectLogin,
                 serverAddress == "https://books.example",
@@ -81,6 +83,10 @@
                 throw .onboarding(
                     .authenticationFailed(.invalidCredentials)
                 )
+            }
+            if scenario == .submissionProgress {
+                await progress(.checkingServer)
+                try? await Task.sleep(for: .seconds(2))
             }
             return try account()
         }

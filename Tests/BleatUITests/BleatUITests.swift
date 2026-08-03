@@ -169,6 +169,27 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testNativeLoginShowsCurrentSubmissionStage() {
+        let app = launch(scenario: "--ui-testing-submission-progress")
+        let submit = app.buttons["login.submit"]
+
+        app.textFields["login.server"].tap()
+        app.textFields["login.server"].typeText("https://books.example")
+        app.textFields["login.username"].tap()
+        app.textFields["login.username"].typeText("reader")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("native-password")
+        submit.tap()
+
+        let checkingServer = expectation(
+            for: NSPredicate(format: "label == %@", "Checking server…"),
+            evaluatedWith: submit
+        )
+        wait(for: [checkingServer], timeout: 3)
+        XCTAssertFalse(submit.isEnabled)
+    }
+
+    @MainActor
     func testRejectedNativeLoginShowsTypedErrorAndNoOIDCControl() {
         let app = launch(scenario: "--ui-testing-reject-login")
 

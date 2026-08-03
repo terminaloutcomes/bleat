@@ -2873,6 +2873,69 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(loginRequestCount, 1)
     }
 
+    func testLoginReportsSubmissionStageWhileServiceIsRunning()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            login: .success(account),
+            libraries: .success([]),
+            loginGate: gate
+        )
+        let model = AppModel(service: service)
+
+        let login = Task { @MainActor in
+            await model.login(
+                serverAddress: "https://books.example",
+                username: "reader",
+                password: "password"
+            )
+        }
+        await gate.waitUntilEntered()
+
+        XCTAssertEqual(model.loginStatus, .submitting(.signingIn))
+
+        await gate.release()
+        let signedIn = await login.value
+        XCTAssertTrue(signedIn)
+        XCTAssertEqual(model.loginStatus, .idle)
+    }
+
+    func testAccountUpdateReportsSubmissionStageWhileServiceIsRunning()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let updated = try fixtureAccount()
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(updated),
+            accountUpdateGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let update = Task { @MainActor in
+            await model.updateAccount(
+                account,
+                serverAddress: "https://books.example",
+                localServerAddress: "",
+                username: account.user.username,
+                password: "password"
+            )
+        }
+        await gate.waitUntilEntered()
+
+        XCTAssertEqual(model.loginStatus, .submitting(.signingIn))
+
+        await gate.release()
+        let result = await update.value
+        XCTAssertEqual(result, .saved)
+        XCTAssertEqual(model.loginStatus, .idle)
+    }
+
     func testLibraryFailureAndRetry() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -5470,6 +5533,7 @@ private actor TestAppService: AppServicing {
         [Result<AppPlaybackPreparation, AppServiceError>]
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
+    private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
     private let searchGate: AsyncGate?
     private let serverEndpointRouterGate: AsyncGate?
@@ -5542,6 +5606,7 @@ private actor TestAppService: AppServicing {
             [Result<AppPlaybackPreparation, AppServiceError>] = [],
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
+        accountUpdateGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil,
         serverEndpointRouterGate: AsyncGate? = nil,
@@ -5569,6 +5634,7 @@ private actor TestAppService: AppServicing {
         playbackResults = playback
         removeAccountResult = removeAccount
         self.loginGate = loginGate
+        self.accountUpdateGate = accountUpdateGate
         self.removeGate = removeGate
         self.searchGate = searchGate
         self.serverEndpointRouterGate = serverEndpointRouterGate
@@ -5682,7 +5748,8 @@ private actor TestAppService: AppServicing {
     func login(
         serverAddress: String,
         username: String,
-        password: String
+        password: String,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount {
         recordedLogins.append(
             LoginRequest(
@@ -5691,6 +5758,7 @@ private actor TestAppService: AppServicing {
                 password: password
             )
         )
+        await progress(.signingIn)
         if let loginGate {
             await loginGate.enterAndWait()
         }
@@ -5716,7 +5784,8 @@ private actor TestAppService: AppServicing {
         localServerAddress: String,
         username: String,
         password: String,
-        localServerValidation: LocalServerValidationPolicy
+        localServerValidation: LocalServerValidationPolicy,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> AccountUpdateServiceOutcome {
         recordedAccountUpdates.append(
             AccountUpdateRequest(
@@ -5727,6 +5796,14 @@ private actor TestAppService: AppServicing {
                 password: password,
                 localServerValidation: localServerValidation
             ))
+        await progress(
+            password.isEmpty
+                ? .verifyingSavedCredentials
+                : .signingIn
+        )
+        if let accountUpdateGate {
+            await accountUpdateGate.enterAndWait()
+        }
         if !accountUpdateOutcomes.isEmpty {
             return accountUpdateOutcomes.removeFirst()
         }

@@ -103,7 +103,8 @@ struct UnavailableAppService: AppServicing {
     func login(
         serverAddress: String,
         username: String,
-        password: String
+        password: String,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount {
         throw .accountStore(.persistenceFailed)
     }

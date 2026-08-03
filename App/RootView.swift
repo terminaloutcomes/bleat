@@ -133,6 +133,31 @@ private struct LaunchingView: View {
     }
 }
 
+private struct AccountSubmissionButton: View {
+    let idleTitle: String
+    let status: LoginStatus
+    let isDisabled: Bool
+    let accessibilityIdentifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let stage = status.submissionStage {
+                    ProgressView()
+                    Text(stage.label)
+                } else {
+                    Text(idleTitle)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .disabled(isDisabled)
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .accessibilityLabel(status.submissionStage?.label ?? idleTitle)
+    }
+}
+
 private struct NativeLoginView: View {
     @Bindable var model: AppModel
     var navigationTitle = "Bleat"
@@ -147,7 +172,7 @@ private struct NativeLoginView: View {
     @State private var invalidURLErrorMessage: String?
 
     private var isSubmitting: Bool {
-        model.loginStatus == .submitting
+        model.loginStatus.isSubmitting
     }
 
     private var canSubmit: Bool {
@@ -211,21 +236,15 @@ NavigationStack {
                      }
                  }
 
-                 Section {
-                     Button {
-                         submit()
-                     } label: {
-                         if isSubmitting {
-                             ProgressView()
-                                 .frame(maxWidth: .infinity)
-                         } else {
-                             Text("Sign In")
-                                 .frame(maxWidth: .infinity)
-                         }
-                     }
-                     .disabled(!canSubmit)
-                     .accessibilityIdentifier("login.submit")
-                 }
+                Section {
+                    AccountSubmissionButton(
+                        idleTitle: "Sign In",
+                        status: model.loginStatus,
+                        isDisabled: !canSubmit,
+                        accessibilityIdentifier: "login.submit",
+                        action: submit
+                    )
+                }
 
                  if showsOfflineDownloads,
                      !model.downloads.records.isEmpty
@@ -353,7 +372,7 @@ private struct AccountEditorView: View {
     }
 
     private var isSubmitting: Bool {
-        model.loginStatus == .submitting
+        model.loginStatus.isSubmitting
     }
 
     private var canSubmit: Bool {
@@ -421,19 +440,13 @@ private struct AccountEditorView: View {
                 }
 
                 Section {
-                    Button {
-                        submit()
-                    } label: {
-                        if isSubmitting {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Save")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(!canSubmit)
-                    .accessibilityIdentifier("accountEditor.save")
+                    AccountSubmissionButton(
+                        idleTitle: "Save",
+                        status: model.loginStatus,
+                        isDisabled: !canSubmit,
+                        accessibilityIdentifier: "accountEditor.save",
+                        action: { submit() }
+                    )
                 }
 
                 if model.account?.id != account.id {

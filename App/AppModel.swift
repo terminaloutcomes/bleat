@@ -88,10 +88,50 @@ enum AppLaunchStage: Equatable, Sendable {
     }
 }
 
+enum AccountSubmissionStage: Equatable, Sendable {
+    case checkingServer
+    case checkingLocalServer
+    case verifyingLocalCredentials
+    case verifyingSavedCredentials
+    case signingIn
+    case savingAccount
+
+    var label: String {
+        switch self {
+        case .checkingServer:
+            "Checking server…"
+        case .checkingLocalServer:
+            "Checking local server…"
+        case .verifyingLocalCredentials:
+            "Verifying local credentials…"
+        case .verifyingSavedCredentials:
+            "Verifying saved credentials…"
+        case .signingIn:
+            "Signing in…"
+        case .savingAccount:
+            "Saving account…"
+        }
+    }
+}
+
 enum LoginStatus: Equatable, Sendable {
     case idle
-    case submitting
+    case submitting(AccountSubmissionStage)
     case failed(AppFailure)
+
+    var isSubmitting: Bool {
+        if case .submitting = self {
+            return true
+        }
+        return false
+    }
+
+    var submissionStage: AccountSubmissionStage? {
+        guard case .submitting(let stage) = self else {
+            return nil
+        }
+        return stage
+    }
 }
 
 enum AccountUpdateResult: Equatable, Sendable {
@@ -857,10 +897,10 @@ final class AppModel {
         username: String,
         password: String
     ) async -> Bool {
-        guard loginStatus != .submitting else {
+        guard !loginStatus.isSubmitting else {
             return false
         }
-        loginStatus = .submitting
+        loginStatus = .submitting(.checkingServer)
         await diagnostics.record(
             .started(.login, category: .auth)
         )
@@ -869,7 +909,10 @@ final class AppModel {
             let authenticatedAccount = try await service.login(
                 serverAddress: serverAddress,
                 username: username,
-                password: password
+                password: password,
+                progress: { [weak self] stage in
+                    await self?.updateSubmissionStage(stage)
+                }
             )
             account = authenticatedAccount
             accounts.removeAll { $0.id == authenticatedAccount.id }
@@ -914,6 +957,13 @@ final class AppModel {
         loginStatus = .idle
     }
 
+    private func updateSubmissionStage(_ stage: AccountSubmissionStage) {
+        guard loginStatus.isSubmitting else {
+            return
+        }
+        loginStatus = .submitting(stage)
+    }
+
     @discardableResult
     func updateAccount(
         _ account: ServerAccount,
@@ -923,10 +973,10 @@ final class AppModel {
         password: String,
         allowUnvalidatedLocalServer: Bool = false
     ) async -> AccountUpdateResult {
-        guard loginStatus != .submitting else {
+        guard !loginStatus.isSubmitting else {
             return .failed
         }
-        loginStatus = .submitting
+        loginStatus = .submitting(.checkingServer)
         do {
             let outcome = try await service.updateAccount(
                 account,
@@ -937,7 +987,10 @@ final class AppModel {
                 localServerValidation:
                     allowUnvalidatedLocalServer
                     ? .allowUnvalidated
-                    : .required
+                    : .required,
+                progress: { [weak self] stage in
+                    await self?.updateSubmissionStage(stage)
+                }
             )
             let updated: ServerAccount
             switch outcome {
@@ -982,10 +1035,10 @@ final class AppModel {
             )
             return false
         }
-        guard loginStatus != .submitting else {
+        guard !loginStatus.isSubmitting else {
             return false
         }
-        loginStatus = .submitting
+        loginStatus = .submitting(.signingIn)
         await diagnostics.record(
             .started(.reauthenticate, category: .auth)
         )

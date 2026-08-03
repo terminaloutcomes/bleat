@@ -442,7 +442,8 @@ extension AuthCoordinator {
         password: String,
         expectedUserID: UserID? = nil,
         accountStore: AccountStore,
-        makeActive: Bool = true
+        makeActive: Bool = true,
+        onAuthenticationCompleted: @escaping @Sendable () async -> Void = {}
     ) async throws(AccountOnboardingError) -> ServerAccount {
         guard discoveredServer.authenticationMethods.contains(.local) else {
             throw .localAuthenticationUnavailable
@@ -462,6 +463,8 @@ extension AuthCoordinator {
         } catch {
             throw .authenticationRequestFailed
         }
+
+        await onAuthenticationCompleted()
 
         let account: ServerAccount
         do {
