@@ -2,8 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BleatBuildDate</key>
+	<string>Unavailable</string>
 	<key>BleatCloudKitMode</key>
 	<string>$(BLEAT_CLOUDKIT_MODE)</string>
+	<key>BleatDeveloperName</key>
+	<string>$(BLEAT_DEVELOPER_NAME)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

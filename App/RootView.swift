@@ -2728,6 +2728,13 @@ private struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.diagnostics")
+
+                    NavigationLink {
+                        AboutView()
+                    } label: {
+                        Label("About", systemImage: "info.circle")
+                    }
+                    .accessibilityIdentifier("settings.about")
                 }
 
             }

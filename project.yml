@@ -6,6 +6,9 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 
+attributes:
+  LastUpgradeCheck: "2630"
+
 packages:
   BleatPackage:
     path: .
@@ -21,6 +24,7 @@ settings:
 targets:
   BleatApp:
     type: application
+    productName: Bleat
     platform: auto
     supportedDestinations:
       - iOS
@@ -36,7 +40,9 @@ targets:
         CFBundleDisplayName: Bleat
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        BleatBuildDate: Unavailable
         BleatCloudKitMode: "$(BLEAT_CLOUDKIT_MODE)"
+        BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
         NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
         UILaunchScreen: {}
         UIBackgroundModes:
@@ -60,15 +66,24 @@ targets:
     settings:
       base:
         BLEAT_CLOUDKIT_MODE: enabled
+        BLEAT_DEVELOPER_NAME: James Hodgkinson
         CODE_SIGN_ENTITLEMENTS: App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements
         CURRENT_PROJECT_VERSION: "1"
+        DEAD_CODE_STRIPPING: YES
         MARKETING_VERSION: "0.1.0"
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).Bleat"
         PRODUCT_NAME: Bleat
         "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
+    postBuildScripts:
+      - path: scripts/write-build-metadata.sh
+        name: Write Build Metadata
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - "$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"
+        showEnvVars: false
 
   BleatAppTests:
     type: bundle.unit-test
@@ -84,6 +99,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).BleatTests"
         GENERATE_INFOPLIST_FILE: true
+        DEAD_CODE_STRIPPING: YES
         "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat"
         BUNDLE_LOADER: "$(TEST_HOST)"
@@ -99,6 +115,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).BleatUITests"
         GENERATE_INFOPLIST_FILE: true
+        DEAD_CODE_STRIPPING: YES
         TEST_TARGET_NAME: BleatApp
 
 schemes:

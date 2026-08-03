@@ -543,6 +543,8 @@ boundary for API and authentication requests, WebSockets, covers, streamed
 playback, and foreground or restored background downloads. **Last Server
 Activity** identifies which of those paths most recently selected or reached a
 server.
+**About** shows the app icon, version, build number, build timestamp, developer,
+and bundle identifier.
 Development builds add **Export Diagnostics** and **Export Recent Logs**. The
 latter shares a text file containing up to 15 minutes of categorized app,
 authentication, API, playback, download, and synchronization events, including
