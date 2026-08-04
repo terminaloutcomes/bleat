@@ -34,11 +34,13 @@ final class AccountStoreTests: XCTestCase {
 
         let accounts = try await fixture.store.accounts()
         let active = try await fixture.store.activeAccount()
-        XCTAssertEqual(Set(accounts.map(\.id)), [
-            first.id,
-            second.id,
-            third.id,
-        ])
+        XCTAssertEqual(
+            Set(accounts.map(\.id)),
+            [
+                first.id,
+                second.id,
+                third.id,
+            ])
         XCTAssertEqual(active?.id, third.id)
 
         let relaunched = AccountStore(modelContainer: fixture.container)
@@ -54,13 +56,13 @@ final class AccountStoreTests: XCTestCase {
         let fixture = try StoreFixture()
         let existing = try Self.account(
             accountID: "existing",
-            server: "https://example.net/prefix/",
+            server: "https://example.com/prefix/",
             userID: "remote-user",
             username: "Reader"
         )
         let duplicate = try Self.account(
             accountID: "duplicate",
-            server: "https://EXAMPLE.net/prefix",
+            server: "https://EXAMPLE.com/prefix",
             userID: "remote-user",
             username: "Reader"
         )
@@ -199,13 +201,14 @@ final class AccountStoreTests: XCTestCase {
     {
         let fixture = try StoreFixture()
         let context = ModelContext(fixture.container)
-        context.insert(ServerAccountRecord(
-            accountID: "corrupt",
-            serverURL: "https://example.net",
-            remoteUserID: "user",
-            profileData: Data("access-token refresh-token".utf8),
-            isActiveBrowsingAccount: true
-        ))
+        context.insert(
+            ServerAccountRecord(
+                accountID: "corrupt",
+                serverURL: "https://example.com",
+                remoteUserID: "user",
+                profileData: Data("access-token refresh-token".utf8),
+                isActiveBrowsingAccount: true
+            ))
         try context.save()
 
         do {
@@ -226,7 +229,7 @@ final class AccountStoreTests: XCTestCase {
     {
         let valid = try Self.account(
             accountID: "account",
-            server: "https://example.net",
+            server: "https://example.com",
             userID: "user",
             username: "Reader"
         )
@@ -347,7 +350,7 @@ final class AccountStoreTests: XCTestCase {
         let fixture = try StoreFixture()
         let existing = try Self.account(
             accountID: "existing",
-            server: "https://example.net",
+            server: "https://example.com",
             userID: "remote-user",
             username: "reader"
         )
@@ -425,7 +428,7 @@ final class AccountStoreTests: XCTestCase {
         let fixture = try StoreFixture()
         let existing = try Self.account(
             accountID: "existing",
-            server: "https://example.net",
+            server: "https://example.com",
             userID: "remote-user",
             username: "reader"
         )
@@ -590,7 +593,7 @@ final class AccountStoreTests: XCTestCase {
         authenticationMethods: [AuthenticationMethod] = [.local]
     ) throws -> DiscoveredServer {
         DiscoveredServer(
-            baseURL: try NormalizedServerURL("https://example.net"),
+            baseURL: try NormalizedServerURL("https://example.com"),
             version: try XCTUnwrap(
                 AudiobookshelfServerVersion("2.36.0")
             ),
@@ -708,33 +711,35 @@ private actor OnboardingTransport: HTTPTransport {
     }
 
     private static func userJSON(includeTokens: Bool) -> Data {
-        let tokens = includeTokens
+        let tokens =
+            includeTokens
             ? """
             ,"accessToken":"access-token","refreshToken":"refresh-token"
             """
             : ""
-        return Data("""
-        {
-          "user": {
-            "id": "remote-user",
-            "username": "reader",
-            "type": "user",
-            "permissions": {
-              "download": true,
-              "update": false,
-              "delete": false,
-              "upload": false,
-              "createEreader": false,
-              "accessAllLibraries": true,
-              "accessAllTags": true,
-              "accessExplicitContent": true,
-              "selectedTagsNotAccessible": false
-            },
-            "librariesAccessible": [],
-            "itemTagsSelected": []
-            \(tokens)
-          }
-        }
-        """.utf8)
+        return Data(
+            """
+            {
+              "user": {
+                "id": "remote-user",
+                "username": "reader",
+                "type": "user",
+                "permissions": {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "createEreader": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                },
+                "librariesAccessible": [],
+                "itemTagsSelected": []
+                \(tokens)
+              }
+            }
+            """.utf8)
     }
 }

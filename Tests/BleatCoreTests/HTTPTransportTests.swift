@@ -4,7 +4,8 @@ import XCTest
 @testable import BleatCore
 
 final class HTTPTransportTests: XCTestCase {
-    func testEndpointRouterUsesLocalServerAndPreservesPathPrefix() async throws {
+    func testEndpointRouterUsesLocalServerAndPreservesPathPrefix() async throws
+    {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL(
             "https://books.example/audiobookshelf"
@@ -181,7 +182,7 @@ final class HTTPTransportTests: XCTestCase {
         let transport = URLSessionHTTPTransport(
             configuration: configuration
         )
-        let url = try XCTUnwrap(URL(string: "https://example.net/status"))
+        let url = try XCTUnwrap(URL(string: "https://example.com/status"))
 
         let response = try await transport.send(
             TracedHTTPRequest(request: URLRequest(url: url), endpoint: .status)
@@ -217,7 +218,7 @@ final class HTTPTransportTests: XCTestCase {
         let transport = URLSessionHTTPTransport(
             configuration: configuration
         )
-        let url = try XCTUnwrap(URL(string: "https://example.net/status"))
+        let url = try XCTUnwrap(URL(string: "https://example.com/status"))
 
         await XCTAssertThrowsErrorAsync(
             try await transport.send(
@@ -273,9 +274,11 @@ final class HTTPTransportTests: XCTestCase {
 
         let events = await recorder.events()
         XCTAssertEqual(events.count, 2)
-        XCTAssertEqual(events.map(\.correlationID), [
-            correlationID, correlationID,
-        ])
+        XCTAssertEqual(
+            events.map(\.correlationID),
+            [
+                correlationID, correlationID,
+            ])
         XCTAssertEqual(events.map(\.endpoint), [.metadata, .metadata])
         XCTAssertEqual(events.map(\.method), [.patch, .patch])
         XCTAssertEqual(events.last?.statusCode, 204)
@@ -330,10 +333,10 @@ final class HTTPTransportTests: XCTestCase {
             cookieStorage: cookieStorage
         )
         let beginURL = try XCTUnwrap(
-            URL(string: "https://example.net/auth/openid")
+            URL(string: "https://example.com/auth/openid")
         )
         let callbackURL = try XCTUnwrap(
-            URL(string: "https://example.net/auth/openid/callback")
+            URL(string: "https://example.com/auth/openid/callback")
         )
 
         let beginResponse = try await transport.send(
