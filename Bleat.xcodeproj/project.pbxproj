@@ -24,6 +24,7 @@
 		6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2675018070436D35F6FC0FF /* MetadataEditorView.swift */; };
 		732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */; };
 		77EE2020CDB865FDB391F7FD /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */; };
+		789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */; };
 		8054CFBF4601C6122146E21E /* AppNavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
 		81AC77653B52F97E7610C957 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0639281D9850EC68335644F /* RootView.swift */; };
@@ -40,6 +41,7 @@
 		CBFD248E5D915C16F1433272 /* DiagnosticLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */; };
 		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
 		F46108AC1C2239DA623870FD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */; };
+		FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */; };
 		FF6591E97BE41B688DA71F70 /* BleatUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E1797402B69FE6551AC02B /* BleatUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -69,6 +71,8 @@
 		167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStoreTests.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationCoordinator.swift; sourceTree = "<group>"; };
+		342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotionTests.swift; sourceTree = "<group>"; };
+		3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotion.swift; sourceTree = "<group>"; };
 		46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
 		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
 		492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
@@ -126,6 +130,7 @@
 				167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */,
 				62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
+				342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */,
 			);
 			path = BleatAppTests;
 			sourceTree = "<group>";
@@ -190,6 +195,7 @@
 				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
 				0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */,
 				E0639281D9850EC68335644F /* RootView.swift */,
+				3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
 			);
 			path = App;
@@ -365,6 +371,7 @@
 				6E053570A66A3B972AE16A4F /* DiagnosticLogStoreTests.swift in Sources */,
 				9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
+				FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -403,6 +410,7 @@
 				012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */,
 				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
+				789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -646,6 +646,17 @@ and volumes when it exits. Redacted Docker logs, screenshots on failure, and
 complete XCTest result bundles are written beneath
 `TestSupport/ServerHarness/app-live-artifacts/`.
 
+Validate registered `bleat://` routes with a cold signed-in launch and warm
+scene delivery using a disposable Simulator:
+
+```sh
+mise run test:deep-links
+```
+
+The runner uses `xcrun simctl openurl` and a DEBUG-only persisted test scenario.
+It accepts the system route confirmation, validates only typed route outcomes,
+and removes its Simulator and test state when it exits.
+
 Control the environment directly when developing a contract test:
 
 ```sh

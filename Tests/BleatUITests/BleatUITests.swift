@@ -53,6 +53,45 @@ private func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
 
 final class BleatUITests: XCTestCase {
     @MainActor
+    func testAcceptsExternalURLConfirmationFromHost() throws {
+        #if !EXTERNAL_URL_DRIVER
+            throw XCTSkip(
+                "The external URL driver is invoked only by scripts/test-deep-links.sh."
+            )
+        #else
+        let defaults = UserDefaults.standard
+        let readyKey = "bleatUITestExternalURLDriverReady"
+        let completeKey = "bleatUITestExternalURLDriverComplete"
+        defaults.removeObject(forKey: completeKey)
+        defaults.set(true, forKey: readyKey)
+        defaults.synchronize()
+        defer {
+            defaults.removeObject(forKey: readyKey)
+            defaults.removeObject(forKey: completeKey)
+            defaults.synchronize()
+        }
+
+        let springboard = XCUIApplication(
+            bundleIdentifier: "com.apple.springboard"
+        )
+        let deadline = Date().addingTimeInterval(300)
+        var acceptedConfirmation = false
+
+        while Date() < deadline && !defaults.bool(forKey: completeKey) {
+            let open = springboard.buttons["Open"]
+            if open.waitForExistence(timeout: 0.5) {
+                open.tap()
+                acceptedConfirmation = true
+            }
+            defaults.synchronize()
+        }
+
+        XCTAssertTrue(acceptedConfirmation)
+        XCTAssertTrue(defaults.bool(forKey: completeKey))
+        #endif
+    }
+
+    @MainActor
     func testLaunchingScreenDescribesStartupWork() {
         let app = launch(scenario: "--ui-testing-launching")
         let launchScreen = app.descendants(matching: .any)["app.launching"]
@@ -134,9 +173,17 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(app.buttons["book.detail.author.0"].isHittable)
         XCTAssertTrue(
+            app.buttons["book.detail.author.1"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["book.detail.author.1"].isHittable)
+        XCTAssertTrue(
             app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.series.0"].isHittable)
+        XCTAssertTrue(
+            app.buttons["book.detail.series.1"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["book.detail.series.1"].isHittable)
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.chapter.0"]
                 .waitForExistence(timeout: 3)
@@ -215,6 +262,16 @@ final class BleatUITests: XCTestCase {
         ]
         XCTAssertTrue(libraryBook.waitForExistence(timeout: 3))
         libraryBook.tap()
+        let secondAuthor = app.buttons["book.detail.author.1"]
+        XCTAssertTrue(secondAuthor.waitForExistence(timeout: 3))
+        secondAuthor.tap()
+        XCTAssertTrue(clear.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Author: Test Coauthor"].exists)
+        clear.tap()
+        XCTAssertTrue(clear.waitForNonExistence(timeout: 3))
+
+        XCTAssertTrue(libraryBook.waitForExistence(timeout: 3))
+        libraryBook.tap()
         let series = app.buttons["book.detail.series.0"]
         XCTAssertTrue(series.waitForExistence(timeout: 3))
         series.tap()
@@ -225,8 +282,14 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Test Series"].exists)
         app.navigationBars["Test Series"].buttons.firstMatch.tap()
         XCTAssertTrue(
-            app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
+            app.buttons["book.detail.series.1"].waitForExistence(timeout: 3)
         )
+        app.buttons["book.detail.series.1"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["series.results"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.navigationBars["Companion Series"].exists)
     }
 
     @MainActor
@@ -508,11 +571,15 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(loadMore.waitForExistence(timeout: 3))
         loadMore.tap()
 
+        let collapsedSeries = app.buttons["library.series.series-1"]
+        XCTAssertTrue(collapsedSeries.waitForExistence(timeout: 3))
+        collapsedSeries.tap()
         XCTAssertTrue(
-            app.staticTexts["The Second Audiobook"].waitForExistence(
-                timeout: 3
-            )
+            app.descendants(matching: .any)["series.results"]
+                .waitForExistence(timeout: 3)
         )
+        XCTAssertTrue(app.staticTexts["Test Series Volume One"].exists)
+        XCTAssertTrue(app.staticTexts["Test Series Volume Two"].exists)
         XCTAssertFalse(loadMore.exists)
     }
 
@@ -965,6 +1032,41 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["book.detail.play"].waitForExistence(timeout: 3)
         )
+        for identifier in [
+            "book.detail.author.0",
+            "book.detail.author.1",
+            "book.detail.series.0",
+            "book.detail.series.1",
+        ] {
+            Self.scrollUntilHittable(
+                app: app,
+                identifier: identifier,
+                direction: .down
+            )
+            XCTAssertTrue(app.buttons[identifier].isHittable)
+        }
+    }
+
+    @MainActor
+    func testSeriesCoverBrowserDisablesDepthMotionWhenRequested() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-reduce-motion"]
+        )
+
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 3))
+        book.tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+
+        let coverBrowser = app.descendants(matching: .any)[
+            "series.coverBrowser.reducedMotion"
+        ]
+        XCTAssertTrue(coverBrowser.waitForExistence(timeout: 3))
+        coverBrowser.swipeLeft()
+        XCTAssertTrue(coverBrowser.exists)
     }
 
     @MainActor
@@ -1126,11 +1228,31 @@ final class BleatLiveUITests: XCTestCase {
         series.tap()
         let seriesResults = app.descendants(matching: .any)["series.results"]
         XCTAssertTrue(seriesResults.waitForExistence(timeout: 20))
-        let book = seriesResults.descendants(matching: .any)[
+        let multiMetadataBook = seriesResults.descendants(matching: .any)[
+            "series.book.0"
+        ]
+        XCTAssertTrue(multiMetadataBook.waitForExistence(timeout: 20))
+        multiMetadataBook.tap()
+        for identifier in [
+            "book.detail.author.0",
+            "book.detail.author.1",
+            "book.detail.series.0",
+            "book.detail.series.1",
+        ] {
+            XCTAssertTrue(
+                app.buttons[identifier].waitForExistence(timeout: 20)
+            )
+            XCTAssertTrue(app.buttons[identifier].isHittable)
+        }
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 20))
+        back.tap()
+
+        let playbackBook = seriesResults.descendants(matching: .any)[
             "series.book.1"
         ]
-        XCTAssertTrue(book.waitForExistence(timeout: 20))
-        book.tap()
+        XCTAssertTrue(playbackBook.waitForExistence(timeout: 20))
+        playbackBook.tap()
     }
 
     private func liveEnvironment() throws -> (

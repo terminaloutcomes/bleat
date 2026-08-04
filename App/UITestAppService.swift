@@ -13,6 +13,21 @@
         case launching = "--ui-testing-launching"
     }
 
+    private enum UITestScenarioStorage {
+        static let persistedScenarioKey = "Bleat.UITest.persistedScenario"
+        static let persistArgument = "--ui-testing-persist-scenario"
+        static let clearArgument = "--ui-testing-clear-persisted-scenario"
+        static let clearDeepLinkReceiptArgument =
+            "--ui-testing-clear-deep-link-receipt"
+    }
+
+    private struct FixtureIDs: Sendable {
+        let primaryAuthor: AuthorID
+        let secondaryAuthor: AuthorID
+        let primarySeries: SeriesID
+        let secondarySeries: SeriesID
+    }
+
     actor UITestAppService: AppServicing {
         private let scenario: UITestScenario
         private let accountResult: Result<ServerAccount, AppServiceError>
@@ -20,11 +35,33 @@
         private var homeShelfRequests = 0
 
         static func current() -> UITestAppService? {
-            guard
-                let scenario = ProcessInfo.processInfo.arguments
-                    .compactMap(UITestScenario.init(rawValue:))
-                    .first
-            else {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains(
+                UITestScenarioStorage.clearDeepLinkReceiptArgument
+            ) {
+                UITestDeepLinkReceipt.clear()
+            }
+            if arguments.contains(UITestScenarioStorage.clearArgument) {
+                UserDefaults.standard.removeObject(
+                    forKey: UITestScenarioStorage.persistedScenarioKey
+                )
+                return UITestAppService(scenario: .signedOut)
+            }
+            if let scenario = arguments
+                .compactMap(UITestScenario.init(rawValue:))
+                .first
+            {
+                if arguments.contains(UITestScenarioStorage.persistArgument) {
+                    UserDefaults.standard.set(
+                        scenario.rawValue,
+                        forKey: UITestScenarioStorage.persistedScenarioKey
+                    )
+                }
+                return UITestAppService(scenario: scenario)
+            }
+            guard let rawScenario = UserDefaults.standard.string(
+                forKey: UITestScenarioStorage.persistedScenarioKey
+            ), let scenario = UITestScenario(rawValue: rawScenario) else {
                 return nil
             }
             return UITestAppService(scenario: scenario)
@@ -115,13 +152,115 @@
             libraryID: LibraryID,
             request: LibraryItemsPageRequest
         ) async throws(AppServiceError) -> LibraryItemsPage {
+            let ids = try Self.fixtureIDs()
+            if request.filter == nil, request.page == 0 {
+                firstPageRequests += 1
+            }
+            let primaryBook = Self.book(
+                id: "ui-book",
+                title: libraryTitle,
+                libraryID: libraryID,
+                ids: ids
+            )
+            let primarySeriesBooks = [
+                Self.book(
+                    id: "ui-series-one",
+                    title: "Test Series Volume One",
+                    libraryID: libraryID,
+                    ids: ids,
+                    series: [
+                        LibraryBookSeries(
+                            id: ids.primarySeries,
+                            name: "Test Series",
+                            sequence: "1"
+                        )
+                    ]
+                ),
+                Self.book(
+                    id: "ui-series-two",
+                    title: "Test Series Volume Two",
+                    libraryID: libraryID,
+                    ids: ids,
+                    series: [
+                        LibraryBookSeries(
+                            id: ids.primarySeries,
+                            name: "Test Series",
+                            sequence: "2"
+                        )
+                    ]
+                ),
+            ]
+            let secondarySeriesBooks = [
+                Self.book(
+                    id: "ui-companion-one",
+                    title: "Companion Series Volume One",
+                    libraryID: libraryID,
+                    ids: ids,
+                    series: [
+                        LibraryBookSeries(
+                            id: ids.secondarySeries,
+                            name: "Companion Series",
+                            sequence: "1"
+                        )
+                    ]
+                ),
+                Self.book(
+                    id: "ui-companion-two",
+                    title: "Companion Series Volume Two",
+                    libraryID: libraryID,
+                    ids: ids,
+                    series: [
+                        LibraryBookSeries(
+                            id: ids.secondarySeries,
+                            name: "Companion Series",
+                            sequence: "2"
+                        )
+                    ]
+                ),
+            ]
+
+            if request.filter == LibraryItemFilter(authorID: ids.primaryAuthor)
+                || request.filter == LibraryItemFilter(authorID: ids.secondaryAuthor)
+            {
+                return LibraryItemsPage(
+                    items: [primaryBook],
+                    total: 1,
+                    page: 0,
+                    limit: 1
+                )
+            }
+            if request.filter == LibraryItemFilter(seriesID: ids.primarySeries) {
+                return LibraryItemsPage(
+                    items: primarySeriesBooks,
+                    total: primarySeriesBooks.count,
+                    page: 0,
+                    limit: primarySeriesBooks.count
+                )
+            }
+            if request.filter == LibraryItemFilter(seriesID: ids.secondarySeries) {
+                return LibraryItemsPage(
+                    items: secondarySeriesBooks,
+                    total: secondarySeriesBooks.count,
+                    page: 0,
+                    limit: secondarySeriesBooks.count
+                )
+            }
             if request.page == 1 {
+                let collapsedSeries = LibraryCollapsedSeries(
+                    id: ids.primarySeries,
+                    name: "Test Series",
+                    libraryItemIDs: primarySeriesBooks.map(\.id),
+                    numBooks: primarySeriesBooks.count,
+                    sequenceList: ["1", "2"]
+                )
                 return LibraryItemsPage(
                     items: [
                         Self.book(
                             id: "ui-book-2",
                             title: "The Second Audiobook",
-                            libraryID: libraryID
+                            libraryID: libraryID,
+                            ids: ids,
+                            collapsedSeries: collapsedSeries
                         )
                     ],
                     total: 2,
@@ -129,19 +268,8 @@
                     limit: 1
                 )
             }
-            firstPageRequests += 1
-            let title =
-                scenario == .refresh && firstPageRequests >= 3
-                ? "The Refreshed Library Audiobook"
-                : "The Test Audiobook"
             return LibraryItemsPage(
-                items: [
-                    Self.book(
-                        id: "ui-book",
-                        title: title,
-                        libraryID: libraryID
-                    )
-                ],
+                items: [primaryBook],
                 total: 2,
                 page: 0,
                 limit: 1
@@ -152,6 +280,7 @@
             for account: ServerAccount,
             libraryID: LibraryID
         ) async throws(AppServiceError) -> [LibraryBookShelf] {
+            let ids = try Self.fixtureIDs()
             homeShelfRequests += 1
             let title =
                 scenario == .refresh && homeShelfRequests >= 2
@@ -166,7 +295,8 @@
                         Self.book(
                             id: "ui-book",
                             title: title,
-                            libraryID: libraryID
+                            libraryID: libraryID,
+                            ids: ids
                         )
                     ],
                     total: 1
@@ -182,23 +312,27 @@
             guard query == "Test" else {
                 return LibrarySearchResults(books: [])
             }
-            guard let authorID = AuthorID(rawValue: "author-1"),
-                  let seriesID = SeriesID(rawValue: "series-1")
-            else {
-                throw .pageRequest(.invalidFilter)
-            }
+            let ids = try Self.fixtureIDs()
             return LibrarySearchResults(
-                books: firstPageItem(libraryID: libraryID),
+                books: try Self.firstPageItem(libraryID: libraryID),
                 authors: [
                     LibrarySearchAuthorMatch(
-                        id: authorID,
+                        id: ids.primaryAuthor,
                         name: "Test Author"
+                    ),
+                    LibrarySearchAuthorMatch(
+                        id: ids.secondaryAuthor,
+                        name: "Test Coauthor"
                     ),
                 ],
                 series: [
                     LibrarySearchSeriesMatch(
-                        id: seriesID,
+                        id: ids.primarySeries,
                         name: "Test Series"
+                    ),
+                    LibrarySearchSeriesMatch(
+                        id: ids.secondarySeries,
+                        name: "Companion Series"
                     ),
                 ]
             )
@@ -209,11 +343,7 @@
             libraryID: LibraryID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookDetail {
-            guard let authorID = AuthorID(rawValue: "author-1"),
-                  let seriesID = SeriesID(rawValue: "series-1")
-            else {
-                throw .pageRequest(.invalidFilter)
-            }
+            let ids = try Self.fixtureIDs()
             return LibraryBookDetail(
                 id: itemID,
                 libraryID: libraryID,
@@ -224,17 +354,26 @@
                 subtitle: "A complete test story",
                 authors: [
                     LibraryBookContributor(
-                        id: authorID,
+                        id: ids.primaryAuthor,
                         name: "Test Author"
-                    )
+                    ),
+                    LibraryBookContributor(
+                        id: ids.secondaryAuthor,
+                        name: "Test Coauthor"
+                    ),
                 ],
                 narrators: ["Test Narrator"],
                 series: [
                     LibraryBookSeries(
-                        id: seriesID,
+                        id: ids.primarySeries,
                         name: "Test Series",
                         sequence: "1"
-                    )
+                    ),
+                    LibraryBookSeries(
+                        id: ids.secondarySeries,
+                        name: "Companion Series",
+                        sequence: "1"
+                    ),
                 ],
                 genres: ["Fiction"],
                 tags: [],
@@ -452,10 +591,35 @@
             }
         }
 
+        private var libraryTitle: String {
+            scenario == .refresh && firstPageRequests >= 3
+                ? "The Refreshed Library Audiobook"
+                : "The Test Audiobook"
+        }
+
+        private static func fixtureIDs() throws(AppServiceError) -> FixtureIDs {
+            guard let primaryAuthor = AuthorID(rawValue: "author-1"),
+                  let secondaryAuthor = AuthorID(rawValue: "author-2"),
+                  let primarySeries = SeriesID(rawValue: "series-1"),
+                  let secondarySeries = SeriesID(rawValue: "series-2")
+            else {
+                throw .pageRequest(.invalidFilter)
+            }
+            return FixtureIDs(
+                primaryAuthor: primaryAuthor,
+                secondaryAuthor: secondaryAuthor,
+                primarySeries: primarySeries,
+                secondarySeries: secondarySeries
+            )
+        }
+
         private static func book(
             id: String,
             title: String,
-            libraryID: LibraryID
+            libraryID: LibraryID,
+            ids: FixtureIDs,
+            series: [LibraryBookSeries]? = nil,
+            collapsedSeries: LibraryCollapsedSeries? = nil
         ) -> LibraryBookSummary {
             LibraryBookSummary(
                 id: LibraryItemID(rawValue: id),
@@ -464,7 +628,30 @@
                 subtitle: nil,
                 authorName: "Test Author",
                 narratorName: "Test Narrator",
-                seriesName: nil,
+                seriesName: series?.first?.name,
+                authors: [
+                    LibraryBookContributor(
+                        id: ids.primaryAuthor,
+                        name: "Test Author"
+                    ),
+                    LibraryBookContributor(
+                        id: ids.secondaryAuthor,
+                        name: "Test Coauthor"
+                    ),
+                ],
+                series: series ?? [
+                    LibraryBookSeries(
+                        id: ids.primarySeries,
+                        name: "Test Series",
+                        sequence: "1"
+                    ),
+                    LibraryBookSeries(
+                        id: ids.secondarySeries,
+                        name: "Companion Series",
+                        sequence: "1"
+                    ),
+                ],
+                collapsedSeries: collapsedSeries,
                 genres: ["Fiction"],
                 publisher: nil,
                 publishedYear: "2026",
@@ -476,6 +663,55 @@
                 isExplicit: false,
                 isAbridged: false
             )
+        }
+
+        private static func firstPageItem(
+            libraryID: LibraryID
+        ) throws(AppServiceError) -> [LibraryBookSummary] {
+            let ids = try fixtureIDs()
+            return [
+                LibraryBookSummary(
+                    id: LibraryItemID(rawValue: "ui-search-book"),
+                    libraryID: libraryID,
+                    title: "The Search Result",
+                    subtitle: nil,
+                    authorName: "Test Author",
+                    narratorName: "Test Narrator",
+                    seriesName: "Test Series",
+                    authors: [
+                        LibraryBookContributor(
+                            id: ids.primaryAuthor,
+                            name: "Test Author"
+                        ),
+                        LibraryBookContributor(
+                            id: ids.secondaryAuthor,
+                            name: "Test Coauthor"
+                        ),
+                    ],
+                    series: [
+                        LibraryBookSeries(
+                            id: ids.primarySeries,
+                            name: "Test Series",
+                            sequence: "1"
+                        ),
+                        LibraryBookSeries(
+                            id: ids.secondarySeries,
+                            name: "Companion Series",
+                            sequence: "1"
+                        ),
+                    ],
+                    genres: ["Fiction"],
+                    publisher: nil,
+                    publishedYear: "2026",
+                    duration: 3_600,
+                    trackCount: 1,
+                    chapterCount: 1,
+                    addedAtMilliseconds: 1,
+                    updatedAtMilliseconds: 1,
+                    isExplicit: false,
+                    isAbridged: false
+                )
+            ]
         }
 
         private static func makeAccount(
@@ -520,29 +756,4 @@
         }
     }
 
-    private func firstPageItem(
-        libraryID: LibraryID
-    ) -> [LibraryBookSummary] {
-        [
-            LibraryBookSummary(
-                id: LibraryItemID(rawValue: "ui-search-book"),
-                libraryID: libraryID,
-                title: "The Search Result",
-                subtitle: nil,
-                authorName: "Test Author",
-                narratorName: "Test Narrator",
-                seriesName: nil,
-                genres: ["Fiction"],
-                publisher: nil,
-                publishedYear: "2026",
-                duration: 3_600,
-                trackCount: 1,
-                chapterCount: 1,
-                addedAtMilliseconds: 1,
-                updatedAtMilliseconds: 1,
-                isExplicit: false,
-                isAbridged: false
-            )
-        ]
-    }
 #endif

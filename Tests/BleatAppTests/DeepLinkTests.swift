@@ -78,4 +78,18 @@ final class DeepLinkTests: XCTestCase {
             )
         )
     }
+
+    func testStartupInboxQueuesOnlyTheLatestValidLink() throws {
+        let inbox = AppDeepLinkInbox()
+        let first = try XCTUnwrap(URL(string: "bleat://library"))
+        let malformed = try XCTUnwrap(URL(string: "bleat://search?q="))
+        let second = try XCTUnwrap(URL(string: "bleat://settings/about"))
+
+        XCTAssertTrue(inbox.receive(url: first))
+        XCTAssertFalse(inbox.receive(url: malformed))
+        XCTAssertTrue(inbox.receive(url: second))
+        XCTAssertEqual(inbox.revision, 2)
+        XCTAssertEqual(inbox.takePendingRoute(), .settings(.about))
+        XCTAssertNil(inbox.takePendingRoute())
+    }
 }

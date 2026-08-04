@@ -32,6 +32,34 @@ struct SeriesDestination: Hashable, Sendable {
 
 @MainActor
 @Observable
+final class AppDeepLinkInbox {
+    static let shared = AppDeepLinkInbox()
+
+    private(set) var revision: UInt64 = 0
+    private var pendingRoute: DeepLinkRoute?
+
+    func receive(url: URL) -> Bool {
+        guard let route = try? DeepLinkParser.parse(url) else {
+            return false
+        }
+        receive(route: route)
+        return true
+    }
+
+    func takePendingRoute() -> DeepLinkRoute? {
+        defer { pendingRoute = nil }
+        return pendingRoute
+    }
+
+    private func receive(route: DeepLinkRoute) {
+        guard pendingRoute != route else { return }
+        pendingRoute = route
+        revision &+= 1
+    }
+}
+
+@MainActor
+@Observable
 final class AppNavigationCoordinator {
     private struct BrowseContext {
         let account: ServerAccount?
@@ -72,6 +100,10 @@ final class AppNavigationCoordinator {
         guard let route = try? DeepLinkParser.parse(url) else {
             return
         }
+        receive(route: route)
+    }
+
+    func receive(route: DeepLinkRoute) {
         pendingRouteGeneration &+= 1
         pendingRoute = route
     }
@@ -84,6 +116,9 @@ final class AppNavigationCoordinator {
         }
 
         while let route = pendingRoute {
+            guard model.phase != .launching else {
+                return
+            }
             guard model.phase == .signedIn else {
                 deepLinkFailure = .signInRequired
                 return
@@ -103,6 +138,12 @@ final class AppNavigationCoordinator {
                     await restore(context, in: model)
                     continue
                 }
+                #if DEBUG
+                    UITestDeepLinkReceipt.record(
+                        route: route,
+                        outcome: .applied
+                    )
+                #endif
                 pendingRoute = nil
                 return
             case .unavailable:
@@ -110,6 +151,12 @@ final class AppNavigationCoordinator {
                     await restore(context, in: model)
                     continue
                 }
+                #if DEBUG
+                    UITestDeepLinkReceipt.record(
+                        route: route,
+                        outcome: .unavailable
+                    )
+                #endif
                 pendingRoute = nil
                 deepLinkFailure = .unavailable
                 return
@@ -360,3 +407,60 @@ final class AppNavigationCoordinator {
         }
     }
 }
+
+#if DEBUG
+enum UITestDeepLinkReceipt {
+    enum Outcome: String {
+        case applied
+        case unavailable
+    }
+
+    static let receiptKey = "bleatUITestLastDeepLinkReceipt"
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: receiptKey)
+        UserDefaults.standard.removeObject(
+            forKey: "bleatUITestDeepLinkReceiptRevision"
+        )
+        UserDefaults.standard.synchronize()
+    }
+
+    static func record(route: DeepLinkRoute, outcome: Outcome) {
+        let revision = UserDefaults.standard.integer(
+            forKey: "bleatUITestDeepLinkReceiptRevision"
+        ) + 1
+        UserDefaults.standard.set(
+            revision,
+            forKey: "bleatUITestDeepLinkReceiptRevision"
+        )
+        UserDefaults.standard.set(
+            "\(revision):\(outcome.rawValue):\(kind(for: route))",
+            forKey: receiptKey
+        )
+        UserDefaults.standard.synchronize()
+    }
+
+    private static func kind(for route: DeepLinkRoute) -> String {
+        switch route {
+        case .home:
+            "home"
+        case .library:
+            "library"
+        case .downloads:
+            "downloads"
+        case .search:
+            "search"
+        case .book:
+            "book"
+        case .author:
+            "author"
+        case .series:
+            "series"
+        case .settings:
+            "settings"
+        case .nowPlaying:
+            "nowPlaying"
+        }
+    }
+}
+#endif

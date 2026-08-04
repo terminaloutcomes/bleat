@@ -42,6 +42,7 @@ enum BookDetailPlaybackAction: Equatable {
 struct RootView: View {
     @Bindable var model: AppModel
     @State private var navigation = AppNavigationCoordinator()
+    @State private var deepLinkInbox = AppDeepLinkInbox.shared
     @Environment(\.scenePhase) private var scenePhase
     @ColourSchemePreference private var colourScheme
 
@@ -75,10 +76,19 @@ struct RootView: View {
         }
         .task {
             await model.start()
+            if let route = deepLinkInbox.takePendingRoute() {
+                navigation.receive(route: route)
+            }
             await navigation.applyPendingRoute(model: model)
         }
         .onOpenURL { url in
-            navigation.receive(url: url)
+            _ = deepLinkInbox.receive(url: url)
+        }
+        .onChange(of: deepLinkInbox.revision) { _, _ in
+            guard let route = deepLinkInbox.takePendingRoute() else {
+                return
+            }
+            navigation.receive(route: route)
             Task { await navigation.applyPendingRoute(model: model) }
         }
         .onChange(of: model.isNavigationReady) { _, ready in
@@ -109,6 +119,7 @@ struct RootView: View {
             }
         }
     }
+
 }
 
 private struct LaunchingView: View {
@@ -1585,6 +1596,9 @@ private struct BookListContent: View {
                                     server: model.account?.server
                                 )
                             }
+                            .accessibilityIdentifier(
+                                "library.series.\(series.id.rawValue)"
+                            )
                         }
                     }
                     if page.hasNextPage {
@@ -1949,7 +1963,7 @@ private struct SeriesDetailView: View {
                         .simultaneousGesture(
                             DragGesture()
                                 .onChanged { value in
-                                    guard !reduceMotion else { return }
+                                    guard !shouldReduceMotion else { return }
                                     coverSwipeOffset = value.translation.width
                                 }
                                 .onEnded { _ in
@@ -1957,6 +1971,11 @@ private struct SeriesDetailView: View {
                                 }
                         )
                         .frame(height: 270)
+                        .accessibilityIdentifier(
+                            shouldReduceMotion
+                                ? "series.coverBrowser.reducedMotion"
+                                : "series.coverBrowser.depthMotion"
+                        )
                     }
                     .listRowInsets(EdgeInsets())
 
@@ -2018,8 +2037,20 @@ private struct SeriesDetailView: View {
     }
 
     private var coverDepthAngle: Double {
-        guard !reduceMotion else { return 0 }
-        return Double(min(max(coverSwipeOffset / 20, -12), 12))
+        SeriesCoverMotion.depthAngle(
+            swipeOffset: coverSwipeOffset,
+            reduceMotion: shouldReduceMotion
+        )
+    }
+
+    private var shouldReduceMotion: Bool {
+        #if DEBUG
+            reduceMotion || ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-reduce-motion"
+            )
+        #else
+            reduceMotion
+        #endif
     }
 }
 

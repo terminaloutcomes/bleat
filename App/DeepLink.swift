@@ -48,10 +48,19 @@ enum DeepLinkParser {
         else {
             throw .invalidURL
         }
-        let encodedPath = components.percentEncodedPath.split(
-            separator: "/",
-            omittingEmptySubsequences: false
-        )
+        let encodedPath: [Substring]
+        let rawPath = components.percentEncodedPath
+        if rawPath.isEmpty {
+            encodedPath = []
+        } else {
+            guard rawPath.first == "/" else {
+                throw .invalidURL
+            }
+            encodedPath = rawPath.split(
+                separator: "/",
+                omittingEmptySubsequences: false
+            ).dropFirst().map { $0 }
+        }
         guard !encodedPath.contains(where: \.isEmpty) else {
             throw .invalidURL
         }

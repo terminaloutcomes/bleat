@@ -43,6 +43,6 @@ codesign -d --entitlements :- "${bleat_app}" >"${entitlements_file}" 2>"${codesi
 }
 plutil -extract keychain-access-groups.0 raw \
   "${entitlements_file}" >/dev/null
-codesign -dvv "${bleat_app}" 2>&1 \
-  | grep -Eq '^TeamIdentifier=[A-Z0-9]+$'
+codesign -dvv "${bleat_app}" >"${codesign_output}" 2>&1
+grep -Eq '^TeamIdentifier=[A-Z0-9]+$' "${codesign_output}"
 open "${bleat_app}"
