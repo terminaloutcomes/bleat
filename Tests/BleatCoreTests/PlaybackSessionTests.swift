@@ -36,7 +36,7 @@ final class PlaybackSessionTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/audiobookshelf/api/items/item/play"
+            "https://example.com/audiobookshelf/api/items/item/play"
         )
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Authorization"),
@@ -85,8 +85,8 @@ final class PlaybackSessionTests: XCTestCase {
         XCTAssertEqual(
             tracks.map(\.url.absoluteString),
             [
-                "https://example.net/audiobookshelf/public/session/session/track/2",
-                "https://example.net/audiobookshelf/public/session/session/track/4",
+                "https://example.com/audiobookshelf/public/session/session/track/2",
+                "https://example.com/audiobookshelf/public/session/session/track/4",
             ]
         )
         XCTAssertTrue(tracks.allSatisfy { $0.url.query == nil })
@@ -302,7 +302,7 @@ final class PlaybackSessionTests: XCTestCase {
 
     func testResolvesPrefixedHLSAndRejectsUnsafeReturnedPaths() async throws {
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
         let hlsSession = try await Self.decodeSession(
             Self.sessionJSON(
@@ -323,7 +323,7 @@ final class PlaybackSessionTests: XCTestCase {
                 try XCTUnwrap(
                     URL(
                         string:
-                            "https://example.net/audiobookshelf/hls/session/output.m3u8"
+                            "https://example.com/audiobookshelf/hls/session/output.m3u8"
                     )
                 )
             )
@@ -357,7 +357,7 @@ final class PlaybackSessionTests: XCTestCase {
     }
 
     func testUnsupportedAndMissingPlaybackSourcesAreTyped() async throws {
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let localSession = try await Self.decodeSession(
             Self.sessionJSON(method: 3)
         )
@@ -443,7 +443,7 @@ final class PlaybackSessionTests: XCTestCase {
         XCTAssertNil(request.httpBody)
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/audiobookshelf/api/session/session/close"
+            "https://example.com/audiobookshelf/api/session/session/close"
         )
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Authorization"),
@@ -474,7 +474,7 @@ final class PlaybackSessionTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/audiobookshelf/api/session/session/sync"
+            "https://example.com/audiobookshelf/api/session/session/sync"
         )
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Authorization"),
@@ -742,7 +742,7 @@ private struct Fixture {
         includeCredentials: Bool = true
     ) throws {
         server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
         transport = PlaybackTestTransport(responses: responses)
         let credentials =

@@ -25,6 +25,10 @@ run = ["./scripts/test-live.sh"]
 description = "Run live app journeys on a disposable iOS Simulator"
 run = ["./scripts/test-app-live.sh"]
 
+[tasks."test:deep-links"]
+description = "Validate cold and warm bleat URL routing on a disposable iOS Simulator"
+run = ["./scripts/test-deep-links.sh"]
+
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
 run = [
@@ -86,3 +90,6 @@ xcrun devicectl device process launch \
 [tasks.device]
 description = "Build, install, and launch Bleat on a physical iPhone"
 depends = ["device:launch"]
+
+[tasks.trufflehog]
+run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore'"""

@@ -261,7 +261,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 callbackURL: Self.callbackURL,
                 browser: OpenIDTestBrowser.success(
                     callbackURL: Self.callbackURL
@@ -290,12 +290,12 @@ final class OpenIDAuthenticationTests: XCTestCase {
 
         let cases: [(String, OpenIDCallbackURLValidationError)] = [
             ("not a url", .malformed),
-            ("https://example.net/oauth/callback", .webSchemeNotAllowed),
-            ("http://example.net/oauth/callback", .webSchemeNotAllowed),
+            ("https://example.com/oauth/callback", .webSchemeNotAllowed),
+            ("http://example.com/oauth/callback", .webSchemeNotAllowed),
             ("audiobookshelf:/oauth", .reservedScheme),
             ("com.example.bleat:", .missingCallbackPath),
             (
-                "com.example.bleat://user@example.net/oauth/callback",
+                "com.example.bleat://user@example.com/oauth/callback",
                 .containsCredentials
             ),
             (
@@ -407,7 +407,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
         let accountID = AccountID(rawValue: "oidc-account")
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
 
         let account = try await coordinator.loginWithOpenID(
@@ -534,7 +534,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser.success(
                         callbackURL: Self.callbackURL
@@ -573,7 +573,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser(
                         result: .failure(browserError)
@@ -601,7 +601,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 callbackURL: Self.callbackURL,
                 browser: OpenIDTestBrowser(result: .unexpectedFailure)
             )
@@ -655,7 +655,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser(
                         result: .callback(callback)
@@ -688,7 +688,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 callbackURL: Self.callbackURL,
                 browser: OpenIDTestBrowser(
                     result: .missingCode(Self.callbackURL)
@@ -719,7 +719,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         let gate = OpenIDBrowserGate()
         let browser = SuspendingOpenIDBrowser(gate: gate)
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
 
         async let firstAttempt = coordinator.loginWithOpenID(
             accountID: accountID,
@@ -821,7 +821,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser.success(
                         callbackURL: Self.callbackURL
@@ -902,7 +902,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser.success(
                         callbackURL: Self.callbackURL
@@ -934,7 +934,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: ""),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 callbackURL: Self.callbackURL,
                 browser: OpenIDTestBrowser.success(
                     callbackURL: Self.callbackURL
@@ -1118,7 +1118,8 @@ private final class OpenIDWebSessionFactory:
 
 @MainActor
 private final class OpenIDWebSession: OpenIDWebAuthenticationSession {
-    var presentationContextProvider: (any ASWebAuthenticationPresentationContextProviding)?
+    var presentationContextProvider:
+        (any ASWebAuthenticationPresentationContextProviding)?
     var prefersEphemeralWebBrowserSession = true
 
     let authorizationURL: URL

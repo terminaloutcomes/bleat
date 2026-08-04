@@ -20,7 +20,7 @@ final class AuthenticationTests: XCTestCase {
 
         let account = try await coordinator.login(
             accountID: accountID,
-            server: NormalizedServerURL("https://example.net"),
+            server: NormalizedServerURL("https://example.com"),
             username: "fixture-root",
             password: "test-password"
         )
@@ -71,7 +71,7 @@ final class AuthenticationTests: XCTestCase {
         )
         let accountID = AccountID(rawValue: "local-account")
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
 
         let account = try await client.login(
@@ -97,7 +97,7 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(
             requests[0].url?.absoluteString,
-            "https://example.net/audiobookshelf/login"
+            "https://example.com/audiobookshelf/login"
         )
         XCTAssertEqual(requests[0].httpMethod, "POST")
         XCTAssertEqual(
@@ -123,7 +123,7 @@ final class AuthenticationTests: XCTestCase {
 
         XCTAssertEqual(
             requests[1].url?.absoluteString,
-            "https://example.net/audiobookshelf/api/authorize"
+            "https://example.com/audiobookshelf/api/authorize"
         )
         XCTAssertEqual(requests[1].httpMethod, "POST")
         XCTAssertEqual(
@@ -363,7 +363,7 @@ final class AuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await client.login(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     username: "reader",
                     password: "incorrect"
                 )
@@ -426,7 +426,7 @@ final class AuthenticationTests: XCTestCase {
             await XCTAssertThrowsErrorAsync(
                 try await client.login(
                     accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.net"),
+                    server: NormalizedServerURL("https://example.com"),
                     username: "reader",
                     password: "test-password"
                 )
@@ -452,7 +452,7 @@ final class AuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await emptyAccountClient.login(
                 accountID: AccountID(rawValue: ""),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 username: "reader",
                 password: "test-password"
             )
@@ -488,7 +488,7 @@ final class AuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await client.login(
                 accountID: AccountID(rawValue: "account"),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 username: "reader",
                 password: "test-password"
             )
@@ -529,7 +529,7 @@ final class AuthenticationTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await client.login(
                 accountID: AccountID(rawValue: "account"),
-                server: NormalizedServerURL("https://example.net"),
+                server: NormalizedServerURL("https://example.com"),
                 username: "reader",
                 password: "test-password"
             )
@@ -547,7 +547,7 @@ final class AuthenticationTests: XCTestCase {
 
     func testBearerAuthorizerAddsHeaderWithoutChangingURL() throws {
         let url = try XCTUnwrap(
-            URL(string: "https://example.net/api/libraries?sort=title")
+            URL(string: "https://example.com/api/libraries?sort=title")
         )
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -570,7 +570,7 @@ final class AuthenticationTests: XCTestCase {
 
     func testBearerAuthorizerRejectsUnsafeRequestOrToken() throws {
         var missingURL = URLRequest(
-            url: try XCTUnwrap(URL(string: "https://example.net"))
+            url: try XCTUnwrap(URL(string: "https://example.com"))
         )
         missingURL.url = nil
 
@@ -579,7 +579,7 @@ final class AuthenticationTests: XCTestCase {
             (
                 URLRequest(
                     url: try XCTUnwrap(
-                        URL(string: "http://example.net/api/libraries")
+                        URL(string: "http://example.com/api/libraries")
                     )
                 ),
                 "access",
@@ -588,7 +588,7 @@ final class AuthenticationTests: XCTestCase {
             (
                 URLRequest(
                     url: try XCTUnwrap(
-                        URL(string: "https://user@example.net/api/libraries")
+                        URL(string: "https://user@example.com/api/libraries")
                     )
                 ),
                 "access",
@@ -599,7 +599,7 @@ final class AuthenticationTests: XCTestCase {
                     url: try XCTUnwrap(
                         URL(
                             string:
-                                "https://example.net/api/libraries?TOKEN=secret"
+                                "https://example.com/api/libraries?TOKEN=secret"
                         )
                     )
                 ),
@@ -609,7 +609,7 @@ final class AuthenticationTests: XCTestCase {
             (
                 URLRequest(
                     url: try XCTUnwrap(
-                        URL(string: "https://example.net/api/libraries")
+                        URL(string: "https://example.com/api/libraries")
                     )
                 ),
                 "",
@@ -618,7 +618,7 @@ final class AuthenticationTests: XCTestCase {
             (
                 URLRequest(
                     url: try XCTUnwrap(
-                        URL(string: "https://example.net/api/libraries")
+                        URL(string: "https://example.com/api/libraries")
                     )
                 ),
                 "bad\nheader",

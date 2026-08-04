@@ -6,7 +6,7 @@ import XCTest
 final class LogoutTests: XCTestCase {
     func testOnlineLogoutUsesRefreshHeaderAndClearsCredentials() async throws {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net/prefix")
+        let server = try NormalizedServerURL("https://example.com/prefix")
         let tokens = try AuthenticationTokens(
             accessToken: "access",
             refreshToken: "refresh"
@@ -16,10 +16,11 @@ final class LogoutTests: XCTestCase {
         )
         let transport = LogoutScriptedTransport(
             responses: [
-                .success(.init(
-                    data: Data(#"{"redirect_url":null}"#.utf8),
-                    statusCode: 200
-                )),
+                .success(
+                    .init(
+                        data: Data(#"{"redirect_url":null}"#.utf8),
+                        statusCode: 200
+                    ))
             ]
         )
         let coordinator = AuthCoordinator(
@@ -42,7 +43,7 @@ final class LogoutTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/prefix/logout"
+            "https://example.com/prefix/logout"
         )
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "x-refresh-token"),
@@ -66,20 +67,21 @@ final class LogoutTests: XCTestCase {
     }
 
     func testRemoteFailuresStillDeleteLocalCredentials() async throws {
-        let scenarios: [(
-            Result<HTTPResponse, LogoutTestError>,
-            RemoteLogoutStatus
-        )] = [
-            (.failure(.transport), .requestFailed),
-            (
-                .success(.init(data: Data(), statusCode: 401)),
-                .rejected(401)
-            ),
-            (
-                .success(.init(data: Data(), statusCode: 503)),
-                .rejected(503)
-            ),
-        ]
+        let scenarios:
+            [(
+                Result<HTTPResponse, LogoutTestError>,
+                RemoteLogoutStatus
+            )] = [
+                (.failure(.transport), .requestFailed),
+                (
+                    .success(.init(data: Data(), statusCode: 401)),
+                    .rejected(401)
+                ),
+                (
+                    .success(.init(data: Data(), statusCode: 503)),
+                    .rejected(503)
+                ),
+            ]
 
         for (response, expectedStatus) in scenarios {
             let fixture = try LogoutFixture(responses: [response])
@@ -140,7 +142,7 @@ final class LogoutTests: XCTestCase {
     {
         let fixture = try LogoutFixture(
             responses: [
-                .success(.init(data: Data(), statusCode: 200)),
+                .success(.init(data: Data(), statusCode: 200))
             ],
             deleteFails: true
         )
@@ -189,13 +191,13 @@ final class LogoutTests: XCTestCase {
 
     func testConcurrentLogoutAndAuthenticatedRequestAreRejected() async throws {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = LogoutCredentialStore(
             credentials: [
                 accountID: try AuthenticationTokens(
                     accessToken: "access",
                     refreshToken: "refresh"
-                ),
+                )
             ]
         )
         let transport = BlockingLogoutTransport()
@@ -248,7 +250,7 @@ final class LogoutTests: XCTestCase {
 
     func testLogoutRejectsAnOverlappingLocalLogin() async throws {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = LogoutCredentialStore(credentials: [:])
         let transport = BlockingLoginTransport()
         let coordinator = AuthCoordinator(
@@ -303,13 +305,13 @@ final class LogoutTests: XCTestCase {
 
     func testLogoutSettlesRefreshAndInvalidatesTheRotatedToken() async throws {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = LogoutCredentialStore(
             credentials: [
                 accountID: try AuthenticationTokens(
                     accessToken: "expired-access",
                     refreshToken: "refresh"
-                ),
+                )
             ]
         )
         let transport = RefreshRaceTransport()
@@ -337,7 +339,7 @@ final class LogoutTests: XCTestCase {
                 server: server
             )
         }
-        for _ in 0 ..< 1_000 {
+        for _ in 0..<1_000 {
             if await coordinator.isSigningOut(accountID: accountID) {
                 break
             }
@@ -371,13 +373,13 @@ final class LogoutTests: XCTestCase {
 
     func testRequestCannotStartRefreshAfterLogoutBegins() async throws {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = LogoutCredentialStore(
             credentials: [
                 accountID: try AuthenticationTokens(
                     accessToken: "expired-access",
                     refreshToken: "refresh"
-                ),
+                )
             ]
         )
         let transport = InitialRequestRaceTransport()
@@ -427,13 +429,13 @@ final class LogoutTests: XCTestCase {
         async throws
     {
         let accountID = AccountID(rawValue: "account")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = LogoutCredentialStore(
             credentials: [
                 accountID: try AuthenticationTokens(
                     accessToken: "access",
                     refreshToken: "refresh"
-                ),
+                )
             ]
         )
         let transport = InitialRequestRaceTransport()
@@ -515,10 +517,11 @@ private struct LogoutFixture {
     let server: NormalizedServerURL
     let store: LogoutCredentialStore
     let transport: LogoutScriptedTransport
-    let coordinator: AuthCoordinator<
-        LogoutScriptedTransport,
-        LogoutCredentialStore
-    >
+    let coordinator:
+        AuthCoordinator<
+            LogoutScriptedTransport,
+            LogoutCredentialStore
+        >
 
     init(
         responses: [Result<HTTPResponse, LogoutTestError>],
@@ -526,7 +529,7 @@ private struct LogoutFixture {
         readFails: Bool = false,
         deleteFails: Bool = false
     ) throws {
-        server = try NormalizedServerURL("https://example.net")
+        server = try NormalizedServerURL("https://example.com")
         let tokens = try AuthenticationTokens(
             accessToken: "access",
             refreshToken: "refresh"
@@ -624,8 +627,7 @@ private actor LogoutScriptedTransport: HTTPTransport {
 }
 
 private actor BlockingLogoutTransport: HTTPTransport {
-    private var logoutContinuation:
-        CheckedContinuation<HTTPResponse, Never>?
+    private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var started = false
 
@@ -661,8 +663,7 @@ private actor BlockingLogoutTransport: HTTPTransport {
 }
 
 private actor BlockingLoginTransport: HTTPTransport {
-    private var loginContinuation:
-        CheckedContinuation<HTTPResponse, Never>?
+    private var loginContinuation: CheckedContinuation<HTTPResponse, Never>?
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var started = false
 
@@ -698,10 +699,8 @@ private actor BlockingLoginTransport: HTTPTransport {
 }
 
 private actor RefreshRaceTransport: HTTPTransport {
-    private var refreshContinuation:
-        CheckedContinuation<HTTPResponse, Never>?
-    private var refreshStartWaiters:
-        [CheckedContinuation<Void, Never>] = []
+    private var refreshContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var refreshStartWaiters: [CheckedContinuation<Void, Never>] = []
     private var refreshStarted = false
     private var refreshRequests = 0
     private var logoutRequests = 0
@@ -776,12 +775,9 @@ private actor RefreshRaceTransport: HTTPTransport {
 private actor InitialRequestRaceTransport: HTTPTransport {
     private var initialRequestContinuation:
         CheckedContinuation<HTTPResponse, Never>?
-    private var logoutContinuation:
-        CheckedContinuation<HTTPResponse, Never>?
-    private var initialStartWaiters:
-        [CheckedContinuation<Void, Never>] = []
-    private var logoutStartWaiters:
-        [CheckedContinuation<Void, Never>] = []
+    private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var initialStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private var logoutStartWaiters: [CheckedContinuation<Void, Never>] = []
     private var initialStarted = false
     private var logoutStarted = false
     private var refreshRequests = 0

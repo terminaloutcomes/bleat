@@ -7,7 +7,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
     private static let builder: AudiobookshelfRouteBuilder = {
         do {
             let server = try NormalizedServerURL(
-                "https://example.net/audiobookshelf/"
+                "https://example.com/audiobookshelf/"
             )
             return AudiobookshelfRouteBuilder(server: server)
         } catch {
@@ -67,7 +67,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
         for (route, path) in routes {
             XCTAssertEqual(
                 try Self.builder.url(for: route).absoluteString,
-                "https://example.net/audiobookshelf\(path)",
+                "https://example.com/audiobookshelf\(path)",
                 "Unexpected URL for \(route)"
             )
         }
@@ -112,7 +112,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/api/items/item%2Fwith%20space%3F%23%25"
+            "https://example.com/audiobookshelf/api/items/item%2Fwith%20space%3F%23%25"
         )
     }
 
@@ -123,7 +123,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/api/items/%2E%2E"
+            "https://example.com/audiobookshelf/api/items/%2E%2E"
         )
     }
 
@@ -134,7 +134,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/api/items/%2E"
+            "https://example.com/audiobookshelf/api/items/%2E"
         )
     }
 
@@ -153,7 +153,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
     func testDoesNotAddDuplicateSlashToRetainedPrefixSlash() throws {
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf//"
+            "https://example.com/audiobookshelf//"
         )
         let builder = AudiobookshelfRouteBuilder(server: server)
 
@@ -161,7 +161,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/status"
+            "https://example.com/audiobookshelf/status"
         )
     }
 
@@ -176,7 +176,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/api/libraries/library/search?q=one%20%26%20two&limit=50"
+            "https://example.com/audiobookshelf/api/libraries/library/search?q=one%20%26%20two&limit=50"
         )
     }
 
@@ -203,7 +203,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/hls/session/output.m3u8"
+            "https://example.com/audiobookshelf/hls/session/output.m3u8"
         )
     }
 
@@ -214,7 +214,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/hls/session/output.m3u8?quality=high%20quality"
+            "https://example.com/audiobookshelf/hls/session/output.m3u8?quality=high%20quality"
         )
     }
 
@@ -225,7 +225,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/hls/session%2Fopaque/output.m3u8"
+            "https://example.com/audiobookshelf/hls/session%2Fopaque/output.m3u8"
         )
     }
 
@@ -301,7 +301,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         XCTAssertEqual(
             url.absoluteString,
-            "https://example.net/audiobookshelf/api/me/item/item/bookmark/12"
+            "https://example.com/audiobookshelf/api/me/item/item/bookmark/12"
         )
     }
 }

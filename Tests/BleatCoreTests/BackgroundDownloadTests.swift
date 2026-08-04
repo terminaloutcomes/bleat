@@ -85,7 +85,7 @@ final class BackgroundDownloadTests: XCTestCase {
             )
         )
         XCTAssertFalse(description.contains("access-token"))
-        XCTAssertFalse(description.contains("example.net"))
+        XCTAssertFalse(description.contains("example.com"))
     }
 
     func testCoordinatorRestoresMappingsAcrossInstances() async throws {
@@ -104,7 +104,7 @@ final class BackgroundDownloadTests: XCTestCase {
         let accountID = AccountID(rawValue: "account")
         let downloadID = DownloadID(rawValue: "download")
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
 
         let scheduled = try await firstCoordinator.schedule(
@@ -185,7 +185,7 @@ final class BackgroundDownloadTests: XCTestCase {
             credentialStore: store
         )
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
         let identity = try Self.identity(accountID: accountID)
 
@@ -197,7 +197,7 @@ final class BackgroundDownloadTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "GET")
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/audiobookshelf/api/items/item/file/101/download"
+            "https://example.com/audiobookshelf/api/items/item/file/101/download"
         )
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Authorization"),
@@ -228,7 +228,7 @@ final class BackgroundDownloadTests: XCTestCase {
             authorizer: authCoordinator
         )
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
         let identity = try Self.identity(accountID: accountID)
         let rejectedRequest =
@@ -276,7 +276,7 @@ final class BackgroundDownloadTests: XCTestCase {
                 credentials: [accountID: tokens]
             )
         )
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let identity = try Self.identity(accountID: accountID)
 
         await XCTAssertThrowsErrorAsync(
@@ -284,7 +284,7 @@ final class BackgroundDownloadTests: XCTestCase {
                 identity: identity,
                 server: server,
                 rejectedRequest: URLRequest(
-                    url: URL(string: "https://example.net/api/libraries")!
+                    url: URL(string: "https://example.com/api/libraries")!
                 )
             )
         ) { error in

@@ -34,19 +34,19 @@ final class ServerDiscoveryTests: XCTestCase {
             responses: [
                 .json(
                     Self.validStatus,
-                    url: URL(string: "https://example.net/prefix/status")
-                ),
+                    url: URL(string: "https://example.com/prefix/status")
+                )
             ]
         )
         let client = ServerDiscoveryClient(transport: transport)
 
         let discovered = try await client.discover(
-            NormalizedServerURL("https://example.net/prefix")
+            NormalizedServerURL("https://example.com/prefix")
         )
 
         XCTAssertEqual(
             discovered.baseURL.url.absoluteString,
-            "https://example.net/prefix"
+            "https://example.com/prefix"
         )
         XCTAssertEqual(discovered.version.original, "2.36.0")
         XCTAssertEqual(discovered.language, "en-us")
@@ -59,7 +59,7 @@ final class ServerDiscoveryTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
         XCTAssertEqual(
             requests.first?.url?.absoluteString,
-            "https://example.net/prefix/status"
+            "https://example.com/prefix/status"
         )
         XCTAssertEqual(requests.first?.httpMethod, "GET")
     }
@@ -108,7 +108,7 @@ final class ServerDiscoveryTests: XCTestCase {
 
     func testFollowsOneSameOriginRedirectAndUpdatesBasePath() async throws {
         let redirectURL = URL(
-            string: "https://example.net/audiobookshelf/status"
+            string: "https://example.com/audiobookshelf/status"
         )
         let transport = StubHTTPTransport(
             responses: [
@@ -116,7 +116,7 @@ final class ServerDiscoveryTests: XCTestCase {
                     data: Data(),
                     statusCode: 302,
                     headers: ["location": "/audiobookshelf/status"],
-                    url: URL(string: "https://example.net/status")
+                    url: URL(string: "https://example.com/status")
                 ),
                 .json(Self.validStatus, url: redirectURL),
             ]
@@ -124,19 +124,19 @@ final class ServerDiscoveryTests: XCTestCase {
         let client = ServerDiscoveryClient(transport: transport)
 
         let discovered = try await client.discover(
-            NormalizedServerURL("https://example.net")
+            NormalizedServerURL("https://example.com")
         )
 
         XCTAssertEqual(
             discovered.baseURL.url.absoluteString,
-            "https://example.net/audiobookshelf"
+            "https://example.com/audiobookshelf"
         )
         let requests = await transport.recordedRequests()
         XCTAssertEqual(
             requests.map(\.url?.absoluteString),
             [
-                "https://example.net/status",
-                "https://example.net/audiobookshelf/status",
+                "https://example.com/status",
+                "https://example.com/audiobookshelf/status",
             ]
         )
     }
@@ -151,15 +151,15 @@ final class ServerDiscoveryTests: XCTestCase {
                     data: Data(),
                     statusCode: 302,
                     headers: ["Location": target.absoluteString],
-                    url: URL(string: "https://example.net/status")
-                ),
+                    url: URL(string: "https://example.com/status")
+                )
             ]
         )
         let client = ServerDiscoveryClient(transport: transport)
 
         await XCTAssertThrowsErrorAsync(
             try await client.discover(
-                NormalizedServerURL("https://example.net")
+                NormalizedServerURL("https://example.com")
             )
         ) { error in
             XCTAssertEqual(
@@ -173,7 +173,7 @@ final class ServerDiscoveryTests: XCTestCase {
 
     func testTreatsExplicitDefaultHTTPSPortAsSameOrigin() async throws {
         let redirectURL = URL(
-            string: "https://example.net:443/audiobookshelf/status"
+            string: "https://example.com:443/audiobookshelf/status"
         )
         let transport = StubHTTPTransport(
             responses: [
@@ -181,9 +181,9 @@ final class ServerDiscoveryTests: XCTestCase {
                     data: Data(),
                     statusCode: 302,
                     headers: [
-                        "Location": try XCTUnwrap(redirectURL).absoluteString,
+                        "Location": try XCTUnwrap(redirectURL).absoluteString
                     ],
-                    url: URL(string: "https://example.net/status")
+                    url: URL(string: "https://example.com/status")
                 ),
                 .json(Self.validStatus, url: redirectURL),
             ]
@@ -191,12 +191,12 @@ final class ServerDiscoveryTests: XCTestCase {
         let client = ServerDiscoveryClient(transport: transport)
 
         let discovered = try await client.discover(
-            NormalizedServerURL("https://example.net")
+            NormalizedServerURL("https://example.com")
         )
 
         XCTAssertEqual(
             discovered.baseURL.url.absoluteString,
-            "https://example.net:443/audiobookshelf"
+            "https://example.com:443/audiobookshelf"
         )
     }
 
@@ -204,18 +204,18 @@ final class ServerDiscoveryTests: XCTestCase {
         let scenarios: [(String?, ServerDiscoveryError)] = [
             (nil, .redirectMissingLocation),
             (
-                "http://example.net/status",
+                "http://example.com/status",
                 .invalidRedirect(
                     try XCTUnwrap(
-                        URL(string: "http://example.net/status")
+                        URL(string: "http://example.com/status")
                     )
                 )
             ),
             (
-                "https://user@example.net/status",
+                "https://user@example.com/status",
                 .invalidRedirect(
                     try XCTUnwrap(
-                        URL(string: "https://user@example.net/status")
+                        URL(string: "https://user@example.com/status")
                     )
                 )
             ),
@@ -229,15 +229,15 @@ final class ServerDiscoveryTests: XCTestCase {
                         data: Data(),
                         statusCode: 302,
                         headers: headers,
-                        url: URL(string: "https://example.net/status")
-                    ),
+                        url: URL(string: "https://example.com/status")
+                    )
                 ]
             )
             let client = ServerDiscoveryClient(transport: transport)
 
             await XCTAssertThrowsErrorAsync(
                 try await client.discover(
-                    NormalizedServerURL("https://example.net")
+                    NormalizedServerURL("https://example.com")
                 )
             ) { error in
                 XCTAssertEqual(
@@ -252,11 +252,11 @@ final class ServerDiscoveryTests: XCTestCase {
         let transport = StubHTTPTransport(
             responses: [
                 .redirect(
-                    from: "https://example.net/status",
+                    from: "https://example.com/status",
                     to: "/one/status"
                 ),
                 .redirect(
-                    from: "https://example.net/one/status",
+                    from: "https://example.com/one/status",
                     to: "/two/status"
                 ),
             ]
@@ -265,7 +265,7 @@ final class ServerDiscoveryTests: XCTestCase {
 
         await XCTAssertThrowsErrorAsync(
             try await client.discover(
-                NormalizedServerURL("https://example.net")
+                NormalizedServerURL("https://example.com")
             )
         ) { error in
             XCTAssertEqual(
@@ -307,15 +307,15 @@ final class ServerDiscoveryTests: XCTestCase {
                     HTTPResponse(
                         data: data,
                         statusCode: statusCode,
-                        url: URL(string: "https://example.net/status")
-                    ),
+                        url: URL(string: "https://example.com/status")
+                    )
                 ]
             )
             let client = ServerDiscoveryClient(transport: transport)
 
             await XCTAssertThrowsErrorAsync(
                 try await client.discover(
-                    NormalizedServerURL("https://example.net")
+                    NormalizedServerURL("https://example.com")
                 )
             ) { error in
                 XCTAssertEqual(
@@ -394,8 +394,8 @@ private enum StubHTTPTransportError: Error {
     case noResponse
 }
 
-private extension HTTPResponse {
-    static func json(_ data: Data, url: URL?) -> HTTPResponse {
+extension HTTPResponse {
+    fileprivate static func json(_ data: Data, url: URL?) -> HTTPResponse {
         HTTPResponse(
             data: data,
             statusCode: 200,
@@ -404,7 +404,7 @@ private extension HTTPResponse {
         )
     }
 
-    static func redirect(from: String, to: String) -> HTTPResponse {
+    fileprivate static func redirect(from: String, to: String) -> HTTPResponse {
         HTTPResponse(
             data: Data(),
             statusCode: 302,

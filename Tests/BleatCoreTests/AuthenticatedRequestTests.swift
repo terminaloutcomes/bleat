@@ -6,7 +6,7 @@ import XCTest
 final class AuthenticatedRequestTests: XCTestCase {
     func testTwentyUnauthorizedRequestsShareOneRotatingRefresh() async throws {
         let accountID = AccountID(rawValue: "concurrent-account")
-        let server = try NormalizedServerURL("https://example.net/prefix")
+        let server = try NormalizedServerURL("https://example.com/prefix")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -77,7 +77,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         XCTAssertEqual(refreshRequest.httpMethod, "POST")
         XCTAssertEqual(
             refreshRequest.url?.absoluteString,
-            "https://example.net/prefix/auth/refresh"
+            "https://example.com/prefix/auth/refresh"
         )
         XCTAssertEqual(
             refreshRequest.value(forHTTPHeaderField: "x-refresh-token"),
@@ -90,7 +90,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testTwentyUnauthorizedRequestsShareOneRejectedRefresh() async throws {
         let accountID = AccountID(rawValue: "concurrent-rejection")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let tokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -150,7 +150,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         async throws
     {
         let accountID = AccountID(rawValue: "join-in-flight")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -221,7 +221,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         async throws
     {
         let accountID = AccountID(rawValue: "originator-token")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -307,7 +307,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testConcurrentRejectionJoinsFailingInFlightRefresh() async throws {
         let accountID = AccountID(rawValue: "join-failing-refresh")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -386,7 +386,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         async throws
     {
         let accountID = AccountID(rawValue: "concurrent-saved-login")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -451,7 +451,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testRejectedRefreshUsesSavedPasswordAndRetriesRequest() async throws {
         let accountID = AccountID(rawValue: "saved-login")
-        let server = try NormalizedServerURL("https://example.net/prefix")
+        let server = try NormalizedServerURL("https://example.com/prefix")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -639,7 +639,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testSavedPasswordRejectionRemainsTyped() async throws {
         let accountID = AccountID(rawValue: "rejected-saved-login")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -712,7 +712,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testSavedLoginCannotChangeRemoteUserIdentity() async throws {
         let accountID = AccountID(rawValue: "identity-change")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let tokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -772,7 +772,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         async throws
     {
         let accountID = AccountID(rawValue: "authorization-rejection")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -1373,7 +1373,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testAlreadyRotatedCredentialsAvoidAnotherRefresh() async throws {
         let accountID = AccountID(rawValue: "externally-rotated")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -1412,7 +1412,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testCompletedRotationCoversAStaleCredentialRead() async throws {
         let accountID = AccountID(rawValue: "stale-read")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let oldTokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"
@@ -1466,7 +1466,7 @@ final class AuthenticatedRequestTests: XCTestCase {
     func testRefreshFailureDoesNotAffectAnotherAccount() async throws {
         let failedAccount = AccountID(rawValue: "failed")
         let healthyAccount = AccountID(rawValue: "healthy")
-        let server = try NormalizedServerURL("https://example.net")
+        let server = try NormalizedServerURL("https://example.com")
         let store = RequestCredentialStore(credentials: [
             failedAccount: try AuthenticationTokens(
                 accessToken: "failed-access",
@@ -1611,7 +1611,7 @@ private struct SavedLoginRecoveryFixture {
         saveFailuresRemaining: Int
     ) throws {
         accountID = AccountID(rawValue: name)
-        server = try NormalizedServerURL("https://example.net")
+        server = try NormalizedServerURL("https://example.com")
         recoveredTokens = try AuthenticationTokens(
             accessToken: "recovered-access",
             refreshToken: "recovered-refresh"
@@ -1687,7 +1687,7 @@ private struct Fixture {
         credentialReadFails: Bool = false,
         credentialSaveFails: Bool = false
     ) throws {
-        server = try NormalizedServerURL("https://example.net")
+        server = try NormalizedServerURL("https://example.com")
         let tokens = try AuthenticationTokens(
             accessToken: "old-access",
             refreshToken: "old-refresh"

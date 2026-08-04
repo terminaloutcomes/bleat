@@ -117,7 +117,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 
 ### 4.1 Accounts and instances
 
-- As a user, I can enter an Audiobookshelf server URL, including a path prefix such as `https://example.net/audiobookshelf`.
+- As a user, I can enter an Audiobookshelf server URL, including a path prefix such as `https://example.com/audiobookshelf`.
 - I can sign in using a local Audiobookshelf username and password.
 - I can add multiple users from the same server and users from different servers.
 - I can switch accounts without stopping current playback or unrelated background downloads.

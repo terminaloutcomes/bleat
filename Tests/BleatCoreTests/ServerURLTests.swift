@@ -20,58 +20,58 @@ final class ServerURLTests: XCTestCase {
         XCTAssertThrowsError(
             try JSONDecoder().decode(
                 NormalizedServerURL.self,
-                from: Data("\"http://example.net\"".utf8)
+                from: Data("\"http://example.com\"".utf8)
             )
         )
     }
 
     func testNormalizesHostAndFinalTrailingSlash() throws {
         let server = try NormalizedServerURL(
-            "  HTTPS://EXAMPLE.NET:8443/audiobookshelf/  "
+            "  HTTPS://example.com:8443/audiobookshelf/  "
         )
 
         XCTAssertEqual(
             server.url.absoluteString,
-            "https://example.net:8443/audiobookshelf"
+            "https://example.com:8443/audiobookshelf"
         )
     }
 
     func testRemovesQueryAndFragment() throws {
         let server = try NormalizedServerURL(
-            "https://example.net/prefix?token=discard#fragment"
+            "https://example.com/prefix?token=discard#fragment"
         )
 
         XCTAssertEqual(
             server.url.absoluteString,
-            "https://example.net/prefix"
+            "https://example.com/prefix"
         )
     }
 
     func testRootPathNormalizesWithoutTrailingSlash() throws {
-        let server = try NormalizedServerURL("https://example.net/")
+        let server = try NormalizedServerURL("https://example.com/")
 
-        XCTAssertEqual(server.url.absoluteString, "https://example.net")
+        XCTAssertEqual(server.url.absoluteString, "https://example.com")
     }
 
     func testRemovesOnlyOneFinalTrailingSlash() throws {
         let server = try NormalizedServerURL(
-            "https://example.net/audiobookshelf//"
+            "https://example.com/audiobookshelf//"
         )
 
         XCTAssertEqual(
             server.url.absoluteString,
-            "https://example.net/audiobookshelf/"
+            "https://example.com/audiobookshelf/"
         )
     }
 
     func testPreservesEncodedPathPrefix() throws {
         let server = try NormalizedServerURL(
-            "https://example.net/audio%20books/"
+            "https://example.com/audio%20books/"
         )
 
         XCTAssertEqual(
             server.url.absoluteString,
-            "https://example.net/audio%20books"
+            "https://example.com/audio%20books"
         )
     }
 
@@ -93,11 +93,11 @@ final class ServerURLTests: XCTestCase {
 
     func testRejectsNonHTTPSAndMissingScheme() {
         assertValidationError(
-            "http://example.net",
+            "http://example.com",
             equals: .unsupportedScheme("http")
         )
         assertValidationError(
-            "example.net",
+            "example.com",
             equals: .unsupportedScheme(nil)
         )
     }
@@ -111,11 +111,11 @@ final class ServerURLTests: XCTestCase {
 
     func testRejectsEmbeddedCredentials() {
         assertValidationError(
-            "https://user@example.net",
+            "https://user@example.com",
             equals: .embeddedCredentials
         )
         assertValidationError(
-            "https://user:password@example.net",
+            "https://user:password@example.com",
             equals: .embeddedCredentials
         )
     }
