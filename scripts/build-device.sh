@@ -18,6 +18,8 @@ if [ -d "${bleat_app}" ]; then
   rm -rf "${bleat_app}"
 fi
 
+echo "Building Bleat for device ${BLEAT_DEVICE_ID} with bundle identifier ${bleat_bundle_id}..."
+
 xcodebuild \
   -project Bleat.xcodeproj \
   -scheme Bleat \
