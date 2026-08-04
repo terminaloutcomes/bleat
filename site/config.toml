@@ -1,4 +1,4 @@
-base_url = "https://terminaloutcomes.github.io/bleat"
+base_url = "https://bleat.terminaloutcomes.com"
 title = "Bleat"
 description = "A native Audiobookshelf client for iPhone and iPad."
 default_language = "en"
