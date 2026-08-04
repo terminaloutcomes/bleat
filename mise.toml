@@ -1,6 +1,33 @@
 [env]
 _.file = { path = ".envrc", redact = true }
 
+[tools]
+node = "24"
+pnpm = "11.17.0"
+zola = "0.22.1"
+
+[tasks."site-css"]
+description = "Install website dependencies and generate the Tailwind stylesheet"
+run = [
+  "pnpm --dir site install --frozen-lockfile",
+  "pnpm --dir site run build:css",
+]
+
+[tasks."site-check"]
+description = "Validate the Zola website"
+depends = ["site-css"]
+run = "zola --root site check"
+
+[tasks."site-build"]
+description = "Build the production website"
+depends = ["site-css"]
+run = "zola --root site build --output-dir site/public --force"
+
+[tasks."site-serve"]
+description = "Serve the website locally"
+depends = ["site-css"]
+run = "zola --root site serve"
+
 [tasks.iphone]
 description = "Build and launch Bleat on the default iPhone simulator"
 run = ["./scripts/launch-iphone.sh"]
@@ -32,6 +59,7 @@ run = ["./scripts/test-deep-links.sh"]
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
 run = [
+  { task = "site-check" },
   { task = "test:local" },
   { task = "test:live" },
   { task = "test:app-live" },

@@ -13,3 +13,8 @@ TestSupport/ServerHarness/artifacts/
 TestSupport/ServerHarness/state/
 TestSupport/ServerHarness/app-live-artifacts/
 build/
+
+# Website build products
+site/node_modules/
+site/public/
+site/static/styles.css

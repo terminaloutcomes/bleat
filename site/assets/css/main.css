@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@source "../../content";
+@source "../../templates";
+
+@theme {
+  --color-ink: #160624;
+  --color-plum: #2b025d;
+  --color-violet: #7c44a8;
+  --color-lilac: #c77af8;
+  --color-mist: #f7efff;
+  --color-muted-lilac: #cbb9dc;
+  --font-sans: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+  }
+
+  ::selection {
+    background: var(--color-lilac);
+    color: var(--color-ink);
+  }
+}

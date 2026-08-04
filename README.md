@@ -157,11 +157,22 @@ Run every automated test that does not require a physical device:
 mise run check
 ```
 
-The exhaustive check runs the local host and Simulator gate, disposable-server
-core integration tests, and disposable-server app journeys sequentially. It
-requires Xcode with an iOS Simulator runtime and Docker, but does not require
-development signing or a connected iPhone. Run an individual stage with
-`mise run test:local`, `mise run test:live`, or `mise run test:app-live`.
+The exhaustive check validates the website, then runs the local host and
+Simulator gate, disposable-server core integration tests, and disposable-server
+app journeys sequentially. It requires Xcode with an iOS Simulator runtime and
+Docker, but does not require development signing or a connected iPhone. Run an
+individual app stage with `mise run test:local`, `mise run test:live`, or
+`mise run test:app-live`.
+
+## Website
+
+The Zola site source lives in `site/`. Install its pinned toolchain with
+`mise install`, then use:
+
+- `mise run site-css` to install the locked frontend packages and generate CSS;
+- `mise run site-check` to validate the Zola project;
+- `mise run site-build` to build `site/public`;
+- `mise run site-serve` to preview it locally.
 
 Run the host test suite with code coverage:
 
