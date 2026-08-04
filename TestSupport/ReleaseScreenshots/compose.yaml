@@ -1,0 +1,38 @@
+name: bleat-release-screenshots
+
+services:
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports:
+      - "127.0.0.1:${BLEAT_SCREENSHOT_HTTPS_PORT:-0}:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      audiobookshelf:
+        condition: service_healthy
+    restart: "no"
+
+  audiobookshelf:
+    hostname: barnyard
+    image: ${BLEAT_SCREENSHOT_ABS_IMAGE:?BLEAT_SCREENSHOT_ABS_IMAGE is required}
+    environment:
+      ROUTER_BASE_PATH: /audiobookshelf
+      TZ: Australia/Brisbane
+    volumes:
+      - audiobookshelf-config:/config
+      - audiobookshelf-metadata:/metadata
+      - ${BLEAT_SCREENSHOT_MEDIA_DIR:?BLEAT_SCREENSHOT_MEDIA_DIR is required}:/audiobooks:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1/audiobookshelf/healthcheck"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    restart: "no"
+
+volumes:
+  caddy-data:
+  caddy-config:
+  audiobookshelf-config:
+  audiobookshelf-metadata:

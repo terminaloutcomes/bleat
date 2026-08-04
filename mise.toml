@@ -52,6 +52,14 @@ run = ["./scripts/test-live.sh"]
 description = "Run live app journeys on a disposable iOS Simulator"
 run = ["./scripts/test-app-live.sh"]
 
+[tasks.screenshots]
+description = "Capture Release screenshots from the live Barnyard fixture"
+run = ["./scripts/capture-release-screenshots.sh"]
+
+[tasks."screenshots:check"]
+description = "Validate the release screenshot fixture and harness contracts"
+run = ["./scripts/test-release-screenshot-harness.sh"]
+
 [tasks."test:deep-links"]
 description = "Validate cold and warm bleat URL routing on a disposable iOS Simulator"
 run = ["./scripts/test-deep-links.sh"]

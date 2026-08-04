@@ -229,6 +229,56 @@ Audiobookshelf instance:
 mise run test:app-live
 ```
 
+### Release screenshots
+
+Generate the publication-ready release screenshots from a fresh live Barnyard
+server:
+
+```sh
+mise run screenshots
+```
+
+This is intentionally separate from `mise run check` and the ordinary live
+fixtures. It builds `Bleat` and `BleatUITests` in Release with CloudKit
+disabled, creates one iPhone 17 Pro Max and one 13-inch iPad Pro simulator,
+uses trusted local HTTPS at `barnyard.terminaloutcomes.com`, and signs in as `kid` with a
+fresh unprinted password. The fixture data and original cover art are versioned
+under `TestSupport/ReleaseScreenshots/fixtures.json` and
+`TestSupport/ReleaseScreenshots/covers/`.
+
+Successful output contains only the screenshots and a non-sensitive manifest:
+
+```text
+.build/release-screenshots/
+  manifest.json
+  iphone/01-home.png … 07-settings.png
+  ipad/01-home.png … 07-settings.png
+```
+
+On failure, redacted Compose logs and the relevant `.xcresult` bundles remain
+under the same directory for inspection. Everything else—including generated
+media, Caddy certificates, Docker volumes, credentials, and simulators—is
+removed automatically.
+
+The default task selects the latest installed iOS runtime. Override it when a
+release requires a specific installed runtime or presentation:
+
+```sh
+BLEAT_SCREENSHOT_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-26-3 \
+BLEAT_SCREENSHOT_DEVICES='com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB' \
+BLEAT_SCREENSHOT_APPEARANCE=light \
+BLEAT_SCREENSHOT_LOCALE=en_AU \
+mise run screenshots
+```
+
+The device list must contain one supported iPhone and one supported iPad. The
+harness reports the available runtime device types when a selection is
+unavailable. Add a scene by extending the ordered `screenshots` list in the
+fixture and adding a matching named attachment in
+`BleatReleaseScreenshotTests`; bump `schemaVersion` when the fixture contract
+changes. Validate fixture changes without Docker or a Simulator with `mise run
+screenshots:check`.
+
 ## Open in Xcode
 
 Open the generated project:

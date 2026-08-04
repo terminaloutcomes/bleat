@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "server": {
+    "friendlyName": "Barnyard",
+    "hostname": "barnyard.terminaloutcomes.com",
+    "pathPrefix": "/audiobookshelf",
+    "libraryName": "Barnyard"
+  },
+  "account": {
+    "username": "kid"
+  },
+  "books": [
+    {
+      "key": "thirteen-hours-of-goat-sounds",
+      "folder": "01-thirteen-hours-of-goat-sounds",
+      "mediaFile": "thirteen-hours-of-goat-sounds.m4b",
+      "duration": 46800,
+      "title": "Thirteen Hours of Goat Sounds",
+      "authors": ["The Barnyard Recording Society"],
+      "narrators": ["Kid"],
+      "series": { "name": "The Complete Goat Audio Archive", "sequence": "1" },
+      "description": "Thirteen carefully indexed hours from the Barnyard Recording Society archive.",
+      "genres": ["Nature", "Field Recordings"],
+      "tags": ["goats", "barnyard", "ambient"],
+      "cover": "covers/thirteen-hours-of-goat-sounds.png",
+      "progress": { "currentTime": 19800, "isFinished": false },
+      "chapters": [
+        { "title": "waking goats", "start": 0, "end": 3600 },
+        { "title": "happy goats", "start": 3600, "end": 7200 },
+        { "title": "bouncing goats", "start": 7200, "end": 10800 },
+        { "title": "breakfast goats", "start": 10800, "end": 14400 },
+        { "title": "competitive goats", "start": 14400, "end": 18000 },
+        { "title": "romantic goats", "start": 18000, "end": 21600 },
+        { "title": "goats reconsider romance", "start": 21600, "end": 25200 },
+        { "title": "afternoon goats", "start": 25200, "end": 28800 },
+        { "title": "suspiciously quiet goats", "start": 28800, "end": 32400 },
+        { "title": "fence-related goats", "start": 32400, "end": 36000 },
+        { "title": "oh no leave each other alone", "start": 36000, "end": 39600 },
+        { "title": "tired goats", "start": 39600, "end": 43200 },
+        { "title": "one last goat", "start": 43200, "end": 46800 }
+      ]
+    },
+    {
+      "key": "practical-headbutting",
+      "folder": "02-practical-headbutting",
+      "mediaFile": "practical-headbutting.m4b",
+      "duration": 8220,
+      "title": "Practical Headbutting",
+      "authors": ["Billy Gruff"],
+      "narrators": ["Billy Gruff"],
+      "series": { "name": "Barnyard Skills", "sequence": "1" },
+      "description": "A clear-headed guide to choosing your target, bracing safely, and knowing when to walk away.",
+      "genres": ["Skills", "Humour"],
+      "tags": ["goats", "practical", "barnyard"],
+      "cover": "covers/practical-headbutting.png"
+    },
+    {
+      "key": "fence-was-merely-a-suggestion",
+      "folder": "03-fence-was-merely-a-suggestion",
+      "mediaFile": "fence-was-merely-a-suggestion.m4b",
+      "duration": 18720,
+      "title": "The Fence Was Merely a Suggestion",
+      "authors": ["Nanny Alpine"],
+      "narrators": ["Nanny Alpine"],
+      "series": { "name": "Barnyard Skills", "sequence": "2" },
+      "description": "A finished field report on boundaries, curiosity, and the routes beyond the pasture.",
+      "genres": ["Adventure", "Humour"],
+      "tags": ["goats", "fence", "barnyard"],
+      "cover": "covers/fence-was-merely-a-suggestion.png",
+      "progress": { "currentTime": 18720, "isFinished": true }
+    },
+    {
+      "key": "ruminating-after-midnight",
+      "folder": "04-ruminating-after-midnight",
+      "mediaFile": "ruminating-after-midnight.m4b",
+      "duration": 24060,
+      "title": "Ruminating After Midnight",
+      "authors": ["Capra Nocturne"],
+      "narrators": ["Capra Nocturne"],
+      "description": "Quiet nocturnal reflections from a barn that never quite sleeps.",
+      "genres": ["Reflection", "Nature"],
+      "tags": ["goats", "night", "reflection"],
+      "cover": "covers/ruminating-after-midnight.png",
+      "progress": { "currentTime": 8400, "isFinished": false }
+    },
+    {
+      "key": "goat-ops",
+      "folder": "05-goat-ops",
+      "mediaFile": "goat-ops.m4b",
+      "duration": 13500,
+      "title": "Goat Ops: Incident Response for the Modern Barnyard",
+      "authors": ["Billy Gruff", "Nanny Alpine"],
+      "narrators": ["Kid"],
+      "description": "A practical incident-response manual for fence failures, missing hay, and surprise herd migrations.",
+      "genres": ["Technology", "Humour"],
+      "tags": ["goats", "operations", "barnyard"],
+      "cover": "covers/goat-ops.png"
+    }
+  ],
+  "screenshots": [
+    { "file": "01-home.png", "scenario": "Home with kid, Barnyard, and Continue Listening" },
+    { "file": "02-library.png", "scenario": "Library with Barnyard catalogue and series" },
+    { "file": "03-goat-sounds-detail.png", "scenario": "Thirteen Hours of Goat Sounds detail" },
+    { "file": "04-goat-sounds-chapters.png", "scenario": "Thirteen Hours of Goat Sounds chapters" },
+    { "file": "05-now-playing.png", "scenario": "Now Playing in romantic goats" },
+    { "file": "06-search.png", "scenario": "Search for goat" },
+    { "file": "07-settings.png", "scenario": "Barnyard account settings" }
+  ]
+}

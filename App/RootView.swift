@@ -1665,6 +1665,7 @@ private struct BookListContent: View {
 private struct SearchView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    @FocusState private var isSearchFocused: Bool
 
     private var taskContext: SearchTaskContext {
         SearchTaskContext(
@@ -1698,6 +1699,18 @@ private struct SearchView: View {
             text: $navigation.searchQuery,
             prompt: "Books, authors, or series"
         )
+        .searchFocused($isSearchFocused)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isSearchFocused {
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        isSearchFocused = false
+                    }
+                }
+                .padding()
+            }
+        }
         .task(id: taskContext) {
             await model.search(query: navigation.searchQuery)
         }

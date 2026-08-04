@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-private func tabButton(
+func tabButton(
     _ label: String,
     in app: XCUIApplication
 ) -> XCUIElement {
@@ -43,7 +43,7 @@ private func pullToRefresh(_ element: XCUIElement) {
 }
 
 @MainActor
-private func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
+func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
     let notNow = app.buttons["Not Now"]
     if notNow.waitForExistence(timeout: 5) {
         notNow.tap()
