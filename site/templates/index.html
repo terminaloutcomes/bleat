@@ -39,11 +39,50 @@
             </div>
           </div>
 
-          <div aria-hidden="true" class="relative mx-auto flex aspect-square w-full max-w-md items-center justify-center">
-            <div class="absolute inset-2 rounded-[3.5rem] border border-white/20 bg-white/10 shadow-2xl shadow-ink/40 backdrop-blur-md"></div>
-            <div class="absolute inset-10 rounded-[3rem] bg-gradient-to-br from-lilac/45 via-violet/20 to-plum/50"></div>
-            <div class="absolute inset-0 rounded-[4rem] border border-lilac/25"></div>
-            <img class="relative z-10 size-44 rounded-[2.25rem] shadow-2xl shadow-ink/50 sm:size-52" src="{{ get_url(path='bleat.svg') }}" alt="">
+          <div class="relative mx-auto w-full max-w-[19rem] sm:max-w-[22rem]">
+            <div aria-hidden="true" class="absolute -inset-8 -z-10 rounded-[4rem] bg-lilac/30 blur-3xl"></div>
+            <div class="overflow-hidden rounded-[2.75rem] border-[0.6rem] border-ink/80 bg-ink shadow-2xl shadow-ink/50">
+              <img class="block w-full" src="{{ get_url(path='screenshots/01-home.jpg') }}" alt="Bleat Home showing a listener's audiobook collection" width="1320" height="2868">
+            </div>
+          </div>
+        </section>
+
+        <section id="screens" class="border-t border-white/10 bg-ink">
+          <div class="mx-auto max-w-6xl px-6 py-20 sm:px-8 lg:px-10 lg:py-28">
+            <div class="max-w-2xl">
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">In the app</p>
+              <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">A clear path from shelf to story.</h2>
+            </div>
+
+            <div class="mt-12 grid gap-6 sm:grid-cols-2">
+              <figure class="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-xl shadow-black/20">
+                <div class="bg-[#f7efff] p-5 pb-0 sm:p-7 sm:pb-0">
+                  <img class="mx-auto block w-full max-w-[22rem] rounded-t-[1.9rem]" src="{{ get_url(path='screenshots/03-goat-sounds-detail.jpg') }}" alt="Audiobook detail screen for Thirteen Hours of Goat Sounds" width="1320" height="2868" loading="lazy">
+                </div>
+                <figcaption class="px-6 py-5 text-lg font-semibold text-white">Detail</figcaption>
+              </figure>
+
+              <figure class="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-xl shadow-black/20">
+                <div class="bg-[#f7efff] p-5 pb-0 sm:p-7 sm:pb-0">
+                  <img class="mx-auto block w-full max-w-[22rem] rounded-t-[1.9rem]" src="{{ get_url(path='screenshots/04-goat-sounds-chapters.jpg') }}" alt="Audiobook chapter list" width="1320" height="2868" loading="lazy">
+                </div>
+                <figcaption class="px-6 py-5 text-lg font-semibold text-white">Chapters</figcaption>
+              </figure>
+
+              <figure class="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-xl shadow-black/20">
+                <div class="bg-[#f7efff] p-5 pb-0 sm:p-7 sm:pb-0">
+                  <img class="mx-auto block w-full max-w-[22rem] rounded-t-[1.9rem]" src="{{ get_url(path='screenshots/05-now-playing.jpg') }}" alt="Now Playing screen with chapter controls" width="1320" height="2868" loading="lazy">
+                </div>
+                <figcaption class="px-6 py-5 text-lg font-semibold text-white">Now Playing</figcaption>
+              </figure>
+
+              <figure class="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-xl shadow-black/20">
+                <div class="bg-[#f7efff] p-5 pb-0 sm:p-7 sm:pb-0">
+                  <img class="mx-auto block w-full max-w-[22rem] rounded-t-[1.9rem]" src="{{ get_url(path='screenshots/06-search.jpg') }}" alt="Search screen for finding audiobooks" width="1320" height="2868" loading="lazy">
+                </div>
+                <figcaption class="px-6 py-5 text-lg font-semibold text-white">Search</figcaption>
+              </figure>
+            </div>
           </div>
         </section>
 
@@ -51,7 +90,7 @@
           <div class="mx-auto max-w-6xl px-6 py-20 sm:px-8 lg:px-10 lg:py-28">
             <div class="max-w-2xl">
               <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Made for the long listen</p>
-              <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Everything between you and the next chapter, quietly disappears.</h2>
+              <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Everything between you and the next chapter.</h2>
             </div>
             <div class="mt-12 grid gap-5 md:grid-cols-3">
               <article class="rounded-3xl border border-white/10 bg-white/[0.06] p-7 shadow-lg shadow-ink/15">
