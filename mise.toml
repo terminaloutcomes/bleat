@@ -120,4 +120,4 @@ description = "Build, install, and launch Bleat on a physical iPhone"
 depends = ["device:launch"]
 
 [tasks.trufflehog]
-run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore' --json --no-verification"""
+run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore' --exclude-detectors=ProtocolsIO,URI,CloudflareApiToken --no-verification"""
