@@ -122,7 +122,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can add multiple users from the same server and users from different servers.
 - I can switch accounts without stopping current playback or unrelated background downloads.
 - I can see when an account requires reauthentication.
-- I can sign out or remove an account, with a clear choice about deleting its downloaded books.
+- I can sign out or remove an account, with clear confirmation that removes its downloaded books.
 - I can tap a saved account to edit its primary URL, optional local-network URL,
   username, and password, or remove that specific account.
 - Leaving the password blank while editing preserves the existing device
@@ -479,12 +479,13 @@ identity-provider logout URL.
 Removing an account distinguishes this device from all devices and asks
 separately whether to retain listening history. It must:
 
-- stop or detach its active downloads;
+- stop and delete its active downloads;
 - close its active playback session if possible;
 - delete device session tokens; an all-device removal also deletes the
   synchronized native credential;
 - remove its cached data and pending sync operations;
-- default to deleting its downloaded audio, with an explicit confirmation.
+- delete its downloaded audio. Startup also deletes any downloaded record whose
+  owning account is no longer stored.
 
 ## 7. Account and permission isolation
 
@@ -1463,9 +1464,8 @@ Use a disposable Audiobookshelf container with a seeded library:
 - background and locked-screen playback;
 - AirPlay and CarPlay transport commands, metadata, whole-book seeking, chapter
   controls, and featured playback-rate changes;
-- CarPlay Home, library chooser, pagination, search, signed-out retained
-  downloads, online/offline selection, stale-result suppression, and
-  disconnect/reconnect state;
+- CarPlay Home, library chooser, pagination, search, online/offline selection,
+  stale-result suppression, and disconnect/reconnect state;
 - speed changes across track boundaries;
 - end-of-chapter sleep timer at non-1× speeds.
 

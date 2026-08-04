@@ -29,6 +29,9 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                     diagnostics: diagnostics,
                     diagnosticLogStore: diagnosticLogStore
                 )
+                if UITestAppService.opensSettingsAtLaunch {
+                    AppDeepLinkInbox.shared.openSettings()
+                }
                 super.init()
                 return
             }
@@ -80,9 +83,6 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
 struct BleatApp: App {
     @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
     private var appDelegate
-
-    @AppStorage(AppPreferenceKey.colourScheme) private var appTint:
-        ColourScheme = .defaultValue
 
     var body: some Scene {
         WindowGroup {

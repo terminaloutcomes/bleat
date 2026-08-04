@@ -1398,37 +1398,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         accounts[accountID] = nil
     }
 
-    func retainDownloadsAndDetachAccount(
-        _ accountID: AccountID
+    func removeOrphanedDownloads(
+        retaining accountIDs: Set<AccountID>
     ) async {
-        let accountDownloadIDs = Set(
-            records.lazy
-                .filter { $0.manifest.accountID == accountID }
-                .map(\.manifest.downloadID)
+        let orphanedAccountIDs = Set(
+            records.compactMap { record in
+                accountIDs.contains(record.manifest.accountID)
+                    ? nil : record.manifest.accountID
+            }
         )
-        let tasks = await session.allTasks
-        for task in tasks {
-            guard let description = task.taskDescription,
-                let identity =
-                    try? DownloadTaskIdentity
-                    .decodeTaskDescription(description),
-                identity.accountID == accountID
-            else {
-                continue
-            }
-            task.cancel()
-            if let storage {
-                _ = try? await storage.markFailed(identity)
-            }
+        for accountID in orphanedAccountIDs {
+            await removeAll(for: accountID)
         }
-        for downloadID in accountDownloadIDs {
-            progress[downloadID] = nil
-            transferredBytesByTrack[downloadID] = nil
-            pausedDownloadIDs.remove(downloadID)
-            playbackSuspendedDownloadIDs.remove(downloadID)
-        }
-        accounts[accountID] = nil
-        await refresh()
     }
 
     func record(

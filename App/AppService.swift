@@ -1,5 +1,6 @@
 import BleatCore
 import Foundation
+import Security
 import SwiftData
 
 enum AppBootstrapError: Error, Equatable, Sendable {
@@ -101,6 +102,42 @@ enum BleatCloudKitBuildMode: String, Sendable {
         }
         return Self(rawValue: value) ?? .disabled
     }
+}
+
+enum BleatCloudKitCapability {
+    static var isAvailable: Bool {
+#if targetEnvironment(macCatalyst)
+        isAvailable(
+            buildMode: .current,
+            containerIdentifiers: entitledContainerIdentifiers
+        )
+#else
+        BleatCloudKitBuildMode.current == .enabled
+#endif
+    }
+
+    static func isAvailable(
+        buildMode: BleatCloudKitBuildMode,
+        containerIdentifiers: [String]?
+    ) -> Bool {
+        buildMode == .enabled
+            && containerIdentifiers?.contains(
+                PrivateCloudSyncCoordinator.containerIdentifier
+            ) == true
+    }
+
+#if targetEnvironment(macCatalyst)
+    private static var entitledContainerIdentifiers: [String]? {
+        guard let task = SecTaskCreateFromSelf(nil) else {
+            return nil
+        }
+        return SecTaskCopyValueForEntitlement(
+            task,
+            "com.apple.developer.icloud-container-identifiers" as CFString,
+            nil
+        ) as? [String]
+    }
+#endif
 }
 
 enum AppServiceError: Error, Equatable, Sendable {
@@ -709,8 +746,7 @@ actor LiveAppService: AppServicing {
             diagnostics: diagnostics,
             endpointRouter: endpointRouter
         )
-        let privateCloudAvailable =
-            BleatCloudKitBuildMode.current == .enabled
+        let privateCloudAvailable = BleatCloudKitCapability.isAvailable
         let privateCloudEnabled =
             privateCloudAvailable
             && (UserDefaults.standard.object(

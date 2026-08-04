@@ -3,29 +3,55 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Names of app preferences used in the app. These are used as keys for @AppStorage and UserDefaults.
+/// Names of app preferences stored in UserDefaults.
 enum AppPreferenceKey: CaseIterable, Equatable, Sendable {
     static let colourScheme = "colourScheme"
 }
 
-/// Saves you having to keep repeating the @AppStorage property wrapper for each preference.
+@MainActor
+@Observable
+final class ColourSchemeStore {
+    static let shared = ColourSchemeStore()
+
+    private let defaults: UserDefaults
+    var value: ColourScheme {
+        didSet {
+            defaults.set(value.rawValue, forKey: AppPreferenceKey.colourScheme)
+        }
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        value = defaults.string(forKey: AppPreferenceKey.colourScheme)
+            .flatMap(ColourScheme.init(rawValue:)) ?? .defaultValue
+    }
+}
+
+/// Provides the app-wide, persistent colour-scheme preference to SwiftUI views.
 ///
 /// Example usage:
 /// ```swift
 /// @ColourSchemePreference private var colourScheme
 /// ```
 @propertyWrapper
+@MainActor
 struct ColourSchemePreference: DynamicProperty {
-    @AppStorage(AppPreferenceKey.colourScheme)
-    private var storedValue: ColourScheme = .defaultValue
+    private let store: ColourSchemeStore
+
+    init(store: ColourSchemeStore = .shared) {
+        self.store = store
+    }
 
     var wrappedValue: ColourScheme {
-        get { storedValue }
-        nonmutating set { storedValue = newValue }
+        get { store.value }
+        nonmutating set { store.value = newValue }
     }
 
     var projectedValue: Binding<ColourScheme> {
-        $storedValue
+        Binding(
+            get: { store.value },
+            set: { store.value = $0 }
+        )
     }
 }
 
@@ -159,11 +185,6 @@ enum PrivateCloudState: Equatable, Sendable {
     case idle
     case syncing
     case failed(AppFailure)
-}
-
-enum AccountDownloadDisposition: Equatable, Sendable {
-    case keep
-    case delete
 }
 
 enum AccountRemovalScope: Equatable, Sendable {
@@ -834,15 +855,23 @@ final class AppModel {
                     count: accounts.count
                 )
             )
+            let restoredAccount = try await service.activeAccount()
+            if let restoredAccount,
+                !accounts.contains(where: { $0.id == restoredAccount.id })
+            {
+                accounts.append(restoredAccount)
+            }
             launchStage = .restoringDownloads
             await downloads.start(account: nil)
             for storedAccount in accounts {
                 await downloads.start(account: storedAccount)
             }
+            await downloads.removeOrphanedDownloads(
+                retaining: Set(accounts.map(\.id))
+            )
             startNetworkPathUpdates()
             schedulePendingLocalSessionSync(for: accounts)
-            guard let restoredAccount = try await service.activeAccount()
-            else {
+            guard let restoredAccount else {
                 phase = .signedOut
                 await diagnostics.record(
                     .transition(
@@ -2050,7 +2079,6 @@ final class AppModel {
     @discardableResult
     func removeAccount(
         _ accountToRemove: ServerAccount? = nil,
-        downloads disposition: AccountDownloadDisposition = .delete,
         scope: AccountRemovalScope = .thisDevice,
         statistics statisticsDisposition:
             AccountStatisticsDisposition = .keep
@@ -2098,18 +2126,9 @@ final class AppModel {
             case .allDevices:
                 try await service.removeAccount(account)
             }
-            switch disposition {
-            case .keep:
-                await downloads.retainDownloadsAndDetachAccount(
-                    account.id
-                )
-            case .delete:
-                await downloads.removeAll(for: account.id)
-                playback.removeLocalData(for: account.id)
-                await BookCoverImageLoader.shared.removeAll(
-                    for: account.id
-                )
-            }
+            await downloads.removeAll(for: account.id)
+            playback.removeLocalData(for: account.id)
+            await BookCoverImageLoader.shared.removeAll(for: account.id)
             accounts.removeAll { $0.id == account.id }
             pendingLocalSessionSyncAccounts[account.id] = nil
             if removingBrowsingAccount {

@@ -363,7 +363,9 @@ entirely. They do not initialize CloudKit or show its Settings controls, and
 their stable native credentials remain device-only.
 
 Account removal distinguishes this device from all devices and asks separately
-whether listening history and downloaded audio should be retained.
+whether listening history should be retained. Downloaded audio is always
+removed with its account, and launch cleanup removes any record whose account
+is no longer saved.
 
 Accounts created by an older Bleat build contain only tokens because those
 builds discarded the password. Enter the password once with **Sign In Again**
@@ -502,10 +504,11 @@ books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;
 Settings links to the same management screen and storage total. Before
 scheduling, Bleat requires the expected audio bytes plus the larger of 10% or
-256 MB to be available. Downloads are grouped by account and show stored versus
-expected bytes for each book and the stored total for that account. A 401
-transfer response is replaced using the native account's rotating refresh token
-without placing tokens in URLs.
+256 MB to be available. Downloads are grouped by saved account and show stored
+versus expected bytes for each book and the stored total for that account.
+Startup removes local records that have no saved owning account. A 401 transfer
+response is replaced using the native account's rotating refresh token without
+placing tokens in URLs.
 Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
 expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.
@@ -603,13 +606,9 @@ offline cache state, local storage, or transient connectivity—rather than a
 generic unavailable message. Read-only operations offer retry only when safely
 repeatable; mutation recovery continues through its existing durable state.
 
-**Remove Account** always asks for confirmation. If that account owns local
-books, choose whether to keep or delete them. Keeping them cancels unfinished
-transfers but preserves local files, metadata, and device progress. When no
-account remains, **Offline Downloads** on the sign-in screen still opens and
-plays those books. Bookmark changes made to that retained account-free copy are
-stored on the device, but server bookmarks and synchronization remain
-unavailable.
+**Remove Account** always asks for confirmation and removes the account's
+local books, metadata, and device progress. It separately asks whether to keep
+or delete listening history.
 
 The app requires HTTPS. The live app harness below supplies a trusted,
 disposable local CA to its temporary simulator; production builds continue to
@@ -754,8 +753,7 @@ candidate. On AP16, verify:
   and simultaneous phone interaction;
 - download continuation across backgrounding and relaunch, followed by local
   playback with the server unavailable;
-- account removal with both retained and deleted downloads, plus progress
-  conflict resolution;
+- account removal deletes its downloads, plus progress conflict resolution;
 - VoiceOver and the largest Dynamic Type setting across login, Library, Book
   Detail, Downloads, mini-player, and Now Playing.
 

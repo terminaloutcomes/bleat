@@ -2,12 +2,22 @@ import BleatCore
 import Observation
 import SwiftUI
 
-enum AppRootTab: Hashable, Sendable {
+enum AppRootTab: CaseIterable, Hashable, Sendable {
     case home
     case library
     case search
     case downloads
     case settings
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .library: "Library"
+        case .search: "Search"
+        case .downloads: "Downloads"
+        case .settings: "Settings"
+        }
+    }
 }
 
 enum DeepLinkPresentationFailure: Equatable, Sendable {

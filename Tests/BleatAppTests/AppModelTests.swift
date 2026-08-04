@@ -11,6 +11,52 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testCloudKitCapabilityRequiresEnabledEntitledBuild() {
+        let containerIdentifier = PrivateCloudSyncCoordinator.containerIdentifier
+
+        XCTAssertFalse(
+            BleatCloudKitCapability.isAvailable(
+                buildMode: .disabled,
+                containerIdentifiers: [containerIdentifier]
+            )
+        )
+        XCTAssertFalse(
+            BleatCloudKitCapability.isAvailable(
+                buildMode: .enabled,
+                containerIdentifiers: nil
+            )
+        )
+        XCTAssertTrue(
+            BleatCloudKitCapability.isAvailable(
+                buildMode: .enabled,
+                containerIdentifiers: [containerIdentifier]
+            )
+        )
+    }
+
+    func testColourSchemeStorePersistsChangesAcrossViewInstances() throws {
+        let suiteName = "ColourSchemeStoreTests-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Could not create isolated user defaults suite")
+            return
+        }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let firstView = ColourSchemePreference(
+            store: ColourSchemeStore(defaults: defaults)
+        )
+        XCTAssertEqual(firstView.wrappedValue, .defaultValue)
+
+        firstView.wrappedValue = .orange
+
+        let anotherView = ColourSchemePreference(
+            store: ColourSchemeStore(defaults: defaults)
+        )
+        XCTAssertEqual(anotherView.wrappedValue, .orange)
+    }
+
     func testBleatLocalStoreUsesApplicationSupportBleatDirectory()
         throws
     {
@@ -765,7 +811,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testAccountRemovalChoiceKeepsOrDeletesDownloads()
+    func testAccountRemovalDeletesDownloads()
         async throws
     {
         let account = try fixtureAccount()
@@ -779,67 +825,96 @@ final class AppModelTests: XCTestCase {
             title: "Downloaded",
             libraryID: fixtureLibrary().id
         )
-        var roots: [URL] = []
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatAccountRemoval-\(UUID().uuidString)",
+                isDirectory: true
+            )
         defer {
-            for root in roots {
-                try? FileManager.default.removeItem(at: root)
-            }
+            try? FileManager.default.removeItem(at: root)
         }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(
+                rawValue: UUID().uuidString.lowercased()
+            ),
+            accountID: account.id,
+            plan: plan,
+            detail: fixtureBookDetail(item: item)
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([])
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        XCTAssertEqual(model.downloads.records.count, 1)
 
-        for (disposition, expectedCount) in [
-            (AccountDownloadDisposition.keep, 1),
-            (.delete, 0),
-        ] {
-            let root = FileManager.default.temporaryDirectory
-                .appendingPathComponent(
-                    "BleatAccountRemoval-\(UUID().uuidString)",
-                    isDirectory: true
-                )
-            roots.append(root)
-            let storage = DownloadStorage(
-                layout: try DownloadStorageLayout(rootURL: root)
-            )
-            _ = try await storage.create(
-                downloadID: DownloadID(
-                    rawValue: UUID().uuidString.lowercased()
-                ),
-                accountID: account.id,
-                plan: plan,
-                detail: fixtureBookDetail(item: item)
-            )
-            let service = TestAppService(
-                activeAccount: .success(account),
-                libraries: .success([])
-            )
-            let model = AppModel(
-                service: service,
-                downloadsStorageRootURL: root
-            )
-            await model.start()
-            XCTAssertEqual(model.downloads.records.count, 1)
+        await model.removeAccount()
 
-            await model.removeAccount(downloads: disposition)
+        XCTAssertTrue(model.downloads.records.isEmpty)
+        XCTAssertEqual(model.phase, .signedOut)
+    }
 
-            XCTAssertEqual(
-                model.downloads.records.count,
-                expectedCount
+    func testStartupRemovesDownloadsForUnknownAccounts() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatOrphanedDownloads-\(UUID().uuidString)",
+                isDirectory: true
             )
-            XCTAssertEqual(model.phase, .signedOut)
-            if disposition == .keep {
-                let relaunched = AppModel(
-                    service: TestAppService(
-                        activeAccount: .success(nil)
-                    ),
-                    downloadsStorageRootURL: root
-                )
-                await relaunched.start()
-                XCTAssertEqual(relaunched.phase, .signedOut)
-                XCTAssertEqual(
-                    relaunched.downloads.records.count,
-                    1
-                )
-            }
+        defer {
+            try? FileManager.default.removeItem(at: root)
         }
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let account = try fixtureAccount()
+        let orphanedAccountID = AccountID(rawValue: "removed-account")
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: plan.itemID.rawValue,
+                title: "Downloaded",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "current-download"),
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "orphaned-download"),
+            accountID: orphanedAccountID,
+            plan: plan,
+            detail: detail
+        )
+
+        let model = AppModel(
+            service: TestAppService(
+                accounts: .success([account]),
+                activeAccount: .success(account)
+            ),
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+
+        XCTAssertEqual(model.downloads.records.map(\.manifest.accountID), [account.id])
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: layout.recordURL(
+                    accountID: orphanedAccountID,
+                    itemID: plan.itemID
+                ).path
+            )
+        )
     }
 
     func testBulkDownloadRemovalKeepsProtectedPlaybackRecord()
@@ -5457,7 +5532,7 @@ final class AppModelTests: XCTestCase {
             coordinator.disconnect()
         }
 
-        func testCarPlayCompletedDownloadWorksSignedOutAndIsPreferredOnline()
+        func testCarPlayCompletedDownloadIsPreferredOnline()
             async throws
         {
             let root = FileManager.default.temporaryDirectory
@@ -5481,45 +5556,6 @@ final class AppModelTests: XCTestCase {
                 account: account,
                 detail: detail
             )
-
-            let signedOutService = TestAppService(
-                activeAccount: .success(nil)
-            )
-            let signedOutModel = AppModel(
-                service: signedOutService,
-                downloadsStorageRootURL: root
-            )
-            await signedOutModel.start()
-            let signedOutPresenter = TestCarPlayPresenter()
-            let signedOutCoordinator = CarPlayCoordinator(
-                model: signedOutModel
-            )
-            signedOutCoordinator.connect(signedOutPresenter)
-            signedOutCoordinator.refreshTemplates()
-            let signedOutRoot = try XCTUnwrap(
-                signedOutPresenter.root as? CPListTemplate
-            )
-            let downloadedItem = try XCTUnwrap(
-                signedOutRoot.sections.first?.items.first
-                    as? CPListItem
-            )
-            let offlineCompletion = expectation(
-                description: "Signed-out download prepared"
-            )
-            downloadedItem.handler?(downloadedItem) {
-                offlineCompletion.fulfill()
-            }
-            await fulfillment(of: [offlineCompletion], timeout: 3)
-            XCTAssertTrue(
-                signedOutPresenter.pushed.contains {
-                    $0 === CPNowPlayingTemplate.shared
-                }
-            )
-            let signedOutPlaybackRequests =
-                await signedOutService.playbackOpenRequests()
-            XCTAssertTrue(signedOutPlaybackRequests.isEmpty)
-            await signedOutModel.playback.stop()
-            signedOutCoordinator.disconnect()
 
             let onlineService = TestAppService(
                 activeAccount: .success(account),

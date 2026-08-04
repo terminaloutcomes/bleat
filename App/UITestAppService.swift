@@ -29,6 +29,12 @@
     }
 
     actor UITestAppService: AppServicing {
+        static var opensSettingsAtLaunch: Bool {
+            ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-open-settings"
+            )
+        }
+
         private let scenario: UITestScenario
         private let accountResult: Result<ServerAccount, AppServiceError>
         private var firstPageRequests = 0

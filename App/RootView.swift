@@ -57,6 +57,9 @@ struct RootView: View {
             case .signedIn:
                 SignedInView(model: model, navigation: navigation)
                     .tint(colourScheme.color)
+                    #if targetEnvironment(macCatalyst)
+                        .id(colourScheme)
+                    #endif
             case .unavailable(let failure):
                 ContentUnavailableView {
                     Label(failure.title, systemImage: failure.systemImage)
@@ -284,12 +287,12 @@ private struct NativeLoginView: View {
             #if targetEnvironment(macCatalyst)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     Text("Please log into a server")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 48)
-                        .padding(.vertical, 8)
-                        .accessibilityIdentifier("login.subtitle")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 48)
+                    .padding(.vertical, 8)
+                    .accessibilityIdentifier("login.subtitle")
                 }
             #endif
             .navigationTitle(navigationTitle)
@@ -602,50 +605,19 @@ private struct AccountEditorView: View {
 
     @ViewBuilder
     private var removalDataButtons: some View {
-        if accountDownloads.isEmpty {
-            Button("Keep Listening History", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .keep)
-            }
-            Button("Delete Listening History", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .delete)
-            }
-        } else {
-            Button("Keep History and Downloads", role: .destructive) {
-                removeAccount(downloads: .keep, statistics: .keep)
-            }
-            Button("Keep History, Delete Downloads", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .keep)
-            }
-            Button("Delete History, Keep Downloads", role: .destructive) {
-                removeAccount(downloads: .keep, statistics: .delete)
-            }
-            Button("Delete History and Downloads", role: .destructive) {
-                removeAccount(downloads: .delete, statistics: .delete)
-            }
+        Button("Keep Listening History", role: .destructive) {
+            removeAccount(statistics: .keep)
+        }
+        Button("Delete Listening History", role: .destructive) {
+            removeAccount(statistics: .delete)
         }
     }
 
     private var removalDataMessage: String {
-        guard !accountDownloads.isEmpty else {
-            return "Choose whether to keep this account's listening history."
-        }
-        let count = accountDownloads.count
-        let books = count == 1 ? "book" : "books"
-        let bytes = ByteCountFormatter.string(
-            fromByteCount: storedDownloadBytes(accountDownloads),
-            countStyle: .file
-        )
-        return "\(count) downloaded \(books) use \(bytes). Choose what to keep."
-    }
-
-    private var accountDownloads: [DownloadedBookRecord] {
-        model.downloads.records.filter {
-            $0.manifest.accountID == account.id
-        }
+        "This removes the account and its downloaded books from this device. Choose whether to keep its listening history."
     }
 
     private func removeAccount(
-        downloads disposition: AccountDownloadDisposition,
         statistics statisticsDisposition: AccountStatisticsDisposition
     ) {
         guard let scope = pendingRemovalScope else {
@@ -655,7 +627,6 @@ private struct AccountEditorView: View {
         Task {
             if await model.removeAccount(
                 account,
-                downloads: disposition,
                 scope: scope,
                 statistics: statisticsDisposition
             ) {
@@ -886,33 +857,15 @@ private struct SignedInView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            TabView(selection: $navigation.selectedTab) {
-                Tab("Home", systemImage: "house", value: .home) {
-                    tabContent(containerHeight: geometry.size.height) {
-                        HomeView(model: model, navigation: navigation)
-                    }
+            #if targetEnvironment(macCatalyst)
+                VStack(spacing: 0) {
+                    CatalystTabBar(selection: $navigation.selectedTab)
+                    tabs(containerHeight: geometry.size.height)
+                        .tabViewStyle(.page(indexDisplayMode: .never))
                 }
-                Tab("Library", systemImage: "books.vertical", value: .library) {
-                    tabContent(containerHeight: geometry.size.height) {
-                        LibraryView(model: model, navigation: navigation)
-                    }
-                }
-                Tab("Search", systemImage: "magnifyingglass", value: .search) {
-                    tabContent(containerHeight: geometry.size.height) {
-                        SearchView(model: model, navigation: navigation)
-                    }
-                }
-                Tab("Downloads", systemImage: "arrow.down.circle", value: .downloads) {
-                    tabContent(containerHeight: geometry.size.height) {
-                        DownloadsView(model: model)
-                    }
-                }
-                Tab("Settings", systemImage: "gearshape", value: .settings) {
-                    tabContent(containerHeight: geometry.size.height) {
-                        SettingsView(model: model, navigation: navigation)
-                    }
-                }
-            }
+            #else
+                tabs(containerHeight: geometry.size.height)
+            #endif
         }
         .sheet(isPresented: $navigation.showsPlayer) {
             NowPlaying(playback: model.playback)
@@ -945,6 +898,38 @@ private struct SignedInView: View {
         .accessibilityIdentifier("app.signedIn")
     }
 
+    private func tabs(containerHeight: CGFloat) -> some View {
+        TabView(selection: $navigation.selectedTab) {
+            Tab("Home", systemImage: "house", value: .home) {
+                tabContent(containerHeight: containerHeight) {
+                    HomeView(model: model, navigation: navigation)
+                }
+            }
+            Tab("Library", systemImage: "books.vertical", value: .library) {
+                tabContent(containerHeight: containerHeight) {
+                    LibraryView(model: model, navigation: navigation)
+                }
+            }
+            Tab("Search", systemImage: "magnifyingglass", value: .search) {
+                tabContent(containerHeight: containerHeight) {
+                    SearchView(model: model, navigation: navigation)
+                }
+            }
+            Tab(
+                "Downloads", systemImage: "arrow.down.circle", value: .downloads
+            ) {
+                tabContent(containerHeight: containerHeight) {
+                    DownloadsView(model: model)
+                }
+            }
+            Tab("Settings", systemImage: "gearshape", value: .settings) {
+                tabContent(containerHeight: containerHeight) {
+                    SettingsView(model: model, navigation: navigation)
+                }
+            }
+        }
+    }
+
     private func tabContent<Content: View>(
         containerHeight: CGFloat,
         @ViewBuilder content: () -> Content
@@ -962,6 +947,27 @@ private struct SignedInView: View {
             }
     }
 }
+
+#if targetEnvironment(macCatalyst)
+    private struct CatalystTabBar: View {
+        @Binding var selection: AppRootTab
+
+        var body: some View {
+            Picker("Navigation", selection: $selection) {
+                ForEach(AppRootTab.allCases, id: \.self) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.bar)
+            .accessibilityIdentifier("app.tabBar")
+        }
+    }
+#endif
 
 private struct HomeView: View {
     @Bindable var model: AppModel
@@ -1315,99 +1321,101 @@ private struct LibraryView: View {
                     .padding(.top, 4)
                 }
                 HStack {
-                Menu {
-                    ForEach(
-                        [
-                            LibraryItemSort.title,
-                            .author,
-                            .addedAt,
-                            .updatedAt,
-                            .duration,
-                        ],
-                        id: \.self
-                    ) { sort in
-                        Button {
-                            Task {
-                                await model.setLibrarySort(sort)
+                    Menu {
+                        ForEach(
+                            [
+                                LibraryItemSort.title,
+                                .author,
+                                .addedAt,
+                                .updatedAt,
+                                .duration,
+                            ],
+                            id: \.self
+                        ) { sort in
+                            Button {
+                                Task {
+                                    await model.setLibrarySort(sort)
+                                }
+                            } label: {
+                                if model.librarySort == sort {
+                                    Label(
+                                        sort.label,
+                                        systemImage: "checkmark"
+                                    )
+                                } else {
+                                    Text(sort.label)
+                                }
                             }
-                        } label: {
-                            if model.librarySort == sort {
-                                Label(
-                                    sort.label,
-                                    systemImage: "checkmark"
-                                )
-                            } else {
-                                Text(sort.label)
-                            }
-                        }
-                    }
-                } label: {
-                    Label(
-                        model.librarySort.label,
-                        systemImage: "arrow.up.arrow.down"
-                    )
-                }
-                .accessibilityIdentifier("library.sort")
-
-                Button {
-                    Task {
-                        await model.setLibrarySortDescending(
-                            !model.librarySortDescending
-                        )
-                    }
-                } label: {
-                    Image(
-                        systemName: model.librarySortDescending
-                            ? "arrow.down" : "arrow.up"
-                    )
-                }
-                .accessibilityLabel(
-                    model.librarySortDescending
-                        ? "Descending" : "Ascending"
-                )
-                .accessibilityIdentifier("library.sortDirection")
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        Task {
-                            await model.setLibraryProgressFilter(nil)
                         }
                     } label: {
-                        if model.libraryBrowseFilter == .all {
-                            Label("All Books", systemImage: "checkmark")
-                        } else {
-                            Text("All Books")
-                        }
+                        Label(
+                            model.librarySort.label,
+                            systemImage: "arrow.up.arrow.down"
+                        )
                     }
-                    Divider()
-                    ForEach(LibraryProgressFilter.allCases, id: \.self) {
-                        filter in
+                    .accessibilityIdentifier("library.sort")
+
+                    Button {
+                        Task {
+                            await model.setLibrarySortDescending(
+                                !model.librarySortDescending
+                            )
+                        }
+                    } label: {
+                        Image(
+                            systemName: model.librarySortDescending
+                                ? "arrow.down" : "arrow.up"
+                        )
+                    }
+                    .accessibilityLabel(
+                        model.librarySortDescending
+                            ? "Descending" : "Ascending"
+                    )
+                    .accessibilityIdentifier("library.sortDirection")
+
+                    Spacer()
+
+                    Menu {
                         Button {
                             Task {
-                                await model.setLibraryProgressFilter(
-                                    filter
-                                )
+                                await model.setLibraryProgressFilter(nil)
                             }
                         } label: {
-                            if model.libraryBrowseFilter == .progress(filter) {
-                                Label(
-                                    filter.label,
-                                    systemImage: "checkmark"
-                                )
+                            if model.libraryBrowseFilter == .all {
+                                Label("All Books", systemImage: "checkmark")
                             } else {
-                                Text(filter.label)
+                                Text("All Books")
                             }
                         }
+                        Divider()
+                        ForEach(LibraryProgressFilter.allCases, id: \.self) {
+                            filter in
+                            Button {
+                                Task {
+                                    await model.setLibraryProgressFilter(
+                                        filter
+                                    )
+                                }
+                            } label: {
+                                if model.libraryBrowseFilter
+                                    == .progress(filter)
+                                {
+                                    Label(
+                                        filter.label,
+                                        systemImage: "checkmark"
+                                    )
+                                } else {
+                                    Text(filter.label)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            model.libraryBrowseFilter.label,
+                            systemImage: "line.3.horizontal.decrease.circle"
+                        )
                     }
-                } label: {
-                    Label(
-                        model.libraryBrowseFilter.label,
-                        systemImage: "line.3.horizontal.decrease.circle"
-                    )
-                }
-                .accessibilityIdentifier("library.filter")
+                    .accessibilityIdentifier("library.filter")
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
@@ -1556,9 +1564,10 @@ private struct BookListContent: View {
                 }
             } else {
                 List {
-                    ForEach(page.browseEntries, id: \.book.id.rawValue) { entry in
+                    ForEach(page.browseEntries, id: \.book.id.rawValue) {
+                        entry in
                         switch entry {
-                        case let .book(book):
+                        case .book(let book):
                             NavigationLink(value: book) {
                                 BookSummaryRow(
                                     book: book,
@@ -1569,7 +1578,7 @@ private struct BookListContent: View {
                             .accessibilityIdentifier(
                                 "library.book.\(book.id.rawValue)"
                             )
-                        case let .series(series, representative: book):
+                        case .series(let series, representative: let book):
                             NavigationLink(
                                 value: SeriesDestination(
                                     libraryID: book.libraryID,
@@ -1720,7 +1729,8 @@ private struct SearchView: View {
             } else {
                 List {
                     if !results.books.isEmpty,
-                       navigation.searchScope == .all || navigation.searchScope == .book
+                        navigation.searchScope == .all
+                            || navigation.searchScope == .book
                     {
                         Section("Books") {
                             ForEach(results.books, id: \.id) { book in
@@ -1738,12 +1748,16 @@ private struct SearchView: View {
                         }
                     }
                     if !results.authors.isEmpty,
-                       navigation.searchScope == .all || navigation.searchScope == .author
+                        navigation.searchScope == .all
+                            || navigation.searchScope == .author
                     {
                         Section("Authors") {
                             ForEach(results.authors, id: \.id) { author in
                                 Button(author.name) {
-                                    guard let libraryID = model.selectedLibrary?.id else {
+                                    guard
+                                        let libraryID = model.selectedLibrary?
+                                            .id
+                                    else {
                                         return
                                     }
                                     Task {
@@ -1765,12 +1779,16 @@ private struct SearchView: View {
                         }
                     }
                     if !results.series.isEmpty,
-                       navigation.searchScope == .all || navigation.searchScope == .series
+                        navigation.searchScope == .all
+                            || navigation.searchScope == .series
                     {
                         Section("Series") {
                             ForEach(results.series, id: \.id) { series in
                                 Button(series.name) {
-                                    guard let libraryID = model.selectedLibrary?.id else {
+                                    guard
+                                        let libraryID = model.selectedLibrary?
+                                            .id
+                                    else {
                                         return
                                     }
                                     navigation.showSeries(
@@ -1916,35 +1934,36 @@ private struct SeriesDetailView: View {
                     Section {
                         ScrollView(.horizontal) {
                             LazyHStack(spacing: 0) {
-                            ForEach(page.items, id: \.id) { book in
-                                NavigationLink(value: book) {
-                                    VStack(spacing: 8) {
-                                        BookCoverView(
-                                            accountID: model.account?.id,
-                                            server: model.account?.server,
-                                            itemID: book.id,
-                                            updatedAtMilliseconds: book.updatedAtMilliseconds,
-                                            width: 480,
-                                            height: 480,
-                                            cornerRadius: 14
+                                ForEach(page.items, id: \.id) { book in
+                                    NavigationLink(value: book) {
+                                        VStack(spacing: 8) {
+                                            BookCoverView(
+                                                accountID: model.account?.id,
+                                                server: model.account?.server,
+                                                itemID: book.id,
+                                                updatedAtMilliseconds: book
+                                                    .updatedAtMilliseconds,
+                                                width: 480,
+                                                height: 480,
+                                                cornerRadius: 14
+                                            )
+                                            .frame(width: 180, height: 180)
+                                            Text(book.title)
+                                                .font(.headline)
+                                            Text(sequenceLabel(for: book))
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .rotation3DEffect(
+                                            .degrees(coverDepthAngle),
+                                            axis: (x: 0, y: 1, z: 0)
                                         )
-                                        .frame(width: 180, height: 180)
-                                        Text(book.title)
-                                            .font(.headline)
-                                        Text(sequenceLabel(for: book))
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
                                     }
-                                    .frame(maxWidth: .infinity)
-                                    .rotation3DEffect(
-                                        .degrees(coverDepthAngle),
-                                        axis: (x: 0, y: 1, z: 0)
-                                    )
+                                    .containerRelativeFrame(.horizontal)
                                 }
-                                .containerRelativeFrame(.horizontal)
                             }
-                        }
-                        .scrollTargetLayout()
+                            .scrollTargetLayout()
                         }
                         .scrollTargetBehavior(.paging)
                         .scrollIndicators(.hidden)
@@ -2004,7 +2023,11 @@ private struct SeriesDetailView: View {
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("series.loadMore")
         case .loading:
-            HStack { Spacer(); ProgressView(); Spacer() }
+            HStack {
+                Spacer()
+                ProgressView()
+                Spacer()
+            }
         case .failed:
             Button("Try Again") {
                 Task { await model.loadNextSeriesPage() }
@@ -2013,9 +2036,11 @@ private struct SeriesDetailView: View {
     }
 
     private func sequenceLabel(for book: LibraryBookSummary) -> String {
-        guard let series = book.series.first(where: {
-            $0.id == destination.id
-        }) else {
+        guard
+            let series = book.series.first(where: {
+                $0.id == destination.id
+            })
+        else {
             return "Unnumbered"
         }
         guard let sequence = series.sequence, !sequence.isEmpty else {
@@ -2033,9 +2058,10 @@ private struct SeriesDetailView: View {
 
     private var shouldReduceMotion: Bool {
         #if DEBUG
-            reduceMotion || ProcessInfo.processInfo.arguments.contains(
-                "--ui-testing-reduce-motion"
-            )
+            reduceMotion
+                || ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-reduce-motion"
+                )
         #else
             reduceMotion
         #endif
@@ -3196,21 +3222,24 @@ private struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink(value: DeepLinkSettingsDestination.statistics) {
-                        Label("Listening Stats", systemImage: "chart.bar")
-                    }
-                    .accessibilityIdentifier("settings.statistics")
-                    NavigationLink(value: DeepLinkSettingsDestination.about) {
-                        Label("About", systemImage: "info.circle")
-                    }
-                    .accessibilityIdentifier("settings.about")
-                    NavigationLink(value: DeepLinkSettingsDestination.diagnostics) {
-                        Label(
-                            "Diagnostics",
-                            systemImage: "stethoscope"
-                        )
-                    }
-                    .accessibilityIdentifier("settings.diagnostics")
+                    settingsDestinationLink(
+                        "Listening Stats",
+                        systemImage: "chart.bar",
+                        destination: .statistics,
+                        accessibilityIdentifier: "settings.statistics"
+                    )
+                    settingsDestinationLink(
+                        "About",
+                        systemImage: "info.circle",
+                        destination: .about,
+                        accessibilityIdentifier: "settings.about"
+                    )
+                    settingsDestinationLink(
+                        "Diagnostics",
+                        systemImage: "stethoscope",
+                        destination: .diagnostics,
+                        accessibilityIdentifier: "settings.diagnostics"
+                    )
                 }
 
             }
@@ -3276,6 +3305,23 @@ private struct SettingsView: View {
                 )
             }
         }
+    }
+
+    private func settingsDestinationLink(
+        _ title: String,
+        systemImage: String,
+        destination: DeepLinkSettingsDestination,
+        accessibilityIdentifier: String
+    ) -> some View {
+        NavigationLink(value: destination) {
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: systemImage)
+                    .foregroundStyle(colourScheme.color)
+            }
+        }
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     private var cloudSection: some View {
