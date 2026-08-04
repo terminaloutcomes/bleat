@@ -219,12 +219,16 @@ enum DownloadNetworkDecision: Equatable, Sendable {
         expectedBytes: Int64,
         largeDownloadThresholdBytes: Int64
     ) -> DownloadNetworkDecision {
+        #if targetEnvironment(macCatalyst)
+            return .schedule
+        #else
         guard policy == .allowCellular,
             expectedBytes >= largeDownloadThresholdBytes
         else {
             return .schedule
         }
         return .confirmCellular(expectedBytes: expectedBytes)
+        #endif
     }
 }
 
@@ -315,6 +319,14 @@ enum DownloadRepairPlanner {
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
 
+    static var supportsNetworkPolicySelection: Bool {
+        #if targetEnvironment(macCatalyst)
+            false
+        #else
+            true
+        #endif
+    }
+
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
     private let defaults: UserDefaults
@@ -373,12 +385,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.service = service
         self.diagnostics = diagnostics
         self.defaults = defaults
-        networkPolicy =
-            defaults.string(
-                forKey: "bleat.downloads.networkPolicy.v1"
-            )
-            .flatMap(DownloadNetworkPolicy.init(rawValue:))
-            ?? .wifiOnly
+        networkPolicy = Self.loadNetworkPolicy(from: defaults)
         automaticLookaheadCount = Self.normalizedLookaheadCount(
             defaults.object(forKey: automaticLookaheadKey) == nil
                 ? 5
@@ -555,6 +562,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func setNetworkPolicy(_ policy: DownloadNetworkPolicy) {
+        guard Self.supportsNetworkPolicySelection else {
+            return
+        }
         networkPolicy = policy
         defaults.set(policy.rawValue, forKey: networkPolicyKey)
     }
@@ -578,10 +588,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func reloadSyncedPreferences() {
-        networkPolicy =
-            defaults.string(forKey: networkPolicyKey)
-            .flatMap(DownloadNetworkPolicy.init(rawValue:))
-            ?? .wifiOnly
+        networkPolicy = Self.loadNetworkPolicy(from: defaults)
         automaticLookaheadCount = Self.normalizedLookaheadCount(
             defaults.object(forKey: automaticLookaheadKey) == nil
                 ? 5
@@ -592,6 +599,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .flatMap(AutomaticDownloadCleanupPolicy.init(rawValue:))
             ?? .afterTwentyFourHours
         scheduleAutomaticCleanup()
+    }
+
+    private static func loadNetworkPolicy(
+        from defaults: UserDefaults
+    ) -> DownloadNetworkPolicy {
+        #if targetEnvironment(macCatalyst)
+            .allowCellular
+        #else
+            defaults.string(forKey: "bleat.downloads.networkPolicy.v1")
+                .flatMap(DownloadNetworkPolicy.init(rawValue:))
+                ?? .wifiOnly
+        #endif
     }
 
     func handleAutomaticPlaybackActivity(

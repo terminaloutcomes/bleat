@@ -11,6 +11,62 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testBleatLocalStoreUsesApplicationSupportBleatDirectory()
+        throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BleatLocalStoreTests-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        let storeURL = try BleatLocalStore.storeURL(
+            applicationSupportURL: root
+        )
+
+        XCTAssertEqual(
+            storeURL,
+            root.appendingPathComponent("Bleat/Bleat.store")
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: storeURL.deletingLastPathComponent().path
+            )
+        )
+    }
+
+    func testBleatLocalStoreMigratesExistingDefaultStore() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BleatLocalStoreMigration-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let legacyURL = root.appendingPathComponent("default.store")
+        let legacyContents = Data("legacy store".utf8)
+        try legacyContents.write(to: legacyURL)
+        let legacyWALURL = URL(fileURLWithPath: legacyURL.path + "-wal")
+        let legacyWALContents = Data("legacy WAL".utf8)
+        try legacyWALContents.write(to: legacyWALURL)
+
+        let storeURL = try BleatLocalStore.storeURL(
+            applicationSupportURL: root
+        )
+
+        XCTAssertEqual(storeURL.lastPathComponent, "Bleat.store")
+        XCTAssertEqual(try Data(contentsOf: storeURL), legacyContents)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: storeURL.path + "-wal")),
+            legacyWALContents
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: legacyURL.path)
+        )
+    }
+
     func testBookDetailPlaybackActionPausesCurrentRequestedBook() {
         let currentItemID = LibraryItemID(rawValue: "current")
 
@@ -1067,7 +1123,15 @@ final class AppModelTests: XCTestCase {
             forHTTPHeaderField: "Authorization"
         )
 
-        XCTAssertEqual(first.networkPolicy, .wifiOnly)
+        #if targetEnvironment(macCatalyst)
+            XCTAssertEqual(first.networkPolicy, .allowCellular)
+            XCTAssertFalse(DownloadModel.supportsNetworkPolicySelection)
+            first.setNetworkPolicy(.wifiOnly)
+            XCTAssertEqual(first.networkPolicy, .allowCellular)
+        #else
+            XCTAssertEqual(first.networkPolicy, .wifiOnly)
+            XCTAssertTrue(DownloadModel.supportsNetworkPolicySelection)
+        #endif
         let wifiRequest = DownloadNetworkPolicy.wifiOnly.applying(
             to: request
         )
@@ -1086,19 +1150,32 @@ final class AppModelTests: XCTestCase {
             DownloadNetworkPolicy.allowCellular.applying(to: request)
                 .allowsExpensiveNetworkAccess
         )
-        XCTAssertEqual(
-            DownloadNetworkDecision.decide(
-                policy: .allowCellular,
-                expectedBytes:
-                    DownloadModel.largeDownloadThresholdBytes,
-                largeDownloadThresholdBytes:
-                    DownloadModel.largeDownloadThresholdBytes
-            ),
-            .confirmCellular(
-                expectedBytes:
-                    DownloadModel.largeDownloadThresholdBytes
+        #if targetEnvironment(macCatalyst)
+            XCTAssertEqual(
+                DownloadNetworkDecision.decide(
+                    policy: .allowCellular,
+                    expectedBytes:
+                        DownloadModel.largeDownloadThresholdBytes,
+                    largeDownloadThresholdBytes:
+                        DownloadModel.largeDownloadThresholdBytes
+                ),
+                .schedule
             )
-        )
+        #else
+            XCTAssertEqual(
+                DownloadNetworkDecision.decide(
+                    policy: .allowCellular,
+                    expectedBytes:
+                        DownloadModel.largeDownloadThresholdBytes,
+                    largeDownloadThresholdBytes:
+                        DownloadModel.largeDownloadThresholdBytes
+                ),
+                .confirmCellular(
+                    expectedBytes:
+                        DownloadModel.largeDownloadThresholdBytes
+                )
+            )
+        #endif
         XCTAssertEqual(
             DownloadNetworkDecision.decide(
                 policy: .wifiOnly,

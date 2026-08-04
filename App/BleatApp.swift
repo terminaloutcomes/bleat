@@ -88,6 +88,17 @@ struct BleatApp: App {
         WindowGroup {
             RootView(model: appDelegate.model)
         }
+        #if targetEnvironment(macCatalyst)
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") {
+                        AppDeepLinkInbox.shared.openSettings()
+                    }
+                    .keyboardShortcut(",", modifiers: .command)
+                    .disabled(appDelegate.model.phase != .signedIn)
+                }
+            }
+        #endif
     }
 }
 

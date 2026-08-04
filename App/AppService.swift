@@ -6,6 +6,87 @@ enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
 }
 
+enum BleatLocalStore {
+    private static let directoryName = "Bleat"
+    private static let storeFilename = "Bleat.store"
+    private static let legacyStoreFilename = "default.store"
+
+    static func storeURL(
+        fileManager: FileManager = .default,
+        applicationSupportURL: URL? = nil
+    ) throws -> URL {
+        let supportURL: URL
+        if let applicationSupportURL {
+            supportURL = applicationSupportURL
+        } else if let resolvedURL = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first {
+            supportURL = resolvedURL
+        } else {
+            throw AppBootstrapError.persistenceUnavailable
+        }
+
+        let directoryURL = supportURL.appendingPathComponent(
+            directoryName,
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+        let storeURL = directoryURL.appendingPathComponent(storeFilename)
+        try migrateLegacyStoreIfNeeded(
+            fileManager: fileManager,
+            legacyStoreURL: supportURL.appendingPathComponent(
+                legacyStoreFilename
+            ),
+            storeURL: storeURL
+        )
+        return storeURL
+    }
+
+    private static func migrateLegacyStoreIfNeeded(
+        fileManager: FileManager,
+        legacyStoreURL: URL,
+        storeURL: URL
+    ) throws {
+        guard !fileManager.fileExists(atPath: storeURL.path),
+            fileManager.fileExists(atPath: legacyStoreURL.path)
+        else {
+            return
+        }
+
+        let legacyStoreSidecars = ["-wal", "-shm"].map {
+            URL(fileURLWithPath: legacyStoreURL.path + $0)
+        }
+        let legacyURLs = ([legacyStoreURL] + legacyStoreSidecars).filter {
+            fileManager.fileExists(atPath: $0.path)
+        }
+        var copiedURLs: [URL] = []
+        do {
+            for legacyURL in legacyURLs {
+                let suffix = String(legacyURL.path.dropFirst(
+                    legacyStoreURL.path.count
+                ))
+                let destinationURL = URL(
+                    fileURLWithPath: storeURL.path + suffix
+                )
+                try fileManager.copyItem(
+                    at: legacyURL,
+                    to: destinationURL
+                )
+                copiedURLs.append(destinationURL)
+            }
+        } catch {
+            for copiedURL in copiedURLs {
+                try? fileManager.removeItem(at: copiedURL)
+            }
+            throw error
+        }
+    }
+}
+
 enum BleatCloudKitBuildMode: String, Sendable {
     case enabled
     case disabled
@@ -602,12 +683,14 @@ actor LiveAppService: AppServicing {
     ) throws(AppBootstrapError) {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         do {
+            let storeURL = try BleatLocalStore.storeURL()
             modelContainer = try ModelContainer(
                 for: schema,
                 configurations: [
                     ModelConfiguration(
                         schema: schema,
-                        isStoredInMemoryOnly: false
+                        url: storeURL,
+                        cloudKitDatabase: .none
                     )
                 ]
             )

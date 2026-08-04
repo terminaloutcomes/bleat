@@ -92,4 +92,12 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertEqual(inbox.takePendingRoute(), .settings(.about))
         XCTAssertNil(inbox.takePendingRoute())
     }
+
+    func testSettingsShortcutQueuesSettingsRoot() {
+        let inbox = AppDeepLinkInbox()
+
+        inbox.openSettings()
+
+        XCTAssertEqual(inbox.takePendingRoute(), .settings(.root))
+    }
 }

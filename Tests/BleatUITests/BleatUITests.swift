@@ -118,7 +118,9 @@ final class BleatUITests: XCTestCase {
         let submit = app.buttons["login.submit"]
 
         XCTAssertTrue(server.waitForExistence(timeout: 3))
+        XCTAssertEqual(server.label, "Server URL")
         XCTAssertFalse(submit.isEnabled)
+        XCTAssertFalse(app.buttons["login.offlineDownloads"].exists)
 
         server.tap()
         server.typeText("https://books.example")

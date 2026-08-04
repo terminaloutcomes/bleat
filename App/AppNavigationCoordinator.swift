@@ -46,6 +46,10 @@ final class AppDeepLinkInbox {
         return true
     }
 
+    func openSettings() {
+        receive(route: .settings(.root))
+    }
+
     func takePendingRoute() -> DeepLinkRoute? {
         defer { pendingRoute = nil }
         return pendingRoute

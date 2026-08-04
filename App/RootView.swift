@@ -198,10 +198,8 @@ private struct AccountSubmissionButton: View {
 private struct NativeLoginView: View {
     @Bindable var model: AppModel
     var navigationTitle = "Bleat"
-    var showsOfflineDownloads = true
     var onSignedIn: () -> Void = {}
     var onCancel: (() -> Void)?
-    @State private var showOfflineDownloads = false
     @State private var serverAddress = ""
     @State private var username = ""
     @State private var password = ""
@@ -226,10 +224,9 @@ private struct NativeLoginView: View {
             Form {
                 Section("Server") {
                     TextField(
-                        "Server Url (e.g. https://bleat.example.com)",
+                        "Server URL",
                         text: $serverAddress
                     )
-                    .textContentType(.URL)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
@@ -283,22 +280,18 @@ private struct NativeLoginView: View {
                     )
                 }
 
-                if showsOfflineDownloads,
-                    !model.downloads.records.isEmpty
-                {
-                    Section {
-                        Button(
-                            "Offline Downloads",
-                            systemImage: "arrow.down.circle"
-                        ) {
-                            showOfflineDownloads = true
-                        }
-                        .accessibilityIdentifier(
-                            "login.offlineDownloads"
-                        )
-                    }
-                }
             }
+            #if targetEnvironment(macCatalyst)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    Text("Please log into a server")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 48)
+                        .padding(.vertical, 8)
+                        .accessibilityIdentifier("login.subtitle")
+                }
+            #endif
             .navigationTitle(navigationTitle)
             .toolbar {
                 if let onCancel {
@@ -306,9 +299,6 @@ private struct NativeLoginView: View {
                         Button("Cancel", action: onCancel)
                     }
                 }
-            }
-            .sheet(isPresented: $showOfflineDownloads) {
-                OfflineDownloadsSheet(model: model)
             }
             .alert(
                 "Invalid URL",
@@ -430,7 +420,6 @@ private struct AccountEditorView: View {
                         "Primary server URL",
                         text: $serverAddress
                     )
-                    .textContentType(.URL)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
@@ -440,7 +429,6 @@ private struct AccountEditorView: View {
                         "Local server URL (optional)",
                         text: $localServerAddress
                     )
-                    .textContentType(.URL)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
@@ -3076,22 +3064,24 @@ private struct SettingsView: View {
                 }
 
                 Section("Downloads") {
-                    Toggle(
-                        "Wi-Fi Only",
-                        isOn: Binding(
-                            get: {
-                                model.downloads.networkPolicy == .wifiOnly
-                            },
-                            set: { wifiOnly in
-                                model.downloads.setNetworkPolicy(
-                                    wifiOnly ? .wifiOnly : .allowCellular
-                                )
-                            }
+                    if DownloadModel.supportsNetworkPolicySelection {
+                        Toggle(
+                            "Wi-Fi Only",
+                            isOn: Binding(
+                                get: {
+                                    model.downloads.networkPolicy == .wifiOnly
+                                },
+                                set: { wifiOnly in
+                                    model.downloads.setNetworkPolicy(
+                                        wifiOnly ? .wifiOnly : .allowCellular
+                                    )
+                                }
+                            )
                         )
-                    )
-                    .accessibilityIdentifier(
-                        "settings.downloads.wifiOnly"
-                    )
+                        .accessibilityIdentifier(
+                            "settings.downloads.wifiOnly"
+                        )
+                    }
 
                     Stepper(
                         "Files Ahead: \(model.downloads.automaticLookaheadCount)",
@@ -3241,8 +3231,7 @@ private struct SettingsView: View {
             .sheet(isPresented: $showAddAccount) {
                 NativeLoginView(
                     model: model,
-                    navigationTitle: "Add Account",
-                    showsOfflineDownloads: false
+                    navigationTitle: "Add Account"
                 ) {
                     showAddAccount = false
                 } onCancel: {
