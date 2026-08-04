@@ -12,7 +12,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                 HTTPResponse(
                     data: Self.expandedBookDetailJSON(),
                     statusCode: 200
-                ),
+                )
             ]
         )
 
@@ -22,20 +22,23 @@ final class AudiobookshelfAPITests: XCTestCase {
         )
         let requests = await fixture.transport.recordedRequests()
         let sent = try XCTUnwrap(requests.first)
-        let components = try XCTUnwrap(URLComponents(
-            url: try XCTUnwrap(sent.url),
-            resolvingAgainstBaseURL: false
-        ))
+        let components = try XCTUnwrap(
+            URLComponents(
+                url: try XCTUnwrap(sent.url),
+                resolvingAgainstBaseURL: false
+            ))
         let detail = result.value
 
         XCTAssertEqual(
             components.path,
             "/audiobookshelf/api/items/item"
         )
-        XCTAssertEqual(components.queryItems, [
-            URLQueryItem(name: "expanded", value: "1"),
-            URLQueryItem(name: "include", value: "progress"),
-        ])
+        XCTAssertEqual(
+            components.queryItems,
+            [
+                URLQueryItem(name: "expanded", value: "1"),
+                URLQueryItem(name: "include", value: "progress"),
+            ])
         XCTAssertEqual(
             sent.value(forHTTPHeaderField: "Authorization"),
             "Bearer access-token"
@@ -45,20 +48,24 @@ final class AudiobookshelfAPITests: XCTestCase {
         XCTAssertEqual(detail.bookID, BookID(rawValue: "book"))
         XCTAssertEqual(detail.title, "Expanded Book")
         XCTAssertEqual(detail.subtitle, "A Subtitle")
-        XCTAssertEqual(detail.authors, [
-            LibraryBookContributor(
-                id: AuthorID(rawValue: "author")!,
-                name: "An Author"
-            ),
-        ])
+        XCTAssertEqual(
+            detail.authors,
+            [
+                LibraryBookContributor(
+                    id: AuthorID(rawValue: "author")!,
+                    name: "An Author"
+                )
+            ])
         XCTAssertEqual(detail.narrators, ["A Narrator"])
-        XCTAssertEqual(detail.series, [
-            LibraryBookSeries(
-                id: SeriesID(rawValue: "series")!,
-                name: "A Series",
-                sequence: "2"
-            ),
-        ])
+        XCTAssertEqual(
+            detail.series,
+            [
+                LibraryBookSeries(
+                    id: SeriesID(rawValue: "series")!,
+                    name: "A Series",
+                    sequence: "2"
+                )
+            ])
         XCTAssertEqual(detail.genres, ["Fiction"])
         XCTAssertEqual(detail.tags, ["Favourite"])
         XCTAssertEqual(detail.descriptionPlain, "Safe description")
@@ -92,10 +99,11 @@ final class AudiobookshelfAPITests: XCTestCase {
             ("\"progress\": 0.25", "\"progress\": 1.25"),
             ("\"numTracks\": 1", "\"numTracks\": 0"),
         ]
-        let valid = try XCTUnwrap(String(
-            data: Self.expandedBookDetailJSON(),
-            encoding: .utf8
-        ))
+        let valid = try XCTUnwrap(
+            String(
+                data: Self.expandedBookDetailJSON(),
+                encoding: .utf8
+            ))
 
         for (target, replacement) in invalidCases {
             let fixture = try APIFixture(
@@ -108,7 +116,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                             ).utf8
                         ),
                         statusCode: 200
-                    ),
+                    )
                 ]
             )
             do {
@@ -123,7 +131,7 @@ final class AudiobookshelfAPITests: XCTestCase {
         }
 
         let malformed = try APIFixture(responses: [
-            HTTPResponse(data: Data("{".utf8), statusCode: 200),
+            HTTPResponse(data: Data("{".utf8), statusCode: 200)
         ])
         do {
             _ = try await malformed.api.bookDetail(
@@ -167,16 +175,19 @@ final class AudiobookshelfAPITests: XCTestCase {
         }
 
         let request = try LibraryHomeRequest(limit: 12)
-        XCTAssertEqual(request.queryItems, [
-            URLQueryItem(name: "limit", value: "12"),
-            URLQueryItem(name: "include", value: "progress"),
-        ])
+        XCTAssertEqual(
+            request.queryItems,
+            [
+                URLQueryItem(name: "limit", value: "12"),
+                URLQueryItem(name: "include", value: "progress"),
+            ])
 
         let expandedRequest = try LibraryItemsPageRequest(
             page: 0,
-            filter: LibraryItemFilter(authorID: try XCTUnwrap(
-                AuthorID(rawValue: "author-1")
-            )),
+            filter: LibraryItemFilter(
+                authorID: try XCTUnwrap(
+                    AuthorID(rawValue: "author-1")
+                )),
             collapseSeries: false,
             minified: false
         )
@@ -241,7 +252,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         """.utf8
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let request = try LibraryHomeRequest(limit: 10)
@@ -333,7 +344,7 @@ final class AudiobookshelfAPITests: XCTestCase {
         for (data, expectedError) in zip(cases, expected) {
             let fixture = try APIFixture(
                 responses: [
-                    HTTPResponse(data: data, statusCode: 200),
+                    HTTPResponse(data: data, statusCode: 200)
                 ]
             )
             do {
@@ -363,7 +374,9 @@ final class AudiobookshelfAPITests: XCTestCase {
     }
 
     func testSearchRequestValidationAndExactQueryContract() throws {
-        for query in ["", " \n ", "bad\nquery", String(repeating: "a", count: 201)] {
+        for query in [
+            "", " \n ", "bad\nquery", String(repeating: "a", count: 201),
+        ] {
             XCTAssertThrowsError(
                 try LibrarySearchRequest(query: query)
             ) { error in
@@ -392,10 +405,12 @@ final class AudiobookshelfAPITests: XCTestCase {
             limit: 12
         )
         XCTAssertEqual(request.query, "one & two")
-        XCTAssertEqual(request.queryItems, [
-            URLQueryItem(name: "q", value: "one & two"),
-            URLQueryItem(name: "limit", value: "12"),
-        ])
+        XCTAssertEqual(
+            request.queryItems,
+            [
+                URLQueryItem(name: "q", value: "one & two"),
+                URLQueryItem(name: "limit", value: "12"),
+            ])
     }
 
     func testSearchMapsExpandedBookMatchesAndExactRoute() async throws {
@@ -407,7 +422,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         bookCount: 1
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let request = try LibrarySearchRequest(
@@ -465,7 +480,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         """.utf8
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let request = try LibrarySearchRequest(query: "first", limit: 5)
@@ -482,7 +497,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                 LibrarySearchAuthorMatch(
                     id: try XCTUnwrap(AuthorID(rawValue: "author-1")),
                     name: "First Author"
-                ),
+                )
             ]
         )
         XCTAssertEqual(
@@ -491,7 +506,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                 LibrarySearchSeriesMatch(
                     id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
                     name: "First Series"
-                ),
+                )
             ]
         )
     }
@@ -524,7 +539,7 @@ final class AudiobookshelfAPITests: XCTestCase {
         for (data, expectedError) in cases {
             let fixture = try APIFixture(
                 responses: [
-                    HTTPResponse(data: data, statusCode: 200),
+                    HTTPResponse(data: data, statusCode: 200)
                 ]
             )
             do {
@@ -588,22 +603,24 @@ final class AudiobookshelfAPITests: XCTestCase {
             descending: true,
             filter: filter
         )
-        XCTAssertEqual(request.queryItems, [
-            URLQueryItem(name: "limit", value: "50"),
-            URLQueryItem(name: "page", value: "2"),
-            URLQueryItem(
-                name: "sort",
-                value: "media.metadata.authorNameLF"
-            ),
-            URLQueryItem(name: "desc", value: "1"),
-            URLQueryItem(
-                name: "filter",
-                value: "genres.Fiction & Fantasy"
-            ),
-            URLQueryItem(name: "minified", value: "1"),
-            URLQueryItem(name: "collapseseries", value: "1"),
-            URLQueryItem(name: "include", value: "progress"),
-        ])
+        XCTAssertEqual(
+            request.queryItems,
+            [
+                URLQueryItem(name: "limit", value: "50"),
+                URLQueryItem(name: "page", value: "2"),
+                URLQueryItem(
+                    name: "sort",
+                    value: "media.metadata.authorNameLF"
+                ),
+                URLQueryItem(name: "desc", value: "1"),
+                URLQueryItem(
+                    name: "filter",
+                    value: "genres.Fiction & Fantasy"
+                ),
+                URLQueryItem(name: "minified", value: "1"),
+                URLQueryItem(name: "collapseseries", value: "1"),
+                URLQueryItem(name: "include", value: "progress"),
+            ])
 
         let sortValues = try [
             LibraryItemSort.title,
@@ -622,14 +639,16 @@ final class AudiobookshelfAPITests: XCTestCase {
                 .first { $0.name == "sort" }?
                 .value
         }
-        XCTAssertEqual(sortValues, [
-            "media.metadata.title",
-            "media.metadata.authorNameLF",
-            "addedAt",
-            "updatedAt",
-            "media.duration",
-            "sequence",
-        ])
+        XCTAssertEqual(
+            sortValues,
+            [
+                "media.metadata.title",
+                "media.metadata.authorNameLF",
+                "addedAt",
+                "updatedAt",
+                "media.duration",
+                "sequence",
+            ])
         XCTAssertEqual(
             LibraryProgressFilter.allCases.map {
                 LibraryItemFilter(progress: $0).rawValue
@@ -663,7 +682,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         named: "library-items-minified"
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let request = try LibraryItemsPageRequest(
@@ -757,7 +776,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         """.utf8
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let request = try LibraryItemsPageRequest(page: 0, limit: 1)
@@ -767,7 +786,9 @@ final class AudiobookshelfAPITests: XCTestCase {
             request: request
         )
         let entry = try XCTUnwrap(result.value.browseEntries.first)
-        guard case let .series(series, representative: representative) = entry else {
+        guard
+            case .series(let series, representative: let representative) = entry
+        else {
             return XCTFail("Expected a collapsed series browse entry")
         }
         XCTAssertEqual(
@@ -819,7 +840,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                         """.utf8
                     ),
                     statusCode: 200
-                ),
+                )
             ]
         )
         let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
@@ -844,7 +865,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                     id: seriesID,
                     name: "A Series",
                     sequence: "1"
-                ),
+                )
             ]
         )
     }
@@ -893,7 +914,7 @@ final class AudiobookshelfAPITests: XCTestCase {
         for (data, expectedError) in invalidCases {
             let fixture = try APIFixture(
                 responses: [
-                    HTTPResponse(data: data, statusCode: 200),
+                    HTTPResponse(data: data, statusCode: 200)
                 ]
             )
             let request = try LibraryItemsPageRequest(
@@ -962,21 +983,23 @@ final class AudiobookshelfAPITests: XCTestCase {
             request.value(forHTTPHeaderField: "X-Bleat-Request-ID")
         )
 
-        XCTAssertEqual(result.value, [
-            LibrarySummary(
-                id: LibraryID(rawValue: "books"),
-                name: "Audiobooks",
-                mediaType: .book
-            ),
-            LibrarySummary(
-                id: LibraryID(rawValue: "future"),
-                name: "Future Media",
-                mediaType: .unknown("spoken-word-v2")
-            ),
-        ])
+        XCTAssertEqual(
+            result.value,
+            [
+                LibrarySummary(
+                    id: LibraryID(rawValue: "books"),
+                    name: "Audiobooks",
+                    mediaType: .book
+                ),
+                LibrarySummary(
+                    id: LibraryID(rawValue: "future"),
+                    name: "Future Media",
+                    mediaType: .unknown("spoken-word-v2")
+                ),
+            ])
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://example.net/audiobookshelf/api/libraries"
+            "https://example.com/audiobookshelf/api/libraries"
         )
         XCTAssertEqual(request.httpMethod, "GET")
         XCTAssertEqual(
@@ -1141,7 +1164,7 @@ final class AudiobookshelfAPITests: XCTestCase {
         itemLibraryID: String,
         bookCount: Int
     ) -> Data {
-        let matches = (0 ..< bookCount).map { index in
+        let matches = (0..<bookCount).map { index in
             """
             {
               "libraryItem": {
@@ -1312,7 +1335,7 @@ private struct APIFixture {
         let account = try ServerAccount(
             id: AccountID(rawValue: "account"),
             server: NormalizedServerURL(
-                "https://example.net/audiobookshelf"
+                "https://example.com/audiobookshelf"
             ),
             serverVersion: "2.36.0",
             authenticationMethods: [.local],
