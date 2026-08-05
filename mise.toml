@@ -125,6 +125,7 @@ readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle i
 
 xcrun devicectl device process launch \
   --device "${BLEAT_DEVICE_ID}" \
+  --terminate-existing \
   "${bleat_bundle_id}"
 """
 
@@ -132,7 +133,7 @@ xcrun devicectl device process launch \
 description = "Build, install, and launch Bleat on a physical iPhone"
 env = { BLEAT_CLOUDKIT_MODE = "disabled" }
 run = """
-BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
+export BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
 export BLEAT_DEVICE_BUILD_DIRECTORY
 exec ./scripts/deploy-device.sh
@@ -174,6 +175,7 @@ readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle i
 
 xcrun devicectl device process launch \
   --device "${BLEAT_IPAD_ID}" \
+  --terminate-existing \
   "${bleat_bundle_id}"
 """
 

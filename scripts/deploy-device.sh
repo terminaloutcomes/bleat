@@ -15,4 +15,5 @@ xcrun devicectl device install app \
 
 xcrun devicectl device process launch \
   --device "${BLEAT_DEVICE_ID}" \
+  --terminate-existing \
   "${bleat_bundle_id}"

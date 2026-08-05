@@ -643,57 +643,56 @@ final class BleatUITests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
         XCTAssertGreaterThan(miniPlayer.frame.midY, app.frame.midY)
-        let usesBottomTabBar = app.frame.width < 600
 
+        let home = tabButton("Home", in: app)
         let library = tabButton("Library", in: app)
-        XCTAssertTrue(library.isHittable)
-        if usesBottomTabBar {
-            XCTAssertLessThan(miniPlayer.frame.maxY, library.frame.minY)
-        }
-        library.tap()
-        if usesBottomTabBar {
-            XCTAssertTrue(
-                app.navigationBars["Library"].waitForExistence(timeout: 3)
-            )
-        }
-
         let search = tabButton("Search", in: app)
-        XCTAssertTrue(search.isHittable)
-        search.tap()
-        if usesBottomTabBar {
-            XCTAssertTrue(
-                app.descendants(matching: .any)["search.screen"]
-                    .waitForExistence(timeout: 3)
-            )
-        }
+        XCTAssertTrue(home.waitForExistence(timeout: 3))
+        XCTAssertTrue(library.waitForExistence(timeout: 3))
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            app.tabBars.count,
+            0,
+            "Mobile navigation must not expose an adaptive system tab bar"
+        )
+        let tabTop = min(home.frame.minY, library.frame.minY, search.frame.minY)
+        XCTAssertGreaterThan(tabTop, app.frame.midY)
+        XCTAssertLessThan(miniPlayer.frame.maxY, tabTop)
+
+        XCTAssertTrue(library.isHittable)
+        library.tap()
+        XCTAssertTrue(
+            app.navigationBars["Library"].waitForExistence(timeout: 3)
+        )
+
+        XCTAssertGreaterThan(search.frame.minX, library.frame.maxX)
+        let currentSearch = tabButton("Search", in: app)
+        XCTAssertTrue(currentSearch.isHittable)
+        currentSearch.tap()
+        XCTAssertTrue(
+            app.navigationBars["Search"].waitForExistence(timeout: 3)
+        )
 
         let downloads = tabButton("Downloads", in: app)
         XCTAssertTrue(downloads.isHittable)
         downloads.tap()
-        if usesBottomTabBar {
-            XCTAssertTrue(
-                app.navigationBars["Downloads"].waitForExistence(timeout: 3)
-            )
-        }
+        XCTAssertTrue(
+            app.navigationBars["Downloads"].waitForExistence(timeout: 3)
+        )
 
         let settings = tabButton("Settings", in: app)
         XCTAssertTrue(settings.isHittable)
         settings.tap()
-        if usesBottomTabBar {
-            XCTAssertTrue(
-                app.navigationBars["Settings"].waitForExistence(timeout: 3)
-            )
-        }
+        XCTAssertTrue(
+            app.navigationBars["Settings"].waitForExistence(timeout: 3)
+        )
 
-        let home = tabButton("Home", in: app)
         XCTAssertTrue(home.isHittable)
         home.tap()
-        if usesBottomTabBar {
-            XCTAssertTrue(
-                app.navigationBars["The Test Audiobook"]
-                    .waitForExistence(timeout: 3)
-            )
-        }
+        XCTAssertTrue(
+            app.navigationBars["The Test Audiobook"]
+                .waitForExistence(timeout: 3)
+        )
     }
 
     @MainActor
