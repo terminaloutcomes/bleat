@@ -108,7 +108,7 @@ The repository's Xcode, test, archive, and `mise` workflows forward this
 setting. For example:
 
 ```sh
-BLEAT_CLOUDKIT_MODE=disabled mise run device:build
+BLEAT_CLOUDKIT_MODE=disabled mise run iphone:build
 ```
 
 For direct Xcode command-line builds, pass the same build setting:
@@ -304,7 +304,7 @@ remain iOS-only.
 The equivalent command-line simulator workflow is:
 
 ```sh
-mise run iphone
+mise run simulator
 ```
 
 The iOS target includes a `CPTemplateApplicationScene`, but the managed CarPlay
@@ -345,32 +345,35 @@ then **TestFlight & App Store** to upload build `0.1.0 (1)`. Upload requires a
 paid Apple Developer team, a matching App Store Connect application, and an
 account permitted to distribute it.
 
-## Install on a personal iPhone
+## Install on a personal iPhone or iPad
 
-The iPhone must run iOS 26 or newer, trust the Mac, and have Developer Mode
+The device must run iOS 26 or newer, trust the Mac, and have Developer Mode
 enabled. Xcode must have a Personal Team or paid development team available.
 Inspect the current signing and device state:
 
 ```sh
-mise run device:status
+mise run devices:status
 ```
 
-Set the team ID and connected iPhone UDID without storing either value in the
-repository, then build, install, and launch the Release app:
+Set the team ID plus the connected iPhone and iPad UDIDs without storing them
+in the repository, then build, install, and launch the Release app:
 
 ```sh
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
-export BLEAT_DEVICE_ID="YOUR_IPHONE_UDID"
+export BLEAT_IPHONE_ID="YOUR_IPHONE_UDID"
+export BLEAT_IPAD_ID="YOUR_IPAD_UDID"
 export BLEAT_CLOUDKIT_MODE=disabled
-mise run device
+mise run iphone
+mise run ipad
 ```
 
-The individual stages are also available as `device:build`, `device:install`,
-and `device:launch`. Personal Teams do not support the CloudKit capability, so
-set `BLEAT_CLOUDKIT_MODE=disabled` for those builds. The disabled mode selects
-CloudKit-free signing entitlements, hides iCloud synchronization, leaves
-statistics local, and stores native credentials in the device-only Keychain.
-Paid-team and distribution builds default to `enabled`.
+The individual stages are available as `iphone:build`, `iphone:install`, and
+`iphone:launch`, with matching `ipad:*` tasks. Personal Teams do not support
+the CloudKit capability, so the physical-device tasks set
+`BLEAT_CLOUDKIT_MODE=disabled`. The disabled mode selects CloudKit-free signing
+entitlements, hides iCloud synchronization, leaves statistics local, and
+stores native credentials in the device-only Keychain. Paid-team and
+distribution builds default to `enabled`.
 
 If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
 set a stable alternative such as

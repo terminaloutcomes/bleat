@@ -28,7 +28,7 @@ description = "Serve the website locally"
 depends = ["site-css"]
 run = "zola --root site serve"
 
-[tasks.iphone]
+[tasks.simulator]
 description = "Build and launch Bleat on the default iPhone simulator"
 run = ["./scripts/launch-iphone.sh"]
 
@@ -81,41 +81,46 @@ run = ["./scripts/build-macos.sh"]
 description = "Create and validate the Release archive"
 run = ["./scripts/archive-beta.sh"]
 
-[tasks."device:status"]
+[tasks."devices:status"]
 description = "List signing identities and connected Apple devices"
 run = [
   "security find-identity -v -p codesigning",
   "xcrun devicectl list devices",
 ]
 
-[tasks."device:build"]
+[tasks."iphone:build"]
 description = "Build a development-signed Release app for a physical iPhone"
 #Until CloudKit is supported on physical devices by getting a "proper" account
 env = { BLEAT_CLOUDKIT_MODE = "disabled" }
-run = ["./scripts/build-device.sh"]
+run = """
+BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
+BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
+export BLEAT_DEVICE_BUILD_DIRECTORY
+exec ./scripts/build-device.sh
+"""
 
-[tasks."device:install"]
+[tasks."iphone:install"]
 description = "Install the signed Release app on a physical iPhone"
-depends = ["device:build"]
+depends = ["iphone:build"]
 run = """
 #!/usr/bin/env zsh
 set -euo pipefail
 
-: "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
+BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 
 xcrun devicectl device install app \
   --device "${BLEAT_DEVICE_ID}" \
-  .build/device-release/Build/Products/Release-iphoneos/Bleat.app
+  .build/iphone-release/Build/Products/Release-iphoneos/Bleat.app
 """
 
-[tasks."device:launch"]
+[tasks."iphone:launch"]
 description = "Launch Bleat on a physical iPhone"
-depends = ["device:install"]
+depends = ["iphone:install"]
 run = """
 #!/usr/bin/env zsh
 set -euo pipefail
 
-: "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected iPhone UDID}"
+BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
 
 xcrun devicectl device process launch \
@@ -123,9 +128,64 @@ xcrun devicectl device process launch \
   "${bleat_bundle_id}"
 """
 
-[tasks.device]
+[tasks.iphone]
 description = "Build, install, and launch Bleat on a physical iPhone"
-depends = ["device:launch"]
+env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+run = """
+BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
+BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
+export BLEAT_DEVICE_BUILD_DIRECTORY
+exec ./scripts/deploy-device.sh
+"""
+
+[tasks."ipad:build"]
+description = "Build a development-signed Release app for a physical iPad"
+env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+run = """
+BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
+BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
+export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
+exec ./scripts/build-device.sh
+"""
+
+[tasks."ipad:install"]
+description = "Install the signed Release app on a physical iPad"
+depends = ["ipad:build"]
+run = """
+#!/usr/bin/env zsh
+set -euo pipefail
+
+: "${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
+
+xcrun devicectl device install app \
+  --device "${BLEAT_IPAD_ID}" \
+  .build/ipad-release/Build/Products/Release-iphoneos/Bleat.app
+"""
+
+[tasks."ipad:launch"]
+description = "Launch Bleat on a physical iPad"
+depends = ["ipad:install"]
+run = """
+#!/usr/bin/env zsh
+set -euo pipefail
+
+: "${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
+readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
+
+xcrun devicectl device process launch \
+  --device "${BLEAT_IPAD_ID}" \
+  "${bleat_bundle_id}"
+"""
+
+[tasks.ipad]
+description = "Build, install, and launch Bleat on a physical iPad"
+env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+run = """
+BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
+BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
+export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
+exec ./scripts/deploy-device.sh
+"""
 
 [tasks.trufflehog]
 run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore' --exclude-detectors=ProtocolsIO,URI,CloudflareApiToken --no-verification"""
