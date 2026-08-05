@@ -1,4 +1,6 @@
 import BleatCore
+import dnssd
+import Network
 import XCTest
 
 @testable import Bleat
@@ -91,6 +93,15 @@ final class NearbyServerDiscoveryTests: XCTestCase {
             XCTAssertEqual(
                 error as? NearbyServerDiscoveryFailure,
                 .invalidAdvertisement
+            )
+        }
+    }
+
+    func testDNSPolicyDenialIsPermissionDenied() {
+        for code in [kDNSServiceErr_PolicyDenied, kDNSServiceErr_NotPermitted] {
+            XCTAssertEqual(
+                BonjourNearbyServerDiscovery.failure(for: .dns(Int32(code))),
+                .permissionDenied
             )
         }
     }

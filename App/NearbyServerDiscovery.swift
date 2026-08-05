@@ -1,4 +1,5 @@
 import BleatCore
+import dnssd
 import Foundation
 import Network
 
@@ -376,19 +377,29 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         return value
     }
 
-    private static func failure(
+    static func failure(
         for error: NWError
     ) -> NearbyServerDiscoveryFailure {
-        guard case .posix(let code) = error else {
-            return .localNetworkUnavailable
-        }
-        switch code {
-        case .EACCES, .EPERM:
-            return NearbyServerDiscoveryFailure.permissionDenied
-        case .ENETDOWN, .ENETUNREACH, .EHOSTUNREACH, .ENODEV:
-            return NearbyServerDiscoveryFailure.localNetworkUnavailable
+        switch error {
+        case .dns(let code):
+            switch code {
+            case Int32(kDNSServiceErr_PolicyDenied),
+                 Int32(kDNSServiceErr_NotPermitted):
+                return .permissionDenied
+            default:
+                return .localNetworkUnavailable
+            }
+        case .posix(let code):
+            switch code {
+            case .EACCES, .EPERM:
+                return NearbyServerDiscoveryFailure.permissionDenied
+            case .ENETDOWN, .ENETUNREACH, .EHOSTUNREACH, .ENODEV:
+                return NearbyServerDiscoveryFailure.localNetworkUnavailable
+            default:
+                return NearbyServerDiscoveryFailure.resolutionFailed
+            }
         default:
-            return NearbyServerDiscoveryFailure.resolutionFailed
+            return .localNetworkUnavailable
         }
     }
 }
