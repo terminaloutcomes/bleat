@@ -26,6 +26,8 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
             if let testService = UITestAppService.current() {
                 model = AppModel(
                     service: testService,
+                    nearbyServerDiscovery:
+                        UnavailableNearbyServerDiscovery(),
                     diagnostics: diagnostics,
                     diagnosticLogStore: diagnosticLogStore
                 )
@@ -54,16 +56,6 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
             )
         }
         super.init()
-    }
-
-    func application(
-        _ application: UIApplication,
-        willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-    ) -> Bool {
-        if let url = launchOptions?[.url] as? URL {
-            _ = AppDeepLinkInbox.shared.receive(url: url)
-        }
-        return true
     }
 
     func application(

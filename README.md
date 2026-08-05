@@ -34,8 +34,13 @@ Listening-history import/export remains deferred. Bookmark creates, renames,
 and deletes also use a durable local
 outbox when the server is unavailable.
 
-Account setup currently uses manual HTTPS server entry. The Bonjour discovery
-boundary is retained for further validation, but it has no user-facing control.
+Account setup automatically browses `_audiobookshelf._tcp`, resolves its SRV
+hostname, port, and optional TXT `path` into a trusted HTTPS base URL, and
+verifies the server through `/status`. Verified nearby servers are selectable
+in the add-server form, while the HTTPS server field remains directly editable.
+Diagnostics on iPhone, iPad, and Mac can run the same pipeline and show the
+service instance, SRV host and port, TXT path, resolved URL, and verification
+result.
 While the app is active, an authenticated Socket.IO subscription refreshes
 visible libraries and progress after server-side changes. Progress events
 refresh browse data, but never move or warn the foreground player: its local

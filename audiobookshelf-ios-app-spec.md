@@ -313,18 +313,19 @@ The screen also provides year, month, and custom-range filters; per-account and 
 
 ### 6.1 Add-server flow
 
-The server field remains directly editable and is currently the only visible
-server-selection control. The nearby-server UI is disabled pending further
-validation. Its retained discovery boundary browses `_https._tcp` and
-`_audiobookshelf._tcp` in the local Bonjour domain.
-`_https._tcp` resolves to the advertised host and port. Bleat's
-`_audiobookshelf._tcp` contract additionally accepts an optional `path` TXT
-value beginning with `/`; values containing a query, fragment, credentials, or
-an invalid encoded path are rejected. Every candidate is converted to HTTPS,
-normalized by the rules below, and verified through `GET <base>/status` before
-it is selectable. Duplicate normalized bases collapse to one result. Discovery
-does not permit HTTP, weaken system trust, or retain local network details in
-diagnostics.
+The server field remains directly editable. When the add-server form appears,
+it automatically browses `_audiobookshelf._tcp` in the local Bonjour domain,
+resolves the advertised SRV hostname and port, and accepts an optional TXT
+`path` value beginning with `/`.
+Values containing a query, fragment, credentials, or invalid encoding are
+rejected. Every candidate is converted to HTTPS using the SRV hostname,
+normalized by the rules below, and verified through `GET <base>/status`.
+Duplicate normalized bases collapse to one selectable result, and the first
+verified result fills an empty server field automatically. Discovery does not
+permit HTTP, construct IP-based server URLs, or weaken system trust.
+The Diagnostics screen on iPhone, iPad, and Mac exposes a Bonjour troubleshooter
+that runs this same production pipeline and reports the service instance, SRV
+host and port, TXT path, resolved and final URLs, and `/status` verification.
 
 1. Normalize the user-entered URL:
    - require `https`;

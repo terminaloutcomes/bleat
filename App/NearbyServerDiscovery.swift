@@ -1,23 +1,11 @@
 import BleatCore
-import dnssd
 import Foundation
 import Network
-
-enum NearbyServerServiceType: String, CaseIterable, Sendable {
-    case https = "_https._tcp"
-    case audiobookshelf = "_audiobookshelf._tcp"
-}
-
-struct NearbyServerAdvertisement: Equatable, Sendable {
-    let name: String
-    let serviceType: NearbyServerServiceType
-    let host: String
-    let port: UInt16
-    let path: String?
-}
+import dnssd
 
 struct NearbyServerResult: Identifiable, Equatable, Sendable {
     let name: String
+    let resolution: ResolvedBonjourService
     let server: DiscoveredServer
 
     var id: NormalizedServerURL { server.baseURL }
@@ -67,58 +55,15 @@ enum NearbyServerDiscoveryState: Equatable, Sendable {
 @MainActor
 protocol NearbyServerDiscovering: AnyObject {
     func start(
-        update: @escaping @MainActor @Sendable (
-            NearbyServerDiscoveryState
-        ) -> Void
+        update:
+            @escaping @MainActor @Sendable (
+                NearbyServerDiscoveryState
+            ) -> Void
     )
     func cancel()
 }
 
 enum NearbyServerAdvertisementMapper {
-    static func serverURL(
-        for advertisement: NearbyServerAdvertisement
-    ) throws(NearbyServerDiscoveryFailure) -> NormalizedServerURL {
-        guard !advertisement.host.isEmpty,
-              advertisement.port > 0,
-              advertisement.host.rangeOfCharacter(
-                from: .whitespacesAndNewlines
-              ) == nil
-        else {
-            throw .invalidAdvertisement
-        }
-
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = advertisement.host
-        if advertisement.port != 443 {
-            components.port = Int(advertisement.port)
-        }
-
-        if advertisement.serviceType == .audiobookshelf,
-           let path = advertisement.path
-        {
-            guard path.hasPrefix("/"),
-                  !path.hasPrefix("//"),
-                  !path.contains("?"),
-                  !path.contains("#"),
-                  URLComponents(string: "https://example.invalid\(path)")?
-                    .percentEncodedPath == path
-            else {
-                throw .invalidAdvertisement
-            }
-            components.percentEncodedPath = path
-        }
-
-        guard let value = components.string else {
-            throw .invalidAdvertisement
-        }
-        do {
-            return try NormalizedServerURL(value)
-        } catch {
-            throw .invalidAdvertisement
-        }
-    }
-
     static func deduplicated(
         _ results: [NearbyServerResult]
     ) -> [NearbyServerResult] {
@@ -132,97 +77,66 @@ enum NearbyServerAdvertisementMapper {
                 byURL[result.server.baseURL] = result
             }
         }
-        return byURL.values.sorted(by: {
+        return byURL.values.sorted {
             let nameOrder = $0.name.localizedStandardCompare($1.name)
             if nameOrder == .orderedSame {
                 return $0.server.baseURL.url.absoluteString
                     < $1.server.baseURL.url.absoluteString
             }
             return nameOrder == .orderedAscending
-        })
+        }
     }
 }
 
 @MainActor
 final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
-    private let verifier: @Sendable (NormalizedServerURL) async throws
-        -> DiscoveredServer
-    private var browsers: [NWBrowser] = []
-    private var resolvers: [NearbyServiceResolver] = []
-    private var results: [NearbyServerResult] = []
-    private var generation: UInt64 = 0
-    private var settledServiceCount = 0
-    private var verificationFailureCount = 0
-    private var update: (@MainActor @Sendable (
-        NearbyServerDiscoveryState
-    ) -> Void)?
+    private let verifier:
+        @Sendable (NormalizedServerURL) async throws -> DiscoveredServer
+    private let browser: BonjourServiceBrowser
+    private let resolver: BonjourServiceResolver
+    private var services: Set<BonjourServiceID> = []
+    private var settledServices: Set<BonjourServiceID> = []
+    private var resultsByService: [BonjourServiceID: NearbyServerResult] = [:]
+    private var failuresByService:
+        [BonjourServiceID: NearbyServerDiscoveryFailure] = [:]
+    private var resolutionTasks: [BonjourServiceID: Task<Void, Never>] = [:]
+    private var browserFailure: NearbyServerDiscoveryFailure?
     private var noResultsTask: Task<Void, Never>?
+    private var generation: UInt64 = 0
+    private var update:
+        (@MainActor @Sendable (NearbyServerDiscoveryState) -> Void)?
 
     init(
-        verifier: @escaping @Sendable (NormalizedServerURL) async throws
-            -> DiscoveredServer = { server in
+        browser: BonjourServiceBrowser = BonjourServiceBrowser(),
+        resolver: BonjourServiceResolver = BonjourServiceResolver(),
+        verifier:
+            @escaping @Sendable (NormalizedServerURL) async throws
+                -> DiscoveredServer = { server in
                 try await ServerDiscoveryClient(
                     transport: URLSessionHTTPTransport(routesRequests: false)
                 ).discover(server)
             }
     ) {
+        self.browser = browser
+        self.resolver = resolver
         self.verifier = verifier
     }
 
     func start(
-        update: @escaping @MainActor @Sendable (
-            NearbyServerDiscoveryState
-        ) -> Void
+        update:
+            @escaping @MainActor @Sendable (
+                NearbyServerDiscoveryState
+            ) -> Void
     ) {
         cancel()
         generation &+= 1
-        let currentGeneration = generation
+        let expectedGeneration = generation
         self.update = update
-        results = []
-        settledServiceCount = 0
-        verificationFailureCount = 0
         update(.searching)
 
-        for serviceType in NearbyServerServiceType.allCases {
-            let descriptor = NWBrowser.Descriptor.bonjour(
-                type: serviceType.rawValue,
-                domain: "local."
-            )
-            let parameters = NWParameters.tcp
-            parameters.includePeerToPeer = true
-            let browser = NWBrowser(for: descriptor, using: parameters)
-            browser.stateUpdateHandler = { [weak self] state in
-                Task { @MainActor [weak self] in
-                    self?.handleBrowserState(
-                        state,
-                        generation: currentGeneration
-                    )
-                }
-            }
-            browser.browseResultsChangedHandler = {
-                [weak self] browserResults, _ in
-                Task { @MainActor [weak self] in
-                    self?.handle(
-                        browserResults,
-                        generation: currentGeneration
-                    )
-                }
-            }
-            browsers.append(browser)
-            browser.start(queue: .global(qos: .userInitiated))
-        }
-
-        noResultsTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled,
-                  let self,
-                  generation == currentGeneration,
-                  results.isEmpty,
-                  settledServiceCount == 0
-            else {
-                return
-            }
-            update(.noResults)
+        browser.start { [weak self] event in
+            guard let self, generation == expectedGeneration else { return }
+            handle(event, generation: expectedGeneration)
         }
     }
 
@@ -230,151 +144,155 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         generation &+= 1
         noResultsTask?.cancel()
         noResultsTask = nil
-        browsers.forEach { $0.cancel() }
-        browsers = []
-        resolvers.forEach { $0.cancel() }
-        resolvers = []
-        results = []
+        browser.cancel()
+        resolver.cancelAll()
+        for task in resolutionTasks.values {
+            task.cancel()
+        }
+        resolutionTasks = [:]
+        services = []
+        settledServices = []
+        resultsByService = [:]
+        failuresByService = [:]
+        browserFailure = nil
         update = nil
     }
 
-    private func handleBrowserState(
-        _ state: NWBrowser.State,
+    private func handle(
+        _ event: BonjourBrowserEvent,
         generation expectedGeneration: UInt64
     ) {
         guard generation == expectedGeneration else { return }
-        switch state {
-        case .failed(let error), .waiting(let error):
-            update?(.failed(Self.failure(for: error)))
-        case .ready, .setup, .cancelled:
-            break
-        @unknown default:
-            update?(.failed(.localNetworkUnavailable))
+        switch event {
+        case .ready:
+            browserFailure = nil
+            scheduleNoResults(generation: expectedGeneration)
+        case .added(let service):
+            services.insert(service.id)
+            failuresByService.removeValue(forKey: service.id)
+            startResolution(for: service, generation: expectedGeneration)
+        case .changed(let service):
+            services.insert(service.id)
+            settledServices.remove(service.id)
+            resultsByService.removeValue(forKey: service.id)
+            failuresByService.removeValue(forKey: service.id)
+            resolver.cancel(service.id)
+            resolutionTasks.removeValue(forKey: service.id)?.cancel()
+            startResolution(for: service, generation: expectedGeneration)
+        case .removed(let service):
+            services.remove(service.id)
+            settledServices.remove(service.id)
+            resultsByService.removeValue(forKey: service.id)
+            failuresByService.removeValue(forKey: service.id)
+            resolver.cancel(service.id)
+            resolutionTasks.removeValue(forKey: service.id)?.cancel()
+            publishCurrentResultsOrSearch()
+        case .failed(let error):
+            noResultsTask?.cancel()
+            noResultsTask = nil
+            let failure = Self.failure(for: error)
+            browserFailure = failure
+            update?(.failed(failure))
         }
     }
 
-    private func handle(
-        _ browserResults: Set<NWBrowser.Result>,
+    private func startResolution(
+        for service: BonjourDiscoveredService,
         generation expectedGeneration: UInt64
     ) {
-        guard generation == expectedGeneration else { return }
-        for browserResult in browserResults {
-            guard case let .service(name, type, _, _) = browserResult.endpoint,
-                  let serviceType = NearbyServerServiceType(rawValue: type),
-                  !resolvers.contains(where: {
-                    $0.endpoint == browserResult.endpoint
-                  })
-            else {
-                continue
-            }
-            let path: String?
+        guard resolutionTasks[service.id] == nil else { return }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { resolutionTasks.removeValue(forKey: service.id) }
             do {
-                path = try Self.path(
-                    from: browserResult.metadata,
-                    serviceType: serviceType
-                )
-            } catch let failure {
-                settledServiceCount += 1
-                if results.isEmpty {
-                    update?(.failed(failure))
-                }
-                continue
-            }
-            let resolver = NearbyServiceResolver(
-                endpoint: browserResult.endpoint,
-                name: name,
-                serviceType: serviceType,
-                path: path
-            ) { [weak self] resolution in
-                guard let self, generation == expectedGeneration else {
+                let resolved = try await resolver.resolve(service)
+                guard generation == expectedGeneration,
+                      services.contains(service.id)
+                else {
                     return
                 }
-                await resolved(
-                    resolution,
-                    generation: expectedGeneration
+                let discovered = try await verifier(resolved.baseURL)
+                guard generation == expectedGeneration,
+                      services.contains(service.id)
+                else {
+                    return
+                }
+                settledServices.insert(service.id)
+                failuresByService.removeValue(forKey: service.id)
+                resultsByService[service.id] = NearbyServerResult(
+                    name: service.name,
+                    resolution: resolved,
+                    server: discovered
                 )
+                publishCurrentResultsOrSearch()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard generation == expectedGeneration,
+                      services.contains(service.id)
+                else {
+                    return
+                }
+                settledServices.insert(service.id)
+                failuresByService[service.id] = Self.failure(for: error)
+                publishCurrentResultsOrSearch()
             }
-            resolvers.append(resolver)
-            resolver.start()
         }
+        resolutionTasks[service.id] = task
     }
 
-    private func resolved(
-        _ resolution: Result<NearbyServerAdvertisement, NearbyServerDiscoveryFailure>,
+    private func scheduleNoResults(
         generation expectedGeneration: UInt64
-    ) async {
-        guard generation == expectedGeneration else { return }
-        settledServiceCount += 1
-        switch resolution {
-        case .failure(let failure):
-            if results.isEmpty {
-                update?(.failed(failure))
-            }
-        case .success(let advertisement):
-            let server: NormalizedServerURL
-            do {
-                server = try NearbyServerAdvertisementMapper.serverURL(
-                    for: advertisement
-                )
-            } catch let failure {
-                if results.isEmpty {
-                    update?(.failed(failure))
-                }
+    ) {
+        noResultsTask?.cancel()
+        noResultsTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled,
+                  let self,
+                  generation == expectedGeneration,
+                  browserFailure == nil,
+                  services.isEmpty,
+                  resultsByService.isEmpty
+            else {
                 return
             }
-            do {
-                let discovered = try await verifier(server)
-                guard generation == expectedGeneration else { return }
-                results.append(
-                    NearbyServerResult(
-                        name: advertisement.name,
-                        server: discovered
-                    )
-                )
-                results = NearbyServerAdvertisementMapper.deduplicated(results)
-                update?(.results(results))
-            } catch {
-                guard generation == expectedGeneration else { return }
-                verificationFailureCount += 1
-                if results.isEmpty,
-                   verificationFailureCount == settledServiceCount
-                {
-                    update?(.failed(.serverVerificationFailed))
-                }
+            update?(.noResults)
+        }
+    }
+
+    private func publishCurrentResultsOrSearch() {
+        let results = NearbyServerAdvertisementMapper.deduplicated(
+            Array(resultsByService.values)
+        )
+        if !results.isEmpty {
+            update?(.results(results))
+        } else if !services.isEmpty,
+                  settledServices.isSuperset(of: services),
+                  let failure = services.compactMap({ failuresByService[$0] })
+                    .first
+        {
+            update?(.failed(failure))
+        } else if browserFailure == nil {
+            update?(.searching)
+        }
+    }
+
+    static func failure(
+        for error: Error
+    ) -> NearbyServerDiscoveryFailure {
+        if let error = error as? BonjourResolutionError {
+            switch error {
+            case .invalidService, .missingHostname, .invalidHostname,
+                 .invalidPort, .invalidTXTPath, .invalidURL:
+                return .invalidAdvertisement
+            case .dnsServiceFailure, .timedOut:
+                return .resolutionFailed
             }
         }
-    }
-
-    static func path(
-        from metadata: NWBrowser.Result.Metadata,
-        serviceType: NearbyServerServiceType
-    ) throws(NearbyServerDiscoveryFailure) -> String? {
-        guard serviceType == .audiobookshelf,
-              case .bonjour(let record) = metadata
-        else {
-            return nil
+        if let error = error as? NWError {
+            return failure(for: error)
         }
-        switch record.getEntry(for: "path") {
-        case .some(.string(let value)):
-            return value
-        case .some(.data(let data)):
-            return try utf8Path(from: data)
-        case .some(.empty):
-            return nil
-        case .some(.none), nil:
-            return nil
-        @unknown default:
-            return nil
-        }
-    }
-
-    static func utf8Path(
-        from data: Data
-    ) throws(NearbyServerDiscoveryFailure) -> String {
-        guard let value = String(data: data, encoding: .utf8) else {
-            throw .invalidAdvertisement
-        }
-        return value
+        return .serverVerificationFailed
     }
 
     static func failure(
@@ -392,11 +310,11 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         case .posix(let code):
             switch code {
             case .EACCES, .EPERM:
-                return NearbyServerDiscoveryFailure.permissionDenied
+                return .permissionDenied
             case .ENETDOWN, .ENETUNREACH, .EHOSTUNREACH, .ENODEV:
-                return NearbyServerDiscoveryFailure.localNetworkUnavailable
+                return .localNetworkUnavailable
             default:
-                return NearbyServerDiscoveryFailure.resolutionFailed
+                return .resolutionFailed
             }
         default:
             return .localNetworkUnavailable
@@ -405,102 +323,12 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
 }
 
 @MainActor
-private final class NearbyServiceResolver {
-    let endpoint: NWEndpoint
-    private let name: String
-    private let serviceType: NearbyServerServiceType
-    private let path: String?
-    private let completion: @MainActor @Sendable (
-        Result<NearbyServerAdvertisement, NearbyServerDiscoveryFailure>
-    ) async -> Void
-    private var connection: NWConnection?
-    private var completed = false
-
-    init(
-        endpoint: NWEndpoint,
-        name: String,
-        serviceType: NearbyServerServiceType,
-        path: String?,
-        completion: @escaping @MainActor @Sendable (
-            Result<NearbyServerAdvertisement, NearbyServerDiscoveryFailure>
-        ) async -> Void
-    ) {
-        self.endpoint = endpoint
-        self.name = name
-        self.serviceType = serviceType
-        self.path = path
-        self.completion = completion
-    }
-
-    func start() {
-        let connection = NWConnection(to: endpoint, using: .tcp)
-        self.connection = connection
-        connection.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor [weak self] in
-                await self?.handle(state)
-            }
-        }
-        connection.start(queue: .global(qos: .userInitiated))
-    }
-
-    func cancel() {
-        completed = true
-        connection?.cancel()
-        connection = nil
-    }
-
-    private func handle(_ state: NWConnection.State) async {
-        guard !completed else { return }
-        switch state {
-        case .ready:
-            guard case let .hostPort(host, port) =
-                    connection?.currentPath?.remoteEndpoint
-            else {
-                await finish(.failure(.resolutionFailed))
-                return
-            }
-            await finish(.success(NearbyServerAdvertisement(
-                name: name,
-                serviceType: serviceType,
-                host: Self.hostString(host),
-                port: port.rawValue,
-                path: path
-            )))
-        case .failed:
-            await finish(.failure(.resolutionFailed))
-        case .cancelled, .setup, .preparing, .waiting:
-            break
-        @unknown default:
-            await finish(.failure(.resolutionFailed))
-        }
-    }
-
-    private func finish(
-        _ result: Result<NearbyServerAdvertisement, NearbyServerDiscoveryFailure>
-    ) async {
-        guard !completed else { return }
-        completed = true
-        connection?.cancel()
-        connection = nil
-        await completion(result)
-    }
-
-    private static func hostString(_ host: NWEndpoint.Host) -> String {
-        switch host {
-        case .name(let value, _): value
-        case .ipv4(let address): address.debugDescription
-        case .ipv6(let address): address.debugDescription
-        @unknown default: host.debugDescription
-        }
-    }
-}
-
-@MainActor
 final class UnavailableNearbyServerDiscovery: NearbyServerDiscovering {
     func start(
-        update: @escaping @MainActor @Sendable (
-            NearbyServerDiscoveryState
-        ) -> Void
+        update:
+            @escaping @MainActor @Sendable (
+                NearbyServerDiscoveryState
+            ) -> Void
     ) {
         update(.failed(.localNetworkUnavailable))
     }

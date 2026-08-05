@@ -51,7 +51,6 @@ targets:
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
         NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
         NSBonjourServices:
-          - _https._tcp
           - _audiobookshelf._tcp
         UILaunchScreen: {}
         UIBackgroundModes:

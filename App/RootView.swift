@@ -235,6 +235,8 @@ private struct NativeLoginView: View {
                     .autocorrectionDisabled()
                     .accessibilityLabel("Server URL")
                     .accessibilityIdentifier("login.server")
+
+                    nearbyServers
                 }
 
                 Section("Account") {
@@ -297,6 +299,24 @@ private struct NativeLoginView: View {
                 }
             #endif
             .navigationTitle(navigationTitle)
+            .task {
+                model.startNearbyServerDiscovery()
+            }
+            .onDisappear {
+                model.cancelNearbyServerDiscovery()
+            }
+            .onChange(of: model.nearbyServerDiscoveryState) {
+                _, state in
+                guard serverAddress.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty,
+                    case .results(let results) = state,
+                    let first = results.first
+                else {
+                    return
+                }
+                serverAddress = first.server.baseURL.url.absoluteString
+            }
             .toolbar {
                 if let onCancel {
                     ToolbarItem(placement: .cancellationAction) {
@@ -319,6 +339,71 @@ private struct NativeLoginView: View {
                 }
             )
         }
+    }
+
+    @ViewBuilder
+    private var nearbyServers: some View {
+        switch model.nearbyServerDiscoveryState {
+        case .idle, .searching:
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Looking for nearby servers")
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityIdentifier("login.nearby.searching")
+        case .results(let results):
+            ForEach(results) { result in
+                Button {
+                    serverAddress =
+                        result.server.baseURL.url.absoluteString
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.name)
+                                .foregroundStyle(.primary)
+                            Text(
+                                result.server.baseURL.url.absoluteString
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if serverAddress
+                            == result.server.baseURL.url.absoluteString
+                        {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .accessibilityLabel(
+                    "Use \(result.name), \(result.server.baseURL.url.absoluteString)"
+                )
+                .accessibilityIdentifier("login.nearby.server")
+            }
+        case .noResults:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("No nearby servers found")
+                    .foregroundStyle(.secondary)
+                retryDiscoveryButton
+            }
+            .accessibilityIdentifier("login.nearby.noResults")
+        case .failed(let failure):
+            VStack(alignment: .leading, spacing: 8) {
+                Text(failure.title)
+                    .font(.headline)
+                Text(failure.message)
+                    .foregroundStyle(.secondary)
+                retryDiscoveryButton
+            }
+            .accessibilityIdentifier("login.nearby.error")
+        }
+    }
+
+    private var retryDiscoveryButton: some View {
+        Button("Try Again") {
+            model.startNearbyServerDiscovery()
+        }
+        .accessibilityIdentifier("login.nearby.retry")
     }
 
     private func submit() {
@@ -747,6 +832,20 @@ private struct DiagnosticsView: View {
                         Text(code)
                     }
                 }
+            }
+
+            Section("Network") {
+                NavigationLink {
+                    BonjourTroubleshooterView()
+                } label: {
+                    Label(
+                        "Bonjour Troubleshooter",
+                        systemImage: "bonjour"
+                    )
+                }
+                .accessibilityIdentifier(
+                    "diagnostics.bonjourTroubleshooter"
+                )
             }
 
             #if DEBUG

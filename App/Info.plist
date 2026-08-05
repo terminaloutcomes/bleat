@@ -39,13 +39,12 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Bleat connects to your Audiobookshelf server on the local network.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_https._tcp</string>
 		<string>_audiobookshelf._tcp</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Bleat connects to your Audiobookshelf server on the local network.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
