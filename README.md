@@ -33,6 +33,9 @@ durable UUIDv4 local-session outbox and reports measured listening time.
 Listening-history import/export remains deferred. Bookmark creates, renames,
 and deletes also use a durable local
 outbox when the server is unavailable.
+
+Account setup currently uses manual HTTPS server entry. The Bonjour discovery
+boundary is retained for further validation, but it has no user-facing control.
 While the app is active, an authenticated Socket.IO subscription refreshes
 visible libraries and progress after server-side changes. Progress events
 refresh browse data, but never move or warn the foreground player: its local

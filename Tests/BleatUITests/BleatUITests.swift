@@ -95,7 +95,7 @@ final class BleatUITests: XCTestCase {
     func testLaunchingScreenDescribesStartupWork() {
         let app = launch(scenario: "--ui-testing-launching")
         let launchScreen = app.descendants(matching: .any)["app.launching"]
-        let expectedLabel = "Starting Bleat. Restoring downloads"
+        let expectedLabel = "Starting Bleat. Restoring your account"
 
         XCTAssertTrue(launchScreen.waitForExistence(timeout: 3))
         let launchStatus = expectation(
@@ -652,8 +652,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 3))
         XCTAssertEqual(
             app.tabBars.count,
-            0,
-            "Mobile navigation must not expose an adaptive system tab bar"
+            1,
+            "Mobile navigation uses the native system tab bar"
         )
         let tabTop = min(home.frame.minY, library.frame.minY, search.frame.minY)
         XCTAssertGreaterThan(tabTop, app.frame.midY)
@@ -666,13 +666,6 @@ final class BleatUITests: XCTestCase {
         )
 
         XCTAssertGreaterThan(search.frame.minX, library.frame.maxX)
-        let currentSearch = tabButton("Search", in: app)
-        XCTAssertTrue(currentSearch.isHittable)
-        currentSearch.tap()
-        XCTAssertTrue(
-            app.navigationBars["Search"].waitForExistence(timeout: 3)
-        )
-
         let downloads = tabButton("Downloads", in: app)
         XCTAssertTrue(downloads.isHittable)
         downloads.tap()
@@ -692,6 +685,13 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.navigationBars["The Test Audiobook"]
                 .waitForExistence(timeout: 3)
+        )
+
+        let currentSearch = tabButton("Search", in: app)
+        XCTAssertTrue(currentSearch.isHittable)
+        currentSearch.tap()
+        XCTAssertTrue(
+            app.navigationBars["Search"].waitForExistence(timeout: 3)
         )
     }
 

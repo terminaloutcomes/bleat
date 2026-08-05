@@ -233,6 +233,7 @@ private struct NativeLoginView: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
+                    .accessibilityLabel("Server URL")
                     .accessibilityIdentifier("login.server")
                 }
 
@@ -864,10 +865,7 @@ private struct SignedInView: View {
                         .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             #else
-                mobileContent(containerHeight: geometry.size.height)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        MobileTabBar(selection: $navigation.selectedTab)
-                    }
+                mobileTabs(containerHeight: geometry.size.height)
             #endif
         }
         .sheet(isPresented: $navigation.showsPlayer) {
@@ -942,30 +940,62 @@ private struct SignedInView: View {
             }
         }
     #else
-        @ViewBuilder
-        private func mobileContent(containerHeight: CGFloat) -> some View {
-            switch navigation.selectedTab {
-            case .home:
-                tabContent(containerHeight: containerHeight) {
-                    HomeView(model: model, navigation: navigation)
+        private func mobileTabs(containerHeight: CGFloat) -> some View {
+            TabView(selection: $navigation.selectedTab) {
+                Tab(value: .home) {
+                    tabContent(containerHeight: containerHeight) {
+                        HomeView(model: model, navigation: navigation)
+                    }
+                } label: {
+                    mobileTabLabel("Home", systemImage: "house")
                 }
-            case .library:
-                tabContent(containerHeight: containerHeight) {
-                    LibraryView(model: model, navigation: navigation)
+
+                Tab(value: .library) {
+                    tabContent(containerHeight: containerHeight) {
+                        LibraryView(model: model, navigation: navigation)
+                    }
+                } label: {
+                    mobileTabLabel("Library", systemImage: "books.vertical")
                 }
-            case .downloads:
-                tabContent(containerHeight: containerHeight) {
-                    DownloadsView(model: model)
+
+                Tab(value: .downloads) {
+                    tabContent(containerHeight: containerHeight) {
+                        DownloadsView(model: model)
+                    }
+                } label: {
+                    mobileTabLabel(
+                        "Downloads",
+                        systemImage: "arrow.down.circle"
+                    )
                 }
-            case .settings:
-                tabContent(containerHeight: containerHeight) {
-                    SettingsView(model: model, navigation: navigation)
+
+                Tab(value: .settings) {
+                    tabContent(containerHeight: containerHeight) {
+                        SettingsView(model: model, navigation: navigation)
+                    }
+                } label: {
+                    mobileTabLabel("Settings", systemImage: "gearshape")
                 }
-            case .search:
-                tabContent(containerHeight: containerHeight) {
-                    SearchView(model: model, navigation: navigation)
+
+                Tab(value: .search, role: .search) {
+                    tabContent(containerHeight: containerHeight) {
+                        SearchView(model: model, navigation: navigation)
+                    }
+                } label: {
+                    mobileTabLabel(
+                        "Search",
+                        systemImage: "magnifyingglass"
+                    )
                 }
             }
+        }
+
+        private func mobileTabLabel(
+            _ title: String,
+            systemImage: String
+        ) -> some View {
+            Label(title, systemImage: systemImage)
+                .font(.caption2)
         }
     #endif
 
@@ -1005,7 +1035,7 @@ private struct TopTabBar: View {
     @available(iOS 26.0, macOS 26.0, *)
     private var liquidGlassTabs: some View {
         GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 ForEach(AppRootTab.macTabs, id: \.self) { tab in
                     Button {
                         selection = tab
@@ -1064,13 +1094,6 @@ extension AppRootTab {
         .downloads,
     ]
 
-    fileprivate static let mobilePrimaryTabs: [Self] = [
-        .home,
-        .library,
-        .downloads,
-        .settings,
-    ]
-
     fileprivate var systemImage: String {
         switch self {
         case .home: "house"
@@ -1081,98 +1104,6 @@ extension AppRootTab {
         }
     }
 }
-
-#if !targetEnvironment(macCatalyst)
-    private struct MobileTabBar: View {
-        @Binding var selection: AppRootTab
-
-        var body: some View {
-            GlassEffectContainer(spacing: 12) {
-                HStack(spacing: 12) {
-                    HStack(spacing: 0) {
-                        ForEach(AppRootTab.mobilePrimaryTabs, id: \.self) {
-                            primaryTabButton($0)
-                        }
-                    }
-                    .padding(4)
-                    .frame(maxWidth: 600)
-                    .glassEffect(.regular.interactive(), in: Capsule())
-
-                    Spacer(minLength: 0)
-
-                    searchButton
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("app.mobileTabBar")
-        }
-
-        @ViewBuilder
-        private func primaryTabButton(_ tab: AppRootTab) -> some View {
-            Button {
-                selection = tab
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: tab.systemImage)
-                        .font(.title2.weight(.semibold))
-                    Text(tab.title)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                }
-                .frame(maxWidth: .infinity, minHeight: 64)
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(
-                selection == tab ? Color.accentColor : .primary
-            )
-            .background {
-                if selection == tab {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.12))
-                }
-            }
-            .accessibilityLabel(tab.title)
-            .accessibilityAddTraits(
-                selection == tab ? .isSelected : []
-            )
-            .accessibilityIdentifier("app.mobileTab.\(tab.title)")
-        }
-
-        private var searchButton: some View {
-            Button {
-                selection = .search
-            } label: {
-                Image(systemName: AppRootTab.search.systemImage)
-                    .font(.title.weight(.semibold))
-                    .frame(width: 72, height: 72)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(
-                selection == .search ? Color.accentColor : .primary
-            )
-            .glassEffect(
-                .regular
-                    .tint(
-                        selection == .search
-                            ? Color.accentColor.opacity(0.22) : nil
-                    )
-                    .interactive(),
-                in: Circle()
-            )
-            .accessibilityLabel(AppRootTab.search.title)
-            .accessibilityAddTraits(
-                selection == .search ? .isSelected : []
-            )
-            .accessibilityIdentifier("app.mobileTab.Search")
-        }
-    }
-#endif
 
 private struct HomeView: View {
     @Bindable var model: AppModel

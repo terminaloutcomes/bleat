@@ -684,6 +684,7 @@ struct AppFailure: Equatable, Sendable {
 @Observable
 final class AppModel {
     private let service: any AppServicing
+    private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
     private let diagnostics: any DiagnosticRecording
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
@@ -710,6 +711,8 @@ final class AppModel {
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
     private(set) var loginStatus: LoginStatus = .idle
+    private(set) var nearbyServerDiscoveryState:
+        NearbyServerDiscoveryState = .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
     private(set) var endpointDiagnostics: AppEndpointDiagnostics?
     private(set) var liveUpdateConnectionState:
@@ -748,6 +751,7 @@ final class AppModel {
 
     init(
         service: any AppServicing,
+        nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
         bootstrapError: AppBootstrapError? = nil,
         downloadsStorageRootURL: URL? = nil,
         diagnostics: any DiagnosticRecording =
@@ -756,6 +760,7 @@ final class AppModel {
         initialLaunchStage: AppLaunchStage? = nil
     ) {
         self.service = service
+        self.nearbyServerDiscovery = nearbyServerDiscovery
         self.diagnostics = diagnostics
         let launchStage = initialLaunchStage
             ?? AppLaunchStage.randomlySelectedInitialStage()
@@ -781,6 +786,20 @@ final class AppModel {
         } else {
             phase = .launching
         }
+    }
+
+    func startNearbyServerDiscovery() {
+        let discovery = nearbyServerDiscovery
+            ?? BonjourNearbyServerDiscovery()
+        nearbyServerDiscovery = discovery
+        discovery.start { [weak self] state in
+            self?.nearbyServerDiscoveryState = state
+        }
+    }
+
+    func cancelNearbyServerDiscovery() {
+        nearbyServerDiscovery?.cancel()
+        nearbyServerDiscoveryState = .idle
     }
 
     private static func makePlaybackAndDownloads(

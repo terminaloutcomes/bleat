@@ -313,6 +313,19 @@ The screen also provides year, month, and custom-range filters; per-account and 
 
 ### 6.1 Add-server flow
 
+The server field remains directly editable and is currently the only visible
+server-selection control. The nearby-server UI is disabled pending further
+validation. Its retained discovery boundary browses `_https._tcp` and
+`_audiobookshelf._tcp` in the local Bonjour domain.
+`_https._tcp` resolves to the advertised host and port. Bleat's
+`_audiobookshelf._tcp` contract additionally accepts an optional `path` TXT
+value beginning with `/`; values containing a query, fragment, credentials, or
+an invalid encoded path are rejected. Every candidate is converted to HTTPS,
+normalized by the rules below, and verified through `GET <base>/status` before
+it is selectable. Duplicate normalized bases collapse to one result. Discovery
+does not permit HTTP, weaken system trust, or retain local network details in
+diagnostics.
+
 1. Normalize the user-entered URL:
    - require `https`;
    - remove query and fragment;

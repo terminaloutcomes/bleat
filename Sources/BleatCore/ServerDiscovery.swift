@@ -151,6 +151,20 @@ public struct DiscoveredServer: Hashable, Sendable {
     public let language: String
     public let authenticationMethods: [AuthenticationMethod]
     public let authenticationFormData: AuthenticationFormData?
+
+    public init(
+        baseURL: NormalizedServerURL,
+        version: AudiobookshelfServerVersion,
+        language: String,
+        authenticationMethods: [AuthenticationMethod],
+        authenticationFormData: AuthenticationFormData?
+    ) {
+        self.baseURL = baseURL
+        self.version = version
+        self.language = language
+        self.authenticationMethods = authenticationMethods
+        self.authenticationFormData = authenticationFormData
+    }
 }
 
 public enum ServerDiscoveryError: Error, Equatable, Sendable {

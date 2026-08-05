@@ -2552,7 +2552,7 @@ final class AppModelTests: XCTestCase {
 
         await accountsGate.release()
         await activeAccountGate.waitUntilEntered()
-        XCTAssertEqual(model.launchStage, .restoringDownloads)
+        XCTAssertEqual(model.launchStage, .restoringAccount)
 
         await activeAccountGate.release()
         await start.value
