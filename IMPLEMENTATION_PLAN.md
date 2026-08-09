@@ -115,6 +115,6 @@ traceability rows can be closed:
 
 Every entry must map to a non-final row in
 `docs/requirements-traceability.md`, an unmet release acceptance criterion, or
-an explicit deferred item in `audiobookshelf-ios-app-spec.md`. Remove an entry
+an explicit deferred item in `docs/audiobookshelf-ios-app-spec.md`. Remove an entry
 once its implementation and required automated, live, simulator, signed-host,
 or physical-device evidence are recorded in the traceability file.

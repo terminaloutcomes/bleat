@@ -9,7 +9,7 @@ harness.
 
 Use these documents for their specific purposes:
 
-- `audiobookshelf-ios-app-spec.md` defines product scope, protocol behavior,
+- `docs/audiobookshelf-ios-app-spec.md` defines product scope, protocol behavior,
   security invariants, and acceptance criteria.
 - `README.md` documents current user-visible behavior and supported developer
   workflows.
@@ -119,7 +119,7 @@ recoverable case into a typed failure.
 
 The pinned Audiobookshelf implementation is authoritative; the published API
 reference is not. Follow sections 3, 15, and 24 of
-`audiobookshelf-ios-app-spec.md`.
+`docs/audiobookshelf-ios-app-spec.md`.
 
 - Keep endpoint construction and path-prefix handling in
   `AudiobookshelfRoute`.
@@ -291,7 +291,7 @@ validation by creating the release manually.
 - Use project-relative paths in documentation, comments, diagnostics, and test
   output. Never write full local filesystem paths into repository files.
 - Keep `README.md` focused on behavior that exists now.
-- Update `audiobookshelf-ios-app-spec.md` when implementation evidence changes
+- Update `docs/audiobookshelf-ios-app-spec.md` when implementation evidence changes
   a product or architectural assumption.
 - Update `docs/requirements-traceability.md` with implementation and test
   evidence for affected requirements.

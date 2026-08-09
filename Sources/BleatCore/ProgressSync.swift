@@ -39,7 +39,7 @@ public enum BookProgressError: Error, Equatable, Sendable {
 extension AuthCoordinator {
     /// Implements the pinned v2.36.0 current-user progress contract.
     ///
-    /// Contract source: `audiobookshelf-ios-app-spec.md`, sections 11 and 24.
+    /// Contract source: `docs/audiobookshelf-ios-app-spec.md`, sections 11 and 24.
     public func bookProgress(
         accountID: AccountID,
         server: NormalizedServerURL,

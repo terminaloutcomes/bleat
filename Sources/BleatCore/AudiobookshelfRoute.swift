@@ -190,7 +190,7 @@ public enum RouteConstructionError: Error, Equatable, Sendable {
 
 /// Builds URLs for the audited Audiobookshelf contract.
 ///
-/// Contract sources are listed in `audiobookshelf-ios-app-spec.md`, sections
+/// Contract sources are listed in `docs/audiobookshelf-ios-app-spec.md`, sections
 /// 15 and 24. Returned playback paths are deliberately relative to the
 /// normalized server base rather than the origin so reverse-proxy prefixes are
 /// retained.

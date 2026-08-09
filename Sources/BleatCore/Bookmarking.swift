@@ -50,7 +50,7 @@ public enum BookmarkError: Error, Equatable, Sendable {
 extension AuthCoordinator {
     /// Implements the pinned v2.36.0 current-user bookmark contract.
     ///
-    /// Contract source: `audiobookshelf-ios-app-spec.md`, sections 15 and 24.
+    /// Contract source: `docs/audiobookshelf-ios-app-spec.md`, sections 15 and 24.
     public func bookmarks(
         accountID: AccountID,
         server: NormalizedServerURL,
