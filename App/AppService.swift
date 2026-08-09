@@ -67,9 +67,10 @@ enum BleatLocalStore {
         var copiedURLs: [URL] = []
         do {
             for legacyURL in legacyURLs {
-                let suffix = String(legacyURL.path.dropFirst(
-                    legacyStoreURL.path.count
-                ))
+                let suffix = String(
+                    legacyURL.path.dropFirst(
+                        legacyStoreURL.path.count
+                    ))
                 let destinationURL = URL(
                     fileURLWithPath: storeURL.path + suffix
                 )
@@ -106,14 +107,14 @@ enum BleatCloudKitBuildMode: String, Sendable {
 
 enum BleatCloudKitCapability {
     static var isAvailable: Bool {
-#if targetEnvironment(macCatalyst)
-        isAvailable(
-            buildMode: .current,
-            containerIdentifiers: entitledContainerIdentifiers
-        )
-#else
-        BleatCloudKitBuildMode.current == .enabled
-#endif
+        #if targetEnvironment(macCatalyst)
+            isAvailable(
+                buildMode: .current,
+                containerIdentifiers: entitledContainerIdentifiers
+            )
+        #else
+            BleatCloudKitBuildMode.current == .enabled
+        #endif
     }
 
     static func isAvailable(
@@ -126,18 +127,18 @@ enum BleatCloudKitCapability {
             ) == true
     }
 
-#if targetEnvironment(macCatalyst)
-    private static var entitledContainerIdentifiers: [String]? {
-        guard let task = SecTaskCreateFromSelf(nil) else {
-            return nil
+    #if targetEnvironment(macCatalyst)
+        private static var entitledContainerIdentifiers: [String]? {
+            guard let task = SecTaskCreateFromSelf(nil) else {
+                return nil
+            }
+            return SecTaskCopyValueForEntitlement(
+                task,
+                "com.apple.developer.icloud-container-identifiers" as CFString,
+                nil
+            ) as? [String]
         }
-        return SecTaskCopyValueForEntitlement(
-            task,
-            "com.apple.developer.icloud-container-identifiers" as CFString,
-            nil
-        ) as? [String]
-    }
-#endif
+    #endif
 }
 
 enum AppServiceError: Error, Equatable, Sendable {
@@ -167,6 +168,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case downloadAuthorization(DownloadAuthorizationError)
     case accountRemoval(AccountLifecycleError)
     case libraryCache(LibraryCacheError)
+    case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
     case privateCloud(PrivateCloudSyncError)
 }
@@ -380,6 +382,17 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookDetail
+
+    func cachedChapterTranscripts(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [CachedChapterTranscript]
+
+    func saveCachedChapterTranscript(
+        _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
 
     func openPlayback(
         for account: ServerAccount,
@@ -600,6 +613,19 @@ extension AppServicing {
         AsyncStream { $0.finish() }
     }
 
+    func cachedChapterTranscripts(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+        []
+    }
+
+    func saveCachedChapterTranscript(
+        _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {}
+
     func removeAccountFromThisDevice(
         _ account: ServerAccount,
         includeStatistics: Bool
@@ -699,6 +725,7 @@ actor LiveAppService: AppServicing {
     private let authenticationCoordinator: Coordinator
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
+    private let transcriptCache: ChapterTranscriptCache
     private let statisticsRepository: StatisticsRepository
     private let privateCloudSync: PrivateCloudSyncCoordinator?
     private var networkPathMonitor: AppNetworkPathMonitor?
@@ -771,6 +798,9 @@ actor LiveAppService: AppServicing {
         )
         accountStore = AccountStore(modelContainer: modelContainer)
         libraryCache = LibraryCache(modelContainer: modelContainer)
+        transcriptCache = ChapterTranscriptCache(
+            modelContainer: modelContainer
+        )
         statisticsRepository = StatisticsRepository(
             modelContainer: modelContainer
         )
@@ -810,7 +840,7 @@ actor LiveAppService: AppServicing {
             },
             onTransportFailure: { server in
                 guard let localServer = account.localServer,
-                      server == localServer
+                    server == localServer
                 else {
                     return
                 }
@@ -819,9 +849,10 @@ actor LiveAppService: AppServicing {
                 )
             },
             onAuthenticated: { server in
-                let isLocal = account.localServer.map {
-                    server == $0
-                } ?? false
+                let isLocal =
+                    account.localServer.map {
+                        server == $0
+                    } ?? false
                 let usage: ServerEndpointUsage =
                     isLocal ? .local : .primary
                 await endpointRouter.recordConnection(
@@ -902,12 +933,12 @@ actor LiveAppService: AppServicing {
             let accounts = try await accountStore.accounts()
             for account in accounts {
                 guard generation == networkProbeGeneration,
-                      !Task.isCancelled
+                    !Task.isCancelled
                 else {
                     return
                 }
                 guard account.localServerValidated,
-                      let localServer = account.localServer
+                    let localServer = account.localServer
                 else {
                     continue
                 }
@@ -916,7 +947,7 @@ actor LiveAppService: AppServicing {
                         transport: directTransport
                     ).discover(localServer)
                     guard generation == networkProbeGeneration,
-                          !Task.isCancelled
+                        !Task.isCancelled
                     else {
                         return
                     }
@@ -925,7 +956,7 @@ actor LiveAppService: AppServicing {
                     )
                 } catch {
                     guard generation == networkProbeGeneration,
-                          !Task.isCancelled
+                        !Task.isCancelled
                     else {
                         return
                     }
@@ -939,14 +970,14 @@ actor LiveAppService: AppServicing {
             // selection if the account list cannot be read here.
         }
         guard generation == networkProbeGeneration,
-              !Task.isCancelled
+            !Task.isCancelled
         else {
             return
         }
         let clients = liveClients.values.map(\.client)
         for client in clients {
             guard generation == networkProbeGeneration,
-                  !Task.isCancelled
+                !Task.isCancelled
             else {
                 return
             }
@@ -1752,14 +1783,55 @@ actor LiveAppService: AppServicing {
             throw .bookDeletion(error)
         }
 
+        var cacheCleanupFailed = false
         do {
             try await libraryCache.invalidateLibrary(
                 detail.libraryID,
                 for: account.id
             )
-            return .deleted
         } catch {
-            return .deletedWithCacheCleanupFailure
+            cacheCleanupFailed = true
+        }
+        do {
+            try await transcriptCache.removeBook(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        } catch {
+            cacheCleanupFailed = true
+        }
+        return cacheCleanupFailed
+            ? .deletedWithCacheCleanupFailure
+            : .deleted
+    }
+
+    func cachedChapterTranscripts(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+        do {
+            return try await transcriptCache.transcripts(
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
+        }
+    }
+
+    func saveCachedChapterTranscript(
+        _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await transcriptCache.save(
+                transcript,
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
         }
     }
 
@@ -1874,6 +1946,11 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .libraryCache(error)
         }
+        do {
+            try await transcriptCache.removeAccount(account.id)
+        } catch let error {
+            throw .transcriptCache(error)
+        }
 
         do {
             _ = try await coordinator.removePersistedAccount(
@@ -1894,6 +1971,11 @@ actor LiveAppService: AppServicing {
             try await libraryCache.removeAccount(account.id)
         } catch let error {
             throw .libraryCache(error)
+        }
+        do {
+            try await transcriptCache.removeAccount(account.id)
+        } catch let error {
+            throw .transcriptCache(error)
         }
         await privateCloudSync?.ignoreAccountOnThisDevice(
             account.id,

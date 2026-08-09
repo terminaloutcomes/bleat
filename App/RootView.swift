@@ -1,27 +1,36 @@
 import BleatCore
+import BleatTranscription
 import Foundation
 import SwiftUI
 
 enum BookDetailPlaybackAction: Equatable {
-    case play
+    case start
+    case resume
     case playAgain
     case pause
 
     static func decide(
         itemID: LibraryItemID,
         currentItemID: LibraryItemID?,
-        isPlaybackRequested: Bool
+        isPlaybackRequested: Bool,
+        progress: LibraryBookProgress?
     ) -> BookDetailPlaybackAction {
-        guard itemID == currentItemID else {
-            return .play
+        if itemID == currentItemID, isPlaybackRequested {
+            return .pause
         }
-        return isPlaybackRequested ? .pause : .playAgain
+
+        guard let progress, progress.progress > 0 else {
+            return .start
+        }
+        return progress.isFinished ? .playAgain : .resume
     }
 
     var label: String {
         switch self {
-        case .play:
-            "Play"
+        case .start:
+            "Start"
+        case .resume:
+            "Resume"
         case .playAgain:
             "Play Again"
         case .pause:
@@ -31,7 +40,7 @@ enum BookDetailPlaybackAction: Equatable {
 
     var systemImage: String {
         switch self {
-        case .play, .playAgain:
+        case .start, .resume, .playAgain:
             "play.fill"
         case .pause:
             "pause.fill"
@@ -307,9 +316,10 @@ private struct NativeLoginView: View {
             }
             .onChange(of: model.nearbyServerDiscoveryState) {
                 _, state in
-                guard serverAddress.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ).isEmpty,
+                guard
+                    serverAddress.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty,
                     case .results(let results) = state,
                     let first = results.first
                 else {
@@ -848,19 +858,19 @@ private struct DiagnosticsView: View {
                 )
             }
 
-            #if DEBUG
-                Section {
-                    ShareLink(
-                        item: report.text,
-                        subject: Text("Bleat Diagnostics")
-                    ) {
-                        Label(
-                            "Export Diagnostics",
-                            systemImage: "square.and.arrow.up"
-                        )
-                    }
-                    .accessibilityIdentifier("diagnostics.export")
+            Section {
+                ShareLink(
+                    item: report.text,
+                    subject: Text("Bleat Diagnostics")
+                ) {
+                    Label(
+                        "Export Diagnostics",
+                        systemImage: "square.and.arrow.up"
+                    )
+                }
+                .accessibilityIdentifier("diagnostics.export")
 
+                #if DEBUG
                     Button {
                         guard let recentLogExport else {
                             return
@@ -890,12 +900,12 @@ private struct DiagnosticsView: View {
                     .accessibilityIdentifier(
                         "diagnostics.exportRecentLogs"
                     )
-                } footer: {
-                    Text(
-                        "The snapshot includes server hostnames and ports. Exports exclude account names, URL paths and queries, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
-                    )
-                }
-            #endif
+                #endif
+            } footer: {
+                Text(
+                    "The snapshot includes server hostnames and ports. Exports exclude account names, URL paths and queries, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
+                )
+            }
         }
         .navigationTitle("Diagnostics")
         .task {
@@ -2323,6 +2333,7 @@ private struct BookDetailView: View {
     let origin: AppRootTab
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
+    @State private var showChapterTranscription = false
     @State private var showRemoveDownloadConfirmation = false
 
     @ColourSchemePreference private var colourScheme
@@ -2351,29 +2362,47 @@ private struct BookDetailView: View {
         }
         .toolbar {
             if let detail = loadedDetail {
-                if canOpenEditor(detail) {
+                if canShowActionsMenu(detail) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button("Edit", systemImage: "pencil") {
-                                showMetadataEditor = true
-                            }
-                            .accessibilityIdentifier("book.detail.edit")
-
-                            Button(
-                                detail.progress?.isFinished == true
-                                    ? "Mark Unfinished" : "Mark Finished"
-                            ) {
-                                Task {
-                                    await model.setFinished(
-                                        detail.progress?.isFinished != true,
-                                        detail: detail
-                                    )
+                            if canOpenEditor(detail) {
+                                Button("Edit", systemImage: "pencil") {
+                                    showMetadataEditor = true
                                 }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(model.bookProgressUpdateState == .saving)
-                            .accessibilityIdentifier("book.detail.finished")
+                                .accessibilityIdentifier("book.detail.edit")
 
+                                Button(
+                                    detail.progress?.isFinished == true
+                                        ? "Mark Unfinished" : "Mark Finished"
+                                ) {
+                                    Task {
+                                        await model.setFinished(
+                                            detail.progress?.isFinished != true,
+                                            detail: detail
+                                        )
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(
+                                    model.bookProgressUpdateState == .saving
+                                )
+                                .accessibilityIdentifier(
+                                    "book.detail.finished"
+                                )
+                            }
+
+                            #if os(iOS) && !targetEnvironment(macCatalyst)
+                                Button(
+                                    transcriptionMenuTitle,
+                                    systemImage: "waveform.badge.mic"
+                                ) {
+                                    showChapterTranscription = true
+                                }
+                                .disabled(!transcriptionMenuIsAvailable)
+                                .accessibilityIdentifier(
+                                    "book.detail.transcription"
+                                )
+                            #endif
                         } label: {
                             Image(systemName: "ellipsis")
                         }
@@ -2395,6 +2424,21 @@ private struct BookDetailView: View {
                 }
             }
         }
+        #if os(iOS) && !targetEnvironment(macCatalyst)
+            .sheet(isPresented: $showChapterTranscription) {
+                if let detail = loadedDetail,
+                    let account = model.account
+                {
+                    ChapterTranscriptionView(
+                        detail: detail,
+                        account: account,
+                        appModel: model,
+                        downloads: model.downloads,
+                        playback: model.playback
+                    )
+                }
+            }
+        #endif
         .confirmationDialog(
             "Remove Download?",
             isPresented: $showRemoveDownloadConfirmation,
@@ -2470,6 +2514,31 @@ private struct BookDetailView: View {
         return actions.contains(.editMetadata)
             || actions.contains(.editCover)
             || actions.contains(.deleteFromServer)
+    }
+
+    private func canShowActionsMenu(_ detail: LibraryBookDetail) -> Bool {
+        #if os(iOS) && !targetEnvironment(macCatalyst)
+            true
+        #else
+            canOpenEditor(detail)
+        #endif
+    }
+
+    private var transcriptionMenuIsAvailable: Bool {
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-transcription-available"
+            ) {
+                return true
+            }
+        #endif
+        return SpeechTranscriptionCapability.isAvailable
+    }
+
+    private var transcriptionMenuTitle: String {
+        transcriptionMenuIsAvailable
+            ? "Transcribe Audiobook"
+            : "Transcription unavailable on this device"
     }
 
     private func detailContent(
@@ -2749,7 +2818,8 @@ private struct BookDetailView: View {
                     itemID: detail.id,
                     currentItemID: model.playback.itemID,
                     isPlaybackRequested:
-                        model.playback.isPlaybackRequested
+                        model.playback.isPlaybackRequested,
+                    progress: detail.progress
                 )
                 if let account = model.account,
                     let downloaded = model.downloads.record(
@@ -2762,7 +2832,7 @@ private struct BookDetailView: View {
                         switch primaryAction {
                         case .pause:
                             model.playback.pause()
-                        case .play, .playAgain:
+                        case .start, .resume, .playAgain:
                             Task {
                                 await model.playDownloaded(downloaded)
                             }
@@ -2783,7 +2853,7 @@ private struct BookDetailView: View {
                         switch primaryAction {
                         case .pause:
                             model.playback.pause()
-                        case .play, .playAgain:
+                        case .start, .resume, .playAgain:
                             Task {
                                 await model.playback.start(
                                     detail: detail,
@@ -2834,19 +2904,23 @@ private struct BookDetailView: View {
                         || !model.downloads.isFullBookAvailable(record)
                     {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label(
-                                    downloadStatus(record),
-                                    systemImage: downloadStatusIcon(record)
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(
+                                    systemName: downloadStatusIcon(record)
                                 )
-                                .accessibilityIdentifier(
-                                    "book.detail.downloadStatus"
-                                )
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(downloadStatus(record))
+                                    Text(downloadBytes(record))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .fixedSize(horizontal: true, vertical: false)
                                 Spacer()
-                                Text(downloadBytes(record))
-                                    .foregroundStyle(.secondary)
                             }
                             .font(.subheadline)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier(
+                                "book.detail.downloadStatus"
+                            )
 
                             if record.manifest.purpose == .automaticCache
                                 || !model.downloads.isFullBookAvailable(record)
@@ -3119,20 +3193,12 @@ private struct BookDetailView: View {
     private func downloadBytes(
         _ record: DownloadedBookRecord
     ) -> String {
-        let stored = ByteCountFormatter.string(
-            fromByteCount: model.downloads.downloadedByteLength(
+        DownloadByteProgressFormatter.string(
+            downloadedBytes: model.downloads.downloadedByteLength(
                 for: record
             ),
-            countStyle: .file
+            expectedBytes: model.downloads.expectedByteLength(for: record)
         )
-        let expected = ByteCountFormatter.string(
-            fromByteCount: max(
-                model.downloads.expectedByteLength(for: record),
-                0
-            ),
-            countStyle: .file
-        )
-        return "\(stored) of \(expected)"
     }
 
     private func durationText(_ duration: Double) -> String {
@@ -4018,6 +4084,52 @@ private struct DownloadStorageView: View {
             fromByteCount: max(value, 0),
             countStyle: .file
         )
+    }
+}
+
+enum DownloadByteProgressFormatter {
+    private struct Unit {
+        let byteCount: Double
+        let symbol: String
+    }
+
+    static func string(
+        downloadedBytes: Int64,
+        expectedBytes: Int64
+    ) -> String {
+        let expectedBytes = max(expectedBytes, 0)
+        let unit = unit(for: expectedBytes)
+        let downloaded = formattedValue(
+            bytes: max(downloadedBytes, 0),
+            unit: unit
+        )
+        let expected = formattedValue(bytes: expectedBytes, unit: unit)
+        return "\(downloaded)/\(expected) \(unit.symbol)"
+    }
+
+    private static func unit(for expectedBytes: Int64) -> Unit {
+        switch expectedBytes {
+        case 1_000_000_000_000...:
+            Unit(byteCount: 1_000_000_000_000, symbol: "TB")
+        case 1_000_000_000...:
+            Unit(byteCount: 1_000_000_000, symbol: "GB")
+        case 1_000_000...:
+            Unit(byteCount: 1_000_000, symbol: "MB")
+        case 1_000...:
+            Unit(byteCount: 1_000, symbol: "KB")
+        default:
+            Unit(byteCount: 1, symbol: "bytes")
+        }
+    }
+
+    private static func formattedValue(bytes: Int64, unit: Unit) -> String {
+        let value = Double(bytes) / unit.byteCount
+        if value < 10, abs(value - value.rounded()) >= 0.05 {
+            return value.formatted(
+                .number.precision(.fractionLength(1))
+            )
+        }
+        return value.formatted(.number.precision(.fractionLength(0)))
     }
 }
 

@@ -53,7 +53,8 @@
                 )
                 return UITestAppService(scenario: .signedOut)
             }
-            if let scenario = arguments
+            if let scenario =
+                arguments
                 .compactMap(UITestScenario.init(rawValue:))
                 .first
             {
@@ -65,9 +66,11 @@
                 }
                 return UITestAppService(scenario: scenario)
             }
-            guard let rawScenario = UserDefaults.standard.string(
-                forKey: UITestScenarioStorage.persistedScenarioKey
-            ), let scenario = UITestScenario(rawValue: rawScenario) else {
+            guard
+                let rawScenario = UserDefaults.standard.string(
+                    forKey: UITestScenarioStorage.persistedScenarioKey
+                ), let scenario = UITestScenario(rawValue: rawScenario)
+            else {
                 return nil
             }
             return UITestAppService(scenario: scenario)
@@ -226,7 +229,8 @@
             ]
 
             if request.filter == LibraryItemFilter(authorID: ids.primaryAuthor)
-                || request.filter == LibraryItemFilter(authorID: ids.secondaryAuthor)
+                || request.filter
+                    == LibraryItemFilter(authorID: ids.secondaryAuthor)
             {
                 return LibraryItemsPage(
                     items: [primaryBook],
@@ -235,7 +239,8 @@
                     limit: 1
                 )
             }
-            if request.filter == LibraryItemFilter(seriesID: ids.primarySeries) {
+            if request.filter == LibraryItemFilter(seriesID: ids.primarySeries)
+            {
                 return LibraryItemsPage(
                     items: primarySeriesBooks,
                     total: primarySeriesBooks.count,
@@ -243,7 +248,9 @@
                     limit: primarySeriesBooks.count
                 )
             }
-            if request.filter == LibraryItemFilter(seriesID: ids.secondarySeries) {
+            if request.filter
+                == LibraryItemFilter(seriesID: ids.secondarySeries)
+            {
                 return LibraryItemsPage(
                     items: secondarySeriesBooks,
                     total: secondarySeriesBooks.count,
@@ -415,6 +422,55 @@
                 progress: nil
             )
         }
+
+        func cachedChapterTranscripts(
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-transcription-cache"
+                )
+            else {
+                return []
+            }
+            return [
+                CachedChapterTranscript(
+                    chapterID: 0,
+                    chapterTitle: "Chapter One",
+                    chapterStartMilliseconds: 0,
+                    chapterEndMilliseconds: 1_800_000,
+                    localeIdentifier: "en-AU",
+                    segments: [
+                        CachedTranscriptSegment(
+                            startMilliseconds: 10_000,
+                            endMilliseconds: 12_000,
+                            text: "The Doomsday Scenario begins"
+                        )
+                    ]
+                ),
+                CachedChapterTranscript(
+                    chapterID: 1,
+                    chapterTitle: "Chapter Two",
+                    chapterStartMilliseconds: 1_800_000,
+                    chapterEndMilliseconds: 3_600_000,
+                    localeIdentifier: "en-AU",
+                    segments: [
+                        CachedTranscriptSegment(
+                            startMilliseconds: 1_810_000,
+                            endMilliseconds: 1_812_000,
+                            text: "Another DOOMSDAY mention"
+                        )
+                    ]
+                ),
+            ]
+        }
+
+        func saveCachedChapterTranscript(
+            _ transcript: CachedChapterTranscript,
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) {}
 
         func openPlayback(
             for account: ServerAccount,
@@ -605,9 +661,9 @@
 
         private static func fixtureIDs() throws(AppServiceError) -> FixtureIDs {
             guard let primaryAuthor = AuthorID(rawValue: "author-1"),
-                  let secondaryAuthor = AuthorID(rawValue: "author-2"),
-                  let primarySeries = SeriesID(rawValue: "series-1"),
-                  let secondarySeries = SeriesID(rawValue: "series-2")
+                let secondaryAuthor = AuthorID(rawValue: "author-2"),
+                let primarySeries = SeriesID(rawValue: "series-1"),
+                let secondarySeries = SeriesID(rawValue: "series-2")
             else {
                 throw .pageRequest(.invalidFilter)
             }

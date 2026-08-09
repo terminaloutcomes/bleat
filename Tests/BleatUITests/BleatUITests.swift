@@ -59,35 +59,35 @@ final class BleatUITests: XCTestCase {
                 "The external URL driver is invoked only by scripts/test-deep-links.sh."
             )
         #else
-        let defaults = UserDefaults.standard
-        let readyKey = "bleatUITestExternalURLDriverReady"
-        let completeKey = "bleatUITestExternalURLDriverComplete"
-        defaults.removeObject(forKey: completeKey)
-        defaults.set(true, forKey: readyKey)
-        defaults.synchronize()
-        defer {
-            defaults.removeObject(forKey: readyKey)
+            let defaults = UserDefaults.standard
+            let readyKey = "bleatUITestExternalURLDriverReady"
+            let completeKey = "bleatUITestExternalURLDriverComplete"
             defaults.removeObject(forKey: completeKey)
+            defaults.set(true, forKey: readyKey)
             defaults.synchronize()
-        }
-
-        let springboard = XCUIApplication(
-            bundleIdentifier: "com.apple.springboard"
-        )
-        let deadline = Date().addingTimeInterval(300)
-        var acceptedConfirmation = false
-
-        while Date() < deadline && !defaults.bool(forKey: completeKey) {
-            let open = springboard.buttons["Open"]
-            if open.waitForExistence(timeout: 0.5) {
-                open.tap()
-                acceptedConfirmation = true
+            defer {
+                defaults.removeObject(forKey: readyKey)
+                defaults.removeObject(forKey: completeKey)
+                defaults.synchronize()
             }
-            defaults.synchronize()
-        }
 
-        XCTAssertTrue(acceptedConfirmation)
-        XCTAssertTrue(defaults.bool(forKey: completeKey))
+            let springboard = XCUIApplication(
+                bundleIdentifier: "com.apple.springboard"
+            )
+            let deadline = Date().addingTimeInterval(300)
+            var acceptedConfirmation = false
+
+            while Date() < deadline && !defaults.bool(forKey: completeKey) {
+                let open = springboard.buttons["Open"]
+                if open.waitForExistence(timeout: 0.5) {
+                    open.tap()
+                    acceptedConfirmation = true
+                }
+                defaults.synchronize()
+            }
+
+            XCTAssertTrue(acceptedConfirmation)
+            XCTAssertTrue(defaults.bool(forKey: completeKey))
         #endif
     }
 
@@ -966,9 +966,60 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["book.detail.play"].waitForExistence(timeout: 3)
         )
-        XCTAssertFalse(app.buttons["book.detail.actions"].exists)
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.exists)
+        actions.tap()
+        let transcription = app.buttons["book.detail.transcription"]
+        XCTAssertTrue(transcription.waitForExistence(timeout: 3))
+        XCTAssertFalse(transcription.isEnabled)
         XCTAssertFalse(app.buttons["book.detail.edit"].exists)
         XCTAssertFalse(app.buttons["book.detail.download"].exists)
+    }
+
+    @MainActor
+    func testBookTranscriptionLoadsCacheAndSearchesEveryChapterIgnoringCase() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        let transcription = app.buttons["book.detail.transcription"]
+        XCTAssertTrue(transcription.waitForExistence(timeout: 3))
+        XCTAssertTrue(transcription.isEnabled)
+        transcription.tap()
+
+        XCTAssertTrue(
+            app.otherElements["transcription.view"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertTrue(app.buttons["transcription.chapter.0"].exists)
+        XCTAssertTrue(app.buttons["transcription.chapter.1"].exists)
+        XCTAssertTrue(app.buttons["transcription.start"].exists)
+        XCTAssertFalse(app.progressIndicators.firstMatch.exists)
+
+        let search = app.searchFields["Search Transcriptions"]
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("doomsday")
+        XCTAssertTrue(
+            app.buttons["transcription.searchResult.0"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["transcription.searchResult.1"].exists)
     }
 
     @MainActor

@@ -11,6 +11,81 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testDownloadByteProgressUsesOneSharedRoundedUnit() {
+        XCTAssertEqual(
+            DownloadByteProgressFormatter.string(
+                downloadedBytes: 494_800_000,
+                expectedBytes: 655_500_000
+            ),
+            "495/656 MB"
+        )
+    }
+
+    func testDownloadByteProgressUsesExpectedSizeUnit() {
+        XCTAssertEqual(
+            DownloadByteProgressFormatter.string(
+                downloadedBytes: 600_000_000,
+                expectedBytes: 1_200_000_000
+            ),
+            "0.6/1.2 GB"
+        )
+    }
+
+    func testChapterAudioSlicePlannerMapsChapterAcrossTracks() throws {
+        let chapter = PlaybackChapter(
+            id: 7,
+            start: 50,
+            end: 130,
+            title: "Across files"
+        )
+
+        XCTAssertEqual(
+            try ChapterAudioSlicePlanner.slices(
+                for: chapter,
+                trackDurations: [60, 50, 40]
+            ),
+            [
+                ChapterAudioSlice(
+                    trackIndex: 0,
+                    audioStartSeconds: 50,
+                    durationSeconds: 10,
+                    wholeBookStartSeconds: 50
+                ),
+                ChapterAudioSlice(
+                    trackIndex: 1,
+                    audioStartSeconds: 0,
+                    durationSeconds: 50,
+                    wholeBookStartSeconds: 60
+                ),
+                ChapterAudioSlice(
+                    trackIndex: 2,
+                    audioStartSeconds: 0,
+                    durationSeconds: 20,
+                    wholeBookStartSeconds: 110
+                ),
+            ]
+        )
+    }
+
+    func testChapterAudioSlicePlannerRejectsIncompleteLocalAudio() {
+        XCTAssertThrowsError(
+            try ChapterAudioSlicePlanner.slices(
+                for: PlaybackChapter(
+                    id: 1,
+                    start: 50,
+                    end: 130,
+                    title: "Missing end"
+                ),
+                trackDurations: [60]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? ChapterAudioSlicePlanFailure,
+                .incompleteChapterCoverage
+            )
+        }
+    }
+
     func testCloudKitCapabilityRequiresEnabledEntitledBuild() {
         let containerIdentifier = PrivateCloudSyncCoordinator.containerIdentifier
 
@@ -113,14 +188,16 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testBookDetailPlaybackActionPausesCurrentRequestedBook() {
+    func testBookDetailPlaybackActionUsesPlaybackAndProgressState() {
         let currentItemID = LibraryItemID(rawValue: "current")
+        let otherItemID = LibraryItemID(rawValue: "other")
 
         XCTAssertEqual(
             BookDetailPlaybackAction.decide(
                 itemID: currentItemID,
                 currentItemID: currentItemID,
-                isPlaybackRequested: true
+                isPlaybackRequested: true,
+                progress: nil
             ),
             .pause
         )
@@ -133,18 +210,62 @@ final class AppModelTests: XCTestCase {
             BookDetailPlaybackAction.decide(
                 itemID: currentItemID,
                 currentItemID: currentItemID,
-                isPlaybackRequested: false
+                isPlaybackRequested: false,
+                progress: fixtureBookProgress(
+                    progress: 0.5,
+                    isFinished: false
+                )
+            ),
+            .resume
+        )
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: otherItemID,
+                currentItemID: currentItemID,
+                isPlaybackRequested: true,
+                progress: nil
+            ),
+            .start
+        )
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: otherItemID,
+                currentItemID: currentItemID,
+                isPlaybackRequested: false,
+                progress: fixtureBookProgress(
+                    progress: 0.75,
+                    isFinished: false
+                )
+            ),
+            .resume
+        )
+        XCTAssertEqual(
+            BookDetailPlaybackAction.decide(
+                itemID: otherItemID,
+                currentItemID: currentItemID,
+                isPlaybackRequested: false,
+                progress: fixtureBookProgress(
+                    progress: 1,
+                    isFinished: true
+                )
             ),
             .playAgain
         )
         XCTAssertEqual(
             BookDetailPlaybackAction.decide(
-                itemID: LibraryItemID(rawValue: "other"),
+                itemID: otherItemID,
                 currentItemID: currentItemID,
-                isPlaybackRequested: true
+                isPlaybackRequested: false,
+                progress: fixtureBookProgress(
+                    progress: 0,
+                    isFinished: true
+                )
             ),
-            .play
+            .start
         )
+        XCTAssertEqual(BookDetailPlaybackAction.start.label, "Start")
+        XCTAssertEqual(BookDetailPlaybackAction.resume.label, "Resume")
+        XCTAssertEqual(BookDetailPlaybackAction.playAgain.label, "Play Again")
     }
 
     func testMiniPlayerSwipeDecidesDirectionalActions() {
@@ -5730,6 +5851,26 @@ final class AppModelTests: XCTestCase {
             isExplicit: item.isExplicit,
             isAbridged: item.isAbridged,
             progress: nil
+        )
+    }
+
+    private func fixtureBookProgress(
+        progress: Double,
+        isFinished: Bool
+    ) -> LibraryBookProgress {
+        LibraryBookProgress(
+            id: "progress-1",
+            userID: UserID(rawValue: "user-1"),
+            libraryItemID: LibraryItemID(rawValue: "item-1"),
+            bookID: BookID(rawValue: "book-1"),
+            duration: 100,
+            progress: progress,
+            currentTime: progress * 100,
+            isFinished: isFinished,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 1,
+            startedAtMilliseconds: 1,
+            finishedAtMilliseconds: isFinished ? 1 : nil
         )
     }
 

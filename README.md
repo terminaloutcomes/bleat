@@ -651,12 +651,13 @@ Activity** identifies which of those paths most recently selected or reached a
 server.
 **About** shows the app icon, version, build number, build timestamp, developer,
 and bundle identifier.
-Development builds add **Export Diagnostics** and **Export Recent Logs**. The
-latter shares a text file containing up to 15 minutes of categorized app,
+All builds provide **Export Diagnostics** for sharing the current snapshot.
+Development builds additionally provide **Export Recent Logs**, which shares a
+text file containing up to 15 minutes of categorized app,
 authentication, API, playback, download, and synchronization events, including
-events from an earlier launch within that window. Release builds keep the
-status screen but compile out both exports and the rolling log file. Snapshot
-exports include these server hostnames and ports but exclude URL paths and
+events from an earlier launch within that window. Release builds compile out
+the recent-log export and rolling log file. Snapshot exports include these
+server hostnames and ports but exclude URL paths and
 queries, account names, credentials, tokens, response bodies, media titles and
 URLs, remote identifiers, playback session IDs, listening positions, and local
 file paths. Recent logs continue to exclude server addresses.
@@ -797,6 +798,42 @@ swift test --filter DownloadStorageTests
 
 The earlier OIDC spike remains in the repository as isolated research code, but
 it is deferred and is not used by the app or Docker harness.
+
+## Chapter transcription CLI
+
+The `bleat-transcribe` Swift executable is a developer harness for testing
+Apple's on-device `SpeechTranscriber` against one local chapter audio file. It
+requires macOS 26 or newer and does not use a fallback transcription engine.
+Running the command is the explicit action that may install Apple's language
+asset for the selected locale.
+
+```sh
+swift run bleat-transcribe \
+    --locale en-AU \
+    --chapter-start 3600 \
+    path/to/chapter.m4b
+```
+
+Final segments are written to standard output with whole-book timestamps. Use
+`--chapter-start` when the chapter begins after zero on the book timeline; omit
+it when the input file is already a standalone chapter and relative timestamps
+are sufficient. Preparation and completion status are written to standard
+error, so the transcript can be redirected independently.
+
+On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
+`SpeechTranscriber` is available and a disabled availability message when it
+is not. The transcription screen requires an explicit chapter selection and
+Start action. It reads only verified full-book download files, maps chapters
+across source-file boundaries, and displays final segments with whole-book
+timestamps. Completed chapters are cached locally by account, book, and
+chapter, survive relaunch, and replace the prior cached result when transcribed
+again. The screen marks cached chapters and provides case-insensitive search
+across every cached chapter for the current book. If the audio is not
+downloaded, the screen asks before scheduling the existing audiobook download.
+
+This is the chapter-level capability slice of GitHub issue #5. Partial-result
+resume, playback seeking from results, automatic-cache pinning, and independent
+transcript deletion are not implemented yet.
 
 ## Manual device beta checks
 

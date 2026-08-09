@@ -22,6 +22,8 @@ Build a native iOS audiobook client for one or more Audiobookshelf servers. The 
 - edit book metadata and cover art when the authenticated user has permission.
 - remove a book from the server library, with an explicit separate choice to
   delete its server files, when the authenticated user has permission.
+- transcribe a downloaded audiobook chapter on supported devices, retain the
+  completed result locally, and search cached chapters within that book.
 
 This is an audiobook app, not a general Audiobookshelf administration client;
 item deletion is limited to the current book editor.
@@ -190,6 +192,16 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - If I lack permission, editing controls are absent rather than merely failing later.
 - Metadata edits are never silently queued while offline.
 - If the server item changed since I began editing, the app warns me and lets me reload or deliberately overwrite.
+
+### 4.5.1 Chapter transcription
+
+- On a supported iOS device, I can explicitly transcribe one chapter from a
+  verified complete download while playback is inactive.
+- Completed transcripts persist locally under the exact account, library item,
+  and chapter identity and replace only that chapter when run again.
+- I can search transcript text case-insensitively across every previously
+  transcribed chapter of the current book and open a matching chapter result.
+- Removing an account or deleting the book removes its cached transcripts.
 
 ### 4.6 Listening statistics — post-MVP
 
@@ -1356,12 +1368,13 @@ Every diagnostic failure event carries its operation and a stable typed cause.
 Do not derive either from localized text, serialized errors, or raw server
 payloads.
 
-The Diagnostics status screen remains available in release builds. Development
-builds add snapshot and recent-log exports. Recent logs use typed, identifier-free
-events, retain at most the preceding 15 minutes across launches in a protected,
-backup-excluded 5 MiB rolling file, and export chronologically as UTF-8 text
-through the system sharing sheet. Release builds compile out both exports and
-the rolling file while continuing to emit the redacted `OSLog` categories.
+The Diagnostics status screen and snapshot export remain available in release
+builds. Development builds additionally provide recent-log exports. Recent logs
+use typed, identifier-free events, retain at most the preceding 15 minutes
+across launches in a protected, backup-excluded 5 MiB rolling file, and export
+chronologically as UTF-8 text through the system sharing sheet. Release builds
+compile out the recent-log export and rolling file while continuing to emit the
+redacted `OSLog` categories.
 
 ## 17. Security and privacy requirements
 
@@ -1581,7 +1594,7 @@ The 1.0 release is acceptable only when:
 - [ ] **AC-26:** Metadata editing performs the documented best-effort `updatedAt` stale-draft check and does not claim atomic conflict prevention.
 - [ ] **AC-29:** Server item deletion is permission-gated, distinguishes library removal
   from permanent file deletion, and stops active playback before deletion.
-- [ ] **AC-27:** Removing an account cannot leave credentials or cross-account cache records behind.
+- [ ] **AC-27:** Removing an account cannot leave credentials, transcripts, or cross-account cache records behind.
 - [ ] **AC-28:** The app remains usable with VoiceOver and the largest Dynamic Type size.
 
 ## 23. Deferred enhancements

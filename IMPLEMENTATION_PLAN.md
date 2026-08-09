@@ -88,6 +88,17 @@ traceability rows can be closed:
 - Add redacted, versioned, idempotent JSON export/import and destructive reset,
   with performance coverage for 250,000 stored slices.
 
+### Transcription
+
+- Complete [GitHub issue #5](https://github.com/terminaloutcomes/bleat/issues/5)
+  by adding partial-result resume, current-position and result seeking,
+  automatic-cache track pinning, source-specific invalidation, and independent
+  transcript deletion, plus physical-device evidence that playback preempts
+  active transcription. The implemented menu, explicit chapter selector,
+  verified full-download input, bounded multi-file chapter transcription,
+  account/book/chapter-scoped durable cache, relaunch loading, and
+  case-insensitive book-wide result search remain the retained foundation.
+
 ### Other deferred enhancements
 
 - Apple Watch remote control and offline transfer.

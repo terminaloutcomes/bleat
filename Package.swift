@@ -13,11 +13,26 @@ let package = Package(
         .library(
             name: "BleatCore",
             targets: ["BleatCore"]
-        )
+        ),
+        .library(
+            name: "BleatTranscription",
+            targets: ["BleatTranscription"]
+        ),
+        .executable(
+            name: "bleat-transcribe",
+            targets: ["BleatTranscribeCLI"]
+        ),
     ],
     targets: [
         .target(
             name: "BleatCore"
+        ),
+        .target(
+            name: "BleatTranscription"
+        ),
+        .executableTarget(
+            name: "BleatTranscribeCLI",
+            dependencies: ["BleatTranscription"]
         ),
         .testTarget(
             name: "BleatCoreTests",
@@ -29,6 +44,10 @@ let package = Package(
         .testTarget(
             name: "BleatCoreLiveTests",
             dependencies: ["BleatCore"]
+        ),
+        .testTarget(
+            name: "BleatTranscriptionTests",
+            dependencies: ["BleatTranscription"]
         ),
     ],
     swiftLanguageModes: [.v6]

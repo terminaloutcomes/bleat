@@ -22,7 +22,8 @@ final class ColourSchemeStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        value = defaults.string(forKey: AppPreferenceKey.colourScheme)
+        value =
+            defaults.string(forKey: AppPreferenceKey.colourScheme)
             .flatMap(ColourScheme.init(rawValue:)) ?? .defaultValue
     }
 }
@@ -455,7 +456,7 @@ struct AppFailure: Equatable, Sendable {
             case .accountPersistenceFailed, .credentialRollbackFailed:
                 return .localStorageUnavailable
             }
-        case .accountStore, .libraryCache, .statistics:
+        case .accountStore, .libraryCache, .transcriptCache, .statistics:
             return .localStorageUnavailable
         case .privateCloud(let error):
             switch error {
@@ -705,14 +706,14 @@ final class AppModel {
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
-    private var pendingLocalSessionSyncAccounts:
-        [AccountID: ServerAccount] = [:]
+    private var pendingLocalSessionSyncAccounts: [AccountID: ServerAccount] =
+        [:]
 
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
     private(set) var loginStatus: LoginStatus = .idle
-    private(set) var nearbyServerDiscoveryState:
-        NearbyServerDiscoveryState = .idle
+    private(set) var nearbyServerDiscoveryState: NearbyServerDiscoveryState =
+        .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
     private(set) var endpointDiagnostics: AppEndpointDiagnostics?
     private(set) var liveUpdateConnectionState:
@@ -749,6 +750,28 @@ final class AppModel {
         let diagnosticLogStore: PersistentDiagnosticLogStore?
     #endif
 
+    func cachedChapterTranscripts(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws -> [CachedChapterTranscript] {
+        try await service.cachedChapterTranscripts(
+            accountID: account.id,
+            itemID: itemID
+        )
+    }
+
+    func saveCachedChapterTranscript(
+        _ transcript: CachedChapterTranscript,
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws {
+        try await service.saveCachedChapterTranscript(
+            transcript,
+            accountID: account.id,
+            itemID: itemID
+        )
+    }
+
     init(
         service: any AppServicing,
         nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
@@ -762,7 +785,8 @@ final class AppModel {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
         self.diagnostics = diagnostics
-        let launchStage = initialLaunchStage
+        let launchStage =
+            initialLaunchStage
             ?? AppLaunchStage.randomlySelectedInitialStage()
         self.initialLaunchStage = launchStage
         self.launchStage = launchStage
@@ -789,7 +813,8 @@ final class AppModel {
     }
 
     func startNearbyServerDiscovery() {
-        let discovery = nearbyServerDiscovery
+        let discovery =
+            nearbyServerDiscovery
             ?? BonjourNearbyServerDiscovery()
         nearbyServerDiscovery = discovery
         discovery.start { [weak self] state in
@@ -1210,9 +1235,11 @@ final class AppModel {
                     count: loadedLibraries.count
                 )
             )
-            guard let library = previouslySelectedLibraryID.flatMap({ id in
-                loadedLibraries.first(where: { $0.id == id })
-            }) ?? loadedLibraries.first else {
+            guard
+                let library = previouslySelectedLibraryID.flatMap({ id in
+                    loadedLibraries.first(where: { $0.id == id })
+                }) ?? loadedLibraries.first
+            else {
                 selectedLibrary = nil
                 if previouslySelectedLibraryID != nil {
                     clearEntityBrowseFilter()
@@ -1220,7 +1247,7 @@ final class AppModel {
                 return
             }
             if previouslySelectedLibraryID != nil,
-               library.id != previouslySelectedLibraryID
+                library.id != previouslySelectedLibraryID
             {
                 selectedLibrary = nil
             }
@@ -1320,7 +1347,8 @@ final class AppModel {
     func setLibraryProgressFilter(
         _ filter: LibraryProgressFilter?
     ) async {
-        await setLibraryBrowseFilter(filter.map(LibraryBrowseFilter.progress) ?? .all)
+        await setLibraryBrowseFilter(
+            filter.map(LibraryBrowseFilter.progress) ?? .all)
     }
 
     func setLibraryBrowseFilter(_ filter: LibraryBrowseFilter) async {
@@ -1480,15 +1508,15 @@ final class AppModel {
                 request: request
             )
             guard generation == seriesPageGeneration,
-                  self.account?.id == account.id,
-                  selectedSeries == destination
+                self.account?.id == account.id,
+                selectedSeries == destination
             else {
                 return
             }
             seriesBooks = .loaded(page)
         } catch let error {
             guard generation == seriesPageGeneration,
-                  selectedSeries == destination
+                selectedSeries == destination
             else {
                 return
             }
@@ -1516,7 +1544,7 @@ final class AppModel {
                 request: request
             )
             guard self.account?.id == account.id,
-                  let item = page.items.first
+                let item = page.items.first
             else {
                 return nil
             }
@@ -1526,8 +1554,8 @@ final class AppModel {
                 itemID: item.id
             )
             guard self.account?.id == account.id,
-                  detail.libraryID == libraryID,
-                  detail.id == item.id
+                detail.libraryID == libraryID,
+                detail.id == item.id
             else {
                 return nil
             }
@@ -1579,8 +1607,8 @@ final class AppModel {
                 itemID: id
             )
             guard self.account?.id == account.id,
-                  detail.id == id,
-                  detail.libraryID == libraryID
+                detail.id == id,
+                detail.libraryID == libraryID
             else {
                 return nil
             }
@@ -1612,10 +1640,10 @@ final class AppModel {
 
     func loadNextSeriesPage() async {
         guard let destination = selectedSeries,
-              let account,
-              case .loaded(let currentPage) = seriesBooks,
-              currentPage.hasNextPage,
-              seriesPaginationState != .loading
+            let account,
+            case .loaded(let currentPage) = seriesBooks,
+            currentPage.hasNextPage,
+            seriesPaginationState != .loading
         else {
             return
         }
@@ -1634,9 +1662,9 @@ final class AppModel {
                 request: request
             )
             guard generation == seriesPageGeneration,
-                  selectedSeries == destination,
-                  case .loaded(let latest) = seriesBooks,
-                  latest.page == currentPage.page
+                selectedSeries == destination,
+                case .loaded(let latest) = seriesBooks,
+                latest.page == currentPage.page
             else {
                 return
             }
@@ -1655,7 +1683,7 @@ final class AppModel {
             seriesPaginationState = .idle
         } catch let error {
             guard generation == seriesPageGeneration,
-                  selectedSeries == destination
+                selectedSeries == destination
             else {
                 return
             }
