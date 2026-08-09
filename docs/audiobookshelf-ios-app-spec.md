@@ -29,9 +29,12 @@ This is an audiobook app, not a general Audiobookshelf administration client;
 item deletion is limited to the current book editor.
 The same application target supports development-signed Mac Catalyst 18 on
 macOS 15 or newer. Signed launch, native login, split Keychain credential
-persistence, and account restoration are acceptance requirements. Notarization,
+persistence, and account restoration are implemented; their signed runtime
+journey is tracked in
+[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
+post-1.0 evidence and is not a version 1.0 acceptance requirement. Notarization,
 distribution, Mac-specific interface adaptation, and otherwise unlisted Mac
-media or background behavior are not version 1.0 acceptance requirements.
+media or background behavior are also not version 1.0 acceptance requirements.
 
 ## 2. Product defaults
 
@@ -46,10 +49,10 @@ These decisions keep the first release bounded:
 | Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
 | Podcasts and ebooks | Out of scope for 1.0 |
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
-| CarPlay | An audio-app scene browses the active account's Home shelves, audiobook libraries, search, and verified complete downloads; account and download management remain phone-only |
+| CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, search, and verified complete downloads; account and download management remain phone-only. Managed entitlement enablement and real-environment validation are deferred until after 1.0 |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
-| Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design but is not an MVP implementation or release requirement |
+| Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design, and [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks the remaining implementation; it is not an MVP or 1.0 release requirement |
 | Cleartext HTTP | Not supported in production builds |
 | Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
 | Third-party analytics | None by default |
@@ -195,17 +198,34 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 
 ### 4.5.1 Chapter transcription
 
-- On a supported iOS device, I can explicitly transcribe one chapter from a
-  verified complete download while playback is inactive.
+- On a supported iOS device, I can explicitly transcribe one chapter or select
+  multiple chapters, including Select All, from a verified complete download.
+- Playback and transcription can run concurrently; starting or resuming
+  playback does not cancel active transcription.
+- A selected batch transcribes one chapter at a time in ascending chapter-index
+  order, not selection order, and continues when I dismiss the transcription
+  screen or navigate elsewhere in the running app.
 - Completed transcripts persist locally under the exact account, library item,
   and chapter identity and replace only that chapter when run again.
+- The latest batch's typed success, failure, or cancellation result persists
+  under the account and library item with start and finish timestamps plus
+  monotonic elapsed time. The transcription screen reloads that terminal state
+  after relaunch without retaining private filenames or framework diagnostics.
 - I can search transcript text case-insensitively across every previously
   transcribed chapter of the current book and open a matching chapter result.
-- Removing an account or deleting the book removes its cached transcripts.
+- In-memory transcript text is retained while its screen is visible or its
+  batch is active, then evicted after five idle minutes or immediately for
+  inactive books when iOS reports memory pressure. Durable records remain.
+- Removing an account or deleting the book removes its cached transcripts and
+  terminal transcription task state.
+- Explicit cancellation, account removal, or book deletion stops the relevant
+  active transcription task.
 
 ### 4.6 Listening statistics — post-MVP
 
-This user story is intentionally deferred until after the MVP.
+This user story is intentionally deferred until after the MVP. Its remaining
+implementation is tracked in
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 - I can see lifetime totals across all configured Audiobookshelf accounts or filter to one account.
 - I can see real listening time separately from audiobook time heard at the active playback rate.
@@ -307,9 +327,10 @@ The detail screen contains:
 
 ### 5.3 Statistics — post-MVP
 
-This screen is not part of the MVP. When implemented, Statistics is a Home
-destination rather than a sixth tab. Its default range is **Lifetime** and its
-default account filter is **All Accounts**.
+This screen is not part of the MVP. Its remaining implementation is tracked in
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). When
+implemented, Statistics is a Home destination rather than a sixth tab. Its
+default range is **Lifetime** and its default account filter is **All Accounts**.
 
 Top-level cards show:
 
@@ -833,6 +854,9 @@ The CarPlay entitlement requires Apple's approval and matching provisioning;
 the repository intentionally omits it until approval. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
+Entitlement enablement and CarPlay Simulator/vehicle validation are tracked in
+[GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24) as
+post-1.0 work and are not a 1.0 release acceptance gate.
 
 Handle:
 
@@ -1067,7 +1091,8 @@ Marking a book finished or unfinished is an explicit progress mutation and follo
 The app implements the local ledger, completion milestones, lifetime summary,
 and private CloudKit merge. Paginated server-history import, user-facing
 archive import/export, range charts, and large-ledger performance work remain
-deferred.
+deferred in
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 ### 12.1 Metric definitions
 
@@ -1423,7 +1448,8 @@ redacted `OSLog` categories.
 - Download task restoration is deterministic after relaunch.
 - Repeated play taps cannot create multiple simultaneous server sessions.
 
-The following targets apply to the deferred post-MVP statistics work:
+The following targets apply to the deferred post-MVP statistics work tracked in
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
 - Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
 - Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
@@ -1441,7 +1467,8 @@ The following targets apply to the deferred post-MVP statistics work:
 - whole-book/track/chapter time mapping;
 - speed persistence and pitch-algorithm selection;
 
-The following advanced statistics tests remain post-MVP:
+The following advanced statistics tests remain post-MVP under
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
 - wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;
 - audiobook-time integration at 0.5×, 1×, 2×, and 3×;
@@ -1494,10 +1521,8 @@ Use a disposable Audiobookshelf container with a seeded library:
 - local/remote source transition;
 - interruption and Bluetooth removal;
 - background and locked-screen playback;
-- AirPlay and CarPlay transport commands, metadata, whole-book seeking, chapter
-  controls, and featured playback-rate changes;
-- CarPlay Home, library chooser, pagination, search, online/offline selection,
-  stale-result suppression, and disconnect/reconnect state;
+- AirPlay transport commands, metadata, whole-book seeking, chapter controls,
+  and featured playback-rate changes;
 - speed changes across track boundaries;
 - end-of-chapter sleep timer at non-1× speeds.
 
@@ -1590,7 +1615,7 @@ The 1.0 release is acceptable only when:
 - [ ] **AC-08:** Seeking a long remote file uses range requests and does not download the whole file first.
 - [ ] **AC-09:** Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
 - [ ] **AC-10:** Speed remains correct through pause, track change, lock, interruption, and relaunch.
-- [ ] **AC-11:** Lock Screen/Control Center/Bluetooth/AirPlay/CarPlay controls report the whole-book position correctly.
+- [ ] **AC-11:** Lock Screen/Control Center/Bluetooth/AirPlay controls report the whole-book position correctly.
 - [ ] **AC-21:** Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
 - [ ] **AC-22:** Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
 - [ ] **AC-23:** Downloaded media plays while the server is offline.
@@ -1605,8 +1630,11 @@ The 1.0 release is acceptable only when:
 ## 23. Deferred enhancements
 
 - OpenID Connect authentication and identity-provider logout;
-- paginated listening-history import, user-facing archive import/export, and
-  advanced Statistics views described in section 12;
+- [listening statistics and portability](https://github.com/terminaloutcomes/bleat/issues/26),
+  including paginated history import, archive import/export, advanced views,
+  and the performance work described in section 12;
+- [managed CarPlay entitlement and real-environment validation](https://github.com/terminaloutcomes/bleat/issues/24);
+- [signed Mac Catalyst authentication and Keychain persistence validation](https://github.com/terminaloutcomes/bleat/issues/25);
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;
 - Siri/App Intents;

@@ -18,23 +18,11 @@ traceability rows can be closed:
 - `APP-DIAGNOSTICS-001`: prove the rolling development log's protection,
   backup exclusion, size/time bounds, and redaction, and prove that export
   controls and retained diagnostic files are absent from Release builds.
-- `APP-MAC-AUTH-001`: record a signed Catalyst login/relaunch journey that
-  exercises the application-host Keychain entitlement and distinguishes
-  rejected credentials from unavailable secure storage.
 - `APP-ICLOUD-001`: record an enabled, signed two-device journey against the
   provisioned private CloudKit container, including statistics/configuration
   merge, static-credential recovery, opt-out, cloud-copy deletion, and
   this-device/all-device account removal. A Personal Team build with
   `BLEAT_CLOUDKIT_MODE=disabled` is not CloudKit propagation evidence.
-- `APP-PLAYBACK-001`: complete the physical-device media matrix for supported
-  formats, background and locked playback, interruptions, route removal,
-  configured Bluetooth/headphone Previous and Next actions, AirPlay, CarPlay
-  transport commands, Now Playing position, speed, sleep timers, relaunch, and
-  session recovery.
-- `APP-CARPLAY-001`: obtain Apple's managed CarPlay Audio App entitlement and
-  record CarPlay Simulator plus physical vehicle/head-unit evidence for
-  browsing, search, online/offline playback, artwork, transport controls,
-  background playback, disconnect/reconnect, and simultaneous phone use.
 
 ## 2. Version 1.0 release readiness
 
@@ -68,48 +56,26 @@ traceability rows can be closed:
 - Add scheduled compatibility, media/download recovery, performance, and flake
   jobs while keeping server versions sequential and disposable.
 - Prove the documented validation gate from a clean checkout and complete the
-  signed iPhone/iPad beta matrix, App Store privacy labels, entitlements,
-  screenshots, release notes, and final compatibility baseline.
+  signed iPhone/iPad beta matrix, App Store privacy labels, final signing
+  entitlements, 1.0 release notes, and final compatibility baseline.
 
 ## 3. Post-1.0 product backlog
 
-### Playback and bookmarks
-
-- `APP-BOOKMARK-UX-001`: give Book Detail the same create, rename, delete,
-  pending-sync, failure, and retry affordances as Now Playing while preserving
-  the account-scoped mutation ordering rules.
-
 ### Listening statistics and portability
 
-- Import paginated Audiobookshelf history resumably and reconcile remote and
-  local sessions without double counting; represent ambiguous all-device
-  results with explicit lower/upper bounds.
-- Add range filtering, all-account charts, per-book and recent-session detail,
-  and live overlays to the implemented lifetime summary.
-- Add redacted, versioned, idempotent JSON export/import and destructive reset,
-  with performance coverage for 250,000 stored slices.
+- Complete [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26),
+  which tracks resumable Audiobookshelf history import and reconciliation,
+  bounded ambiguous totals, richer statistics views and live overlays,
+  redacted idempotent portability, destructive reset, and 250,000-slice
+  performance evidence.
 
 ### Transcription
 
 - Complete [GitHub issue #5](https://github.com/terminaloutcomes/bleat/issues/5)
   by adding partial-result resume, current-position and result seeking,
   automatic-cache track pinning, source-specific invalidation, and independent
-  transcript deletion, plus physical-device evidence that playback preempts
-  active transcription. The implemented menu, explicit chapter selector,
-  verified full-download input, bounded multi-file chapter transcription,
-  account/book/chapter-scoped durable cache, relaunch loading, and
-  case-insensitive book-wide result search remain the retained foundation.
-
-### Other deferred enhancements
-
-- Apple Watch remote control and offline transfer.
-- Widgets and Live Activities.
-- Siri and App Intents.
-- Metadata provider search and matching.
-- Configurable reverse-proxy/service-token headers.
-- Silence skipping, voice boost, and equalizer.
-- Series bulk download.
-- Deliberate cross-server edition merging for statistics.
+  transcript deletion, plus physical-device evidence that playback and
+  transcription remain usable concurrently.
 
 ## Backlog maintenance
 

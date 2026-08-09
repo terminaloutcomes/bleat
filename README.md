@@ -30,8 +30,9 @@ Native Audiobookshelf username/password is the active authentication scope; the
 earlier isolated OIDC spike is deferred. Bleat records local listening slices,
 completion milestones, and lifetime summaries. Downloaded playback uses a
 durable UUIDv4 local-session outbox and reports measured listening time.
-Listening-history import/export remains deferred. Bookmark creates, renames,
-and deletes also use a durable local
+Listening-history import/export and richer statistics views remain deferred in
+[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
+Bookmark creates, renames, and deletes also use a durable local
 outbox when the server is unavailable.
 
 Account setup automatically browses `_audiobookshelf._tcp`, resolves its SRV
@@ -54,7 +55,7 @@ resuming.
 - An installed iOS Simulator runtime for simulator tests
 - Docker Desktop or another Docker Compose 2-compatible runtime for live tests
 - XcodeGen 2.46 or newer only when changing `project.yml`
-- An Apple development team for signed Mac Catalyst runtime tests
+- Optionally, an Apple development team for signed Mac Catalyst runtime tests
 
 Confirm the active toolchain:
 
@@ -145,8 +146,11 @@ identifier is unavailable to the selected team. Keep the same team and bundle
 identifier to retain access to existing Keychain credentials.
 
 Signed Catalyst launch, native login, and account restoration are supported.
-Notarization, distribution, Mac-specific interface adaptation, and unlisted
-Mac media or background behavior are not release gates.
+The signed login/relaunch evidence is tracked in
+[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
+post-1.0 work and does not block the 1.0 release. Notarization, distribution,
+Mac-specific interface adaptation, and unlisted Mac media or background
+behavior are also not release gates.
 
 Build products and intermediate files are written beneath `.build/`.
 
@@ -323,7 +327,9 @@ enabled before a signed physical-device build or distribution can use CarPlay.
 Follow Apple's
 [entitlement request](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [CarPlay scene](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay)
-guidance when provisioning the app.
+guidance when provisioning the app. Entitlement enablement and real-environment
+validation are tracked in [GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24)
+as post-1.0 work and do not block the 1.0 release.
 
 ## Archive a beta
 
@@ -831,14 +837,29 @@ error, so the transcript can be redirected independently.
 
 On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
 `SpeechTranscriber` is available and a disabled availability message when it
-is not. The transcription screen requires an explicit chapter selection and
-Start action. It reads only verified full-book download files, maps chapters
-across source-file boundaries, and displays final segments with whole-book
-timestamps. Completed chapters are cached locally by account, book, and
-chapter, survive relaunch, and replace the prior cached result when transcribed
-again. The screen marks cached chapters and provides case-insensitive search
-across every cached chapter for the current book. If the audio is not
-downloaded, the screen asks before scheduling the existing audiobook download.
+is not. The transcription screen supports one explicit chapter or a Select
+mode with Select All and multi-selection. A batch always runs one chapter at a
+time in ascending chapter-index order, regardless of selection order. It reads
+only verified full-book download files, maps chapters across source-file
+boundaries, and displays final segments with whole-book timestamps.
+
+The app owns active transcription work rather than the sheet. Dismissing the
+sheet or navigating elsewhere leaves the batch running; reopening the same
+book shows its current progress. Explicit cancellation, account removal, or
+book deletion stops the relevant work. Playback and transcription can run at
+the same time. Completed chapters are cached locally
+by account, book, and chapter, survive relaunch, and replace the prior cached
+result when transcribed again. The latest batch's success, typed privacy-safe
+failure, or cancellation result is also stored by account and book with its
+completion time and monotonic elapsed time, then reloaded after relaunch. The
+screen marks cached chapters and provides case-insensitive search across every
+cached chapter for the current book. If the audio is not downloaded, the
+screen asks before scheduling the existing audiobook download.
+
+Loaded transcript text is retained in memory while its transcription screen is
+visible or its batch is active. Otherwise it is evicted after five idle minutes
+or immediately when iOS reports memory pressure, and reloads from the durable
+local cache when needed.
 
 This is the chapter-level capability slice of GitHub issue #5. Partial-result
 resume, playback seeking from results, automatic-cache pinning, and independent
@@ -854,10 +875,6 @@ candidate. On AP16, verify:
 - whole-book seeking, chapter/file transitions, and persisted playback speed;
 - background, lock-screen, Control Center, wired/headset, Bluetooth, and
   AirPlay controls, including removed-output pause behavior;
-- CarPlay launch, Home shelves, library switching, pagination, search,
-  online/offline selection, artwork, play/pause, configured skip, chapter
-  controls, seeking, speed, background/locked playback, disconnect/reconnect,
-  and simultaneous phone interaction;
 - download continuation across backgrounding and relaunch, followed by local
   playback with the server unavailable;
 - account removal deletes its downloads, plus progress conflict resolution;
