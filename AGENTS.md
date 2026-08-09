@@ -267,6 +267,25 @@ validation. Never claim live-server, background-execution, AirPlay, Bluetooth,
 CarPlay, or physical-device behavior was validated by a host or ordinary
 Simulator test.
 
+## Versioning and automated releases
+
+`MARKETING_VERSION` in `project.yml` is the application version source of
+truth. `CURRENT_PROJECT_VERSION` is the build number. When changing either,
+regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit the generated
+version settings directly.
+
+Every application version bump must add a matching `CHANGELOG.md` section using
+the heading `## <version> - YYYY-MM-DD`. Keep the section limited to changes
+included in that release.
+
+A push to `main` that changes `project.yml` runs
+`.github/workflows/release.yml`. The workflow compares the version with the
+pre-push revision, requires the matching changelog section, validates an
+unsigned Release archive, and publishes a GitHub Release and `v<version>` tag
+using that section as the release notes. Existing version tags are immutable:
+never reuse a released version, and do not bypass a failed archive or changelog
+validation by creating the release manually.
+
 ## Documentation and change discipline
 
 - Use project-relative paths in documentation, comments, diagnostics, and test

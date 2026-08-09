@@ -507,15 +507,16 @@ struct ChapterTranscriptionView: View {
                         searchQuery = ""
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(match.chapterTitle)
-                                .font(.headline)
-                            Text(timestamp(match.segment.startMilliseconds))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                            Text(
+                                "\(match.chapterTitle) - \(timestamp(match.segment.startMilliseconds))"
+                            )
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
                             Text(match.segment.text)
                                 .foregroundStyle(.primary)
                         }
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier(
                         "transcription.searchResult.\(match.chapterID)"
                     )

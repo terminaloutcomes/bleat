@@ -461,6 +461,16 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
+        XCTAssertTrue(
+            app.buttons["settings.playback.previousCommand"].waitForExistence(
+                timeout: 3
+            )
+        )
+        XCTAssertTrue(
+            app.buttons["settings.playback.nextCommand"].waitForExistence(
+                timeout: 3
+            )
+        )
         let diagnostics = app.buttons["settings.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
         diagnostics.tap()

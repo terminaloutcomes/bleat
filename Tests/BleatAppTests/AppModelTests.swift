@@ -1552,22 +1552,93 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(first.resumeRewind(), .tenSeconds)
         XCTAssertEqual(first.skipBackward(), .fifteenSeconds)
         XCTAssertEqual(first.skipForward(), .thirtySeconds)
+        XCTAssertEqual(first.previousCommandAction(), .skipBackward)
+        XCTAssertEqual(first.nextCommandAction(), .skipForward)
         first.savePlaybackRate(1.37)
         first.saveResumeRewind(.thirtySeconds)
         first.saveSkipBackward(.fortyFiveSeconds)
         first.saveSkipForward(.sixtySeconds)
+        first.savePreviousCommandAction(.previousChapter)
+        first.saveNextCommandAction(.nextChapter)
 
         let restored = PlaybackPreferencesStore(defaults: defaults)
         XCTAssertEqual(restored.playbackRate(), 1.35, accuracy: 0.001)
         XCTAssertEqual(restored.resumeRewind(), .thirtySeconds)
         XCTAssertEqual(restored.skipBackward(), .fortyFiveSeconds)
         XCTAssertEqual(restored.skipForward(), .sixtySeconds)
+        XCTAssertEqual(restored.previousCommandAction(), .previousChapter)
+        XCTAssertEqual(restored.nextCommandAction(), .nextChapter)
         restored.savePlaybackRate(10)
         XCTAssertEqual(restored.playbackRate(), 3)
         restored.savePlaybackRate(0)
         XCTAssertEqual(restored.playbackRate(), 0.5)
         restored.savePlaybackRate(.nan)
         XCTAssertEqual(restored.playbackRate(), 1)
+        defaults.set(
+            "invalid",
+            forKey: "bleat.playback.previousCommandAction.v1"
+        )
+        defaults.set(
+            "invalid",
+            forKey: "bleat.playback.nextCommandAction.v1"
+        )
+        XCTAssertEqual(restored.previousCommandAction(), .skipBackward)
+        XCTAssertEqual(restored.nextCommandAction(), .skipForward)
+    }
+
+    func testHeadphoneCommandActionsMapAndRespectChapterAvailability() {
+        XCTAssertEqual(
+            HeadphoneCommandAction.skipBackward.remoteCommand,
+            .skipBackward
+        )
+        XCTAssertEqual(
+            HeadphoneCommandAction.skipForward.remoteCommand,
+            .skipForward
+        )
+        XCTAssertEqual(
+            HeadphoneCommandAction.previousChapter.remoteCommand,
+            .previousChapter
+        )
+        XCTAssertEqual(
+            HeadphoneCommandAction.nextChapter.remoteCommand,
+            .nextChapter
+        )
+
+        for action in [
+            HeadphoneCommandAction.skipBackward,
+            .skipForward,
+        ] {
+            XCTAssertTrue(
+                action.isAvailable(
+                    canMoveToPreviousChapter: false,
+                    canMoveToNextChapter: false
+                )
+            )
+        }
+        XCTAssertFalse(
+            HeadphoneCommandAction.previousChapter.isAvailable(
+                canMoveToPreviousChapter: false,
+                canMoveToNextChapter: true
+            )
+        )
+        XCTAssertTrue(
+            HeadphoneCommandAction.previousChapter.isAvailable(
+                canMoveToPreviousChapter: true,
+                canMoveToNextChapter: false
+            )
+        )
+        XCTAssertFalse(
+            HeadphoneCommandAction.nextChapter.isAvailable(
+                canMoveToPreviousChapter: true,
+                canMoveToNextChapter: false
+            )
+        )
+        XCTAssertTrue(
+            HeadphoneCommandAction.nextChapter.isAvailable(
+                canMoveToPreviousChapter: false,
+                canMoveToNextChapter: true
+            )
+        )
     }
 
     func testBookmarkMutationStorePersistsAndAppliesOptimisticChanges()
@@ -4996,8 +5067,8 @@ final class AppModelTests: XCTestCase {
             isPlaying: true,
             isPlaybackRequested: true,
             isPlaybackAvailable: true,
-            canMoveToPreviousChapter: true,
-            canMoveToNextChapter: true,
+            canPerformPreviousCommand: true,
+            canPerformNextCommand: true,
             currentChapterIndex: 1,
             currentChapterTitle: "Chapter Two",
             chapterCount: 4
@@ -5145,8 +5216,8 @@ final class AppModelTests: XCTestCase {
                 isPlaying: false,
                 isPlaybackRequested: false,
                 isPlaybackAvailable: true,
-                canMoveToPreviousChapter: false,
-                canMoveToNextChapter: false,
+                canPerformPreviousCommand: false,
+                canPerformNextCommand: false,
                 currentChapterIndex: nil,
                 currentChapterTitle: nil,
                 chapterCount: 0
@@ -5172,6 +5243,8 @@ final class AppModelTests: XCTestCase {
             .toggle,
             .skipBackward,
             .skipForward,
+            .previous,
+            .next,
             .previousChapter,
             .nextChapter,
             .seek(0),
@@ -6082,8 +6155,8 @@ private func nowPlayingSnapshot(
         isPlaying: true,
         isPlaybackRequested: true,
         isPlaybackAvailable: true,
-        canMoveToPreviousChapter: false,
-        canMoveToNextChapter: false,
+        canPerformPreviousCommand: false,
+        canPerformNextCommand: false,
         currentChapterIndex: nil,
         currentChapterTitle: nil,
         chapterCount: 0

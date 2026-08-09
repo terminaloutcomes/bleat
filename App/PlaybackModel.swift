@@ -375,6 +375,8 @@ final class PlaybackModel {
     private(set) var resumeRewind: ResumeRewind
     private(set) var skipBackwardInterval: PlaybackSkipInterval
     private(set) var skipForwardInterval: PlaybackSkipInterval
+    private(set) var previousCommandAction: HeadphoneCommandAction
+    private(set) var nextCommandAction: HeadphoneCommandAction
     private(set) var bookmarks: [AudioBookmark] = []
     private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
@@ -488,6 +490,8 @@ final class PlaybackModel {
     ) {
         let skipBackwardInterval = preferencesStore.skipBackward()
         let skipForwardInterval = preferencesStore.skipForward()
+        let previousCommandAction = preferencesStore.previousCommandAction()
+        let nextCommandAction = preferencesStore.nextCommandAction()
         self.service = service
         self.diagnostics = diagnostics
         self.positionStore = positionStore
@@ -502,6 +506,8 @@ final class PlaybackModel {
         resumeRewind = preferencesStore.resumeRewind()
         self.skipBackwardInterval = skipBackwardInterval
         self.skipForwardInterval = skipForwardInterval
+        self.previousCommandAction = previousCommandAction
+        self.nextCommandAction = nextCommandAction
         nowPlayingCoordinator.setCommandHandler {
             [weak self] command in
             self?.handleRemoteCommand(command) ?? .unavailable
@@ -1331,11 +1337,25 @@ final class PlaybackModel {
         updateRemoteSkipIntervals()
     }
 
+    func setPreviousCommandAction(_ value: HeadphoneCommandAction) {
+        preferencesStore.savePreviousCommandAction(value)
+        previousCommandAction = value
+        updateNowPlaying()
+    }
+
+    func setNextCommandAction(_ value: HeadphoneCommandAction) {
+        preferencesStore.saveNextCommandAction(value)
+        nextCommandAction = value
+        updateNowPlaying()
+    }
+
     func reloadSyncedPreferences() {
         rate = preferencesStore.playbackRate()
         resumeRewind = preferencesStore.resumeRewind()
         skipBackwardInterval = preferencesStore.skipBackward()
         skipForwardInterval = preferencesStore.skipForward()
+        previousCommandAction = preferencesStore.previousCommandAction()
+        nextCommandAction = preferencesStore.nextCommandAction()
         updateTimePitchAlgorithm()
         if isPlaybackRequested {
             player?.playImmediately(atRate: rate)
@@ -2978,8 +2998,12 @@ final class PlaybackModel {
                 isPlaying: isPlaying,
                 isPlaybackRequested: isPlaybackRequested,
                 isPlaybackAvailable: isPlaybackControlAvailable,
-                canMoveToPreviousChapter: canMoveToPreviousChapter,
-                canMoveToNextChapter: canMoveToNextChapter,
+                canPerformPreviousCommand: canPerformHeadphoneCommand(
+                    previousCommandAction
+                ),
+                canPerformNextCommand: canPerformHeadphoneCommand(
+                    nextCommandAction
+                ),
                 currentChapterIndex: currentChapterIndex,
                 currentChapterTitle: currentChapter?.title,
                 chapterCount: chapters.count
@@ -3032,6 +3056,10 @@ final class PlaybackModel {
             Task { @MainActor [weak self] in
                 await self?.skipForward()
             }
+        case .previous:
+            return handleHeadphoneCommand(previousCommandAction)
+        case .next:
+            return handleHeadphoneCommand(nextCommandAction)
         case .previousChapter:
             guard isPlaybackControlAvailable,
                 canMoveToPreviousChapter
@@ -3072,6 +3100,21 @@ final class PlaybackModel {
             setRate(requestedRate)
         }
         return .accepted
+    }
+
+    private func handleHeadphoneCommand(
+        _ action: HeadphoneCommandAction
+    ) -> PlaybackRemoteCommandOutcome {
+        handleRemoteCommand(action.remoteCommand)
+    }
+
+    private func canPerformHeadphoneCommand(
+        _ action: HeadphoneCommandAction
+    ) -> Bool {
+        action.isAvailable(
+            canMoveToPreviousChapter: canMoveToPreviousChapter,
+            canMoveToNextChapter: canMoveToNextChapter
+        )
     }
 
     private func seek(

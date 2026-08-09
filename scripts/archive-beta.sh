@@ -6,6 +6,27 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_archive_path="${BLEAT_ARCHIVE_PATH:-${bleat_repository_root}/.build/Bleat.xcarchive}"
+readonly bleat_project_configuration="${bleat_repository_root}/project.yml"
+
+readonly bleat_expected_version="$(
+    awk '$1 == "MARKETING_VERSION:" {
+        gsub(/"/, "", $2)
+        print $2
+        exit
+    }' "${bleat_project_configuration}"
+)"
+readonly bleat_expected_build="$(
+    awk '$1 == "CURRENT_PROJECT_VERSION:" {
+        gsub(/"/, "", $2)
+        print $2
+        exit
+    }' "${bleat_project_configuration}"
+)"
+
+if [[ -z "${bleat_expected_version}" || -z "${bleat_expected_build}" ]]; then
+    print -u2 "Could not read the app version and build from project.yml"
+    exit 1
+fi
 
 BUILD_VERBOSE="${BUILD_VERBOSE:-false}"
 BUILD_VERBOSE_FLAG="-quiet"
@@ -49,8 +70,8 @@ test -f "${bleat_app_info}"
 test -f "${bleat_privacy_manifest}"
 plutil -lint "${bleat_app_info}" "${bleat_privacy_manifest}"
 
-if [[ "$(plutil -extract CFBundleShortVersionString raw "${bleat_app_info}")" != "0.1.0" \
-    || "$(plutil -extract CFBundleVersion raw "${bleat_app_info}")" != "1" ]]; then
-    print -u2 "Archive version does not match Bleat 0.1.0 (1)"
+if [[ "$(plutil -extract CFBundleShortVersionString raw "${bleat_app_info}")" != "${bleat_expected_version}" \
+    || "$(plutil -extract CFBundleVersion raw "${bleat_app_info}")" != "${bleat_expected_build}" ]]; then
+    print -u2 "Archive version does not match Bleat ${bleat_expected_version} (${bleat_expected_build})"
     exit 1
 fi

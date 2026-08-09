@@ -3537,6 +3537,52 @@ private struct SettingsView: View {
                 }
 
                 Section {
+                    Picker(
+                        "Previous Command",
+                        selection: Binding(
+                            get: {
+                                model.playback.previousCommandAction
+                            },
+                            set: { value in
+                                model.playback.setPreviousCommandAction(value)
+                            }
+                        )
+                    ) {
+                        ForEach(HeadphoneCommandAction.allCases) { action in
+                            Text(action.label).tag(action)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.playback.previousCommand"
+                    )
+
+                    Picker(
+                        "Next Command",
+                        selection: Binding(
+                            get: {
+                                model.playback.nextCommandAction
+                            },
+                            set: { value in
+                                model.playback.setNextCommandAction(value)
+                            }
+                        )
+                    ) {
+                        ForEach(HeadphoneCommandAction.allCases) { action in
+                            Text(action.label).tag(action)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "settings.playback.nextCommand"
+                    )
+                } header: {
+                    Text("Headphone Controls")
+                } footer: {
+                    Text(
+                        "AirPods send Previous and Next commands. Bleat cannot identify which AirPod or tap count sent them."
+                    )
+                }
+
+                Section {
                     settingsDestinationLink(
                         "Listening Stats",
                         systemImage: "chart.bar",

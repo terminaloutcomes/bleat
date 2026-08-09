@@ -28,8 +28,9 @@ traceability rows can be closed:
   `BLEAT_CLOUDKIT_MODE=disabled` is not CloudKit propagation evidence.
 - `APP-PLAYBACK-001`: complete the physical-device media matrix for supported
   formats, background and locked playback, interruptions, route removal,
-  Bluetooth, AirPlay, CarPlay transport commands, Now Playing position, speed,
-  sleep timers, relaunch, and session recovery.
+  configured Bluetooth/headphone Previous and Next actions, AirPlay, CarPlay
+  transport commands, Now Playing position, speed, sleep timers, relaunch, and
+  session recovery.
 - `APP-CARPLAY-001`: obtain Apple's managed CarPlay Audio App entitlement and
   record CarPlay Simulator plus physical vehicle/head-unit evidence for
   browsing, search, online/offline playback, artwork, transport controls,

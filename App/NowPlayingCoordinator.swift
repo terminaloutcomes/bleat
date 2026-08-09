@@ -9,10 +9,27 @@ enum PlaybackRemoteCommand: Equatable, Sendable {
     case toggle
     case skipBackward
     case skipForward
+    case previous
+    case next
     case previousChapter
     case nextChapter
     case seek(Double)
     case setRate(Float)
+}
+
+extension HeadphoneCommandAction {
+    var remoteCommand: PlaybackRemoteCommand {
+        switch self {
+        case .skipBackward:
+            .skipBackward
+        case .skipForward:
+            .skipForward
+        case .previousChapter:
+            .previousChapter
+        case .nextChapter:
+            .nextChapter
+        }
+    }
 }
 
 enum PlaybackRemoteCommandOutcome: Equatable, Sendable {
@@ -46,8 +63,8 @@ struct NowPlayingSnapshot: Equatable, Sendable {
     let isPlaying: Bool
     let isPlaybackRequested: Bool
     let isPlaybackAvailable: Bool
-    let canMoveToPreviousChapter: Bool
-    let canMoveToNextChapter: Bool
+    let canPerformPreviousCommand: Bool
+    let canPerformNextCommand: Bool
     let currentChapterIndex: Int?
     let currentChapterTitle: String?
     let chapterCount: Int
@@ -248,10 +265,10 @@ final class NowPlayingCoordinator {
             _ in .skipForward
         }
         addTarget(to: commandCenter.previousTrackCommand) {
-            _ in .previousChapter
+            _ in .previous
         }
         addTarget(to: commandCenter.nextTrackCommand) {
-            _ in .nextChapter
+            _ in .next
         }
         addTarget(to: commandCenter.changePlaybackPositionCommand) {
             event in
@@ -320,8 +337,8 @@ final class NowPlayingCoordinator {
         commandCenter.changePlaybackPositionCommand.isEnabled = available
         commandCenter.changePlaybackRateCommand.isEnabled = available
         commandCenter.previousTrackCommand.isEnabled =
-            available && snapshot?.canMoveToPreviousChapter == true
+            available && snapshot?.canPerformPreviousCommand == true
         commandCenter.nextTrackCommand.isEnabled =
-            available && snapshot?.canMoveToNextChapter == true
+            available && snapshot?.canPerformNextCommand == true
     }
 }

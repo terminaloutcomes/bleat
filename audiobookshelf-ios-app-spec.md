@@ -238,6 +238,7 @@ Use a `TabView` with:
    - accounts and server management
    - playback defaults
    - skip intervals
+   - Previous and Next headphone-command actions
    - download/network policy
    - storage management
    - diagnostics
@@ -795,11 +796,15 @@ Register `MPRemoteCommandCenter` handlers for:
 - skip backward;
 - skip forward;
 - absolute position change;
-- previous/next chapter where supported.
+- previous/next commands independently configurable as skip backward, skip
+  forward, previous chapter, or next chapter;
 - playback-rate changes using the featured 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2×,
   2.5×, and 3× values.
 
 Remote commands and Bluetooth/headset actions call the same engine methods as SwiftUI controls.
+The app receives semantic Previous and Next commands and cannot identify the
+originating AirPod, ear, or raw tap count. Previous defaults to the configured
+skip-back action and Next defaults to the configured skip-forward action.
 
 Provide a `CPTemplateApplicationScene` for the CarPlay Audio App category. Its
 signed-in root is a three-tab interface:

@@ -18,6 +18,44 @@ enum PlaybackSkipInterval: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum HeadphoneCommandAction: String, CaseIterable, Identifiable, Sendable {
+    case skipBackward
+    case skipForward
+    case previousChapter
+    case nextChapter
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .skipBackward:
+            "Skip Back"
+        case .skipForward:
+            "Skip Forward"
+        case .previousChapter:
+            "Previous Chapter"
+        case .nextChapter:
+            "Next Chapter"
+        }
+    }
+
+    func isAvailable(
+        canMoveToPreviousChapter: Bool,
+        canMoveToNextChapter: Bool
+    ) -> Bool {
+        switch self {
+        case .skipBackward, .skipForward:
+            true
+        case .previousChapter:
+            canMoveToPreviousChapter
+        case .nextChapter:
+            canMoveToNextChapter
+        }
+    }
+}
+
 enum ResumeRewind: Int, CaseIterable, Codable, Identifiable, Sendable {
     case off = 0
     case fiveSeconds = 5
@@ -93,6 +131,10 @@ final class PlaybackPreferencesStore {
     private let resumeRewindKey = "bleat.playback.resumeRewind.v1"
     private let skipBackwardKey = "bleat.playback.skipBackward.v1"
     private let skipForwardKey = "bleat.playback.skipForward.v1"
+    private let previousCommandActionKey =
+        "bleat.playback.previousCommandAction.v1"
+    private let nextCommandActionKey =
+        "bleat.playback.nextCommandAction.v1"
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -146,6 +188,28 @@ final class PlaybackPreferencesStore {
         defaults.set(value.rawValue, forKey: skipForwardKey)
     }
 
+    func previousCommandAction() -> HeadphoneCommandAction {
+        headphoneCommandAction(
+            forKey: previousCommandActionKey,
+            defaultValue: .skipBackward
+        )
+    }
+
+    func savePreviousCommandAction(_ value: HeadphoneCommandAction) {
+        defaults.set(value.rawValue, forKey: previousCommandActionKey)
+    }
+
+    func nextCommandAction() -> HeadphoneCommandAction {
+        headphoneCommandAction(
+            forKey: nextCommandActionKey,
+            defaultValue: .skipForward
+        )
+    }
+
+    func saveNextCommandAction(_ value: HeadphoneCommandAction) {
+        defaults.set(value.rawValue, forKey: nextCommandActionKey)
+    }
+
     private func skipInterval(
         forKey key: String,
         defaultValue: PlaybackSkipInterval
@@ -154,6 +218,18 @@ final class PlaybackPreferencesStore {
             let value = PlaybackSkipInterval(
                 rawValue: defaults.integer(forKey: key)
             )
+        else {
+            return defaultValue
+        }
+        return value
+    }
+
+    private func headphoneCommandAction(
+        forKey key: String,
+        defaultValue: HeadphoneCommandAction
+    ) -> HeadphoneCommandAction {
+        guard let rawValue = defaults.string(forKey: key),
+            let value = HeadphoneCommandAction(rawValue: rawValue)
         else {
             return defaultValue
         }

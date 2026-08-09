@@ -349,9 +349,14 @@ BLEAT_DEVELOPMENT_TEAM=YOURTEAMID \
 ```
 
 Open `.build/Bleat.xcarchive` in Xcode Organizer, choose **Distribute App**,
-then **TestFlight & App Store** to upload build `0.1.0 (1)`. Upload requires a
+then **TestFlight & App Store** to upload build `0.1.1 (1)`. Upload requires a
 paid Apple Developer team, a matching App Store Connect application, and an
 account permitted to distribute it.
+
+Pushing `main` with a changed `MARKETING_VERSION` in `project.yml` validates an
+unsigned Release archive and publishes `v<version>` as a GitHub Release. The
+release notes come from the matching `## <version> - YYYY-MM-DD` section in
+`CHANGELOG.md`. This GitHub release does not upload to App Store Connect.
 
 ## Install on a personal iPhone or iPad
 
@@ -498,7 +503,11 @@ The selected global speed persists across relaunches and can be adjusted in
 0.05× steps.
 
 Audio continues in the background. Lock-screen, Control Center, headset, and
-Bluetooth controls can play, pause, seek, skip, and move between chapters.
+Bluetooth controls can play, pause, seek, and skip. Settings independently maps
+the system Previous and Next commands to skip back, skip forward, previous
+chapter, or next chapter; they default to the configured back and forward
+intervals. AirPods report only Previous or Next to Bleat, not the originating
+ear or tap count.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
 The CarPlay audio scene shares the phone's active account, selected audiobook
