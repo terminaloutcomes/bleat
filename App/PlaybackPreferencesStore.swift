@@ -18,16 +18,7 @@ enum PlaybackSkipInterval: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum HeadphoneCommandAction: String, CaseIterable, Identifiable, Sendable {
-    case skipBackward
-    case skipForward
-    case previousChapter
-    case nextChapter
-
-    var id: String {
-        rawValue
-    }
-
+extension HeadphoneCommandAction {
     var label: String {
         switch self {
         case .skipBackward:

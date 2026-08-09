@@ -17,6 +17,19 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     case cloudUnavailable
 }
 
+public enum HeadphoneCommandAction:
+    String, Codable, CaseIterable, Identifiable, Sendable
+{
+    case skipBackward
+    case skipForward
+    case previousChapter
+    case nextChapter
+
+    public var id: String {
+        rawValue
+    }
+}
+
 public struct CloudConfigurationSnapshot:
     Codable, Equatable, Sendable
 {
@@ -24,6 +37,8 @@ public struct CloudConfigurationSnapshot:
     public let resumeRewindSeconds: Int
     public let skipBackwardSeconds: Int
     public let skipForwardSeconds: Int
+    public let previousCommandAction: HeadphoneCommandAction
+    public let nextCommandAction: HeadphoneCommandAction
     public let downloadNetworkPolicy: String
     public let automaticDownloadLookahead: Int
     public let automaticDownloadCleanupPolicy: String
@@ -33,6 +48,8 @@ public struct CloudConfigurationSnapshot:
         resumeRewindSeconds: Int,
         skipBackwardSeconds: Int,
         skipForwardSeconds: Int,
+        previousCommandAction: HeadphoneCommandAction,
+        nextCommandAction: HeadphoneCommandAction,
         downloadNetworkPolicy: String,
         automaticDownloadLookahead: Int,
         automaticDownloadCleanupPolicy: String
@@ -41,10 +58,66 @@ public struct CloudConfigurationSnapshot:
         self.resumeRewindSeconds = resumeRewindSeconds
         self.skipBackwardSeconds = skipBackwardSeconds
         self.skipForwardSeconds = skipForwardSeconds
+        self.previousCommandAction = previousCommandAction
+        self.nextCommandAction = nextCommandAction
         self.downloadNetworkPolicy = downloadNetworkPolicy
         self.automaticDownloadLookahead = automaticDownloadLookahead
         self.automaticDownloadCleanupPolicy =
             automaticDownloadCleanupPolicy
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultPlaybackRate
+        case resumeRewindSeconds
+        case skipBackwardSeconds
+        case skipForwardSeconds
+        case previousCommandAction
+        case nextCommandAction
+        case downloadNetworkPolicy
+        case automaticDownloadLookahead
+        case automaticDownloadCleanupPolicy
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        defaultPlaybackRate = try container.decode(
+            Double.self,
+            forKey: .defaultPlaybackRate
+        )
+        resumeRewindSeconds = try container.decode(
+            Int.self,
+            forKey: .resumeRewindSeconds
+        )
+        skipBackwardSeconds = try container.decode(
+            Int.self,
+            forKey: .skipBackwardSeconds
+        )
+        skipForwardSeconds = try container.decode(
+            Int.self,
+            forKey: .skipForwardSeconds
+        )
+        previousCommandAction =
+            try container.decodeIfPresent(
+                HeadphoneCommandAction.self,
+                forKey: .previousCommandAction
+            ) ?? .skipBackward
+        nextCommandAction =
+            try container.decodeIfPresent(
+                HeadphoneCommandAction.self,
+                forKey: .nextCommandAction
+            ) ?? .skipForward
+        downloadNetworkPolicy = try container.decode(
+            String.self,
+            forKey: .downloadNetworkPolicy
+        )
+        automaticDownloadLookahead = try container.decode(
+            Int.self,
+            forKey: .automaticDownloadLookahead
+        )
+        automaticDownloadCleanupPolicy = try container.decode(
+            String.self,
+            forKey: .automaticDownloadCleanupPolicy
+        )
     }
 }
 
@@ -58,6 +131,10 @@ public actor CloudConfigurationStore {
             "bleat.playback.skipBackward.v1"
         static let skipForward =
             "bleat.playback.skipForward.v1"
+        static let previousCommandAction =
+            "bleat.playback.previousCommandAction.v1"
+        static let nextCommandAction =
+            "bleat.playback.nextCommandAction.v1"
         static let downloadNetworkPolicy =
             "bleat.downloads.networkPolicy.v1"
         static let automaticDownloadLookahead =
@@ -102,6 +179,14 @@ public actor CloudConfigurationStore {
                 : defaults.integer(
                     forKey: Key.skipForward
                 ),
+            previousCommandAction: defaults.string(
+                forKey: Key.previousCommandAction
+            ).flatMap(HeadphoneCommandAction.init(rawValue:))
+                ?? .skipBackward,
+            nextCommandAction: defaults.string(
+                forKey: Key.nextCommandAction
+            ).flatMap(HeadphoneCommandAction.init(rawValue:))
+                ?? .skipForward,
             downloadNetworkPolicy: defaults.string(
                 forKey: Key.downloadNetworkPolicy
             ) ?? "wifiOnly",
@@ -157,6 +242,14 @@ public actor CloudConfigurationStore {
         defaults.set(
             snapshot.skipForwardSeconds,
             forKey: Key.skipForward
+        )
+        defaults.set(
+            snapshot.previousCommandAction.rawValue,
+            forKey: Key.previousCommandAction
+        )
+        defaults.set(
+            snapshot.nextCommandAction.rawValue,
+            forKey: Key.nextCommandAction
         )
         defaults.set(
             snapshot.downloadNetworkPolicy,
