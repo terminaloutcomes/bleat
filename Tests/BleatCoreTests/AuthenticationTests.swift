@@ -308,6 +308,72 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertEqual(saveCount, 1)
     }
 
+    func testSavedNativeLoginValidatesAnUntrustedEndpointWithoutBearerToken()
+        async throws
+    {
+        let transport = AuthenticationHTTPTransport(
+            responses: [
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: "temporary-access",
+                        refreshToken: "temporary-refresh"
+                    )
+                ),
+                .json(Self.authenticationJSON()),
+            ]
+        )
+        let store = RecordingCredentialStore()
+        let accountID = AccountID(rawValue: "edited-account")
+        let storedTokens = try AuthenticationTokens(
+            accessToken: "primary-access",
+            refreshToken: "primary-refresh"
+        )
+        let storedLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "stored-password"
+        )
+        try await store.save(
+            storedTokens,
+            nativeLogin: storedLogin,
+            for: accountID
+        )
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        _ = try await coordinator.validateSavedNativeLogin(
+            accountID: accountID,
+            server: NormalizedServerURL("https://local.example/prefix"),
+            expectedUserID: UserID(rawValue: "user-id")
+        )
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(
+            requests[0].url?.absoluteString,
+            "https://local.example/prefix/login"
+        )
+        XCTAssertNil(
+            requests[0].value(forHTTPHeaderField: "Authorization")
+        )
+        XCTAssertEqual(
+            requests[1].url?.absoluteString,
+            "https://local.example/prefix/api/authorize"
+        )
+        XCTAssertEqual(
+            requests[1].value(forHTTPHeaderField: "Authorization"),
+            "Bearer temporary-access"
+        )
+        let retainedTokens = await store.credentials(for: accountID)
+        let retainedLogin = await store.nativeLoginCredentials(for: accountID)
+        let saveCount = await store.saveCount()
+        XCTAssertEqual(retainedTokens, storedTokens)
+        XCTAssertEqual(retainedLogin, storedLogin)
+        XCTAssertEqual(saveCount, 1)
+    }
+
     func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting()
         async throws
     {

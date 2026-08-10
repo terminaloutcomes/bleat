@@ -4,6 +4,7 @@ public enum AudiobookshelfLiveConnectionState: Equatable, Sendable {
     case connecting
     case authenticated
     case disconnected
+    case suspendedForLowDataMode
     case failed(AudiobookshelfLiveUpdateFailure)
 }
 
@@ -113,6 +114,14 @@ public struct AudiobookshelfSocketCodec: Sendable {
             decoding: data ?? Data("[]".utf8),
             as: UTF8.self
         )
+    }
+
+    public func socketRequest(
+        for server: NormalizedServerURL
+    ) throws(AudiobookshelfLiveUpdateFailure) -> URLRequest {
+        var request = URLRequest(url: try socketURL(for: server))
+        request.allowsConstrainedNetworkAccess = false
+        return request
     }
 
     public func decode(
@@ -289,10 +298,10 @@ public actor AudiobookshelfLiveEventClient {
         continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation
     ) async -> Bool {
         let server = await serverProvider()
-        let url: URL
+        let request: URLRequest
         let initialToken: String
         do {
-            url = try codec.socketURL(for: server)
+            request = try codec.socketRequest(for: server)
             initialToken = try await tokenProvider()
         } catch let failure as AudiobookshelfLiveUpdateFailure {
             continuation.yield(.connection(.failed(failure)))
@@ -302,7 +311,7 @@ public actor AudiobookshelfLiveEventClient {
             return false
         }
 
-        let socket = URLSession.shared.webSocketTask(with: url)
+        let socket = URLSession.shared.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
         var token = initialToken

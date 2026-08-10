@@ -1,6 +1,8 @@
 import AVFoundation
 import BleatCore
+import BleatTranscription
 import MediaPlayer
+import UIKit
 import XCTest
 
 @testable import Bleat
@@ -86,8 +88,905 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testChapterAudioSlicePlannerUsesOneDownloadedChapterFile() throws {
+        XCTAssertEqual(
+            try ChapterAudioSlicePlanner.slices(
+                for: PlaybackChapter(
+                    id: 2,
+                    start: 70,
+                    end: 90,
+                    title: "Downloaded chapter"
+                ),
+                tracks: [
+                    ChapterAudioTrack(
+                        trackIndex: 4,
+                        startOffsetSeconds: 60,
+                        durationSeconds: 60
+                    )
+                ]
+            ),
+            [
+                ChapterAudioSlice(
+                    trackIndex: 4,
+                    audioStartSeconds: 10,
+                    durationSeconds: 20,
+                    wholeBookStartSeconds: 70
+                )
+            ]
+        )
+    }
+
+    func testChapterTranscriptionBatchPlannerUsesBookChapterOrder() {
+        let chapters = [
+            PlaybackChapter(id: 9, start: 0, end: 10, title: "Nine"),
+            PlaybackChapter(id: 2, start: 10, end: 20, title: "Two"),
+            PlaybackChapter(id: 7, start: 20, end: 30, title: "Seven"),
+            PlaybackChapter(id: 1, start: 30, end: 40, title: "One"),
+        ]
+
+        XCTAssertEqual(
+            ChapterTranscriptionBatchPlanner.orderedChapters(
+                selectedChapterIDs: [1, 9, 7],
+                from: chapters
+            ).map(\.id),
+            [1, 7, 9]
+        )
+    }
+
+    func testChapterTranscriptionViewUsesAppOwnedCoordinator() throws {
+        let appModel = AppModel(
+            service: TestAppService(activeAccount: .success(nil))
+        )
+        let item = fixtureBook(
+            id: "item-1",
+            title: "A Book",
+            libraryID: fixtureLibrary().id
+        )
+        let view = ChapterTranscriptionView(
+            detail: fixtureBookDetail(item: item),
+            account: try fixtureAccount(),
+            appModel: appModel,
+            downloads: appModel.downloads
+        )
+
+        XCTAssertTrue(view.model === appModel.transcription)
+    }
+
+    func testChapterTranscriptionFailuresMapToTypedPersistentFailures() {
+        XCTAssertEqual(
+            ChapterTranscriptionViewFailure.audioNotDownloaded
+                .cachedTaskFailure,
+            .audioNotDownloaded
+        )
+        XCTAssertEqual(
+            ChapterTranscriptionViewFailure.transcription(
+                .analyzerInputFailed(
+                    ChapterTranscriptionDiagnostic(
+                        domain: "SFSpeechErrorDomain",
+                        code: 2
+                    )
+                )
+            ).cachedTaskFailure,
+            .analyzerInputFailed
+        )
+        XCTAssertEqual(
+            ChapterTranscriptionViewFailure.transcription(
+                .audioFileUnreadable("private filename.m4b")
+            ).cachedTaskFailure,
+            .audioFileUnreadable
+        )
+    }
+
+    func testLateTranscriptLoadCannotReplaceNewerBatchResult() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 9,
+            start: 0,
+            end: 20,
+            title: "Chapter Nine"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-load-race",
+                title: "Load Race",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let staleTaskState = fixtureTranscriptionTaskState(
+            chapterIDs: [chapter.id],
+            completedChapterIDs: [],
+            outcome: .failed,
+            failure: .localAudioUnavailable
+        )
+        let loadGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoadGate: loadGate,
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "stale text")
+            ]),
+            transcriptionTaskStateLoad: .success(staleTaskState)
+        )
+        let coordinator = makeTranscriptionModel(
+            segments: [
+                TranscriptSegment(
+                    startMilliseconds: 1_000,
+                    endMilliseconds: 2_000,
+                    text: "new text"
+                )
+            ]
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        let load = Task { @MainActor in
+            await coordinator.loadCachedTranscripts(
+                detail: detail,
+                account: account,
+                appModel: appModel
+            )
+        }
+        await loadGate.waitUntilEntered()
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        let completed = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        XCTAssertEqual(completed?.outcome, .succeeded)
+        let completedTaskID = completed?.taskID
+
+        await loadGate.release()
+        await load.value
+
+        XCTAssertEqual(
+            coordinator.searchResults(query: "new text", for: bookKey).count,
+            1
+        )
+        XCTAssertTrue(
+            coordinator.searchResults(query: "stale text", for: bookKey)
+                .isEmpty
+        )
+        XCTAssertEqual(
+            coordinator.terminalState(for: bookKey)?.taskID,
+            completedTaskID
+        )
+        XCTAssertEqual(
+            coordinator.terminalState(for: bookKey)?.outcome,
+            .succeeded
+        )
+    }
+
+    func testCancellationAfterSuccessfulSaveKeepsCompletedChapter()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 3,
+            start: 0,
+            end: 20,
+            title: "Chapter Three"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-cancel-save",
+                title: "Cancel Save",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let saveGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptSaveGate: saveGate
+        )
+        let coordinator = makeTranscriptionModel(
+            segments: [
+                TranscriptSegment(
+                    startMilliseconds: 500,
+                    endMilliseconds: 1_500,
+                    text: "saved before cancellation"
+                )
+            ]
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await saveGate.waitUntilEntered()
+        coordinator.cancel()
+        XCTAssertTrue(coordinator.isCancelling(for: bookKey))
+        await saveGate.release()
+
+        let loadedTerminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        let terminalState = try XCTUnwrap(loadedTerminalState)
+        XCTAssertEqual(terminalState.outcome, .cancelled)
+        XCTAssertEqual(terminalState.completedChapterIDs, [chapter.id])
+        XCTAssertTrue(coordinator.isCached(chapterID: chapter.id, for: bookKey))
+        XCTAssertEqual(
+            coordinator.searchResults(
+                query: "SAVED BEFORE CANCELLATION",
+                for: bookKey
+            ).count,
+            1
+        )
+    }
+
+    func testLateTranscriptLoadErrorCannotReplaceNewerBatchResult()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 11,
+            start: 0,
+            end: 20,
+            title: "Chapter Eleven"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-load-error-race",
+                title: "Load Error Race",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let loadGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoadGate: loadGate,
+            transcriptLoad: .failure(
+                .transcriptCache(.persistenceFailed)
+            )
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        let load = Task { @MainActor in
+            await coordinator.loadCachedTranscripts(
+                detail: detail,
+                account: account,
+                appModel: appModel
+            )
+        }
+        await loadGate.waitUntilEntered()
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        let terminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        XCTAssertEqual(terminalState?.outcome, .succeeded)
+        await loadGate.release()
+        await load.value
+
+        XCTAssertNil(coordinator.cacheFailure(for: bookKey))
+        XCTAssertTrue(coordinator.isCached(chapterID: chapter.id, for: bookKey))
+        XCTAssertEqual(
+            coordinator.terminalState(for: bookKey)?.taskID,
+            terminalState?.taskID
+        )
+    }
+
+    func testReloadPreservesNewerTerminalStateAndItsSaveFailure()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 12,
+            start: 0,
+            end: 20,
+            title: "Chapter Twelve"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-terminal-reload",
+                title: "Terminal Reload",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "durable text")
+            ]),
+            transcriptionTaskStateLoad: .success(nil),
+            transcriptionTaskStateSaveResults: [
+                .failure(.transcriptCache(.persistenceFailed))
+            ]
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        let loadedTerminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        let terminalState = try XCTUnwrap(loadedTerminalState)
+        await waitForTranscriptionCacheFailure(
+            .taskStateSaveFailed,
+            in: coordinator,
+            bookKey: bookKey
+        )
+
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        XCTAssertEqual(
+            coordinator.terminalState(for: bookKey)?.taskID,
+            terminalState.taskID
+        )
+        XCTAssertEqual(
+            coordinator.cacheFailure(for: bookKey),
+            .taskStateSaveFailed
+        )
+    }
+
+    func testLateTerminalSaveCannotSetFailureForReplacementBatch()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 13,
+            start: 0,
+            end: 20,
+            title: "Chapter Thirteen"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-terminal-save-race",
+                title: "Terminal Save Race",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let firstSaveGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            firstTranscriptionTaskStateSaveGate: firstSaveGate,
+            transcriptionTaskStateSaveResults: [
+                .failure(.transcriptCache(.persistenceFailed)),
+                .success(()),
+            ]
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await firstSaveGate.waitUntilEntered()
+        let firstTaskID = try XCTUnwrap(
+            coordinator.terminalState(for: bookKey)?.taskID
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        let loadedReplacement =
+            await waitForDifferentTranscriptionTerminalState(
+                than: firstTaskID,
+                in: coordinator,
+                bookKey: bookKey
+            )
+        let replacement = try XCTUnwrap(loadedReplacement)
+        await waitForTranscriptionTaskStateSaveAttempts(2, in: service)
+        XCTAssertNil(coordinator.cacheFailure(for: bookKey))
+
+        await firstSaveGate.release()
+        await waitForTranscriptionTaskStateSaveCompletions(2, in: service)
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(
+            coordinator.terminalState(for: bookKey)?.taskID,
+            replacement.taskID
+        )
+        XCTAssertNil(coordinator.cacheFailure(for: bookKey))
+    }
+
+    func testCancellationBeforeFailedSaveDoesNotCompleteChapter()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 5,
+            start: 0,
+            end: 20,
+            title: "Chapter Five"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-cancel-failed-save",
+                title: "Failed Save",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let saveGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptSaveGate: saveGate,
+            transcriptSave: .failure(
+                .transcriptCache(.persistenceFailed)
+            )
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await saveGate.waitUntilEntered()
+        coordinator.cancel()
+        await saveGate.release()
+
+        let terminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        XCTAssertEqual(terminalState?.outcome, .cancelled)
+        XCTAssertEqual(terminalState?.completedChapterIDs, [])
+        XCTAssertFalse(
+            coordinator.isCached(chapterID: chapter.id, for: bookKey))
+    }
+
+    func testTranscriptCacheExpiresOnlyAfterFiveIdleMinutes() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "Chapter One"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-expiry",
+                title: "Expiry",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "cached")
+            ])
+        )
+        let coordinator = ChapterTranscriptionModel(
+            transcriptCacheTTL: .seconds(300),
+            transcriptCacheReapInterval: .seconds(3_600)
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+        coordinator.reapExpiredTranscriptCaches(
+            now: ContinuousClock().now.advanced(by: Duration.seconds(299))
+        )
+        XCTAssertTrue(coordinator.isCached(chapterID: chapter.id, for: bookKey))
+
+        coordinator.reapExpiredTranscriptCaches(
+            now: ContinuousClock().now.advanced(by: Duration.seconds(301))
+        )
+        XCTAssertFalse(
+            coordinator.isCached(chapterID: chapter.id, for: bookKey))
+    }
+
+    func testVisibleAndActiveTranscriptCachesSurviveMemoryWarning()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "Chapter One"
+        )
+        let details = (1...3).map { index in
+            fixtureBookDetail(
+                item: fixtureBook(
+                    id: "memory-warning-\(index)",
+                    title: "Book \(index)",
+                    libraryID: fixtureLibrary().id
+                ),
+                chapters: [chapter]
+            )
+        }
+        let transcriberGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "cached")
+            ])
+        )
+        let coordinator = makeTranscriptionModel(
+            transcriberGate: transcriberGate
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        for detail in details {
+            await coordinator.loadCachedTranscripts(
+                detail: detail,
+                account: account,
+                appModel: appModel
+            )
+        }
+        let visibleBookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: details[1].id
+        )
+        let activeBookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: details[2].id
+        )
+        coordinator.retainTranscriptCache(for: visibleBookKey)
+        coordinator.start(
+            chapters: [chapter],
+            detail: details[2],
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await transcriberGate.waitUntilEntered()
+        await Task.yield()
+
+        NotificationCenter.default.post(
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+
+        let inactiveBookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: details[0].id
+        )
+        XCTAssertFalse(
+            coordinator.isCached(chapterID: chapter.id, for: inactiveBookKey)
+        )
+        XCTAssertTrue(
+            coordinator.isCached(chapterID: chapter.id, for: visibleBookKey)
+        )
+        XCTAssertTrue(
+            coordinator.isCached(chapterID: chapter.id, for: activeBookKey)
+        )
+
+        coordinator.releaseTranscriptCache(for: visibleBookKey)
+        coordinator.cancel()
+        await transcriberGate.release()
+        _ = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: activeBookKey
+        )
+    }
+
+    func testPlaybackDoesNotBlockOrCancelTranscription() async throws {
+        let playbackFixture = try playbackRecoveryFixture()
+        defer {
+            playbackFixture.cleanUp()
+        }
+        let playback = playbackFixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        await playback.startDownloaded(
+            detail: playbackFixture.detail,
+            trackURLs: [playbackFixture.audioURL],
+            accountID: playbackFixture.accountID,
+            account: nil
+        )
+        XCTAssertTrue(playback.isPlaybackRequested)
+
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 7,
+            start: 0,
+            end: 20,
+            title: "Chapter Seven"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-playback",
+                title: "Playback",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let transcriberGate = AsyncGate()
+        let service = TestAppService(activeAccount: .success(account))
+        let coordinator = makeTranscriptionModel(
+            transcriberGate: transcriberGate
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await transcriberGate.waitUntilEntered()
+        XCTAssertTrue(coordinator.isWorking(for: bookKey))
+
+        playback.pause()
+        playback.play()
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertTrue(coordinator.isWorking(for: bookKey))
+        XCTAssertFalse(coordinator.isCancelling(for: bookKey))
+
+        await transcriberGate.release()
+        let terminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        XCTAssertEqual(terminalState?.outcome, .succeeded)
+        await playback.stop()
+    }
+
+    func testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes()
+        async throws
+    {
+        let audioFixture = try playbackRecoveryFixture()
+        defer { audioFixture.cleanUp() }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatTranscriptionPin-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let suite = "TranscriptionPinTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 2,
+            start: 1,
+            end: 2,
+            title: "Cached chapter"
+        )
+        let item = fixtureBook(
+            id: "automatic-transcription",
+            title: "Automatic transcription",
+            libraryID: fixtureLibrary().id
+        )
+        let detail = fixtureBookDetail(
+            item: item,
+            chapters: [chapter]
+        )
+        let size = try XCTUnwrap(
+            try FileManager.default.attributesOfItem(
+                atPath: audioFixture.audioURL.path
+            )[.size] as? NSNumber
+        ).int64Value
+        let tracks = (0..<2).map { index in
+            DownloadTrackPlan(
+                index: index,
+                inode: "\(index)",
+                expectedByteLength: size,
+                mimeType: "audio/wav",
+                safeExtension: .wav,
+                destinationEntry: String(format: "%05d.wav", index),
+                startOffset: Double(index),
+                duration: 1
+            )
+        }
+        let plan = DownloadPlan(itemID: detail.id, tracks: tracks)
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        var record = try await storage.create(
+            downloadID: DownloadID(rawValue: "automatic-transcription"),
+            accountID: account.id,
+            plan: plan,
+            detail: detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[1]
+        )
+        let staged = root.appendingPathComponent("staged.wav")
+        try FileManager.default.copyItem(
+            at: audioFixture.audioURL,
+            to: staged
+        )
+        let observed = try layout.placeDownloadedFile(
+            from: staged,
+            identity: identity
+        )
+        record = try await storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+        _ = try await storage.markBookFinished(record, at: Date())
+
+        let gate = AsyncGate()
+        let coordinator = ChapterTranscriptionModel(
+            transcriptCacheReapInterval: .seconds(3_600),
+            transcriberFactory: {
+                TestChapterTranscriber(
+                    gate: gate,
+                    segments: [
+                        TranscriptSegment(
+                            startMilliseconds: 1_000,
+                            endMilliseconds: 2_000,
+                            text: "cached chapter"
+                        )
+                    ]
+                )
+            }
+        )
+        let service = TestAppService(activeAccount: .success(account))
+        let downloads = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root
+        )
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        await downloads.start(account: account)
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: downloads,
+            appModel: appModel
+        )
+        await gate.waitUntilEntered()
+
+        downloads.setAutomaticCleanupPolicy(.afterBook)
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+        XCTAssertNotNil(
+            downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: layout.destinationURL(for: identity).path
+            )
+        )
+
+        await gate.release()
+        let terminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+        XCTAssertEqual(terminalState?.outcome, .succeeded)
+        for _ in 0..<100
+        where downloads.record(
+            accountID: account.id,
+            itemID: detail.id
+        ) != nil {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(
+            downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+    }
+
     func testCloudKitCapabilityRequiresEnabledEntitledBuild() {
-        let containerIdentifier = PrivateCloudSyncCoordinator.containerIdentifier
+        let containerIdentifier = PrivateCloudSyncCoordinator
+            .containerIdentifier
 
         XCTAssertFalse(
             BleatCloudKitCapability.isAvailable(
@@ -158,7 +1057,8 @@ final class AppModelTests: XCTestCase {
 
     func testBleatLocalStoreMigratesExistingDefaultStore() throws {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("BleatLocalStoreMigration-\(UUID().uuidString)")
+            .appendingPathComponent(
+                "BleatLocalStoreMigration-\(UUID().uuidString)")
         defer {
             try? FileManager.default.removeItem(at: root)
         }
@@ -1027,7 +1927,8 @@ final class AppModelTests: XCTestCase {
         )
         await model.start()
 
-        XCTAssertEqual(model.downloads.records.map(\.manifest.accountID), [account.id])
+        XCTAssertEqual(
+            model.downloads.records.map(\.manifest.accountID), [account.id])
         XCTAssertFalse(
             FileManager.default.fileExists(
                 atPath: layout.recordURL(
@@ -1897,7 +2798,9 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testPlaybackRecoveryPolicyBoundsRebuildAndSessionReplacement() {
+    func testPlaybackRecoveryPolicyBoundsRebuildAndSessionReplacement()
+        throws
+    {
         var streamingPolicy = PlaybackRecoveryPolicy()
         XCTAssertEqual(
             streamingPolicy.action(
@@ -1918,6 +2821,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             streamingPolicy.action(
                 for: .missingSession,
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .fail
+        )
+
+        let localURL = try XCTUnwrap(
+            URL(string: "https://local.example/audio.m4b")
+        )
+        var endpointPolicy = PlaybackRecoveryPolicy()
+        XCTAssertEqual(
+            endpointPolicy.action(
+                for: .localEndpointFailure(localURL),
+                isStreaming: true,
+                isTranscoded: false
+            ),
+            .fallbackFromLocal(localURL)
+        )
+        XCTAssertEqual(
+            endpointPolicy.action(
+                for: .localEndpointFailure(localURL),
                 isStreaming: true,
                 isTranscoded: false
             ),
@@ -2618,6 +3542,63 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(finalRequests.count, 2)
     }
 
+    func testNetworkPathStateAllowsRealtimeOnlyWhenUnconstrained() {
+        XCTAssertFalse(AppNetworkPathState.unknown.allowsRealtimeUpdates)
+        XCTAssertFalse(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: true,
+                isExpensive: false
+            ).allowsRealtimeUpdates
+        )
+        XCTAssertTrue(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: true
+            ).allowsRealtimeUpdates
+        )
+    }
+
+    func testConstrainedPathSuspendsLiveUpdatesWithoutSigningOut()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            accounts: .success([account]),
+            activeAccount: .success(account)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        for _ in 0..<100 {
+            if await service.networkPathObserverCount() == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: true,
+                isExpensive: false
+            )
+        )
+        for _ in 0..<100 {
+            if model.liveUpdateConnectionState == .suspendedForLowDataMode {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.account?.id, account.id)
+        XCTAssertEqual(
+            model.liveUpdateConnectionState,
+            .suspendedForLowDataMode
+        )
+    }
+
     func testPendingLocalSessionUploadDoesNotBlockLaunch() async throws {
         let storageKey = "bleat.localPlaybackSessions.v1"
         let defaults = UserDefaults.standard
@@ -3230,6 +4211,37 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testTemporaryLocalFailureNeverRevokesExistingValidation() throws {
+        let fixture = try fixtureAccount()
+        let local = try NormalizedServerURL("https://local.example")
+        let account = try ServerAccount(
+            id: fixture.id,
+            server: fixture.server,
+            localServer: local,
+            localServerValidated: true,
+            serverVersion: fixture.serverVersion,
+            authenticationMethods: fixture.authenticationMethods,
+            user: fixture.user
+        )
+
+        XCTAssertTrue(
+            LocalServerValidationDecision.persistedValidation(
+                account: account,
+                local: local,
+                validationSucceeded: false
+            )
+        )
+        XCTAssertFalse(
+            LocalServerValidationDecision.persistedValidation(
+                account: account,
+                local: try NormalizedServerURL(
+                    "https://different-local.example"
+                ),
+                validationSucceeded: false
+            )
+        )
+    }
+
     func testAccountEditorCanSaveAfterLocalValidationFailure() async throws {
         let account = try fixtureAccount()
         let updated = try ServerAccount(
@@ -3321,7 +4333,8 @@ final class AppModelTests: XCTestCase {
                 server: try NormalizedServerURL(
                     "https://private.example/library"
                 )
-            )
+            ),
+            localServerState: .available
         )
         let service = TestAppService(
             activeAccount: .success(account),
@@ -3358,6 +4371,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(report.apiEndpoint, "Local — books.home:8443")
         XCTAssertEqual(report.webSocketEndpoint, "Primary — private.example")
         XCTAssertEqual(report.webSocketState, "Disconnected")
+        XCTAssertEqual(report.localServerState, "Validated — available")
         XCTAssertTrue(report.errorCodes.isEmpty)
         XCTAssertTrue(report.text.contains("App: 0.1.0 (7)"))
         XCTAssertTrue(report.text.contains("Server version: 2.36.0"))
@@ -3382,7 +4396,8 @@ final class AppModelTests: XCTestCase {
             ),
             authentication: endpointDiagnostics.authentication,
             api: endpointDiagnostics.api,
-            webSocket: endpointDiagnostics.webSocket
+            webSocket: endpointDiagnostics.webSocket,
+            localServerState: .temporarilyUnavailable
         )
         for _ in 0..<100 {
             if await service.endpointDiagnosticsObserverCount() > 0 {
@@ -3859,7 +4874,8 @@ final class AppModelTests: XCTestCase {
         let coordinator = AppNavigationCoordinator()
         let accountQualifiedBookURL = try XCTUnwrap(
             URL(
-                string: "bleat://book/item-1?account=account-2&library=library-1"
+                string:
+                    "bleat://book/item-1?account=account-2&library=library-1"
             )
         )
         let settingsURL = try XCTUnwrap(
@@ -3894,7 +4910,7 @@ final class AppModelTests: XCTestCase {
             title: "A Book",
             libraryID: library.id,
             authors: [
-                LibraryBookContributor(id: authorID, name: "An Author"),
+                LibraryBookContributor(id: authorID, name: "An Author")
             ]
         )
         let gate = AsyncGate()
@@ -4013,14 +5029,14 @@ final class AppModelTests: XCTestCase {
             title: "Volume One",
             libraryID: library.id,
             authors: [
-                LibraryBookContributor(id: authorID, name: "First Author"),
+                LibraryBookContributor(id: authorID, name: "First Author")
             ],
             series: [
                 LibraryBookSeries(
                     id: seriesID,
                     name: "A Series",
                     sequence: "1"
-                ),
+                )
             ]
         )
         let service = TestAppService(
@@ -4039,14 +5055,18 @@ final class AppModelTests: XCTestCase {
         let author = await model.resolveAuthor(authorID, in: library.id)
         let series = await model.resolveSeries(seriesID, in: library.id)
 
-        XCTAssertEqual(author, LibrarySearchAuthorMatch(
-            id: authorID,
-            name: "First Author"
-        ))
-        XCTAssertEqual(series, LibrarySearchSeriesMatch(
-            id: seriesID,
-            name: "A Series"
-        ))
+        XCTAssertEqual(
+            author,
+            LibrarySearchAuthorMatch(
+                id: authorID,
+                name: "First Author"
+            ))
+        XCTAssertEqual(
+            series,
+            LibrarySearchSeriesMatch(
+                id: seriesID,
+                name: "A Series"
+            ))
         let selections = await service.pageSelections()
         XCTAssertEqual(
             Array(selections.suffix(2)),
@@ -4705,56 +5725,6 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
-        await playback.stop()
-    }
-
-    func testPausedPlaybackIgnoresLiveProgress() async throws {
-        let fixture = try playbackRecoveryFixture()
-        defer {
-            fixture.cleanUp()
-        }
-        let account = try fixtureAccount()
-        let preparation = AppPlaybackPreparation(
-            sessionID: PlaybackSessionID(rawValue: "active-session"),
-            itemID: fixture.detail.id,
-            title: fixture.detail.title,
-            duration: 1,
-            currentTime: 0,
-            chapters: fixture.detail.chapters,
-            source: .direct([
-                AppPlaybackTrack(
-                    url: fixture.audioURL,
-                    startOffset: 0,
-                    duration: 1,
-                    title: "Track 1"
-                )
-            ])
-        )
-        let playback = fixture.model(
-            activation: TestAudioSessionActivation(),
-            service: TestAppService(
-                activeAccount: .success(account),
-                playback: [.success(preparation)]
-            )
-        )
-        await playback.start(detail: fixture.detail, account: account)
-        playback.pause()
-        let pausedTime = playback.currentTime
-
-        playback.observeLiveProgress(
-            AudiobookshelfLivePlaybackProgress(
-                itemID: fixture.detail.id,
-                sessionID: PlaybackSessionID(rawValue: "stale-session"),
-                deviceDescription: "iPhone / v0.1.0",
-                currentTime: 0.5,
-                duration: 1,
-                isFinished: false,
-                lastUpdateMilliseconds: 1
-            )
-        )
-
-        XCTAssertEqual(playback.state, .paused)
-        XCTAssertEqual(playback.currentTime, pausedTime, accuracy: 0.001)
         await playback.stop()
     }
 
@@ -5890,7 +6860,8 @@ final class AppModelTests: XCTestCase {
 
     private func fixtureBookDetail(
         item: LibraryBookSummary,
-        authors: [LibraryBookContributor]? = nil
+        authors: [LibraryBookContributor]? = nil,
+        chapters: [PlaybackChapter] = []
     ) -> LibraryBookDetail {
         LibraryBookDetail(
             id: item.id,
@@ -5918,13 +6889,158 @@ final class AppModelTests: XCTestCase {
             duration: item.duration,
             trackCount: item.trackCount,
             audioFileCount: item.trackCount,
-            chapters: [],
+            chapters: chapters,
             addedAtMilliseconds: item.addedAtMilliseconds,
             updatedAtMilliseconds: item.updatedAtMilliseconds,
             isExplicit: item.isExplicit,
             isAbridged: item.isAbridged,
             progress: nil
         )
+    }
+
+    private func makeTranscriptionModel(
+        segments: [TranscriptSegment] = [
+            TranscriptSegment(
+                startMilliseconds: 0,
+                endMilliseconds: 1_000,
+                text: "transcribed text"
+            )
+        ],
+        transcriberGate: AsyncGate? = nil
+    ) -> ChapterTranscriptionModel {
+        ChapterTranscriptionModel(
+            transcriptCacheReapInterval: .seconds(3_600),
+            audioLoader: { _, _, _, _ in
+                PreparedChapterTranscriptionAudio(
+                    tracks: [
+                        PreparedChapterTranscriptionTrack(
+                            timeline: ChapterAudioTrack(
+                                trackIndex: 0,
+                                startOffsetSeconds: 0,
+                                durationSeconds: 60
+                            ),
+                            url: FileManager.default.temporaryDirectory
+                                .appendingPathComponent("test-audio.m4b")
+                        )
+                    ],
+                    cachePin: nil
+                )
+            },
+            transcriberFactory: {
+                TestChapterTranscriber(
+                    gate: transcriberGate,
+                    segments: segments
+                )
+            }
+        )
+    }
+
+    private func fixtureTranscript(
+        chapter: PlaybackChapter,
+        text: String
+    ) -> CachedChapterTranscript {
+        CachedChapterTranscript(
+            chapterID: chapter.id,
+            chapterTitle: chapter.title,
+            chapterStartMilliseconds: Int64(chapter.start * 1_000),
+            chapterEndMilliseconds: Int64(chapter.end * 1_000),
+            localeIdentifier: "en_AU",
+            segments: [
+                CachedTranscriptSegment(
+                    startMilliseconds: Int64(chapter.start * 1_000),
+                    endMilliseconds: Int64(chapter.start * 1_000 + 1_000),
+                    text: text
+                )
+            ]
+        )
+    }
+
+    private func fixtureTranscriptionTaskState(
+        chapterIDs: [Int],
+        completedChapterIDs: [Int],
+        outcome: CachedChapterTranscriptionTaskOutcome,
+        failure: CachedChapterTranscriptionTaskFailure?
+    ) -> CachedChapterTranscriptionTaskState {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        return CachedChapterTranscriptionTaskState(
+            taskID: UUID(),
+            selectedChapterIDs: chapterIDs,
+            completedChapterIDs: completedChapterIDs,
+            currentChapterID: chapterIDs.first,
+            outcome: outcome,
+            failure: failure,
+            startedAt: startedAt,
+            finishedAt: startedAt.addingTimeInterval(1),
+            durationMilliseconds: 1_000
+        )
+    }
+
+    private func waitForTranscriptionTerminalState(
+        in coordinator: ChapterTranscriptionModel,
+        bookKey: ChapterTranscriptionBookKey
+    ) async -> CachedChapterTranscriptionTaskState? {
+        for _ in 0..<100 {
+            if let terminalState = coordinator.terminalState(for: bookKey) {
+                return terminalState
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return coordinator.terminalState(for: bookKey)
+    }
+
+    private func waitForDifferentTranscriptionTerminalState(
+        than taskID: UUID?,
+        in coordinator: ChapterTranscriptionModel,
+        bookKey: ChapterTranscriptionBookKey
+    ) async -> CachedChapterTranscriptionTaskState? {
+        for _ in 0..<100 {
+            if let terminalState = coordinator.terminalState(for: bookKey),
+                terminalState.taskID != taskID
+            {
+                return terminalState
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return coordinator.terminalState(for: bookKey)
+    }
+
+    private func waitForTranscriptionCacheFailure(
+        _ failure: ChapterTranscriptCacheViewFailure,
+        in coordinator: ChapterTranscriptionModel,
+        bookKey: ChapterTranscriptionBookKey
+    ) async {
+        for _ in 0..<100 {
+            if coordinator.cacheFailure(for: bookKey) == failure {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    private func waitForTranscriptionTaskStateSaveAttempts(
+        _ count: Int,
+        in service: TestAppService
+    ) async {
+        for _ in 0..<100 {
+            if await service.transcriptionTaskStateSaveAttemptCount() >= count {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    private func waitForTranscriptionTaskStateSaveCompletions(
+        _ count: Int,
+        in service: TestAppService
+    ) async {
+        for _ in 0..<100 {
+            if await service.transcriptionTaskStateSaveCompletionCount()
+                >= count
+            {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     private func fixtureBookProgress(
@@ -6504,13 +7620,23 @@ private actor TestAppService: AppServicing {
     private let bookDetailGate: AsyncGate?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
+    private let transcriptLoadGate: AsyncGate?
+    private let transcriptSaveGate: AsyncGate?
+    private let transcriptLoadResult:
+        Result<[CachedChapterTranscript], AppServiceError>
+    private let transcriptSaveResult: Result<Void, AppServiceError>
+    private let transcriptionTaskStateLoadResult:
+        Result<CachedChapterTranscriptionTaskState?, AppServiceError>
+    private let firstTranscriptionTaskStateSaveGate: AsyncGate?
+    private let transcriptionTaskStateSaveResults:
+        [Result<Void, AppServiceError>]
     private let privateCloudSyncAvailable: Bool
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
             AsyncStream<AppEndpointDiagnostics>.Continuation] = [:]
     private var networkPathContinuations:
-        [UUID: AsyncStream<Void>.Continuation] = [:]
+        [UUID: AsyncStream<AppNetworkPathState>.Continuation] = [:]
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -6532,6 +7658,11 @@ private actor TestAppService: AppServicing {
     private var recordedProgressUpdateRequests: [ProgressUpdateRequest] = []
     private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
+    private var recordedSavedTranscripts: [CachedChapterTranscript] = []
+    private var recordedTranscriptionTaskStates:
+        [CachedChapterTranscriptionTaskState] = []
+    private var transcriptionTaskStateSaveAttempts = 0
+    private var transcriptionTaskStateSaveCompletions = 0
 
     init(
         accounts: Result<[ServerAccount], AppServiceError>? = nil,
@@ -6587,6 +7718,17 @@ private actor TestAppService: AppServicing {
         bookDetailGate: AsyncGate? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
+        transcriptLoadGate: AsyncGate? = nil,
+        transcriptSaveGate: AsyncGate? = nil,
+        transcriptLoad:
+            Result<[CachedChapterTranscript], AppServiceError> = .success([]),
+        transcriptSave: Result<Void, AppServiceError> = .success(()),
+        transcriptionTaskStateLoad:
+            Result<CachedChapterTranscriptionTaskState?, AppServiceError> =
+            .success(nil),
+        firstTranscriptionTaskStateSaveGate: AsyncGate? = nil,
+        transcriptionTaskStateSaveResults:
+            [Result<Void, AppServiceError>] = [],
         privateCloudSyncAvailable: Bool = true,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
@@ -6621,12 +7763,88 @@ private actor TestAppService: AppServicing {
         self.bookDetailGate = bookDetailGate
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
+        self.transcriptLoadGate = transcriptLoadGate
+        self.transcriptSaveGate = transcriptSaveGate
+        transcriptLoadResult = transcriptLoad
+        transcriptSaveResult = transcriptSave
+        transcriptionTaskStateLoadResult = transcriptionTaskStateLoad
+        self.firstTranscriptionTaskStateSaveGate =
+            firstTranscriptionTaskStateSaveGate
+        self.transcriptionTaskStateSaveResults =
+            transcriptionTaskStateSaveResults
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
         configuredEndpointDiagnostics = endpointDiagnostics
     }
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSyncAvailable
+    }
+
+    func cachedChapterTranscripts(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+        let result = transcriptLoadResult
+        if let transcriptLoadGate {
+            await transcriptLoadGate.enterAndWait()
+        }
+        return try value(from: result)
+    }
+
+    func saveCachedChapterTranscript(
+        _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        if let transcriptSaveGate {
+            await transcriptSaveGate.enterAndWait()
+        }
+        try value(from: transcriptSaveResult)
+        recordedSavedTranscripts.append(transcript)
+    }
+
+    func cachedChapterTranscriptionTaskState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> CachedChapterTranscriptionTaskState? {
+        try value(from: transcriptionTaskStateLoadResult)
+    }
+
+    func saveCachedChapterTranscriptionTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        defer {
+            transcriptionTaskStateSaveCompletions += 1
+        }
+        let attempt = transcriptionTaskStateSaveAttempts
+        transcriptionTaskStateSaveAttempts += 1
+        if attempt == 0, let firstTranscriptionTaskStateSaveGate {
+            await firstTranscriptionTaskStateSaveGate.enterAndWait()
+        }
+        if transcriptionTaskStateSaveResults.indices.contains(attempt) {
+            try value(from: transcriptionTaskStateSaveResults[attempt])
+        }
+        recordedTranscriptionTaskStates.append(state)
+    }
+
+    func transcriptionTaskStateSaveAttemptCount() -> Int {
+        transcriptionTaskStateSaveAttempts
+    }
+
+    func transcriptionTaskStateSaveCompletionCount() -> Int {
+        transcriptionTaskStateSaveCompletions
+    }
+
+    func savedTranscripts() -> [CachedChapterTranscript] {
+        recordedSavedTranscripts
+    }
+
+    func savedTranscriptionTaskStates()
+        -> [CachedChapterTranscriptionTaskState]
+    {
+        recordedTranscriptionTaskStates
     }
 
     func serverEndpointRouter() async -> ServerEndpointRouter? {
@@ -6636,7 +7854,7 @@ private actor TestAppService: AppServicing {
         return nil
     }
 
-    func networkPathUpdates() async -> AsyncStream<Void> {
+    func networkPathUpdates() async -> AsyncStream<AppNetworkPathState> {
         AsyncStream { continuation in
             let token = UUID()
             networkPathContinuations[token] = continuation
@@ -6648,9 +7866,15 @@ private actor TestAppService: AppServicing {
         }
     }
 
-    func emitNetworkPathUpdate() {
+    func emitNetworkPathUpdate(
+        _ state: AppNetworkPathState = AppNetworkPathState(
+            availability: .satisfied,
+            isConstrained: false,
+            isExpensive: false
+        )
+    ) {
         for continuation in networkPathContinuations.values {
-            continuation.yield()
+            continuation.yield(state)
         }
     }
 
@@ -6679,7 +7903,12 @@ private actor TestAppService: AppServicing {
                 webSocket: AppEndpointDescription(
                     usage: .primary,
                     server: account.server
-                )
+                ),
+                localServerState:
+                    account.localServer == nil
+                    ? .notConfigured
+                    : account.localServerValidated
+                        ? .available : .notYetValidated
             )
     }
 
@@ -6839,9 +8068,9 @@ private actor TestAppService: AppServicing {
             )
         )
         if request.collapseSeries,
-           let browsePageGate,
-           let browsePageGateFilter,
-           request.filter == browsePageGateFilter
+            let browsePageGate,
+            let browsePageGateFilter,
+            request.filter == browsePageGateFilter
         {
             await browsePageGate.enterAndWait()
         }
@@ -7301,5 +8530,19 @@ private actor AsyncGate {
     func reset() {
         entered = false
         released = false
+    }
+}
+
+private struct TestChapterTranscriber: ChapterTranscribing {
+    let gate: AsyncGate?
+    let segments: [TranscriptSegment]
+
+    func transcribe(
+        _ request: ChapterTranscriptionRequest
+    ) async throws -> [TranscriptSegment] {
+        if let gate {
+            await gate.enterAndWait()
+        }
+        return segments
     }
 }

@@ -101,6 +101,96 @@ final class ChapterTranscriptCacheTests: XCTestCase {
         )
     }
 
+    func testTaskStatePersistsOutcomeFailureAndElapsedTime() async throws {
+        let fixture = try ChapterTranscriptCacheFixture()
+        let accountID = AccountID(rawValue: "account")
+        let itemID = LibraryItemID(rawValue: "book")
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let failed = CachedChapterTranscriptionTaskState(
+            taskID: UUID(),
+            selectedChapterIDs: [1, 3, 5],
+            completedChapterIDs: [1],
+            currentChapterID: 3,
+            outcome: .failed,
+            failure: .analyzerInputFailed,
+            startedAt: startedAt,
+            finishedAt: startedAt.addingTimeInterval(12.345),
+            durationMilliseconds: 12_345
+        )
+
+        try await fixture.cache.saveTaskState(
+            failed,
+            accountID: accountID,
+            itemID: itemID
+        )
+
+        let relaunched = ChapterTranscriptCache(
+            modelContainer: fixture.container
+        )
+        let restored = try await relaunched.taskState(
+            accountID: accountID,
+            itemID: itemID
+        )
+        XCTAssertEqual(restored, failed)
+    }
+
+    func testTaskStateRejectsInvalidSuccess() async throws {
+        let fixture = try ChapterTranscriptCacheFixture()
+        let invalid = CachedChapterTranscriptionTaskState(
+            taskID: UUID(),
+            selectedChapterIDs: [1, 2],
+            completedChapterIDs: [1],
+            currentChapterID: nil,
+            outcome: .succeeded,
+            failure: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            finishedAt: Date(timeIntervalSince1970: 101),
+            durationMilliseconds: 1_000
+        )
+
+        do {
+            try await fixture.cache.saveTaskState(
+                invalid,
+                accountID: AccountID(rawValue: "account"),
+                itemID: LibraryItemID(rawValue: "book")
+            )
+            XCTFail("Expected invalid task state rejection")
+        } catch {
+            XCTAssertEqual(error, .invalidTaskState)
+        }
+    }
+
+    func testOlderTaskStateCannotReplaceNewerResult() async throws {
+        let fixture = try ChapterTranscriptCacheFixture()
+        let accountID = AccountID(rawValue: "account")
+        let itemID = LibraryItemID(rawValue: "book")
+        let newer = Self.taskState(
+            outcome: .succeeded,
+            finishedAt: Date(timeIntervalSince1970: 200)
+        )
+        let older = Self.taskState(
+            outcome: .failed,
+            finishedAt: Date(timeIntervalSince1970: 150)
+        )
+
+        try await fixture.cache.saveTaskState(
+            newer,
+            accountID: accountID,
+            itemID: itemID
+        )
+        try await fixture.cache.saveTaskState(
+            older,
+            accountID: accountID,
+            itemID: itemID
+        )
+
+        let restored = try await fixture.cache.taskState(
+            accountID: accountID,
+            itemID: itemID
+        )
+        XCTAssertEqual(restored, newer)
+    }
+
     func testRemovingAccountDeletesOnlyItsTranscripts() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let accountA = AccountID(rawValue: "account-a")
@@ -116,6 +206,14 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountB,
             itemID: itemID
         )
+        try await fixture.cache.saveTaskState(
+            Self.taskState(
+                outcome: .failed,
+                finishedAt: Date(timeIntervalSince1970: 200)
+            ),
+            accountID: accountA,
+            itemID: itemID
+        )
 
         try await fixture.cache.removeAccount(accountA)
 
@@ -127,8 +225,13 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountB,
             itemID: itemID
         )
+        let removedTaskState = try await fixture.cache.taskState(
+            accountID: accountA,
+            itemID: itemID
+        )
         XCTAssertTrue(removed.isEmpty)
         XCTAssertEqual(retained.first?.segments.first?.text, "B")
+        XCTAssertNil(removedTaskState)
     }
 
     func testRejectsInvalidTranscript() async throws {
@@ -181,6 +284,23 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 1)
         )
     }
+
+    private static func taskState(
+        outcome: CachedChapterTranscriptionTaskOutcome,
+        finishedAt: Date
+    ) -> CachedChapterTranscriptionTaskState {
+        CachedChapterTranscriptionTaskState(
+            taskID: UUID(),
+            selectedChapterIDs: [1],
+            completedChapterIDs: outcome == .succeeded ? [1] : [],
+            currentChapterID: outcome == .failed ? 1 : nil,
+            outcome: outcome,
+            failure: outcome == .failed ? .analyzerInputFailed : nil,
+            startedAt: finishedAt.addingTimeInterval(-1),
+            finishedAt: finishedAt,
+            durationMilliseconds: 1_000
+        )
+    }
 }
 
 private struct ChapterTranscriptCacheFixture {
@@ -188,7 +308,10 @@ private struct ChapterTranscriptCacheFixture {
     let cache: ChapterTranscriptCache
 
     init() throws {
-        let schema = Schema([CachedChapterTranscriptRecord.self])
+        let schema = Schema([
+            CachedChapterTranscriptRecord.self,
+            CachedChapterTranscriptionTaskRecord.self,
+        ])
         container = try ModelContainer(
             for: schema,
             configurations: [

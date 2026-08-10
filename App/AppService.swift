@@ -202,6 +202,18 @@ enum LocalServerValidationDecision: Equatable, Sendable {
         }
         return .skip
     }
+
+    static func persistedValidation(
+        account: ServerAccount,
+        local: NormalizedServerURL?,
+        validationSucceeded: Bool
+    ) -> Bool {
+        guard local != nil else {
+            return false
+        }
+        return validationSucceeded
+            || (local == account.localServer && account.localServerValidated)
+    }
 }
 
 enum AccountUpdateServiceOutcome: Equatable, Sendable {
@@ -240,6 +252,30 @@ struct AppEndpointDiagnostics: Equatable, Sendable {
     let authentication: AppEndpointDescription?
     let api: AppEndpointDescription?
     let webSocket: AppEndpointDescription
+    let localServerState: AppLocalServerState
+}
+
+enum AppLocalServerState: Equatable, Sendable {
+    case notConfigured
+    case notYetValidated
+    case probing
+    case available
+    case temporarilyUnavailable
+
+    var diagnosticsLabel: String {
+        switch self {
+        case .notConfigured:
+            "Not configured"
+        case .notYetValidated:
+            "Not yet validated"
+        case .probing:
+            "Validated — checking this network"
+        case .available:
+            "Validated — available"
+        case .temporarilyUnavailable:
+            "Validated — unavailable on this network"
+        }
+    }
 }
 
 struct AppEndpointActivityDescription: Equatable, Sendable {
@@ -317,12 +353,18 @@ protocol AppServicing: Sendable {
 
     func serverEndpointRouter() async -> ServerEndpointRouter?
 
-    func networkPathUpdates() async -> AsyncStream<Void>
+    func networkPathUpdates() async -> AsyncStream<AppNetworkPathState>
 
     func recordServerActivity(
         url: URL,
         purpose: ServerConnectionPurpose
     ) async
+
+    func reportServerTransportFailure(url: URL) async -> Bool
+
+    func primaryFallbackDownloadRequest(
+        for failedRequest: URLRequest
+    ) async -> URLRequest?
 
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
@@ -390,6 +432,17 @@ protocol AppServicing: Sendable {
 
     func saveCachedChapterTranscript(
         _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
+
+    func cachedChapterTranscriptionTaskState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> CachedChapterTranscriptionTaskState?
+
+    func saveCachedChapterTranscriptionTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError)
@@ -572,7 +625,12 @@ extension AppServicing {
             webSocket: AppEndpointDescription(
                 usage: .primary,
                 server: account.server
-            )
+            ),
+            localServerState:
+                account.localServer == nil
+                ? .notConfigured
+                : account.localServerValidated
+                    ? .available : .notYetValidated
         )
     }
 
@@ -586,7 +644,7 @@ extension AppServicing {
         nil
     }
 
-    func networkPathUpdates() async -> AsyncStream<Void> {
+    func networkPathUpdates() async -> AsyncStream<AppNetworkPathState> {
         AsyncStream { $0.finish() }
     }
 
@@ -594,6 +652,16 @@ extension AppServicing {
         url: URL,
         purpose: ServerConnectionPurpose
     ) async {}
+
+    func reportServerTransportFailure(url: URL) async -> Bool {
+        false
+    }
+
+    func primaryFallbackDownloadRequest(
+        for failedRequest: URLRequest
+    ) async -> URLRequest? {
+        nil
+    }
 
     func updateAccount(
         _ account: ServerAccount,
@@ -622,6 +690,19 @@ extension AppServicing {
 
     func saveCachedChapterTranscript(
         _ transcript: CachedChapterTranscript,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {}
+
+    func cachedChapterTranscriptionTaskState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> CachedChapterTranscriptionTaskState? {
+        nil
+    }
+
+    func saveCachedChapterTranscriptionTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) {}
@@ -737,8 +818,9 @@ actor LiveAppService: AppServicing {
     private var liveClients: [AccountID: LiveClientRegistration] = [:]
     private var networkProbeGeneration = 0
     private var networkProbeTask: Task<Void, Never>?
+    private var networkPathState: AppNetworkPathState = .unknown
     private var networkPathContinuations:
-        [UUID: AsyncStream<Void>.Continuation] = [:]
+        [UUID: AsyncStream<AppNetworkPathState>.Continuation] = [:]
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
@@ -818,6 +900,15 @@ actor LiveAppService: AppServicing {
     func liveUpdates(
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
+        guard networkPathState.allowsRealtimeUpdates else {
+            let state: AudiobookshelfLiveConnectionState =
+                networkPathState.isConstrained
+                ? .suspendedForLowDataMode : .disconnected
+            return AsyncStream { continuation in
+                continuation.yield(.connection(state))
+                continuation.finish()
+            }
+        }
         let coordinator = coordinator
         let endpointRouter = self.endpointRouter
         if let existing = liveClients.removeValue(forKey: account.id) {
@@ -912,11 +1003,19 @@ actor LiveAppService: AppServicing {
         liveClients.removeValue(forKey: accountID)
     }
 
-    private func networkPathChanged() {
+    private func networkPathChanged(_ state: AppNetworkPathState) async {
+        networkPathState = state
         networkProbeGeneration &+= 1
         let generation = networkProbeGeneration
         for continuation in networkPathContinuations.values {
-            continuation.yield()
+            continuation.yield(state)
+        }
+        if !state.allowsRealtimeUpdates {
+            let clients = liveClients.values.map(\.client)
+            liveClients.removeAll()
+            for client in clients {
+                await client.stop()
+            }
         }
         networkProbeTask?.cancel()
         networkProbeTask = Task { [weak self] in
@@ -937,8 +1036,7 @@ actor LiveAppService: AppServicing {
                 else {
                     return
                 }
-                guard account.localServerValidated,
-                    let localServer = account.localServer
+                guard let localServer = account.localServer
                 else {
                     continue
                 }
@@ -951,9 +1049,36 @@ actor LiveAppService: AppServicing {
                     else {
                         return
                     }
+                    let promotedValidation = !account.localServerValidated
+                    if promotedValidation {
+                        _ = try await authenticationCoordinator
+                            .validateSavedNativeLogin(
+                                accountID: account.id,
+                                server: localServer,
+                                expectedUserID: account.user.id
+                            )
+                        try await accountStore.setLocalServer(
+                            localServer,
+                            validated: true,
+                            for: account.id
+                        )
+                    }
+                    await endpointRouter.configure(
+                        primary: account.server,
+                        local: localServer
+                    )
                     await endpointRouter.markLocalAvailable(
                         for: account.server
                     )
+                    if promotedValidation {
+                        await endpointRouter.recordAuthenticationUse(
+                            primary: account.server,
+                            usage: .local
+                        )
+                        for continuation in networkPathContinuations.values {
+                            continuation.yield(networkPathState)
+                        }
+                    }
                 } catch {
                     guard generation == networkProbeGeneration,
                         !Task.isCancelled
@@ -974,14 +1099,16 @@ actor LiveAppService: AppServicing {
         else {
             return
         }
-        let clients = liveClients.values.map(\.client)
-        for client in clients {
-            guard generation == networkProbeGeneration,
-                !Task.isCancelled
-            else {
-                return
+        if networkPathState.allowsRealtimeUpdates {
+            let clients = liveClients.values.map(\.client)
+            for client in clients {
+                guard generation == networkProbeGeneration,
+                    !Task.isCancelled
+                else {
+                    return
+                }
+                await client.reconnect()
             }
-            await client.reconnect()
         }
         if generation == networkProbeGeneration {
             networkProbeTask = nil
@@ -993,9 +1120,13 @@ actor LiveAppService: AppServicing {
     ) async -> AppEndpointDiagnostics {
         let snapshot =
             await endpointRouter.activitySnapshot(for: account.server)
+        let localAvailability = await endpointRouter.localAvailability(
+            for: account.server
+        )
         return endpointDiagnostics(
             snapshot: snapshot,
-            account: account
+            account: account,
+            localAvailability: localAvailability
         )
     }
 
@@ -1007,10 +1138,15 @@ actor LiveAppService: AppServicing {
         return AsyncStream { continuation in
             let task = Task {
                 for await snapshot in updates {
+                    let localAvailability =
+                        await endpointRouter.localAvailability(
+                            for: account.server
+                        )
                     continuation.yield(
                         self.endpointDiagnostics(
                             snapshot: snapshot,
-                            account: account
+                            account: account,
+                            localAvailability: localAvailability
                         )
                     )
                 }
@@ -1026,11 +1162,12 @@ actor LiveAppService: AppServicing {
         endpointRouter
     }
 
-    func networkPathUpdates() async -> AsyncStream<Void> {
+    func networkPathUpdates() async -> AsyncStream<AppNetworkPathState> {
         startNetworkPathMonitoring()
         return AsyncStream { continuation in
             let token = UUID()
             networkPathContinuations[token] = continuation
+            continuation.yield(networkPathState)
             continuation.onTermination = { [weak self] _ in
                 Task {
                     await self?.removeNetworkPathContinuation(token)
@@ -1055,9 +1192,25 @@ actor LiveAppService: AppServicing {
         )
     }
 
+    func reportServerTransportFailure(url: URL) async -> Bool {
+        let candidate = await endpointRouter.candidate(forResolvedURL: url)
+        guard candidate.isLocal, let primary = candidate.primary else {
+            return false
+        }
+        await endpointRouter.markLocalUnavailable(for: primary)
+        return true
+    }
+
+    func primaryFallbackDownloadRequest(
+        for failedRequest: URLRequest
+    ) async -> URLRequest? {
+        await endpointRouter.primaryFallbackRequest(for: failedRequest)
+    }
+
     nonisolated private func endpointDiagnostics(
         snapshot: ServerEndpointActivitySnapshot,
-        account: ServerAccount
+        account: ServerAccount,
+        localAvailability: ServerEndpointLocalAvailability
     ) -> AppEndpointDiagnostics {
         return AppEndpointDiagnostics(
             lastConnection: snapshot.lastConnection.map {
@@ -1084,8 +1237,32 @@ actor LiveAppService: AppServicing {
             webSocket: endpointDescription(
                 usage: snapshot.webSocket ?? .primary,
                 account: account
+            ),
+            localServerState: localServerState(
+                account: account,
+                availability: localAvailability
             )
         )
+    }
+
+    nonisolated private func localServerState(
+        account: ServerAccount,
+        availability: ServerEndpointLocalAvailability
+    ) -> AppLocalServerState {
+        guard account.localServer != nil else {
+            return .notConfigured
+        }
+        guard account.localServerValidated else {
+            return .notYetValidated
+        }
+        switch availability {
+        case .notConfigured, .temporarilyUnavailable:
+            return .temporarilyUnavailable
+        case .unknown:
+            return .probing
+        case .available:
+            return .available
+        }
     }
 
     func accounts()
@@ -1113,9 +1290,9 @@ actor LiveAppService: AppServicing {
         guard networkPathMonitor == nil else {
             return
         }
-        networkPathMonitor = AppNetworkPathMonitor { [weak self] in
+        networkPathMonitor = AppNetworkPathMonitor { [weak self] state in
             Task {
-                await self?.networkPathChanged()
+                await self?.networkPathChanged(state)
             }
         }
     }
@@ -1174,11 +1351,6 @@ actor LiveAppService: AppServicing {
             localValidationDecision == .validate,
             localServerValidation == .required
         {
-            guard !password.isEmpty else {
-                return .localServerValidationFailed(
-                    .passwordRequiredForCredentialChange
-                )
-            }
             do {
                 await progress(.checkingLocalServer)
                 let discoveredLocal = try await discoverDirect(local)
@@ -1187,13 +1359,23 @@ actor LiveAppService: AppServicing {
                     throw AccountOnboardingError.localAuthenticationUnavailable
                 }
                 await progress(.verifyingLocalCredentials)
-                _ = try await authenticationCoordinator.validateLocalLogin(
-                    accountID: account.id,
-                    server: local,
-                    username: username,
-                    password: password,
-                    expectedUserID: account.user.id
-                )
+                if password.isEmpty {
+                    _ = try await authenticationCoordinator
+                        .validateSavedNativeLogin(
+                            accountID: account.id,
+                            server: local,
+                            expectedUserID: account.user.id
+                        )
+                } else {
+                    _ = try await authenticationCoordinator
+                        .validateLocalLogin(
+                            accountID: account.id,
+                            server: local,
+                            username: username,
+                            password: password,
+                            expectedUserID: account.user.id
+                        )
+                }
                 localWasValidated = true
             } catch let error as AccountOnboardingError {
                 return .localServerValidationFailed(.onboarding(error))
@@ -1210,10 +1392,11 @@ actor LiveAppService: AppServicing {
             }
         }
         let localValidated =
-            local != nil
-            && (localWasValidated
-                || (localValidationDecision == .skip
-                    && account.localServerValidated))
+            LocalServerValidationDecision.persistedValidation(
+                account: account,
+                local: local,
+                validationSucceeded: localWasValidated
+            )
 
         let persisted: ServerAccount
         do {
@@ -1502,10 +1685,7 @@ actor LiveAppService: AppServicing {
                 for track in tracks {
                     appTracks.append(
                         AppPlaybackTrack(
-                            url: await routedServerURL(
-                                track.url,
-                                purpose: .playback
-                            ),
+                            url: await routedServerURL(track.url),
                             startOffset: track.track.startOffset,
                             duration: track.track.duration,
                             title: track.track.title
@@ -1514,10 +1694,7 @@ actor LiveAppService: AppServicing {
                 source = .direct(appTracks)
             case .hls(let url):
                 source = .hls(
-                    await routedServerURL(
-                        url,
-                        purpose: .playback
-                    )
+                    await routedServerURL(url)
                 )
             }
         } catch let error {
@@ -1698,10 +1875,7 @@ actor LiveAppService: AppServicing {
                 return request
             }
             var updated = request
-            updated.url = await routedServerURL(
-                url,
-                purpose: .download
-            )
+            updated.url = await routedServerURL(url)
             return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
@@ -1727,10 +1901,7 @@ actor LiveAppService: AppServicing {
                 return request
             }
             var updated = request
-            updated.url = await routedServerURL(
-                url,
-                purpose: .download
-            )
+            updated.url = await routedServerURL(url)
             return updated
         } catch let error as DownloadAuthorizationError {
             throw .downloadAuthorization(error)
@@ -1827,6 +1998,36 @@ actor LiveAppService: AppServicing {
         do {
             try await transcriptCache.save(
                 transcript,
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
+        }
+    }
+
+    func cachedChapterTranscriptionTaskState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> CachedChapterTranscriptionTaskState? {
+        do {
+            return try await transcriptCache.taskState(
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
+        }
+    }
+
+    func saveCachedChapterTranscriptionTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await transcriptCache.saveTaskState(
+                state,
                 accountID: accountID,
                 itemID: itemID
             )
@@ -2180,17 +2381,8 @@ actor LiveAppService: AppServicing {
         }
     }
 
-    private func routedServerURL(
-        _ url: URL,
-        purpose: ServerConnectionPurpose
-    ) async -> URL {
-        let candidate =
-            await endpointRouter.preferredCandidate(for: url)
-        await endpointRouter.recordConnection(
-            candidate,
-            purpose: purpose
-        )
-        return candidate.url
+    private func routedServerURL(_ url: URL) async -> URL {
+        return await endpointRouter.preferredCandidate(for: url).url
     }
 
     private func discoverDirect(

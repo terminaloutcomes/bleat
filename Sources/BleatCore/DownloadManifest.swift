@@ -46,6 +46,8 @@ public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public let trackIndex: Int
     public let expectedByteLength: Int64
     public let destinationEntry: String
+    public let startOffset: Double?
+    public let duration: Double?
     public internal(set) var state: DownloadTrackState
     public internal(set) var observedByteLength: Int64?
     public internal(set) var placement: DownloadFilePlacement?
@@ -191,6 +193,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
                 trackIndex: $0.index,
                 expectedByteLength: $0.expectedByteLength,
                 destinationEntry: $0.destinationEntry,
+                startOffset: $0.startOffset,
+                duration: $0.duration,
                 state: .queued
             )
         }
@@ -365,6 +369,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
                     && DownloadTaskIdentity.isValidDestinationEntry(
                         $0.destinationEntry
                     )
+                    && Self.isValidTimelineMetadata($0)
             }),
             Set(trackIndexes).count == trackIndexes.count
         else {
@@ -447,6 +452,22 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             throw .trackNotFound(trackIndex)
         }
         return index
+    }
+
+    private static func isValidTimelineMetadata(
+        _ entry: DownloadManifestEntry
+    ) -> Bool {
+        switch (entry.startOffset, entry.duration) {
+        case (nil, nil):
+            true
+        case (let startOffset?, let duration?):
+            startOffset.isFinite
+                && startOffset >= 0
+                && duration.isFinite
+                && duration > 0
+        case (.some, nil), (nil, .some):
+            false
+        }
     }
 
     private mutating func updateIncompleteState() {

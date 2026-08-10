@@ -718,6 +718,7 @@ final class AppModel {
     private(set) var endpointDiagnostics: AppEndpointDiagnostics?
     private(set) var liveUpdateConnectionState:
         AudiobookshelfLiveConnectionState = .disconnected
+    private(set) var networkPathState: AppNetworkPathState = .unknown
     private(set) var account: ServerAccount?
     private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
@@ -746,6 +747,7 @@ final class AppModel {
     private(set) var privateCloudSyncEnabled = true
     let playback: PlaybackModel
     let downloads: DownloadModel
+    let transcription: ChapterTranscriptionModel
     #if DEBUG
         let diagnosticLogStore: PersistentDiagnosticLogStore?
     #endif
@@ -772,6 +774,28 @@ final class AppModel {
         )
     }
 
+    func cachedChapterTranscriptionTaskState(
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws -> CachedChapterTranscriptionTaskState? {
+        try await service.cachedChapterTranscriptionTaskState(
+            accountID: account.id,
+            itemID: itemID
+        )
+    }
+
+    func saveCachedChapterTranscriptionTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
+        for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws {
+        try await service.saveCachedChapterTranscriptionTaskState(
+            state,
+            accountID: account.id,
+            itemID: itemID
+        )
+    }
+
     init(
         service: any AppServicing,
         nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
@@ -780,7 +804,8 @@ final class AppModel {
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
         diagnosticLogStore: (any DiagnosticRecording)? = nil,
-        initialLaunchStage: AppLaunchStage? = nil
+        initialLaunchStage: AppLaunchStage? = nil,
+        transcription: ChapterTranscriptionModel? = nil
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -797,6 +822,7 @@ final class AppModel {
         )
         self.playback = subsystems.playback
         self.downloads = subsystems.downloads
+        self.transcription = transcription ?? ChapterTranscriptionModel()
         #if DEBUG
             self.diagnosticLogStore =
                 diagnosticLogStore as? PersistentDiagnosticLogStore
@@ -1910,6 +1936,13 @@ final class AppModel {
         }
         bookDeletionState = .deleting
 
+        transcription.cancel(
+            for: ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+
         let isActiveBook =
             playback.hasActiveBook
             && playback.accountID == account.id
@@ -2149,6 +2182,7 @@ final class AppModel {
         await diagnostics.record(
             .started(.removeAccount, category: .auth)
         )
+        transcription.cancel(for: account.id)
         if playback.accountID == account.id {
             await playback.stop()
         }
@@ -2239,13 +2273,44 @@ final class AppModel {
                 return
             }
             let updates = await service.networkPathUpdates()
-            for await _ in updates {
+            for await state in updates {
                 guard !Task.isCancelled else {
                     return
                 }
+                networkPathState = state
                 schedulePendingLocalSessionSync(for: accounts)
+                await refreshAccountsAfterNetworkChange()
+                guard let account else {
+                    continue
+                }
+                if state.allowsRealtimeUpdates {
+                    startLiveUpdates(for: account)
+                    scheduleLiveRefresh(
+                        libraryChanged: true,
+                        itemIDs: []
+                    )
+                } else {
+                    await stopLiveUpdatesAndWait()
+                    if state.isConstrained {
+                        liveUpdateConnectionState =
+                            .suspendedForLowDataMode
+                    }
+                }
             }
         }
+    }
+
+    private func refreshAccountsAfterNetworkChange() async {
+        guard let refreshed = try? await service.accounts() else {
+            return
+        }
+        accounts = refreshed.sorted(by: Self.sortAccounts)
+        guard let account,
+            let replacement = refreshed.first(where: { $0.id == account.id })
+        else {
+            return
+        }
+        self.account = replacement
     }
 
     private func schedulePendingLocalSessionSync(
@@ -2316,7 +2381,12 @@ final class AppModel {
 
     private func startLiveUpdates(for account: ServerAccount) {
         startEndpointDiagnostics(for: account)
-        guard liveUpdatesAreActive else {
+        guard liveUpdatesAreActive,
+            networkPathState.allowsRealtimeUpdates
+        else {
+            if networkPathState.isConstrained {
+                liveUpdateConnectionState = .suspendedForLowDataMode
+            }
             return
         }
         liveUpdatesTask?.cancel()
@@ -2348,7 +2418,6 @@ final class AppModel {
                         itemIDs: change.itemIDs
                     )
                 case .playbackProgress(let progress):
-                    playback.observeLiveProgress(progress)
                     scheduleLiveRefresh(
                         libraryChanged: false,
                         itemIDs: [progress.itemID]

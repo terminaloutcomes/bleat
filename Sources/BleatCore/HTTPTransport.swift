@@ -74,6 +74,13 @@ public enum ServerEndpointUsage: String, Codable, Equatable, Sendable {
     case local
 }
 
+public enum ServerEndpointLocalAvailability: Equatable, Sendable {
+    case notConfigured
+    case unknown
+    case available
+    case temporarilyUnavailable
+}
+
 public enum ServerConnectionPurpose: String, Codable, Equatable, Sendable {
     case authentication
     case api
@@ -123,6 +130,8 @@ public actor ServerEndpointRouter {
 
     private var routes: [NormalizedServerURL: Route] = [:]
     private var localFailures: [NormalizedServerURL: Date] = [:]
+    private var localAvailabilityStates:
+        [NormalizedServerURL: ServerEndpointLocalAvailability] = [:]
     private var activity:
         [NormalizedServerURL: ServerEndpointActivitySnapshot] = [:]
     private var activityObservers:
@@ -142,11 +151,18 @@ public actor ServerEndpointRouter {
         primary: NormalizedServerURL,
         local: NormalizedServerURL?
     ) {
-        routes[primary] = Route(
+        let route = Route(
             primary: primary,
             local: local == primary ? nil : local
         )
+        let unchanged = routes[primary]?.local == route.local
+        routes[primary] = route
+        guard !unchanged else {
+            return
+        }
         localFailures[primary] = nil
+        localAvailabilityStates[primary] = route.local == nil
+            ? .notConfigured : .unknown
     }
 
     public func candidates(for url: URL) -> [ServerEndpointCandidate] {
@@ -238,6 +254,43 @@ public actor ServerEndpointRouter {
         preferredCandidate(for: url).url
     }
 
+    public func primaryFallback(
+        forResolvedURL url: URL
+    ) -> ServerEndpointCandidate? {
+        for route in routes.values {
+            guard let local = route.local,
+                let primaryURL = replacingBase(
+                    in: url,
+                    from: local,
+                    with: route.primary
+                )
+            else {
+                continue
+            }
+            return ServerEndpointCandidate(
+                url: primaryURL,
+                primary: route.primary,
+                isLocal: false
+            )
+        }
+        return nil
+    }
+
+    public func primaryFallbackRequest(
+        for failedRequest: URLRequest
+    ) -> URLRequest? {
+        guard let failedURL = failedRequest.url,
+            let fallback = primaryFallback(forResolvedURL: failedURL),
+            let primary = fallback.primary
+        else {
+            return nil
+        }
+        markLocalUnavailable(for: primary)
+        var request = failedRequest
+        request.url = fallback.url
+        return request
+    }
+
     public func preferredServer(
         for primary: NormalizedServerURL
     ) -> NormalizedServerURL {
@@ -255,6 +308,9 @@ public actor ServerEndpointRouter {
     public func networkPathDidChange() {
         for primary in routes.keys {
             localFailures[primary] = nil
+            localAvailabilityStates[primary] =
+                routes[primary]?.local == nil ? .notConfigured : .unknown
+            publishCurrentActivity(for: primary)
         }
     }
 
@@ -262,6 +318,8 @@ public actor ServerEndpointRouter {
         for primary: NormalizedServerURL
     ) {
         localFailures[primary] = nil
+        localAvailabilityStates[primary] = .available
+        publishCurrentActivity(for: primary)
     }
 
     public func markLocalUnavailable(
@@ -269,6 +327,17 @@ public actor ServerEndpointRouter {
         duration: TimeInterval = 30
     ) {
         localFailures[primary] = Date().addingTimeInterval(duration)
+        localAvailabilityStates[primary] = .temporarilyUnavailable
+        publishCurrentActivity(for: primary)
+    }
+
+    public func localAvailability(
+        for primary: NormalizedServerURL
+    ) -> ServerEndpointLocalAvailability {
+        guard routes[primary]?.local != nil else {
+            return .notConfigured
+        }
+        return localAvailabilityStates[primary] ?? .unknown
     }
 
     public func recordSuccessfulUse(
@@ -288,7 +357,8 @@ public actor ServerEndpointRouter {
         purpose: ServerConnectionPurpose
     ) {
         if candidate.isLocal, let primary = candidate.primary {
-            markLocalAvailable(for: primary)
+            localFailures[primary] = nil
+            localAvailabilityStates[primary] = .available
         }
         guard let primary = candidate.primary else {
             return
@@ -427,6 +497,16 @@ public actor ServerEndpointRouter {
         activityObservers[primary]?[observerID] = nil
         if activityObservers[primary]?.isEmpty == true {
             activityObservers[primary] = nil
+        }
+    }
+
+    private func publishCurrentActivity(for primary: NormalizedServerURL) {
+        guard let observers = activityObservers[primary] else {
+            return
+        }
+        let snapshot = activitySnapshot(for: primary)
+        for continuation in observers.values {
+            continuation.yield(snapshot)
         }
     }
 }

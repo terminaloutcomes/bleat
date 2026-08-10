@@ -1020,6 +1020,23 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["transcription.chapter.1"].exists)
         XCTAssertTrue(app.buttons["transcription.start"].exists)
         XCTAssertFalse(app.progressIndicators.firstMatch.exists)
+        XCTAssertTrue(
+            app.staticTexts["Transcribed 2 chapters in 2m 5s."]
+                .waitForExistence(timeout: 3)
+        )
+
+        let select = app.buttons["transcription.select"]
+        XCTAssertTrue(select.waitForExistence(timeout: 3))
+        select.tap()
+        let selectAll = app.buttons["transcription.selectAll"]
+        XCTAssertTrue(selectAll.waitForExistence(timeout: 3))
+        let startBatch = app.buttons["transcription.startBatch"]
+        XCTAssertTrue(startBatch.exists)
+        XCTAssertFalse(startBatch.isEnabled)
+        selectAll.tap()
+        XCTAssertTrue(startBatch.isEnabled)
+        select.tap()
+        XCTAssertTrue(app.buttons["transcription.start"].exists)
 
         let search = app.searchFields["Search Transcriptions"]
         XCTAssertTrue(search.waitForExistence(timeout: 3))

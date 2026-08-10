@@ -10,6 +10,7 @@ public enum BleatPersistenceModelCatalog {
         CachedLibraryHomeRecord.self,
         CachedLibraryBookDetailRecord.self,
         CachedChapterTranscriptRecord.self,
+        CachedChapterTranscriptionTaskRecord.self,
         ListeningSliceRecord.self,
         CompletionMilestoneRecord.self,
         RemoteListeningSessionRecord.self,

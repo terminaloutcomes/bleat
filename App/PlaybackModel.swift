@@ -155,11 +155,13 @@ enum PlaybackRecoveryFault: Equatable, Sendable {
     case missingSession
     case stalled
     case itemFailure
+    case localEndpointFailure(URL)
 }
 
 enum PlaybackRecoveryAction: Equatable, Sendable {
     case rebuildCurrentSource
     case reopenSession(PlaybackPreference)
+    case fallbackFromLocal(URL)
     case fail
 }
 
@@ -169,6 +171,7 @@ struct PlaybackRecoveryPolicy: Equatable, Sendable {
     private(set) var rebuiltCurrentSource = false
     private(set) var reopenedSession = false
     private(set) var forcedTranscode = false
+    private(set) var attemptedEndpointFallback = false
 
     mutating func action(
         for fault: PlaybackRecoveryFault,
@@ -176,6 +179,13 @@ struct PlaybackRecoveryPolicy: Equatable, Sendable {
         isTranscoded: Bool
     ) -> PlaybackRecoveryAction {
         switch fault {
+        case .localEndpointFailure(let url):
+            guard isStreaming, !attemptedEndpointFallback else {
+                return .fail
+            }
+            attemptedEndpointFallback = true
+            reopenedSession = true
+            return .fallbackFromLocal(url)
         case .decoderFailure:
             guard isStreaming, !isTranscoded, !forcedTranscode else {
                 return .fail
@@ -402,16 +412,6 @@ final class PlaybackModel {
         preparation?.sessionID == nil
             ? .cacheOnly
             : .allowNetwork
-    }
-
-    func observeLiveProgress(
-        _ progress: AudiobookshelfLivePlaybackProgress
-    ) {
-        guard itemID == progress.itemID else {
-            return
-        }
-        // The foreground player owns its timeline. AppModel refreshes browse
-        // data from this event, but it must never rebuild or pause the player.
     }
 
     var isPlaybackRequested: Bool {
@@ -2063,8 +2063,16 @@ final class PlaybackModel {
         case .hls:
             isTranscoded = true
         }
+        let effectiveFault: PlaybackRecoveryFault
+        if (fault == .stalled || fault == .itemFailure),
+            let localURL = currentLocalPlaybackURL()
+        {
+            effectiveFault = .localEndpointFailure(localURL)
+        } else {
+            effectiveFault = fault
+        }
         let action = playbackRecoveryPolicy.action(
-            for: fault,
+            for: effectiveFault,
             isStreaming: isStreaming,
             isTranscoded: isTranscoded
         )
@@ -2141,9 +2149,50 @@ final class PlaybackModel {
                 recoveryTime: recoveryTime,
                 operationGeneration: operationGeneration
             )
+        case .fallbackFromLocal(let failedURL):
+            guard await service.reportServerTransportFailure(
+                url: failedURL
+            ) else {
+                failPlaybackRecovery()
+                return
+            }
+            await reopenPlaybackSession(
+                preference: .automatic,
+                recoveryTime: recoveryTime,
+                operationGeneration: operationGeneration
+            )
         case .fail:
             failPlaybackRecovery()
         }
+    }
+
+    private func currentLocalPlaybackURL() -> URL? {
+        guard let account = activeAccount,
+            let local = account.localServer,
+            let asset = player?.currentItem?.asset as? AVURLAsset,
+            Self.isURL(asset.url, under: local.url)
+        else {
+            return nil
+        }
+        return asset.url
+    }
+
+    private static func isURL(_ url: URL, under serverURL: URL) -> Bool {
+        guard let value = URLComponents(
+            url: url,
+            resolvingAgainstBaseURL: false
+        ),
+            let server = URLComponents(
+                url: serverURL,
+                resolvingAgainstBaseURL: false
+            )
+        else {
+            return false
+        }
+        return value.scheme == server.scheme
+            && value.host == server.host
+            && value.port == server.port
+            && value.path.hasPrefix(server.path)
     }
 
     private func reopenPlaybackSession(

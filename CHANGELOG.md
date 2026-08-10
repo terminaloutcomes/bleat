@@ -24,6 +24,9 @@
   inactive transcript text immediately when iOS reports memory pressure.
 - Reloaded the latest transcription task result after relaunch and displayed
   its privacy-safe error and elapsed time on the transcription screen.
+- Allowed transcription from verified downloaded files covering the selected
+  chapters without requiring a complete-book download, and pinned automatic
+  cache files against cleanup until transcription releases them.
 
 ## 0.1.1 - 2026-08-09
 

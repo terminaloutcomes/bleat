@@ -252,6 +252,41 @@ public actor AuthCoordinator<
         }
     }
 
+    public func validateSavedNativeLogin(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        expectedUserID: UserID
+    ) async throws -> AuthenticatedAccount {
+        let savedLogin: NativeLoginCredentials
+        do {
+            guard let credentials = try await credentialStore
+                .nativeLoginCredentials(for: accountID),
+                credentials.userID == expectedUserID
+            else {
+                throw LocalAuthenticationError.tokenValidationFailed
+            }
+            savedLogin = credentials
+        } catch let error as LocalAuthenticationError {
+            throw error
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw LocalAuthenticationError.credentialStorageUnavailable
+            default:
+                throw LocalAuthenticationError.tokenValidationFailed
+            }
+        } catch {
+            throw LocalAuthenticationError.tokenValidationFailed
+        }
+        return try await validateLocalLogin(
+            accountID: accountID,
+            server: server,
+            username: savedLogin.username,
+            password: savedLogin.password,
+            expectedUserID: expectedUserID
+        )
+    }
+
     static func authenticateLocally(
         accountID: AccountID,
         server: NormalizedServerURL,

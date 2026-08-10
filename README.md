@@ -859,8 +859,11 @@ On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
 is not. The transcription screen supports one explicit chapter or a Select
 mode with Select All and multi-selection. A batch always runs one chapter at a
 time in ascending chapter-index order, regardless of selection order. It reads
-only verified full-book download files, maps chapters across source-file
-boundaries, and displays final segments with whole-book timestamps.
+the verified downloaded files covering every selected chapter, including files
+held by the automatic playback cache, maps chapters across source-file
+boundaries, and displays final segments with whole-book timestamps. Automatic
+cache files used by transcription are pinned until the batch finishes, fails,
+or is cancelled so ordinary cache cleanup cannot remove them mid-chapter.
 
 The app owns active transcription work rather than the sheet. Dismissing the
 sheet or navigating elsewhere leaves the batch running; reopening the same
@@ -881,8 +884,8 @@ or immediately when iOS reports memory pressure, and reloads from the durable
 local cache when needed.
 
 This is the chapter-level capability slice of GitHub issue #5. Partial-result
-resume, playback seeking from results, automatic-cache pinning, and independent
-transcript deletion are not implemented yet.
+resume, playback seeking from results, and independent transcript deletion are
+tracked as follow-up work.
 
 ## Manual device beta checks
 

@@ -199,7 +199,11 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 ### 4.5.1 Chapter transcription
 
 - On a supported iOS device, I can explicitly transcribe one chapter or select
-  multiple chapters, including Select All, from a verified complete download.
+  multiple chapters, including Select All, when the verified local download or
+  automatic cache contains every audio file intersecting those chapters.
+- Automatic-cache files are pinned while transcription uses them, preventing
+  ordinary cache cleanup from removing the input until the batch finishes,
+  fails, or is cancelled.
 - Playback and transcription can run concurrently; starting or resuming
   playback does not cancel active transcription.
 - A selected batch transcribes one chapter at a time in ascending chapter-index

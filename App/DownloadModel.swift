@@ -222,12 +222,12 @@ enum DownloadNetworkDecision: Equatable, Sendable {
         #if targetEnvironment(macCatalyst)
             return .schedule
         #else
-        guard policy == .allowCellular,
-            expectedBytes >= largeDownloadThresholdBytes
-        else {
-            return .schedule
-        }
-        return .confirmCellular(expectedBytes: expectedBytes)
+            guard policy == .allowCellular,
+                expectedBytes >= largeDownloadThresholdBytes
+            else {
+                return .schedule
+            }
+            return .confirmCellular(expectedBytes: expectedBytes)
         #endif
     }
 }
@@ -258,6 +258,16 @@ private struct AutomaticDownloadTaskKey: Hashable {
         downloadID = identity.downloadID
         trackIndex = identity.trackIndex
     }
+}
+
+struct AutomaticCachePin: Hashable, Sendable {
+    fileprivate let id: UUID
+    fileprivate let downloadID: DownloadID
+}
+
+private enum DeferredAutomaticCacheCleanup {
+    case tracks(Set<Int>)
+    case record
 }
 
 enum DownloadRepairScope: Equatable, Sendable {
@@ -348,6 +358,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
     private var supersededAutomaticTasks: Set<AutomaticDownloadTaskKey> = []
+    private var automaticCachePins: [DownloadID: [UUID: Set<Int>]] = [:]
+    private var deferredAutomaticCacheCleanup:
+        [DownloadID: DeferredAutomaticCacheCleanup] = [:]
     private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
@@ -447,14 +460,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if record(downloadID: identity.downloadID)?
                 .manifest.purpose == .automaticCache
             {
-                if let url = task.currentRequest?.url
-                    ?? task.originalRequest?.url
-                {
-                    await service.recordServerActivity(
-                        url: url,
-                        purpose: .download
-                    )
-                }
                 task.resume()
             } else {
                 pausedDownloadIDs.insert(identity.downloadID)
@@ -864,10 +869,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         plan: plan,
                         activity: activity
                     ).subtracting(targets)
-                if !completedIndexes.isEmpty {
+                let pinned = pinnedAutomaticCacheTrackIndexes(
+                    for: existing.manifest.downloadID
+                )
+                let deferredIndexes = completedIndexes.intersection(pinned)
+                if !deferredIndexes.isEmpty {
+                    deferAutomaticCacheCleanup(
+                        .tracks(deferredIndexes),
+                        for: existing.manifest.downloadID
+                    )
+                }
+                let removableIndexes = completedIndexes.subtracting(pinned)
+                if !removableIndexes.isEmpty {
                     record = try await storage.removeCompletedTracks(
                         from: existing,
-                        trackIndexes: completedIndexes
+                        trackIndexes: removableIndexes
                     )
                 }
             }
@@ -917,7 +933,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         switch automaticCleanupPolicy {
         case .afterChapter, .afterBook:
-            await remove(record)
+            await removeAutomatically(record)
         case .afterTwentyFourHours:
             do {
                 _ = try await storage.markBookFinished(
@@ -940,7 +956,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     && $0.manifest.bookFinishedAt != nil
             }
             for record in finished {
-                await remove(record)
+                await removeAutomatically(record)
             }
         case .afterTwentyFourHours:
             await cleanupExpiredAutomaticDownloads()
@@ -957,7 +973,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 && ($0.manifest.bookFinishedAt ?? .distantFuture) <= deadline
         }
         for record in expired {
-            await remove(record)
+            await removeAutomatically(record)
         }
     }
 
@@ -1152,6 +1168,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         do {
             try await storage.remove(record)
+            automaticCachePins[record.manifest.downloadID] = nil
+            deferredAutomaticCacheCleanup[record.manifest.downloadID] = nil
             progress[record.manifest.downloadID] = nil
             transferredBytesByTrack[record.manifest.downloadID] = nil
             pausedDownloadIDs.remove(record.manifest.downloadID)
@@ -1556,6 +1574,50 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         record.manifest.isFullBookComplete
     }
 
+    func pinAutomaticCacheTracks(
+        for record: DownloadedBookRecord,
+        trackIndexes: Set<Int>
+    ) -> AutomaticCachePin? {
+        guard record.manifest.purpose == .automaticCache,
+            !trackIndexes.isEmpty,
+            let current = self.record(
+                accountID: record.manifest.accountID,
+                itemID: record.manifest.itemID
+            ),
+            current.manifest.downloadID == record.manifest.downloadID,
+            trackIndexes.isSubset(
+                of: Set(current.manifest.entries.map(\.trackIndex))
+            )
+        else {
+            return nil
+        }
+        let pin = AutomaticCachePin(
+            id: UUID(),
+            downloadID: current.manifest.downloadID
+        )
+        automaticCachePins[pin.downloadID, default: [:]][pin.id] =
+            trackIndexes
+        return pin
+    }
+
+    func releaseAutomaticCachePin(_ pin: AutomaticCachePin?) {
+        guard let pin else {
+            return
+        }
+        automaticCachePins[pin.downloadID]?[pin.id] = nil
+        if automaticCachePins[pin.downloadID]?.isEmpty == true {
+            automaticCachePins[pin.downloadID] = nil
+        }
+        guard deferredAutomaticCacheCleanup[pin.downloadID] != nil else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            await self?.performDeferredAutomaticCacheCleanup(
+                for: pin.downloadID
+            )
+        }
+    }
+
     static func combinedDownloadedByteLength(
         storedByteLength: Int64,
         transferredByteLengths: [Int64],
@@ -1585,6 +1647,101 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         } catch {
             await refresh()
             throw .transferFailed
+        }
+    }
+
+    func localTrackURLs(
+        for record: DownloadedBookRecord,
+        trackIndexes: Set<Int>
+    ) async throws(DownloadModelFailure) -> [Int: URL] {
+        guard let storage else {
+            throw .storageUnavailable
+        }
+        do {
+            return try await storage.localTrackURLs(
+                for: record,
+                trackIndexes: trackIndexes
+            )
+        } catch {
+            await refresh()
+            throw .transferFailed
+        }
+    }
+
+    private func pinnedAutomaticCacheTrackIndexes(
+        for downloadID: DownloadID
+    ) -> Set<Int> {
+        automaticCachePins[downloadID]?.values.reduce(into: []) {
+            $0.formUnion($1)
+        } ?? []
+    }
+
+    private func deferAutomaticCacheCleanup(
+        _ cleanup: DeferredAutomaticCacheCleanup,
+        for downloadID: DownloadID
+    ) {
+        switch (deferredAutomaticCacheCleanup[downloadID], cleanup) {
+        case (.record, _), (_, .record):
+            deferredAutomaticCacheCleanup[downloadID] = .record
+        case (.tracks(let existing), .tracks(let additional)):
+            deferredAutomaticCacheCleanup[downloadID] =
+                .tracks(existing.union(additional))
+        case (nil, .tracks(let indexes)):
+            deferredAutomaticCacheCleanup[downloadID] = .tracks(indexes)
+        }
+    }
+
+    private func removeAutomatically(
+        _ record: DownloadedBookRecord
+    ) async {
+        guard automaticCachePins[record.manifest.downloadID]?.isEmpty != false
+        else {
+            deferAutomaticCacheCleanup(
+                .record,
+                for: record.manifest.downloadID
+            )
+            return
+        }
+        _ = await remove(record)
+    }
+
+    private func performDeferredAutomaticCacheCleanup(
+        for downloadID: DownloadID
+    ) async {
+        guard
+            let cleanup = deferredAutomaticCacheCleanup.removeValue(
+                forKey: downloadID
+            ),
+            let record = record(downloadID: downloadID),
+            record.manifest.purpose == .automaticCache
+        else {
+            return
+        }
+        switch cleanup {
+        case .record:
+            await removeAutomatically(record)
+        case .tracks(let trackIndexes):
+            let pinned = pinnedAutomaticCacheTrackIndexes(for: downloadID)
+            let deferredIndexes = trackIndexes.intersection(pinned)
+            if !deferredIndexes.isEmpty {
+                deferAutomaticCacheCleanup(
+                    .tracks(deferredIndexes),
+                    for: downloadID
+                )
+            }
+            let removableIndexes = trackIndexes.subtracting(pinned)
+            guard !removableIndexes.isEmpty, let storage else {
+                return
+            }
+            do {
+                _ = try await storage.removeCompletedTracks(
+                    from: record,
+                    trackIndexes: removableIndexes
+                )
+                await refresh()
+            } catch {
+                failure = .transferFailed
+            }
         }
     }
 
@@ -1693,6 +1850,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         guard let response = task.response as? HTTPURLResponse else {
+            if error != nil,
+                let request = task.currentRequest ?? task.originalRequest,
+                let replacement =
+                    await service
+                    .primaryFallbackDownloadRequest(for: request)
+            {
+                scheduleReplacementDownload(
+                    replacement,
+                    taskDescription: description,
+                    identity: identity
+                )
+                return
+            }
             if error != nil, let storage {
                 _ = try? await storage.markFailed(identity)
                 clearTransferredBytes(for: identity)
@@ -1701,6 +1871,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         if (200..<300).contains(response.statusCode), error == nil {
+            if let url = response.url ?? task.currentRequest?.url
+                ?? task.originalRequest?.url
+            {
+                await service.recordServerActivity(
+                    url: url,
+                    purpose: .download
+                )
+            }
             return
         }
         if response.statusCode == 401,
@@ -1708,36 +1886,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let account = accounts[identity.accountID]
         {
             do {
-                var replacement =
+                let replacement =
                     try await service.replacementDownloadRequest(
                         for: account,
                         identity: identity,
                         rejectedRequest: request
                     )
-                if record(downloadID: identity.downloadID)?
-                    .manifest.purpose == .automaticCache
-                {
-                    replacement.networkServiceType = .background
-                }
-                let replacementTask = session.downloadTask(
-                    with: networkPolicy.applying(to: replacement)
+                scheduleReplacementDownload(
+                    replacement,
+                    taskDescription: description,
+                    identity: identity
                 )
-                replacementTask.taskDescription = description
-                replacementTask.priority =
-                    record(downloadID: identity.downloadID)?
-                        .manifest.purpose == .automaticCache
-                    ? URLSessionTask.lowPriority
-                    : URLSessionTask.defaultPriority
-                clearTransferredBytes(for: identity)
-                if let record = record(
-                    downloadID: identity.downloadID
-                ), automaticDownloadIsBlocked(record) {
-                    playbackSuspendedDownloadIDs.insert(
-                        identity.downloadID
-                    )
-                } else {
-                    replacementTask.resume()
-                }
                 return
             } catch {
                 failure = .transferFailed
@@ -1750,6 +1909,36 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         clearTransferredBytes(for: identity)
         await refresh()
+    }
+
+    private func scheduleReplacementDownload(
+        _ request: URLRequest,
+        taskDescription: String,
+        identity: DownloadTaskIdentity
+    ) {
+        var replacement = request
+        let automatic =
+            record(downloadID: identity.downloadID)?
+            .manifest.purpose == .automaticCache
+        if automatic {
+            replacement.networkServiceType = .background
+        }
+        let replacementTask = session.downloadTask(
+            with: networkPolicy.applying(to: replacement)
+        )
+        replacementTask.taskDescription = taskDescription
+        replacementTask.priority =
+            automatic
+            ? URLSessionTask.lowPriority
+            : URLSessionTask.defaultPriority
+        clearTransferredBytes(for: identity)
+        if let record = record(downloadID: identity.downloadID),
+            automaticDownloadIsBlocked(record)
+        {
+            playbackSuspendedDownloadIDs.insert(identity.downloadID)
+        } else {
+            replacementTask.resume()
+        }
     }
 
     private func updateTransferredBytes(

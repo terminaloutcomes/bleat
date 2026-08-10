@@ -472,6 +472,41 @@
             itemID: LibraryItemID
         ) async throws(AppServiceError) {}
 
+        func cachedChapterTranscriptionTaskState(
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError)
+            -> CachedChapterTranscriptionTaskState?
+        {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-transcription-cache"
+                )
+            else {
+                return nil
+            }
+            let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+            return CachedChapterTranscriptionTaskState(
+                taskID: UUID(
+                    uuidString: "00000000-0000-0000-0000-000000000001"
+                ) ?? UUID(),
+                selectedChapterIDs: [0, 1],
+                completedChapterIDs: [0, 1],
+                currentChapterID: nil,
+                outcome: .succeeded,
+                failure: nil,
+                startedAt: startedAt,
+                finishedAt: startedAt.addingTimeInterval(125),
+                durationMilliseconds: 125_000
+            )
+        }
+
+        func saveCachedChapterTranscriptionTaskState(
+            _ state: CachedChapterTranscriptionTaskState,
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) {}
+
         func openPlayback(
             for account: ServerAccount,
             itemID: LibraryItemID,

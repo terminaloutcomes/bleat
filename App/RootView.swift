@@ -511,6 +511,10 @@ private struct AccountEditorView: View {
             && !isSubmitting
     }
 
+    private var currentAccount: ServerAccount {
+        model.accounts.first(where: { $0.id == account.id }) ?? account
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -532,6 +536,14 @@ private struct AccountEditorView: View {
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("accountEditor.localServer")
+
+                    if currentAccount.localServer != nil {
+                        LabeledContent(
+                            "Local server",
+                            value: currentAccount.localServerValidated
+                                ? "Validated" : "Not yet validated"
+                        )
+                    }
                 }
 
                 Section {
@@ -2433,8 +2445,7 @@ private struct BookDetailView: View {
                         detail: detail,
                         account: account,
                         appModel: model,
-                        downloads: model.downloads,
-                        playback: model.playback
+                        downloads: model.downloads
                     )
                 }
             }

@@ -61,6 +61,71 @@ public struct CachedChapterTranscriptMatch: Equatable, Sendable {
     }
 }
 
+public enum CachedChapterTranscriptionTaskOutcome:
+    String, Codable, Equatable, Sendable
+{
+    case succeeded
+    case failed
+    case cancelled
+}
+
+public enum CachedChapterTranscriptionTaskFailure:
+    String, Codable, Equatable, Sendable
+{
+    case audioNotDownloaded
+    case localAudioUnavailable
+    case invalidChapterRange
+    case cacheSaveFailed
+    case cancelled
+    case operatingSystemUnsupported
+    case unavailableOnDevice
+    case unsupportedLocale
+    case languageAssetsUnavailable
+    case languageAssetInstallationFailed
+    case audioFileUnreadable
+    case chapterExtractionUnavailable
+    case chapterExtractionFailed
+    case analyzerInputFailed
+    case analyzerFinalizationFailed
+    case resultStreamFailed
+}
+
+public struct CachedChapterTranscriptionTaskState:
+    Codable, Equatable, Sendable
+{
+    public let taskID: UUID
+    public let selectedChapterIDs: [Int]
+    public let completedChapterIDs: [Int]
+    public let currentChapterID: Int?
+    public let outcome: CachedChapterTranscriptionTaskOutcome
+    public let failure: CachedChapterTranscriptionTaskFailure?
+    public let startedAt: Date
+    public let finishedAt: Date
+    public let durationMilliseconds: Int64
+
+    public init(
+        taskID: UUID,
+        selectedChapterIDs: [Int],
+        completedChapterIDs: [Int],
+        currentChapterID: Int?,
+        outcome: CachedChapterTranscriptionTaskOutcome,
+        failure: CachedChapterTranscriptionTaskFailure?,
+        startedAt: Date,
+        finishedAt: Date,
+        durationMilliseconds: Int64
+    ) {
+        self.taskID = taskID
+        self.selectedChapterIDs = selectedChapterIDs
+        self.completedChapterIDs = completedChapterIDs
+        self.currentChapterID = currentChapterID
+        self.outcome = outcome
+        self.failure = failure
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.durationMilliseconds = durationMilliseconds
+    }
+}
+
 public enum CachedChapterTranscriptSearch {
     public static func matches(
         query: String,
@@ -96,6 +161,8 @@ public enum ChapterTranscriptCacheError: Error, Equatable, Sendable {
     case invalidItemID
     case invalidTranscript
     case invalidStoredTranscript
+    case invalidTaskState
+    case invalidStoredTaskState
     case encodingFailed
     case persistenceFailed
 }
@@ -124,6 +191,30 @@ public final class CachedChapterTranscriptRecord {
         self.chapterID = chapterID
         self.payload = payload
         self.updatedAt = updatedAt
+    }
+}
+
+@Model
+public final class CachedChapterTranscriptionTaskRecord {
+    @Attribute(.unique)
+    var taskKey: String
+    var accountID: String
+    var libraryItemID: String
+    var payload: Data
+    var finishedAt: Date
+
+    init(
+        taskKey: String,
+        accountID: String,
+        libraryItemID: String,
+        payload: Data,
+        finishedAt: Date
+    ) {
+        self.taskKey = taskKey
+        self.accountID = accountID
+        self.libraryItemID = libraryItemID
+        self.payload = payload
+        self.finishedAt = finishedAt
     }
 }
 
@@ -207,12 +298,90 @@ public actor ChapterTranscriptCache {
         }
     }
 
+    public func saveTaskState(
+        _ state: CachedChapterTranscriptionTaskState,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) throws(ChapterTranscriptCacheError) {
+        try validate(accountID: accountID, itemID: itemID)
+        guard Self.isValid(state) else {
+            throw .invalidTaskState
+        }
+        let payload: Data
+        do {
+            payload = try JSONEncoder().encode(state)
+        } catch {
+            throw .encodingFailed
+        }
+        let key = Self.taskKey(accountID: accountID, itemID: itemID)
+        if let record = try taskRecords().first(where: {
+            $0.taskKey == key
+        }) {
+            guard record.finishedAt <= state.finishedAt else {
+                return
+            }
+            record.payload = payload
+            record.finishedAt = state.finishedAt
+        } else {
+            modelContext.insert(
+                CachedChapterTranscriptionTaskRecord(
+                    taskKey: key,
+                    accountID: accountID.rawValue,
+                    libraryItemID: itemID.rawValue,
+                    payload: payload,
+                    finishedAt: state.finishedAt
+                ))
+        }
+        try saveContext()
+    }
+
+    public func taskState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) throws(ChapterTranscriptCacheError)
+        -> CachedChapterTranscriptionTaskState?
+    {
+        try validate(accountID: accountID, itemID: itemID)
+        let key = Self.taskKey(accountID: accountID, itemID: itemID)
+        guard
+            let record = try taskRecords().first(where: {
+                $0.taskKey == key
+            })
+        else {
+            return nil
+        }
+        let state: CachedChapterTranscriptionTaskState
+        do {
+            state = try JSONDecoder().decode(
+                CachedChapterTranscriptionTaskState.self,
+                from: record.payload
+            )
+        } catch {
+            throw .invalidStoredTaskState
+        }
+        guard Self.isValid(state),
+            record.accountID == accountID.rawValue,
+            record.libraryItemID == itemID.rawValue,
+            record.taskKey == key,
+            record.finishedAt == state.finishedAt
+        else {
+            throw .invalidStoredTaskState
+        }
+        return state
+    }
+
     public func removeBook(
         accountID: AccountID,
         itemID: LibraryItemID
     ) throws(ChapterTranscriptCacheError) {
         try validate(accountID: accountID, itemID: itemID)
         for record in try records()
+        where record.accountID == accountID.rawValue
+            && record.libraryItemID == itemID.rawValue
+        {
+            modelContext.delete(record)
+        }
+        for record in try taskRecords()
         where record.accountID == accountID.rawValue
             && record.libraryItemID == itemID.rawValue
         {
@@ -228,6 +397,10 @@ public actor ChapterTranscriptCache {
             throw .invalidAccountID
         }
         for record in try records()
+        where record.accountID == accountID.rawValue {
+            modelContext.delete(record)
+        }
+        for record in try taskRecords()
         where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
@@ -267,6 +440,18 @@ public actor ChapterTranscriptCache {
         }
     }
 
+    private func taskRecords() throws(ChapterTranscriptCacheError)
+        -> [CachedChapterTranscriptionTaskRecord]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     private static func isValid(
         _ transcript: CachedChapterTranscript
     ) -> Bool {
@@ -284,6 +469,36 @@ public actor ChapterTranscriptCache {
             }
     }
 
+    private static func isValid(
+        _ state: CachedChapterTranscriptionTaskState
+    ) -> Bool {
+        let selected = state.selectedChapterIDs
+        let completed = state.completedChapterIDs
+        let selectedSet = Set(selected)
+        guard !selected.isEmpty,
+            selected == selected.sorted(),
+            selectedSet.count == selected.count,
+            completed == completed.sorted(),
+            Set(completed).count == completed.count,
+            completed.allSatisfy({ selectedSet.contains($0) }),
+            state.currentChapterID.map({ selectedSet.contains($0) }) != false,
+            state.startedAt.timeIntervalSinceReferenceDate.isFinite,
+            state.finishedAt.timeIntervalSinceReferenceDate.isFinite,
+            state.finishedAt >= state.startedAt,
+            state.durationMilliseconds >= 0
+        else {
+            return false
+        }
+        switch state.outcome {
+        case .succeeded:
+            return state.failure == nil && completed == selected
+        case .failed:
+            return state.failure != nil && state.failure != .cancelled
+        case .cancelled:
+            return state.failure == .cancelled
+        }
+    }
+
     private static func key(
         accountID: AccountID,
         itemID: LibraryItemID,
@@ -293,6 +508,18 @@ public actor ChapterTranscriptCache {
             accountID.rawValue,
             itemID.rawValue,
             String(chapterID),
+        ].map {
+            "\($0.utf8.count):\($0)"
+        }.joined()
+    }
+
+    private static func taskKey(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> String {
+        [
+            accountID.rawValue,
+            itemID.rawValue,
         ].map {
             "\($0.utf8.count):\($0)"
         }.joined()

@@ -4,6 +4,18 @@ import XCTest
 @testable import BleatCore
 
 final class LiveUpdatesTests: XCTestCase {
+    func testSocketRequestDisallowsConstrainedNetworkAccess() throws {
+        let request = try AudiobookshelfSocketCodec().socketRequest(
+            for: NormalizedServerURL("https://example.test/prefix")
+        )
+
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "wss://example.test/prefix/socket.io/?EIO=4&transport=websocket"
+        )
+        XCTAssertFalse(request.allowsConstrainedNetworkAccess)
+    }
+
     func testSocketURLPreservesRootAndServerPrefix() throws {
         let codec = AudiobookshelfSocketCodec()
         let root = try codec.socketURL(

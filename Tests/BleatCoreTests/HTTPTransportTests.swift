@@ -68,6 +68,66 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(recoveredPreferredServer, local)
     }
 
+    func testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL(
+            "https://books.example/audiobookshelf"
+        )
+        let local = try NormalizedServerURL(
+            "https://books.home/local-books"
+        )
+        await router.configure(primary: primary, local: local)
+        let failedURL = try XCTUnwrap(
+            URL(string: "https://books.home/local-books/audio/file.m4b")
+        )
+
+        let fallback = await router.primaryFallback(
+            forResolvedURL: failedURL
+        )
+
+        XCTAssertEqual(
+            fallback?.url.absoluteString,
+            "https://books.example/audiobookshelf/audio/file.m4b"
+        )
+        XCTAssertEqual(fallback?.primary, primary)
+        XCTAssertFalse(fallback?.isLocal == true)
+    }
+
+    func testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example/prefix")
+        let local = try NormalizedServerURL("https://books.home/local")
+        await router.configure(primary: primary, local: local)
+        let localURL = try XCTUnwrap(
+            URL(string: "https://books.home/local/items/book/download")
+        )
+        var request = URLRequest(url: localURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer opaque", forHTTPHeaderField: "Authorization")
+        request.allowsConstrainedNetworkAccess = false
+        request.allowsExpensiveNetworkAccess = false
+
+        let fallback = await router.primaryFallbackRequest(for: request)
+
+        XCTAssertEqual(
+            fallback?.url?.absoluteString,
+            "https://books.example/prefix/items/book/download"
+        )
+        XCTAssertEqual(fallback?.httpMethod, "GET")
+        XCTAssertEqual(
+            fallback?.value(forHTTPHeaderField: "Authorization"),
+            "Bearer opaque"
+        )
+        XCTAssertFalse(fallback?.allowsConstrainedNetworkAccess == true)
+        XCTAssertFalse(fallback?.allowsExpensiveNetworkAccess == true)
+        let availability = await router.localAvailability(for: primary)
+        XCTAssertEqual(availability, .temporarilyUnavailable)
+    }
+
     func testSuccessfulLocalUseClearsLocalCooldown() async throws {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL("https://books.example")

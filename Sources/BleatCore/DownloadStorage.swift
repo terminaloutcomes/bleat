@@ -549,12 +549,48 @@ public actor DownloadStorage {
         guard reconciled.manifest.state == .complete else {
             throw .invalidStoredRecord
         }
-        let entries = reconciled.manifest.entries.sorted {
-            $0.trackIndex < $1.trackIndex
-        }
+        let trackIndexes = Set(
+            reconciled.manifest.entries.map(\.trackIndex)
+        )
+        let urlsByTrackIndex = try localTrackURLs(
+            for: reconciled,
+            trackIndexes: trackIndexes
+        )
         var urls: [URL] = []
-        urls.reserveCapacity(entries.count)
+        for entry in reconciled.manifest.entries.sorted(by: {
+            $0.trackIndex < $1.trackIndex
+        }) {
+            guard let url = urlsByTrackIndex[entry.trackIndex] else {
+                throw .invalidStoredRecord
+            }
+            urls.append(url)
+        }
+        return urls
+    }
+
+    public func localTrackURLs(
+        for record: DownloadedBookRecord,
+        trackIndexes: Set<Int>
+    ) throws(DownloadStorageError) -> [Int: URL] {
+        guard !trackIndexes.isEmpty else {
+            throw .trackNotFound
+        }
+        let reconciled = try reconcileCompletedFiles(in: record)
+        let entries = reconciled.manifest.entries.filter {
+            trackIndexes.contains($0.trackIndex)
+        }
+        guard entries.count == trackIndexes.count else {
+            throw .trackNotFound
+        }
+        var urlsByTrackIndex: [Int: URL] = [:]
+        urlsByTrackIndex.reserveCapacity(entries.count)
         for entry in entries {
+            guard entry.state == .complete,
+                entry.placement == .finalized,
+                entry.observedByteLength == entry.expectedByteLength
+            else {
+                throw .invalidStoredRecord
+            }
             guard
                 let safeExtension = Self.safeExtension(
                     destinationEntry: entry.destinationEntry
@@ -588,9 +624,9 @@ public actor DownloadStorage {
             else {
                 throw DownloadStorageError.invalidStoredRecord
             }
-            urls.append(url)
+            urlsByTrackIndex[entry.trackIndex] = url
         }
-        return urls
+        return urlsByTrackIndex
     }
 
     private func reconcileCompletedFiles(

@@ -279,7 +279,9 @@ final class DownloadStorageTests: XCTestCase {
                     expectedByteLength: 4,
                     mimeType: "audio/mpeg",
                     safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
+                    destinationEntry: "00000.mp3",
+                    startOffset: 0,
+                    duration: 60
                 ),
                 DownloadTrackPlan(
                     index: 1,
@@ -287,7 +289,9 @@ final class DownloadStorageTests: XCTestCase {
                     expectedByteLength: 2,
                     mimeType: "audio/mpeg",
                     safeExtension: .mp3,
-                    destinationEntry: "00001.mp3"
+                    destinationEntry: "00001.mp3",
+                    startOffset: 60,
+                    duration: 60
                 ),
             ]
         )
@@ -334,6 +338,11 @@ final class DownloadStorageTests: XCTestCase {
                 observedByteLength: observed
             )
             if track.index == 1 {
+                XCTAssertEqual(
+                    record.manifest.entries[1].startOffset,
+                    60
+                )
+                XCTAssertEqual(record.manifest.entries[1].duration, 60)
                 XCTAssertEqual(record.manifest.state, .partial)
                 XCTAssertFalse(record.manifest.isFullBookComplete)
                 XCTAssertEqual(
@@ -348,6 +357,21 @@ final class DownloadStorageTests: XCTestCase {
                     record.manifest.automaticStoredByteLength,
                     2
                 )
+                let localChapterFiles =
+                    try await fixture.storage.localTrackURLs(
+                        for: record,
+                        trackIndexes: [1]
+                    )
+                XCTAssertEqual(localChapterFiles.keys.sorted(), [1])
+                do {
+                    _ = try await fixture.storage.localTrackURLs(
+                        for: record,
+                        trackIndexes: [0, 1]
+                    )
+                    XCTFail("Expected the missing track to be rejected")
+                } catch {
+                    XCTAssertEqual(error, .invalidStoredRecord)
+                }
                 record = try await fixture.storage.updateAutomaticWindow(
                     record,
                     targetTrackIndexes: [0, 1]
@@ -665,8 +689,10 @@ final class DownloadStorageTests: XCTestCase {
 
         let destination0 = fixture.layout.destinationURL(for: identity0)
         let destination1 = fixture.layout.destinationURL(for: identity1)
-        let partial0 = destination0.deletingPathExtension().appendingPathExtension("mp3.partial")
-        let partial1 = destination1.deletingPathExtension().appendingPathExtension("mp3.partial")
+        let partial0 = destination0.deletingPathExtension()
+            .appendingPathExtension("mp3.partial")
+        let partial1 = destination1.deletingPathExtension()
+            .appendingPathExtension("mp3.partial")
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination0.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
@@ -675,7 +701,8 @@ final class DownloadStorageTests: XCTestCase {
 
         try await fixture.storage.removeTrackFiles(identity0)
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: destination0.path))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: destination0.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: partial0.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: partial1.path))
@@ -775,7 +802,8 @@ final class DownloadStorageTests: XCTestCase {
         try await fixture.storage.removeTrackFiles(identity)
 
         let destination = fixture.layout.destinationURL(for: identity)
-        let partial = destination.deletingPathExtension().appendingPathExtension("mp3.partial")
+        let partial = destination.deletingPathExtension()
+            .appendingPathExtension("mp3.partial")
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
     }
