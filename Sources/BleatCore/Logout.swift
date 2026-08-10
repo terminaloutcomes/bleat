@@ -1,5 +1,13 @@
 import Foundation
 
+private struct LogoutResponse: Decodable {
+    let redirectURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case redirectURL = "redirect_url"
+    }
+}
+
 public enum RemoteLogoutStatus: Equatable, Sendable {
     case completed
     case noCredentials
@@ -10,9 +18,14 @@ public enum RemoteLogoutStatus: Equatable, Sendable {
 
 public struct LogoutResult: Equatable, Sendable {
     public let remoteStatus: RemoteLogoutStatus
+    public let providerLogoutURL: URL?
 
-    public init(remoteStatus: RemoteLogoutStatus) {
+    public init(
+        remoteStatus: RemoteLogoutStatus,
+        providerLogoutURL: URL? = nil
+    ) {
         self.remoteStatus = remoteStatus
+        self.providerLogoutURL = providerLogoutURL
     }
 }
 
@@ -47,7 +60,7 @@ extension AuthCoordinator {
         }
 
         await settleRefreshBeforeLogout(for: accountID)
-        let remoteStatus = await performRemoteLogout(
+        let result = await performRemoteLogout(
             accountID: accountID,
             server: server
         )
@@ -62,7 +75,7 @@ extension AuthCoordinator {
 
         clearAuthenticationState(for: accountID)
         reauthenticationRequiredAccounts.remove(accountID)
-        return LogoutResult(remoteStatus: remoteStatus)
+        return result
     }
 
     public func logoutKeepingNativeLogin(
@@ -85,7 +98,7 @@ extension AuthCoordinator {
         }
 
         await settleRefreshBeforeLogout(for: accountID)
-        let remoteStatus = await performRemoteLogout(
+        let result = await performRemoteLogout(
             accountID: accountID,
             server: server
         )
@@ -100,7 +113,7 @@ extension AuthCoordinator {
         }
         clearAuthenticationState(for: accountID)
         reauthenticationRequiredAccounts.remove(accountID)
-        return LogoutResult(remoteStatus: remoteStatus)
+        return result
     }
 
     private func settleRefreshBeforeLogout(
@@ -118,17 +131,17 @@ extension AuthCoordinator {
     private func performRemoteLogout(
         accountID: AccountID,
         server: NormalizedServerURL
-    ) async -> RemoteLogoutStatus {
+    ) async -> LogoutResult {
         let credentials: AuthenticationTokens?
         do {
             credentials = try await credentialStore.credentials(
                 for: accountID
             )
         } catch {
-            return .credentialsUnavailable
+            return LogoutResult(remoteStatus: .credentialsUnavailable)
         }
         guard let credentials else {
-            return .noCredentials
+            return LogoutResult(remoteStatus: .noCredentials)
         }
 
         let logoutURL: URL
@@ -136,7 +149,7 @@ extension AuthCoordinator {
             logoutURL = try AudiobookshelfRouteBuilder(server: server)
                 .url(for: .logout)
         } catch {
-            return .requestFailed
+            return LogoutResult(remoteStatus: .requestFailed)
         }
         var request = URLRequest(url: logoutURL)
         request.httpMethod = "POST"
@@ -154,12 +167,34 @@ extension AuthCoordinator {
                 )
             )
         } catch {
-            return .requestFailed
+            return LogoutResult(remoteStatus: .requestFailed)
         }
         guard (200 ..< 300).contains(response.statusCode) else {
-            return .rejected(response.statusCode)
+            return LogoutResult(
+                remoteStatus: .rejected(response.statusCode)
+            )
         }
-        return .completed
+        return LogoutResult(
+            remoteStatus: .completed,
+            providerLogoutURL: Self.providerLogoutURL(from: response.data)
+        )
+    }
+
+    private nonisolated static func providerLogoutURL(from data: Data) -> URL? {
+        guard let value = try? JSONDecoder().decode(
+            LogoutResponse.self,
+            from: data
+        ),
+              let rawURL = value.redirectURL,
+              let url = URL(string: rawURL),
+              url.scheme?.lowercased() == "https",
+              url.host != nil,
+              url.user == nil,
+              url.password == nil
+        else {
+            return nil
+        }
+        return url
     }
 
     private func clearAuthenticationState(for accountID: AccountID) {

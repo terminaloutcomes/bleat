@@ -4059,6 +4059,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.account)
     }
 
+    func testOpenIDLoginForwardsServerAndLoadsLibrary() async throws {
+        let account = try fixtureAccount(authenticationMethods: [.openID])
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            login: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page)
+        )
+        let model = AppModel(service: service)
+
+        let authenticated = await model.loginWithOpenID(
+            serverAddress: "https://books.example/audiobookshelf"
+        )
+
+        XCTAssertTrue(authenticated)
+        let requests = await service.openIDLoginRequests()
+        XCTAssertEqual(
+            requests,
+            ["https://books.example/audiobookshelf"]
+        )
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.loginStatus, .idle)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(model.books, .loaded(page))
+    }
+
     func testReauthenticationUsesSavedAccountAndReloadsLibrary()
         async throws
     {
@@ -4144,6 +4172,27 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
+    }
+
+    func testOpenIDReauthenticationUsesSavedAccount() async throws {
+        let account = try fixtureAccount(authenticationMethods: [.openID])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            login: .success(account)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let authenticated = await model.reauthenticateWithOpenID()
+
+        XCTAssertTrue(authenticated)
+        let requests = await service.openIDReauthenticationRequests()
+        XCTAssertEqual(
+            requests,
+            [account.id]
+        )
+        XCTAssertEqual(model.loginStatus, .idle)
+        XCTAssertEqual(model.account, account)
     }
 
     func testAccountEditorKeepsCredentialsWhenPasswordIsBlank() async throws {
@@ -6775,13 +6824,14 @@ final class AppModelTests: XCTestCase {
         userID: String = "user-1",
         username: String = "reader",
         server: String = "https://books.example",
+        authenticationMethods: [AuthenticationMethod] = [.local],
         permissions: UserPermissions? = nil
     ) throws -> ServerAccount {
         try ServerAccount(
             id: AccountID(rawValue: accountID),
             server: NormalizedServerURL(server),
             serverVersion: "2.36.0",
-            authenticationMethods: [.local],
+            authenticationMethods: authenticationMethods,
             user: AuthenticatedUser(
                 id: UserID(rawValue: userID),
                 username: username,
@@ -7641,7 +7691,9 @@ private actor TestAppService: AppServicing {
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
+    private var recordedOpenIDLogins: [String] = []
     private var recordedReauthentications: [ReauthenticationRequest] = []
+    private var recordedOpenIDReauthentications: [AccountID] = []
     private var recordedAccountUpdates: [AccountUpdateRequest] = []
     private var recordedPageRequests: [LibraryID] = []
     private var recordedPageSelections: [PageSelection] = []
@@ -7663,6 +7715,12 @@ private actor TestAppService: AppServicing {
         [CachedChapterTranscriptionTaskState] = []
     private var transcriptionTaskStateSaveAttempts = 0
     private var transcriptionTaskStateSaveCompletions = 0
+
+    func discoverServer(
+        serverAddress: String
+    ) async throws(AppServiceError) -> DiscoveredServer {
+        throw .discoveryRequestFailed
+    }
 
     init(
         accounts: Result<[ServerAccount], AppServiceError>? = nil,
@@ -8000,6 +8058,18 @@ private actor TestAppService: AppServicing {
         return try value(from: loginResult)
     }
 
+    func loginWithOpenID(
+        serverAddress: String,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        recordedOpenIDLogins.append(serverAddress)
+        await progress(.signingIn)
+        if let loginGate {
+            await loginGate.enterAndWait()
+        }
+        return try value(from: loginResult)
+    }
+
     func reauthenticate(
         _ account: ServerAccount,
         password: String
@@ -8010,6 +8080,15 @@ private actor TestAppService: AppServicing {
                 password: password
             )
         )
+        return try value(from: loginResult)
+    }
+
+    func reauthenticateWithOpenID(
+        _ account: ServerAccount,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        recordedOpenIDReauthentications.append(account.id)
+        await progress(.signingIn)
         return try value(from: loginResult)
     }
 
@@ -8385,8 +8464,16 @@ private actor TestAppService: AppServicing {
         recordedLogins
     }
 
+    func openIDLoginRequests() -> [String] {
+        recordedOpenIDLogins
+    }
+
     func reauthenticationRequests() -> [ReauthenticationRequest] {
         recordedReauthentications
+    }
+
+    func openIDReauthenticationRequests() -> [AccountID] {
+        recordedOpenIDReauthentications
     }
 
     func accountUpdateRequests() -> [AccountUpdateRequest] {

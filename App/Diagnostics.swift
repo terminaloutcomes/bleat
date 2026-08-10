@@ -305,6 +305,15 @@ extension AppFailure {
         case (_, .requestRejected): .requestRejected
         case (_, .mediaUnavailable): .mediaUnavailable
         case (_, .uncertainMutation): .uncertainMutation
+        case (_, .authenticationCancelled): .authenticationCancelled
+        case (_, .authenticationSessionInProgress):
+            .authenticationSessionInProgress
+        case (_, .authenticationBrowserFailed): .authenticationBrowserFailed
+        case (_, .authenticationBridgeFailed): .authenticationBridgeFailed
+        case (_, .authenticationCallbackInvalid):
+            .authenticationCallbackInvalid
+        case (_, .authenticationCredentialInvalid):
+            .authenticationCredentialInvalid
         }
     }
 

@@ -1,0 +1,37 @@
+{
+  "realm": "bleat",
+  "enabled": true,
+  "sslRequired": "NONE",
+  "clients": [
+    {
+      "clientId": "audiobookshelf",
+      "name": "Bleat live Audiobookshelf client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "bleat-oidc-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "username": "bleat-oidc",
+      "enabled": true,
+      "email": "bleat-oidc@example.test",
+      "emailVerified": true,
+      "firstName": "Bleat",
+      "lastName": "OIDC",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bleat-oidc-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

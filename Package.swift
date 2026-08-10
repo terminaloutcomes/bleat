@@ -23,9 +23,18 @@ let package = Package(
             targets: ["BleatTranscribeCLI"]
         ),
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/openid/AppAuth-iOS.git",
+            exact: "2.0.0"
+        )
+    ],
     targets: [
         .target(
-            name: "BleatCore"
+            name: "BleatCore",
+            dependencies: [
+                .product(name: "AppAuthCore", package: "AppAuth-iOS")
+            ]
         ),
         .target(
             name: "BleatTranscription"

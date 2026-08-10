@@ -10,3 +10,7 @@ https://localhost:8443 {
 https://localhost:8444 {
 	reverse_proxy audiobookshelf-prefix:80
 }
+
+https://localhost:8445, https://caddy:8445 {
+	reverse_proxy keycloak:8080
+}

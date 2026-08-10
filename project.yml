@@ -47,7 +47,7 @@ targets:
           - CFBundleTypeRole: Viewer
             CFBundleURLName: "$(PRODUCT_BUNDLE_IDENTIFIER)"
             CFBundleURLSchemes:
-              - bleat
+              - com.yaleman.bleat
         BleatBuildDate: Unavailable
         BleatCloudKitMode: "$(BLEAT_CLOUDKIT_MODE)"
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"

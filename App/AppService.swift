@@ -339,6 +339,10 @@ enum AppBookDeletionOutcome: Equatable, Sendable {
 }
 
 protocol AppServicing: Sendable {
+    func discoverServer(
+        serverAddress: String
+    ) async throws(AppServiceError) -> DiscoveredServer
+
     func liveUpdates(
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate>
@@ -393,9 +397,19 @@ protocol AppServicing: Sendable {
         progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount
 
+    func loginWithOpenID(
+        serverAddress: String,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount
+
     func reauthenticate(
         _ account: ServerAccount,
         password: String
+    ) async throws(AppServiceError) -> ServerAccount
+
+    func reauthenticateWithOpenID(
+        _ account: ServerAccount,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount
 
     func libraries(
@@ -613,6 +627,20 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func loginWithOpenID(
+        serverAddress: String,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        throw .onboarding(.openIDAuthenticationUnavailable)
+    }
+
+    func reauthenticateWithOpenID(
+        _ account: ServerAccount,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        throw .onboarding(.openIDAuthenticationUnavailable)
+    }
+
     func stopLiveUpdates(for accountID: AccountID) async {}
 
     func endpointDiagnostics(
@@ -804,6 +832,12 @@ actor LiveAppService: AppServicing {
     private let credentialStore: TokenVault
     private let coordinator: Coordinator
     private let authenticationCoordinator: Coordinator
+    private let openIDAuthenticationCoordinator: AuthCoordinator<
+        URLSessionOpenIDTransport,
+        TokenVault
+    >
+    private let openIDBrowserProvider:
+        @MainActor @Sendable () -> any OpenIDBrowserSession
     private let accountStore: AccountStore
     private let libraryCache: LibraryCache
     private let transcriptCache: ChapterTranscriptCache
@@ -825,7 +859,9 @@ actor LiveAppService: AppServicing {
 
     init(
         diagnostics: any DiagnosticRecording =
-            SystemDiagnosticRecorder.shared
+            SystemDiagnosticRecorder.shared,
+        openIDBrowserProvider: @escaping @MainActor @Sendable ()
+            -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         do {
@@ -878,6 +914,14 @@ actor LiveAppService: AppServicing {
             transport: directTransport,
             credentialStore: credentialStore
         )
+        guard let openIDTransport = try? URLSessionOpenIDTransport() else {
+            throw .persistenceUnavailable
+        }
+        openIDAuthenticationCoordinator = AuthCoordinator(
+            transport: openIDTransport,
+            credentialStore: credentialStore
+        )
+        self.openIDBrowserProvider = openIDBrowserProvider
         accountStore = AccountStore(modelContainer: modelContainer)
         libraryCache = LibraryCache(modelContainer: modelContainer)
         transcriptCache = ChapterTranscriptCache(
@@ -894,6 +938,59 @@ actor LiveAppService: AppServicing {
             )
         } else {
             privateCloudSync = nil
+        }
+    }
+
+    func loginWithOpenID(
+        serverAddress: String,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        let server: NormalizedServerURL
+        do {
+            server = try NormalizedServerURL(serverAddress)
+        } catch let error {
+            throw .invalidServerURL(error)
+        }
+
+        await progress(.checkingServer)
+        let discoveredServer = try await discoverDirect(server)
+        guard discoveredServer.authenticationMethods.contains(.openID) else {
+            throw .onboarding(.openIDAuthenticationUnavailable)
+        }
+        let callbackURL: OpenIDCallbackURL
+        do {
+            callbackURL = try OpenIDCallbackURL(
+                "com.yaleman.bleat:/oauth2redirect"
+            )
+        } catch {
+            throw .onboarding(.openIDAuthenticationUnavailable)
+        }
+
+        await progress(.signingIn)
+        let browser = await openIDBrowserProvider()
+        do {
+            let account = try await openIDAuthenticationCoordinator
+                .loginWithOpenIDAndPersistAccount(
+                    accountID: AccountID(
+                        rawValue: UUID().uuidString.lowercased()
+                    ),
+                    discoveredServer: discoveredServer,
+                    callbackURL: callbackURL,
+                    browser: browser,
+                    accountStore: accountStore,
+                    onAuthenticationCompleted: {
+                        await progress(.savingAccount)
+                    }
+                )
+            await endpointRouter.recordAuthenticationUse(
+                primary: account.server,
+                usage: .primary
+            )
+            return account
+        } catch let error as AccountOnboardingError {
+            throw .onboarding(error)
+        } catch {
+            throw .onboarding(.authenticationRequestFailed)
         }
     }
 
@@ -1550,6 +1647,49 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func reauthenticateWithOpenID(
+        _ account: ServerAccount,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        let discoveredServer = try await discoverDirect(account.server)
+        guard discoveredServer.authenticationMethods.contains(.openID) else {
+            throw .onboarding(.openIDAuthenticationUnavailable)
+        }
+        let callbackURL: OpenIDCallbackURL
+        do {
+            callbackURL = try OpenIDCallbackURL(
+                "com.yaleman.bleat:/oauth2redirect"
+            )
+        } catch {
+            throw .onboarding(.openIDAuthenticationUnavailable)
+        }
+
+        await progress(.checkingServer)
+        await progress(.signingIn)
+        let browser = await openIDBrowserProvider()
+        do {
+            let authenticated = try await openIDAuthenticationCoordinator
+                .loginWithOpenIDAndPersistAccount(
+                    accountID: account.id,
+                    discoveredServer: discoveredServer,
+                    callbackURL: callbackURL,
+                    browser: browser,
+                    accountStore: accountStore,
+                    expectedUserID: account.user.id,
+                    makeActive: false
+                )
+            await endpointRouter.recordAuthenticationUse(
+                primary: authenticated.server,
+                usage: .primary
+            )
+            return authenticated
+        } catch let error as AccountOnboardingError {
+            throw .onboarding(error)
+        } catch {
+            throw .onboarding(.authenticationRequestFailed)
+        }
+    }
+
     func libraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {
@@ -2153,14 +2293,16 @@ actor LiveAppService: AppServicing {
             throw .transcriptCache(error)
         }
 
+        let logoutResult: LogoutResult
         do {
-            _ = try await coordinator.removePersistedAccount(
+            logoutResult = try await coordinator.removePersistedAccount(
                 accountID: account.id,
                 accountStore: accountStore
             )
         } catch let error {
             throw .accountRemoval(error)
         }
+        await presentProviderLogout(logoutResult.providerLogoutURL)
     }
 
     func removeAccountFromThisDevice(
@@ -2182,14 +2324,24 @@ actor LiveAppService: AppServicing {
             account.id,
             includeStatistics: includeStatistics
         )
+        let logoutResult: LogoutResult
         do {
-            _ = try await coordinator.removePersistedAccountFromDevice(
+            logoutResult = try await coordinator.removePersistedAccountFromDevice(
                 accountID: account.id,
                 accountStore: accountStore
             )
         } catch let error {
             throw .accountRemoval(error)
         }
+        await presentProviderLogout(logoutResult.providerLogoutURL)
+    }
+
+    private func presentProviderLogout(_ url: URL?) async {
+        guard let url else {
+            return
+        }
+        let browser = await openIDBrowserProvider()
+        await browser.presentLogout(at: url)
     }
 
     func removeStatistics(
@@ -2383,6 +2535,18 @@ actor LiveAppService: AppServicing {
 
     private func routedServerURL(_ url: URL) async -> URL {
         return await endpointRouter.preferredCandidate(for: url).url
+    }
+
+    func discoverServer(
+        serverAddress: String
+    ) async throws(AppServiceError) -> DiscoveredServer {
+        let server: NormalizedServerURL
+        do {
+            server = try NormalizedServerURL(serverAddress)
+        } catch let error {
+            throw .invalidServerURL(error)
+        }
+        return try await discoverDirect(server)
     }
 
     private func discoverDirect(

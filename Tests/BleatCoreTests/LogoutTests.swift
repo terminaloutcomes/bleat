@@ -18,7 +18,9 @@ final class LogoutTests: XCTestCase {
             responses: [
                 .success(
                     .init(
-                        data: Data(#"{"redirect_url":null}"#.utf8),
+                        data: Data(
+                            #"{"redirect_url":"https://id.example/logout"}"#.utf8
+                        ),
                         statusCode: 200
                     ))
             ]
@@ -40,6 +42,10 @@ final class LogoutTests: XCTestCase {
             await coordinator.requiresReauthentication(for: accountID)
 
         XCTAssertEqual(result.remoteStatus, .completed)
+        XCTAssertEqual(
+            result.providerLogoutURL?.absoluteString,
+            "https://id.example/logout"
+        )
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(
             request.url?.absoluteString,
@@ -62,8 +68,36 @@ final class LogoutTests: XCTestCase {
         let requestCount = await transport.requestCount()
         let secondDeleteCount = await store.deleteCount()
         XCTAssertEqual(secondResult.remoteStatus, .noCredentials)
+        XCTAssertNil(secondResult.providerLogoutURL)
         XCTAssertEqual(requestCount, 1)
         XCTAssertEqual(secondDeleteCount, 2)
+    }
+
+    func testLogoutRejectsUnsafeProviderRedirectWithoutBlockingCleanup() async throws {
+        let fixture = try LogoutFixture(
+            responses: [
+                .success(
+                    .init(
+                        data: Data(
+                            #"{"redirect_url":"http://id.example/logout"}"#.utf8
+                        ),
+                        statusCode: 200
+                    )
+                )
+            ]
+        )
+
+        let result = try await fixture.coordinator.logout(
+            accountID: fixture.accountID,
+            server: fixture.server
+        )
+
+        XCTAssertEqual(result.remoteStatus, .completed)
+        XCTAssertNil(result.providerLogoutURL)
+        let credentials = try await fixture.store.credentials(
+            for: fixture.accountID
+        )
+        XCTAssertNil(credentials)
     }
 
     func testRemoteFailuresStillDeleteLocalCredentials() async throws {
