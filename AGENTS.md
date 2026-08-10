@@ -13,13 +13,13 @@ Use these documents for their specific purposes:
   security invariants, and acceptance criteria.
 - `README.md` documents current user-visible behavior and supported developer
   workflows.
-- `IMPLEMENTATION_PLAN.md` records delivery sequencing and remaining release
-  work. Verify status claims against the current code and tests before relying
-  on them.
 - `docs/requirements-traceability.md` maps requirements to implementation and
   test evidence.
+- GitHub issues and milestones record remaining release work. The
+  [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
+  is the version 1.0 backlog.
 
-Keep all four aligned when a change affects their subject matter. Do not
+Keep these sources aligned when a change affects their subject matter. Do not
 describe a proposed or partially implemented behavior as complete.
 
 ## Platform and scope
@@ -295,5 +295,11 @@ validation by creating the release manually.
   a product or architectural assumption.
 - Update `docs/requirements-traceability.md` with implementation and test
   evidence for affected requirements.
+- Track remaining implementation and evidence work in GitHub issues and
+  milestones. Every backlog issue referenced by repository documentation must
+  map to a non-final traceability row, an unmet release acceptance criterion,
+  or an explicit deferred specification item. Close it and remove stale
+  documentation references once implementation and all required automated,
+  live, simulator, signed-host, or physical-device evidence are recorded.
 - Preserve unrelated worktree changes.
 - Prefer small, direct changes that reduce duplication and code sprawl.

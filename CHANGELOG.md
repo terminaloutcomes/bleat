@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added Select and Select All controls for ordered, one-at-a-time chapter
+  transcription batches.
+- Added durable account/book-scoped transcription task results with typed
+  success, failure, or cancellation state, completion time, and elapsed time.
+
+### Changed
+
+- Made configured local servers retry automatically on launch and network
+  changes, retain successful validation across temporary failures, and fall
+  back from local playback and downloads to the primary server.
+- Suspended Audiobookshelf WebSocket updates while Low Data Mode is active
+  without changing REST access or local playback state.
+- Moved active transcription ownership out of the sheet so work continues when
+  navigating elsewhere; playback and transcription can now run concurrently.
+- Made transcription cancellation cooperative so chapters saved during a
+  cancellation race remain cached and included in the final cancelled result.
+- Limited inactive in-memory transcript retention to five minutes and evicted
+  inactive transcript text immediately when iOS reports memory pressure.
+- Reloaded the latest transcription task result after relaunch and displayed
+  its privacy-safe error and elapsed time on the transcription screen.
+
 ## 0.1.1 - 2026-08-09
 
 ### Added

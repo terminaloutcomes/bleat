@@ -364,6 +364,13 @@ unsigned Release archive and publishes `v<version>` as a GitHub Release. The
 release notes come from the matching `## <version> - YYYY-MM-DD` section in
 `CHANGELOG.md`. This GitHub release does not upload to App Store Connect.
 
+Remaining first-release delivery work is tracked in
+[GitHub issue #35](https://github.com/terminaloutcomes/bleat/issues/35) for CI,
+[issue #34](https://github.com/terminaloutcomes/bleat/issues/34) for scheduled
+compatibility and reliability jobs, and
+[issue #36](https://github.com/terminaloutcomes/bleat/issues/36) for final
+signed and App Store distribution readiness.
+
 ## Install on a personal iPhone or iPad
 
 The device must run iOS 26 or newer, trust the Mac, and have Developer Mode
@@ -637,16 +644,20 @@ Settings lists every saved username/server pair and marks the active browsing
 account. Tap a saved account to edit its primary server URL, optional local
 server URL, username, and password, remove it, or make it the active account.
 Leave password blank while editing to preserve the existing Keychain
-credentials. Use **Add Account** for another standard Audiobookshelf
-username/password login.
+credentials, including when verifying a local server. Use **Add Account** for
+another standard Audiobookshelf username/password login.
 Switching the browsing account does not stop current playback or unrelated
 background downloads.
 
 Each account can also have an optional **Local Network** server URL. Bleat keeps
 the primary URL as the account identity, tries the local URL first for matching
 requests, and falls back to the primary URL when the local endpoint cannot be
-reached. A network-path change clears the local failure cooldown and performs a
-safe status probe so the local endpoint can be selected again. This applies to
+reached. Every launch and network-path change clears the current local failure
+state and tries any configured local endpoint. An endpoint that has not yet
+been validated uses the saved native username and password for direct identity
+validation without sending its existing bearer token. A successful validation
+is retained; a temporary failure affects only the current network lifecycle and
+never revokes an earlier validation. This applies to
 all supported iOS and Mac Catalyst network interfaces; it does not assume that
 the current path is Wi-Fi. A changed local URL is verified directly as the same saved
 Audiobookshelf user. Changing only the primary URL does not require the local
@@ -662,8 +673,15 @@ traffic, plus the configured WebSocket endpoint and its connection state.
 Endpoint activity updates live and is collected through the same account-aware
 boundary for API and authentication requests, WebSockets, covers, streamed
 playback, and foreground or restored background downloads. **Last Server
-Activity** identifies which of those paths most recently selected or reached a
-server.
+Activity** identifies which of those paths most recently reached a server.
+Diagnostics also distinguishes a local endpoint that is not yet validated,
+being checked, available, or temporarily unavailable.
+
+Foreground Socket.IO updates are suspended while the current path is marked
+constrained by Low Data Mode and resume with a catch-up refresh when the path
+becomes unconstrained. REST requests, downloads, covers, and playback remain
+independent of that optional realtime connection, and socket progress never
+changes the foreground player's timeline.
 **About** shows the app icon, version, build number, build timestamp, developer,
 and bundle identifier.
 All builds provide **Export Diagnostics** for sharing the current snapshot.
@@ -758,7 +776,8 @@ unset BLEAT_TEST_USERNAME BLEAT_TEST_PASSWORD
 The harness covers pinned 2.36.0 status, login-token, authorization,
 refresh-rotation, logout, seeded-library, media, root/prefix, and HTTPS app
 profiles. The 2.26.x and current-stable compatibility profiles remain later
-release work.
+release work tracked in
+[GitHub issue #31](https://github.com/terminaloutcomes/bleat/issues/31).
 
 The deterministic refresh suite exercises 20 simultaneous 401 responses,
 single-flight rotation, retry limits, 403 behavior, typed failures, and
@@ -888,7 +907,8 @@ physical device.
 ## Project documentation
 
 - `docs/audiobookshelf-ios-app-spec.md` is the product and protocol source of truth.
-- `IMPLEMENTATION_PLAN.md` lists only remaining implementation and validation
-  work, including the deferred product backlog.
+- The [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
+  tracks remaining version 1.0 implementation and validation work; deferred
+  issues are linked from the specification and traceability matrix.
 - `docs/requirements-traceability.md` links implemented requirements to tests.
 - `AGENTS.md` contains repository implementation guidance.

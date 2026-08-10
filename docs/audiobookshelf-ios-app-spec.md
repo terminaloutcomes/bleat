@@ -382,20 +382,33 @@ an endpoint alias for the same server, not another account. API requests and
 session-scoped media/download URLs may use the local base first and must fall
 back to the primary base after a local transport failure. Account identity,
 credentials, caches, downloads, and playback state remain keyed to the primary
-account. A changed local base must be authenticated directly with the supplied
-credentials and identify the existing remote user before it is enabled.
+account. A changed local base must be authenticated directly with supplied or
+saved native credentials and identify the existing remote user before it is
+enabled.
 Changing only the primary base must not require the unchanged local base to be
 reachable. If changed local validation fails or identifies a different user,
 the user may save the primary and local details with the local base disabled.
 An unvalidated local base must never receive an existing bearer credential.
+Every app launch and platform network-path change retries each configured local
+base without blocking primary-server work. Successful authenticated identity
+validation is durable for that exact normalized URL. Probe and transport
+failures update only current-lifecycle availability and must never clear a
+previously successful validation; only explicit URL replacement/removal or
+account removal clears it.
 
 The app monitors changes to the available network path using the platform
 Network framework on iOS and Mac Catalyst. A path change clears the temporary
 local-endpoint failure state and performs a non-mutating `GET <local>/status`
-probe for each validated local alias. The app does not infer home-network
+probe for each validated local alias and an authenticated native-credential
+probe for an unvalidated alias. The app does not infer home-network
 identity from Wi-Fi, DNS search domains, or interface names. A successful probe
 restores local-first routing; a failed probe keeps the bounded primary fallback.
 Live WebSocket connections use the same endpoint selection and fallback policy.
+They are optional foreground refresh channels: when `NWPath.isConstrained` is
+true the app closes the current socket, suppresses reconnects, and also sets
+`URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
+starts one connection and one catch-up browse refresh. REST, cover, playback,
+download, and offline behavior do not depend on the socket.
 
 Endpoint URLs must be built relative to the normalized base URL. Never construct API URLs from an origin alone, because that drops an Audiobookshelf path prefix.
 
@@ -1211,6 +1224,10 @@ unknown runtime value fails closed as disabled.
 
 Use SwiftData for structured local state and the filesystem for audio bytes.
 
+Every shipped SwiftData schema requires a versioned migration fixture and
+coverage for upgrade, backup/restore, account removal, and app-data reset
+journeys ([GitHub issue #47](https://github.com/terminaloutcomes/bleat/issues/47)).
+
 Suggested models:
 
 - `ServerAccount`
@@ -1412,6 +1429,9 @@ redacted `OSLog` categories.
 - Do not implement “accept any certificate.”
 - Do not pin a public certificate; self-hosted servers legitimately rotate certificates and may use private CAs.
 - Store no secrets in SwiftData, plist files, logs, crash annotations, or URLs.
+- Before the first release, scan logs, diagnostics, persistence, exports, URLs,
+  live-test artifacts, and Release archives for seeded secrets and bearer-like
+  values ([GitHub issue #48](https://github.com/terminaloutcomes/bleat/issues/48)).
 - Treat playback session IDs as transient bearer-like capabilities even though they are not JWTs.
 - Use secure random generation from Security/CryptoKit for OAuth material.
 - Enforce exact OAuth callback matching.
@@ -1426,19 +1446,28 @@ redacted `OSLog` categories.
 
 ## 18. Accessibility and usability
 
-- Full Dynamic Type support without clipping essential controls.
-- VoiceOver labels include action, title, current state, and time where relevant.
+- Full Dynamic Type support without clipping essential controls
+  ([GitHub issue #38](https://github.com/terminaloutcomes/bleat/issues/38)).
+- VoiceOver labels include action, title, current state, and time where relevant
+  ([GitHub issue #39](https://github.com/terminaloutcomes/bleat/issues/39)).
 - Player actions remain usable without relying on artwork or colour.
-- Minimum 44-point interaction targets.
-- Support Bold Text, Increase Contrast, Reduce Motion, and landscape layouts.
-- Provide keyboard shortcuts on iPad for play/pause, skip, speed, and search.
+- Minimum 44-point interaction targets
+  ([GitHub issue #45](https://github.com/terminaloutcomes/bleat/issues/45)).
+- Support Bold Text ([GitHub issue #44](https://github.com/terminaloutcomes/bleat/issues/44)),
+  Increase Contrast ([GitHub issue #43](https://github.com/terminaloutcomes/bleat/issues/43)),
+  Reduce Motion ([GitHub issue #41](https://github.com/terminaloutcomes/bleat/issues/41)),
+  and landscape layouts ([GitHub issue #42](https://github.com/terminaloutcomes/bleat/issues/42)).
+- Provide keyboard shortcuts on iPad for play/pause, skip, speed, and search
+  ([GitHub issue #40](https://github.com/terminaloutcomes/bleat/issues/40)).
 - Format times and numbers with locale-aware APIs.
 - VoiceOver labels for statistics state the metric, value, selected range, account scope, and whether coverage is all-device, this-app-only, stale, or approximate.
 - All destructive actions require clear confirmation and identify the affected server/account.
 
 ## 19. Performance and reliability targets
 
-- Library browsing remains responsive with at least 10,000 cached books.
+- Library browsing remains responsive with at least 10,000 cached books, with
+  launch, memory, energy, storage, and main-actor evidence recorded in
+  [GitHub issue #46](https://github.com/terminaloutcomes/bleat/issues/46).
 - No full-library expanded fetch.
 - No audio file or complete HTTP response is held in memory.
 - UI work remains off the main thread except observable state publication.
@@ -1598,15 +1627,22 @@ If one of these fails, revise the architecture before proceeding.
 - permission/error states;
 - accessibility;
 - diagnostics;
-- migration and integration test matrix;
-- App Store privacy and entitlement review.
+- first-release CI, migration, security, live-smoke, and redacted-artifact
+  coverage ([GitHub issue #35](https://github.com/terminaloutcomes/bleat/issues/35));
+- scheduled compatibility, recovery, performance, and flake jobs
+  ([GitHub issue #34](https://github.com/terminaloutcomes/bleat/issues/34));
+- clean-checkout validation, signed beta coverage, App Store privacy and
+  entitlement review, release notes, and the final compatibility baseline
+  ([GitHub issue #36](https://github.com/terminaloutcomes/bleat/issues/36)).
 
 ## 22. Release acceptance criteria
 
 The 1.0 release is acceptable only when:
 
 - [ ] **AC-01:** Two different Audiobookshelf accounts can remain signed in concurrently.
-- [ ] **AC-02:** No token, cookie, password, verifier, or OAuth code appears in logs or media URLs.
+- [ ] **AC-02:** No token, cookie, password, verifier, or OAuth code appears in
+  logs or media URLs; the release deep scan is tracked in
+  [GitHub issue #48](https://github.com/terminaloutcomes/bleat/issues/48).
 - [ ] **AC-03:** Native username/password login, rotating refresh tokens, and logout work without an identity provider.
 - [ ] **AC-04:** Twenty concurrent expired-token requests cause one refresh and at most one retry each.
 - [ ] **AC-05:** Server path prefixes work for API, covers, playback, and downloads.
