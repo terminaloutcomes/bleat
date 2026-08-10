@@ -290,20 +290,15 @@ final class AccountStoreTests: XCTestCase {
                 .invalidServerVersion
             )
         }
-        XCTAssertThrowsError(
-            try ServerAccount(
-                id: valid.id,
-                server: valid.server,
-                serverVersion: "2.36.0",
-                authenticationMethods: [.openID],
-                user: valid.user
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? ServerAccountValidationError,
-                .localAuthenticationUnavailable
-            )
-        }
+        let openIDOnly = try ServerAccount(
+            id: valid.id,
+            server: valid.server,
+            serverVersion: "2.36.0",
+            authenticationMethods: [.openID],
+            user: valid.user
+        )
+        XCTAssertFalse(openIDOnly.supportsLocalAuthentication)
+        XCTAssertTrue(openIDOnly.supportsOpenIDAuthentication)
     }
 
     func testLoginPersistsAccountAndCredentialsTransactionally()

@@ -139,6 +139,12 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case unavailableOffline = "unavailable_offline"
     case requestRejected = "request_rejected"
     case uncertainMutation = "uncertain_mutation"
+    case authenticationCancelled = "authentication_cancelled"
+    case authenticationSessionInProgress = "authentication_session_in_progress"
+    case authenticationBrowserFailed = "authentication_browser_failed"
+    case authenticationBridgeFailed = "authentication_bridge_failed"
+    case authenticationCallbackInvalid = "authentication_callback_invalid"
+    case authenticationCredentialInvalid = "authentication_credential_invalid"
 }
 
 public enum DiagnosticEndpoint: String, Codable, CaseIterable, Sendable {

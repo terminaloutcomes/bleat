@@ -6,15 +6,31 @@ services:
     ports:
       - "${BLEAT_HTTPS_ROOT_PORT:-13478}:8443"
       - "${BLEAT_HTTPS_PREFIX_PORT:-13479}:8444"
+      - "${BLEAT_OIDC_HTTPS_PORT:-13480}:8445"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    depends_on:
-      audiobookshelf-root:
-        condition: service_healthy
-      audiobookshelf-prefix:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/data/caddy/pki/authorities/local/root.crt"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.3
+    command:
+      - start-dev
+      - --http-port=8080
+      - --hostname=https://caddy:8445
+      - --hostname-strict=false
+      - --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: bleat-keycloak-admin
+    volumes:
+      - ./keycloak/bleat-realm.json:/opt/keycloak/data/import/bleat-realm.json:ro
     restart: "no"
 
   audiobookshelf-root:
@@ -23,10 +39,15 @@ services:
       - "${BLEAT_ABS_ROOT_PORT:-13378}:80"
     environment:
       TZ: Australia/Brisbane
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
     volumes:
       - root-config:/config
       - root-metadata:/metadata
+      - caddy-data:/caddy-data:ro
       - ./media:/audiobooks:ro
+    depends_on:
+      caddy:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1/healthcheck"]
       interval: 1s
@@ -41,10 +62,15 @@ services:
     environment:
       TZ: Australia/Brisbane
       ROUTER_BASE_PATH: /audiobookshelf
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
     volumes:
       - prefix-config:/config
       - prefix-metadata:/metadata
+      - caddy-data:/caddy-data:ro
       - ./media:/audiobooks:ro
+    depends_on:
+      caddy:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1/audiobookshelf/healthcheck"]
       interval: 1s

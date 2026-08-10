@@ -263,6 +263,9 @@ enum AppFailureCause: String, Equatable, Sendable {
     case authenticationRequired, permissionDenied, itemNotFound
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
+    case authenticationCancelled, authenticationSessionInProgress
+    case authenticationBrowserFailed, authenticationBridgeFailed
+    case authenticationCallbackInvalid, authenticationCredentialInvalid
 
     static let notFound = Self.itemNotFound
     static let accessDenied = Self.permissionDenied
@@ -299,6 +302,12 @@ struct AppFailure: Equatable, Sendable {
         case .mediaUnavailable: "Playback unavailable"
         case .uncertainMutation: "Change needs attention"
         case .requestRejected: "Request rejected"
+        case .authenticationCancelled: "Sign-in cancelled"
+        case .authenticationSessionInProgress: "Sign-in already in progress"
+        case .authenticationBrowserFailed: "Browser sign-in unavailable"
+        case .authenticationBridgeFailed: "Sign-in bridge unavailable"
+        case .authenticationCallbackInvalid: "Invalid sign-in callback"
+        case .authenticationCredentialInvalid: "Invalid sign-in response"
         }
     }
 
@@ -334,6 +343,18 @@ struct AppFailure: Equatable, Sendable {
             "Bleat could not reach the Audiobookshelf server."
         case .requestRejected:
             "The server refused this request."
+        case .authenticationCancelled:
+            "The system browser sign-in was cancelled."
+        case .authenticationSessionInProgress:
+            "Finish or cancel the current sign-in attempt before starting another."
+        case .authenticationBrowserFailed:
+            "Bleat could not start or complete the system browser sign-in session."
+        case .authenticationBridgeFailed:
+            "Audiobookshelf could not complete its OpenID sign-in bridge."
+        case .authenticationCallbackInvalid:
+            "The OpenID callback did not match the sign-in request."
+        case .authenticationCredentialInvalid:
+            "Audiobookshelf returned incomplete or mismatched account credentials."
         case .mediaUnavailable:
             "This audiobook could not be prepared for playback."
         case .uncertainMutation:
@@ -346,7 +367,9 @@ struct AppFailure: Equatable, Sendable {
         case .itemNotFound: "book.closed"
         case .permissionDenied: "lock"
         case .authenticationRequired: "person.crop.circle.badge.exclamationmark"
-        case .invalidServerResponse, .invalidInput, .requestRejected:
+        case .invalidServerResponse, .invalidInput, .requestRejected,
+            .authenticationBridgeFailed, .authenticationCallbackInvalid,
+            .authenticationCredentialInvalid:
             "exclamationmark.triangle"
         case .localStorageUnavailable, .persistenceUnavailable:
             "externaldrive.badge.exclamationmark"
@@ -355,7 +378,8 @@ struct AppFailure: Equatable, Sendable {
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
         case .serverNotReady, .serverUnsupported, .localLoginUnavailable,
-            .invalidCredentials:
+            .invalidCredentials, .authenticationCancelled,
+            .authenticationSessionInProgress, .authenticationBrowserFailed:
             "exclamationmark.circle"
         }
     }
@@ -435,6 +459,10 @@ struct AppFailure: Equatable, Sendable {
         case .onboarding(let error):
             switch error {
             case .localAuthenticationUnavailable: return .localLoginUnavailable
+            case .openIDAuthenticationUnavailable:
+                return .authenticationBridgeFailed
+            case .openIDAuthenticationFailed(let error):
+                return openIDCause(error)
             case .authenticationFailed(let error):
                 switch error {
                 case .invalidCredentials: return .invalidCredentials
@@ -523,6 +551,35 @@ struct AppFailure: Equatable, Sendable {
             case .logoutFailed, .logoutRequestFailed: return .uncertainMutation
             case .accountStoreFailed: return .localStorageUnavailable
             }
+        }
+    }
+
+    private static func openIDCause(
+        _ error: OpenIDAuthenticationError
+    ) -> AppFailureCause {
+        switch error {
+        case .invalidAccountID:
+            .invalidInput
+        case .attemptAlreadyInProgress:
+            .authenticationSessionInProgress
+        case .randomGenerationFailed, .browserFailed:
+            .authenticationBrowserFailed
+        case .browserCancelled:
+            .authenticationCancelled
+        case .unexpectedAuthorizationRedirectStatus,
+            .missingProviderRedirect, .invalidProviderRedirect,
+            .unexpectedExchangeStatus:
+            .authenticationBridgeFailed
+        case .invalidCallbackURL, .missingState, .stateMismatch,
+            .missingAuthorizationCode:
+            .authenticationCallbackInvalid
+        case .malformedExchangeResponse, .missingAccessToken,
+            .missingRefreshToken, .tokenValidationFailed,
+            .unexpectedAuthorizationStatus, .malformedAuthorizationResponse,
+            .authorizedUserMismatch:
+            .authenticationCredentialInvalid
+        case .credentialPersistenceFailed:
+            .localStorageUnavailable
         }
     }
 
@@ -712,6 +769,7 @@ final class AppModel {
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
     private(set) var loginStatus: LoginStatus = .idle
+    private(set) var loginDiscovery: ResourceState<DiscoveredServer> = .idle
     private(set) var nearbyServerDiscoveryState: NearbyServerDiscoveryState =
         .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
@@ -851,6 +909,26 @@ final class AppModel {
     func cancelNearbyServerDiscovery() {
         nearbyServerDiscovery?.cancel()
         nearbyServerDiscoveryState = .idle
+    }
+
+    func discoverLoginServer(_ serverAddress: String) async {
+        let trimmed = serverAddress.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !trimmed.isEmpty else {
+            loginDiscovery = .idle
+            return
+        }
+        loginDiscovery = .loading
+        do {
+            loginDiscovery = .loaded(
+                try await service.discoverServer(serverAddress: trimmed)
+            )
+        } catch let error {
+            loginDiscovery = .failed(
+                AppFailure(operation: .login, serviceError: error)
+            )
+        }
     }
 
     private static func makePlaybackAndDownloads(
@@ -1060,8 +1138,49 @@ final class AppModel {
         }
     }
 
+    @discardableResult
+    func loginWithOpenID(serverAddress: String) async -> Bool {
+        guard !loginStatus.isSubmitting else {
+            return false
+        }
+        loginStatus = .submitting(.checkingServer)
+        await diagnostics.record(.started(.login, category: .auth))
+        do {
+            let authenticatedAccount = try await service.loginWithOpenID(
+                serverAddress: serverAddress,
+                progress: { [weak self] stage in
+                    await self?.updateSubmissionStage(stage)
+                }
+            )
+            account = authenticatedAccount
+            accounts.removeAll { $0.id == authenticatedAccount.id }
+            accounts.append(authenticatedAccount)
+            accounts.sort(by: Self.sortAccounts)
+            phase = .signedIn
+            loginStatus = .idle
+            await downloads.start(account: authenticatedAccount)
+            await loadLibraries()
+            await loadStatistics()
+            startLiveUpdates(for: authenticatedAccount)
+            await diagnostics.record(.completed(.login, category: .auth))
+            return true
+        } catch let error {
+            let failure = AppFailure(operation: .login, serviceError: error)
+            loginStatus = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .login,
+                    category: .auth,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+            return false
+        }
+    }
+
     func prepareAccountLogin() {
         loginStatus = .idle
+        loginDiscovery = .idle
     }
 
     private func updateSubmissionStage(_ stage: AccountSubmissionStage) {
@@ -1072,6 +1191,41 @@ final class AppModel {
     }
 
     @discardableResult
+    func reauthenticateWithOpenID() async -> Bool {
+        guard let account else {
+            loginStatus = .failed(
+                AppFailure(.reauthenticate, .authenticationRequired)
+            )
+            return false
+        }
+        guard !loginStatus.isSubmitting else {
+            return false
+        }
+        loginStatus = .submitting(.checkingServer)
+        do {
+            let authenticated = try await service.reauthenticateWithOpenID(
+                account,
+                progress: { [weak self] stage in
+                    await self?.updateSubmissionStage(stage)
+                }
+            )
+            self.account = authenticated
+            accounts.removeAll { $0.id == authenticated.id }
+            accounts.append(authenticated)
+            accounts.sort(by: Self.sortAccounts)
+            loginStatus = .idle
+            await loadLibraries()
+            await loadStatistics()
+            startLiveUpdates(for: authenticated)
+            return true
+        } catch let error {
+            loginStatus = .failed(
+                AppFailure(operation: .reauthenticate, serviceError: error)
+            )
+            return false
+        }
+    }
+
     func updateAccount(
         _ account: ServerAccount,
         serverAddress: String,

@@ -433,11 +433,11 @@ When `authMethods` contains `local`:
    the same non-synchronizing, device-only Keychain credential item as the
    rotating token pair. Never store it elsewhere or log it.
 
-### 6.3 OpenID Connect authentication — deferred research contract
+### 6.3 OpenID Connect authentication
 
-OpenID Connect is not an MVP authentication method. The MVP presents and uses
-the server's native username/password flow. The retained contract below is
-non-release-blocking research for a possible later release.
+OpenID Connect is an optional authentication method selected from the server's
+advertised `authMethods`. Native username/password remains available when the
+server advertises `local`; OIDC-only servers are valid account targets.
 
 Audiobookshelf acts as a bridge between the native client and its configured OpenID provider. Use Authorization Code with PKCE; do not embed a web view.
 
@@ -488,7 +488,7 @@ Do not reuse `audiobookshelf://oauth`, which belongs to the official client and 
 9. Require access and refresh tokens, then validate with `/api/authorize`.
 10. Atomically store the account and tokens.
 11. Clear the verifier, state, authorization code, Express session cookie, and temporary response data on success, failure, or cancellation.
-12. If 1.0 supports optional identity-provider logout, retain only the Audiobookshelf-domain `auth_method` and `openid_id_token` cookies under that `AccountID`, encrypted in Keychain. Otherwise clear all cookies and do not offer provider logout. Never share these cookies between two users on the same server.
+12. On logout, accept only Audiobookshelf's returned HTTPS provider logout URL and open it in a separate non-ephemeral `ASWebAuthenticationSession` after local credentials and account state have been cleared. Do not retain provider cookies in account state, and never allow provider logout cancellation or failure to block local cleanup.
 
 Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, or the PKCE verifier.
 
@@ -536,10 +536,12 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
 
 ### 6.5 Logout and account removal
 
-MVP logout calls `/logout` with the refresh-token header, then clears local
-credentials even if the server is unreachable. The current response is
-`{ "redirect_url": String? }`; the MVP ignores that deferred
-identity-provider logout URL.
+Logout calls `/logout` with the refresh-token header, then clears local
+credentials even if the server is unreachable. If Audiobookshelf returns an
+HTTPS OIDC provider logout URL, the app opens it in a separate system
+authentication session after local cleanup. Provider cancellation or failure
+does not undo local cleanup, and no provider cookie or redirect is retained in
+account state.
 
 Removing an account distinguishes this device from all devices and asks
 separately whether to retain listening history. It must:
@@ -1317,7 +1319,11 @@ Features/
   Settings/
 ```
 
-No third-party runtime dependency is required for 1.0. Reconsider this only where an audited package substantially reduces risk.
+AppAuth-iOS `2.0.0` is the sole third-party runtime dependency. It is pinned to
+revision `145104f5ea9d58ae21b60add007c33c1cc0c948e`, published by the OpenID
+Foundation under Apache-2.0, and isolated behind Bleat's internal OIDC adapter.
+The upstream release signature and published security-advisory list were
+checked when accepted; dependency updates require the same review.
 
 ## 15. Current implementation integration map
 
@@ -1669,7 +1675,6 @@ The 1.0 release is acceptable only when:
 
 ## 23. Deferred enhancements
 
-- OpenID Connect authentication and identity-provider logout;
 - [listening statistics and portability](https://github.com/terminaloutcomes/bleat/issues/26),
   including paginated history import, archive import/export, advanced views,
   and the performance work described in section 12;

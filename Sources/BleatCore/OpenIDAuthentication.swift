@@ -1,4 +1,5 @@
 import AuthenticationServices
+@preconcurrency import AppAuthCore
 import CryptoKit
 import Foundation
 import Security
@@ -129,6 +130,14 @@ public protocol OpenIDBrowserSession: Sendable {
         at authorizationURL: URL,
         callbackScheme: String
     ) async throws -> URL
+
+    @MainActor
+    func presentLogout(at logoutURL: URL)
+}
+
+public extension OpenIDBrowserSession {
+    @MainActor
+    func presentLogout(at logoutURL: URL) {}
 }
 
 @MainActor
@@ -272,6 +281,26 @@ public final class SystemOpenIDBrowserSession:
         for session: ASWebAuthenticationSession
     ) -> ASPresentationAnchor {
         anchorProvider()
+    }
+
+    public func presentLogout(at logoutURL: URL) {
+        guard activeSession == nil else {
+            return
+        }
+        let session = ASWebAuthenticationSession(
+            url: logoutURL,
+            callbackURLScheme: nil
+        ) { [weak self] _, _ in
+            Task { @MainActor in
+                self?.activeSession = nil
+            }
+        }
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        activeSession = session
+        if !session.start() {
+            activeSession = nil
+        }
     }
 }
 
@@ -473,7 +502,7 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             server: server,
             callbackURL: callbackURL,
             browser: browser,
-            generator: PKCEGenerator()
+            suppliedAttempt: nil
         )
     }
 
@@ -484,6 +513,31 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
         browser: Browser,
         generator: PKCEGenerator
     ) async throws -> AuthenticatedAccount {
+        let attempt: OpenIDAttempt
+        do {
+            attempt = try generator.makeAttempt(callbackURL: callbackURL)
+        } catch let error {
+            switch error {
+            case .randomGenerationFailed(let status):
+                throw OpenIDAuthenticationError.randomGenerationFailed(status)
+            }
+        }
+        return try await loginWithOpenID(
+            accountID: accountID,
+            server: server,
+            callbackURL: callbackURL,
+            browser: browser,
+            suppliedAttempt: attempt
+        )
+    }
+
+    private func loginWithOpenID<Browser: OpenIDBrowserSession>(
+        accountID: AccountID,
+        server: NormalizedServerURL,
+        callbackURL: OpenIDCallbackURL,
+        browser: Browser,
+        suppliedAttempt: OpenIDAttempt?
+    ) async throws -> AuthenticatedAccount {
         guard !accountID.rawValue.isEmpty else {
             throw OpenIDAuthenticationError.invalidAccountID
         }
@@ -491,49 +545,72 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             throw OpenIDAuthenticationError.attemptAlreadyInProgress
         }
 
-        let attempt: OpenIDAttempt
-        do {
-            attempt = try generator.makeAttempt(
-                callbackURL: callbackURL
+        let routeBuilder = AudiobookshelfRouteBuilder(server: server)
+        let authorizationEndpoint = try routeBuilder.url(for: .beginOpenID)
+        let completionEndpoint = try routeBuilder.url(for: .completeOpenID)
+        let configuration = OIDServiceConfiguration(
+            authorizationEndpoint: authorizationEndpoint,
+            tokenEndpoint: completionEndpoint
+        )
+        let authorizationRequest: OIDAuthorizationRequest
+        if let suppliedAttempt {
+            authorizationRequest = OIDAuthorizationRequest(
+                configuration: configuration,
+                clientId: "Bleat",
+                clientSecret: nil,
+                scope: nil,
+                redirectURL: callbackURL.url,
+                responseType: OIDResponseTypeCode,
+                state: suppliedAttempt.state,
+                nonce: nil,
+                codeVerifier: suppliedAttempt.verifier,
+                codeChallenge: suppliedAttempt.challenge,
+                codeChallengeMethod:
+                    OIDOAuthorizationRequestCodeChallengeMethodS256,
+                additionalParameters: nil
             )
-        } catch let error {
-            switch error {
-            case .randomGenerationFailed(let status):
-                throw OpenIDAuthenticationError.randomGenerationFailed(
-                    status
-                )
-            }
+        } else {
+            authorizationRequest = OIDAuthorizationRequest(
+                configuration: configuration,
+                clientId: "Bleat",
+                scopes: nil,
+                redirectURL: callbackURL.url,
+                responseType: OIDResponseTypeCode,
+                additionalParameters: nil
+            )
         }
+        guard let state = authorizationRequest.state,
+            let verifier = authorizationRequest.codeVerifier,
+            let challenge = authorizationRequest.codeChallenge
+        else {
+            throw OpenIDAuthenticationError.randomGenerationFailed(
+                errSecAllocate
+            )
+        }
+        let attempt = OpenIDAttempt(
+            callbackURL: callbackURL,
+            verifier: verifier,
+            challenge: challenge,
+            state: state
+        )
 
         openIDAttempt = attempt
         await transport.clearSession()
 
         do {
             let providerURL = try await beginOpenID(
-                server: server,
-                attempt: attempt
+                authorizationRequest.authorizationRequestURL()
             )
-            let callback: URL
-            do {
-                callback = try await browser.authenticate(
-                    at: providerURL,
-                    callbackScheme: callbackURL.callbackScheme
-                )
-            } catch let error as OpenIDBrowserError {
-                switch error {
-                case .cancelled:
-                    throw OpenIDAuthenticationError.browserCancelled
-                case .alreadyActive, .failed:
-                    throw OpenIDAuthenticationError.browserFailed
-                }
-            } catch {
-                throw OpenIDAuthenticationError.browserFailed
-            }
-
+            let grant = try await AppAuthAuthorizationFlow.authorize(
+                request: authorizationRequest,
+                providerURL: providerURL,
+                callbackURL: callbackURL,
+                browser: browser
+            )
             let account = try await completeOpenID(
                 accountID: accountID,
                 server: server,
-                callbackURL: callback,
+                grant: grant,
                 attempt: attempt
             )
             await clearOpenIDAttempt()
@@ -545,30 +622,9 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
     }
 
     private func beginOpenID(
-        server: NormalizedServerURL,
-        attempt: OpenIDAttempt
+        _ authorizationURL: URL
     ) async throws -> URL {
-        let url = try AudiobookshelfRouteBuilder(server: server).url(
-            for: .beginOpenID,
-            queryItems: [
-                URLQueryItem(
-                    name: "code_challenge",
-                    value: attempt.challenge
-                ),
-                URLQueryItem(
-                    name: "code_challenge_method",
-                    value: "S256"
-                ),
-                URLQueryItem(
-                    name: "redirect_uri",
-                    value: attempt.callbackURL.url.absoluteString
-                ),
-                URLQueryItem(name: "response_type", value: "code"),
-                URLQueryItem(name: "state", value: attempt.state),
-                URLQueryItem(name: "client_id", value: "Bleat"),
-            ]
-        )
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: authorizationURL)
         request.httpMethod = "GET"
 
         let response = try await transport.send(
@@ -602,20 +658,15 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
     private func completeOpenID(
         accountID: AccountID,
         server: NormalizedServerURL,
-        callbackURL: URL,
+        grant: OpenIDAuthorizationGrant,
         attempt: OpenIDAttempt
     ) async throws -> AuthenticatedAccount {
-        let values = try attempt.callbackURL.authorizationValues(
-            from: callbackURL,
-            expectedState: attempt.state
-        )
-
         let routeBuilder = AudiobookshelfRouteBuilder(server: server)
         let exchangeURL = try routeBuilder.url(
             for: .completeOpenID,
             queryItems: [
-                URLQueryItem(name: "state", value: values.state),
-                URLQueryItem(name: "code", value: values.code),
+                URLQueryItem(name: "state", value: grant.state),
+                URLQueryItem(name: "code", value: grant.code),
                 URLQueryItem(
                     name: "code_verifier",
                     value: attempt.verifier
@@ -733,5 +784,217 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
     private func clearOpenIDAttempt() async {
         openIDAttempt = nil
         await transport.clearSession()
+    }
+
+    public func loginWithOpenIDAndPersistAccount<Browser: OpenIDBrowserSession>(
+        accountID: AccountID,
+        discoveredServer: DiscoveredServer,
+        callbackURL: OpenIDCallbackURL,
+        browser: Browser,
+        accountStore: AccountStore,
+        expectedUserID: UserID? = nil,
+        makeActive: Bool = true,
+        onAuthenticationCompleted: @escaping @Sendable () async -> Void = {}
+    ) async throws(AccountOnboardingError) -> ServerAccount {
+        guard discoveredServer.authenticationMethods.contains(.openID) else {
+            throw .openIDAuthenticationUnavailable
+        }
+
+        let authenticated: AuthenticatedAccount
+        do {
+            authenticated = try await loginWithOpenID(
+                accountID: accountID,
+                server: discoveredServer.baseURL,
+                callbackURL: callbackURL,
+                browser: browser
+            )
+        } catch let error as OpenIDAuthenticationError {
+            throw .openIDAuthenticationFailed(error)
+        } catch {
+            throw .authenticationRequestFailed
+        }
+
+        if let expectedUserID, authenticated.user.id != expectedUserID {
+            try await rollbackOnboardingCredentials(
+                accountID: accountID,
+                originalError: .openIDAuthenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: expectedUserID.rawValue,
+                        actual: authenticated.user.id.rawValue
+                    )
+                )
+            )
+        }
+
+        await onAuthenticationCompleted()
+
+        let account: ServerAccount
+        do {
+            account = try ServerAccount(
+                authenticatedAccount: authenticated,
+                discoveredServer: discoveredServer
+            )
+        } catch let error {
+            try await rollbackOnboardingCredentials(
+                accountID: accountID,
+                originalError: .invalidAccount(error)
+            )
+        }
+
+        do {
+            try await accountStore.save(account, makeActive: makeActive)
+        } catch let error {
+            try await rollbackOnboardingCredentials(
+                accountID: accountID,
+                originalError: .accountPersistenceFailed(error)
+            )
+        }
+        return account
+    }
+}
+
+public struct OpenIDAuthorizationGrant: Equatable, Sendable {
+    public let code: String
+    public let state: String
+
+    public init(code: String, state: String) {
+        self.code = code
+        self.state = state
+    }
+}
+
+@MainActor
+private enum AppAuthAuthorizationFlow {
+    static func authorize<Browser: OpenIDBrowserSession>(
+        request: OIDAuthorizationRequest,
+        providerURL: URL,
+        callbackURL: OpenIDCallbackURL,
+        browser: Browser
+    ) async throws -> OpenIDAuthorizationGrant {
+        let externalUserAgent = AppAuthOpenIDExternalUserAgent(
+            providerURL: providerURL,
+            callbackScheme: callbackURL.callbackScheme,
+            browser: browser
+        )
+        return try await withCheckedThrowingContinuation { continuation in
+            let session = OIDAuthorizationService.present(
+                request,
+                externalUserAgent: externalUserAgent
+            ) { response, _ in
+                Task { @MainActor in
+                    externalUserAgent.releaseSession()
+                    if let response,
+                        let code = response.authorizationCode,
+                        let state = response.request.state
+                    {
+                        continuation.resume(
+                            returning: OpenIDAuthorizationGrant(
+                                code: code,
+                                state: state
+                            )
+                        )
+                        return
+                    }
+                    if let browserError = externalUserAgent.browserError {
+                        switch browserError {
+                        case .cancelled:
+                            continuation.resume(
+                                throwing:
+                                    OpenIDAuthenticationError.browserCancelled
+                            )
+                        case .alreadyActive, .failed:
+                            continuation.resume(
+                                throwing:
+                                    OpenIDAuthenticationError.browserFailed
+                            )
+                        }
+                        return
+                    }
+                    if let returnedURL = externalUserAgent.callbackURL {
+                        do {
+                            _ = try callbackURL.authorizationValues(
+                                from: returnedURL,
+                                expectedState: request.state ?? ""
+                            )
+                        } catch let error as OpenIDAuthenticationError {
+                            continuation.resume(throwing: error)
+                            return
+                        } catch {}
+                    }
+                    continuation.resume(
+                        throwing: OpenIDAuthenticationError.invalidCallbackURL
+                    )
+                }
+            }
+            externalUserAgent.retain(session: session)
+        }
+    }
+}
+
+@MainActor
+private final class AppAuthOpenIDExternalUserAgent<
+    Browser: OpenIDBrowserSession
+>: NSObject, @preconcurrency OIDExternalUserAgent {
+    private let providerURL: URL
+    private let callbackScheme: String
+    private let browser: Browser
+    private var task: Task<Void, Never>?
+    private var authorizationSession: (any OIDExternalUserAgentSession)?
+    private(set) var callbackURL: URL?
+    private(set) var browserError: OpenIDBrowserError?
+
+    init(
+        providerURL: URL,
+        callbackScheme: String,
+        browser: Browser
+    ) {
+        self.providerURL = providerURL
+        self.callbackScheme = callbackScheme
+        self.browser = browser
+    }
+
+    func present(
+        _ request: any OIDExternalUserAgentRequest,
+        session: any OIDExternalUserAgentSession
+    ) -> Bool {
+        guard task == nil else {
+            return false
+        }
+        task = Task { @MainActor in
+            do {
+                let callbackURL = try await browser.authenticate(
+                    at: providerURL,
+                    callbackScheme: callbackScheme
+                )
+                self.callbackURL = callbackURL
+                if !session.resumeExternalUserAgentFlow(with: callbackURL) {
+                    await session.cancel()
+                }
+            } catch let error as OpenIDBrowserError {
+                browserError = error
+                await session.cancel()
+            } catch {
+                browserError = .failed
+                await session.cancel()
+            }
+        }
+        return true
+    }
+
+    func dismiss(
+        animated: Bool,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        task = nil
+        completion()
+    }
+
+    func retain(session: any OIDExternalUserAgentSession) {
+        authorizationSession = session
+    }
+
+    func releaseSession() {
+        authorizationSession = nil
+        task = nil
     }
 }

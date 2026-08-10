@@ -115,6 +115,24 @@
             _ account: ServerAccount
         ) async throws(AppServiceError) {}
 
+        func discoverServer(
+            serverAddress: String
+        ) async throws(AppServiceError) -> DiscoveredServer {
+            let account = try account()
+            guard let version = AudiobookshelfServerVersion(
+                account.serverVersion
+            ) else {
+                throw .accountStore(.persistenceFailed)
+            }
+            return DiscoveredServer(
+                baseURL: account.server,
+                version: version,
+                language: "en-us",
+                authenticationMethods: account.authenticationMethods,
+                authenticationFormData: nil
+            )
+        }
+
         func login(
             serverAddress: String,
             username: String,
@@ -137,11 +155,25 @@
             return try account()
         }
 
+        func loginWithOpenID(
+            serverAddress: String,
+            progress: @escaping AccountSubmissionProgress
+        ) async throws(AppServiceError) -> ServerAccount {
+            throw .onboarding(.openIDAuthenticationUnavailable)
+        }
+
         func reauthenticate(
             _ account: ServerAccount,
             password: String
         ) async throws(AppServiceError) -> ServerAccount {
             try self.account()
+        }
+
+        func reauthenticateWithOpenID(
+            _ account: ServerAccount,
+            progress: @escaping AccountSubmissionProgress
+        ) async throws(AppServiceError) -> ServerAccount {
+            throw .onboarding(.openIDAuthenticationUnavailable)
         }
 
         func libraries(

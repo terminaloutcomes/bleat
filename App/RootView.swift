@@ -217,6 +217,7 @@ private struct NativeLoginView: View {
     @State private var password = ""
     @State private var isPasswordVisible = false
     @State private var invalidURLErrorMessage: String?
+    @State private var autoLaunchedServer: String?
 
     private var isSubmitting: Bool {
         model.loginStatus.isSubmitting
@@ -229,6 +230,21 @@ private struct NativeLoginView: View {
             && !username.isEmpty
             && !password.isEmpty
             && !isSubmitting
+    }
+
+    private var discoveredServer: DiscoveredServer? {
+        guard case .loaded(let server) = model.loginDiscovery else {
+            return nil
+        }
+        return server
+    }
+
+    private var supportsLocalLogin: Bool {
+        discoveredServer?.authenticationMethods.contains(.local) ?? true
+    }
+
+    private var supportsOpenIDLogin: Bool {
+        discoveredServer?.authenticationMethods.contains(.openID) ?? false
     }
 
     var body: some View {
@@ -248,7 +264,8 @@ private struct NativeLoginView: View {
                     nearbyServers
                 }
 
-                Section("Account") {
+                if supportsLocalLogin {
+                    Section("Account") {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
@@ -275,6 +292,28 @@ private struct NativeLoginView: View {
                         isPasswordVisible
                             ? "Hide password" : "Show password"
                     )
+                    }
+                }
+
+                if supportsOpenIDLogin {
+                    Section {
+                        Button(
+                            discoveredServer?.authenticationFormData?
+                                .openIDButtonText
+                                ?? "Sign in with OpenID"
+                        ) {
+                            let submittedServerAddress = serverAddress
+                            Task {
+                                if await model.loginWithOpenID(
+                                    serverAddress: submittedServerAddress
+                                ) {
+                                    onSignedIn()
+                                }
+                            }
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("login.openid")
+                    }
                 }
 
                 if case .failed(let failure) = model.loginStatus {
@@ -289,7 +328,7 @@ private struct NativeLoginView: View {
                     AccountSubmissionButton(
                         idleTitle: "Sign In",
                         status: model.loginStatus,
-                        isDisabled: !canSubmit,
+                        isDisabled: !canSubmit || !supportsLocalLogin,
                         accessibilityIdentifier: "login.submit",
                         action: submit
                     )
@@ -310,6 +349,27 @@ private struct NativeLoginView: View {
             .navigationTitle(navigationTitle)
             .task {
                 model.startNearbyServerDiscovery()
+            }
+            .task(id: serverAddress) {
+                try? await Task.sleep(for: .milliseconds(300))
+                await model.discoverLoginServer(serverAddress)
+            }
+            .onChange(of: model.loginDiscovery) { _, state in
+                guard case .loaded(let discovered) = state,
+                    discovered.authenticationFormData?.openIDAutoLaunch == true,
+                    autoLaunchedServer != discovered.baseURL.url.absoluteString
+                else {
+                    return
+                }
+                autoLaunchedServer = discovered.baseURL.url.absoluteString
+                let submittedServerAddress = serverAddress
+                Task {
+                    if await model.loginWithOpenID(
+                        serverAddress: submittedServerAddress
+                    ) {
+                        onSignedIn()
+                    }
+                }
             }
             .onDisappear {
                 model.cancelNearbyServerDiscovery()
@@ -584,6 +644,22 @@ private struct AccountEditorView: View {
                         accessibilityIdentifier: "accountEditor.save",
                         action: { submit() }
                     )
+                }
+
+                if account.supportsOpenIDAuthentication,
+                    model.account?.id == account.id
+                {
+                    Section {
+                        Button("Sign in with OpenID") {
+                            Task {
+                                if await model.reauthenticateWithOpenID() {
+                                    onSaved()
+                                }
+                            }
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("accountEditor.openid")
+                    }
                 }
 
                 if model.account?.id != account.id {

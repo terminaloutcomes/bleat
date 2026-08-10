@@ -26,8 +26,8 @@ library listing, pagination, and search, account-scoped SwiftData library
 caching including personalized shelves and expanded book details,
 online-first/cache-fallback repository behavior, permission-derived book
 action visibility, playback sessions, and background-download contracts.
-Native Audiobookshelf username/password is the active authentication scope; the
-earlier isolated OIDC spike is deferred. Bleat records local listening slices,
+Native Audiobookshelf username/password and server-advertised OpenID Connect
+login are supported authentication methods. Bleat records local listening slices,
 completion milestones, and lifetime summaries. Downloaded playback uses a
 durable UUIDv4 local-session outbox and reports measured listening time.
 Listening-history import/export and richer statistics views remain deferred in
@@ -424,8 +424,9 @@ refresh endpoint rejects the session or returns
 an unusable response, Bleat silently performs one native login, verifies that
 the same server user was returned, and retries the request. Network, malformed
 recovery, and storage failures remain retryable; only a missing or conclusively
-invalid saved login requires explicit sign-in. OIDC and third-party
-identity-provider configuration are not part of the app.
+invalid saved login requires explicit sign-in. OIDC uses the configured
+Audiobookshelf identity-provider bridge and does not expose provider
+configuration in the app.
 
 ## iCloud synchronization
 
@@ -773,11 +774,14 @@ export BLEAT_TEST_PASSWORD="$(uuidgen)"
 unset BLEAT_TEST_USERNAME BLEAT_TEST_PASSWORD
 ```
 
-The harness covers pinned 2.36.0 status, login-token, authorization,
+The harness covers pinned 2.36.0 status, native login-token, authorization,
 refresh-rotation, logout, seeded-library, media, root/prefix, and HTTPS app
 profiles. The 2.26.x and current-stable compatibility profiles remain later
 release work tracked in
-[GitHub issue #31](https://github.com/terminaloutcomes/bleat/issues/31).
+[GitHub issue #31](https://github.com/terminaloutcomes/bleat/issues/31). It also
+provisions a disposable Keycloak realm and runs the real PKCE browser bridge,
+token exchange, and account authorization for root and path-prefixed
+Audiobookshelf servers.
 
 The deterministic refresh suite exercises 20 simultaneous 401 responses,
 single-flight rotation, retry limits, 403 behavior, typed failures, and
@@ -830,8 +834,12 @@ swift test --filter BackgroundDownloadTests
 swift test --filter DownloadStorageTests
 ```
 
-The earlier OIDC spike remains in the repository as isolated research code, but
-it is deferred and is not used by the app or Docker harness.
+The OIDC flow uses the server-provided button label and the registered
+`com.yaleman.bleat:/oauth2redirect` callback. OpenID Foundation AppAuth-iOS
+`2.0.0` is pinned exactly for authorization-response, state, and PKCE handling;
+Bleat exposes no AppAuth types outside its internal adapter. Provider URLs,
+callback values, codes, verifiers, cookies, and tokens are excluded from
+diagnostics.
 
 ## Chapter transcription CLI
 

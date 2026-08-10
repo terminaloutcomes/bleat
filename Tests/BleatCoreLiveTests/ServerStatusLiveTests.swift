@@ -27,7 +27,7 @@ final class ServerStatusLiveTests: XCTestCase {
             XCTAssertEqual(status.app, "audiobookshelf")
             XCTAssertEqual(status.serverVersion, "2.36.0")
             XCTAssertTrue(status.isInitialized)
-            XCTAssertEqual(status.authenticationMethods, [.local])
+            XCTAssertEqual(status.authenticationMethods, [.local, .openID])
         }
     }
 }

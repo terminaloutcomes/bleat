@@ -1,4 +1,5 @@
 import BleatCore
+import AuthenticationServices
 import SwiftUI
 import UIKit
 
@@ -42,7 +43,20 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
         do {
             model = AppModel(
                 service: try LiveAppService(
-                    diagnostics: diagnostics
+                    diagnostics: diagnostics,
+                    openIDBrowserProvider: {
+                        SystemOpenIDBrowserSession(
+                            anchorProvider: {
+                                UIApplication.shared.connectedScenes
+                                    .compactMap {
+                                        $0 as? UIWindowScene
+                                    }
+                                    .flatMap(\.windows)
+                                    .first(where: \.isKeyWindow)
+                                    ?? UIWindow()
+                            }
+                        )
+                    }
                 ),
                 diagnostics: diagnostics,
                 diagnosticLogStore: diagnosticLogStore
@@ -95,6 +109,12 @@ struct BleatApp: App {
 }
 
 struct UnavailableAppService: AppServicing {
+    func discoverServer(
+        serverAddress: String
+    ) async throws(AppServiceError) -> DiscoveredServer {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
@@ -122,9 +142,23 @@ struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func loginWithOpenID(
+        serverAddress: String,
+        progress: @escaping AccountSubmissionProgress
+    ) async throws(AppServiceError) -> ServerAccount {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func reauthenticate(
         _ account: ServerAccount,
         password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        throw .accountStore(.persistenceFailed)
+    }
+
+    func reauthenticateWithOpenID(
+        _ account: ServerAccount,
+        progress: @escaping AccountSubmissionProgress
     ) async throws(AppServiceError) -> ServerAccount {
         throw .accountStore(.persistenceFailed)
     }

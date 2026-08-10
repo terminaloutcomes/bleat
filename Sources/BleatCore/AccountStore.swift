@@ -52,7 +52,9 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
         guard AudiobookshelfServerVersion(serverVersion) != nil else {
             throw .invalidServerVersion
         }
-        guard authenticationMethods.contains(.local) else {
+        guard authenticationMethods.contains(.local)
+            || authenticationMethods.contains(.openID)
+        else {
             throw .localAuthenticationUnavailable
         }
         self.id = id
@@ -84,6 +86,10 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
 
     public var supportsLocalAuthentication: Bool {
         authenticationMethods.contains(.local)
+    }
+
+    public var supportsOpenIDAuthentication: Bool {
+        authenticationMethods.contains(.openID)
     }
 
     public func updatingConnectionState(
@@ -209,6 +215,8 @@ public enum AccountStoreError: Error, Equatable, Sendable {
 public enum AccountOnboardingError: Error, Equatable, Sendable {
     case localAuthenticationUnavailable
     case authenticationFailed(LocalAuthenticationError)
+    case openIDAuthenticationUnavailable
+    case openIDAuthenticationFailed(OpenIDAuthenticationError)
     case authenticationRequestFailed
     case invalidAccount(ServerAccountValidationError)
     case accountPersistenceFailed(AccountStoreError)
@@ -490,7 +498,7 @@ extension AuthCoordinator {
         return account
     }
 
-    private func rollbackOnboardingCredentials(
+    func rollbackOnboardingCredentials(
         accountID: AccountID,
         originalError: AccountOnboardingError
     ) async throws(AccountOnboardingError) -> Never {
