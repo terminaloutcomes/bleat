@@ -389,6 +389,8 @@ final class ChapterTranscriptionModel {
     @ObservationIgnored
     private var activeBatch: ActiveChapterTranscriptionBatch?
     @ObservationIgnored
+    private var activeTranscriber: (any ChapterTranscribing)?
+    @ObservationIgnored
     private weak var activeAppModel: AppModel?
     @ObservationIgnored
     private var activeCompletedChapterIDs: [Int] = []
@@ -697,6 +699,7 @@ final class ChapterTranscriptionModel {
             chapterID: chapterID
         )
         transcriptionTask?.cancel()
+        cancelActiveTranscriber()
     }
 
     func cancel(for accountID: AccountID) {
@@ -785,6 +788,7 @@ final class ChapterTranscriptionModel {
             }
 
             let transcriber = transcriberFactory()
+            activeTranscriber = transcriber
             for (chapterIndex, chapter) in chapters.enumerated() {
                 currentChapterID = chapter.id
                 let progress = ChapterTranscriptionBatchProgress(
@@ -1051,6 +1055,7 @@ final class ChapterTranscriptionModel {
             return
         }
         transcriptionTask = nil
+        activeTranscriber = nil
         let bookKey = activeBatch?.bookKey
         activeTaskID = nil
         activeBatch = nil
@@ -1063,10 +1068,20 @@ final class ChapterTranscriptionModel {
 
     private func cancelWithoutPersisting() {
         transcriptionTask?.cancel()
+        cancelActiveTranscriber()
         guard let taskID = activeTaskID else {
             return
         }
         finishTask(taskID)
+    }
+
+    private func cancelActiveTranscriber() {
+        guard let activeTranscriber else {
+            return
+        }
+        Task {
+            await activeTranscriber.cancel()
+        }
     }
 
     private func startCacheMaintenance() {

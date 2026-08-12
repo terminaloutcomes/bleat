@@ -42,6 +42,12 @@ public protocol ChapterTranscribing: Sendable {
     func transcribe(
         _ request: ChapterTranscriptionRequest
     ) async throws -> [TranscriptSegment]
+
+    func cancel() async
+}
+
+public extension ChapterTranscribing {
+    func cancel() async {}
 }
 
 public struct ChapterTranscriptionDiagnostic: Equatable, Sendable {

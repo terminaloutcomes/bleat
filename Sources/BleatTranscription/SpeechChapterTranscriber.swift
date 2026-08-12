@@ -4,6 +4,8 @@
     import Speech
 
     public struct SpeechChapterTranscriber: ChapterTranscribing {
+        private let activeAnalysis = ActiveSpeechAnalysis()
+
         public init() {}
 
         public func transcribe(
@@ -27,7 +29,17 @@
                 throw ChapterTranscriptionFailure.operatingSystemUnsupported
             }
 
-            return try await transcribeUsingSpeechTranscriber(request)
+            return try await withTaskCancellationHandler {
+                try await transcribeUsingSpeechTranscriber(request)
+            } onCancel: {
+                Task {
+                    await activeAnalysis.cancel()
+                }
+            }
+        }
+
+        public func cancel() async {
+            await activeAnalysis.cancel()
         }
 
         @available(macOS 26.0, iOS 26.0, visionOS 26.0, *)
@@ -97,6 +109,22 @@
                 from: transcriber,
                 chapterStartSeconds: request.chapterStartSeconds
             )
+            let analysisID = UUID()
+            await activeAnalysis.begin(
+                id: analysisID,
+                analyzer: analyzer,
+                resultsTask: resultsTask
+            )
+            defer {
+                Task {
+                    await activeAnalysis.finish(id: analysisID)
+                }
+            }
+            if Task.isCancelled {
+                resultsTask.cancel()
+                await analyzer.cancelAndFinishNow()
+                throw CancellationError()
+            }
 
             let lastSampleTime: CMTime?
             do {
@@ -209,6 +237,39 @@
                 }
                 return segments
             }
+        }
+    }
+
+    private actor ActiveSpeechAnalysis {
+        private var activeID: UUID?
+        private var activeCancellation: (@Sendable () async -> Void)?
+
+        @available(macOS 26.0, iOS 26.0, visionOS 26.0, *)
+        func begin(
+            id: UUID,
+            analyzer: SpeechAnalyzer,
+            resultsTask: Task<[TranscriptSegment], any Error>
+        ) {
+            activeID = id
+            activeCancellation = {
+                resultsTask.cancel()
+                await analyzer.cancelAndFinishNow()
+            }
+        }
+
+        func finish(id: UUID) {
+            guard activeID == id else {
+                return
+            }
+            activeID = nil
+            activeCancellation = nil
+        }
+
+        func cancel() async {
+            guard let activeCancellation else {
+                return
+            }
+            await activeCancellation()
         }
     }
 #endif

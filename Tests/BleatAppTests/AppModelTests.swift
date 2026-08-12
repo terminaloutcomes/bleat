@@ -339,6 +339,81 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testCancellationActivelyStopsCurrentTranscriber() async throws {
+        let account = try fixtureAccount()
+        let firstChapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "First Chapter"
+        )
+        let interruptedChapter = PlaybackChapter(
+            id: 2,
+            start: 20,
+            end: 40,
+            title: "Interrupted Chapter"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-active-cancellation",
+                title: "Active cancellation",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [firstChapter, interruptedChapter]
+        )
+        let transcriber = CancellableTestChapterTranscriber(
+            segments: [
+                TranscriptSegment(
+                    startMilliseconds: 500,
+                    endMilliseconds: 1_500,
+                    text: "saved before active cancellation"
+                )
+            ]
+        )
+        let coordinator = makeTranscriptionModel(
+            transcriberFactory: { transcriber }
+        )
+        let service = TestAppService(activeAccount: .success(account))
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [firstChapter, interruptedChapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await transcriber.waitUntilSecondCallStarts()
+
+        coordinator.cancel()
+
+        let loadedTerminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        let terminalState = try XCTUnwrap(loadedTerminalState)
+        let wasCancelled = await transcriber.wasCancelled()
+        XCTAssertTrue(wasCancelled)
+        XCTAssertEqual(terminalState.outcome, .cancelled)
+        XCTAssertEqual(terminalState.completedChapterIDs, [firstChapter.id])
+        XCTAssertTrue(
+            coordinator.isCached(chapterID: firstChapter.id, for: bookKey)
+        )
+        XCTAssertFalse(
+            coordinator.isCached(
+                chapterID: interruptedChapter.id,
+                for: bookKey
+            )
+        )
+    }
+
     func testLateTranscriptLoadErrorCannotReplaceNewerBatchResult()
         async throws
     {
@@ -6956,7 +7031,8 @@ final class AppModelTests: XCTestCase {
                 text: "transcribed text"
             )
         ],
-        transcriberGate: AsyncGate? = nil
+        transcriberGate: AsyncGate? = nil,
+        transcriberFactory: ChapterTranscriberFactory? = nil
     ) -> ChapterTranscriptionModel {
         ChapterTranscriptionModel(
             transcriptCacheReapInterval: .seconds(3_600),
@@ -6976,7 +7052,7 @@ final class AppModelTests: XCTestCase {
                     cachePin: nil
                 )
             },
-            transcriberFactory: {
+            transcriberFactory: transcriberFactory ?? {
                 TestChapterTranscriber(
                     gate: transcriberGate,
                     segments: segments
@@ -8631,5 +8707,41 @@ private struct TestChapterTranscriber: ChapterTranscribing {
             await gate.enterAndWait()
         }
         return segments
+    }
+}
+
+private actor CancellableTestChapterTranscriber: ChapterTranscribing {
+    private let secondCallGate = AsyncGate()
+    private let segments: [TranscriptSegment]
+    private var callCount = 0
+    private var cancelled = false
+
+    init(segments: [TranscriptSegment]) {
+        self.segments = segments
+    }
+
+    func transcribe(
+        _ request: ChapterTranscriptionRequest
+    ) async throws -> [TranscriptSegment] {
+        callCount += 1
+        guard callCount == 2 else {
+            return segments
+        }
+        await secondCallGate.enterAndWait()
+        try Task.checkCancellation()
+        return segments
+    }
+
+    func cancel() async {
+        cancelled = true
+        await secondCallGate.release()
+    }
+
+    func waitUntilSecondCallStarts() async {
+        await secondCallGate.waitUntilEntered()
+    }
+
+    func wasCancelled() -> Bool {
+        cancelled
     }
 }
