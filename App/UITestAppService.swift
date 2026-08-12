@@ -455,6 +455,25 @@
             )
         }
 
+        func bookDetailResult(
+            for account: ServerAccount,
+            libraryID: LibraryID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError)
+            -> LibraryRepositoryResult<LibraryBookDetail>
+        {
+            LibraryRepositoryResult(
+                value: try await bookDetail(
+                    for: account,
+                    libraryID: libraryID,
+                    itemID: itemID
+                ),
+                source: .remote,
+                refreshedAt: Date(),
+                correlationID: nil
+            )
+        }
+
         func cachedChapterTranscripts(
             accountID: AccountID,
             itemID: LibraryItemID

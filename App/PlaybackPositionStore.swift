@@ -44,6 +44,43 @@ enum DownloadedPositionReconciler {
     }
 }
 
+enum StreamingPositionRefreshDecision: Equatable {
+    case unchanged
+    case conflict(local: Double, server: Double)
+}
+
+enum StreamingPositionRefreshReconciler {
+    static let equivalentPositionTolerance: Double = 30
+
+    static func decide(
+        currentTime: Double,
+        baseline: LibraryBookProgress?,
+        refreshed: LibraryBookProgress,
+        duration: Double
+    ) -> StreamingPositionRefreshDecision {
+        let baselineTime = min(
+            max(baseline?.currentTime ?? 0, 0),
+            duration
+        )
+        let localTime = min(max(currentTime, 0), duration)
+        let serverTime = min(max(refreshed.currentTime, 0), duration)
+        let serverChanged =
+            refreshed.lastUpdateMilliseconds
+            > (baseline?.lastUpdateMilliseconds ?? 0)
+            && abs(serverTime - baselineTime) > equivalentPositionTolerance
+        let localChanged =
+            abs(localTime - baselineTime) > equivalentPositionTolerance
+
+        guard serverChanged,
+            localChanged,
+            abs(localTime - serverTime) > equivalentPositionTolerance
+        else {
+            return .unchanged
+        }
+        return .conflict(local: localTime, server: serverTime)
+    }
+}
+
 @MainActor
 final class PlaybackPositionStore {
     static let shared = PlaybackPositionStore(defaults: .standard)

@@ -439,6 +439,13 @@ protocol AppServicing: Sendable {
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookDetail
 
+    func bookDetailResult(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+
     func cachedChapterTranscripts(
         accountID: AccountID,
         itemID: LibraryItemID
@@ -1784,6 +1791,24 @@ actor LiveAppService: AppServicing {
                 for: itemID,
                 in: libraryID
             ).value
+        } catch let error {
+            throw .bookDetail(error)
+        }
+    }
+
+    func bookDetailResult(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+    {
+        let repository = repository(for: account)
+        do {
+            return try await repository.bookDetail(
+                for: itemID,
+                in: libraryID
+            )
         } catch let error {
             throw .bookDetail(error)
         }

@@ -346,6 +346,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let updatedAtMilliseconds: Int64
     public let isExplicit: Bool
     public let isAbridged: Bool
+    public let progress: LibraryBookProgress?
 
     public init(
         id: LibraryItemID,
@@ -367,7 +368,8 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         addedAtMilliseconds: Int64,
         updatedAtMilliseconds: Int64,
         isExplicit: Bool,
-        isAbridged: Bool
+        isAbridged: Bool,
+        progress: LibraryBookProgress? = nil
     ) {
         self.id = id
         self.libraryID = libraryID
@@ -389,13 +391,14 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         self.updatedAtMilliseconds = updatedAtMilliseconds
         self.isExplicit = isExplicit
         self.isAbridged = isAbridged
+        self.progress = progress
     }
 
     enum CodingKeys: String, CodingKey {
         case id, libraryID, title, subtitle, authorName, narratorName, seriesName
         case authors, series, collapsedSeries, genres, publisher, publishedYear
         case duration, trackCount, chapterCount, addedAtMilliseconds
-        case updatedAtMilliseconds, isExplicit, isAbridged
+        case updatedAtMilliseconds, isExplicit, isAbridged, progress
     }
 
     public init(from decoder: Decoder) throws {
@@ -420,6 +423,10 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         updatedAtMilliseconds = try values.decode(Int64.self, forKey: .updatedAtMilliseconds)
         isExplicit = try values.decode(Bool.self, forKey: .isExplicit)
         isAbridged = try values.decode(Bool.self, forKey: .isAbridged)
+        progress = try values.decodeIfPresent(
+            LibraryBookProgress.self,
+            forKey: .progress
+        )
     }
 }
 
@@ -642,6 +649,17 @@ extension LibraryBookDetail {
             && audioFileCount >= trackCount
             && addedAtMilliseconds >= 0
             && updatedAtMilliseconds >= 0
+            && (progress.map {
+                $0.libraryItemID == id
+                    && $0.duration.isFinite
+                    && $0.duration >= 0
+                    && $0.progress.isFinite
+                    && (0 ... 1).contains($0.progress)
+                    && $0.currentTime.isFinite
+                    && $0.currentTime >= 0
+                    && $0.lastUpdateMilliseconds >= 0
+                    && $0.startedAtMilliseconds >= 0
+            } ?? true)
             && Self.areValid(chapters: chapters, duration: duration)
             && Self.isValid(
                 progress: progress,

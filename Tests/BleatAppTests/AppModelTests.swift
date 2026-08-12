@@ -1168,6 +1168,117 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(BookDetailPlaybackAction.playAgain.label, "Play Again")
     }
 
+    func testStreamingProgressRefreshPromptsWhenBothClientsAdvanced() {
+        let baseline = LibraryBookProgress(
+            id: "progress-1",
+            userID: UserID(rawValue: "user-1"),
+            libraryItemID: LibraryItemID(rawValue: "item-1"),
+            bookID: BookID(rawValue: "book-1"),
+            duration: 100,
+            progress: 0.2,
+            currentTime: 20,
+            isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 100,
+            startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil
+        )
+        let refreshed = LibraryBookProgress(
+            id: "progress-1",
+            userID: UserID(rawValue: "user-1"),
+            libraryItemID: LibraryItemID(rawValue: "item-1"),
+            bookID: BookID(rawValue: "book-1"),
+            duration: 100,
+            progress: 0.7,
+            currentTime: 100,
+            isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 200,
+            startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil
+        )
+
+        XCTAssertEqual(
+            StreamingPositionRefreshReconciler.decide(
+                currentTime: 65,
+                baseline: baseline,
+                refreshed: refreshed,
+                duration: 100
+            ),
+            .conflict(local: 65, server: 100)
+        )
+    }
+
+    func testStreamingProgressRefreshIgnoresStaleOrMatchingServerTime() {
+        let baseline = fixtureBookProgress(progress: 0.2, isFinished: false)
+        let refreshed = LibraryBookProgress(
+            id: baseline.id,
+            userID: baseline.userID,
+            libraryItemID: baseline.libraryItemID,
+            bookID: baseline.bookID,
+            duration: baseline.duration,
+            progress: 0.45,
+            currentTime: 45,
+            isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: baseline.lastUpdateMilliseconds,
+            startedAtMilliseconds: baseline.startedAtMilliseconds,
+            finishedAtMilliseconds: nil
+        )
+
+        XCTAssertEqual(
+            StreamingPositionRefreshReconciler.decide(
+                currentTime: 45,
+                baseline: baseline,
+                refreshed: refreshed,
+                duration: 100
+            ),
+            .unchanged
+        )
+    }
+
+    func testStreamingProgressRefreshTreatsThirtySecondsAsEquivalent() {
+        let baseline = fixtureBookProgress(progress: 0.2, isFinished: false)
+        let refreshed = LibraryBookProgress(
+            id: baseline.id,
+            userID: baseline.userID,
+            libraryItemID: baseline.libraryItemID,
+            bookID: baseline.bookID,
+            duration: baseline.duration,
+            progress: 0.5,
+            currentTime: 50,
+            isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: baseline.lastUpdateMilliseconds + 1,
+            startedAtMilliseconds: baseline.startedAtMilliseconds,
+            finishedAtMilliseconds: nil
+        )
+
+        XCTAssertEqual(
+            StreamingPositionRefreshReconciler.decide(
+                currentTime: 50,
+                baseline: baseline,
+                refreshed: refreshed,
+                duration: 100
+            ),
+            .unchanged
+        )
+    }
+
+    func testStreamingProgressRefreshIgnoresDuplicateServerUpdate() {
+        let refreshed = fixtureBookProgress(progress: 0.8, isFinished: false)
+
+        XCTAssertEqual(
+            StreamingPositionRefreshReconciler.decide(
+                currentTime: 20,
+                baseline: refreshed,
+                refreshed: refreshed,
+                duration: 100
+            ),
+            .unchanged
+        )
+    }
+
     func testMiniPlayerSwipeDecidesDirectionalActions() {
         let height: CGFloat = 844
         XCTAssertEqual(
@@ -5531,6 +5642,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.bookEditSaveState, .saved)
         XCTAssertEqual(model.bookDetail, .loaded(detail))
+        XCTAssertEqual(model.bookDetailSource, .remote)
         let requests = await service.metadataSaveRequests()
         XCTAssertEqual(
             requests,
@@ -5684,6 +5796,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.bookProgressUpdateState, .saved)
         XCTAssertEqual(model.bookDetail, .loaded(detail))
+        XCTAssertEqual(model.bookDetailSource, .remote)
         let updates = await service.progressUpdateRequests()
         XCTAssertEqual(
             updates,
@@ -8255,6 +8368,25 @@ private actor TestAppService: AppServicing {
             await bookDetailGate.enterAndWait()
         }
         return try value(from: bookDetailResult)
+    }
+
+    func bookDetailResult(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
+        -> LibraryRepositoryResult<LibraryBookDetail>
+    {
+        LibraryRepositoryResult(
+            value: try await bookDetail(
+                for: account,
+                libraryID: libraryID,
+                itemID: itemID
+            ),
+            source: .remote,
+            refreshedAt: Date(),
+            correlationID: nil
+        )
     }
 
     func saveMetadata(

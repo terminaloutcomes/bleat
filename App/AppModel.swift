@@ -795,6 +795,7 @@ final class AppModel {
     private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
+    private(set) var bookDetailSource: LibraryRepositorySource?
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
@@ -1938,6 +1939,7 @@ final class AppModel {
         let operationGeneration = bookDetailGeneration
         selectedBookID = book.id
         bookBookmarks = .idle
+        bookDetailSource = nil
 
         guard let account else {
             bookDetail = .failed(
@@ -1951,7 +1953,7 @@ final class AppModel {
         )
 
         do {
-            let detail = try await service.bookDetail(
+            let result = try await service.bookDetailResult(
                 for: account,
                 libraryID: book.libraryID,
                 itemID: book.id
@@ -1959,7 +1961,8 @@ final class AppModel {
             guard bookDetailGeneration == operationGeneration else {
                 return
             }
-            bookDetail = .loaded(detail)
+            bookDetail = .loaded(result.value)
+            bookDetailSource = result.source
             await diagnostics.record(
                 .completed(.loadBook, category: .api)
             )
@@ -2041,6 +2044,7 @@ final class AppModel {
             case .saved(let detail):
                 selectedBookID = detail.id
                 bookDetail = .loaded(detail)
+                bookDetailSource = .remote
                 guard let coverJPEGData else {
                     bookEditSaveState = .saved
                     return
@@ -2053,6 +2057,7 @@ final class AppModel {
                     )
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
+                    bookDetailSource = .remote
                     bookEditSaveState = .saved
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
@@ -2210,6 +2215,7 @@ final class AppModel {
             )
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
+            bookDetailSource = .remote
             bookProgressUpdateState = .saved
         } catch let error {
             bookProgressUpdateState = .failed(
@@ -2668,13 +2674,24 @@ final class AppModel {
         if let selectedBookID,
             refreshLibraries || itemIDs.contains(selectedBookID),
             let selectedLibrary,
-            let detail = try? await service.bookDetail(
+            let result = try? await service.bookDetailResult(
                 for: account,
                 libraryID: selectedLibrary.id,
                 itemID: selectedBookID
             )
         {
-            bookDetail = .loaded(detail)
+            bookDetail = .loaded(result.value)
+            bookDetailSource = result.source
+            playback.reconcileRefreshedServerProgress(result.value.progress)
+        }
+        if let activeItemID = playback.itemID,
+            activeItemID != selectedBookID,
+            let progress = try? await service.bookProgress(
+                for: account,
+                itemID: activeItemID
+            )
+        {
+            playback.reconcileRefreshedServerProgress(progress)
         }
         if !searchQuery.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -2711,6 +2728,7 @@ final class AppModel {
         bookDetailGeneration &+= 1
         selectedBookID = nil
         bookDetail = .idle
+        bookDetailSource = nil
         bookBookmarks = .idle
         bookEditSaveState = .idle
         bookDeletionState = .idle

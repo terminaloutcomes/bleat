@@ -1069,6 +1069,11 @@ private struct SignedInView: View {
             NowPlaying(playback: model.playback)
 
         }
+        .onChange(of: model.playback.positionConflict) { _, conflict in
+            if conflict != nil {
+                navigation.showsPlayer = true
+            }
+        }
         .alert(
             "Allow Cellular Download?",
             isPresented: Binding(
@@ -1590,6 +1595,12 @@ private struct HomeContent: View {
                                 Text(book.title)
                                     .font(.headline)
                                     .lineLimit(2)
+                                if let progress = book.progress {
+                                    ProgressView(value: progress.progress)
+                                        .accessibilityIdentifier(
+                                            "home.book.progress.\(book.id.rawValue)"
+                                        )
+                                }
                                 if let author = book.authorName {
                                     Text(author)
                                         .font(.subheadline)
@@ -2944,7 +2955,9 @@ private struct BookDetailView: View {
                             Task {
                                 await model.playback.start(
                                     detail: detail,
-                                    account: account
+                                    account: account,
+                                    progressSource:
+                                        model.bookDetailSource ?? .remote
                                 )
                             }
                         }

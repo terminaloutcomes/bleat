@@ -421,12 +421,11 @@ struct NowPlaying: View {
                     }
                     if let conflict = playback.positionConflict {
                         VStack(spacing: 10) {
-                            // TODO have a button to force-sync the position or overwrite
-                            Text("Playback position changed in two places.")
+                            Text("Server progress changed while playing cached progress.")
                                 .font(.headline)
                             HStack {
                                 Button(
-                                    "This device (\(playbackTime(conflict.localTime)))"
+                                    "This device: \(playbackTime(conflict.localTime))"
                                 ) {
                                     Task {
                                         await playback.resolvePositionConflict(
@@ -436,7 +435,7 @@ struct NowPlaying: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 Button(
-                                    "Server (\(playbackTime(conflict.serverTime)))"
+                                    "Server: \(playbackTime(conflict.serverTime))"
                                 ) {
                                     Task {
                                         await playback.resolvePositionConflict(

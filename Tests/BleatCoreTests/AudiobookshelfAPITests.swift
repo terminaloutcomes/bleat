@@ -211,7 +211,25 @@ final class AudiobookshelfAPITests: XCTestCase {
             id: "audio",
             libraryID: "library",
             title: "Audio Book",
-            trackCount: 1
+            trackCount: 1,
+            userMediaProgress: """
+            ,"userMediaProgress": {
+              "id": "progress",
+              "userId": "user",
+              "libraryItemId": "audio",
+              "episodeId": null,
+              "mediaItemId": "book-audio",
+              "mediaItemType": "book",
+              "duration": 60,
+              "progress": 0.5,
+              "currentTime": 30,
+              "isFinished": false,
+              "hideFromContinueListening": false,
+              "lastUpdate": 3000,
+              "startedAt": 1000,
+              "finishedAt": null
+            }
+            """
         )
         let ebook = Self.bookItemJSON(
             id: "ebook",
@@ -284,6 +302,10 @@ final class AudiobookshelfAPITests: XCTestCase {
             LibraryItemID(rawValue: "audio")
         )
         XCTAssertEqual(
+            result.value.first?.items.first?.progress?.currentTime,
+            30
+        )
+        XCTAssertEqual(
             components.path,
             "/audiobookshelf/api/libraries/library/personalized"
         )
@@ -300,6 +322,30 @@ final class AudiobookshelfAPITests: XCTestCase {
             libraryID: "library",
             title: "Book",
             trackCount: 1
+        )
+        let invalidProgressBook = Self.bookItemJSON(
+            id: "book",
+            libraryID: "library",
+            title: "Book",
+            trackCount: 1,
+            userMediaProgress: """
+            ,"userMediaProgress": {
+              "id": "progress",
+              "userId": "user",
+              "libraryItemId": "book",
+              "episodeId": null,
+              "mediaItemId": "book-book",
+              "mediaItemType": "book",
+              "duration": 60,
+              "progress": 1.5,
+              "currentTime": 90,
+              "isFinished": false,
+              "hideFromContinueListening": false,
+              "lastUpdate": 3000,
+              "startedAt": 1000,
+              "finishedAt": null
+            }
+            """
         )
         let cases: [Data] = [
             Data("{\"not\":\"an array\"}".utf8),
@@ -334,11 +380,23 @@ final class AudiobookshelfAPITests: XCTestCase {
                 ]
                 """.utf8
             ),
+            Data(
+                """
+                [{
+                  "id": "progress",
+                  "label": "Progress",
+                  "type": "book",
+                  "entities": [\(invalidProgressBook)],
+                  "total": 1
+                }]
+                """.utf8
+            ),
         ]
         let expected: [AudiobookshelfAPIError] = [
             .malformedResponse,
             .invalidPersonalizedShelves,
             .invalidPersonalizedShelves,
+            .invalidBookDetail,
         ]
         let request = try LibraryHomeRequest(limit: 1)
         for (data, expectedError) in zip(cases, expected) {
@@ -1212,7 +1270,8 @@ final class AudiobookshelfAPITests: XCTestCase {
         id: String,
         libraryID: String,
         title: String,
-        trackCount: Int
+        trackCount: Int,
+        userMediaProgress: String = ""
     ) -> String {
         """
         {
@@ -1222,6 +1281,7 @@ final class AudiobookshelfAPITests: XCTestCase {
           "updatedAt": 2,
           "mediaType": "book",
           "media": {
+            "id": "book-\(id)",
             "metadata": {
               "title": "\(title)",
               "genres": [],
@@ -1231,7 +1291,7 @@ final class AudiobookshelfAPITests: XCTestCase {
             "numTracks": \(trackCount),
             "numChapters": 0,
             "duration": 60
-          }
+          }\(userMediaProgress)
         }
         """
     }

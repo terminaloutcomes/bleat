@@ -75,6 +75,17 @@ enum PlaybackMediaServicesResetIntent: Equatable, Sendable {
 struct PlaybackPositionConflict: Equatable, Sendable {
     let localTime: Double
     let serverTime: Double
+    let serverLastUpdateMilliseconds: Int64?
+
+    init(
+        localTime: Double,
+        serverTime: Double,
+        serverLastUpdateMilliseconds: Int64? = nil
+    ) {
+        self.localTime = localTime
+        self.serverTime = serverTime
+        self.serverLastUpdateMilliseconds = serverLastUpdateMilliseconds
+    }
 }
 
 enum PlaybackObservationDecision: Equatable, Sendable {
@@ -355,6 +366,8 @@ final class PlaybackModel {
     private var lastAttemptedSyncTime: Double = 0
     private var lastPersistedLocalTime: Double = 0
     private var activeDownloadDetail: LibraryBookDetail?
+    private var serverProgressBaseline: LibraryBookProgress?
+    private var startedWithCachedProgress = false
     private var lastAutomaticDownloadSignal: AutomaticDownloadSignal?
     private var automaticDownloadPlaybackGate =
         AutomaticDownloadPlaybackGate()
@@ -533,7 +546,8 @@ final class PlaybackModel {
 
     func start(
         detail: LibraryBookDetail,
-        account: ServerAccount
+        account: ServerAccount,
+        progressSource: LibraryRepositorySource = .remote
     ) async {
         await diagnostics.record(
             .started(.openPlayback, category: .playback)
@@ -613,6 +627,8 @@ final class PlaybackModel {
         pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
+        serverProgressBaseline = detail.progress
+        startedWithCachedProgress = progressSource == .cache
 
         do {
             let prepared = try await service.openPlayback(
@@ -768,6 +784,8 @@ final class PlaybackModel {
         pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
+        serverProgressBaseline = nil
+        startedWithCachedProgress = false
 
         do {
             var offset: Double = 0
@@ -859,9 +877,7 @@ final class PlaybackModel {
     }
 
     func resolvePositionConflict(useLocalPosition: Bool) async {
-        guard let conflict = positionConflict,
-            preparation?.sessionID == nil
-        else {
+        guard let conflict = positionConflict else {
             return
         }
         let target =
@@ -871,7 +887,11 @@ final class PlaybackModel {
             try await rebuildQueue(at: target)
             currentTime = target
             positionConflict = nil
-            persistLocalPosition()
+            if preparation?.sessionID == nil {
+                persistLocalPosition()
+            } else if !useLocalPosition {
+                lastAttemptedSyncTime = target
+            }
             state = .ready
             if !useLocalPosition {
                 syncState = .idle
@@ -879,6 +899,44 @@ final class PlaybackModel {
             play()
         } catch {
             state = .failed(.mediaUnavailable)
+        }
+    }
+
+    func reconcileRefreshedServerProgress(_ refreshed: LibraryBookProgress?) {
+        guard let refreshed,
+            itemID == refreshed.libraryItemID,
+            preparation?.sessionID != nil,
+            startedWithCachedProgress,
+            isPlaybackRequested,
+            positionConflict == nil
+        else {
+            return
+        }
+
+        switch StreamingPositionRefreshReconciler.decide(
+            currentTime: currentTime,
+            baseline: serverProgressBaseline,
+            refreshed: refreshed,
+            duration: duration
+        ) {
+        case .unchanged:
+            if abs(currentTime - refreshed.currentTime) <= 1 {
+                serverProgressBaseline = refreshed
+            }
+        case let .conflict(localTime, serverTime):
+            serverProgressBaseline = refreshed
+            player?.pause()
+            playbackRequested = false
+            cancelPlaybackWatchdog()
+            playbackRecoveryTask?.cancel()
+            playbackRecoveryTask = nil
+            state = .paused
+            positionConflict = PlaybackPositionConflict(
+                localTime: localTime,
+                serverTime: serverTime,
+                serverLastUpdateMilliseconds:
+                    refreshed.lastUpdateMilliseconds
+            )
         }
     }
 
@@ -1522,6 +1580,8 @@ final class PlaybackModel {
         state = .idle
         syncState = .idle
         positionConflict = nil
+        serverProgressBaseline = nil
+        startedWithCachedProgress = false
         nowPlayingCoordinator.clear()
         try? AVAudioSession.sharedInstance().setActive(
             false,

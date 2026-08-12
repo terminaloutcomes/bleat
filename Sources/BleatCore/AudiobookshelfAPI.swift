@@ -115,7 +115,10 @@ public actor AudiobookshelfAPI<
         items.reserveCapacity(result.value.results.count)
         for item in result.value.results {
             items.append(
-                try item.domainValue(expectedLibraryID: libraryID)
+                try item.domainValue(
+                    expectedLibraryID: libraryID,
+                    expectedUserID: userID
+                )
             )
         }
         return AudiobookshelfAPIResult(
@@ -155,7 +158,8 @@ public actor AudiobookshelfAPI<
         for match in result.value.book {
             books.append(
                 try match.libraryItem.domainValue(
-                    expectedLibraryID: libraryID
+                    expectedLibraryID: libraryID,
+                    expectedUserID: userID
                 )
             )
         }
@@ -224,7 +228,8 @@ public actor AudiobookshelfAPI<
             items.reserveCapacity(entities.count)
             for entity in entities {
                 let item = try entity.domainValue(
-                    expectedLibraryID: libraryID
+                    expectedLibraryID: libraryID,
+                    expectedUserID: userID
                 )
                 if item.trackCount > 0 {
                     items.append(item)
@@ -527,6 +532,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
     let mediaType: String
     let media: LibraryBookDTO
     let collapsedSeries: LibraryCollapsedSeriesDTO?
+    let userMediaProgress: LibraryBookProgressDTO?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -536,10 +542,12 @@ private struct LibraryItemDTO: Decodable, Sendable {
         case mediaType
         case media
         case collapsedSeries
+        case userMediaProgress
     }
 
     func domainValue(
-        expectedLibraryID: LibraryID
+        expectedLibraryID: LibraryID,
+        expectedUserID: UserID
     ) throws(AudiobookshelfAPIError) -> LibraryBookSummary {
         guard !id.rawValue.isEmpty,
               libraryID == expectedLibraryID,
@@ -570,6 +578,19 @@ private struct LibraryItemDTO: Decodable, Sendable {
         else {
             throw .invalidLibraryItem
         }
+        let progress: LibraryBookProgress?
+        if let userMediaProgress {
+            guard let bookID = media.id, !bookID.rawValue.isEmpty else {
+                throw .invalidLibraryItem
+            }
+            progress = try userMediaProgress.domainValue(
+                expectedItemID: id,
+                expectedBookID: bookID,
+                expectedUserID: expectedUserID
+            )
+        } else {
+            progress = nil
+        }
         return LibraryBookSummary(
             id: id,
             libraryID: libraryID,
@@ -590,7 +611,8 @@ private struct LibraryItemDTO: Decodable, Sendable {
             addedAtMilliseconds: addedAt,
             updatedAtMilliseconds: updatedAt,
             isExplicit: media.metadata.explicit,
-            isAbridged: media.metadata.abridged
+            isAbridged: media.metadata.abridged,
+            progress: progress
         )
     }
 
@@ -621,6 +643,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
 }
 
 private struct LibraryBookDTO: Decodable, Sendable {
+    let id: BookID?
     let metadata: LibraryBookMetadataDTO
     let numTracks: Int
     let numChapters: Int
@@ -960,7 +983,15 @@ private struct LibraryBookProgressDTO: Decodable, Sendable {
               mediaItemID == expectedBookID,
               userID == expectedUserID,
               episodeID == nil,
-              mediaItemType == "book"
+              mediaItemType == "book",
+              duration.isFinite,
+              duration >= 0,
+              progress.isFinite,
+              (0 ... 1).contains(progress),
+              currentTime.isFinite,
+              currentTime >= 0,
+              lastUpdate >= 0,
+              startedAt >= 0
         else {
             throw .invalidBookDetail
         }
