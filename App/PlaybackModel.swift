@@ -404,6 +404,15 @@ final class PlaybackModel {
         state != .idle
     }
 
+    func isPrepared(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Bool {
+        preparation != nil
+            && self.accountID == accountID
+            && self.itemID == itemID
+    }
+
     var isPlaying: Bool {
         state == .playing
     }
@@ -533,7 +542,8 @@ final class PlaybackModel {
 
     func start(
         detail: LibraryBookDetail,
-        account: ServerAccount
+        account: ServerAccount,
+        initialTime: Double? = nil
     ) async {
         await diagnostics.record(
             .started(.openPlayback, category: .playback)
@@ -606,7 +616,10 @@ final class PlaybackModel {
             height: 600
         )
         duration = detail.duration
-        currentTime = detail.progress?.currentTime ?? 0
+        currentTime = min(
+            max(initialTime ?? detail.progress?.currentTime ?? 0, 0),
+            detail.duration
+        )
         lastAttemptedSyncTime = currentTime
         syncState = .idle
         bookmarks = []
@@ -638,7 +651,12 @@ final class PlaybackModel {
             title = prepared.title
             duration = prepared.duration
             currentTime = min(
-                max(detail.progress?.currentTime ?? prepared.currentTime, 0),
+                max(
+                    initialTime
+                        ?? detail.progress?.currentTime
+                        ?? prepared.currentTime,
+                    0
+                ),
                 prepared.duration
             )
             try await rebuildQueue(at: currentTime)
@@ -700,7 +718,8 @@ final class PlaybackModel {
         detail: LibraryBookDetail,
         trackURLs: [URL],
         accountID: AccountID,
-        account: ServerAccount?
+        account: ServerAccount?,
+        initialTime: Double? = nil
     ) async {
         await diagnostics.record(
             .started(
@@ -762,7 +781,10 @@ final class PlaybackModel {
             width: 600,
             height: 600
         )
-        currentTime = detail.progress?.currentTime ?? 0
+        currentTime = min(
+            max(initialTime ?? detail.progress?.currentTime ?? 0, 0),
+            detail.duration
+        )
         syncState = .idle
         bookmarks = []
         pendingBookmarkMutations = []
@@ -798,7 +820,10 @@ final class PlaybackModel {
                 title: detail.title,
                 duration: offset,
                 currentTime: min(
-                    max(detail.progress?.currentTime ?? 0, 0),
+                    max(
+                        initialTime ?? detail.progress?.currentTime ?? 0,
+                        0
+                    ),
                     offset
                 ),
                 chapters: detail.chapters,
@@ -809,16 +834,21 @@ final class PlaybackModel {
             localAccountID = accountID
             preparation = prepared
             duration = prepared.duration
-            let savedPosition = positionStore.position(
-                accountID: accountID,
-                itemID: detail.id
-            )
-            currentTime = reconciledDownloadedPosition(
-                savedPosition: savedPosition,
-                baseline: detail.progress,
-                remote: nil,
-                duration: prepared.duration
-            )
+            if let initialTime {
+                currentTime = min(max(initialTime, 0), prepared.duration)
+                positionConflict = nil
+            } else {
+                let savedPosition = positionStore.position(
+                    accountID: accountID,
+                    itemID: detail.id
+                )
+                currentTime = reconciledDownloadedPosition(
+                    savedPosition: savedPosition,
+                    baseline: detail.progress,
+                    remote: nil,
+                    duration: prepared.duration
+                )
+            }
             lastAttemptedSyncTime = currentTime
             lastPersistedLocalTime = currentTime
             try beginLocalPlaybackSession(

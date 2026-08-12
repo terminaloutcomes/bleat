@@ -5777,6 +5777,181 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    func testPlaybackStartUsesExplicitWholeBookPosition() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let account = try fixtureAccount()
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "session"),
+            itemID: fixture.detail.id,
+            title: fixture.detail.title,
+            duration: 1,
+            currentTime: 0.1,
+            chapters: fixture.detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: fixture.audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(preparation)]
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+
+        await playback.start(
+            detail: fixture.detail,
+            account: account,
+            initialTime: 0.75
+        )
+
+        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        await playback.stop()
+    }
+
+    func testDownloadedPlaybackUsesExplicitWholeBookPosition()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL, fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil,
+            initialTime: 1.5
+        )
+
+        XCTAssertEqual(playback.currentTime, 1.5, accuracy: 0.01)
+        XCTAssertEqual(playback.currentAudioFileIndex, 1)
+        XCTAssertNil(playback.positionConflict)
+        await playback.stop()
+    }
+
+    func testActivePlaybackSeekPreservesPausedIntent() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        playback.pause()
+
+        await playback.seek(to: 0.75)
+
+        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertEqual(playback.state, .paused)
+        XCTAssertFalse(playback.isPlaybackRequested)
+        await playback.stop()
+    }
+
+    func testActivePlaybackSeekPreservesPlayingIntent() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer {
+            fixture.cleanUp()
+        }
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+
+        await playback.seek(to: 0.75)
+
+        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertTrue(
+            playback.state == .buffering || playback.state == .playing
+        )
+        await playback.stop()
+    }
+
+    func testPlaybackPositioningRouteRequiresExactAccountAndBook() {
+        let accountID = AccountID(rawValue: "account-1")
+        let itemID = LibraryItemID(rawValue: "item-1")
+
+        XCTAssertEqual(
+            PlaybackPositioningRoute.decide(
+                playbackAccountID: accountID,
+                playbackItemID: itemID,
+                isPlaybackPrepared: true,
+                requestedAccountID: accountID,
+                requestedItemID: itemID,
+                hasCompleteDownload: false
+            ),
+            .activePlayer
+        )
+        XCTAssertEqual(
+            PlaybackPositioningRoute.decide(
+                playbackAccountID: AccountID(rawValue: "account-2"),
+                playbackItemID: itemID,
+                isPlaybackPrepared: true,
+                requestedAccountID: accountID,
+                requestedItemID: itemID,
+                hasCompleteDownload: true
+            ),
+            .downloaded
+        )
+        XCTAssertEqual(
+            PlaybackPositioningRoute.decide(
+                playbackAccountID: accountID,
+                playbackItemID: LibraryItemID(rawValue: "item-2"),
+                isPlaybackPrepared: true,
+                requestedAccountID: accountID,
+                requestedItemID: itemID,
+                hasCompleteDownload: false
+            ),
+            .streamed
+        )
+    }
+
+    func testTranscriptPlaybackPreparationFailureRemainsTyped()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        let model = AppModel(
+            service: TestAppService(activeAccount: .success(account))
+        )
+
+        let outcome = await model.positionPlayback(
+            for: detail,
+            account: account,
+            at: 10
+        )
+
+        XCTAssertEqual(outcome, .failed(.playbackUnavailable))
+        XCTAssertEqual(model.playback.itemID, detail.id)
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()

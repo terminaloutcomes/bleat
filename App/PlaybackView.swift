@@ -271,6 +271,9 @@ struct MiniPlayerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .accessibilityValue(
+                    playback.currentChapter?.title ?? "No current chapter"
+                )
                 .accessibilityIdentifier("player.mini.open")
                 .simultaneousGesture(miniPlayerGesture)
 

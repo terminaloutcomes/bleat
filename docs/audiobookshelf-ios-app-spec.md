@@ -216,7 +216,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   monotonic elapsed time. The transcription screen reloads that terminal state
   after relaunch without retaining private filenames or framework diagnostics.
 - I can search transcript text case-insensitively across every previously
-  transcribed chapter of the current book and open a matching chapter result.
+  transcribed chapter of the current book.
+- Tapping a transcript segment or search result opens actions to copy only its
+  text or move playback to its whole-book start timestamp. A matching active
+  player seeks without changing its playing or paused intent; otherwise the
+  existing downloaded-first preparation flow starts the exact account and book
+  at that timestamp. Typed playback failures remain visible without replacing
+  the transcript.
 - In-memory transcript text is retained while its screen is visible or its
   batch is active, then evicted after five idle minutes or immediately for
   inactive books when iOS reports memory pressure. Durable records remain.

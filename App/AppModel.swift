@@ -88,6 +88,34 @@ enum AppPhase: Equatable, Sendable {
     case unavailable(AppFailure)
 }
 
+enum PlaybackPositioningOutcome: Equatable, Sendable {
+    case positioned
+    case failed(AppFailure)
+}
+
+enum PlaybackPositioningRoute: Equatable, Sendable {
+    case activePlayer
+    case downloaded
+    case streamed
+
+    static func decide(
+        playbackAccountID: AccountID?,
+        playbackItemID: LibraryItemID?,
+        isPlaybackPrepared: Bool,
+        requestedAccountID: AccountID,
+        requestedItemID: LibraryItemID,
+        hasCompleteDownload: Bool
+    ) -> Self {
+        if isPlaybackPrepared,
+            playbackAccountID == requestedAccountID,
+            playbackItemID == requestedItemID
+        {
+            return .activePlayer
+        }
+        return hasCompleteDownload ? .downloaded : .streamed
+    }
+}
+
 enum AppLaunchStage: Equatable, Sendable {
     case preparing
     case reticulatingSplines
@@ -2218,7 +2246,10 @@ final class AppModel {
         }
     }
 
-    func playDownloaded(_ record: DownloadedBookRecord) async {
+    func playDownloaded(
+        _ record: DownloadedBookRecord,
+        initialTime: Double? = nil
+    ) async {
         let recordAccount = accounts.first {
             $0.id == record.manifest.accountID
         }
@@ -2230,11 +2261,62 @@ final class AppModel {
                 detail: record.detail,
                 trackURLs: urls,
                 accountID: record.manifest.accountID,
-                account: recordAccount
+                account: recordAccount,
+                initialTime: initialTime
             )
         } catch {
             playback.fail(.mediaUnavailable)
         }
+    }
+
+    func positionPlayback(
+        for detail: LibraryBookDetail,
+        account: ServerAccount,
+        at requestedTime: Double
+    ) async -> PlaybackPositioningOutcome {
+        let downloaded = downloads.record(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        let hasCompleteDownload =
+            downloaded.map {
+                downloads.isFullBookAvailable($0)
+            } ?? false
+        let route = PlaybackPositioningRoute.decide(
+            playbackAccountID: playback.accountID,
+            playbackItemID: playback.itemID,
+            isPlaybackPrepared: playback.isPrepared(
+                accountID: account.id,
+                itemID: detail.id
+            ),
+            requestedAccountID: account.id,
+            requestedItemID: detail.id,
+            hasCompleteDownload: hasCompleteDownload
+        )
+
+        switch route {
+        case .activePlayer:
+            await playback.seek(to: requestedTime)
+        case .downloaded:
+            guard let downloaded else {
+                return .failed(.mediaUnavailable)
+            }
+            await playDownloaded(
+                downloaded,
+                initialTime: requestedTime
+            )
+        case .streamed:
+            await playback.start(
+                detail: detail,
+                account: account,
+                initialTime: requestedTime
+            )
+        }
+
+        if case .failed(let failure) = playback.state {
+            return .failed(failure)
+        }
+        return .positioned
     }
 
     func loadStatistics() async {

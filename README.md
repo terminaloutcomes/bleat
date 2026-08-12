@@ -883,8 +883,12 @@ result when transcribed again. The latest batch's success, typed privacy-safe
 failure, or cancellation result is also stored by account and book with its
 completion time and monotonic elapsed time, then reloaded after relaunch. The
 screen marks cached chapters and provides case-insensitive search across every
-cached chapter for the current book. If the audio is not downloaded, the
-screen asks before scheduling the existing audiobook download.
+cached chapter for the current book. Tapping a transcript segment or search
+result opens actions to copy its text or move the matching book's playback to
+its whole-book start timestamp. Existing playback seeks in place; otherwise
+Bleat prepares the book through the normal downloaded-first playback flow. If
+the audio is not downloaded, the screen asks before scheduling the existing
+audiobook download.
 
 Loaded transcript text is retained in memory while its transcription screen is
 visible or its batch is active. Otherwise it is evicted after five idle minutes
@@ -892,8 +896,7 @@ or immediately when iOS reports memory pressure, and reloads from the durable
 local cache when needed.
 
 This is the chapter-level capability slice of GitHub issue #5. Partial-result
-resume, playback seeking from results, and independent transcript deletion are
-tracked as follow-up work.
+resume and independent transcript deletion are tracked as follow-up work.
 
 ## Manual device beta checks
 

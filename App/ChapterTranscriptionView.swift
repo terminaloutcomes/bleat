@@ -1503,6 +1503,7 @@ struct ChapterTranscriptionView: View {
     @State private var isSelectingChapters = false
     @State private var searchQuery = ""
     @State private var showDownloadConfirmation = false
+    @State private var playbackFailure: AppFailure?
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1523,11 +1524,13 @@ struct ChapterTranscriptionView: View {
         NavigationStack {
             List {
                 if hasSearchQuery {
+                    playbackFailureContent
                     searchContent
                 } else {
                     chapterSelector
                     cacheFailureContent
                     transcriptionStatusContent
+                    playbackFailureContent
                     selectedTranscriptContent
                 }
             }
@@ -1690,11 +1693,15 @@ struct ChapterTranscriptionView: View {
                 Text("No cached transcription matches this search.")
             } else {
                 ForEach(Array(matches.enumerated()), id: \.offset) {
-                    _, match in
-                    Button {
-                        selectedChapterID = match.chapterID
-                        searchQuery = ""
-                    } label: {
+                    index, match in
+                    transcriptSegmentMenu(
+                        segment: TranscriptSegment(cached: match.segment),
+                        identifier: "transcription.searchResult.\(index)",
+                        beforeMovingPlayback: {
+                            selectedChapterID = match.chapterID
+                            searchQuery = ""
+                        }
+                    ) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(
                                 "\(match.chapterTitle) - \(timestamp(match.segment.startMilliseconds))"
@@ -1705,11 +1712,21 @@ struct ChapterTranscriptionView: View {
                                 .foregroundStyle(.primary)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier(
-                        "transcription.searchResult.\(match.chapterID)"
-                    )
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var playbackFailureContent: some View {
+        if let playbackFailure {
+            Section {
+                Label(
+                    playbackFailure.message,
+                    systemImage: playbackFailure.systemImage
+                )
+                .foregroundStyle(.red)
+                .accessibilityIdentifier("transcription.playbackError")
             }
         }
     }
@@ -1866,12 +1883,19 @@ struct ChapterTranscriptionView: View {
                     ForEach(
                         Array(segments.enumerated()),
                         id: \.offset
-                    ) { _, segment in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(timestamp(segment.startMilliseconds))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                            Text(segment.text)
+                    ) { index, segment in
+                        transcriptSegmentMenu(
+                            segment: segment,
+                            identifier:
+                                "transcription.segment.\(selectedChapterID).\(index)"
+                        ) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(timestamp(segment.startMilliseconds))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                Text(segment.text)
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
                 }
@@ -1975,6 +1999,42 @@ struct ChapterTranscriptionView: View {
 
     private var hasSearchQuery: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func transcriptSegmentMenu<Label: View>(
+        segment: TranscriptSegment,
+        identifier: String,
+        beforeMovingPlayback: @escaping () -> Void = {},
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Menu {
+            Button("Copy Text", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = segment.text
+            }
+            .accessibilityIdentifier("transcription.copyText")
+
+            Button("Move Playback Here", systemImage: "playhead.right") {
+                beforeMovingPlayback()
+                Task {
+                    playbackFailure = nil
+                    let outcome = await appModel.positionPlayback(
+                        for: detail,
+                        account: account,
+                        at: Double(segment.startMilliseconds) / 1_000
+                    )
+                    if case .failed(let failure) = outcome {
+                        playbackFailure = failure
+                    }
+                }
+            }
+            .accessibilityIdentifier("transcription.movePlayback")
+        } label: {
+            label()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 
     private func chapterCountText(_ count: Int) -> String {

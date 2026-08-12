@@ -989,7 +989,7 @@ final class BleatUITests: XCTestCase {
     @MainActor
     func testBookTranscriptionLoadsCacheAndSearchesEveryChapterIgnoringCase() {
         let app = launch(
-            scenario: "--ui-testing-signed-in",
+            scenario: "--ui-testing-playback",
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
@@ -1038,15 +1038,86 @@ final class BleatUITests: XCTestCase {
         select.tap()
         XCTAssertTrue(app.buttons["transcription.start"].exists)
 
+        let segment = app.buttons["transcription.segment.0.0"]
+        XCTAssertTrue(segment.waitForExistence(timeout: 3))
+        segment.tap()
+        let copyText = app.buttons["Copy Text"]
+        XCTAssertTrue(copyText.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Move Playback Here"].exists)
+        copyText.tap()
+
         let search = app.searchFields["Search Transcriptions"]
         XCTAssertTrue(search.waitForExistence(timeout: 3))
         search.tap()
+        search.press(forDuration: 1)
+        let paste = app.menuItems["Paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 3))
+        paste.tap()
+        XCTAssertEqual(
+            search.value as? String,
+            "The Doomsday Scenario begins"
+        )
+        app.buttons["Clear text"].tap()
         search.typeText("doomsday")
         XCTAssertTrue(
             app.buttons["transcription.searchResult.0"]
                 .waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["transcription.searchResult.1"].exists)
+
+        app.buttons["transcription.searchResult.1"].tap()
+        let movePlayback = app.buttons["Move Playback Here"]
+        XCTAssertTrue(movePlayback.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Copy Text"].exists)
+        movePlayback.tap()
+        XCTAssertTrue(app.otherElements["transcription.view"].exists)
+
+        let miniPlayer = app.buttons["player.mini.open"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        let chapterUpdated = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Chapter Two"),
+            object: miniPlayer
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [chapterUpdated], timeout: 3),
+            .completed
+        )
+    }
+
+    @MainActor
+    func testTranscriptPlaybackFailureKeepsTranscriptVisible() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let transcript = app.otherElements["transcription.view"]
+        XCTAssertTrue(transcript.waitForExistence(timeout: 3))
+        let segment = app.buttons["transcription.segment.0.0"]
+        XCTAssertTrue(segment.waitForExistence(timeout: 3))
+        segment.tap()
+        app.buttons["Move Playback Here"].tap()
+
+        XCTAssertTrue(transcript.exists)
+        let failure = app.staticTexts["transcription.playbackError"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            failure.label.contains(
+                "Bleat could not reach the Audiobookshelf server."
+            )
+        )
     }
 
     @MainActor

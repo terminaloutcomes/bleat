@@ -8,6 +8,8 @@
   transcription batches.
 - Added durable account/book-scoped transcription task results with typed
   success, failure, or cancellation state, completion time, and elapsed time.
+- Added transcript-segment menus for copying text or moving playback to the
+  segment's whole-book timestamp.
 
 ### Changed
 
