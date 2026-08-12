@@ -1058,6 +1058,13 @@ final class BleatUITests: XCTestCase {
             "The Doomsday Scenario begins"
         )
         app.buttons["Clear text"].tap()
+        search.typeText("begins doomsday")
+        XCTAssertTrue(
+            app.buttons["transcription.searchResult.0"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["transcription.searchResult.1"].exists)
+        app.buttons["Clear text"].tap()
         search.typeText("doomsday")
         XCTAssertTrue(
             app.buttons["transcription.searchResult.0"]

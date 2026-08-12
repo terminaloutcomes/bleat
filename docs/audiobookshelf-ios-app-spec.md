@@ -216,7 +216,8 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   monotonic elapsed time. The transcription screen reloads that terminal state
   after relaunch without retaining private filenames or framework diagnostics.
 - I can search transcript text case-insensitively across every previously
-  transcribed chapter of the current book.
+  transcribed chapter of the current book. Query terms may appear in any order,
+  but every term must occur within the same transcript segment.
 - Tapping a transcript segment or search result opens actions to copy only its
   text or move playback to its whole-book start timestamp. A matching active
   player seeks without changing its playing or paused intent; otherwise the

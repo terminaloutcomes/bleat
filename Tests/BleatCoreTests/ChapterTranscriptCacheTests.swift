@@ -76,22 +76,45 @@ final class ChapterTranscriptCacheTests: XCTestCase {
         XCTAssertEqual(transcripts.map(\.chapterID), [1, 2])
     }
 
-    func testSearchIsCaseInsensitiveAcrossCachedChapters() {
+    func testSearchMatchesEveryTermIgnoringCaseAndOrderAcrossChapters() {
         let transcripts = [
-            Self.transcript(chapterID: 1, text: "The Doomsday Scenario"),
+            Self.transcript(
+                chapterID: 1,
+                text: "The cat sat on the mat"
+            ),
             Self.transcript(chapterID: 2, text: "Nothing relevant here"),
-            Self.transcript(chapterID: 3, text: "DOOMSDAY arrives"),
+            Self.transcript(chapterID: 3, text: "A MAT welcomed another CAT"),
         ]
 
         let matches = CachedChapterTranscriptSearch.matches(
-            query: "doomsday",
+            query: "  MaT\ncat  ",
             in: transcripts
         )
 
         XCTAssertEqual(matches.map(\.chapterID), [1, 3])
         XCTAssertEqual(
             matches.map(\.segment.text),
-            ["The Doomsday Scenario", "DOOMSDAY arrives"]
+            ["The cat sat on the mat", "A MAT welcomed another CAT"]
+        )
+        XCTAssertEqual(
+            CachedChapterTranscriptSearch.matches(
+                query: "cat cat",
+                in: transcripts
+            ).map(\.chapterID),
+            [1, 3]
+        )
+        XCTAssertEqual(
+            CachedChapterTranscriptSearch.matches(
+                query: "nothing",
+                in: transcripts
+            ).map(\.chapterID),
+            [2]
+        )
+        XCTAssertTrue(
+            CachedChapterTranscriptSearch.matches(
+                query: "cat missing",
+                in: transcripts
+            ).isEmpty
         )
         XCTAssertTrue(
             CachedChapterTranscriptSearch.matches(

@@ -5952,6 +5952,89 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.itemID, detail.id)
     }
 
+    func testTranscriptPlaybackFallsBackToStreamWhenDownloadIsInvalid()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "TranscriptPlaybackFallback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail
+        )
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "streamed-session"),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 1,
+            currentTime: 0,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: root.appendingPathComponent("source.wav"),
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(preparation)]
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        XCTAssertTrue(
+            try XCTUnwrap(model.downloads.records.first)
+                .manifest.isFullBookComplete
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        try FileManager.default.removeItem(
+            at: layout.bookDirectory(
+                accountID: account.id,
+                itemID: detail.id
+            ).appendingPathComponent("00000.wav")
+        )
+
+        let outcome = await model.positionPlayback(
+            for: detail,
+            account: account,
+            at: 0.75
+        )
+        let playbackRequests = await service.playbackOpenRequests()
+
+        XCTAssertEqual(outcome, .positioned)
+        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertEqual(
+            playbackRequests,
+            [
+                PlaybackOpenRequest(
+                    accountID: account.id,
+                    itemID: detail.id,
+                    preference: .automatic
+                )
+            ]
+        )
+        await model.playback.stop()
+    }
+
     func testPlaybackSessionFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()

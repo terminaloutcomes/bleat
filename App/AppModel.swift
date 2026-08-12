@@ -2246,10 +2246,11 @@ final class AppModel {
         }
     }
 
+    @discardableResult
     func playDownloaded(
         _ record: DownloadedBookRecord,
         initialTime: Double? = nil
-    ) async {
+    ) async -> PlaybackPositioningOutcome {
         let recordAccount = accounts.first {
             $0.id == record.manifest.accountID
         }
@@ -2264,8 +2265,13 @@ final class AppModel {
                 account: recordAccount,
                 initialTime: initialTime
             )
+            if case .failed(let failure) = playback.state {
+                return .failed(failure)
+            }
+            return .positioned
         } catch {
             playback.fail(.mediaUnavailable)
+            return .failed(.mediaUnavailable)
         }
     }
 
@@ -2301,10 +2307,17 @@ final class AppModel {
             guard let downloaded else {
                 return .failed(.mediaUnavailable)
             }
-            await playDownloaded(
+            let outcome = await playDownloaded(
                 downloaded,
                 initialTime: requestedTime
             )
+            if case .failed = outcome {
+                await playback.start(
+                    detail: detail,
+                    account: account,
+                    initialTime: requestedTime
+                )
+            }
         case .streamed:
             await playback.start(
                 detail: detail,

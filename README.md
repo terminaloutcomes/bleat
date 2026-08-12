@@ -882,13 +882,14 @@ by account, book, and chapter, survive relaunch, and replace the prior cached
 result when transcribed again. The latest batch's success, typed privacy-safe
 failure, or cancellation result is also stored by account and book with its
 completion time and monotonic elapsed time, then reloaded after relaunch. The
-screen marks cached chapters and provides case-insensitive search across every
-cached chapter for the current book. Tapping a transcript segment or search
-result opens actions to copy its text or move the matching book's playback to
-its whole-book start timestamp. Existing playback seeks in place; otherwise
-Bleat prepares the book through the normal downloaded-first playback flow. If
-the audio is not downloaded, the screen asks before scheduling the existing
-audiobook download.
+screen marks cached chapters and provides case-insensitive, order-independent
+all-term search across every cached chapter for the current book. Every search
+term must occur within the same transcript segment. Tapping a transcript
+segment or search result opens actions to copy its text or move the matching
+book's playback to its whole-book start timestamp. Existing playback seeks in
+place; otherwise Bleat prepares the book through the normal downloaded-first
+playback flow. If the audio is not downloaded, the screen asks before
+scheduling the existing audiobook download.
 
 Loaded transcript text is retained in memory while its transcription screen is
 visible or its batch is active. Otherwise it is evicted after five idle minutes

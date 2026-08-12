@@ -10,6 +10,8 @@
   success, failure, or cancellation state, completion time, and elapsed time.
 - Added transcript-segment menus for copying text or moving playback to the
   segment's whole-book timestamp.
+- Transcript search now matches all query terms within a segment regardless of
+  term order or letter case.
 
 ### Changed
 

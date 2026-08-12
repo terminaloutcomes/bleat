@@ -131,18 +131,21 @@ public enum CachedChapterTranscriptSearch {
         query: String,
         in transcripts: [CachedChapterTranscript]
     ) -> [CachedChapterTranscriptMatch] {
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
+        let terms = query.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        guard !terms.isEmpty else {
             return []
         }
 
         return transcripts.flatMap { transcript in
             transcript.segments.compactMap { segment in
                 guard
-                    segment.text.range(
-                        of: query,
-                        options: .caseInsensitive
-                    ) != nil
+                    terms.allSatisfy({ term in
+                        segment.text.range(
+                            of: term,
+                            options: .caseInsensitive
+                        ) != nil
+                    })
                 else {
                     return nil
                 }
