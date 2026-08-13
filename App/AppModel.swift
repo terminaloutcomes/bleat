@@ -202,6 +202,11 @@ enum ResourceState<Value: Equatable & Sendable>: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum ResourceRefreshState: Equatable, Sendable {
+    case idle
+    case failed(AppFailure)
+}
+
 enum AccountActionStatus: Equatable, Sendable {
     case idle
     case switching
@@ -774,7 +779,9 @@ final class AppModel {
     private let diagnostics: any DiagnosticRecording
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
+    private var librariesGeneration: UInt64 = 0
     private var libraryPageGeneration: UInt64 = 0
+    private var homeShelvesGeneration: UInt64 = 0
     private var seriesPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
@@ -808,9 +815,11 @@ final class AppModel {
     private(set) var account: ServerAccount?
     private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
+    private(set) var librariesRefreshState: ResourceRefreshState = .idle
     private(set) var selectedLibrary: LibrarySummary?
     private(set) var isNavigationReady = false
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
+    private(set) var booksRefreshState: ResourceRefreshState = .idle
     private(set) var libraryPaginationState: LibraryPaginationState = .idle
     private(set) var librarySort: LibraryItemSort = .title
     private(set) var librarySortDescending = false
@@ -819,6 +828,7 @@ final class AppModel {
     private(set) var seriesPaginationState: LibraryPaginationState = .idle
     private(set) var selectedSeries: SeriesDestination?
     private(set) var homeShelves: ResourceState<[LibraryBookShelf]> = .idle
+    private(set) var homeShelvesRefreshState: ResourceRefreshState = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
     private(set) var selectedBookID: LibraryItemID?
@@ -1299,6 +1309,7 @@ final class AppModel {
             if self.account?.id == updated.id {
                 await stopLiveUpdatesAndWait()
                 self.account = updated
+                resetBrowsingResourcesForAccountChange()
                 await downloads.start(account: updated)
                 await loadLibraries()
                 startLiveUpdates(for: updated)
@@ -1380,8 +1391,7 @@ final class AppModel {
         do {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
-            selectedLibrary = nil
-            clearEntityBrowseFilter()
+            resetBrowsingResourcesForAccountChange()
             await downloads.start(account: selectedAccount)
             schedulePendingLocalSessionSync(for: selectedAccount)
             await loadLibraries()
@@ -1410,22 +1420,31 @@ final class AppModel {
     }
 
     func loadLibraries() async {
+        if case .loaded = libraries {
+            await refreshLibraries()
+            return
+        }
         guard let account else {
             libraries = .failed(
                 AppFailure(.loadLibraries, .authenticationRequired)
             )
             return
         }
+        librariesGeneration &+= 1
+        let operationGeneration = librariesGeneration
         await diagnostics.record(
             .started(.loadLibraries, category: .api)
         )
         libraries = .loading
+        librariesRefreshState = .idle
         isNavigationReady = false
         let previouslySelectedLibraryID = selectedLibrary?.id
         libraryPageGeneration &+= 1
         books = .idle
+        booksRefreshState = .idle
         libraryPaginationState = .idle
         homeShelves = .idle
+        homeShelvesRefreshState = .idle
         resetSearch()
         resetBookDetail()
         resetSeriesBrowse()
@@ -1435,6 +1454,11 @@ final class AppModel {
                 .filter { library in
                     library.mediaType == .book
                 }
+            guard operationGeneration == librariesGeneration,
+                  self.account?.id == account.id
+            else {
+                return
+            }
             libraries = .loaded(loadedLibraries)
             await diagnostics.record(
                 .completed(
@@ -1461,9 +1485,106 @@ final class AppModel {
             }
             await selectLibrary(library)
         } catch let error {
+            guard operationGeneration == librariesGeneration,
+                  self.account?.id == account.id
+            else {
+                return
+            }
             let failure = AppFailure(
                 operation: .loadLibraries, serviceError: error)
             libraries = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadLibraries,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+        }
+    }
+
+    func refreshLibraries() async {
+        guard let account else {
+            let failure = ResourceRefreshState.failed(
+                AppFailure(.loadLibraries, .authenticationRequired)
+            )
+            if librariesRefreshState != failure {
+                librariesRefreshState = failure
+            }
+            return
+        }
+        librariesGeneration &+= 1
+        let operationGeneration = librariesGeneration
+        await diagnostics.record(
+            .started(.loadLibraries, category: .api)
+        )
+        do {
+            let loadedLibraries = try await service.refreshedLibraries(
+                for: account
+            )
+                .filter { $0.mediaType == .book }
+            guard operationGeneration == librariesGeneration,
+                  self.account?.id == account.id
+            else {
+                return
+            }
+            let loadedState = ResourceState.loaded(loadedLibraries)
+            if libraries != loadedState {
+                libraries = loadedState
+            }
+            if librariesRefreshState != .idle {
+                librariesRefreshState = .idle
+            }
+            await diagnostics.record(
+                .completed(
+                    .loadLibraries,
+                    category: .api,
+                    count: loadedLibraries.count
+                )
+            )
+
+            guard let currentLibrary = selectedLibrary else {
+                guard let firstLibrary = loadedLibraries.first else {
+                    setEmptyLibraryContentIfChanged()
+                    return
+                }
+                await selectLibrary(firstLibrary)
+                return
+            }
+            guard let retainedLibrary = loadedLibraries.first(where: {
+                $0.id == currentLibrary.id
+            }) else {
+                selectedLibrary = nil
+                clearEntityBrowseFilter()
+                resetSearch()
+                resetBookDetail()
+                resetSeriesBrowse()
+                guard let firstLibrary = loadedLibraries.first else {
+                    libraryPageGeneration &+= 1
+                    setEmptyLibraryContentIfChanged()
+                    booksRefreshState = .idle
+                    homeShelvesRefreshState = .idle
+                    return
+                }
+                await selectLibrary(firstLibrary)
+                return
+            }
+            if selectedLibrary != retainedLibrary {
+                selectedLibrary = retainedLibrary
+            }
+            await refreshSelectedLibrary()
+        } catch let error {
+            guard operationGeneration == librariesGeneration,
+                  self.account?.id == account.id
+            else {
+                return
+            }
+            let failure = AppFailure(
+                operation: .loadLibraries, serviceError: error)
+            let failedState = ResourceRefreshState.failed(failure)
+            if librariesRefreshState != failedState {
+                librariesRefreshState = failedState
+            }
             await diagnostics.record(
                 .failed(
                     .loadLibraries,
@@ -1484,6 +1605,13 @@ final class AppModel {
             )
             return
         }
+        if selectedLibrary?.id == library.id {
+            if selectedLibrary != library {
+                selectedLibrary = library
+            }
+            await refreshSelectedLibrary()
+            return
+        }
         if selectedLibrary?.id != library.id {
             clearEntityBrowseFilter()
             resetSearch()
@@ -1491,41 +1619,127 @@ final class AppModel {
             resetSeriesBrowse()
         }
         selectedLibrary = library
+        homeShelvesGeneration &+= 1
+        let homeOperationGeneration = homeShelvesGeneration
         homeShelves = .loading
+        homeShelvesRefreshState = .idle
         await diagnostics.record(
             .started(.loadHome, category: .api)
         )
 
-        await reloadBooks()
+        await reloadBooks(preservingLoadedContent: false)
         guard self.account?.id == account.id,
-            selectedLibrary?.id == library.id
+            selectedLibrary?.id == library.id,
+            homeOperationGeneration == homeShelvesGeneration
         else {
             return
         }
         isNavigationReady = true
         do {
-            homeShelves = .loaded(
-                try await service.homeShelves(
-                    for: account,
-                    libraryID: library.id
-                )
+            let shelves = try await service.homeShelves(
+                for: account,
+                libraryID: library.id
             )
-            let count: Int
-            if case .loaded(let shelves) = homeShelves {
-                count = shelves.count
-            } else {
-                count = 0
+            guard self.account?.id == account.id,
+                  selectedLibrary?.id == library.id,
+                  homeOperationGeneration == homeShelvesGeneration
+            else {
+                return
+            }
+            let loadedState = ResourceState.loaded(shelves)
+            if homeShelves != loadedState {
+                homeShelves = loadedState
             }
             await diagnostics.record(
                 .completed(
                     .loadHome,
                     category: .api,
-                    count: count
+                    count: shelves.count
                 )
             )
-        } catch {
-            let failure = AppFailure(.loadHome, .serverUnavailable)
+        } catch let error {
+            guard self.account?.id == account.id,
+                  selectedLibrary?.id == library.id,
+                  homeOperationGeneration == homeShelvesGeneration
+            else {
+                return
+            }
+            let failure = AppFailure(
+                operation: .loadHome, serviceError: error)
             homeShelves = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadHome,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+        }
+    }
+
+    func refreshSelectedLibrary() async {
+        guard let account, let library = selectedLibrary else {
+            return
+        }
+        homeShelvesGeneration &+= 1
+        let operationGeneration = homeShelvesGeneration
+        await diagnostics.record(
+            .started(.loadHome, category: .api)
+        )
+
+        await reloadBooks(preservingLoadedContent: true)
+        guard self.account?.id == account.id,
+              selectedLibrary?.id == library.id,
+              operationGeneration == homeShelvesGeneration
+        else {
+            return
+        }
+        if !isNavigationReady {
+            isNavigationReady = true
+        }
+        do {
+            let shelves = try await service.refreshedHomeShelves(
+                for: account,
+                libraryID: library.id
+            )
+            guard self.account?.id == account.id,
+                  selectedLibrary?.id == library.id,
+                  operationGeneration == homeShelvesGeneration
+            else {
+                return
+            }
+            let loadedState = ResourceState.loaded(shelves)
+            if homeShelves != loadedState {
+                homeShelves = loadedState
+            }
+            if homeShelvesRefreshState != .idle {
+                homeShelvesRefreshState = .idle
+            }
+            await diagnostics.record(
+                .completed(
+                    .loadHome,
+                    category: .api,
+                    count: shelves.count
+                )
+            )
+        } catch let error {
+            guard self.account?.id == account.id,
+                  selectedLibrary?.id == library.id,
+                  operationGeneration == homeShelvesGeneration
+            else {
+                return
+            }
+            let failure = AppFailure(
+                operation: .loadHome, serviceError: error)
+            if case .loaded = homeShelves {
+                let failedState = ResourceRefreshState.failed(failure)
+                if homeShelvesRefreshState != failedState {
+                    homeShelvesRefreshState = failedState
+                }
+            } else {
+                homeShelves = .failed(failure)
+                homeShelvesRefreshState = .idle
+            }
             await diagnostics.record(
                 .failed(
                     .loadHome,
@@ -1567,7 +1781,9 @@ final class AppModel {
         await reloadBooks()
     }
 
-    func reloadBooks() async {
+    func reloadBooks(
+        preservingLoadedContent: Bool = false
+    ) async {
         libraryPageGeneration &+= 1
         let operationGeneration = libraryPageGeneration
         guard let account, let library = selectedLibrary else {
@@ -1576,25 +1792,57 @@ final class AppModel {
             )
             return
         }
-        books = .loading
-        libraryPaginationState = .idle
+        let retainsLoadedContent: Bool
+        let retainedPage: LibraryItemsPage?
+        if preservingLoadedContent, case .loaded(let page) = books {
+            retainsLoadedContent = true
+            retainedPage = page
+        } else {
+            retainsLoadedContent = false
+            retainedPage = nil
+        }
+        if !retainsLoadedContent {
+            books = .loading
+            booksRefreshState = .idle
+        }
+        if libraryPaginationState != .idle {
+            libraryPaginationState = .idle
+        }
         let filter = libraryBrowseFilter
         await diagnostics.record(
             .started(.loadLibraryPage, category: .api)
         )
 
         do {
-            let request = try makeLibraryItemsPageRequest(
-                page: 0,
-                sort: librarySort,
-                descending: librarySortDescending,
-                filter: filter.itemFilter
-            )
-            let page = try await service.page(
-                for: account,
-                libraryID: library.id,
-                request: request
-            )
+            let page: LibraryItemsPage
+            if let retainedPage {
+                page = try await refreshedLibraryItemsPage(
+                    for: account,
+                    library: library,
+                    filter: filter,
+                    retaining: retainedPage
+                )
+            } else {
+                let request = try makeLibraryItemsPageRequest(
+                    page: 0,
+                    sort: librarySort,
+                    descending: librarySortDescending,
+                    filter: filter.itemFilter
+                )
+                if preservingLoadedContent {
+                    page = try await service.refreshedPage(
+                        for: account,
+                        libraryID: library.id,
+                        request: request
+                    )
+                } else {
+                    page = try await service.page(
+                        for: account,
+                        libraryID: library.id,
+                        request: request
+                    )
+                }
+            }
             guard operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
@@ -1602,7 +1850,13 @@ final class AppModel {
             else {
                 return
             }
-            books = .loaded(page)
+            let loadedState = ResourceState.loaded(page)
+            if books != loadedState {
+                books = loadedState
+            }
+            if booksRefreshState != .idle {
+                booksRefreshState = .idle
+            }
             await diagnostics.record(
                 .completed(
                     .loadLibraryPage,
@@ -1619,7 +1873,15 @@ final class AppModel {
             }
             let failure = AppFailure(
                 operation: .loadLibraryPage, serviceError: error)
-            books = .failed(failure)
+            if preservingLoadedContent, case .loaded = books {
+                let failedState = ResourceRefreshState.failed(failure)
+                if booksRefreshState != failedState {
+                    booksRefreshState = failedState
+                }
+            } else {
+                books = .failed(failure)
+                booksRefreshState = .idle
+            }
             await diagnostics.record(
                 .failed(
                     .loadLibraryPage,
@@ -2463,14 +2725,7 @@ final class AppModel {
             pendingLocalSessionSyncAccounts[account.id] = nil
             if removingBrowsingAccount {
                 self.account = accounts.first
-                selectedLibrary = nil
-                libraryPageGeneration &+= 1
-                libraries = .idle
-                books = .idle
-                libraryPaginationState = .idle
-                homeShelves = .idle
-                resetSearch()
-                resetBookDetail()
+                resetBrowsingResourcesForAccountChange()
             }
             accountActionStatus = .idle
             loginStatus = .idle
@@ -2731,37 +2986,19 @@ final class AppModel {
 
     private func performLiveRefresh() async {
         guard let account else { return }
-        let refreshLibraries = pendingLiveLibraryRefresh
+        let librariesChanged = pendingLiveLibraryRefresh
         let itemIDs = pendingLiveItemIDs
         pendingLiveLibraryRefresh = false
         pendingLiveItemIDs = []
 
-        if refreshLibraries {
-            guard
-                let loaded = try? await service.libraries(for: account)
-                    .filter({ $0.mediaType == .book })
-            else { return }
-            libraries = .loaded(loaded)
-            let retained = selectedLibrary.flatMap { selected in
-                loaded.first { $0.id == selected.id }
-            }
-            guard let library = retained ?? loaded.first else {
-                selectedLibrary = nil
-                books = .loaded(
-                    LibraryItemsPage(
-                        items: [], total: 0, page: 0, limit: 20
-                    )
-                )
-                homeShelves = .loaded([])
-                return
-            }
-            await selectLibrary(library)
-        } else if let library = selectedLibrary {
-            await selectLibrary(library)
+        if librariesChanged {
+            await refreshLibraries()
+        } else {
+            await refreshSelectedLibrary()
         }
 
         if let selectedBookID,
-            refreshLibraries || itemIDs.contains(selectedBookID),
+            librariesChanged || itemIDs.contains(selectedBookID),
             let selectedLibrary,
             let detail = try? await service.bookDetail(
                 for: account,
@@ -2802,6 +3039,68 @@ final class AppModel {
         }
     }
 
+    private func refreshedLibraryItemsPage(
+        for account: ServerAccount,
+        library: LibrarySummary,
+        filter: LibraryBrowseFilter,
+        retaining currentPage: LibraryItemsPage
+    ) async throws(AppServiceError) -> LibraryItemsPage {
+        let firstRequest = try makeLibraryItemsPageRequest(
+            page: 0,
+            limit: currentPage.limit,
+            sort: librarySort,
+            descending: librarySortDescending,
+            filter: filter.itemFilter
+        )
+        let firstPage = try await service.refreshedPage(
+            for: account,
+            libraryID: library.id,
+            request: firstRequest
+        )
+        guard firstPage.limit > 0 else {
+            throw .libraryRepository(.remote(.invalidPage))
+        }
+        let lastAvailablePage = firstPage.total > 0
+            ? (firstPage.total - 1) / firstPage.limit
+            : 0
+        let lastPageToRefresh = min(currentPage.page, lastAvailablePage)
+        guard lastPageToRefresh > 0 else {
+            return firstPage
+        }
+
+        var items = firstPage.items
+        var itemIDs = Set(items.map(\.id))
+        for pageNumber in 1 ... lastPageToRefresh {
+            let request = try makeLibraryItemsPageRequest(
+                page: pageNumber,
+                limit: firstPage.limit,
+                sort: librarySort,
+                descending: librarySortDescending,
+                filter: filter.itemFilter
+            )
+            let nextPage = try await service.refreshedPage(
+                for: account,
+                libraryID: library.id,
+                request: request
+            )
+            guard nextPage.page == pageNumber,
+                  nextPage.limit == firstPage.limit,
+                  nextPage.total == firstPage.total
+            else {
+                throw .libraryRepository(.remote(.invalidPage))
+            }
+            for item in nextPage.items where itemIDs.insert(item.id).inserted {
+                items.append(item)
+            }
+        }
+        return LibraryItemsPage(
+            items: items,
+            total: firstPage.total,
+            page: lastPageToRefresh,
+            limit: firstPage.limit
+        )
+    }
+
     private func resetBookDetail() {
         bookDetailGeneration &+= 1
         selectedBookID = nil
@@ -2816,6 +3115,37 @@ final class AppModel {
         selectedSeries = nil
         seriesBooks = .idle
         seriesPaginationState = .idle
+    }
+
+    private func setEmptyLibraryContentIfChanged() {
+        let emptyBooks = ResourceState.loaded(
+            LibraryItemsPage(items: [], total: 0, page: 0, limit: 20)
+        )
+        if books != emptyBooks {
+            books = emptyBooks
+        }
+        let emptyShelves = ResourceState<[LibraryBookShelf]>.loaded([])
+        if homeShelves != emptyShelves {
+            homeShelves = emptyShelves
+        }
+    }
+
+    private func resetBrowsingResourcesForAccountChange() {
+        librariesGeneration &+= 1
+        libraryPageGeneration &+= 1
+        homeShelvesGeneration &+= 1
+        selectedLibrary = nil
+        libraries = .idle
+        librariesRefreshState = .idle
+        books = .idle
+        booksRefreshState = .idle
+        libraryPaginationState = .idle
+        homeShelves = .idle
+        homeShelvesRefreshState = .idle
+        clearEntityBrowseFilter()
+        resetSearch()
+        resetBookDetail()
+        resetSeriesBrowse()
     }
 
     private static func sortAccounts(

@@ -608,9 +608,10 @@ final class BleatUITests: XCTestCase {
         let home = app.descendants(matching: .any)["home.shelves"]
         XCTAssertTrue(home.waitForExistence(timeout: 3))
         pullToRefresh(home)
+        XCTAssertTrue(home.exists)
         XCTAssertTrue(
             app.staticTexts["The Refreshed Home Audiobook"]
-                .waitForExistence(timeout: 3)
+                .waitForExistence(timeout: 5)
         )
 
         tabButton("Library", in: app).tap()
@@ -618,10 +619,38 @@ final class BleatUITests: XCTestCase {
         let library = app.descendants(matching: .any)["books.list"]
         XCTAssertTrue(library.waitForExistence(timeout: 3))
         pullToRefresh(library)
+        XCTAssertTrue(library.exists)
         XCTAssertTrue(
             app.staticTexts["The Refreshed Library Audiobook"]
+                .waitForExistence(timeout: 5)
+        )
+    }
+
+    @MainActor
+    func testEmptyLibraryShowsRefreshFailureWithoutReplacingEmptyState() {
+        let app = launch(
+            scenario: "--ui-testing-empty-library-refresh-failure"
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        tabButton("Library", in: app).tap()
+
+        let library = app.descendants(matching: .any)["books.list"]
+        XCTAssertTrue(library.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["No audiobook libraries"]
                 .waitForExistence(timeout: 3)
         )
+
+        pullToRefresh(library)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["library.refreshError"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.staticTexts["No audiobook libraries"].exists)
     }
 
     @MainActor

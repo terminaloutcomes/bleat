@@ -6,6 +6,8 @@
         case signedOut = "--ui-testing-signed-out"
         case signedIn = "--ui-testing-signed-in"
         case refresh = "--ui-testing-refresh"
+        case emptyLibraryRefreshFailure =
+            "--ui-testing-empty-library-refresh-failure"
         case limitedPermissions = "--ui-testing-limited-permissions"
         case rejectLogin = "--ui-testing-reject-login"
         case submissionProgress = "--ui-testing-submission-progress"
@@ -39,6 +41,7 @@
         private let accountResult: Result<ServerAccount, AppServiceError>
         private var firstPageRequests = 0
         private var homeShelfRequests = 0
+        private var libraryRequests = 0
 
         static func current() -> UITestAppService? {
             let arguments = ProcessInfo.processInfo.arguments
@@ -87,7 +90,13 @@
             async throws(AppServiceError) -> [ServerAccount]
         {
             guard
-                [.signedIn, .refresh, .limitedPermissions, .playback]
+                [
+                    .signedIn,
+                    .refresh,
+                    .emptyLibraryRefreshFailure,
+                    .limitedPermissions,
+                    .playback,
+                ]
                     .contains(scenario)
             else {
                 return []
@@ -103,7 +112,13 @@
                 return nil
             }
             guard
-                [.signedIn, .refresh, .limitedPermissions, .playback]
+                [
+                    .signedIn,
+                    .refresh,
+                    .emptyLibraryRefreshFailure,
+                    .limitedPermissions,
+                    .playback,
+                ]
                     .contains(scenario)
             else {
                 return nil
@@ -179,7 +194,14 @@
         func libraries(
             for account: ServerAccount
         ) async throws(AppServiceError) -> [LibrarySummary] {
-            [
+            libraryRequests += 1
+            if scenario == .emptyLibraryRefreshFailure {
+                guard libraryRequests == 1 else {
+                    throw .libraryRepository(.remote(.unexpectedStatus(503)))
+                }
+                return []
+            }
+            return [
                 LibrarySummary(
                     id: LibraryID(rawValue: "ui-library"),
                     name: "Audiobooks",
@@ -196,6 +218,9 @@
             let ids = try Self.fixtureIDs()
             if request.filter == nil, request.page == 0 {
                 firstPageRequests += 1
+                if scenario == .refresh, firstPageRequests >= 3 {
+                    try? await Task.sleep(for: .seconds(2))
+                }
             }
             let primaryBook = Self.book(
                 id: "ui-book",
@@ -327,6 +352,9 @@
         ) async throws(AppServiceError) -> [LibraryBookShelf] {
             let ids = try Self.fixtureIDs()
             homeShelfRequests += 1
+            if scenario == .refresh, homeShelfRequests >= 2 {
+                try? await Task.sleep(for: .seconds(2))
+            }
             let title =
                 scenario == .refresh && homeShelfRequests >= 2
                 ? "The Refreshed Home Audiobook"

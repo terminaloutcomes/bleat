@@ -1406,11 +1406,14 @@ private struct HomeContent: View {
             case .loaded(let shelves):
                 if shelves.isEmpty && downloadedRecords.isEmpty {
                     statusScroll {
-                        ContentUnavailableView(
-                            "No personalized shelves",
-                            systemImage: "books.vertical"
-                        )
-                        .accessibilityIdentifier("home.empty")
+                        VStack(spacing: 20) {
+                            homeRefreshFailure
+                            ContentUnavailableView(
+                                "No personalized shelves",
+                                systemImage: "books.vertical"
+                            )
+                            .accessibilityIdentifier("home.empty")
+                        }
                     }
                 } else {
                     homeScroll(shelves: shelves) {
@@ -1451,6 +1454,7 @@ private struct HomeContent: View {
     ) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
+                homeRefreshFailure
                 ForEach(shelves.prefix(2), id: \.id) { shelf in
                     shelfContent(shelf)
                 }
@@ -1485,10 +1489,22 @@ private struct HomeContent: View {
     }
 
     private func refresh() async {
-        guard let library = model.selectedLibrary else {
-            return
+        await model.refreshSelectedLibrary()
+    }
+
+    @ViewBuilder
+    private var homeRefreshFailure: some View {
+        if case .failed(let failure) = model.homeShelvesRefreshState {
+            RefreshFailureBanner(
+                failure: failure,
+                accessibilityIdentifier: "home.refreshError"
+            ) {
+                Task {
+                    await model.refreshSelectedLibrary()
+                }
+            }
+            .padding(.horizontal)
         }
-        await model.selectLibrary(library)
     }
 
     private var downloadedShelf: some View {
@@ -1847,10 +1863,13 @@ private struct BookListContent: View {
             case .loaded(let libraries):
                 if libraries.isEmpty {
                     statusScroll {
-                        ContentUnavailableView(
-                            "No audiobook libraries",
-                            systemImage: "books.vertical"
-                        )
+                        VStack(spacing: 20) {
+                            libraryRefreshFailures
+                            ContentUnavailableView(
+                                "No audiobook libraries",
+                                systemImage: "books.vertical"
+                            )
+                        }
                     }
                 } else {
                     booksContent
@@ -1890,13 +1909,17 @@ private struct BookListContent: View {
         case .loaded(let page):
             if page.items.isEmpty {
                 statusScroll {
-                    ContentUnavailableView(
-                        "No audiobooks",
-                        systemImage: "book.closed"
-                    )
+                    VStack(spacing: 20) {
+                        libraryRefreshFailures
+                        ContentUnavailableView(
+                            "No audiobooks",
+                            systemImage: "book.closed"
+                        )
+                    }
                 }
             } else {
                 List {
+                    libraryRefreshFailures
                     ForEach(page.browseEntries, id: \.book.id.rawValue) {
                         entry in
                         switch entry {
@@ -1966,7 +1989,7 @@ private struct BookListContent: View {
                 }
                 .accessibilityIdentifier("books.list")
                 .refreshable {
-                    await model.loadLibraries()
+                    await model.refreshLibraries()
                 }
             }
         }
@@ -1982,7 +2005,31 @@ private struct BookListContent: View {
         }
         .accessibilityIdentifier("books.list")
         .refreshable {
-            await model.loadLibraries()
+            await model.refreshLibraries()
+        }
+    }
+
+    @ViewBuilder
+    private var libraryRefreshFailures: some View {
+        if case .failed(let failure) = model.librariesRefreshState {
+            RefreshFailureBanner(
+                failure: failure,
+                accessibilityIdentifier: "library.refreshError"
+            ) {
+                Task {
+                    await model.refreshLibraries()
+                }
+            }
+        }
+        if case .failed(let failure) = model.booksRefreshState {
+            RefreshFailureBanner(
+                failure: failure,
+                accessibilityIdentifier: "books.refreshError"
+            ) {
+                Task {
+                    await model.refreshSelectedLibrary()
+                }
+            }
         }
     }
 
@@ -1992,6 +2039,26 @@ private struct BookListContent: View {
             systemImage: "wifi.exclamationmark",
             description: Text(failure.message)
         )
+    }
+}
+
+private struct RefreshFailureBanner: View {
+    let failure: AppFailure
+    let accessibilityIdentifier: String
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label(
+                failure.message,
+                systemImage: "wifi.exclamationmark"
+            )
+            .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Button("Try Again", action: retry)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 

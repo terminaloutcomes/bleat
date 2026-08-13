@@ -601,6 +601,12 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
 - Debounce text search by approximately 300 ms.
 - Cache summaries for offline browsing, but show their last-refresh state.
 - Refresh on app launch, foregrounding, explicit pull-to-refresh, and after a successful mutation.
+- Keep loaded libraries, pages, and Home shelves mounted during refresh. Publish
+  a complete normalized replacement only when its domain value changed; a
+  refresh failure retains usable content and presents a compact typed retry.
+- Normalize Continue Listening by progress `lastUpdate` descending, then opaque
+  library-item ID ascending when timestamps are equal. Preserve server order
+  for other personalized shelves.
 - Do not preload expanded details for every item.
 - Cache cover thumbnails separately from original cover images.
 

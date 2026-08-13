@@ -2,6 +2,7 @@ import AVFoundation
 import BleatCore
 import BleatTranscription
 import MediaPlayer
+import Observation
 import UIKit
 import XCTest
 
@@ -4709,6 +4710,128 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testIdenticalRefreshPreservesLoadedPagesWithoutPublishing()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstBook = fixtureBook(
+            id: "item-1",
+            title: "First",
+            libraryID: library.id
+        )
+        let secondBook = fixtureBook(
+            id: "item-2",
+            title: "Second",
+            libraryID: library.id
+        )
+        let firstPage = LibraryItemsPage(
+            items: [firstBook], total: 2, page: 0, limit: 1
+        )
+        let nextPage = LibraryItemsPage(
+            items: [secondBook], total: 2, page: 1, limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(firstPage),
+            nextPage: .success(nextPage)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadNextBooksPage()
+
+        let browsingStateChanged = expectation(
+            description: "Observable paginated state changed"
+        )
+        browsingStateChanged.isInverted = true
+        withObservationTracking {
+            _ = model.books
+            _ = model.booksRefreshState
+            _ = model.libraryPaginationState
+            _ = model.homeShelves
+            _ = model.homeShelvesRefreshState
+        } onChange: {
+            browsingStateChanged.fulfill()
+        }
+
+        await model.refreshSelectedLibrary()
+
+        await fulfillment(of: [browsingStateChanged], timeout: 0.1)
+        XCTAssertEqual(
+            model.books,
+            .loaded(
+                LibraryItemsPage(
+                    items: [firstBook, secondBook],
+                    total: 2,
+                    page: 1,
+                    limit: 1
+                )
+            )
+        )
+    }
+
+    func testChangedRefreshPublishesCompleteLoadedPageSpan() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstBook = fixtureBook(
+            id: "item-1",
+            title: "First",
+            libraryID: library.id
+        )
+        let refreshedFirstBook = fixtureBook(
+            id: "item-1",
+            title: "Refreshed First",
+            libraryID: library.id
+        )
+        let secondBook = fixtureBook(
+            id: "item-2",
+            title: "Second",
+            libraryID: library.id
+        )
+        let firstPage = LibraryItemsPage(
+            items: [firstBook], total: 2, page: 0, limit: 1
+        )
+        let nextPage = LibraryItemsPage(
+            items: [secondBook], total: 2, page: 1, limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(firstPage),
+            nextPage: .success(nextPage)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadNextBooksPage()
+        await service.setFirstPage(
+            .success(
+                LibraryItemsPage(
+                    items: [refreshedFirstBook],
+                    total: 2,
+                    page: 0,
+                    limit: 1
+                )
+            )
+        )
+
+        await model.refreshSelectedLibrary()
+
+        XCTAssertEqual(
+            model.books,
+            .loaded(
+                LibraryItemsPage(
+                    items: [refreshedFirstBook, secondBook],
+                    total: 2,
+                    page: 1,
+                    limit: 1
+                )
+            )
+        )
+        let selections = await service.pageSelections()
+        XCTAssertEqual(selections.suffix(2).map(\.page), [0, 1])
+    }
+
     func testLibrarySortAndProgressFilterReloadFromFirstPage()
         async throws
     {
@@ -4857,6 +4980,180 @@ final class AppModelTests: XCTestCase {
             selections.last?.filter,
             LibraryItemFilter(authorID: authorID)
         )
+    }
+
+    func testRefreshKeepsLoadedBooksAndShelvesUntilReplacementsArrive()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let initialPage = fixturePage(libraryID: library.id)
+        let initialShelves = fixtureShelves(libraryID: library.id)
+        let refreshedBook = fixtureBook(
+            id: "refreshed-item",
+            title: "Refreshed",
+            libraryID: library.id
+        )
+        let refreshedPage = LibraryItemsPage(
+            items: [refreshedBook], total: 1, page: 0, limit: 20
+        )
+        let refreshedShelves = [
+            LibraryBookShelf(
+                id: "continue-listening",
+                label: "Continue Listening",
+                labelLocalizationKey: nil,
+                items: [refreshedBook],
+                total: 1
+            )
+        ]
+        let pageGate = AsyncGate()
+        let homeGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(initialPage),
+            homeShelves: .success(initialShelves),
+            refreshPageGate: pageGate,
+            homeShelvesRefreshGate: homeGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await service.setFirstPage(.success(refreshedPage))
+        await service.setHomeShelves(.success(refreshedShelves))
+
+        let refresh = Task { @MainActor in
+            await model.refreshSelectedLibrary()
+        }
+        await pageGate.waitUntilEntered()
+
+        XCTAssertEqual(model.books, .loaded(initialPage))
+        XCTAssertEqual(model.homeShelves, .loaded(initialShelves))
+        XCTAssertEqual(model.booksRefreshState, .idle)
+        XCTAssertEqual(model.homeShelvesRefreshState, .idle)
+
+        await pageGate.release()
+        await homeGate.waitUntilEntered()
+        XCTAssertEqual(model.books, .loaded(refreshedPage))
+        XCTAssertEqual(model.homeShelves, .loaded(initialShelves))
+
+        await homeGate.release()
+        await refresh.value
+        XCTAssertEqual(model.homeShelves, .loaded(refreshedShelves))
+        XCTAssertEqual(model.booksRefreshState, .idle)
+        XCTAssertEqual(model.homeShelvesRefreshState, .idle)
+    }
+
+    func testRefreshFailureRetainsLoadedBooksAndShelves() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let shelves = fixtureShelves(libraryID: library.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            homeShelves: .success(shelves)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let failure = AppServiceError.libraryRepository(
+            .remote(.unexpectedStatus(503))
+        )
+        await service.setFirstPage(.failure(failure))
+        await service.setHomeShelves(.failure(failure))
+
+        await model.refreshSelectedLibrary()
+
+        XCTAssertEqual(model.books, .loaded(page))
+        XCTAssertEqual(model.homeShelves, .loaded(shelves))
+        guard case .failed(let booksFailure) = model.booksRefreshState,
+              case .failed(let homeFailure) = model.homeShelvesRefreshState
+        else {
+            return XCTFail("Expected typed refresh failures")
+        }
+        XCTAssertEqual(booksFailure.operation, .loadLibraryPage)
+        XCTAssertEqual(homeFailure.operation, .loadHome)
+    }
+
+    func testIdenticalRefreshDoesNotPublishObservableContent() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let shelves = fixtureShelves(libraryID: library.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            homeShelves: .success(shelves)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let browsingStateChanged = expectation(
+            description: "Observable browsing state changed"
+        )
+        browsingStateChanged.isInverted = true
+        withObservationTracking {
+            _ = model.libraries
+            _ = model.librariesRefreshState
+            _ = model.selectedLibrary
+            _ = model.isNavigationReady
+            _ = model.books
+            _ = model.booksRefreshState
+            _ = model.libraryPaginationState
+            _ = model.homeShelves
+            _ = model.homeShelvesRefreshState
+        } onChange: {
+            browsingStateChanged.fulfill()
+        }
+
+        await model.refreshLibraries()
+
+        await fulfillment(of: [browsingStateChanged], timeout: 0.1)
+        XCTAssertEqual(model.libraries, .loaded([library]))
+        XCTAssertEqual(model.books, .loaded(page))
+        XCTAssertEqual(model.homeShelves, .loaded(shelves))
+    }
+
+    func testIdenticalEmptyLibraryRefreshDoesNotPublishObservableContent()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.refreshLibraries()
+        let emptyPage = LibraryItemsPage(
+            items: [], total: 0, page: 0, limit: 20
+        )
+        XCTAssertEqual(model.books, .loaded(emptyPage))
+        XCTAssertEqual(model.homeShelves, .loaded([]))
+
+        let browsingStateChanged = expectation(
+            description: "Observable empty-library state changed"
+        )
+        browsingStateChanged.isInverted = true
+        withObservationTracking {
+            _ = model.libraries
+            _ = model.librariesRefreshState
+            _ = model.selectedLibrary
+            _ = model.books
+            _ = model.booksRefreshState
+            _ = model.libraryPaginationState
+            _ = model.homeShelves
+            _ = model.homeShelvesRefreshState
+        } onChange: {
+            browsingStateChanged.fulfill()
+        }
+
+        await model.refreshLibraries()
+
+        await fulfillment(of: [browsingStateChanged], timeout: 0.1)
+        XCTAssertEqual(model.books, .loaded(emptyPage))
+        XCTAssertEqual(model.homeShelves, .loaded([]))
     }
 
     func testLatestDeepLinkDoesNotNavigateAfterNewerLinkArrives()
@@ -7928,6 +8225,8 @@ private actor TestAppService: AppServicing {
     private let bookDetailGate: AsyncGate?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
+    private let refreshPageGate: AsyncGate?
+    private let homeShelvesRefreshGate: AsyncGate?
     private let transcriptLoadGate: AsyncGate?
     private let transcriptSaveGate: AsyncGate?
     private let transcriptLoadResult:
@@ -8034,6 +8333,8 @@ private actor TestAppService: AppServicing {
         bookDetailGate: AsyncGate? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
+        refreshPageGate: AsyncGate? = nil,
+        homeShelvesRefreshGate: AsyncGate? = nil,
         transcriptLoadGate: AsyncGate? = nil,
         transcriptSaveGate: AsyncGate? = nil,
         transcriptLoad:
@@ -8079,6 +8380,8 @@ private actor TestAppService: AppServicing {
         self.bookDetailGate = bookDetailGate
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
+        self.refreshPageGate = refreshPageGate
+        self.homeShelvesRefreshGate = homeShelvesRefreshGate
         self.transcriptLoadGate = transcriptLoadGate
         self.transcriptSaveGate = transcriptSaveGate
         transcriptLoadResult = transcriptLoad
@@ -8411,6 +8714,12 @@ private actor TestAppService: AppServicing {
         {
             await browsePageGate.enterAndWait()
         }
+        if request.page == 0,
+           recordedPageRequests.count > 1,
+           let refreshPageGate
+        {
+            await refreshPageGate.enterAndWait()
+        }
         if request.page == 0 {
             return try value(from: firstPageResult)
         }
@@ -8422,6 +8731,11 @@ private actor TestAppService: AppServicing {
         libraryID: LibraryID
     ) async throws(AppServiceError) -> [LibraryBookShelf] {
         recordedHomeRequests.append(libraryID)
+        if recordedHomeRequests.count > 1,
+           let homeShelvesRefreshGate
+        {
+            await homeShelvesRefreshGate.enterAndWait()
+        }
         return try value(from: homeShelvesResult)
     }
 
@@ -8696,6 +9010,12 @@ private actor TestAppService: AppServicing {
         _ result: Result<LibraryItemsPage, AppServiceError>
     ) {
         firstPageResult = result
+    }
+
+    func setHomeShelves(
+        _ result: Result<[LibraryBookShelf], AppServiceError>
+    ) {
+        homeShelvesResult = result
     }
 
     func setSearch(
