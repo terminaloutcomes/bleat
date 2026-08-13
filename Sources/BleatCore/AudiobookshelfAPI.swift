@@ -236,6 +236,22 @@ public actor AudiobookshelfAPI<
             guard seenShelfIDs.insert(shelf.id).inserted else {
                 throw .invalidPersonalizedShelves
             }
+            if shelf.kind == .continueListening {
+                // The pinned query sorts only by progress update time, so equal
+                // timestamps need a client-side opaque-ID tie-breaker.
+                // https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/utils/queries/libraryItemsBookFilters.js#L240-L291
+                let progressUpdates = try await progressUpdates(
+                    for: items.map(\.id)
+                )
+                items.sort { left, right in
+                    let leftUpdate = progressUpdates[left.id] ?? -1
+                    let rightUpdate = progressUpdates[right.id] ?? -1
+                    if leftUpdate != rightUpdate {
+                        return leftUpdate > rightUpdate
+                    }
+                    return left.id.rawValue < right.id.rawValue
+                }
+            }
             shelves.append(LibraryBookShelf(
                 id: shelf.id,
                 label: shelf.label,
@@ -248,6 +264,73 @@ public actor AudiobookshelfAPI<
             value: shelves,
             correlationID: result.correlationID
         )
+    }
+
+    private func progressUpdates(
+        for itemIDs: [LibraryItemID]
+    ) async throws(AudiobookshelfAPIError) -> [LibraryItemID: Int64] {
+        let results = await withTaskGroup(
+            of: Result<(LibraryItemID, Int64), AudiobookshelfAPIError>.self
+        ) { group in
+            for itemID in itemIDs {
+                group.addTask {
+                    do throws(AudiobookshelfAPIError) {
+                        return .success(
+                            try await self.progressUpdate(for: itemID)
+                        )
+                    } catch {
+                        return .failure(error)
+                    }
+                }
+            }
+
+            var results: [
+                Result<(LibraryItemID, Int64), AudiobookshelfAPIError>
+            ] = []
+            results.reserveCapacity(itemIDs.count)
+            for await result in group {
+                if case .failure = result {
+                    group.cancelAll()
+                }
+                results.append(result)
+            }
+            return results
+        }
+
+        var updates: [LibraryItemID: Int64] = [:]
+        updates.reserveCapacity(itemIDs.count)
+        for result in results {
+            let (itemID, lastUpdate) = try result.get()
+            guard updates.updateValue(
+                lastUpdate,
+                forKey: itemID
+            ) == nil else {
+                throw AudiobookshelfAPIError.invalidPersonalizedShelves
+            }
+        }
+        return updates
+    }
+
+    private func progressUpdate(
+        for itemID: LibraryItemID
+    ) async throws(AudiobookshelfAPIError) -> (LibraryItemID, Int64) {
+        guard !Task.isCancelled else {
+            throw .cancelled
+        }
+        let result: AudiobookshelfAPIResult<LibraryBookProgressDTO> =
+            try await get(
+                .progress(itemID),
+                as: LibraryBookProgressDTO.self
+            )
+        guard let progress = result.value.domainValue(),
+              progress.userID == userID,
+              progress.libraryItemID == itemID,
+              !progress.isFinished,
+              !progress.hideFromContinueListening
+        else {
+            throw .invalidPersonalizedShelves
+        }
+        return (itemID, progress.lastUpdateMilliseconds)
     }
 
     public func bookDetail(
@@ -480,12 +563,28 @@ private struct LibrarySearchSeriesIdentityDTO: Decodable, Sendable {
     let name: String
 }
 
+private enum PersonalizedShelfKind: Equatable, Sendable {
+    case continueListening
+    case other
+}
+
+/// Pinned contract:
+/// https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/utils/queries/libraryFilters.js#L38-L71
 private struct PersonalizedShelfDTO: Decodable, Sendable {
     let id: String
     let label: String
     let labelLocalizationKey: String?
     let total: Int
     let bookEntities: [LibraryItemDTO]?
+
+    var kind: PersonalizedShelfKind {
+        switch id {
+        case "continue-listening":
+            .continueListening
+        default:
+            .other
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -918,7 +1017,7 @@ private struct ExpandedLibraryBookSeriesDTO: Decodable, Sendable {
     let sequence: String?
 }
 
-private struct LibraryBookProgressDTO: Decodable, Sendable {
+struct LibraryBookProgressDTO: Decodable, Sendable {
     let id: String
     let userID: UserID
     let libraryItemID: LibraryItemID
@@ -956,13 +1055,35 @@ private struct LibraryBookProgressDTO: Decodable, Sendable {
         expectedBookID: BookID,
         expectedUserID: UserID
     ) throws(AudiobookshelfAPIError) -> LibraryBookProgress {
-        guard libraryItemID == expectedItemID,
+        guard let progress = domainValue(),
+              libraryItemID == expectedItemID,
               mediaItemID == expectedBookID,
               userID == expectedUserID,
-              episodeID == nil,
-              mediaItemType == "book"
+              progress.libraryItemID == expectedItemID
         else {
             throw .invalidBookDetail
+        }
+        return progress
+    }
+
+    func domainValue() -> LibraryBookProgress? {
+        guard !id.isEmpty,
+              !userID.rawValue.isEmpty,
+              !libraryItemID.rawValue.isEmpty,
+              episodeID == nil,
+              !mediaItemID.rawValue.isEmpty,
+              mediaItemType == "book",
+              duration.isFinite,
+              duration >= 0,
+              progress.isFinite,
+              (0 ... 1).contains(progress),
+              currentTime.isFinite,
+              currentTime >= 0,
+              lastUpdate >= 0,
+              startedAt >= 0,
+              (finishedAt ?? 0) >= 0
+        else {
+            return nil
         }
         return LibraryBookProgress(
             id: id,

@@ -461,13 +461,17 @@ offline playback directly. That shelf remains usable while personalized
 shelves are loading or unavailable.
 Shelf cards are compact enough to scan several books without losing title and
 author context. Pull down on Home to refresh the current library page and its
-personalized shelves.
+personalized shelves. Refresh keeps the loaded shelves visible and replaces
+them only when the normalized content changes. **Continue Listening** is
+ordered by the most recently updated listening progress, with stable book-ID
+ordering when progress timestamps are equal.
 
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
 direction. The progress filter shows all, finished, in-progress, not-started,
 or not-finished books without downloading the entire library first. Pull down
-to reload accessible libraries and the selected library's content. **Load More**
+to reload accessible libraries and the selected library's content without
+clearing the loaded page; unchanged results are not republished. **Load More**
 fetches the next page using the active sort and filter. Collapsed server series
 are shown as series entries; opening one uses the server's uncollapsed sequence
 order, supports cached pages and pagination, and provides a swipeable cover

@@ -59,10 +59,14 @@ extension AuthCoordinator {
             throw .unexpectedStatus(response.statusCode)
         }
         do {
-            return try JSONDecoder().decode(
-                BookProgressResponse.self,
+            guard let progress = try JSONDecoder().decode(
+                LibraryBookProgressDTO.self,
                 from: response.data
             ).domainValue()
+            else {
+                throw BookProgressError.malformedResponse
+            }
+            return progress
         } catch let error as BookProgressError {
             throw error
         } catch {
@@ -158,48 +162,5 @@ extension AuthCoordinator {
         {
             throw .invalidProgress
         }
-    }
-}
-
-private struct BookProgressResponse: Decodable {
-    let id: String
-    let userId: String
-    let libraryItemId: String
-    let episodeId: String?
-    let mediaItemId: String
-    let mediaItemType: String
-    let duration: Double
-    let progress: Double
-    let currentTime: Double
-    let isFinished: Bool
-    let hideFromContinueListening: Bool
-    let lastUpdate: Int64
-    let startedAt: Int64
-    let finishedAt: Int64?
-
-    func domainValue() throws(BookProgressError) -> LibraryBookProgress {
-        guard !id.isEmpty, !userId.isEmpty, !libraryItemId.isEmpty,
-            episodeId == nil, !mediaItemId.isEmpty, mediaItemType == "book",
-            duration.isFinite, duration >= 0,
-            progress.isFinite, (0...1).contains(progress),
-            currentTime.isFinite, currentTime >= 0, lastUpdate >= 0,
-            startedAt >= 0
-        else {
-            throw .malformedResponse
-        }
-        return LibraryBookProgress(
-            id: id,
-            userID: UserID(rawValue: userId),
-            libraryItemID: LibraryItemID(rawValue: libraryItemId),
-            bookID: BookID(rawValue: mediaItemId),
-            duration: duration,
-            progress: progress,
-            currentTime: currentTime,
-            isFinished: isFinished,
-            hideFromContinueListening: hideFromContinueListening,
-            lastUpdateMilliseconds: lastUpdate,
-            startedAtMilliseconds: startedAt,
-            finishedAtMilliseconds: finishedAt
-        )
     }
 }

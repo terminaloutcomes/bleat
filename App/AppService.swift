@@ -427,6 +427,21 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID
     ) async throws(AppServiceError) -> [LibraryBookShelf]
 
+    func refreshedLibraries(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibrarySummary]
+
+    func refreshedPage(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryItemsPage
+
+    func refreshedHomeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf]
+
     func search(
         for account: ServerAccount,
         libraryID: LibraryID,
@@ -627,6 +642,31 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func refreshedLibraries(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibrarySummary] {
+        try await libraries(for: account)
+    }
+
+    func refreshedPage(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryItemsPage {
+        try await page(
+            for: account,
+            libraryID: libraryID,
+            request: request
+        )
+    }
+
+    func refreshedHomeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf] {
+        try await homeShelves(for: account, libraryID: libraryID)
+    }
+
     func loginWithOpenID(
         serverAddress: String,
         progress: @escaping AccountSubmissionProgress
@@ -1732,6 +1772,56 @@ actor LiveAppService: AppServicing {
             return try await repository.personalizedShelves(
                 in: libraryID,
                 request: request
+            ).value
+        } catch let error {
+            throw .libraryRepository(error)
+        }
+    }
+
+    func refreshedLibraries(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibrarySummary] {
+        let repository = repository(for: account)
+        do {
+            return try await repository.libraries(policy: .remoteOnly).value
+        } catch let error {
+            throw .libraryRepository(error)
+        }
+    }
+
+    func refreshedPage(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryItemsPage {
+        let repository = repository(for: account)
+        do {
+            return try await repository.libraryItems(
+                in: libraryID,
+                request: request,
+                policy: .remoteOnly
+            ).value
+        } catch let error {
+            throw .libraryRepository(error)
+        }
+    }
+
+    func refreshedHomeShelves(
+        for account: ServerAccount,
+        libraryID: LibraryID
+    ) async throws(AppServiceError) -> [LibraryBookShelf] {
+        let request: LibraryHomeRequest
+        do {
+            request = try LibraryHomeRequest()
+        } catch let error {
+            throw .homeRequest(error)
+        }
+        let repository = repository(for: account)
+        do {
+            return try await repository.personalizedShelves(
+                in: libraryID,
+                request: request,
+                policy: .remoteOnly
             ).value
         } catch let error {
             throw .libraryRepository(error)
