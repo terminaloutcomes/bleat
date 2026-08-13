@@ -1365,6 +1365,7 @@ private struct HomeView: View {
 
 private struct HomeContent: View {
     @Bindable var model: AppModel
+    @State private var playbackFailure: AppFailure?
 
     var body: some View {
         Group {
@@ -1428,6 +1429,19 @@ private struct HomeContent: View {
                         }
                     }
                 }
+            }
+        }
+        .alert(
+            playbackFailure?.title ?? "Playback unavailable",
+            isPresented: Binding(
+                get: { playbackFailure != nil },
+                set: { if !$0 { playbackFailure = nil } }
+            )
+        ) {
+            Button("OK") { playbackFailure = nil }
+        } message: {
+            if let playbackFailure {
+                Text(playbackFailure.message)
             }
         }
     }
@@ -1520,7 +1534,20 @@ private struct HomeContent: View {
                     ) { record in
                         Button {
                             Task {
-                                await model.playDownloaded(record)
+                                guard let account = model.account else {
+                                    playbackFailure = AppFailure(
+                                        .openPlayback,
+                                        .accountUnavailable
+                                    )
+                                    return
+                                }
+                                let outcome = await model.startPlayback(
+                                    download: record,
+                                    account: account
+                                )
+                                if case .failed(let failure) = outcome {
+                                    playbackFailure = failure
+                                }
                             }
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
@@ -2490,6 +2517,7 @@ private struct BookDetailView: View {
     @State private var showMetadataEditor = false
     @State private var showChapterTranscription = false
     @State private var showRemoveDownloadConfirmation = false
+    @State private var playbackFailure: AppFailure?
 
     @ColourSchemePreference private var colourScheme
 
@@ -2611,6 +2639,19 @@ private struct BookDetailView: View {
             Text(
                 "This removes the audiobook files stored on this device."
             )
+        }
+        .alert(
+            playbackFailure?.title ?? "Playback unavailable",
+            isPresented: Binding(
+                get: { playbackFailure != nil },
+                set: { if !$0 { playbackFailure = nil } }
+            )
+        ) {
+            Button("OK") { playbackFailure = nil }
+        } message: {
+            if let playbackFailure {
+                Text(playbackFailure.message)
+            }
         }
     }
 
@@ -2970,49 +3011,40 @@ private struct BookDetailView: View {
             case .allowed:
                 let primaryAction = BookDetailPlaybackAction.decide(
                     itemID: detail.id,
-                    currentItemID: model.playback.itemID,
+                    currentItemID:
+                        model.playback.accountID == model.account?.id
+                        ? model.playback.itemID : nil,
                     isPlaybackRequested:
                         model.playback.isPlaybackRequested,
                     progress: detail.progress
                 )
-                if let account = model.account,
-                    let downloaded = model.downloads.record(
-                        accountID: account.id,
-                        itemID: detail.id
-                    ),
-                    model.downloads.isFullBookAvailable(downloaded)
-                {
-                    Button {
-                        switch primaryAction {
-                        case .pause:
-                            model.playback.pause()
-                        case .start, .resume, .playAgain:
-                            Task {
-                                await model.playDownloaded(downloaded)
-                            }
-                        }
-                    } label: {
-                        Label(
-                            primaryAction.label,
-                            systemImage: primaryAction.systemImage
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("book.detail.play")
-                } else if availability.visibleActions.contains(.play),
+                if availability.visibleActions.contains(.play),
                     let account = model.account
                 {
                     Button {
                         switch primaryAction {
                         case .pause:
                             model.playback.pause()
-                        case .start, .resume, .playAgain:
+                        case .start, .resume:
                             Task {
-                                await model.playback.start(
+                                let outcome = await model.startPlayback(
                                     detail: detail,
                                     account: account
                                 )
+                                if case .failed(let failure) = outcome {
+                                    playbackFailure = failure
+                                }
+                            }
+                        case .playAgain:
+                            Task {
+                                let outcome = await model.startPlayback(
+                                    detail: detail,
+                                    account: account,
+                                    position: .beginning
+                                )
+                                if case .failed(let failure) = outcome {
+                                    playbackFailure = failure
+                                }
                             }
                         }
                     } label: {
@@ -3025,6 +3057,7 @@ private struct BookDetailView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         model.playback.state == .preparing
+                            && model.playback.accountID == account.id
                             && model.playback.itemID == detail.id
                     )
                     .accessibilityIdentifier("book.detail.play")

@@ -225,6 +225,27 @@ swift test --filter BleatCoreTests
 swift test --filter TokenVaultTests
 ```
 
+A successful command exit is not sufficient test evidence. Verify that every
+intended test actually executed and passed:
+
+- Treat `No matching test cases were run`, zero executed tests, an empty test
+  selection, or an unexpected test bundle as a failed validation attempt, even
+  when the command exits successfully. Immediately use the correct test runner
+  and target; never count or summarize the zero-test attempt as coverage.
+- `swift test` covers SwiftPM package tests, not the app-hosted
+  `BleatAppTests`. Run app tests through the `Bleat` Xcode scheme with
+  `-only-testing:BleatAppTests/...`.
+- For filtered or quiet `xcodebuild` runs, write an `.xcresult` bundle and
+  inspect it with `xcresulttool`. Confirm the exact requested test identifiers,
+  executed count, and individual outcomes before claiming the focused tests
+  passed. Console exit status alone is not evidence.
+- If validation emits a runtime warning, crash, hang, unexpected skip, or other
+  suspicious result, investigate it to a concrete conclusion or report it as
+  unresolved. Do not rerun until it disappears and omit the earlier evidence.
+- Do not hand off while a required validation command is still running or its
+  result is unverified. Finish the gate, inspect the evidence, and report any
+  unsuccessful or superseded attempts precisely.
+
 Run the complete local validation gate when practical:
 
 ```sh

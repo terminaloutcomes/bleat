@@ -93,7 +93,6 @@
             [ObjectIdentifier: LibraryBookSummary] = [:]
         private var artworkTasks: [Task<Void, Never>] = []
         private var presentationGeneration: UInt64 = 0
-        private var selectionGeneration: UInt64 = 0
         private var searchGeneration: UInt64 = 0
         private var searchTask: Task<Void, Never>?
 
@@ -124,7 +123,6 @@
 
         func disconnect() {
             presentationGeneration &+= 1
-            selectionGeneration &+= 1
             searchGeneration &+= 1
             searchTask?.cancel()
             searchTask = nil
@@ -762,57 +760,45 @@
                 )
                 return
             }
-            selectionGeneration &+= 1
-            let generation = selectionGeneration
-            await model.loadBookDetail(book)
-            guard generation == selectionGeneration,
-                model.account?.id == account.id,
-                model.selectedBookID == book.id
-            else {
-                return
-            }
-            guard case .loaded(let detail) = model.bookDetail else {
-                if case .failed(let failure) = model.bookDetail {
-                    showFailure(failure)
-                }
-                return
-            }
-            let availability = BookActionAvailability(
-                user: account.user,
-                detail: detail
+            let outcome = await model.startPlayback(
+                book: book,
+                account: account
             )
-            guard availability.visibleActions.contains(.play) else {
-                showFailure(.playbackDenied)
-                return
-            }
-            if let record = model.downloads.record(
-                accountID: account.id,
-                itemID: detail.id
-            ), model.downloads.isFullBookAvailable(record) {
-                await model.playDownloaded(record)
-            } else {
-                await model.playback.start(
-                    detail: detail,
-                    account: account
+            switch outcome {
+            case .started:
+                presentNowPlayingIfReady(
+                    itemID: book.id,
+                    accountID: account.id
                 )
+            case .failed(let failure):
+                showFailure(failure)
+            case .superseded:
+                break
             }
-            presentNowPlayingIfReady(
-                itemID: detail.id,
-                accountID: account.id
-            )
         }
 
         private func play(_ record: DownloadedBookRecord) async {
-            selectionGeneration &+= 1
-            let generation = selectionGeneration
-            await model.playDownloaded(record)
-            guard generation == selectionGeneration else {
+            guard let account = model.account else {
+                showFailure(
+                    AppFailure(.openPlayback, .accountUnavailable)
+                )
                 return
             }
-            presentNowPlayingIfReady(
-                itemID: record.detail.id,
-                accountID: record.manifest.accountID
+            let outcome = await model.startPlayback(
+                download: record,
+                account: account
             )
+            switch outcome {
+            case .started:
+                presentNowPlayingIfReady(
+                    itemID: record.detail.id,
+                    accountID: record.manifest.accountID
+                )
+            case .failed(let failure):
+                showFailure(failure)
+            case .superseded:
+                break
+            }
         }
 
         private func presentNowPlayingIfReady(

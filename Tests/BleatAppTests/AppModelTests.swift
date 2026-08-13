@@ -6189,43 +6189,938 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
-    func testPlaybackPositioningRouteRequiresExactAccountAndBook() {
-        let accountID = AccountID(rawValue: "account-1")
-        let itemID = LibraryItemID(rawValue: "item-1")
+    func testPlaybackStartPositionResolverValidatesEveryTypedPosition() {
+        let chapters = [
+            PlaybackChapter(id: 7, start: 10, end: 20, title: "Seven"),
+            PlaybackChapter(id: 8, start: 20, end: 30, title: "Eight"),
+        ]
 
         XCTAssertEqual(
-            PlaybackPositioningRoute.decide(
-                playbackAccountID: accountID,
-                playbackItemID: itemID,
-                isPlaybackPrepared: true,
-                requestedAccountID: accountID,
-                requestedItemID: itemID,
-                hasCompleteDownload: false
+            PlaybackStartPositionResolver.resolve(
+                .resume,
+                duration: 30,
+                chapters: chapters
             ),
-            .activePlayer
+            .resume
         )
         XCTAssertEqual(
-            PlaybackPositioningRoute.decide(
-                playbackAccountID: AccountID(rawValue: "account-2"),
-                playbackItemID: itemID,
-                isPlaybackPrepared: true,
-                requestedAccountID: accountID,
-                requestedItemID: itemID,
-                hasCompleteDownload: true
+            PlaybackStartPositionResolver.resolve(
+                .beginning,
+                duration: 30,
+                chapters: chapters
             ),
-            .downloaded
+            .absoluteTime(0)
         )
         XCTAssertEqual(
-            PlaybackPositioningRoute.decide(
-                playbackAccountID: accountID,
-                playbackItemID: LibraryItemID(rawValue: "item-2"),
-                isPlaybackPrepared: true,
-                requestedAccountID: accountID,
-                requestedItemID: itemID,
-                hasCompleteDownload: false
+            PlaybackStartPositionResolver.resolve(
+                .absoluteTime(12.5),
+                duration: 30,
+                chapters: chapters
             ),
-            .streamed
+            .absoluteTime(12.5)
         )
+        for invalid in [
+            -1.0, Double.nan, Double.infinity, 30.1,
+        ] {
+            XCTAssertEqual(
+                PlaybackStartPositionResolver.resolve(
+                    .absoluteTime(invalid),
+                    duration: 30,
+                    chapters: chapters
+                ),
+                .failed(
+                    AppFailure(.openPlayback, .invalidPlaybackPosition)
+                )
+            )
+        }
+        XCTAssertEqual(
+            PlaybackStartPositionResolver.resolve(
+                .chapter(
+                    PlaybackChapterPosition(chapterID: 7, offset: 2.5)
+                ),
+                duration: 30,
+                chapters: chapters
+            ),
+            .absoluteTime(12.5)
+        )
+        XCTAssertEqual(
+            PlaybackStartPositionResolver.resolve(
+                .chapter(
+                    PlaybackChapterPosition(chapterID: 9, offset: 0)
+                ),
+                duration: 30,
+                chapters: chapters
+            ),
+            .failed(AppFailure(.openPlayback, .unknownPlaybackChapter))
+        )
+        for offset in [-1.0, Double.nan, Double.infinity, 10] {
+            XCTAssertEqual(
+                PlaybackStartPositionResolver.resolve(
+                    .chapter(
+                        PlaybackChapterPosition(
+                            chapterID: 7,
+                            offset: offset
+                        )
+                    ),
+                    duration: 30,
+                    chapters: chapters
+                ),
+                .failed(
+                    AppFailure(
+                        .openPlayback,
+                        .invalidPlaybackChapterOffset
+                    )
+                )
+            )
+        }
+        XCTAssertEqual(
+            PlaybackStartPositionResolver.resolve(
+                .chapter(
+                    PlaybackChapterPosition(chapterID: 7, offset: 0)
+                ),
+                duration: 30,
+                chapters: chapters + [chapters[0]]
+            ),
+            .failed(AppFailure(.openPlayback, .unknownPlaybackChapter))
+        )
+        let staleChapter = PlaybackChapter(
+            id: 7,
+            start: 1_000,
+            end: 2_000,
+            title: "Stale"
+        )
+        XCTAssertEqual(
+            PlaybackStartPositionResolver.resolve(
+                .chapter(staleChapter, offset: 2.5),
+                duration: 30,
+                chapters: chapters
+            ),
+            .absoluteTime(12.5)
+        )
+    }
+
+    func testPlaybackStartDiscoversCompleteDownloadFromSummary()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "PlaybackStartDownload-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let otherAccount = try fixtureAccount(accountID: "account-2")
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: summary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail
+        )
+        let service = TestAppService(
+            accounts: .success([account, otherAccount]),
+            activeAccount: .success(account)
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+
+        let outcome = await model.startPlayback(
+            book: summary,
+            account: account,
+            position: .absoluteTime(0.75)
+        )
+        let detailRequests = await service.bookDetailRequests()
+        let playbackRequests = await service.playbackOpenRequests()
+
+        XCTAssertEqual(outcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertTrue(detailRequests.isEmpty)
+        XCTAssertTrue(playbackRequests.isEmpty)
+        await model.playback.stop()
+
+        let record = try XCTUnwrap(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+        let mismatched = await model.startPlayback(
+            download: record,
+            account: otherAccount
+        )
+        XCTAssertEqual(
+            mismatched,
+            .failed(AppFailure(.openPlayback, .playbackIdentityMismatch))
+        )
+    }
+
+    func testPlaybackStartLoadsDetailWithoutChangingNavigationState()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let outcome = await model.startPlayback(
+            book: fixturePage(libraryID: detail.libraryID).items[0],
+            account: account,
+            position: .absoluteTime(0.75)
+        )
+
+        XCTAssertEqual(outcome, .started(source: .streamed))
+        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertNil(model.selectedBookID)
+        XCTAssertEqual(model.bookDetail, .idle)
+        XCTAssertEqual(model.bookBookmarks, .idle)
+        let detailRequests = await service.bookDetailRequests()
+        XCTAssertEqual(detailRequests.count, 1)
+        await model.playback.stop()
+    }
+
+    func testPlaybackStartReusesMatchingActivePlayerAndResumes()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initialOutcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initialOutcome, .started(source: .streamed))
+        model.playback.pause()
+
+        let outcome = await model.startPlayback(
+            detail: detail,
+            account: account,
+            position: .absoluteTime(0.5)
+        )
+
+        XCTAssertEqual(outcome, .started(source: .activePlayer))
+        XCTAssertEqual(model.playback.currentTime, 0.5, accuracy: 0.01)
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        let playbackRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(playbackRequests.count, 1)
+        await model.playback.stop()
+    }
+
+    func testPlaybackStartRejectsActivePlayerFromAnotherLibrary()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initialOutcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initialOutcome, .started(source: .streamed))
+
+        let mismatched = fixtureBookDetail(
+            item: fixtureBook(
+                id: detail.id.rawValue,
+                title: detail.title,
+                libraryID: LibraryID(rawValue: "other-library")
+            )
+        )
+        let outcome = await model.startPlayback(
+            detail: mismatched,
+            account: account
+        )
+
+        XCTAssertEqual(
+            outcome,
+            .failed(AppFailure(.openPlayback, .playbackIdentityMismatch))
+        )
+        let requests = await service.playbackOpenRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(model.playback.libraryID, detail.libraryID)
+        await model.playback.stop()
+    }
+
+    func testPlaybackStartRejectsAnUnsavedAccount() async throws {
+        let savedAccount = try fixtureAccount()
+        let otherAccount = try fixtureAccount(accountID: "account-2")
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        let model = AppModel(
+            service: TestAppService(activeAccount: .success(savedAccount))
+        )
+        await model.start()
+
+        let outcome = await model.startPlayback(
+            detail: detail,
+            account: otherAccount
+        )
+
+        XCTAssertEqual(
+            outcome,
+            .failed(AppFailure(.openPlayback, .accountUnavailable))
+        )
+    }
+
+    func testPlaybackStartMapsEveryAccessDenial() async throws {
+        let libraryID = fixtureLibrary().id
+        let cases: [(
+            permissions: UserPermissions,
+            accessibleLibraryIDs: [LibraryID],
+            selectedItemTags: [String],
+            isExplicit: Bool,
+            tags: [String],
+            expected: AppFailureCause
+        )] = [
+            (
+                permissions: UserPermissions(
+                    download: false,
+                    update: false,
+                    delete: false,
+                    upload: false,
+                    createEReader: false,
+                    accessAllLibraries: false,
+                    accessAllTags: true,
+                    accessExplicitContent: true,
+                    selectedTagsNotAccessible: false
+                ),
+                accessibleLibraryIDs: [],
+                selectedItemTags: [],
+                isExplicit: false,
+                tags: [],
+                expected: .inaccessibleLibrary
+            ),
+            (
+                permissions: UserPermissions(
+                    download: false,
+                    update: false,
+                    delete: false,
+                    upload: false,
+                    createEReader: false,
+                    accessAllLibraries: true,
+                    accessAllTags: false,
+                    accessExplicitContent: true,
+                    selectedTagsNotAccessible: false
+                ),
+                accessibleLibraryIDs: [],
+                selectedItemTags: ["allowed"],
+                isExplicit: false,
+                tags: ["restricted"],
+                expected: .inaccessibleTags
+            ),
+            (
+                permissions: UserPermissions(
+                    download: false,
+                    update: false,
+                    delete: false,
+                    upload: false,
+                    createEReader: false,
+                    accessAllLibraries: true,
+                    accessAllTags: true,
+                    accessExplicitContent: false,
+                    selectedTagsNotAccessible: false
+                ),
+                accessibleLibraryIDs: [],
+                selectedItemTags: [],
+                isExplicit: true,
+                tags: [],
+                expected: .explicitContentDenied
+            ),
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let account = try fixtureAccount(
+                accountID: "account-\(index)",
+                permissions: testCase.permissions,
+                accessibleLibraryIDs: testCase.accessibleLibraryIDs,
+                selectedItemTags: testCase.selectedItemTags
+            )
+            let book = fixtureBook(
+                id: "restricted-\(index)",
+                title: "Restricted",
+                libraryID: libraryID,
+                isExplicit: testCase.isExplicit
+            )
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(account))
+            )
+            await model.start()
+
+            let outcome = await model.startPlayback(
+                detail: fixtureBookDetail(
+                    item: book,
+                    tags: testCase.tags
+                ),
+                account: account
+            )
+
+            XCTAssertEqual(
+                outcome,
+                .failed(AppFailure(.openPlayback, testCase.expected))
+            )
+        }
+    }
+
+    func testNewPlaybackStartSupersedesInFlightDetailLoad() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let gate = AsyncGate()
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let summary = fixturePage(libraryID: detail.libraryID).items[0]
+        let first = Task {
+            await model.startPlayback(book: summary, account: account)
+        }
+        await gate.waitUntilEntered()
+
+        let second = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        await gate.release()
+
+        let firstOutcome = await first.value
+        let playbackRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(second, .started(source: .streamed))
+        XCTAssertEqual(firstOutcome, .superseded)
+        XCTAssertEqual(playbackRequests.count, 1)
+        await model.playback.stop()
+    }
+
+    func testAccountSwitchSupersedesInFlightPlaybackStart() async throws {
+        let firstAccount = try fixtureAccount()
+        let secondAccount = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let gate = AsyncGate()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        let service = TestAppService(
+            accounts: .success([firstAccount, secondAccount]),
+            activeAccount: .success(firstAccount),
+            bookDetail: .success(detail),
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let start = Task {
+            await model.startPlayback(
+                book: fixturePage(libraryID: detail.libraryID).items[0],
+                account: firstAccount
+            )
+        }
+        await gate.waitUntilEntered()
+
+        await model.switchAccount(to: secondAccount)
+        await gate.release()
+
+        let outcome = await start.value
+        let playbackRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(outcome, .superseded)
+        XCTAssertTrue(playbackRequests.isEmpty)
+    }
+
+    func testAccountSwitchCancelsInFlightStreamPreparation() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playbackGate = AsyncGate()
+        let firstAccount = try fixtureAccount()
+        let secondAccount = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let service = TestAppService(
+            accounts: .success([firstAccount, secondAccount]),
+            activeAccount: .success(firstAccount),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            playbackGate: playbackGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let start = Task {
+            await model.startPlayback(
+                detail: fixture.detail,
+                account: firstAccount
+            )
+        }
+        await playbackGate.waitUntilEntered()
+
+        await model.switchAccount(to: secondAccount)
+        await playbackGate.release()
+
+        let outcome = await start.value
+        let closedSessions = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(outcome, .superseded)
+        XCTAssertFalse(model.playback.hasActiveBook)
+        XCTAssertEqual(
+            closedSessions,
+            [PlaybackSessionID(rawValue: "playback-start-session")]
+        )
+    }
+
+    func testNewRequestCancelsInFlightStreamPreparation() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playbackGate = AsyncGate()
+        let account = try fixtureAccount()
+        let secondDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-2",
+                title: "Second",
+                libraryID: fixture.detail.libraryID
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "first-session"
+                    )
+                ),
+                .success(
+                    playbackPreparation(
+                        detail: secondDetail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "second-session"
+                    )
+                ),
+            ],
+            playbackGate: playbackGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let first = Task {
+            await model.startPlayback(
+                detail: fixture.detail,
+                account: account
+            )
+        }
+        await playbackGate.waitUntilEntered()
+
+        let second = await model.startPlayback(
+            detail: secondDetail,
+            account: account
+        )
+        await playbackGate.release()
+
+        let firstOutcome = await first.value
+        let closedSessions = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(firstOutcome, .superseded)
+        XCTAssertEqual(second, .started(source: .streamed))
+        XCTAssertEqual(model.playback.itemID, secondDetail.id)
+        XCTAssertTrue(
+            closedSessions.contains(
+                PlaybackSessionID(rawValue: "first-session")
+            )
+        )
+        await model.playback.stop()
+    }
+
+    func testThreePlaybackStartsSerializeReentrantInvalidation()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playbackGate = AsyncGate()
+        let closeGate = AsyncGate()
+        let diagnostics = GatedClosePlaybackDiagnosticRecorder(
+            gate: closeGate
+        )
+        let account = try fixtureAccount()
+        let secondDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-2",
+                title: "Second",
+                libraryID: fixture.detail.libraryID
+            )
+        )
+        let thirdDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-3",
+                title: "Third",
+                libraryID: fixture.detail.libraryID
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "first-session"
+                    )
+                ),
+                .success(
+                    playbackPreparation(
+                        detail: thirdDetail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "third-session"
+                    )
+                ),
+            ],
+            playbackGate: playbackGate
+        )
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        await model.start()
+        let first = Task {
+            await model.startPlayback(
+                detail: fixture.detail,
+                account: account
+            )
+        }
+        await playbackGate.waitUntilEntered()
+        let second = Task {
+            await model.startPlayback(
+                detail: secondDetail,
+                account: account
+            )
+        }
+        await closeGate.waitUntilEntered()
+        let third = Task {
+            await model.startPlayback(
+                detail: thirdDetail,
+                account: account
+            )
+        }
+
+        await closeGate.release()
+        await playbackGate.release()
+
+        let firstOutcome = await first.value
+        let secondOutcome = await second.value
+        let thirdOutcome = await third.value
+        XCTAssertEqual(firstOutcome, .superseded)
+        XCTAssertEqual(secondOutcome, .superseded)
+        XCTAssertEqual(thirdOutcome, .started(source: .streamed))
+        XCTAssertEqual(model.playback.itemID, thirdDetail.id)
+        let requests = await service.playbackOpenRequests()
+        XCTAssertEqual(
+            requests.map(\.itemID),
+            [fixture.detail.id, thirdDetail.id]
+        )
+        await model.playback.stop()
+    }
+
+    func testSupersededFailureIsNotReturnedAfterDiagnosticRecording()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let diagnosticGate = AsyncGate()
+        let diagnostics = GatedPlaybackFailureDiagnosticRecorder(
+            gate: diagnosticGate
+        )
+        let denied = fixtureBookDetail(
+            item: fixtureBook(
+                id: "denied",
+                title: "Denied",
+                libraryID: fixture.detail.libraryID,
+                isExplicit: true
+            )
+        )
+        let restrictedAccount = try fixtureAccount(
+            permissions: UserPermissions(
+                download: true,
+                update: false,
+                delete: false,
+                upload: false,
+                createEReader: false,
+                accessAllLibraries: true,
+                accessAllTags: true,
+                accessExplicitContent: false,
+                selectedTagsNotAccessible: false
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(restrictedAccount),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        await model.start()
+        let first = Task {
+            await model.startPlayback(
+                detail: denied,
+                account: restrictedAccount
+            )
+        }
+        await diagnosticGate.waitUntilEntered()
+
+        let second = await model.startPlayback(
+            detail: fixture.detail,
+            account: restrictedAccount
+        )
+        await diagnosticGate.release()
+
+        let firstOutcome = await first.value
+        XCTAssertEqual(second, .started(source: .streamed))
+        XCTAssertEqual(firstOutcome, .superseded)
+        XCTAssertEqual(model.playback.itemID, fixture.detail.id)
+        await model.playback.stop()
+    }
+
+    func testPlaybackStartContinuesAfterCallerCancellation() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let gate = AsyncGate()
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let start = Task {
+            await model.startPlayback(
+                book: fixturePage(libraryID: detail.libraryID).items[0],
+                account: account
+            )
+        }
+        await gate.waitUntilEntered()
+
+        start.cancel()
+        await gate.release()
+
+        let outcome = await start.value
+        XCTAssertEqual(outcome, .started(source: .streamed))
+        XCTAssertTrue(
+            model.playback.isPrepared(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+        await model.playback.stop()
+    }
+
+    func testPlaybackStartExcludesIncompleteAndAutomaticDownloads()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        let cases: [(purpose: DownloadPurpose, complete: Bool)] = [
+            (.manual, false),
+            (.automaticCache, true),
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "PlaybackStartExcludedDownload-\(index)-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(
+                at: root,
+                withIntermediateDirectories: true
+            )
+            try await prepareCompleteDownload(
+                root: root,
+                account: account,
+                detail: detail,
+                purpose: testCase.purpose,
+                complete: testCase.complete
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: detail,
+                            audioURL: root.appendingPathComponent("source.wav")
+                        )
+                    )
+                ]
+            )
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: root
+            )
+            await model.start()
+
+            let outcome = await model.startPlayback(
+                detail: detail,
+                account: account,
+                position: .absoluteTime(0.75)
+            )
+            let playbackRequests = await service.playbackOpenRequests()
+            let detailRequests = await service.bookDetailRequests()
+
+            XCTAssertEqual(outcome, .started(source: .streamed))
+            XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+            XCTAssertEqual(playbackRequests.count, 1)
+            XCTAssertTrue(detailRequests.isEmpty)
+            await model.playback.stop()
+        }
+    }
+
+    func testExcludedDownloadFetchesCanonicalDetailBeforeStreaming()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let root = fixture.root.appendingPathComponent(
+            "CanonicalDownloadFallback",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount(
+            permissions: UserPermissions(
+                download: true,
+                update: false,
+                delete: false,
+                upload: false,
+                createEReader: false,
+                accessAllLibraries: true,
+                accessAllTags: true,
+                accessExplicitContent: false,
+                selectedTagsNotAccessible: false
+            )
+        )
+        let persistedDetail = fixture.detail
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: persistedDetail,
+            purpose: .automaticCache
+        )
+        let canonicalDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: persistedDetail.id.rawValue,
+                title: persistedDetail.title,
+                libraryID: persistedDetail.libraryID,
+                isExplicit: true
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(canonicalDetail)
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let record = try XCTUnwrap(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: persistedDetail.id
+            )
+        )
+
+        let outcome = await model.startPlayback(
+            download: record,
+            account: account
+        )
+
+        XCTAssertEqual(
+            outcome,
+            .failed(AppFailure(.openPlayback, .explicitContentDenied))
+        )
+        let detailRequests = await service.bookDetailRequests()
+        XCTAssertEqual(detailRequests.count, 1)
+        let playbackRequests = await service.playbackOpenRequests()
+        XCTAssertTrue(playbackRequests.isEmpty)
     }
 
     func testTranscriptPlaybackPreparationFailureRemainsTyped()
@@ -6235,21 +7130,21 @@ final class AppModelTests: XCTestCase {
         let detail = fixtureBookDetail(
             item: fixturePage(libraryID: fixtureLibrary().id).items[0]
         )
-        let model = AppModel(
-            service: TestAppService(activeAccount: .success(account))
-        )
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(service: service)
+        await model.start()
 
-        let outcome = await model.positionPlayback(
-            for: detail,
+        let outcome = await model.startPlayback(
+            detail: detail,
             account: account,
-            at: 10
+            position: .absoluteTime(10)
         )
 
         XCTAssertEqual(outcome, .failed(.playbackUnavailable))
         XCTAssertEqual(model.playback.itemID, detail.id)
     }
 
-    func testTranscriptPlaybackFallsBackToStreamWhenDownloadIsInvalid()
+    func testBrokenCompleteDownloadDoesNotFallBackToStreaming()
         async throws
     {
         let root = FileManager.default.temporaryDirectory
@@ -6293,9 +7188,11 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             playback: [.success(preparation)]
         )
+        let diagnostics = AppDiagnosticRecorderSpy()
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            diagnostics: diagnostics
         )
         await model.start()
         XCTAssertTrue(
@@ -6310,25 +7207,99 @@ final class AppModelTests: XCTestCase {
             ).appendingPathComponent("00000.wav")
         )
 
-        let outcome = await model.positionPlayback(
-            for: detail,
+        let outcome = await model.startPlayback(
+            detail: detail,
             account: account,
-            at: 0.75
+            position: .absoluteTime(0.75)
         )
         let playbackRequests = await service.playbackOpenRequests()
 
-        XCTAssertEqual(outcome, .positioned)
-        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
-        XCTAssertEqual(
-            playbackRequests,
-            [
-                PlaybackOpenRequest(
-                    accountID: account.id,
-                    itemID: detail.id,
-                    preference: .automatic
+        XCTAssertEqual(outcome, .failed(.mediaUnavailable))
+        XCTAssertTrue(playbackRequests.isEmpty)
+        let events = await diagnostics.events()
+        XCTAssertTrue(
+            events.contains {
+                $0.operation == .openPlayback
+                    && $0.failureCode == .mediaUnavailable
+            }
+        )
+    }
+
+    func testBrokenDownloadFailureCannotOverwriteNewerPlayback()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let root = fixture.root.appendingPathComponent(
+            "BrokenDownloadSupersession",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let brokenDetail = fixture.detail
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: brokenDetail
+        )
+        let secondDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-2",
+                title: "Second",
+                libraryID: brokenDetail.libraryID
+            )
+        )
+        let diagnosticGate = AsyncGate()
+        let diagnostics = GatedPlaybackFailureDiagnosticRecorder(
+            gate: diagnosticGate
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: secondDetail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "second-session"
+                    )
                 )
             ]
         )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root,
+            diagnostics: diagnostics
+        )
+        await model.start()
+        let layout = try DownloadStorageLayout(rootURL: root)
+        try FileManager.default.removeItem(
+            at: layout.bookDirectory(
+                accountID: account.id,
+                itemID: brokenDetail.id
+            ).appendingPathComponent("00000.wav")
+        )
+        let first = Task {
+            await model.startPlayback(
+                detail: brokenDetail,
+                account: account
+            )
+        }
+        await diagnosticGate.waitUntilEntered()
+
+        let second = await model.startPlayback(
+            detail: secondDetail,
+            account: account
+        )
+        await diagnosticGate.release()
+
+        let firstOutcome = await first.value
+        XCTAssertEqual(firstOutcome, .superseded)
+        XCTAssertEqual(second, .started(source: .streamed))
+        XCTAssertEqual(model.playback.itemID, secondDetail.id)
+        XCTAssertNotEqual(model.playback.state, .failed(.mediaUnavailable))
         await model.playback.stop()
     }
 
@@ -7380,7 +8351,9 @@ final class AppModelTests: XCTestCase {
         username: String = "reader",
         server: String = "https://books.example",
         authenticationMethods: [AuthenticationMethod] = [.local],
-        permissions: UserPermissions? = nil
+        permissions: UserPermissions? = nil,
+        accessibleLibraryIDs: [LibraryID] = [],
+        selectedItemTags: [String] = []
     ) throws -> ServerAccount {
         try ServerAccount(
             id: AccountID(rawValue: accountID),
@@ -7403,8 +8376,8 @@ final class AppModelTests: XCTestCase {
                         accessExplicitContent: true,
                         selectedTagsNotAccessible: false
                     ),
-                accessibleLibraryIDs: [],
-                selectedItemTags: []
+                accessibleLibraryIDs: accessibleLibraryIDs,
+                selectedItemTags: selectedItemTags
             )
         )
     }
@@ -7466,7 +8439,8 @@ final class AppModelTests: XCTestCase {
     private func fixtureBookDetail(
         item: LibraryBookSummary,
         authors: [LibraryBookContributor]? = nil,
-        chapters: [PlaybackChapter] = []
+        chapters: [PlaybackChapter] = [],
+        tags: [String] = []
     ) -> LibraryBookDetail {
         LibraryBookDetail(
             id: item.id,
@@ -7483,7 +8457,7 @@ final class AppModelTests: XCTestCase {
             narrators: ["A Narrator"],
             series: [],
             genres: item.genres,
-            tags: [],
+            tags: tags,
             publishedYear: item.publishedYear,
             publishedDate: nil,
             publisher: item.publisher,
@@ -7500,6 +8474,29 @@ final class AppModelTests: XCTestCase {
             isExplicit: item.isExplicit,
             isAbridged: item.isAbridged,
             progress: nil
+        )
+    }
+
+    private func playbackPreparation(
+        detail: LibraryBookDetail,
+        audioURL: URL,
+        sessionID: String = "playback-start-session"
+    ) -> AppPlaybackPreparation {
+        AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: sessionID),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 1,
+            currentTime: 0,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
         )
     }
 
@@ -7685,7 +8682,9 @@ final class AppModelTests: XCTestCase {
     private func prepareCompleteDownload(
         root: URL,
         account: ServerAccount,
-        detail: LibraryBookDetail
+        detail: LibraryBookDetail,
+        purpose: DownloadPurpose = .manual,
+        complete: Bool = true
     ) async throws {
         let source = root.appendingPathComponent(
             "source.wav",
@@ -7737,8 +8736,14 @@ final class AppModelTests: XCTestCase {
             downloadID: downloadID,
             accountID: account.id,
             plan: plan,
-            detail: detail
+            detail: detail,
+            purpose: purpose,
+            automaticTargetTrackIndexes:
+                purpose == .automaticCache ? Set([0]) : nil
         )
+        guard complete else {
+            return
+        }
         let identity = try DownloadTaskIdentity(
             downloadID: downloadID,
             accountID: account.id,
@@ -8223,6 +9228,7 @@ private actor TestAppService: AppServicing {
     private let bookProgressGate: AsyncGate?
     private let localSessionSyncGate: AsyncGate?
     private let bookDetailGate: AsyncGate?
+    private let playbackGate: AsyncGate?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
     private let refreshPageGate: AsyncGate?
@@ -8258,6 +9264,7 @@ private actor TestAppService: AppServicing {
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
     private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
+    private var recordedPlaybackCloseSessionIDs: [PlaybackSessionID] = []
     private var recordedPlaybackSyncSessionIDs: [PlaybackSessionID] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedBookProgressRequests: [LibraryItemID] = []
@@ -8331,6 +9338,7 @@ private actor TestAppService: AppServicing {
         bookProgressGate: AsyncGate? = nil,
         localSessionSyncGate: AsyncGate? = nil,
         bookDetailGate: AsyncGate? = nil,
+        playbackGate: AsyncGate? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
         refreshPageGate: AsyncGate? = nil,
@@ -8378,6 +9386,7 @@ private actor TestAppService: AppServicing {
         self.bookProgressGate = bookProgressGate
         self.localSessionSyncGate = localSessionSyncGate
         self.bookDetailGate = bookDetailGate
+        self.playbackGate = playbackGate
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
         self.refreshPageGate = refreshPageGate
@@ -8776,13 +9785,21 @@ private actor TestAppService: AppServicing {
         guard !playbackResults.isEmpty else {
             throw .playbackSession(.requestFailed)
         }
-        return try value(from: playbackResults.removeFirst())
+        let result = playbackResults.removeFirst()
+        if recordedPlaybackOpenRequests.count == 1,
+            let playbackGate
+        {
+            await playbackGate.enterAndWait()
+        }
+        return try value(from: result)
     }
 
     func closePlayback(
         for account: ServerAccount,
         sessionID: PlaybackSessionID
-    ) async throws(AppServiceError) {}
+    ) async throws(AppServiceError) {
+        recordedPlaybackCloseSessionIDs.append(sessionID)
+    }
 
     func syncPlayback(
         for account: ServerAccount,
@@ -9082,6 +10099,10 @@ private actor TestAppService: AppServicing {
         recordedPlaybackOpenRequests
     }
 
+    func playbackCloseSessionIDs() -> [PlaybackSessionID] {
+        recordedPlaybackCloseSessionIDs
+    }
+
     func playbackSyncSessionIDs() -> [PlaybackSessionID] {
         recordedPlaybackSyncSessionIDs
     }
@@ -9149,6 +10170,43 @@ private actor AppDiagnosticRecorderSpy: DiagnosticRecording {
 
     func events() -> [DiagnosticEvent] {
         recordedEvents
+    }
+}
+
+private actor GatedPlaybackFailureDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+
+    init(gate: AsyncGate) {
+        self.gate = gate
+    }
+
+    func record(_ event: DiagnosticEvent) async {
+        guard event.operation == .openPlayback,
+            event.name == .operationFailed
+        else {
+            return
+        }
+        await gate.enterAndWait()
+    }
+}
+
+private actor GatedClosePlaybackDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+    private var didGate = false
+
+    init(gate: AsyncGate) {
+        self.gate = gate
+    }
+
+    func record(_ event: DiagnosticEvent) async {
+        guard !didGate,
+            event.operation == .closePlayback,
+            event.name == .operationStarted
+        else {
+            return
+        }
+        didGate = true
+        await gate.enterAndWait()
     }
 }
 

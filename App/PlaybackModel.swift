@@ -400,6 +400,10 @@ final class PlaybackModel {
         localAccountID ?? activeAccount?.id
     }
 
+    var libraryID: LibraryID? {
+        activeDownloadDetail?.libraryID
+    }
+
     var hasActiveBook: Bool {
         state != .idle
     }

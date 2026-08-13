@@ -314,6 +314,15 @@ extension AppFailure {
             .authenticationCallbackInvalid
         case (_, .authenticationCredentialInvalid):
             .authenticationCredentialInvalid
+        case (_, .accountUnavailable): .accountUnavailable
+        case (_, .playbackIdentityMismatch): .playbackIdentityMismatch
+        case (_, .inaccessibleLibrary): .playbackLibraryInaccessible
+        case (_, .inaccessibleTags): .playbackTagsInaccessible
+        case (_, .explicitContentDenied): .playbackExplicitContentDenied
+        case (_, .invalidPlaybackPosition): .invalidPlaybackPosition
+        case (_, .unknownPlaybackChapter): .unknownPlaybackChapter
+        case (_, .invalidPlaybackChapterOffset):
+            .invalidPlaybackChapterOffset
         }
     }
 

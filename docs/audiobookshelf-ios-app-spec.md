@@ -153,6 +153,19 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 ### 4.3 Playback
 
 - I can play or resume a streamed or downloaded book.
+- Every application playback entry point supplies a saved account, audiobook,
+  and typed resume, beginning, whole-book-time, or chapter-relative position to
+  one coordinator. The coordinator alone reuses an active player, discovers
+  and validates complete manual downloads, loads canonical detail, enforces
+  access policy, or opens streamed playback.
+- Chapter-relative positions resolve a unique canonical chapter ID and a
+  non-negative in-chapter offset before becoming one whole-book timestamp.
+  Invalid, non-finite, ambiguous, or out-of-range positions fail distinctly.
+- A newer playback request or invalidating account transition supersedes late
+  preparation without presenting an error or starting the stale audiobook.
+- Quick playback detail loading does not change Book Detail, bookmarks,
+  selection, or navigation state. Reusable browsing-cover controls remain
+  tracked in [GitHub issue #56](https://github.com/terminaloutcomes/bleat/issues/56).
 - I can pause, seek, scrub across the whole book, skip backward and forward, and jump between chapters.
 - A multi-file book behaves as one continuous timeline.
 - Playback continues with the screen locked and while the app is in the background.
@@ -1285,6 +1298,7 @@ Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, a
 | `LibraryRepository` actor | Server/cache merge, pagination, search, invalidation |
 | `MetadataRepository` actor | Draft creation, best-effort `updatedAt` stale checks, and mutation |
 | `PlaybackEngine` | AVPlayer/AVAudioSession lifecycle and global playback state |
+| `AppModel` playback-start coordinator | Account/item validation, active/downloaded/streamed routing, typed positioning and failure outcomes, and stale-request suppression |
 | `ProgressCoordinator` actor | Durable checkpoints, session accounting, conflict resolution |
 | `StatisticsRepository` actor | Local slice recording, remote-session import, deduplication, metric aggregation, coverage labels, and export/import |
 | `PlaybackRouteAdapter` | Builds version-verified public-session or HLS media URLs from a playback session |

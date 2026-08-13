@@ -88,31 +88,139 @@ enum AppPhase: Equatable, Sendable {
     case unavailable(AppFailure)
 }
 
-enum PlaybackPositioningOutcome: Equatable, Sendable {
-    case positioned
-    case failed(AppFailure)
+enum PlaybackStartPosition: Equatable, Sendable {
+    case resume
+    case beginning
+    case absoluteTime(TimeInterval)
+    case chapter(PlaybackChapterPosition)
+
+    static func chapter(
+        _ chapter: PlaybackChapter,
+        offset: TimeInterval = 0
+    ) -> Self {
+        .chapter(
+            PlaybackChapterPosition(
+                chapterID: chapter.id,
+                offset: offset
+            )
+        )
+    }
 }
 
-enum PlaybackPositioningRoute: Equatable, Sendable {
+struct PlaybackChapterPosition: Equatable, Sendable {
+    let chapterID: Int
+    let offset: TimeInterval
+}
+
+enum PlaybackStartSource: Equatable, Sendable {
     case activePlayer
     case downloaded
     case streamed
+}
 
-    static func decide(
-        playbackAccountID: AccountID?,
-        playbackItemID: LibraryItemID?,
-        isPlaybackPrepared: Bool,
-        requestedAccountID: AccountID,
-        requestedItemID: LibraryItemID,
-        hasCompleteDownload: Bool
-    ) -> Self {
-        if isPlaybackPrepared,
-            playbackAccountID == requestedAccountID,
-            playbackItemID == requestedItemID
-        {
-            return .activePlayer
+enum PlaybackStartOutcome: Equatable, Sendable {
+    case started(source: PlaybackStartSource)
+    case superseded
+    case failed(AppFailure)
+}
+
+private enum PlaybackStartBook: Sendable {
+    case summary(LibraryBookSummary)
+    case detail(LibraryBookDetail)
+    case download(DownloadedBookRecord)
+
+    var itemID: LibraryItemID {
+        switch self {
+        case .summary(let book): book.id
+        case .detail(let detail): detail.id
+        case .download(let record): record.detail.id
         }
-        return hasCompleteDownload ? .downloaded : .streamed
+    }
+
+    var libraryID: LibraryID {
+        switch self {
+        case .summary(let book): book.libraryID
+        case .detail(let detail): detail.libraryID
+        case .download(let record): record.detail.libraryID
+        }
+    }
+}
+
+private struct PlaybackStartRequest: Sendable {
+    let book: PlaybackStartBook
+    let account: ServerAccount
+    let position: PlaybackStartPosition
+}
+
+private enum PlaybackStartPhase: Sendable {
+    case resolving
+    case positioningActivePlayer
+    case preparingPlayback
+}
+
+enum ResolvedPlaybackStartPosition: Equatable, Sendable {
+    case resume
+    case absoluteTime(TimeInterval)
+    case failed(AppFailure)
+
+    var explicitTime: TimeInterval? {
+        guard case .absoluteTime(let time) = self else {
+            return nil
+        }
+        return time
+    }
+}
+
+enum PlaybackStartPositionResolver {
+    static func resolve(
+        _ position: PlaybackStartPosition,
+        duration: TimeInterval,
+        chapters: [PlaybackChapter]
+    ) -> ResolvedPlaybackStartPosition {
+        switch position {
+        case .resume:
+            return .resume
+        case .beginning:
+            return .absoluteTime(0)
+        case .absoluteTime(let value):
+            guard value.isFinite, value >= 0, value <= duration else {
+                return .failed(
+                    AppFailure(.openPlayback, .invalidPlaybackPosition)
+                )
+            }
+            return .absoluteTime(value)
+        case .chapter(let requested):
+            let matches = chapters.filter { $0.id == requested.chapterID }
+            guard matches.count == 1, let chapter = matches.first else {
+                return .failed(
+                    AppFailure(.openPlayback, .unknownPlaybackChapter)
+                )
+            }
+            let chapterDuration = chapter.end - chapter.start
+            guard requested.offset.isFinite,
+                requested.offset >= 0,
+                chapterDuration.isFinite,
+                chapterDuration > 0,
+                requested.offset < chapterDuration
+            else {
+                return .failed(
+                    AppFailure(
+                        .openPlayback,
+                        .invalidPlaybackChapterOffset
+                    )
+                )
+            }
+            let absoluteTime = chapter.start + requested.offset
+            guard absoluteTime.isFinite,
+                absoluteTime >= 0,
+                absoluteTime <= duration
+            else {
+                return .failed(
+                    AppFailure(.openPlayback, .invalidPlaybackPosition)
+                )
+            }
+            return .absoluteTime(absoluteTime)
+        }
     }
 }
 
@@ -299,6 +407,10 @@ enum AppFailureCause: String, Equatable, Sendable {
     case authenticationCancelled, authenticationSessionInProgress
     case authenticationBrowserFailed, authenticationBridgeFailed
     case authenticationCallbackInvalid, authenticationCredentialInvalid
+    case accountUnavailable, playbackIdentityMismatch
+    case inaccessibleLibrary, inaccessibleTags, explicitContentDenied
+    case invalidPlaybackPosition, unknownPlaybackChapter
+    case invalidPlaybackChapterOffset
 
     static let notFound = Self.itemNotFound
     static let accessDenied = Self.permissionDenied
@@ -318,6 +430,14 @@ struct AppFailure: Equatable, Sendable {
 
     var title: String {
         switch cause {
+        case .accountUnavailable: "Account unavailable"
+        case .playbackIdentityMismatch: "Audiobook mismatch"
+        case .inaccessibleLibrary, .inaccessibleTags,
+            .explicitContentDenied:
+            "Access denied"
+        case .invalidPlaybackPosition: "Invalid playback position"
+        case .unknownPlaybackChapter: "Chapter unavailable"
+        case .invalidPlaybackChapterOffset: "Invalid chapter position"
         case .itemNotFound: "Audiobook not found"
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
@@ -346,6 +466,22 @@ struct AppFailure: Equatable, Sendable {
 
     var message: String {
         switch cause {
+        case .accountUnavailable:
+            "That saved account is no longer available."
+        case .playbackIdentityMismatch:
+            "The audiobook does not belong to the selected account or library."
+        case .inaccessibleLibrary:
+            "This account cannot access the audiobook's library."
+        case .inaccessibleTags:
+            "This account cannot access the audiobook's tags."
+        case .explicitContentDenied:
+            "This account cannot access explicit audiobooks."
+        case .invalidPlaybackPosition:
+            "That playback position is outside this audiobook."
+        case .unknownPlaybackChapter:
+            "That chapter is not available in this audiobook."
+        case .invalidPlaybackChapterOffset:
+            "That position is outside the selected chapter."
         case .persistenceUnavailable:
             "Bleat could not open its local data store."
         case .invalidInput:
@@ -397,9 +533,16 @@ struct AppFailure: Equatable, Sendable {
 
     var systemImage: String {
         switch cause {
+        case .accountUnavailable, .authenticationRequired:
+            "person.crop.circle.badge.exclamationmark"
+        case .playbackIdentityMismatch, .invalidPlaybackPosition,
+            .unknownPlaybackChapter, .invalidPlaybackChapterOffset:
+            "exclamationmark.triangle"
+        case .inaccessibleLibrary, .inaccessibleTags,
+            .explicitContentDenied:
+            "lock"
         case .itemNotFound: "book.closed"
         case .permissionDenied: "lock"
-        case .authenticationRequired: "person.crop.circle.badge.exclamationmark"
         case .invalidServerResponse, .invalidInput, .requestRejected,
             .authenticationBridgeFailed, .authenticationCallbackInvalid,
             .authenticationCredentialInvalid:
@@ -785,6 +928,13 @@ final class AppModel {
     private var seriesPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
+    private var playbackStartGeneration: UInt64 = 0
+    @ObservationIgnored
+    private var playbackStartTask: Task<PlaybackStartOutcome, Never>?
+    @ObservationIgnored
+    private var playbackStartPhase: PlaybackStartPhase?
+    @ObservationIgnored
+    private var playbackStartInvalidationTask: Task<Void, Never>?
     @ObservationIgnored
     private var liveUpdatesTask: Task<Void, Never>?
     @ObservationIgnored
@@ -1275,6 +1425,9 @@ final class AppModel {
         guard !loginStatus.isSubmitting else {
             return .failed
         }
+        if self.account?.id == account.id {
+            await invalidatePlaybackStarts()
+        }
         loginStatus = .submitting(.checkingServer)
         do {
             let outcome = try await service.updateAccount(
@@ -1383,6 +1536,7 @@ final class AppModel {
         guard accountActionStatus == .idle else {
             return
         }
+        await invalidatePlaybackStarts()
         accountActionStatus = .switching
         await stopLiveUpdatesAndWait()
         await diagnostics.record(
@@ -2508,90 +2662,366 @@ final class AppModel {
         }
     }
 
-    @discardableResult
-    func playDownloaded(
-        _ record: DownloadedBookRecord,
-        initialTime: Double? = nil
-    ) async -> PlaybackPositioningOutcome {
-        let recordAccount = accounts.first {
-            $0.id == record.manifest.accountID
-        }
-        do {
-            let urls = try await downloads.localTrackURLs(
-                for: record
+    func startPlayback(
+        book: LibraryBookSummary,
+        account: ServerAccount,
+        position: PlaybackStartPosition = .resume
+    ) async -> PlaybackStartOutcome {
+        await startPlayback(
+            PlaybackStartRequest(
+                book: .summary(book),
+                account: account,
+                position: position
             )
-            await playback.startDownloaded(
-                detail: record.detail,
-                trackURLs: urls,
-                accountID: record.manifest.accountID,
-                account: recordAccount,
-                initialTime: initialTime
-            )
-            if case .failed(let failure) = playback.state {
-                return .failed(failure)
-            }
-            return .positioned
-        } catch {
-            playback.fail(.mediaUnavailable)
-            return .failed(.mediaUnavailable)
-        }
+        )
     }
 
-    func positionPlayback(
-        for detail: LibraryBookDetail,
+    func startPlayback(
+        detail: LibraryBookDetail,
         account: ServerAccount,
-        at requestedTime: Double
-    ) async -> PlaybackPositioningOutcome {
-        let downloaded = downloads.record(
-            accountID: account.id,
-            itemID: detail.id
-        )
-        let hasCompleteDownload =
-            downloaded.map {
-                downloads.isFullBookAvailable($0)
-            } ?? false
-        let route = PlaybackPositioningRoute.decide(
-            playbackAccountID: playback.accountID,
-            playbackItemID: playback.itemID,
-            isPlaybackPrepared: playback.isPrepared(
-                accountID: account.id,
-                itemID: detail.id
-            ),
-            requestedAccountID: account.id,
-            requestedItemID: detail.id,
-            hasCompleteDownload: hasCompleteDownload
-        )
-
-        switch route {
-        case .activePlayer:
-            await playback.seek(to: requestedTime)
-        case .downloaded:
-            guard let downloaded else {
-                return .failed(.mediaUnavailable)
-            }
-            let outcome = await playDownloaded(
-                downloaded,
-                initialTime: requestedTime
+        position: PlaybackStartPosition = .resume
+    ) async -> PlaybackStartOutcome {
+        await startPlayback(
+            PlaybackStartRequest(
+                book: .detail(detail),
+                account: account,
+                position: position
             )
-            if case .failed = outcome {
-                await playback.start(
-                    detail: detail,
-                    account: account,
-                    initialTime: requestedTime
+        )
+    }
+
+    func startPlayback(
+        download: DownloadedBookRecord,
+        account: ServerAccount,
+        position: PlaybackStartPosition = .resume
+    ) async -> PlaybackStartOutcome {
+        await startPlayback(
+            PlaybackStartRequest(
+                book: .download(download),
+                account: account,
+                position: position
+            )
+        )
+    }
+
+    private func startPlayback(
+        _ request: PlaybackStartRequest
+    ) async -> PlaybackStartOutcome {
+        let generation = await invalidatePlaybackStarts()
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        playbackStartPhase = .resolving
+        let task = Task { @MainActor [weak self] in
+            guard let self else {
+                return PlaybackStartOutcome.failed(
+                    AppFailure(.openPlayback, .accountUnavailable)
                 )
             }
-        case .streamed:
-            await playback.start(
-                detail: detail,
-                account: account,
-                initialTime: requestedTime
+            return await performPlaybackStart(
+                request,
+                generation: generation
+            )
+        }
+        playbackStartTask = task
+        let outcome = await task.value
+        if playbackStartGeneration == generation {
+            playbackStartTask = nil
+            playbackStartPhase = nil
+        }
+        return outcome
+    }
+
+    private func performPlaybackStart(
+        _ request: PlaybackStartRequest,
+        generation: UInt64
+    ) async -> PlaybackStartOutcome {
+        guard
+            let savedAccount = accounts.first(where: {
+                $0.id == request.account.id
+            })
+        else {
+            return await playbackStartFailure(
+                AppFailureCause.accountUnavailable,
+                generation: generation
+            )
+        }
+        guard
+            validateSuppliedPlaybackIdentity(
+                request.book,
+                accountID: savedAccount.id
+            )
+        else {
+            return await playbackStartFailure(
+                .playbackIdentityMismatch,
+                generation: generation
+            )
+        }
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+
+        let itemID = request.book.itemID
+        let libraryID = request.book.libraryID
+        if playback.isPrepared(
+            accountID: savedAccount.id,
+            itemID: itemID
+        ) {
+            guard playback.libraryID == libraryID else {
+                return await playbackStartFailure(
+                    .playbackIdentityMismatch,
+                    generation: generation
+                )
+            }
+            let resolved = PlaybackStartPositionResolver.resolve(
+                request.position,
+                duration: playback.duration,
+                chapters: playback.chapters
+            )
+            if case .failed(let failure) = resolved {
+                return await playbackStartFailure(
+                    failure.cause,
+                    generation: generation
+                )
+            }
+            if case .absoluteTime(let time) = resolved {
+                playbackStartPhase = .positioningActivePlayer
+                await playback.seek(to: time)
+            }
+            guard playbackStartGeneration == generation else {
+                return .superseded
+            }
+            playbackStartPhase = .resolving
+            playback.play()
+            return playbackStartOutcome(
+                source: .activePlayer,
+                accountID: savedAccount.id,
+                itemID: itemID
             )
         }
 
+        let downloaded = downloads.record(
+            accountID: savedAccount.id,
+            itemID: itemID
+        )
+        if let downloaded,
+            downloaded.manifest.purpose == .manual,
+            downloads.isFullBookAvailable(downloaded)
+        {
+            guard downloaded.detail.id == itemID,
+                downloaded.detail.libraryID == libraryID,
+                downloaded.manifest.itemID == itemID
+            else {
+                return await playbackStartFailure(
+                    .playbackIdentityMismatch,
+                    generation: generation
+                )
+            }
+            let resolved = PlaybackStartPositionResolver.resolve(
+                request.position,
+                duration: downloaded.detail.duration,
+                chapters: downloaded.detail.chapters
+            )
+            if case .failed(let failure) = resolved {
+                return await playbackStartFailure(
+                    failure.cause,
+                    generation: generation
+                )
+            }
+            do {
+                let urls = try await downloads.localTrackURLs(
+                    for: downloaded
+                )
+                guard playbackStartGeneration == generation else {
+                    return .superseded
+                }
+                playbackStartPhase = .preparingPlayback
+                await playback.startDownloaded(
+                    detail: downloaded.detail,
+                    trackURLs: urls,
+                    accountID: savedAccount.id,
+                    account: savedAccount,
+                    initialTime: resolved.explicitTime
+                )
+            } catch {
+                let failure = AppFailure.mediaUnavailable
+                let outcome = await playbackStartFailure(
+                    failure,
+                    generation: generation
+                )
+                guard case .failed = outcome else {
+                    return outcome
+                }
+                playback.fail(failure)
+                return outcome
+            }
+            guard playbackStartGeneration == generation else {
+                return .superseded
+            }
+            playbackStartPhase = .resolving
+            return playbackStartOutcome(
+                source: .downloaded,
+                accountID: savedAccount.id,
+                itemID: itemID
+            )
+        }
+
+        let detail: LibraryBookDetail
+        switch request.book {
+        case .detail(let suppliedDetail):
+            detail = suppliedDetail
+        case .summary, .download:
+            do {
+                detail = try await service.bookDetail(
+                    for: savedAccount,
+                    libraryID: libraryID,
+                    itemID: itemID
+                )
+            } catch let error {
+                guard playbackStartGeneration == generation else {
+                    return .superseded
+                }
+                let failure = AppFailure(
+                    operation: .openPlayback,
+                    serviceError: error
+                )
+                return await playbackStartFailure(
+                    failure,
+                    generation: generation
+                )
+            }
+        }
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        guard detail.id == itemID, detail.libraryID == libraryID else {
+            return await playbackStartFailure(
+                .playbackIdentityMismatch,
+                generation: generation
+            )
+        }
+
+        let availability = BookActionAvailability(
+            user: savedAccount.user,
+            detail: detail
+        )
+        if availability.access != .allowed {
+            return await playbackStartFailure(
+                Self.playbackFailureCause(for: availability.access),
+                generation: generation
+            )
+        }
+        let resolved = PlaybackStartPositionResolver.resolve(
+            request.position,
+            duration: detail.duration,
+            chapters: detail.chapters
+        )
+        if case .failed(let failure) = resolved {
+            return await playbackStartFailure(
+                failure.cause,
+                generation: generation
+            )
+        }
+        playbackStartPhase = .preparingPlayback
+        await playback.start(
+            detail: detail,
+            account: savedAccount,
+            initialTime: resolved.explicitTime
+        )
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        playbackStartPhase = .resolving
+        return playbackStartOutcome(
+            source: .streamed,
+            accountID: savedAccount.id,
+            itemID: itemID
+        )
+    }
+
+    private func validateSuppliedPlaybackIdentity(
+        _ book: PlaybackStartBook,
+        accountID: AccountID
+    ) -> Bool {
+        guard case .download(let supplied) = book else {
+            return true
+        }
+        guard supplied.manifest.accountID == accountID,
+            supplied.manifest.itemID == supplied.detail.id,
+            let current = downloads.record(
+                accountID: supplied.manifest.accountID,
+                itemID: supplied.manifest.itemID
+            )
+        else {
+            return false
+        }
+        return current.manifest.downloadID == supplied.manifest.downloadID
+            && current.detail.id == supplied.detail.id
+            && current.detail.libraryID == supplied.detail.libraryID
+    }
+
+    private func playbackStartOutcome(
+        source: PlaybackStartSource,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> PlaybackStartOutcome {
         if case .failed(let failure) = playback.state {
             return .failed(failure)
         }
-        return .positioned
+        guard playback.accountID == accountID,
+            playback.itemID == itemID,
+            playback.isPrepared(accountID: accountID, itemID: itemID)
+        else {
+            return .failed(.mediaUnavailable)
+        }
+        return .started(source: source)
+    }
+
+    private func playbackStartFailure(
+        _ cause: AppFailureCause,
+        generation: UInt64
+    ) async -> PlaybackStartOutcome {
+        await playbackStartFailure(
+            AppFailure(.openPlayback, cause),
+            generation: generation
+        )
+    }
+
+    private func playbackStartFailure(
+        _ failure: AppFailure,
+        generation: UInt64
+    ) async -> PlaybackStartOutcome {
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        await recordPlaybackStartFailure(failure)
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        return .failed(failure)
+    }
+
+    private func recordPlaybackStartFailure(
+        _ failure: AppFailure
+    ) async {
+        await diagnostics.record(
+            .failed(
+                .openPlayback,
+                category: .playback,
+                failureCode: failure.diagnosticFailureCode
+            )
+        )
+    }
+
+    private static func playbackFailureCause(
+        for access: LibraryItemAccessDecision
+    ) -> AppFailureCause {
+        switch access {
+        case .allowed: .permissionDenied
+        case .inaccessibleLibrary: .inaccessibleLibrary
+        case .inaccessibleTags: .inaccessibleTags
+        case .explicitContentDenied: .explicitContentDenied
+        }
     }
 
     func loadStatistics() async {
@@ -2683,6 +3113,7 @@ final class AppModel {
         guard accountActionStatus != .removing else {
             return false
         }
+        await invalidatePlaybackStarts()
         let removingBrowsingAccount = account.id == self.account?.id
         accountActionStatus = .removing
         if removingBrowsingAccount {
@@ -3108,6 +3539,37 @@ final class AppModel {
         bookBookmarks = .idle
         bookEditSaveState = .idle
         bookDeletionState = .idle
+    }
+
+    @discardableResult
+    private func invalidatePlaybackStarts() async -> UInt64 {
+        playbackStartGeneration &+= 1
+        let generation = playbackStartGeneration
+        playbackStartTask?.cancel()
+        playbackStartTask = nil
+        let phase = playbackStartPhase
+        playbackStartPhase = nil
+        let previousInvalidation = playbackStartInvalidationTask
+        let invalidation = Task { @MainActor [weak self] in
+            await previousInvalidation?.value
+            guard let self else {
+                return
+            }
+            switch phase {
+            case .positioningActivePlayer:
+                playback.pause()
+            case .preparingPlayback:
+                await playback.stop()
+            case .resolving, nil:
+                break
+            }
+        }
+        playbackStartInvalidationTask = invalidation
+        await invalidation.value
+        if playbackStartGeneration == generation {
+            playbackStartInvalidationTask = nil
+        }
+        return generation
     }
 
     private func resetSeriesBrowse() {

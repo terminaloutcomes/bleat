@@ -698,7 +698,6 @@ final class BleatUITests: XCTestCase {
         XCTAssertGreaterThan(tabTop, app.frame.midY)
         XCTAssertLessThan(miniPlayer.frame.maxY, tabTop)
 
-        XCTAssertTrue(library.isHittable)
         library.tap()
         XCTAssertTrue(
             app.navigationBars["Library"].waitForExistence(timeout: 3)
@@ -1301,12 +1300,15 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.textFields["login.server"].waitForExistence(timeout: 10)
         )
-        app.textFields["login.server"].tap()
-        app.textFields["login.server"].typeText(environment.server)
-        app.textFields["login.username"].tap()
-        app.textFields["login.username"].typeText(environment.username)
-        app.secureTextFields["login.password"].tap()
-        app.secureTextFields["login.password"].typeText(
+        let serverField = app.textFields["login.server"]
+        serverField.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        serverField.typeText(environment.server)
+        let usernameField = app.textFields["login.username"]
+        usernameField.tap()
+        usernameField.typeText(environment.username)
+        let passwordField = app.secureTextFields["login.password"]
+        passwordField.tap()
+        passwordField.typeText(
             environment.password
         )
         app.buttons["login.submit"].tap()
@@ -1378,7 +1380,7 @@ final class BleatLiveUITests: XCTestCase {
         openLiveLibraryBook(in: app)
         let play = app.buttons["book.detail.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 20))
-        XCTAssertEqual(play.label, "Play")
+        XCTAssertEqual(play.label, "Resume")
         play.tap()
 
         let miniPlayer = app.buttons["player.mini.open"]

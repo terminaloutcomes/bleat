@@ -2017,10 +2017,12 @@ struct ChapterTranscriptionView: View {
                 beforeMovingPlayback()
                 Task {
                     playbackFailure = nil
-                    let outcome = await appModel.positionPlayback(
-                        for: detail,
+                    let outcome = await appModel.startPlayback(
+                        detail: detail,
                         account: account,
-                        at: Double(segment.startMilliseconds) / 1_000
+                        position: .absoluteTime(
+                            Double(segment.startMilliseconds) / 1_000
+                        )
                     )
                     if case .failed(let failure) = outcome {
                         playbackFailure = failure
