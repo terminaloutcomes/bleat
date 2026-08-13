@@ -372,7 +372,7 @@ struct NowPlaying: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 22) {
                     BookCoverView(
                         accountID: playback.accountID,
                         url: playback.coverURL,
