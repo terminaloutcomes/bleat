@@ -92,7 +92,8 @@ enum MiniPlayerSwipeDecision: Equatable {
         guard isVertical else {
             return .ignore
         }
-        let action: Self = translation.height < 0
+        let action: Self =
+            translation.height < 0
             ? .showPlayer
             : .stopAndDismiss
         let dismissalDistance = max(
@@ -381,7 +382,7 @@ struct NowPlaying: View {
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: 320)
 
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) {
                         Text(playback.title)
                             .font(.title2.bold())
                             .multilineTextAlignment(.center)
@@ -699,8 +700,6 @@ struct NowPlaying: View {
                 }
                 .padding()
             }
-            .navigationTitle("Now Playing")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 playerToolbar
             }
