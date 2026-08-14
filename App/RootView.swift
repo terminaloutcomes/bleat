@@ -512,7 +512,7 @@ private struct OfflineDownloadsSheet: View {
         GeometryReader { geometry in
             DownloadsView(model: model)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if model.playback.hasActiveBook {
+                    if model.playback.showsMiniPlayer {
                         MiniPlayerView(
                             playback: model.playback,
                             containerHeight: geometry.size.height
@@ -1240,7 +1240,7 @@ private struct SignedInView: View {
     ) -> some View {
         content()
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if model.playback.hasActiveBook {
+                if model.playback.showsMiniPlayer {
                     MiniPlayerView(
                         playback: model.playback,
                         containerHeight: containerHeight

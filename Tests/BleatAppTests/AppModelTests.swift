@@ -6104,6 +6104,54 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(pageRequestCount, 2)
     }
 
+    func testBookDeletionStopsFailedPreparedPlaybackAndClosesSession()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            bookDeletion: .success(.deleted),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "failed-session"
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let outcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(outcome, .started(source: .streamed))
+        model.playback.fail(.mediaUnavailable)
+        XCTAssertTrue(model.playback.hasActiveBook)
+        XCTAssertFalse(model.playback.showsMiniPlayer)
+
+        await model.deleteBook(detail, mode: .libraryRecordOnly)
+
+        let closedSessions = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertFalse(model.playback.hasActiveBook)
+        XCTAssertEqual(
+            closedSessions,
+            [PlaybackSessionID(rawValue: "failed-session")]
+        )
+    }
+
     func testSetFinishedUpdatesProgressAndRefetchesDetail() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()

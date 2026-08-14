@@ -270,7 +270,7 @@ final class AppNavigationCoordinator {
                 settingsPath.append(destination)
             }
         case .nowPlaying:
-            guard model.playback.hasActiveBook else {
+            guard model.playback.showsMiniPlayer else {
                 return .unavailable
             }
             showsPlayer = true

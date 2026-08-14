@@ -405,6 +405,20 @@ final class PlaybackModel {
     }
 
     var hasActiveBook: Bool {
+        guard itemID != nil else {
+            return false
+        }
+        return switch state {
+        case .idle:
+            false
+        case .preparing, .ready, .playing, .paused, .buffering, .ended:
+            true
+        case .failed:
+            preparation != nil
+        }
+    }
+
+    var showsMiniPlayer: Bool {
         switch state {
         case .idle, .failed:
             false
