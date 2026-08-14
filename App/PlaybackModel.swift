@@ -405,7 +405,12 @@ final class PlaybackModel {
     }
 
     var hasActiveBook: Bool {
-        state != .idle
+        switch state {
+        case .idle, .failed:
+            false
+        case .preparing, .ready, .playing, .paused, .buffering, .ended:
+            true
+        }
     }
 
     func isPrepared(

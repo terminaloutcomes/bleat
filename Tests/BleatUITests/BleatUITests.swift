@@ -295,6 +295,222 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testPlayableHomeCoverSeparatesPlaybackFromNavigation() {
+        let app = launch(scenario: "--ui-testing-playback")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+
+        let play = app.buttons["home.book.ui-book.play"]
+        let open = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+        XCTAssertEqual(play.label, "Play The Test Audiobook")
+        XCTAssertTrue(play.isHittable)
+        XCTAssertTrue(open.isHittable)
+        XCTAssertEqual(play.frame.width, 44, accuracy: 0.5)
+        XCTAssertEqual(play.frame.height, 44, accuracy: 0.5)
+
+        open.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        app.navigationBars["The Test Audiobook"].buttons.firstMatch.tap()
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+
+        play.tap()
+
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertTrue(open.isHittable)
+        let pauseLabel = expectation(
+            for: NSPredicate(
+                format: "label == %@",
+                "Pause The Test Audiobook"
+            ),
+            evaluatedWith: play
+        )
+        wait(for: [pauseLabel], timeout: 3)
+
+        play.tap()
+
+        let resumedLabel = expectation(
+            for: NSPredicate(
+                format: "label == %@",
+                "Play The Test Audiobook"
+            ),
+            evaluatedWith: play
+        )
+        wait(for: [resumedLabel], timeout: 3)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertTrue(app.buttons["player.mini.open"].exists)
+        app.buttons["player.mini.open"].tap()
+        XCTAssertTrue(
+            app.otherElements["player.screen"].waitForExistence(timeout: 3)
+        )
+        let playerScreen = app.otherElements["player.screen"]
+        XCTAssertFalse(
+            playerScreen.buttons.matching(
+                NSPredicate(
+                    format: "label == %@",
+                    "Play The Test Audiobook"
+                )
+            ).firstMatch.exists
+        )
+        XCTAssertFalse(
+            playerScreen.buttons.matching(
+                NSPredicate(
+                    format: "label == %@",
+                    "Pause The Test Audiobook"
+                )
+            ).firstMatch.exists
+        )
+    }
+
+    @MainActor
+    func testPlayableCoverPreparationDisablesOnlyMatchingAction() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-slow-playback"]
+        )
+        let firstPlay = app.buttons["home.book.ui-book.play"]
+        let firstOpen = app.buttons["home.book.ui-book"]
+        let secondPlay = app.buttons["home.book.ui-book-two.play"]
+
+        XCTAssertTrue(firstPlay.waitForExistence(timeout: 3))
+        XCTAssertTrue(secondPlay.waitForExistence(timeout: 3))
+        firstPlay.tap()
+
+        let preparing = expectation(
+            for: NSPredicate(
+                format: "label == %@ AND enabled == false",
+                "Preparing The Test Audiobook"
+            ),
+            evaluatedWith: firstPlay
+        )
+        wait(for: [preparing], timeout: 3)
+        XCTAssertTrue(firstOpen.isHittable)
+        XCTAssertTrue(secondPlay.isEnabled)
+        XCTAssertTrue(secondPlay.isHittable)
+        XCTAssertEqual(secondPlay.frame.width, 44, accuracy: 0.5)
+        XCTAssertEqual(secondPlay.frame.height, 44, accuracy: 0.5)
+
+        secondPlay.tap()
+
+        let secondPlaying = expectation(
+            for: NSPredicate(
+                format: "label == %@",
+                "Pause The Other Audiobook"
+            ),
+            evaluatedWith: secondPlay
+        )
+        wait(for: [secondPlaying], timeout: 10)
+        XCTAssertEqual(firstPlay.label, "Play The Test Audiobook")
+        XCTAssertTrue(firstPlay.isEnabled)
+        XCTAssertTrue(app.buttons["player.mini.open"].exists)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+    }
+
+    @MainActor
+    func testPlayableCoverPresentsTypedPlaybackFailure() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-playback-failure"]
+        )
+        let play = app.buttons["home.book.ui-book.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let alert = app.alerts["Server unavailable"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            alert.staticTexts[
+                "Bleat could not reach the Audiobookshelf server."
+            ].exists
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        alert.buttons["OK"].tap()
+    }
+
+    @MainActor
+    func testPlayableCoverPresentsTypedPermissionDenial() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-playback-denied"]
+        )
+        let play = app.buttons["home.book.ui-book.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        XCTAssertTrue(
+            app.alerts["Access denied"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.alerts["Access denied"].staticTexts[
+                "This account cannot access the audiobook's library."
+            ].exists
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+    }
+
+    @MainActor
+    func testPlayableCoversAppearOnEverySingleBookBrowseSurface() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        XCTAssertTrue(
+            app.buttons["home.book.ui-book.play"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.buttons["home.book.ui-home-series"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            app.buttons["home.book.ui-home-series.play"].exists
+        )
+
+        app.buttons["home.book.ui-book"].tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+        XCTAssertTrue(
+            app.buttons["series.book.ui-series-one.play"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertEqual(
+            app.buttons["series.book.0"].label,
+            "Open Test Series Volume One, Book 1"
+        )
+        XCTAssertTrue(
+            app.buttons["series.carousel.ui-series-one.play"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["book.detail.ui-series-one.play"].exists)
+
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.buttons["library.book.ui-book.play"]
+                .waitForExistence(timeout: 3)
+        )
+
+        tabButton("Search", in: app).tap()
+        let searchField = app.searchFields.firstMatch
+        if !searchField.waitForExistence(timeout: 1) {
+            let presentSearch = app.navigationBars["Search"].buttons["Search"]
+            XCTAssertTrue(presentSearch.waitForExistence(timeout: 3))
+            presentSearch.tap()
+        }
+        searchField.tap()
+        searchField.typeText("Test")
+        XCTAssertTrue(
+            app.buttons["search.book.ui-search-book.play"]
+                .waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
     func testGroupedSearchSelectionsReachAuthorAndSeriesDestinations() {
         let app = launch(scenario: "--ui-testing-signed-in")
         XCTAssertTrue(
@@ -656,7 +872,7 @@ final class BleatUITests: XCTestCase {
     @MainActor
     func testBottomMiniPlayerLeavesTabsNavigable() {
         let app = launch(
-            scenario: "--ui-testing-signed-in",
+            scenario: "--ui-testing-playback",
             additionalArguments: [
                 "-UIPreferredContentSizeCategoryName",
                 "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
@@ -673,13 +889,9 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(play.waitForExistence(timeout: 3))
         play.tap()
 
-        let miniPlayer = app.buttons.matching(
-            NSPredicate(
-                format: "label CONTAINS %@ AND label CONTAINS %@",
-                "The Test Audiobook",
-                "Test Author"
-            )
-        ).firstMatch
+        let miniPlayer = app.descendants(matching: .any)[
+            "player.mini.open"
+        ]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
         XCTAssertGreaterThan(miniPlayer.frame.midY, app.frame.midY)
 
@@ -1177,6 +1389,14 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["book.edit.cover"].waitForExistence(timeout: 3)
         )
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(
+                    format: "label == %@",
+                    "Play The Test Audiobook"
+                )
+            ).firstMatch.exists
+        )
         let delete = app.buttons["book.edit.delete"]
         app.swipeUp()
         app.swipeUp()
@@ -1209,6 +1429,11 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
+        let quickPlay = app.buttons["library.book.ui-book.play"]
+        XCTAssertTrue(quickPlay.waitForExistence(timeout: 3))
+        XCTAssertTrue(quickPlay.isHittable)
+        XCTAssertEqual(quickPlay.frame.width, 44, accuracy: 0.5)
+        XCTAssertEqual(quickPlay.frame.height, 44, accuracy: 0.5)
         app.staticTexts["The Test Audiobook"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.title"]
@@ -1319,6 +1544,46 @@ final class BleatLiveUITests: XCTestCase {
             )
         )
         dismissSavePasswordPromptIfNeeded(app: app)
+
+        let remotePlay = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@",
+                "home.book.",
+                ".play"
+            )
+        ).firstMatch
+        XCTAssertTrue(remotePlay.waitForExistence(timeout: 30))
+        let remoteOpen = app.buttons[
+            String(remotePlay.identifier.dropLast(".play".count))
+        ]
+        XCTAssertTrue(remoteOpen.waitForExistence(timeout: 20))
+        XCTAssertTrue(remotePlay.isHittable)
+        XCTAssertTrue(remoteOpen.isHittable)
+        XCTAssertEqual(remotePlay.frame.width, 44, accuracy: 0.5)
+        XCTAssertEqual(remotePlay.frame.height, 44, accuracy: 0.5)
+
+        remoteOpen.tap()
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 20)
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(remotePlay.waitForExistence(timeout: 20))
+
+        remotePlay.tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 30)
+        )
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        let remotePause = expectation(
+            for: NSPredicate(format: "label BEGINSWITH %@", "Pause "),
+            evaluatedWith: remotePlay
+        )
+        await fulfillment(of: [remotePause], timeout: 10)
+        remotePlay.tap()
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        stopMiniPlayer(in: app)
+
         openLiveLibraryBook(in: app)
         XCTAssertTrue(
             app.buttons["book.detail.play"].waitForExistence(timeout: 20)
@@ -1363,6 +1628,41 @@ final class BleatLiveUITests: XCTestCase {
             app.buttons["book.detail.download.fullBook"]
                 .waitForExistence(timeout: 10)
         )
+        app.buttons["book.detail.download.fullBook"].tap()
+
+        stopMiniPlayer(in: app)
+        tabButton("Home", in: app).tap()
+        let downloadedPlay = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                "home.downloaded.",
+                ".play",
+                "Play multi-track"
+            )
+        ).firstMatch
+        XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 30))
+        let downloadedOpen = app.buttons[
+            String(downloadedPlay.identifier.dropLast(".play".count))
+        ]
+        XCTAssertTrue(downloadedOpen.waitForExistence(timeout: 20))
+        XCTAssertTrue(downloadedPlay.isHittable)
+        XCTAssertTrue(downloadedOpen.isHittable)
+        XCTAssertEqual(downloadedPlay.frame.width, 44, accuracy: 0.5)
+        XCTAssertEqual(downloadedPlay.frame.height, 44, accuracy: 0.5)
+
+        downloadedOpen.tap()
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 20)
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 20))
+
+        downloadedPlay.tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 30)
+        )
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         app.terminate()
     }
 
@@ -1377,11 +1677,18 @@ final class BleatLiveUITests: XCTestCase {
                 timeout: 30
             )
         )
-        openLiveLibraryBook(in: app)
-        let play = app.buttons["book.detail.play"]
-        XCTAssertTrue(play.waitForExistence(timeout: 20))
-        XCTAssertEqual(play.label, "Resume")
-        play.tap()
+        let downloadedPlay = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                "home.downloaded.",
+                ".play",
+                "Play multi-track"
+            )
+        ).firstMatch
+        XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 30))
+        XCTAssertTrue(downloadedPlay.isHittable)
+        downloadedPlay.tap()
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
 
         let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
@@ -1440,7 +1747,37 @@ final class BleatLiveUITests: XCTestCase {
             "series.book.1"
         ]
         XCTAssertTrue(playbackBook.waitForExistence(timeout: 20))
+        let quickPlayButtons = seriesResults.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@",
+                "series.book.",
+                ".play"
+            )
+        )
+        XCTAssertGreaterThanOrEqual(quickPlayButtons.count, 2)
+        let quickPlay = quickPlayButtons.element(boundBy: 1)
+        XCTAssertTrue(quickPlay.isHittable)
+        quickPlay.tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 30)
+        )
+        XCTAssertTrue(seriesResults.exists)
+        stopMiniPlayer(in: app)
         playbackBook.tap()
+    }
+
+    @MainActor
+    private func stopMiniPlayer(in app: XCUIApplication) {
+        let toggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 30))
+        let start = toggle.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80))
+        )
+        XCTAssertTrue(toggle.waitForNonExistence(timeout: 10))
     }
 
     private func liveEnvironment() throws -> (

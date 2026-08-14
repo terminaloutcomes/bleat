@@ -14,6 +14,145 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testPlayableCoverStateUsesExactAccountAndItemIdentity() {
+        let account = AccountID(rawValue: "account-1")
+        let otherAccount = AccountID(rawValue: "account-2")
+        let item = LibraryItemID(rawValue: "item-1")
+        let otherItem = LibraryItemID(rawValue: "item-2")
+        let target = PlaybackStartTarget(
+            accountID: account,
+            itemID: item
+        )
+
+        XCTAssertEqual(
+            PlayableBookCoverState.derive(
+                target: target,
+                accountID: account,
+                itemID: item,
+                playbackAccountID: nil,
+                playbackItemID: nil,
+                playbackState: .idle,
+                isPlaybackRequested: false
+            ),
+            .preparing
+        )
+        XCTAssertEqual(
+            PlayableBookCoverState.derive(
+                target: target,
+                accountID: otherAccount,
+                itemID: item,
+                playbackAccountID: account,
+                playbackItemID: item,
+                playbackState: .playing,
+                isPlaybackRequested: true
+            ),
+            .idle
+        )
+        XCTAssertEqual(
+            PlayableBookCoverState.derive(
+                target: nil,
+                accountID: account,
+                itemID: otherItem,
+                playbackAccountID: account,
+                playbackItemID: item,
+                playbackState: .playing,
+                isPlaybackRequested: true
+            ),
+            .idle
+        )
+    }
+
+    func testPlayableCoverStateMapsTypedPlaybackStates() {
+        let account = AccountID(rawValue: "account-1")
+        let item = LibraryItemID(rawValue: "item-1")
+        func state(
+            _ playbackState: PlaybackState,
+            requested: Bool
+        ) -> PlayableBookCoverState {
+            PlayableBookCoverState.derive(
+                target: nil,
+                accountID: account,
+                itemID: item,
+                playbackAccountID: account,
+                playbackItemID: item,
+                playbackState: playbackState,
+                isPlaybackRequested: requested
+            )
+        }
+
+        XCTAssertEqual(state(.preparing, requested: true), .preparing)
+        XCTAssertEqual(state(.ready, requested: true), .playing)
+        XCTAssertEqual(state(.buffering, requested: true), .playing)
+        XCTAssertEqual(state(.playing, requested: true), .playing)
+        XCTAssertEqual(state(.paused, requested: false), .paused)
+        XCTAssertEqual(state(.ready, requested: false), .paused)
+        XCTAssertEqual(state(.ended, requested: false), .idle)
+        XCTAssertEqual(state(.failed(.mediaUnavailable), requested: true), .idle)
+    }
+
+    func testPlaybackStartOutcomePresentsOnlyTypedFailures() {
+        XCTAssertNil(
+            PlaybackStartOutcome.started(source: .streamed)
+                .presentationFailure
+        )
+        XCTAssertNil(PlaybackStartOutcome.superseded.presentationFailure)
+        XCTAssertEqual(
+            PlaybackStartOutcome.failed(.mediaUnavailable)
+                .presentationFailure,
+            .mediaUnavailable
+        )
+    }
+
+    func testBrowsingPlaybackActionPausesOnlyExactRequestedIdentity()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let otherAccount = try fixtureAccount(accountID: "account-2")
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initialOutcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initialOutcome, .started(source: .streamed))
+
+        let mismatchedOutcome = await model.performBrowsingPlaybackAction(
+            book: detail.summary,
+            account: otherAccount
+        )
+        XCTAssertEqual(
+            mismatchedOutcome,
+            .start(
+                .failed(
+                    AppFailure(.openPlayback, .accountUnavailable)
+                )
+            )
+        )
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+
+        let matchingOutcome = await model.performBrowsingPlaybackAction(
+            book: detail.summary,
+            account: account
+        )
+        XCTAssertEqual(matchingOutcome, .paused)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        await model.playback.stop()
+    }
+
     func testDownloadByteProgressUsesOneSharedRoundedUnit() {
         XCTAssertEqual(
             DownloadByteProgressFormatter.string(
@@ -6636,6 +6775,18 @@ final class AppModelTests: XCTestCase {
         }
         await gate.waitUntilEntered()
 
+        XCTAssertEqual(
+            model.playbackStartTarget,
+            PlaybackStartTarget(accountID: account.id, itemID: summary.id)
+        )
+        XCTAssertEqual(
+            model.coverPlaybackState(
+                accountID: account.id,
+                itemID: summary.id
+            ),
+            .preparing
+        )
+
         let second = await model.startPlayback(
             detail: detail,
             account: account
@@ -6647,6 +6798,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(second, .started(source: .streamed))
         XCTAssertEqual(firstOutcome, .superseded)
         XCTAssertEqual(playbackRequests.count, 1)
+        XCTAssertNil(model.playbackStartTarget)
         await model.playback.stop()
     }
 
@@ -6856,6 +7008,13 @@ final class AppModelTests: XCTestCase {
             )
         }
         await closeGate.waitUntilEntered()
+        XCTAssertEqual(
+            model.playbackStartTarget,
+            PlaybackStartTarget(
+                accountID: account.id,
+                itemID: secondDetail.id
+            )
+        )
         let third = Task {
             await model.startPlayback(
                 detail: thirdDetail,
@@ -7324,6 +7483,7 @@ final class AppModelTests: XCTestCase {
             .failed(.playbackUnavailable)
         )
         XCTAssertEqual(model.playback.itemID, detail.id)
+        XCTAssertFalse(model.playback.hasActiveBook)
     }
 
     func testRemoveAccountClearsSignedInState() async throws {

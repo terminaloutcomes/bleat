@@ -492,9 +492,17 @@ starting opens once its account and library context is ready.
 
 ## Play an audiobook
 
-Open a book from Home, Library, or Search and tap **Play**. Bleat opens a native
-Audiobookshelf playback session and uses its session-scoped direct-play or HLS
-URL without putting access tokens in media URLs. The mini-player floats in a
+Single-book covers on Home, Library, Search, and Series provide a separate
+Play/Pause control without changing the current screen; tapping the rest of a
+card opens Book Detail. The same control discovers a verified complete download
+or opens streamed playback without making the browsing screen choose the media
+source. While preparation is in progress, only that book's control is disabled.
+Collapsed-series covers remain navigation-only because they do not identify one
+book. Book Detail retains its larger primary playback action.
+
+Bleat opens native Audiobookshelf playback sessions and uses session-scoped
+direct-play or HLS URLs without putting access tokens in media URLs. The
+mini-player floats in a
 rounded material bar above the signed-in tab bar so tab navigation stays
 unobstructed; tap its title or swipe upward to open Now Playing for
 current-chapter seeking, configurable rewind and forward controls,
@@ -519,6 +527,24 @@ opens one forced-transcode session instead; exhausted recovery becomes a
 visible playback failure rather than continuing to appear active.
 The selected global speed persists across relaunches and can be adjusted in
 0.05× steps.
+
+Playable-cover verification is provided by
+`BleatUITests.testPlayableHomeCoverSeparatesPlaybackFromNavigation`,
+`testPlayableCoverPreparationDisablesOnlyMatchingAction`,
+`testPlayableCoverPresentsTypedPlaybackFailure`,
+`testPlayableCoverPresentsTypedPermissionDenial`,
+`testPlayableCoversAppearOnEverySingleBookBrowseSurface`,
+`testBookEditorOwnsCoverAndServerDeletionControls`,
+`testCoreJourneyAtLargestDynamicType`, and
+`testSeriesCoverBrowserDisablesDepthMotionWhenRequested`. The disposable live
+journeys `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload` and
+`testLiveOfflineCachedDownloadAndLocalProgress` cover remote and completed
+download quick-play, including offline local transport with every server
+stopped. Component-specific manual checks confirm separate VoiceOver and
+keyboard targets on iPad and Mac, legible increased-contrast presentation,
+reduced carousel motion without playback-state changes, and no overlap at the
+largest Dynamic Type size. These checks do not replace the broader application
+accessibility audits or physical-device audio-route validation.
 
 Audio continues in the background. Lock-screen, Control Center, headset, and
 Bluetooth controls can play, pause, seek, and skip. Settings independently maps

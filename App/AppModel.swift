@@ -122,6 +122,21 @@ enum PlaybackStartOutcome: Equatable, Sendable {
     case started(source: PlaybackStartSource)
     case superseded
     case failed(AppFailure)
+
+    var presentationFailure: AppFailure? {
+        guard case .failed(let failure) = self else { return nil }
+        return failure
+    }
+}
+
+enum BrowsingPlaybackActionOutcome: Equatable, Sendable {
+    case paused
+    case start(PlaybackStartOutcome)
+}
+
+struct PlaybackStartTarget: Equatable, Sendable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
 }
 
 private enum PlaybackStartBook: Sendable {
@@ -962,6 +977,7 @@ final class AppModel {
     private(set) var liveUpdateConnectionState:
         AudiobookshelfLiveConnectionState = .disconnected
     private(set) var networkPathState: AppNetworkPathState = .unknown
+    private(set) var playbackStartTarget: PlaybackStartTarget?
     private(set) var account: ServerAccount?
     private(set) var accounts: [ServerAccount] = []
     private(set) var libraries: ResourceState<[LibrarySummary]> = .idle
@@ -2236,27 +2252,7 @@ final class AppModel {
             else {
                 return nil
             }
-            return LibraryBookSummary(
-                id: detail.id,
-                libraryID: detail.libraryID,
-                title: detail.title,
-                subtitle: detail.subtitle,
-                authorName: detail.authors.first?.name,
-                narratorName: detail.narrators.first,
-                seriesName: detail.series.first?.name,
-                authors: detail.authors,
-                series: detail.series,
-                genres: detail.genres,
-                publisher: detail.publisher,
-                publishedYear: detail.publishedYear,
-                duration: detail.duration,
-                trackCount: detail.trackCount,
-                chapterCount: detail.chapters.count,
-                addedAtMilliseconds: detail.addedAtMilliseconds,
-                updatedAtMilliseconds: detail.updatedAtMilliseconds,
-                isExplicit: detail.isExplicit,
-                isAbridged: detail.isAbridged
-            )
+            return detail.summary
         } catch {
             return nil
         }
@@ -2676,6 +2672,22 @@ final class AppModel {
         )
     }
 
+    func performBrowsingPlaybackAction(
+        book: LibraryBookSummary,
+        account: ServerAccount
+    ) async -> BrowsingPlaybackActionOutcome {
+        if playback.accountID == account.id,
+            playback.itemID == book.id,
+            playback.isPlaybackRequested
+        {
+            playback.pause()
+            return .paused
+        }
+        return .start(
+            await startPlayback(book: book, account: account)
+        )
+    }
+
     func startPlayback(
         detail: LibraryBookDetail,
         account: ServerAccount,
@@ -2707,7 +2719,13 @@ final class AppModel {
     private func startPlayback(
         _ request: PlaybackStartRequest
     ) async -> PlaybackStartOutcome {
-        let generation = await invalidatePlaybackStarts()
+        let target = PlaybackStartTarget(
+            accountID: request.account.id,
+            itemID: request.book.itemID
+        )
+        let generation = await invalidatePlaybackStarts(
+            replacementTarget: target
+        )
         guard playbackStartGeneration == generation else {
             return .superseded
         }
@@ -2728,8 +2746,24 @@ final class AppModel {
         if playbackStartGeneration == generation {
             playbackStartTask = nil
             playbackStartPhase = nil
+            playbackStartTarget = nil
         }
         return outcome
+    }
+
+    func coverPlaybackState(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> PlayableBookCoverState {
+        PlayableBookCoverState.derive(
+            target: playbackStartTarget,
+            accountID: accountID,
+            itemID: itemID,
+            playbackAccountID: playback.accountID,
+            playbackItemID: playback.itemID,
+            playbackState: playback.state,
+            isPlaybackRequested: playback.isPlaybackRequested
+        )
     }
 
     private func performPlaybackStart(
@@ -3542,13 +3576,16 @@ final class AppModel {
     }
 
     @discardableResult
-    private func invalidatePlaybackStarts() async -> UInt64 {
+    private func invalidatePlaybackStarts(
+        replacementTarget: PlaybackStartTarget? = nil
+    ) async -> UInt64 {
         playbackStartGeneration &+= 1
         let generation = playbackStartGeneration
         playbackStartTask?.cancel()
         playbackStartTask = nil
         let phase = playbackStartPhase
         playbackStartPhase = nil
+        playbackStartTarget = replacementTarget
         let previousInvalidation = playbackStartInvalidationTask
         let invalidation = Task { @MainActor [weak self] in
             await previousInvalidation?.value

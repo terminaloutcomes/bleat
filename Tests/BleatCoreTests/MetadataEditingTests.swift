@@ -4,6 +4,38 @@ import XCTest
 @testable import BleatCore
 
 final class MetadataEditingTests: XCTestCase {
+    func testBookDetailSummaryMapsAvailableDomainFields() {
+        let detail = fixtureDetail()
+        let summary = detail.summary
+
+        XCTAssertEqual(summary.id, detail.id)
+        XCTAssertEqual(summary.libraryID, detail.libraryID)
+        XCTAssertEqual(summary.title, detail.title)
+        XCTAssertEqual(summary.subtitle, detail.subtitle)
+        XCTAssertEqual(summary.authorName, detail.authors.first?.name)
+        XCTAssertEqual(summary.narratorName, detail.narrators.first)
+        XCTAssertEqual(summary.seriesName, detail.series.first?.name)
+        XCTAssertEqual(summary.authors, detail.authors)
+        XCTAssertEqual(summary.series, detail.series)
+        XCTAssertNil(summary.collapsedSeries)
+        XCTAssertEqual(summary.genres, detail.genres)
+        XCTAssertEqual(summary.publisher, detail.publisher)
+        XCTAssertEqual(summary.publishedYear, detail.publishedYear)
+        XCTAssertEqual(summary.duration, detail.duration)
+        XCTAssertEqual(summary.trackCount, detail.trackCount)
+        XCTAssertEqual(summary.chapterCount, detail.chapters.count)
+        XCTAssertEqual(
+            summary.addedAtMilliseconds,
+            detail.addedAtMilliseconds
+        )
+        XCTAssertEqual(
+            summary.updatedAtMilliseconds,
+            detail.updatedAtMilliseconds
+        )
+        XCTAssertEqual(summary.isExplicit, detail.isExplicit)
+        XCTAssertEqual(summary.isAbridged, detail.isAbridged)
+    }
+
     func testPatchEncodesOnlyChangedFieldsAndExplicitNulls() throws {
         let detail = fixtureDetail()
         var draft = BookMetadataDraft(detail: detail)

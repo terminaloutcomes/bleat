@@ -1052,6 +1052,7 @@ private struct DiagnosticsView: View {
 private struct SignedInView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    @State private var playbackFailure: AppFailure?
 
     var body: some View {
         GeometryReader { geometry in
@@ -1093,6 +1094,19 @@ private struct SignedInView: View {
                 )
             }
         }
+        .alert(
+            playbackFailure?.title ?? "Playback unavailable",
+            isPresented: Binding(
+                get: { playbackFailure != nil },
+                set: { if !$0 { playbackFailure = nil } }
+            )
+        ) {
+            Button("OK") { playbackFailure = nil }
+        } message: {
+            if let playbackFailure {
+                Text(playbackFailure.message)
+            }
+        }
         .accessibilityIdentifier("app.signedIn")
     }
 
@@ -1101,13 +1115,21 @@ private struct SignedInView: View {
             TabView(selection: $navigation.selectedTab) {
                 Tab("Home", systemImage: "house", value: .home) {
                     tabContent(containerHeight: containerHeight) {
-                        HomeView(model: model, navigation: navigation)
+                        HomeView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 }
 
                 Tab("Library", systemImage: "books.vertical", value: .library) {
                     tabContent(containerHeight: containerHeight) {
-                        LibraryView(model: model, navigation: navigation)
+                        LibraryView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 }
 
@@ -1131,7 +1153,11 @@ private struct SignedInView: View {
                     role: .search
                 ) {
                     tabContent(containerHeight: containerHeight) {
-                        SearchView(model: model, navigation: navigation)
+                        SearchView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 }
             }
@@ -1141,7 +1167,11 @@ private struct SignedInView: View {
             TabView(selection: $navigation.selectedTab) {
                 Tab(value: .home) {
                     tabContent(containerHeight: containerHeight) {
-                        HomeView(model: model, navigation: navigation)
+                        HomeView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 } label: {
                     mobileTabLabel("Home", systemImage: "house")
@@ -1149,7 +1179,11 @@ private struct SignedInView: View {
 
                 Tab(value: .library) {
                     tabContent(containerHeight: containerHeight) {
-                        LibraryView(model: model, navigation: navigation)
+                        LibraryView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 } label: {
                     mobileTabLabel("Library", systemImage: "books.vertical")
@@ -1176,7 +1210,11 @@ private struct SignedInView: View {
 
                 Tab(value: .search, role: .search) {
                     tabContent(containerHeight: containerHeight) {
-                        SearchView(model: model, navigation: navigation)
+                        SearchView(
+                            model: model,
+                            navigation: navigation,
+                            handlePlaybackOutcome: handlePlaybackOutcome
+                        )
                     }
                 } label: {
                     mobileTabLabel(
@@ -1211,6 +1249,11 @@ private struct SignedInView: View {
                     }
                 }
             }
+    }
+
+    private func handlePlaybackOutcome(_ outcome: PlaybackStartOutcome) {
+        guard let failure = outcome.presentationFailure else { return }
+        playbackFailure = failure
     }
 }
 
@@ -1305,10 +1348,15 @@ extension AppRootTab {
 private struct HomeView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
         NavigationStack(path: navigation.pathBinding(for: .home)) {
-            HomeContent(model: model)
+            HomeContent(
+                model: model,
+                navigation: navigation,
+                handlePlaybackOutcome: handlePlaybackOutcome
+            )
                 .safeAreaInset(edge: .top, spacing: 0) {
                     homeContext
                 }
@@ -1325,7 +1373,8 @@ private struct HomeView: View {
                         model: model,
                         destination: series,
                         navigation: navigation,
-                        origin: .home
+                        origin: .home,
+                        handlePlaybackOutcome: handlePlaybackOutcome
                     )
                 }
         }
@@ -1365,7 +1414,8 @@ private struct HomeView: View {
 
 private struct HomeContent: View {
     @Bindable var model: AppModel
-    @State private var playbackFailure: AppFailure?
+    @Bindable var navigation: AppNavigationCoordinator
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
         Group {
@@ -1429,19 +1479,6 @@ private struct HomeContent: View {
                         }
                     }
                 }
-            }
-        }
-        .alert(
-            playbackFailure?.title ?? "Playback unavailable",
-            isPresented: Binding(
-                get: { playbackFailure != nil },
-                set: { if !$0 { playbackFailure = nil } }
-            )
-        ) {
-            Button("OK") { playbackFailure = nil }
-        } message: {
-            if let playbackFailure {
-                Text(playbackFailure.message)
             }
         }
     }
@@ -1532,74 +1569,20 @@ private struct HomeContent: View {
                         downloadedRecords,
                         id: \.manifest.downloadID
                     ) { record in
-                        Button {
-                            Task {
-                                guard let account = model.account else {
-                                    playbackFailure = AppFailure(
-                                        .openPlayback,
-                                        .accountUnavailable
-                                    )
-                                    return
-                                }
-                                let outcome = await model.startPlayback(
-                                    download: record,
-                                    account: account
-                                )
-                                if case .failed(let failure) = outcome {
-                                    playbackFailure = failure
-                                }
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    BookCoverView(
-                                        accountID: model.account?.id,
-                                        server: model.account?.server,
-                                        itemID: record.detail.id,
-                                        updatedAtMilliseconds:
-                                            record.detail
-                                            .updatedAtMilliseconds,
-                                        width: 360,
-                                        height: 360,
-                                        cornerRadius: 10
-                                    )
-                                    .frame(width: 148, height: 148)
-                                    Image(
-                                        systemName:
-                                            model.playback.itemID
-                                            == record.detail.id
-                                            && model.playback.accountID
-                                                == record.manifest.accountID
-                                            ? "speaker.wave.2.circle.fill"
-                                            : "play.circle.fill"
-                                    )
-                                    .font(.title)
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(
-                                        .white, .black.opacity(0.7)
-                                    )
-                                    .padding(8)
-                                }
-                                Text(record.detail.title)
-                                    .font(.headline)
-                                    .lineLimit(2)
-                                if !record.detail.authors.isEmpty {
-                                    Text(
-                                        record.detail.authors
-                                            .map(\.name)
-                                            .joined(separator: ", ")
-                                    )
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                }
-                            }
-                            .frame(width: 148, alignment: .leading)
+                        if let account = model.account {
+                            ShelfBookCard(
+                                model: model,
+                                navigation: navigation,
+                                account: account,
+                                book: record.detail.summary,
+                                navigationIdentifier:
+                                    "home.downloaded.\(record.detail.id.rawValue)",
+                                playbackIdentifier:
+                                    "home.downloaded.\(record.detail.id.rawValue).play",
+                                coverLoadPolicy: .cacheOnly,
+                                handlePlaybackOutcome: handlePlaybackOutcome
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            "Play \(record.detail.title) offline"
-                        )
                     }
                 }
                 .padding(.horizontal)
@@ -1617,35 +1600,19 @@ private struct HomeContent: View {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 12) {
                     ForEach(shelf.items, id: \.id.rawValue) { book in
-                        NavigationLink(value: book) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                BookCoverView(
-                                    accountID: model.account?.id,
-                                    server: model.account?.server,
-                                    itemID: book.id,
-                                    updatedAtMilliseconds:
-                                        book.updatedAtMilliseconds,
-                                    width: 360,
-                                    height: 360,
-                                    cornerRadius: 10
-                                )
-                                .frame(width: 148, height: 148)
-                                Text(book.title)
-                                    .font(.headline)
-                                    .lineLimit(2)
-                                if let author = book.authorName {
-                                    Text(author)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .frame(width: 148, alignment: .leading)
+                        if let account = model.account {
+                            ShelfBookCard(
+                                model: model,
+                                navigation: navigation,
+                                account: account,
+                                book: book,
+                                navigationIdentifier:
+                                    "home.book.\(book.id.rawValue)",
+                                playbackIdentifier:
+                                    "home.book.\(book.id.rawValue).play",
+                                handlePlaybackOutcome: handlePlaybackOutcome
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(
-                            "home.book.\(book.id.rawValue)"
-                        )
                     }
                 }
                 .padding(.horizontal)
@@ -1655,9 +1622,89 @@ private struct HomeContent: View {
     }
 }
 
+private struct ShelfBookCard: View {
+    @Bindable var model: AppModel
+    let navigation: AppNavigationCoordinator
+    let account: ServerAccount
+    let book: LibraryBookSummary
+    let navigationIdentifier: String
+    let playbackIdentifier: String
+    var coverLoadPolicy: BookCoverLoadPolicy = .allowNetwork
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Button {
+                navigation.showBook(book, from: .home)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Color.clear
+                        .frame(width: 148, height: 148)
+                    Text(book.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                    if let author = book.authorName {
+                        Text(author)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(width: 148, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable()
+            .accessibilityLabel("Open \(book.title)")
+            .accessibilityIdentifier(navigationIdentifier)
+
+            if book.collapsedSeries == nil {
+                PlayableBookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 360,
+                    height: 360,
+                    cornerRadius: 10,
+                    loadPolicy: coverLoadPolicy,
+                    title: book.title,
+                    state: model.coverPlaybackState(
+                        accountID: account.id,
+                        itemID: book.id
+                    ),
+                    accessibilityIdentifier: playbackIdentifier,
+                    performPlaybackAction: {
+                        await model.performBrowsingPlaybackAction(
+                            book: book,
+                            account: account
+                        )
+                    },
+                    handleOutcome: handlePlaybackOutcome
+                )
+                .frame(width: 148, height: 148)
+            } else {
+                BookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 360,
+                    height: 360,
+                    cornerRadius: 10,
+                    loadPolicy: coverLoadPolicy
+                )
+                .allowsHitTesting(false)
+                .frame(width: 148, height: 148)
+            }
+        }
+    }
+}
+
 private struct LibraryView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
         NavigationStack(path: navigation.pathBinding(for: .library)) {
@@ -1667,7 +1714,8 @@ private struct LibraryView: View {
                 BookListContent(
                     model: model,
                     navigation: navigation,
-                    origin: .library
+                    origin: .library,
+                    handlePlaybackOutcome: handlePlaybackOutcome
                 )
             }
             .navigationTitle("Library")
@@ -1874,6 +1922,7 @@ private struct BookListContent: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
     let origin: AppRootTab
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
         Group {
@@ -1916,7 +1965,8 @@ private struct BookListContent: View {
                 model: model,
                 destination: series,
                 navigation: navigation,
-                origin: origin
+                origin: origin,
+                handlePlaybackOutcome: handlePlaybackOutcome
             )
         }
     }
@@ -1951,16 +2001,23 @@ private struct BookListContent: View {
                         entry in
                         switch entry {
                         case .book(let book):
-                            NavigationLink(value: book) {
+                            if let account = model.account {
                                 BookSummaryRow(
+                                    model: model,
+                                    navigation: navigation,
                                     book: book,
-                                    accountID: model.account?.id,
-                                    server: model.account?.server
+                                    account: account,
+                                    origin: origin,
+                                    navigationIdentifier:
+                                        "library.book.\(book.id.rawValue)",
+                                    navigationAccessibilityLabel:
+                                        "Open \(book.title)",
+                                    playbackIdentifier:
+                                        "library.book.\(book.id.rawValue).play",
+                                    handlePlaybackOutcome:
+                                        handlePlaybackOutcome
                                 )
                             }
-                            .accessibilityIdentifier(
-                                "library.book.\(book.id.rawValue)"
-                            )
                         case .series(let series, representative: let book):
                             NavigationLink(
                                 value: SeriesDestination(
@@ -2092,6 +2149,7 @@ private struct RefreshFailureBanner: View {
 private struct SearchView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @FocusState private var isSearchFocused: Bool
 
     private var taskContext: SearchTaskContext {
@@ -2118,7 +2176,8 @@ private struct SearchView: View {
                         model: model,
                         destination: series,
                         navigation: navigation,
-                        origin: .search
+                        origin: .search,
+                        handlePlaybackOutcome: handlePlaybackOutcome
                     )
                 }
         }
@@ -2174,16 +2233,23 @@ private struct SearchView: View {
                     {
                         Section("Books") {
                             ForEach(results.books, id: \.id) { book in
-                                NavigationLink(value: book) {
+                                if let account = model.account {
                                     BookSummaryRow(
+                                        model: model,
+                                        navigation: navigation,
                                         book: book,
-                                        accountID: model.account?.id,
-                                        server: model.account?.server
+                                        account: account,
+                                        origin: .search,
+                                        navigationIdentifier:
+                                            "search.book.\(book.id.rawValue)",
+                                        navigationAccessibilityLabel:
+                                            "Open \(book.title)",
+                                        playbackIdentifier:
+                                            "search.book.\(book.id.rawValue).play",
+                                        handlePlaybackOutcome:
+                                            handlePlaybackOutcome
                                     )
                                 }
-                                .accessibilityIdentifier(
-                                    "search.book.\(book.id.rawValue)"
-                                )
                             }
                         }
                     }
@@ -2260,28 +2326,75 @@ private struct SearchTaskContext: Hashable {
 }
 
 private struct BookSummaryRow: View {
+    @Bindable var model: AppModel
+    let navigation: AppNavigationCoordinator
     let book: LibraryBookSummary
-    let accountID: AccountID?
-    let server: NormalizedServerURL?
+    let account: ServerAccount
+    let origin: AppRootTab
+    let navigationIdentifier: String
+    let navigationAccessibilityLabel: String
+    let playbackIdentifier: String
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            BookCoverView(
-                accountID: accountID,
-                server: server,
-                itemID: book.id,
-                updatedAtMilliseconds: book.updatedAtMilliseconds,
-                width: 128,
-                height: 128
-            )
-            .frame(width: 64, height: 64)
-            VStack(alignment: .leading) {
-                Text(book.title)
-                if let author = book.authorName {
-                    Text(author)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        ZStack(alignment: .leading) {
+            Button {
+                navigation.showBook(book, from: origin)
+            } label: {
+                HStack(spacing: 12) {
+                    Color.clear
+                        .frame(width: 64, height: 64)
+                    VStack(alignment: .leading) {
+                        Text(book.title)
+                        if let author = book.authorName {
+                            Text(author)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable()
+            .accessibilityLabel(navigationAccessibilityLabel)
+            .accessibilityIdentifier(navigationIdentifier)
+
+            if book.collapsedSeries == nil {
+                PlayableBookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 128,
+                    height: 128,
+                    title: book.title,
+                    state: model.coverPlaybackState(
+                        accountID: account.id,
+                        itemID: book.id
+                    ),
+                    accessibilityIdentifier: playbackIdentifier,
+                    performPlaybackAction: {
+                        await model.performBrowsingPlaybackAction(
+                            book: book,
+                            account: account
+                        )
+                    },
+                    handleOutcome: handlePlaybackOutcome
+                )
+                .frame(width: 64, height: 64)
+            } else {
+                BookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 128,
+                    height: 128
+                )
+                .allowsHitTesting(false)
+                .frame(width: 64, height: 64)
             }
         }
     }
@@ -2334,6 +2447,7 @@ private struct SeriesDetailView: View {
     let destination: SeriesDestination
     @Bindable var navigation: AppNavigationCoordinator
     let origin: AppRootTab
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverSwipeOffset: CGFloat = 0
 
@@ -2375,30 +2489,24 @@ private struct SeriesDetailView: View {
                         ScrollView(.horizontal) {
                             LazyHStack(spacing: 0) {
                                 ForEach(page.items, id: \.id) { book in
-                                    NavigationLink(value: book) {
-                                        VStack(spacing: 8) {
-                                            BookCoverView(
-                                                accountID: model.account?.id,
-                                                server: model.account?.server,
-                                                itemID: book.id,
-                                                updatedAtMilliseconds: book
-                                                    .updatedAtMilliseconds,
-                                                width: 480,
-                                                height: 480,
-                                                cornerRadius: 14
+                                    Group {
+                                        if let account = model.account {
+                                            SeriesCarouselBookCard(
+                                                model: model,
+                                                navigation: navigation,
+                                                account: account,
+                                                book: book,
+                                                origin: origin,
+                                                sequenceLabel:
+                                                    sequenceLabel(for: book),
+                                                handlePlaybackOutcome:
+                                                    handlePlaybackOutcome
                                             )
-                                            .frame(width: 180, height: 180)
-                                            Text(book.title)
-                                                .font(.headline)
-                                            Text(sequenceLabel(for: book))
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
+                                            .rotation3DEffect(
+                                                .degrees(coverDepthAngle),
+                                                axis: (x: 0, y: 1, z: 0)
+                                            )
                                         }
-                                        .frame(maxWidth: .infinity)
-                                        .rotation3DEffect(
-                                            .degrees(coverDepthAngle),
-                                            axis: (x: 0, y: 1, z: 0)
-                                        )
                                     }
                                     .containerRelativeFrame(.horizontal)
                                 }
@@ -2429,19 +2537,23 @@ private struct SeriesDetailView: View {
                     Section("Books") {
                         ForEach(page.items.indices, id: \.self) { index in
                             let book = page.items[index]
-                            NavigationLink(value: book) {
+                            if let account = model.account {
                                 BookSummaryRow(
+                                    model: model,
+                                    navigation: navigation,
                                     book: book,
-                                    accountID: model.account?.id,
-                                    server: model.account?.server
+                                    account: account,
+                                    origin: origin,
+                                    navigationIdentifier:
+                                        "series.book.\(index)",
+                                    navigationAccessibilityLabel:
+                                        "Open \(book.title), \(sequenceLabel(for: book))",
+                                    playbackIdentifier:
+                                        "series.book.\(book.id.rawValue).play",
+                                    handlePlaybackOutcome:
+                                        handlePlaybackOutcome
                                 )
                             }
-                            .accessibilityLabel(
-                                "\(book.title), \(sequenceLabel(for: book))"
-                            )
-                            .accessibilityIdentifier(
-                                "series.book.\(index)"
-                            )
                         }
                     }
                 }
@@ -2505,6 +2617,81 @@ private struct SeriesDetailView: View {
         #else
             reduceMotion
         #endif
+    }
+}
+
+private struct SeriesCarouselBookCard: View {
+    @Bindable var model: AppModel
+    let navigation: AppNavigationCoordinator
+    let account: ServerAccount
+    let book: LibraryBookSummary
+    let origin: AppRootTab
+    let sequenceLabel: String
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Button {
+                navigation.showBook(book, from: origin)
+            } label: {
+                VStack(spacing: 8) {
+                    Color.clear
+                        .frame(width: 180, height: 180)
+                    Text(book.title)
+                        .font(.headline)
+                    Text(sequenceLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable()
+            .accessibilityLabel("Open \(book.title), \(sequenceLabel)")
+            .accessibilityIdentifier(
+                "series.carousel.\(book.id.rawValue)"
+            )
+
+            if book.collapsedSeries == nil {
+                PlayableBookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 480,
+                    height: 480,
+                    cornerRadius: 14,
+                    title: book.title,
+                    state: model.coverPlaybackState(
+                        accountID: account.id,
+                        itemID: book.id
+                    ),
+                    accessibilityIdentifier:
+                        "series.carousel.\(book.id.rawValue).play",
+                    performPlaybackAction: {
+                        await model.performBrowsingPlaybackAction(
+                            book: book,
+                            account: account
+                        )
+                    },
+                    handleOutcome: handlePlaybackOutcome
+                )
+                .frame(width: 180, height: 180)
+            } else {
+                BookCoverView(
+                    accountID: account.id,
+                    server: account.server,
+                    itemID: book.id,
+                    updatedAtMilliseconds: book.updatedAtMilliseconds,
+                    width: 480,
+                    height: 480,
+                    cornerRadius: 14
+                )
+                .allowsHitTesting(false)
+                .frame(width: 180, height: 180)
+            }
+        }
     }
 }
 

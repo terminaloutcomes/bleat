@@ -164,8 +164,46 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - A newer playback request or invalidating account transition supersedes late
   preparation without presenting an error or starting the stale audiobook.
 - Quick playback detail loading does not change Book Detail, bookmarks,
-  selection, or navigation state. Reusable browsing-cover controls remain
-  tracked in [GitHub issue #56](https://github.com/terminaloutcomes/bleat/issues/56).
+  selection, or navigation state.
+- Every Home, Library, Search, and Series cover that identifies one audiobook
+  exposes the same account/item-scoped Play, Preparing, and Pause control.
+  Playback and Book Detail navigation remain separate hit and accessibility
+  targets; starting playback never navigates and navigation never starts
+  playback.
+- Cover controls submit only the saved account, book summary, and resume
+  position to the shared playback-start coordinator. They never inspect or
+  select active, cached, downloaded, or streamed media. A superseded start is
+  silent and typed failures use one privacy-safe browsing presentation.
+- Collapsed-series covers and artwork on Book Detail, metadata editing,
+  mini-player, and Now Playing do not receive redundant playback overlays.
+- Deterministic Simulator coverage is provided by
+  `BleatUITests.testPlayableHomeCoverSeparatesPlaybackFromNavigation`,
+  `testPlayableCoverPreparationDisablesOnlyMatchingAction`,
+  `testPlayableCoverPresentsTypedPlaybackFailure`,
+  `testPlayableCoverPresentsTypedPermissionDenial`,
+  `testPlayableCoversAppearOnEverySingleBookBrowseSurface`,
+  `testBookEditorOwnsCoverAndServerDeletionControls`,
+  `testCoreJourneyAtLargestDynamicType`, and
+  `testSeriesCoverBrowserDisablesDepthMotionWhenRequested`.
+- `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload` quick-plays the
+  remote Home cover before Book Detail, completes a full download, and
+  quick-plays its Downloaded cover. With every test server stopped,
+  `testLiveOfflineCachedDownloadAndLocalProgress` starts that completed book
+  from `home.downloaded.<id>.play` and verifies local transport and progress.
+- Component-specific manual checks on iPad and Mac confirm independent
+  VoiceOver and keyboard navigation/playback targets, changing Play/Pause
+  labels, reduced carousel motion, legible increased-contrast presentation,
+  and usable largest-Dynamic-Type layout. These results do not close the
+  whole-application accessibility audits or claim physical-device audio-route
+  validation.
+- Xcode 26.3 (17C529) reports an internal priority-inversion warning during
+  each final live UI journey on iOS Simulator 26.3.1 (23D8133):
+  `Thread running at User-initiated quality-of-service class waiting on a lower
+  QoS thread running at Utility quality-of-service class`. Exported diagnostics
+  contain only `BleatUITests-Runner`/XCTest `XCTWaiter` screen-identifier and
+  remote-query work, with no application source location or Bleat application
+  frame. The warning is recorded as an Xcode test-infrastructure limitation;
+  the final app-test result bundle contains no QoS warning.
 - I can pause, seek, scrub across the whole book, skip backward and forward, and jump between chapters.
 - A multi-file book behaves as one continuous timeline.
 - Playback continues with the screen locked and while the app is in the background.
@@ -268,13 +306,16 @@ Use a `TabView` with:
    - Recently Added
    - Downloaded
    - current account/server indicator
+   - separate navigation and quick-play targets on each single-book card
 2. **Library**
    - library selector
    - paginated grid/list
    - sort and filter controls
+   - quick-play controls on individual-book rows
 3. **Search**
    - debounced server-side search
    - grouped results by books, authors, and series where supported
+   - quick-play controls on book results
 4. **Downloads**
    - queued, active, completed, and failed items
    - aggregate storage usage

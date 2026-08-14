@@ -350,6 +350,21 @@ final class AppNavigationCoordinator {
         }
     }
 
+    func showBook(_ book: LibraryBookSummary, from tab: AppRootTab) {
+        switch tab {
+        case .home:
+            homePath.append(book)
+        case .library:
+            libraryPath.append(book)
+        case .search:
+            searchPath.append(book)
+        case .downloads:
+            downloadsPath.append(book)
+        case .settings:
+            settingsPath.append(book)
+        }
+    }
+
     private func resolveScope(
         for route: DeepLinkRoute,
         model: AppModel,

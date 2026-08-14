@@ -493,3 +493,151 @@ private struct BookCoverRequest: Hashable {
     let accountID: AccountID?
     let url: URL?
 }
+
+enum PlayableBookCoverState: Equatable, Sendable {
+    case idle
+    case preparing
+    case playing
+    case paused
+
+    static func derive(
+        target: PlaybackStartTarget?,
+        accountID: AccountID,
+        itemID: LibraryItemID,
+        playbackAccountID: AccountID?,
+        playbackItemID: LibraryItemID?,
+        playbackState: PlaybackState,
+        isPlaybackRequested: Bool
+    ) -> Self {
+        if target == PlaybackStartTarget(
+            accountID: accountID,
+            itemID: itemID
+        ) {
+            return .preparing
+        }
+        guard playbackAccountID == accountID,
+            playbackItemID == itemID
+        else {
+            return .idle
+        }
+        switch playbackState {
+        case .preparing:
+            return .preparing
+        case .ready, .buffering, .playing, .paused:
+            return isPlaybackRequested ? .playing : .paused
+        case .idle, .ended, .failed:
+            return .idle
+        }
+    }
+}
+
+struct PlayableBookCoverView: View {
+    let accountID: AccountID
+    let server: NormalizedServerURL?
+    let itemID: LibraryItemID
+    let updatedAtMilliseconds: Int64
+    let width: Int
+    let height: Int
+    let cornerRadius: CGFloat
+    let loadPolicy: BookCoverLoadPolicy
+    let title: String
+    let state: PlayableBookCoverState
+    let accessibilityIdentifier: String
+    let performPlaybackAction: () async -> BrowsingPlaybackActionOutcome
+    let handleOutcome: (PlaybackStartOutcome) -> Void
+
+    init(
+        accountID: AccountID,
+        server: NormalizedServerURL?,
+        itemID: LibraryItemID,
+        updatedAtMilliseconds: Int64,
+        width: Int,
+        height: Int,
+        cornerRadius: CGFloat = 8,
+        loadPolicy: BookCoverLoadPolicy = .allowNetwork,
+        title: String,
+        state: PlayableBookCoverState,
+        accessibilityIdentifier: String,
+        performPlaybackAction:
+            @escaping () async -> BrowsingPlaybackActionOutcome,
+        handleOutcome: @escaping (PlaybackStartOutcome) -> Void
+    ) {
+        self.accountID = accountID
+        self.server = server
+        self.itemID = itemID
+        self.updatedAtMilliseconds = updatedAtMilliseconds
+        self.width = width
+        self.height = height
+        self.cornerRadius = cornerRadius
+        self.loadPolicy = loadPolicy
+        self.title = title
+        self.state = state
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.performPlaybackAction = performPlaybackAction
+        self.handleOutcome = handleOutcome
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            BookCoverView(
+                accountID: accountID,
+                server: server,
+                itemID: itemID,
+                updatedAtMilliseconds: updatedAtMilliseconds,
+                width: width,
+                height: height,
+                cornerRadius: cornerRadius,
+                loadPolicy: loadPolicy
+            )
+            .allowsHitTesting(false)
+
+            Button(action: performAction) {
+                Group {
+                    if state == .preparing {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: controlSystemImage)
+                            .font(.title)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.black.opacity(0.68), in: Circle())
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .focusable(state != .preparing)
+            .disabled(state == .preparing)
+            .padding(4)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityIdentifier(accessibilityIdentifier)
+        }
+    }
+
+    private var controlSystemImage: String {
+        state == .playing ? "pause.circle.fill" : "play.circle.fill"
+    }
+
+    private var accessibilityLabel: String {
+        switch state {
+        case .idle, .paused:
+            "Play \(title)"
+        case .preparing:
+            "Preparing \(title)"
+        case .playing:
+            "Pause \(title)"
+        }
+    }
+
+    private func performAction() {
+        guard state != .preparing else { return }
+        Task {
+            let outcome = await performPlaybackAction()
+            if case .start(let startOutcome) = outcome {
+                handleOutcome(startOutcome)
+            }
+        }
+    }
+}

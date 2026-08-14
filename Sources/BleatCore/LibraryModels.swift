@@ -608,6 +608,33 @@ public struct LibraryBookDetail: Codable, Hashable, Sendable {
 }
 
 extension LibraryBookDetail {
+    public var summary: LibraryBookSummary {
+        LibraryBookSummary(
+            id: id,
+            libraryID: libraryID,
+            title: title,
+            subtitle: subtitle,
+            authorName: authors.first?.name,
+            narratorName: narrators.first,
+            seriesName: series.first?.name,
+            authors: authors,
+            series: series,
+            collapsedSeries: nil,
+            genres: genres,
+            publisher: publisher,
+            publishedYear: publishedYear,
+            duration: duration,
+            trackCount: trackCount,
+            chapterCount: chapters.count,
+            addedAtMilliseconds: addedAtMilliseconds,
+            updatedAtMilliseconds: updatedAtMilliseconds,
+            isExplicit: isExplicit,
+            isAbridged: isAbridged
+        )
+    }
+}
+
+extension LibraryBookDetail {
     func isValidForStorage(
         in libraryID: LibraryID,
         for userID: UserID

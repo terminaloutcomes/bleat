@@ -82,7 +82,10 @@
         private init(scenario: UITestScenario) {
             self.scenario = scenario
             accountResult = Self.makeAccount(
-                hasManagementPermissions: scenario != .limitedPermissions
+                hasManagementPermissions: scenario != .limitedPermissions,
+                deniesPlayback: ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-playback-denied"
+                )
             )
         }
 
@@ -359,20 +362,50 @@
                 scenario == .refresh && homeShelfRequests >= 2
                 ? "The Refreshed Home Audiobook"
                 : "The Test Audiobook"
+            let collapsedSeries = LibraryCollapsedSeries(
+                id: ids.primarySeries,
+                name: "Test Series",
+                libraryItemIDs: [
+                    LibraryItemID(rawValue: "ui-home-series"),
+                    LibraryItemID(rawValue: "ui-home-series-two"),
+                ],
+                numBooks: 2,
+                sequenceList: ["1", "2"]
+            )
+            var items = [
+                Self.book(
+                    id: "ui-book",
+                    title: title,
+                    libraryID: libraryID,
+                    ids: ids
+                )
+            ]
+            if scenario == .playback {
+                items.append(
+                    Self.book(
+                        id: "ui-book-two",
+                        title: "The Other Audiobook",
+                        libraryID: libraryID,
+                        ids: ids
+                    )
+                )
+            }
+            items.append(
+                Self.book(
+                    id: "ui-home-series",
+                    title: "Test Series",
+                    libraryID: libraryID,
+                    ids: ids,
+                    collapsedSeries: collapsedSeries
+                )
+            )
             return [
                 LibraryBookShelf(
                     id: "continue-listening",
                     label: "Continue Listening",
                     labelLocalizationKey: nil,
-                    items: [
-                        Self.book(
-                            id: "ui-book",
-                            title: title,
-                            libraryID: libraryID,
-                            ids: ids
-                        )
-                    ],
-                    total: 1
+                    items: items,
+                    total: items.count
                 )
             ]
         }
@@ -421,9 +454,7 @@
                 id: itemID,
                 libraryID: libraryID,
                 bookID: BookID(rawValue: "ui-book"),
-                title: itemID.rawValue == "ui-search-book"
-                    ? "The Search Result"
-                    : "The Test Audiobook",
+                title: Self.title(for: itemID),
                 subtitle: "A complete test story",
                 authors: [
                     LibraryBookContributor(
@@ -576,10 +607,21 @@
             guard scenario == .playback else {
                 throw .playbackSession(.requestFailed)
             }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-slow-playback"
+            ) {
+                try? await Task.sleep(for: .seconds(3))
+            }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-playback-failure"
+            ) {
+                throw .playbackSession(.requestFailed)
+            }
+            let title = Self.title(for: itemID)
             return AppPlaybackPreparation(
                 sessionID: nil,
                 itemID: itemID,
-                title: "The Test Audiobook",
+                title: title,
                 duration: 3_600,
                 currentTime: 0,
                 chapters: [
@@ -603,7 +645,7 @@
                         ),
                         startOffset: 0,
                         duration: 3_600,
-                        title: "The Test Audiobook"
+                        title: title
                     )
                 ])
             )
@@ -872,7 +914,8 @@
         }
 
         private static func makeAccount(
-            hasManagementPermissions: Bool
+            hasManagementPermissions: Bool,
+            deniesPlayback: Bool
         )
             -> Result<ServerAccount, AppServiceError>
         {
@@ -895,7 +938,7 @@
                                 delete: hasManagementPermissions,
                                 upload: hasManagementPermissions,
                                 createEReader: false,
-                                accessAllLibraries: true,
+                                accessAllLibraries: !deniesPlayback,
                                 accessAllTags: true,
                                 accessExplicitContent: true,
                                 selectedTagsNotAccessible: false
@@ -909,6 +952,14 @@
                 return .failure(
                     .accountStore(.persistenceFailed)
                 )
+            }
+        }
+
+        private static func title(for itemID: LibraryItemID) -> String {
+            switch itemID.rawValue {
+            case "ui-search-book": "The Search Result"
+            case "ui-book-two": "The Other Audiobook"
+            default: "The Test Audiobook"
             }
         }
     }
