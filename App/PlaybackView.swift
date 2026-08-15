@@ -380,21 +380,21 @@ struct NowPlaying: View {
                         loadPolicy: playback.coverLoadPolicy
                     )
                     .aspectRatio(1, contentMode: .fit)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 300)
 
                     VStack(spacing: 4) {
                         Text(playback.title)
                             .font(.title2.bold())
                             .multilineTextAlignment(.center)
-                        if !playback.author.isEmpty {
-                            Text(playback.author)
-                                .foregroundStyle(.secondary)
-                        }
-                        if !playback.narrator.isEmpty {
-                            Text("Narrated by \(playback.narrator)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                        // if !playback.author.isEmpty {
+                        //     Text(playback.author)
+                        //         .foregroundStyle(.secondary)
+                        // }
+                        // if !playback.narrator.isEmpty {
+                        //     Text("Narrated by \(playback.narrator)")
+                        //         .font(.subheadline)
+                        //         .foregroundStyle(.secondary)
+                        // }
                         if let chapter = playback.currentChapter {
                             Text(chapter.title)
                                 .font(.subheadline.weight(.medium))
