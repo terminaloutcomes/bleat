@@ -1501,6 +1501,47 @@ chronologically as UTF-8 text through the system sharing sheet. Release builds
 compile out the recent-log export and rolling file while continuing to emit the
 redacted `OSLog` categories.
 
+Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
+diagnose bounded technical application operations without collecting user,
+server, account, or audiobook content. It defaults off and may be enabled only
+through the device-local **Share diagnostic telemetry** Settings control. The
+consent preference is not synchronized through iCloud. Disabling it persists
+withdrawal before synchronously notifying the remote telemetry runtime; that
+runtime must stop export and token renewal before returning, then clear
+memory-only telemetry credentials and purge buffered remote telemetry. The
+control remains available while signed out and through the unavailable-startup
+screen. Telemetry initialization or runtime failure must never affect launch,
+browsing, authentication, downloads, playback, transcription,
+synchronization, or local Diagnostics.
+
+The reviewed resource allowlist is `service.name=bleat`, normalized numeric app
+version and build, typed Apple platform, and numeric operating-system version.
+Hardware model and installation identifiers are excluded. The reviewed span
+names are app launch, account connection, library refresh, playback preparation,
+playback start, download transfer, playback progress synchronization, and
+transcription. Span attributes are limited to a subsystem derived from the span
+name, typed success/cancellation/failure outcome, privacy-safe failure category,
+optional downloaded/streamed/offline/remote/cache source, and a retry bucket of
+none, one, two, or three-or-more. Duration comes from span timing and is not an
+application-supplied attribute. Application code must not receive an arbitrary
+span-name or attribute-dictionary API.
+
+When enabled, the reviewed collection policy samples every eligible trace.
+Temporary retained telemetry is limited to two hours and 128 MiB, has no
+separate span-count cap, and evicts the oldest spans first at the byte limit.
+Actual OpenTelemetry integration and retention are owned by follow-up work;
+the current policy and consent layer performs no remote export.
+
+Remote telemetry must never contain credentials, tokens, cookies,
+authorization headers, playback session routes, App Attest evidence, backend
+JWTs, usernames, account or installation identifiers, server URLs or network
+discovery data, IP addresses, audiobook/author/series/library names, filenames,
+filesystem paths, cover or media URLs, metadata, transcript/subtitle content,
+search or other entered text, HTTP bodies, or unreviewed URLs and query strings.
+The shipped pipeline is expected to require App Store disclosure as diagnostic
+data; its final categories, linkage declaration, privacy manifest, and actual
+wire schema must be re-audited before release as part of GitHub issue 68.
+
 ## 17. Security and privacy requirements
 
 - HTTPS and system trust validation are mandatory in production.

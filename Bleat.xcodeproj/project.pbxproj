@@ -19,6 +19,7 @@
 		3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */; };
 		421E1D94991D910E1C6FAA04 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */; };
 		509E512BD4358EA5BCBA799D /* AudioChapterSliceExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10759FAD9A628F0F553DB7B1 /* AudioChapterSliceExporterTests.swift */; };
+		5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */; };
 		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
 		63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */; };
 		66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */; };
@@ -42,6 +43,7 @@
 		9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */; };
 		AA52BE76FF8BA97DA914DC49 /* CarPlayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */; };
 		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
+		B6C10C962CA72B7128D294C9 /* RemoteTelemetryConsent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */; };
 		B87F1CC629E7094C9B063DA6 /* LocalPlaybackSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D22D9E035F6E4DE28DE0B5 /* LocalPlaybackSessionStore.swift */; };
 		C1224783D3F9B1CC7057759A /* AppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12995342C7E6318A5F929A2 /* AppService.swift */; };
 		C17545E7FE86937506709C5D /* LibraryBrowseModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */; };
@@ -89,6 +91,7 @@
 		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
 		492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
+		4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsent.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTroubleshooterView.swift; sourceTree = "<group>"; };
 		543E50567C1D837B42834F5F /* AppMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMetadataTests.swift; sourceTree = "<group>"; };
@@ -114,6 +117,7 @@
 		C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.enabled.entitlements; sourceTree = "<group>"; };
 		C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.disabled.entitlements; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
+		C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsentTests.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
 		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
 		E0639281D9850EC68335644F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -158,6 +162,7 @@
 				62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */,
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
+				C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */,
 				342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */,
 			);
 			path = BleatAppTests;
@@ -237,6 +242,7 @@
 				DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */,
 				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
 				0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */,
+				4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
@@ -420,6 +426,7 @@
 				9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */,
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
+				5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */,
 				FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -463,6 +470,7 @@
 				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
 				012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */,
 				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,
+				B6C10C962CA72B7128D294C9 /* RemoteTelemetryConsent.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,

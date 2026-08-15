@@ -935,6 +935,9 @@ final class AppModel {
     private let service: any AppServicing
     private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
     private let diagnostics: any DiagnosticRecording
+    private let remoteTelemetryConsentStore: RemoteTelemetryConsentStore
+    private let remoteTelemetryConsentController:
+        any RemoteTelemetryConsentApplying
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
     private var librariesGeneration: UInt64 = 0
@@ -1007,6 +1010,7 @@ final class AppModel {
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
+    private(set) var remoteTelemetryEnabled: Bool
     let playback: PlaybackModel
     let downloads: DownloadModel
     let transcription: ChapterTranscriptionModel
@@ -1067,11 +1071,21 @@ final class AppModel {
             SystemDiagnosticRecorder.shared,
         diagnosticLogStore: (any DiagnosticRecording)? = nil,
         initialLaunchStage: AppLaunchStage? = nil,
-        transcription: ChapterTranscriptionModel? = nil
+        transcription: ChapterTranscriptionModel? = nil,
+        remoteTelemetryConsentStore: RemoteTelemetryConsentStore? = nil,
+        remoteTelemetryConsentController:
+            any RemoteTelemetryConsentApplying =
+                InactiveRemoteTelemetryConsentController()
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
         self.diagnostics = diagnostics
+        let consentStore =
+            remoteTelemetryConsentStore ?? RemoteTelemetryConsentStore()
+        self.remoteTelemetryConsentStore = consentStore
+        self.remoteTelemetryConsentController =
+            remoteTelemetryConsentController
+        remoteTelemetryEnabled = consentStore.isEnabled
         let launchStage =
             initialLaunchStage
             ?? AppLaunchStage.randomlySelectedInitialStage()
@@ -1098,6 +1112,22 @@ final class AppModel {
         } else {
             phase = .launching
         }
+        if remoteTelemetryEnabled {
+            remoteTelemetryConsentController
+                .applyRemoteTelemetryConsent(true)
+        }
+    }
+
+    func setRemoteTelemetryEnabled(_ enabled: Bool) {
+        guard remoteTelemetryEnabled != enabled else { return }
+
+        // Persist withdrawal before crossing the asynchronous runtime
+        // boundary. A later exporter must independently consult this setting
+        // before export or token renewal.
+        remoteTelemetryConsentStore.setEnabled(enabled)
+        remoteTelemetryEnabled = enabled
+        remoteTelemetryConsentController
+            .applyRemoteTelemetryConsent(enabled)
     }
 
     func startNearbyServerDiscovery() {

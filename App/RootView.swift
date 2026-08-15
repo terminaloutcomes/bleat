@@ -52,6 +52,7 @@ struct RootView: View {
     @Bindable var model: AppModel
     @State private var navigation = AppNavigationCoordinator()
     @State private var deepLinkInbox = AppDeepLinkInbox.shared
+    @State private var isShowingPrivacySettings = false
     @Environment(\.scenePhase) private var scenePhase
     @ColourSchemePreference private var colourScheme
 
@@ -81,6 +82,10 @@ struct RootView: View {
                         }
                     }
                     .accessibilityIdentifier("app.retry")
+                    Button("Privacy") {
+                        isShowingPrivacySettings = true
+                    }
+                    .accessibilityIdentifier("app.privacy")
                 }
                 .accessibilityIdentifier("app.unavailable")
                 .tint(colourScheme.color)
@@ -120,6 +125,21 @@ struct RootView: View {
         } message: {
             if let failure = navigation.deepLinkFailure {
                 Text(failure.message)
+            }
+        }
+        .sheet(isPresented: $isShowingPrivacySettings) {
+            NavigationStack {
+                Form {
+                    RemoteTelemetryConsentSection(model: model)
+                }
+                .navigationTitle("Privacy")
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            isShowingPrivacySettings = false
+                        }
+                    }
+                }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -333,6 +353,8 @@ private struct NativeLoginView: View {
                         action: submit
                     )
                 }
+
+                RemoteTelemetryConsentSection(model: model)
 
             }
             #if targetEnvironment(macCatalyst)
@@ -3712,6 +3734,34 @@ private struct StatisticsView: View {
     }
 }
 
+private struct RemoteTelemetryConsentSection: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Section {
+            Toggle(
+                "Share diagnostic telemetry",
+                isOn: Binding(
+                    get: {
+                        model.remoteTelemetryEnabled
+                    },
+                    set: { enabled in
+                        model.setRemoteTelemetryEnabled(enabled)
+                    }
+                )
+            )
+            .accessibilityIdentifier("settings.telemetry.enabled")
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text(
+                "Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, and timing. Audiobook content, credentials, accounts, servers, searches, transcripts, and device identifiers are excluded. You can turn this off at any time without affecting local Diagnostics."
+            )
+            .accessibilityIdentifier("settings.telemetry.explanation")
+        }
+    }
+}
+
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
@@ -3909,6 +3959,8 @@ private struct SettingsView: View {
                         "settings.playback.resumeRewind"
                     )
                 }
+
+                RemoteTelemetryConsentSection(model: model)
 
                 Section {
                     Picker(

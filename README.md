@@ -708,6 +708,16 @@ Activity** identifies which of those paths most recently reached a server.
 Diagnostics also distinguishes a local endpoint that is not yet validated,
 being checked, available, or temporarily unavailable.
 
+The Settings **Privacy** section also records device-local, default-off consent
+for **Share diagnostic telemetry**. The reviewed schema permits only bounded
+technical operation, outcome, timing, app-version, and operating-system data;
+it excludes audiobook content, credentials, accounts, servers, searches,
+transcripts, paths, and device or installation identifiers. Turning the setting
+off does not affect local Diagnostics. The same privacy control remains
+available while signed out and when application startup is unavailable. The
+current consent/schema foundation does not yet include a remote exporter; that
+integration is tracked separately.
+
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path
 becomes unconstrained. REST requests, downloads, covers, and playback remain

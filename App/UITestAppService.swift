@@ -21,6 +21,8 @@
         static let clearArgument = "--ui-testing-clear-persisted-scenario"
         static let clearDeepLinkReceiptArgument =
             "--ui-testing-clear-deep-link-receipt"
+        static let resetRemoteTelemetryConsentArgument =
+            "--ui-testing-reset-telemetry-consent"
     }
 
     private struct FixtureIDs: Sendable {
@@ -49,6 +51,13 @@
                 UITestScenarioStorage.clearDeepLinkReceiptArgument
             ) {
                 UITestDeepLinkReceipt.clear()
+            }
+            if arguments.contains(
+                UITestScenarioStorage.resetRemoteTelemetryConsentArgument
+            ) {
+                UserDefaults.standard.removeObject(
+                    forKey: RemoteTelemetryConsentStore.enabledKey
+                )
             }
             if arguments.contains(UITestScenarioStorage.clearArgument) {
                 UserDefaults.standard.removeObject(

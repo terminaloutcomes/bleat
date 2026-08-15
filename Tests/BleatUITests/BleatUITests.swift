@@ -768,6 +768,56 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testDiagnosticTelemetryConsentIsExplicitAndPersistsOffline() {
+        var app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-reset-telemetry-consent"]
+        )
+        tabButton("Settings", in: app).tap()
+
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.telemetry.enabled",
+            direction: .up
+        )
+        var telemetry = app.switches["settings.telemetry.enabled"]
+        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
+        XCTAssertEqual(telemetry.value as? String, "0")
+        XCTAssertTrue(
+            app.staticTexts["settings.telemetry.explanation"].exists
+        )
+
+        telemetry.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
+        ).tap()
+        let enabled = expectation(
+            for: NSPredicate(format: "value == %@", "1"),
+            evaluatedWith: telemetry
+        )
+        wait(for: [enabled], timeout: 3)
+
+        app.terminate()
+        app = launch(scenario: "--ui-testing-signed-out")
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.telemetry.enabled",
+            direction: .up
+        )
+        telemetry = app.switches["settings.telemetry.enabled"]
+        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
+        XCTAssertEqual(telemetry.value as? String, "1")
+
+        telemetry.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
+        ).tap()
+        let disabled = expectation(
+            for: NSPredicate(format: "value == %@", "0"),
+            evaluatedWith: telemetry
+        )
+        wait(for: [disabled], timeout: 3)
+    }
+
+    @MainActor
     func testLibraryLoadsAnotherPage() {
         let app = launch(scenario: "--ui-testing-signed-in")
 
