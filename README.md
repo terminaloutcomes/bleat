@@ -959,6 +959,27 @@ Record the device, iOS build, server version, media fixture, and result for each
 check. No script in this repository discovers, installs to, or controls a
 physical device.
 
+## Run bleat-api
+
+The initial Rust telemetry-authentication service lives in `bleat-api/`. It
+currently provides health/readiness checks and typed placeholder routes for the
+later App Attest challenge, enrollment, and token work. Run it locally with:
+
+```sh
+mise run api:run
+```
+
+Run its formatting, type-checking, strict Clippy, test, and Release-build gates
+with:
+
+```sh
+mise run api:validate
+```
+
+Local structured logs remain active when optional OTLP/HTTP trace and log
+export is configured. See `bleat-api/README.md` for the complete configuration
+and route contract.
+
 ## Project documentation
 
 - `docs/audiobookshelf-ios-app-spec.md` is the product and protocol source of truth.

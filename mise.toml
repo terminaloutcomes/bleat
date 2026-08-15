@@ -4,7 +4,42 @@ _.file = { path = ".envrc", redact = true }
 [tools]
 node = "24"
 pnpm = "11.17.0"
+rust = "1.97.0"
 zola = "0.22.1"
+
+[tasks."api:fmt"]
+description = "Check bleat-api Rust formatting"
+run = "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check"
+
+[tasks."api:check"]
+description = "Type-check bleat-api"
+run = "cargo check --manifest-path bleat-api/Cargo.toml --all-targets --all-features"
+
+[tasks."api:clippy"]
+description = "Lint bleat-api"
+run = "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings"
+
+[tasks."api:test"]
+description = "Test bleat-api"
+run = "cargo test --manifest-path bleat-api/Cargo.toml --all-features"
+
+[tasks."api:build"]
+description = "Build the bleat-api release binary"
+run = "cargo build --manifest-path bleat-api/Cargo.toml --release"
+
+[tasks."api:run"]
+description = "Run bleat-api with local development defaults"
+run = "cargo run --manifest-path bleat-api/Cargo.toml"
+
+[tasks."api:validate"]
+description = "Run every bleat-api validation gate"
+run = [
+  "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check",
+  "cargo check --manifest-path bleat-api/Cargo.toml --all-targets --all-features",
+  "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings",
+  "cargo test --manifest-path bleat-api/Cargo.toml --all-features",
+  "cargo build --manifest-path bleat-api/Cargo.toml --release",
+]
 
 [tasks."site-css"]
 description = "Install website dependencies and generate the Tailwind stylesheet"
@@ -67,6 +102,7 @@ run = ["./scripts/test-deep-links.sh"]
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
 run = [
+  { task = "api:validate" },
   { task = "site-check" },
   { task = "test:local" },
   { task = "test:live" },

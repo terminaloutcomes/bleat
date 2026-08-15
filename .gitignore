@@ -13,6 +13,7 @@ TestSupport/ServerHarness/artifacts/
 TestSupport/ServerHarness/state/
 TestSupport/ServerHarness/app-live-artifacts/
 build/
+/bleat-api/target/
 
 # Website build products
 site/node_modules/
