@@ -27,13 +27,26 @@ let package = Package(
         .package(
             url: "https://github.com/openid/AppAuth-iOS.git",
             exact: "2.0.0"
-        )
+        ),
+        .package(
+            url:
+                "https://github.com/open-telemetry/opentelemetry-swift-core.git",
+            exact: "2.3.0"
+        ),
     ],
     targets: [
         .target(
             name: "BleatCore",
             dependencies: [
-                .product(name: "AppAuthCore", package: "AppAuth-iOS")
+                .product(name: "AppAuthCore", package: "AppAuth-iOS"),
+                .product(
+                    name: "OpenTelemetryApi",
+                    package: "opentelemetry-swift-core"
+                ),
+                .product(
+                    name: "OpenTelemetrySdk",
+                    package: "opentelemetry-swift-core"
+                ),
             ]
         ),
         .target(
@@ -45,7 +58,13 @@ let package = Package(
         ),
         .testTarget(
             name: "BleatCoreTests",
-            dependencies: ["BleatCore"],
+            dependencies: [
+                "BleatCore",
+                .product(
+                    name: "OpenTelemetrySdk",
+                    package: "opentelemetry-swift-core"
+                ),
+            ],
             resources: [
                 .process("Fixtures")
             ]

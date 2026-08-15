@@ -1529,8 +1529,19 @@ span-name or attribute-dictionary API.
 When enabled, the reviewed collection policy samples every eligible trace.
 Temporary retained telemetry is limited to two hours and 128 MiB, has no
 separate span-count cap, and evicts the oldest spans first at the byte limit.
-Actual OpenTelemetry integration and retention are owned by follow-up work;
-the current policy and consent layer performs no remote export.
+The application owns a private OpenTelemetry provider with the SDK batch span
+processor and a persistence-first exporter decorator. Completed batches are
+atomically written to a protected, backup-excluded Application Support
+directory before downstream delivery, drained oldest-first, and deleted only
+after downstream success. Failed delivery retries with bounded foreground
+backoff and resumes after relaunch or foreground activation. Backgrounding
+requests a best-effort non-main-actor flush with a two-second caller-visible
+deadline and adds no telemetry background mode. Withdrawal synchronously gates
+new spans and downstream attempts and invalidates the current storage
+generation before asynchronous shutdown and purge, so rapid re-enablement
+cannot export withdrawn data. The downstream exporter remains injectable;
+production uses an unavailable sink until authenticated OTLP delivery is added
+by issue 63.
 
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend

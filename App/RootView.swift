@@ -92,6 +92,7 @@ struct RootView: View {
             }
         }
         .task {
+            model.setRemoteTelemetryForeground(scenePhase == .active)
             await model.start()
             if let route = deepLinkInbox.takePendingRoute() {
                 navigation.receive(route: route)
@@ -144,6 +145,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             model.setLiveUpdatesActive(phase == .active)
+            model.setRemoteTelemetryForeground(phase == .active)
             if phase != .active {
                 Task {
                     await model.synchronizePrivateCloud()
@@ -286,32 +288,32 @@ private struct NativeLoginView: View {
 
                 if supportsLocalLogin {
                     Section("Account") {
-                    TextField("Username", text: $username)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("login.username")
-                    if isPasswordVisible {
-                        TextField("Password", text: $password)
-                            .textContentType(.password)
-                            .accessibilityIdentifier("login.password")
-                    } else {
-                        SecureField("Password", text: $password)
-                            .textContentType(.password)
-                            .accessibilityIdentifier("login.password")
-                    }
-                    Button {
-                        isPasswordVisible.toggle()
-                    } label: {
-                        Image(
-                            systemName: isPasswordVisible
-                                ? "eye.slash" : "eye"
+                        TextField("Username", text: $username)
+                            .textContentType(.username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("login.username")
+                        if isPasswordVisible {
+                            TextField("Password", text: $password)
+                                .textContentType(.password)
+                                .accessibilityIdentifier("login.password")
+                        } else {
+                            SecureField("Password", text: $password)
+                                .textContentType(.password)
+                                .accessibilityIdentifier("login.password")
+                        }
+                        Button {
+                            isPasswordVisible.toggle()
+                        } label: {
+                            Image(
+                                systemName: isPasswordVisible
+                                    ? "eye.slash" : "eye"
+                            )
+                        }
+                        .accessibilityLabel(
+                            isPasswordVisible
+                                ? "Hide password" : "Show password"
                         )
-                    }
-                    .accessibilityLabel(
-                        isPasswordVisible
-                            ? "Hide password" : "Show password"
-                    )
                     }
                 }
 
@@ -1379,26 +1381,26 @@ private struct HomeView: View {
                 navigation: navigation,
                 handlePlaybackOutcome: handlePlaybackOutcome
             )
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    homeContext
-                }
-                .navigationDestination(for: LibraryBookSummary.self) { book in
-                    BookDetailView(
-                        model: model,
-                        book: book,
-                        navigation: navigation,
-                        origin: .home
-                    )
-                }
-                .navigationDestination(for: SeriesDestination.self) { series in
-                    SeriesDetailView(
-                        model: model,
-                        destination: series,
-                        navigation: navigation,
-                        origin: .home,
-                        handlePlaybackOutcome: handlePlaybackOutcome
-                    )
-                }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                homeContext
+            }
+            .navigationDestination(for: LibraryBookSummary.self) { book in
+                BookDetailView(
+                    model: model,
+                    book: book,
+                    navigation: navigation,
+                    origin: .home
+                )
+            }
+            .navigationDestination(for: SeriesDestination.self) { series in
+                SeriesDetailView(
+                    model: model,
+                    destination: series,
+                    navigation: navigation,
+                    origin: .home,
+                    handlePlaybackOutcome: handlePlaybackOutcome
+                )
+            }
         }
     }
 
@@ -1562,7 +1564,7 @@ private struct HomeContent: View {
     }
 
     private func refresh() async {
-        await model.refreshSelectedLibrary()
+        await model.refreshSelectedLibraryForPullToRefresh()
     }
 
     @ViewBuilder
@@ -2095,7 +2097,7 @@ private struct BookListContent: View {
                 }
                 .accessibilityIdentifier("books.list")
                 .refreshable {
-                    await model.refreshLibraries()
+                    await model.refreshLibrariesForPullToRefresh()
                 }
             }
         }
@@ -2111,7 +2113,7 @@ private struct BookListContent: View {
         }
         .accessibilityIdentifier("books.list")
         .refreshable {
-            await model.refreshLibraries()
+            await model.refreshLibrariesForPullToRefresh()
         }
     }
 

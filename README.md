@@ -715,8 +715,13 @@ it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and device or installation identifiers. Turning the setting
 off does not affect local Diagnostics. The same privacy control remains
 available while signed out and when application startup is unavailable. The
-current consent/schema foundation does not yet include a remote exporter; that
-integration is tracked separately.
+opted-in runtime batches completed OpenTelemetry spans away from the main
+actor and durably retains failed batches for at most two hours and 128 MiB in
+protected, backup-excluded Application Support storage. Withdrawal immediately
+stops new spans and downstream attempts, invalidates the retained generation,
+and purges it asynchronously. Authenticated OTLP delivery is tracked separately
+in issue 63; until then the unavailable production sink retains eligible spans
+within those limits.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path

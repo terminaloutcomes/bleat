@@ -687,6 +687,11 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.diagnostics",
+            direction: .up
+        )
         let diagnostics = app.buttons["settings.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
         diagnostics.tap()
@@ -1684,7 +1689,8 @@ final class BleatLiveUITests: XCTestCase {
         tabButton("Home", in: app).tap()
         let downloadedPlay = app.buttons.matching(
             NSPredicate(
-                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                format:
+                    "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
                 "home.downloaded.",
                 ".play",
                 "Play multi-track"
@@ -1729,7 +1735,8 @@ final class BleatLiveUITests: XCTestCase {
         )
         let downloadedPlay = app.buttons.matching(
             NSPredicate(
-                format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                format:
+                    "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
                 "home.downloaded.",
                 ".play",
                 "Play multi-track"

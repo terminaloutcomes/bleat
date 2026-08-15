@@ -134,6 +134,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case bookmarkUnavailable = "bookmark_unavailable"
     case accountRemovalFailed = "account_removal_failed"
     case requestCancelled = "request_cancelled"
+    case requestTimedOut = "request_timed_out"
+    case requestRateLimited = "request_rate_limited"
     case requestTransportFailed = "request_transport_failed"
     case nonHTTPResponse = "non_http_response"
     case logStorageUnavailable = "log_storage_unavailable"

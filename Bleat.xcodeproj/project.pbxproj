@@ -14,6 +14,7 @@
 		212CB9A152C459B1BFDFBBCF /* CoverImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */; };
 		297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F16612F5D186DFAED140F6 /* BookCoverView.swift */; };
 		305FC1C033F98F51115F4B9C /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */; };
+		30FC3808C6E7EB0FA36DF71F /* RemoteTelemetryTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */; };
 		315C431973BBE5E53135BE12 /* BonjourTroubleshooterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */; };
 		3704B4B5449FC6CB62037606 /* BleatTranscription in Frameworks */ = {isa = PBXBuildFile; productRef = 904BA9E1C52D54609A64CB46 /* BleatTranscription */; };
 		3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */; };
@@ -112,6 +113,7 @@
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		B2BC7735A08B9D198087831D /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		B458AC215D720282F4321F56 /* Bleat.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Bleat.icon; sourceTree = "<group>"; };
+		B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryTestSupport.swift; sourceTree = "<group>"; };
 		B5A82F11A48563C7E31708E0 /* BleatReleaseScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatReleaseScreenshotTests.swift; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.enabled.entitlements; sourceTree = "<group>"; };
@@ -163,6 +165,7 @@
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
 				C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */,
+				B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */,
 				342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */,
 			);
 			path = BleatAppTests;
@@ -427,6 +430,7 @@
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
 				5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */,
+				30FC3808C6E7EB0FA36DF71F /* RemoteTelemetryTestSupport.swift in Sources */,
 				FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

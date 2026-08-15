@@ -320,6 +320,7 @@ struct AutomaticDownloadPlaybackGate {
 final class PlaybackModel {
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
+    private let remoteTelemetryTracer: any RemoteTelemetryTracing
     private let positionStore: PlaybackPositionStore
     private let localSessionStore: LocalPlaybackSessionStore
     private let bookmarkMutationStore: BookmarkMutationStore
@@ -366,6 +367,7 @@ final class PlaybackModel {
     private var lastConfirmedAdvanceAt: TimeInterval?
     private var stablePlaybackStartedAt: TimeInterval?
     private var playbackRecoveryPolicy = PlaybackRecoveryPolicy()
+    private var pendingPlaybackStartSpan: RemoteTelemetrySpan?
     private let monotonicNow: @MainActor @Sendable () -> TimeInterval
     @ObservationIgnored
     private var automaticDownloadHandler:
@@ -518,7 +520,9 @@ final class PlaybackModel {
                 ProcessInfo.processInfo.systemUptime
             },
         diagnostics: any DiagnosticRecording =
-            SystemDiagnosticRecorder.shared
+            SystemDiagnosticRecorder.shared,
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer()
     ) {
         let skipBackwardInterval = preferencesStore.skipBackward()
         let skipForwardInterval = preferencesStore.skipForward()
@@ -526,6 +530,7 @@ final class PlaybackModel {
         let nextCommandAction = preferencesStore.nextCommandAction()
         self.service = service
         self.diagnostics = diagnostics
+        self.remoteTelemetryTracer = remoteTelemetryTracer
         self.positionStore = positionStore
         self.localSessionStore = localSessionStore
         self.bookmarkMutationStore = bookmarkMutationStore
@@ -568,6 +573,12 @@ final class PlaybackModel {
         account: ServerAccount,
         initialTime: Double? = nil
     ) async {
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .playbackPreparation,
+            source: .streamed
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         await diagnostics.record(
             .started(.openPlayback, category: .playback)
         )
@@ -576,9 +587,9 @@ final class PlaybackModel {
             detail: detail
         )
         guard availability.visibleActions.contains(.play) else {
-            state = .failed(
-                AppFailure(.openPlayback, .permissionDenied)
-            )
+            let failure = AppFailure(.openPlayback, .permissionDenied)
+            state = .failed(failure)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             await diagnostics.record(
                 .failed(
                     .openPlayback,
@@ -687,6 +698,7 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            telemetryOutcome = .succeeded
             await diagnostics.record(
                 .transition(
                     category: .playback,
@@ -709,6 +721,7 @@ final class PlaybackModel {
             resetPlayer()
             let failure = AppFailure(
                 operation: .openPlayback, serviceError: error)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             state = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -727,6 +740,7 @@ final class PlaybackModel {
             activeDownloadDetail = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            telemetryOutcome = .failed(.media)
             await diagnostics.record(
                 .failed(
                     .openPlayback,
@@ -744,6 +758,12 @@ final class PlaybackModel {
         account: ServerAccount?,
         initialTime: Double? = nil
     ) async {
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .playbackPreparation,
+            source: .downloaded
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         await diagnostics.record(
             .started(
                 .openPlayback,
@@ -753,6 +773,7 @@ final class PlaybackModel {
         )
         guard !trackURLs.isEmpty else {
             state = .failed(.mediaUnavailable)
+            telemetryOutcome = .failed(.media)
             await diagnostics.record(
                 .failed(
                     .openPlayback,
@@ -883,6 +904,7 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            telemetryOutcome = .succeeded
             await diagnostics.record(
                 .completed(.openPlayback, category: .playback)
             )
@@ -901,6 +923,7 @@ final class PlaybackModel {
             preparation = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            telemetryOutcome = .failed(.media)
             await diagnostics.record(
                 .failed(
                     .openPlayback,
@@ -1201,12 +1224,24 @@ final class PlaybackModel {
     }
 
     func play() {
+        play(preservingPendingPlaybackStart: false)
+    }
+
+    private func play(preservingPendingPlaybackStart: Bool) {
         guard let player,
             preparation != nil,
             state != .preparing,
             state != .ended
         else {
             return
+        }
+        if !preservingPendingPlaybackStart {
+            pendingPlaybackStartSpan?.end(.cancelled)
+            pendingPlaybackStartSpan = remoteTelemetryTracer.beginSpan(
+                operation: .playbackStart,
+                source: preparation?.sessionID == nil
+                    ? .downloaded : .streamed
+            )
         }
         if let rewindTarget = PlaybackResumeRewindDecision.target(
             currentTime: currentTime,
@@ -1268,6 +1303,8 @@ final class PlaybackModel {
         recordStatisticsSample(isAudibleAndAdvancing: false)
         generation &+= 1
         playbackRequested = false
+        pendingPlaybackStartSpan?.end(.cancelled)
+        pendingPlaybackStartSpan = nil
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
@@ -1315,6 +1352,8 @@ final class PlaybackModel {
 
     func fail(_ failure: AppFailure) {
         playbackRequested = false
+        pendingPlaybackStartSpan?.end(failure.remoteTelemetryOutcome)
+        pendingPlaybackStartSpan = nil
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
@@ -1418,12 +1457,26 @@ final class PlaybackModel {
     }
 
     func seek(to requestedTime: Double) async {
-        await performSeek(to: requestedTime)
+        await performSeek(
+            to: requestedTime,
+            preservingPendingPlaybackStart: false
+        )
     }
 
-    private func performSeek(to requestedTime: Double) async {
+    private func performSeek(
+        to requestedTime: Double,
+        preservingPendingPlaybackStart: Bool
+    ) async {
         guard let preparation else {
+            if preservingPendingPlaybackStart {
+                pendingPlaybackStartSpan?.end(.cancelled)
+                pendingPlaybackStartSpan = nil
+            }
             return
+        }
+        if !preservingPendingPlaybackStart {
+            pendingPlaybackStartSpan?.end(.cancelled)
+            pendingPlaybackStartSpan = nil
         }
         await diagnostics.record(
             .started(.seek, category: .playback)
@@ -1446,6 +1499,10 @@ final class PlaybackModel {
             persistLocalPosition()
         }
         guard generation == operationGeneration else {
+            if preservingPendingPlaybackStart {
+                pendingPlaybackStartSpan?.end(.cancelled)
+                pendingPlaybackStartSpan = nil
+            }
             return
         }
         let target = min(max(requestedTime, 0), preparation.duration)
@@ -1456,6 +1513,10 @@ final class PlaybackModel {
         do {
             try await rebuildQueue(at: target)
             guard generation == operationGeneration else {
+                if preservingPendingPlaybackStart {
+                    pendingPlaybackStartSpan?.end(.cancelled)
+                    pendingPlaybackStartSpan = nil
+                }
                 return
             }
             currentTime = target
@@ -1480,6 +1541,10 @@ final class PlaybackModel {
             }
             resetPlayer()
             state = .failed(.mediaUnavailable)
+            if preservingPendingPlaybackStart {
+                pendingPlaybackStartSpan?.end(.failed(.media))
+                pendingPlaybackStartSpan = nil
+            }
             await diagnostics.record(
                 .failed(
                     .seek,
@@ -1533,6 +1598,8 @@ final class PlaybackModel {
         generation &+= 1
         let operationGeneration = generation
         playbackRequested = false
+        pendingPlaybackStartSpan?.end(.cancelled)
+        pendingPlaybackStartSpan = nil
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
@@ -2032,6 +2099,8 @@ final class PlaybackModel {
 
     private func confirmPlaybackAdvance(at now: TimeInterval) {
         hasConfirmedPlaybackAdvance = true
+        pendingPlaybackStartSpan?.end(.succeeded)
+        pendingPlaybackStartSpan = nil
         lastConfirmedAdvanceAt = now
         if stablePlaybackStartedAt == nil {
             stablePlaybackStartedAt = now
@@ -2046,6 +2115,8 @@ final class PlaybackModel {
     }
 
     private func resetPlaybackRecoveryState() {
+        pendingPlaybackStartSpan?.end(.cancelled)
+        pendingPlaybackStartSpan = nil
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -2117,7 +2188,7 @@ final class PlaybackModel {
             isTranscoded = true
         }
         let effectiveFault: PlaybackRecoveryFault
-        if (fault == .stalled || fault == .itemFailure),
+        if fault == .stalled || fault == .itemFailure,
             let localURL = currentLocalPlaybackURL()
         {
             effectiveFault = .localEndpointFailure(localURL)
@@ -2203,9 +2274,11 @@ final class PlaybackModel {
                 operationGeneration: operationGeneration
             )
         case .fallbackFromLocal(let failedURL):
-            guard await service.reportServerTransportFailure(
-                url: failedURL
-            ) else {
+            guard
+                await service.reportServerTransportFailure(
+                    url: failedURL
+                )
+            else {
                 failPlaybackRecovery()
                 return
             }
@@ -2231,10 +2304,11 @@ final class PlaybackModel {
     }
 
     private static func isURL(_ url: URL, under serverURL: URL) -> Bool {
-        guard let value = URLComponents(
-            url: url,
-            resolvingAgainstBaseURL: false
-        ),
+        guard
+            let value = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ),
             let server = URLComponents(
                 url: serverURL,
                 resolvingAgainstBaseURL: false
@@ -2356,6 +2430,8 @@ final class PlaybackModel {
         _ failure: AppFailure = .mediaUnavailable
     ) {
         playbackRequested = false
+        pendingPlaybackStartSpan?.end(failure.remoteTelemetryOutcome)
+        pendingPlaybackStartSpan = nil
         cancelPlaybackWatchdog()
         player?.pause()
         transitionPlaybackState(to: .failed(failure))
@@ -2503,6 +2579,8 @@ final class PlaybackModel {
     private func playbackEnded() {
         recordStatisticsSample(isAudibleAndAdvancing: false)
         playbackRequested = false
+        pendingPlaybackStartSpan?.end(.succeeded)
+        pendingPlaybackStartSpan = nil
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
@@ -2642,6 +2720,12 @@ final class PlaybackModel {
         else {
             return
         }
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .playbackProgressSync,
+            source: .remote
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         await finishStatisticsSession()
         let listeningDelta =
             (try? await service.pendingStatisticsRealSeconds(
@@ -2667,6 +2751,7 @@ final class PlaybackModel {
             )
             lastAttemptedSyncTime = position
             syncState = .idle
+            telemetryOutcome = .succeeded
             await diagnostics.record(
                 .completed(.syncPlayback, category: .sync)
             )
@@ -2684,6 +2769,11 @@ final class PlaybackModel {
                 )
             }
             syncState = .failed
+            telemetryOutcome =
+                AppFailure(
+                    operation: .updateProgress,
+                    serviceError: error
+                ).remoteTelemetryOutcome
             await diagnostics.record(
                 .failed(
                     .syncPlayback,
@@ -2753,11 +2843,16 @@ final class PlaybackModel {
     }
 
     private func resumePlayback(afterRewindingTo target: Double) async {
-        await seek(to: target)
+        await performSeek(
+            to: target,
+            preservingPendingPlaybackStart: true
+        )
         guard state == .paused || state == .ready else {
+            pendingPlaybackStartSpan?.end(.cancelled)
+            pendingPlaybackStartSpan = nil
             return
         }
-        play()
+        play(preservingPendingPlaybackStart: true)
     }
 
     func syncPendingLocalSessions(for account: ServerAccount) async {

@@ -14,6 +14,190 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testPlaybackPreparationAndStartEmitReviewedTelemetry() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let tracer = RecordingRemoteTelemetryTracer()
+        let activation = TestAudioSessionActivation()
+        let playback = PlaybackModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            audioSessionActivation: {
+                activation.activate()
+            },
+            remoteTelemetryTracer: tracer
+        )
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: AccountID(rawValue: "private-account"),
+            account: nil
+        )
+        playback.pause()
+
+        XCTAssertEqual(
+            tracer.spans,
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .playbackPreparation,
+                    source: .downloaded,
+                    retryBucket: .none,
+                    outcome: .succeeded
+                ),
+                RecordedRemoteTelemetrySpan(
+                    operation: .playbackStart,
+                    source: .downloaded,
+                    retryBucket: .none,
+                    outcome: .cancelled
+                ),
+            ]
+        )
+    }
+
+    func testPlaybackPreparationFailureEmitsTypedMediaCategory()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let tracer = RecordingRemoteTelemetryTracer()
+        let playback = PlaybackModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            remoteTelemetryTracer: tracer
+        )
+
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [],
+            accountID: AccountID(rawValue: "private-account"),
+            account: nil
+        )
+
+        XCTAssertEqual(
+            tracer.spans,
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .playbackPreparation,
+                    source: .downloaded,
+                    retryBucket: .none,
+                    outcome: .failed(.media)
+                )
+            ]
+        )
+    }
+
+    func testRemotePlaybackProgressSyncEmitsOneTypedAttempt()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "private-session"),
+            itemID: fixture.detail.id,
+            title: fixture.detail.title,
+            duration: 1,
+            currentTime: 0,
+            chapters: fixture.detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: fixture.audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Private track"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(preparation)]
+        )
+        let tracer = RecordingRemoteTelemetryTracer()
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service,
+            remoteTelemetryTracer: tracer
+        )
+
+        await playback.start(detail: fixture.detail, account: account)
+        playback.pause()
+        for _ in 0..<100
+        where !tracer.spans.contains(where: {
+            $0.operation == .playbackProgressSync
+                && $0.outcome != nil
+        }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(
+            tracer.spans.filter {
+                $0.operation == .playbackProgressSync
+            },
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .playbackProgressSync,
+                    source: .remote,
+                    retryBucket: .none,
+                    outcome: .succeeded
+                )
+            ]
+        )
+        await playback.stop()
+    }
+
+    func testManualDownloadSchedulingAndCancellationEmitTaskSpans()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatTelemetryDownload-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: plan.itemID.rawValue,
+                title: "Private title",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(
+                URL(string: "https://192.0.2.1/private-audio")
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let tracer = RecordingRemoteTelemetryTracer()
+        let downloads = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            remoteTelemetryTracer: tracer
+        )
+
+        await downloads.download(detail: detail, account: account)
+        let record = try XCTUnwrap(downloads.records.first)
+        await downloads.cancel(record)
+
+        XCTAssertEqual(
+            tracer.spans,
+            plan.tracks.map { _ in
+                RecordedRemoteTelemetrySpan(
+                    operation: .downloadTransfer,
+                    source: .remote,
+                    retryBucket: .none,
+                    outcome: .cancelled
+                )
+            }
+        )
+    }
+
     func testPlayableCoverStateUsesExactAccountAndItemIdentity() {
         let account = AccountID(rawValue: "account-1")
         let otherAccount = AccountID(rawValue: "account-2")
@@ -87,7 +271,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(state(.paused, requested: false), .paused)
         XCTAssertEqual(state(.ready, requested: false), .paused)
         XCTAssertEqual(state(.ended, requested: false), .idle)
-        XCTAssertEqual(state(.failed(.mediaUnavailable), requested: true), .idle)
+        XCTAssertEqual(
+            state(.failed(.mediaUnavailable), requested: true), .idle)
     }
 
     func testPlaybackStartOutcomePresentsOnlyTypedFailures() {
@@ -965,6 +1150,63 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(terminalState?.outcome, .succeeded)
         await playback.stop()
+    }
+
+    func testTranscriptionLifecycleEmitsOneContentFreeSpan() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "Private chapter title"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "private-item-id",
+                title: "Private audiobook title",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let tracer = RecordingRemoteTelemetryTracer()
+        let coordinator = makeTranscriptionModel(
+            remoteTelemetryTracer: tracer
+        )
+        let appModel = AppModel(
+            service: TestAppService(activeAccount: .success(account)),
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        _ = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+
+        XCTAssertEqual(
+            tracer.spans,
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .transcription,
+                    source: .downloaded,
+                    retryBucket: .none,
+                    outcome: .succeeded
+                )
+            ]
+        )
+        XCTAssertFalse(
+            String(describing: tracer.spans).contains("Private")
+        )
     }
 
     func testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes()
@@ -5206,12 +5448,81 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.books, .loaded(page))
         XCTAssertEqual(model.homeShelves, .loaded(shelves))
         guard case .failed(let booksFailure) = model.booksRefreshState,
-              case .failed(let homeFailure) = model.homeShelvesRefreshState
+            case .failed(let homeFailure) = model.homeShelvesRefreshState
         else {
             return XCTFail("Expected typed refresh failures")
         }
         XCTAssertEqual(booksFailure.operation, .loadLibraryPage)
         XCTAssertEqual(homeFailure.operation, .loadHome)
+    }
+
+    func testOnlyPullToRefreshEmitsOneTypedLibraryRefreshSpan()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let shelves = fixtureShelves(libraryID: library.id)
+        let tracer = RecordingRemoteTelemetryTracer()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            homeShelves: .success(shelves)
+        )
+        let model = AppModel(service: service, remoteTelemetryTracer: tracer)
+        await model.start()
+        let launchSpanCount = tracer.spans.count
+
+        await model.refreshSelectedLibrary()
+        XCTAssertEqual(tracer.spans.count, launchSpanCount)
+
+        let failure = AppServiceError.libraryRepository(
+            .remote(.unexpectedStatus(503))
+        )
+        await service.setFirstPage(.failure(failure))
+        await service.setHomeShelves(.failure(failure))
+        await model.refreshSelectedLibraryForPullToRefresh()
+
+        XCTAssertEqual(
+            Array(tracer.spans.dropFirst(launchSpanCount)),
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .libraryRefresh,
+                    source: .remote,
+                    retryBucket: .none,
+                    outcome: .failed(.transport)
+                )
+            ]
+        )
+    }
+
+    func testLibraryListPullToRefreshEmitsOneSuccessfulSpanForEmptyList()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let tracer = RecordingRemoteTelemetryTracer()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service, remoteTelemetryTracer: tracer)
+        await model.start()
+        let launchSpanCount = tracer.spans.count
+
+        await model.refreshLibrariesForPullToRefresh()
+
+        XCTAssertEqual(
+            Array(tracer.spans.dropFirst(launchSpanCount)),
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .libraryRefresh,
+                    source: .remote,
+                    retryBucket: .none,
+                    outcome: .succeeded
+                )
+            ]
+        )
     }
 
     func testIdenticalRefreshDoesNotPublishObservableContent() async throws {
@@ -6699,69 +7010,70 @@ final class AppModelTests: XCTestCase {
 
     func testPlaybackStartMapsEveryAccessDenial() async throws {
         let libraryID = fixtureLibrary().id
-        let cases: [(
-            permissions: UserPermissions,
-            accessibleLibraryIDs: [LibraryID],
-            selectedItemTags: [String],
-            isExplicit: Bool,
-            tags: [String],
-            expected: AppFailureCause
-        )] = [
-            (
-                permissions: UserPermissions(
-                    download: false,
-                    update: false,
-                    delete: false,
-                    upload: false,
-                    createEReader: false,
-                    accessAllLibraries: false,
-                    accessAllTags: true,
-                    accessExplicitContent: true,
-                    selectedTagsNotAccessible: false
+        let cases:
+            [(
+                permissions: UserPermissions,
+                accessibleLibraryIDs: [LibraryID],
+                selectedItemTags: [String],
+                isExplicit: Bool,
+                tags: [String],
+                expected: AppFailureCause
+            )] = [
+                (
+                    permissions: UserPermissions(
+                        download: false,
+                        update: false,
+                        delete: false,
+                        upload: false,
+                        createEReader: false,
+                        accessAllLibraries: false,
+                        accessAllTags: true,
+                        accessExplicitContent: true,
+                        selectedTagsNotAccessible: false
+                    ),
+                    accessibleLibraryIDs: [],
+                    selectedItemTags: [],
+                    isExplicit: false,
+                    tags: [],
+                    expected: .inaccessibleLibrary
                 ),
-                accessibleLibraryIDs: [],
-                selectedItemTags: [],
-                isExplicit: false,
-                tags: [],
-                expected: .inaccessibleLibrary
-            ),
-            (
-                permissions: UserPermissions(
-                    download: false,
-                    update: false,
-                    delete: false,
-                    upload: false,
-                    createEReader: false,
-                    accessAllLibraries: true,
-                    accessAllTags: false,
-                    accessExplicitContent: true,
-                    selectedTagsNotAccessible: false
+                (
+                    permissions: UserPermissions(
+                        download: false,
+                        update: false,
+                        delete: false,
+                        upload: false,
+                        createEReader: false,
+                        accessAllLibraries: true,
+                        accessAllTags: false,
+                        accessExplicitContent: true,
+                        selectedTagsNotAccessible: false
+                    ),
+                    accessibleLibraryIDs: [],
+                    selectedItemTags: ["allowed"],
+                    isExplicit: false,
+                    tags: ["restricted"],
+                    expected: .inaccessibleTags
                 ),
-                accessibleLibraryIDs: [],
-                selectedItemTags: ["allowed"],
-                isExplicit: false,
-                tags: ["restricted"],
-                expected: .inaccessibleTags
-            ),
-            (
-                permissions: UserPermissions(
-                    download: false,
-                    update: false,
-                    delete: false,
-                    upload: false,
-                    createEReader: false,
-                    accessAllLibraries: true,
-                    accessAllTags: true,
-                    accessExplicitContent: false,
-                    selectedTagsNotAccessible: false
+                (
+                    permissions: UserPermissions(
+                        download: false,
+                        update: false,
+                        delete: false,
+                        upload: false,
+                        createEReader: false,
+                        accessAllLibraries: true,
+                        accessAllTags: true,
+                        accessExplicitContent: false,
+                        selectedTagsNotAccessible: false
+                    ),
+                    accessibleLibraryIDs: [],
+                    selectedItemTags: [],
+                    isExplicit: true,
+                    tags: [],
+                    expected: .explicitContentDenied
                 ),
-                accessibleLibraryIDs: [],
-                selectedItemTags: [],
-                isExplicit: true,
-                tags: [],
-                expected: .explicitContentDenied
-            ),
-        ]
+            ]
 
         for (index, testCase) in cases.enumerated() {
             let account = try fixtureAccount(
@@ -7642,6 +7954,14 @@ final class AppModelTests: XCTestCase {
                 .serverUnavailable
             ),
             (
+                .login, .discovery(.unexpectedHTTPStatus(408)),
+                .timeout
+            ),
+            (
+                .login, .discovery(.unexpectedHTTPStatus(429)),
+                .rateLimited
+            ),
+            (
                 .login, .onboarding(.localAuthenticationUnavailable),
                 .localLoginUnavailable
             ),
@@ -7660,7 +7980,7 @@ final class AppModelTests: XCTestCase {
             (.loadLibraryPage, .pageRequest(.invalidPage), .invalidInput),
             (.loadHome, .homeRequest(.invalidLimit), .invalidInput),
             (.search, .searchRequest(.invalidQuery), .invalidInput),
-            (.search, .searchCoordinator(.cancelled), .serverUnavailable),
+            (.search, .searchCoordinator(.cancelled), .requestCancelled),
             (
                 .loadBook, .bookDetail(.remote(.invalidBookDetail)),
                 .invalidServerResponse
@@ -8716,7 +9036,9 @@ final class AppModelTests: XCTestCase {
                 text: "transcribed text"
             )
         ],
-        transcriberGate: AsyncGate? = nil
+        transcriberGate: AsyncGate? = nil,
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer()
     ) -> ChapterTranscriptionModel {
         ChapterTranscriptionModel(
             transcriptCacheReapInterval: .seconds(3_600),
@@ -8741,7 +9063,8 @@ final class AppModelTests: XCTestCase {
                     gate: transcriberGate,
                     segments: segments
                 )
-            }
+            },
+            remoteTelemetryTracer: remoteTelemetryTracer
         )
     }
 
@@ -9208,6 +9531,8 @@ private struct PlaybackRecoveryFixture {
     func model(
         activation: TestAudioSessionActivation,
         service: TestAppService? = nil,
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer(),
         queuePlanning:
             @escaping @MainActor @Sendable (
                 AppPlaybackPreparation,
@@ -9230,7 +9555,8 @@ private struct PlaybackRecoveryFixture {
             audioSessionActivation: {
                 activation.activate()
             },
-            queuePlanning: queuePlanning
+            queuePlanning: queuePlanning,
+            remoteTelemetryTracer: remoteTelemetryTracer
         )
     }
 
@@ -9423,6 +9749,9 @@ private actor TestAppService: AppServicing {
         Result<[LocalPlaybackSessionSyncResult], AppServiceError>
     private var playbackResults:
         [Result<AppPlaybackPreparation, AppServiceError>]
+    private let downloadPlanResult: Result<DownloadPlan, AppServiceError>?
+    private let authorizedDownloadRequestResult:
+        Result<URLRequest, AppServiceError>?
     private var removeAccountResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
@@ -9533,6 +9862,9 @@ private actor TestAppService: AppServicing {
             > = .success([]),
         playback:
             [Result<AppPlaybackPreparation, AppServiceError>] = [],
+        downloadPlan: Result<DownloadPlan, AppServiceError>? = nil,
+        authorizedDownloadRequest:
+            Result<URLRequest, AppServiceError>? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         accountUpdateGate: AsyncGate? = nil,
@@ -9581,6 +9913,8 @@ private actor TestAppService: AppServicing {
         progressUpdateResult = progressUpdate
         localSessionSyncResult = localSessionSync
         playbackResults = playback
+        downloadPlanResult = downloadPlan
+        authorizedDownloadRequestResult = authorizedDownloadRequest
         removeAccountResult = removeAccount
         self.loginGate = loginGate
         self.accountUpdateGate = accountUpdateGate
@@ -9932,8 +10266,8 @@ private actor TestAppService: AppServicing {
             await browsePageGate.enterAndWait()
         }
         if request.page == 0,
-           recordedPageRequests.count > 1,
-           let refreshPageGate
+            recordedPageRequests.count > 1,
+            let refreshPageGate
         {
             await refreshPageGate.enterAndWait()
         }
@@ -9949,7 +10283,7 @@ private actor TestAppService: AppServicing {
     ) async throws(AppServiceError) -> [LibraryBookShelf] {
         recordedHomeRequests.append(libraryID)
         if recordedHomeRequests.count > 1,
-           let homeShelvesRefreshGate
+            let homeShelvesRefreshGate
         {
             await homeShelvesRefreshGate.enterAndWait()
         }
@@ -10078,6 +10412,9 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> DownloadPlan {
+        if let downloadPlanResult {
+            return try value(from: downloadPlanResult)
+        }
         throw .downloadPlan(.invalidItemID)
     }
 
@@ -10085,6 +10422,9 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         identity: DownloadTaskIdentity
     ) async throws(AppServiceError) -> URLRequest {
+        if let authorizedDownloadRequestResult {
+            return try value(from: authorizedDownloadRequestResult)
+        }
         throw .downloadAuthorization(.invalidAccountID)
     }
 

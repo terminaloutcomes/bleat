@@ -302,6 +302,9 @@ extension AppFailure {
         case (_, .localStorageUnavailable): .localStorageUnavailable
         case (_, .unavailableOffline): .unavailableOffline
         case (_, .serverUnavailable): .serverUnavailable
+        case (_, .timeout): .requestTimedOut
+        case (_, .rateLimited): .requestRateLimited
+        case (_, .requestCancelled): .requestCancelled
         case (_, .requestRejected): .requestRejected
         case (_, .mediaUnavailable): .mediaUnavailable
         case (_, .uncertainMutation): .uncertainMutation

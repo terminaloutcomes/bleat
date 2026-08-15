@@ -191,6 +191,42 @@ enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
     }
 }
 
+extension ChapterTranscriptionViewFailure {
+    var remoteTelemetryOutcome: RemoteTelemetryOutcome {
+        switch self {
+        case .cancelled:
+            .cancelled
+        case .audioNotDownloaded:
+            .failed(.offline)
+        case .localAudioUnavailable, .invalidChapterRange:
+            .failed(.media)
+        case .cacheSaveFailed:
+            .failed(.localStorage)
+        case .transcription(let failure):
+            .failed(failure.remoteTelemetryFailureCategory)
+        }
+    }
+}
+
+extension ChapterTranscriptionFailure {
+    fileprivate var remoteTelemetryFailureCategory:
+        RemoteTelemetryFailureCategory
+    {
+        switch self {
+        case .operatingSystemUnsupported, .unavailableOnDevice,
+            .unsupportedLocale, .languageAssetsUnavailable:
+            .unsupported
+        case .languageAssetInstallationFailed:
+            .transport
+        case .audioFileUnreadable, .invalidChapterStart,
+            .invalidAudioRange, .chapterExtractionUnavailable,
+            .chapterExtractionFailed, .analyzerInputFailed,
+            .analyzerFinalizationFailed, .resultStreamFailed:
+            .media
+        }
+    }
+}
+
 extension ChapterTranscriptionFailure {
     fileprivate var cachedTaskFailure: CachedChapterTranscriptionTaskFailure {
         switch self {
@@ -374,6 +410,10 @@ typealias ChapterTranscriberFactory = @Sendable () -> any ChapterTranscribing
 @MainActor
 @Observable
 final class ChapterTranscriptionModel {
+    @ObservationIgnored
+    private let remoteTelemetryTracer: any RemoteTelemetryTracing
+    @ObservationIgnored
+    private var remoteTelemetrySpan: RemoteTelemetrySpan?
     private(set) var state: ChapterTranscriptionViewState = .ready
     private(set) var cachedTranscriptsByBook:
         [ChapterTranscriptionBookKey: [CachedChapterTranscript]] = [:]
@@ -423,8 +463,11 @@ final class ChapterTranscriptionModel {
         transcriptCacheTTL: Duration = .seconds(300),
         transcriptCacheReapInterval: Duration = .seconds(60),
         audioLoader: ChapterTranscriptionAudioLoader? = nil,
-        transcriberFactory: ChapterTranscriberFactory? = nil
+        transcriberFactory: ChapterTranscriberFactory? = nil,
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer()
     ) {
+        self.remoteTelemetryTracer = remoteTelemetryTracer
         self.transcriptCacheTTL = transcriptCacheTTL
         self.transcriptCacheReapInterval = transcriptCacheReapInterval
         self.audioLoader = audioLoader ?? Self.loadAudio
@@ -661,6 +704,10 @@ final class ChapterTranscriptionModel {
         )
         activeAppModel = appModel
         activeCompletedChapterIDs = []
+        remoteTelemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .transcription,
+            source: .downloaded
+        )
         cacheExpiryDeadlines[bookKey] = nil
         state = .preparingAudio(
             bookKey: bookKey,
@@ -931,6 +978,8 @@ final class ChapterTranscriptionModel {
             )
             terminalStatesByBook[bookKey] = terminalState
             markMutated(bookKey)
+            remoteTelemetrySpan?.end(.succeeded)
+            remoteTelemetrySpan = nil
             finishTask(taskID)
             await persist(
                 terminalState,
@@ -1025,6 +1074,8 @@ final class ChapterTranscriptionModel {
         )
         terminalStatesByBook[bookKey] = terminalState
         markMutated(bookKey)
+        remoteTelemetrySpan?.end(failure.remoteTelemetryOutcome)
+        remoteTelemetrySpan = nil
         finishTask(taskID)
         if outcome == .cancelled {
             Task { [weak self, weak appModel] in
@@ -1050,6 +1101,8 @@ final class ChapterTranscriptionModel {
         guard activeTaskID == taskID else {
             return
         }
+        remoteTelemetrySpan?.end(.cancelled)
+        remoteTelemetrySpan = nil
         transcriptionTask = nil
         let bookKey = activeBatch?.bookKey
         activeTaskID = nil

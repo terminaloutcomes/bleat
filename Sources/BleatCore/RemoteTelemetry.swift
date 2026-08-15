@@ -1,5 +1,65 @@
 import Foundation
 
+/// The application-facing tracing boundary. It deliberately exposes no raw
+/// OpenTelemetry span names or attribute dictionaries.
+public protocol RemoteTelemetryTracing: Sendable {
+    func beginSpan(
+        operation: RemoteTelemetryOperation,
+        source: RemoteTelemetrySource?,
+        retryBucket: RemoteTelemetryRetryBucket
+    ) -> RemoteTelemetrySpan
+}
+
+extension RemoteTelemetryTracing {
+    public func beginSpan(
+        operation: RemoteTelemetryOperation,
+        source: RemoteTelemetrySource? = nil,
+        retryBucket: RemoteTelemetryRetryBucket = .none
+    ) -> RemoteTelemetrySpan {
+        beginSpan(
+            operation: operation,
+            source: source,
+            retryBucket: retryBucket
+        )
+    }
+}
+
+/// A single reviewed operation. Ending is idempotent so cancellation and
+/// replacement paths may safely race without producing duplicate spans.
+public final class RemoteTelemetrySpan: @unchecked Sendable {
+    private let lock = NSLock()
+    private var endAction: (@Sendable (RemoteTelemetryOutcome) -> Void)?
+
+    public init(
+        endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void
+    ) {
+        self.endAction = endAction
+    }
+
+    public func end(_ outcome: RemoteTelemetryOutcome) {
+        let action = lock.withLock {
+            let action = endAction
+            endAction = nil
+            return action
+        }
+        action?(outcome)
+    }
+
+    static let inactive = RemoteTelemetrySpan { _ in }
+}
+
+public struct InactiveRemoteTelemetryTracer: RemoteTelemetryTracing {
+    public init() {}
+
+    public func beginSpan(
+        operation: RemoteTelemetryOperation,
+        source: RemoteTelemetrySource?,
+        retryBucket: RemoteTelemetryRetryBucket
+    ) -> RemoteTelemetrySpan {
+        .inactive
+    }
+}
+
 /// The complete reviewed set of operations that Bleat may trace remotely.
 ///
 /// Adding a case changes Bleat's remote telemetry contract and requires a
@@ -271,18 +331,4 @@ public struct RemoteTelemetryCollectionPolicy: Equatable, Sendable {
         maximumBufferedSpanCount: nil,
         overflowPolicy: .dropOldest
     )
-
-    private init(
-        samplingRatio: Double,
-        maximumBufferedAge: TimeInterval,
-        maximumBufferedBytes: Int,
-        maximumBufferedSpanCount: Int?,
-        overflowPolicy: RemoteTelemetryBufferOverflowPolicy
-    ) {
-        self.samplingRatio = samplingRatio
-        self.maximumBufferedAge = maximumBufferedAge
-        self.maximumBufferedBytes = maximumBufferedBytes
-        self.maximumBufferedSpanCount = maximumBufferedSpanCount
-        self.overflowPolicy = overflowPolicy
-    }
 }

@@ -1,5 +1,5 @@
-import BleatCore
 import AuthenticationServices
+import BleatCore
 import SwiftUI
 import UIKit
 
@@ -22,6 +22,7 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                 SystemDiagnosticRecorder.shared
             let diagnosticLogStore: (any DiagnosticRecording)? = nil
         #endif
+        let remoteTelemetry = RemoteTelemetryController()
 
         #if DEBUG
             if let testService = UITestAppService.current() {
@@ -30,7 +31,9 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                     nearbyServerDiscovery:
                         UnavailableNearbyServerDiscovery(),
                     diagnostics: diagnostics,
-                    diagnosticLogStore: diagnosticLogStore
+                    diagnosticLogStore: diagnosticLogStore,
+                    remoteTelemetryConsentController: remoteTelemetry,
+                    remoteTelemetryTracer: remoteTelemetry.tracer
                 )
                 if UITestAppService.opensSettingsAtLaunch {
                     AppDeepLinkInbox.shared.openSettings()
@@ -59,14 +62,18 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                     }
                 ),
                 diagnostics: diagnostics,
-                diagnosticLogStore: diagnosticLogStore
+                diagnosticLogStore: diagnosticLogStore,
+                remoteTelemetryConsentController: remoteTelemetry,
+                remoteTelemetryTracer: remoteTelemetry.tracer
             )
         } catch let error {
             model = AppModel(
                 service: UnavailableAppService(),
                 bootstrapError: error,
                 diagnostics: diagnostics,
-                diagnosticLogStore: diagnosticLogStore
+                diagnosticLogStore: diagnosticLogStore,
+                remoteTelemetryConsentController: remoteTelemetry,
+                remoteTelemetryTracer: remoteTelemetry.tracer
             )
         }
         super.init()

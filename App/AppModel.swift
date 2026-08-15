@@ -419,6 +419,7 @@ enum AppFailureCause: String, Equatable, Sendable {
     case authenticationRequired, permissionDenied, itemNotFound
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
+    case requestCancelled, timeout, rateLimited
     case authenticationCancelled, authenticationSessionInProgress
     case authenticationBrowserFailed, authenticationBridgeFailed
     case authenticationCallbackInvalid, authenticationCredentialInvalid
@@ -461,6 +462,9 @@ struct AppFailure: Equatable, Sendable {
             "Local storage unavailable"
         case .unavailableOffline: "Unavailable offline"
         case .serverUnavailable: "Server unavailable"
+        case .timeout: "Request timed out"
+        case .rateLimited: "Too many requests"
+        case .requestCancelled: "Request cancelled"
         case .serverRequiresHTTPS: "HTTPS required"
         case .serverNotReady: "Server not ready"
         case .serverUnsupported: "Server unsupported"
@@ -525,6 +529,12 @@ struct AppFailure: Equatable, Sendable {
             "This information has not been saved for offline access."
         case .serverUnavailable:
             "Bleat could not reach the Audiobookshelf server."
+        case .timeout:
+            "The Audiobookshelf server did not respond in time."
+        case .rateLimited:
+            "The Audiobookshelf server asked Bleat to try again later."
+        case .requestCancelled:
+            "The request was cancelled."
         case .requestRejected:
             "The server refused this request."
         case .authenticationCancelled:
@@ -564,7 +574,9 @@ struct AppFailure: Equatable, Sendable {
             "exclamationmark.triangle"
         case .localStorageUnavailable, .persistenceUnavailable:
             "externaldrive.badge.exclamationmark"
-        case .unavailableOffline, .serverUnavailable: "wifi.exclamationmark"
+        case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
+            "wifi.exclamationmark"
+        case .requestCancelled: "xmark.circle"
         case .mediaUnavailable: "play.slash"
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
@@ -580,7 +592,8 @@ struct AppFailure: Equatable, Sendable {
             && (cause == .invalidServerResponse
                 || cause == .localStorageUnavailable
                 || cause == .unavailableOffline
-                || cause == .serverUnavailable || cause == .requestRejected)
+                || cause == .serverUnavailable || cause == .requestRejected
+                || cause == .timeout || cause == .rateLimited)
     }
 
     static let persistenceUnavailable = AppFailure(
@@ -696,7 +709,7 @@ struct AppFailure: Equatable, Sendable {
             return .invalidInput
         case .searchCoordinator(let error):
             switch error {
-            case .cancelled, .superseded: return .serverUnavailable
+            case .cancelled, .superseded: return .requestCancelled
             case .repository(let error): return repositoryCause(error)
             }
         case .playbackSession(let error): return playbackSessionCause(error)
@@ -779,7 +792,9 @@ struct AppFailure: Equatable, Sendable {
         case 401: .authenticationRequired
         case 403: .permissionDenied
         case 404: .itemNotFound
-        case 408, 429, 500...599: .serverUnavailable
+        case 408: .timeout
+        case 429: .rateLimited
+        case 500...599: .serverUnavailable
         default: .requestRejected
         }
     }
@@ -791,7 +806,7 @@ struct AppFailure: Equatable, Sendable {
         case .fallbackCache(let remote, _): apiCause(remote)
         case .cache: .localStorageUnavailable
         case .noCachedValue: .unavailableOffline
-        case .cancelled: .serverUnavailable
+        case .cancelled: .requestCancelled
         }
     }
     private static func apiCause(_ error: AudiobookshelfAPIError)
@@ -804,7 +819,7 @@ struct AppFailure: Equatable, Sendable {
             .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults,
             .invalidPersonalizedShelves:
             .invalidServerResponse
-        case .cancelled: .serverUnavailable
+        case .cancelled: .requestCancelled
         case .invalidAccountID, .routeConstruction: .requestRejected
         }
     }
@@ -823,10 +838,12 @@ struct AppFailure: Equatable, Sendable {
         case .unexpectedRefreshStatus(let status): statusCause(status)
         case .invalidAccountID, .accountOperationInProgress,
             .authenticationEndpoint, .requestDoesNotMatchRoute,
-            .authorizationFailed, .requestCancelled,
-            .refreshRequestConstructionFailed, .refreshCancelled,
+            .authorizationFailed,
+            .refreshRequestConstructionFailed,
             .malformedRefreshResponse:
             .requestRejected
+        case .requestCancelled, .refreshCancelled:
+            .requestCancelled
         }
     }
     private static func playbackSessionCause(_ error: PlaybackSessionError)
@@ -929,6 +946,55 @@ struct AppFailure: Equatable, Sendable {
     }
 }
 
+extension AppFailure {
+    var remoteTelemetryOutcome: RemoteTelemetryOutcome {
+        if cause == .authenticationCancelled || cause == .requestCancelled {
+            return .cancelled
+        }
+        return .failed(cause.remoteTelemetryFailureCategory)
+    }
+}
+
+extension AppFailureCause {
+    var remoteTelemetryFailureCategory: RemoteTelemetryFailureCategory {
+        switch self {
+        case .invalidCredentials, .authenticationRequired,
+            .authenticationCallbackInvalid,
+            .authenticationCredentialInvalid:
+            .authentication
+        case .permissionDenied, .inaccessibleLibrary, .inaccessibleTags,
+            .explicitContentDenied:
+            .authorization
+        case .unavailableOffline:
+            .offline
+        case .serverUnavailable, .uncertainMutation,
+            .authenticationBrowserFailed:
+            .transport
+        case .timeout:
+            .timeout
+        case .rateLimited:
+            .rateLimited
+        case .serverNotReady, .requestRejected, .itemNotFound,
+            .authenticationBridgeFailed:
+            .serverRejected
+        case .invalidServerResponse, .playbackIdentityMismatch:
+            .invalidResponse
+        case .persistenceUnavailable, .localStorageUnavailable:
+            .localStorage
+        case .mediaUnavailable:
+            .media
+        case .serverUnsupported, .localLoginUnavailable:
+            .unsupported
+        case .invalidInput, .serverRequiresHTTPS,
+            .authenticationSessionInProgress, .accountUnavailable,
+            .invalidPlaybackPosition, .unknownPlaybackChapter,
+            .invalidPlaybackChapterOffset, .authenticationCancelled,
+            .requestCancelled:
+            .unknown
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -938,6 +1004,7 @@ final class AppModel {
     private let remoteTelemetryConsentStore: RemoteTelemetryConsentStore
     private let remoteTelemetryConsentController:
         any RemoteTelemetryConsentApplying
+    private let remoteTelemetryTracer: any RemoteTelemetryTracing
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
     private var librariesGeneration: UInt64 = 0
@@ -1075,7 +1142,9 @@ final class AppModel {
         remoteTelemetryConsentStore: RemoteTelemetryConsentStore? = nil,
         remoteTelemetryConsentController:
             any RemoteTelemetryConsentApplying =
-                InactiveRemoteTelemetryConsentController()
+            InactiveRemoteTelemetryConsentController(),
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer()
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -1085,6 +1154,7 @@ final class AppModel {
         self.remoteTelemetryConsentStore = consentStore
         self.remoteTelemetryConsentController =
             remoteTelemetryConsentController
+        self.remoteTelemetryTracer = remoteTelemetryTracer
         remoteTelemetryEnabled = consentStore.isEnabled
         let launchStage =
             initialLaunchStage
@@ -1094,11 +1164,16 @@ final class AppModel {
         let subsystems = Self.makePlaybackAndDownloads(
             service: service,
             downloadsStorageRootURL: downloadsStorageRootURL,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            remoteTelemetryTracer: remoteTelemetryTracer
         )
         self.playback = subsystems.playback
         self.downloads = subsystems.downloads
-        self.transcription = transcription ?? ChapterTranscriptionModel()
+        self.transcription =
+            transcription
+            ?? ChapterTranscriptionModel(
+                remoteTelemetryTracer: remoteTelemetryTracer
+            )
         #if DEBUG
             self.diagnosticLogStore =
                 diagnosticLogStore as? PersistentDiagnosticLogStore
@@ -1113,8 +1188,20 @@ final class AppModel {
             phase = .launching
         }
         if remoteTelemetryEnabled {
+            let storageGeneration =
+                consentStore
+                .ensureEnabledStorageGeneration()
             remoteTelemetryConsentController
-                .applyRemoteTelemetryConsent(true)
+                .applyRemoteTelemetryConsent(
+                    true,
+                    storageGeneration: storageGeneration
+                )
+        } else {
+            remoteTelemetryConsentController
+                .applyRemoteTelemetryConsent(
+                    false,
+                    storageGeneration: nil
+                )
         }
     }
 
@@ -1124,10 +1211,18 @@ final class AppModel {
         // Persist withdrawal before crossing the asynchronous runtime
         // boundary. A later exporter must independently consult this setting
         // before export or token renewal.
-        remoteTelemetryConsentStore.setEnabled(enabled)
+        let storageGeneration = remoteTelemetryConsentStore.setEnabled(enabled)
         remoteTelemetryEnabled = enabled
         remoteTelemetryConsentController
-            .applyRemoteTelemetryConsent(enabled)
+            .applyRemoteTelemetryConsent(
+                enabled,
+                storageGeneration: storageGeneration
+            )
+    }
+
+    func setRemoteTelemetryForeground(_ foreground: Bool) {
+        remoteTelemetryConsentController
+            .setRemoteTelemetryForeground(foreground)
     }
 
     func startNearbyServerDiscovery() {
@@ -1168,16 +1263,19 @@ final class AppModel {
     private static func makePlaybackAndDownloads(
         service: any AppServicing,
         downloadsStorageRootURL: URL?,
-        diagnostics: any DiagnosticRecording
+        diagnostics: any DiagnosticRecording,
+        remoteTelemetryTracer: any RemoteTelemetryTracing
     ) -> (playback: PlaybackModel, downloads: DownloadModel) {
         let playback = PlaybackModel(
             service: service,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            remoteTelemetryTracer: remoteTelemetryTracer
         )
         let downloads = DownloadModel(
             service: service,
             storageRootURL: downloadsStorageRootURL,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            remoteTelemetryTracer: remoteTelemetryTracer
         )
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
@@ -1189,6 +1287,11 @@ final class AppModel {
         guard !hasStarted else {
             return
         }
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .appLaunch
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         hasStarted = true
         await diagnostics.record(
             .started(.appStart, category: .app)
@@ -1265,6 +1368,7 @@ final class AppModel {
                 await diagnostics.record(
                     .completed(.appStart, category: .app)
                 )
+                telemetryOutcome = .succeeded
                 return
             }
             account = restoredAccount
@@ -1282,8 +1386,10 @@ final class AppModel {
             await diagnostics.record(
                 .completed(.appStart, category: .app)
             )
+            telemetryOutcome = .succeeded
         } catch let error {
             let failure = AppFailure(operation: .appStart, serviceError: error)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             phase = .unavailable(failure)
             await diagnostics.record(
                 .failed(
@@ -1321,6 +1427,12 @@ final class AppModel {
         guard !loginStatus.isSubmitting else {
             return false
         }
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .accountConnection,
+            source: .remote
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         loginStatus = .submitting(.checkingServer)
         await diagnostics.record(
             .started(.login, category: .auth)
@@ -1357,9 +1469,11 @@ final class AppModel {
             await loadStatistics()
             await synchronizePrivateCloud()
             startLiveUpdates(for: authenticatedAccount)
+            telemetryOutcome = .succeeded
             return true
         } catch let error {
             let failure = AppFailure(operation: .login, serviceError: error)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             loginStatus = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -1528,10 +1642,19 @@ final class AppModel {
 
     @discardableResult
     func reauthenticate(password: String) async -> Bool {
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .accountConnection,
+            source: .remote
+        )
+        var telemetryOutcome = RemoteTelemetryOutcome.cancelled
+        defer { telemetrySpan.end(telemetryOutcome) }
         guard let account else {
-            loginStatus = .failed(
-                AppFailure(.reauthenticate, .authenticationRequired)
+            let failure = AppFailure(
+                .reauthenticate,
+                .authenticationRequired
             )
+            loginStatus = .failed(failure)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             return false
         }
         guard !loginStatus.isSubmitting else {
@@ -1559,10 +1682,12 @@ final class AppModel {
             schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             startLiveUpdates(for: authenticatedAccount)
+            telemetryOutcome = .succeeded
             return true
         } catch let error {
             let failure = AppFailure(
                 operation: .reauthenticate, serviceError: error)
+            telemetryOutcome = failure.remoteTelemetryOutcome
             loginStatus = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -1655,7 +1780,7 @@ final class AppModel {
                     library.mediaType == .book
                 }
             guard operationGeneration == librariesGeneration,
-                  self.account?.id == account.id
+                self.account?.id == account.id
             else {
                 return
             }
@@ -1686,7 +1811,7 @@ final class AppModel {
             await selectLibrary(library)
         } catch let error {
             guard operationGeneration == librariesGeneration,
-                  self.account?.id == account.id
+                self.account?.id == account.id
             else {
                 return
             }
@@ -1704,17 +1829,38 @@ final class AppModel {
     }
 
     func refreshLibraries() async {
+        await refreshLibrariesContent()
+    }
+
+    func refreshLibrariesForPullToRefresh() async {
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .libraryRefresh,
+            source: .remote
+        )
+        let startingGeneration = librariesGeneration
+        await refreshLibrariesContent()
+        let expectedGeneration = startingGeneration &+ 1
+        let outcome =
+            librariesGeneration == expectedGeneration
+            ? currentLibraryRefreshOutcome(includeLibraries: true)
+            : .cancelled
+        telemetrySpan.end(outcome)
+    }
+
+    private func refreshLibrariesContent() async {
+        librariesGeneration &+= 1
+        let operationGeneration = librariesGeneration
         guard let account else {
-            let failure = ResourceRefreshState.failed(
-                AppFailure(.loadLibraries, .authenticationRequired)
+            let appFailure = AppFailure(
+                .loadLibraries,
+                .authenticationRequired
             )
+            let failure = ResourceRefreshState.failed(appFailure)
             if librariesRefreshState != failure {
                 librariesRefreshState = failure
             }
             return
         }
-        librariesGeneration &+= 1
-        let operationGeneration = librariesGeneration
         await diagnostics.record(
             .started(.loadLibraries, category: .api)
         )
@@ -1722,9 +1868,9 @@ final class AppModel {
             let loadedLibraries = try await service.refreshedLibraries(
                 for: account
             )
-                .filter { $0.mediaType == .book }
+            .filter { $0.mediaType == .book }
             guard operationGeneration == librariesGeneration,
-                  self.account?.id == account.id
+                self.account?.id == account.id
             else {
                 return
             }
@@ -1742,7 +1888,6 @@ final class AppModel {
                     count: loadedLibraries.count
                 )
             )
-
             guard let currentLibrary = selectedLibrary else {
                 guard let firstLibrary = loadedLibraries.first else {
                     setEmptyLibraryContentIfChanged()
@@ -1751,9 +1896,11 @@ final class AppModel {
                 await selectLibrary(firstLibrary)
                 return
             }
-            guard let retainedLibrary = loadedLibraries.first(where: {
-                $0.id == currentLibrary.id
-            }) else {
+            guard
+                let retainedLibrary = loadedLibraries.first(where: {
+                    $0.id == currentLibrary.id
+                })
+            else {
                 selectedLibrary = nil
                 clearEntityBrowseFilter()
                 resetSearch()
@@ -1772,10 +1919,10 @@ final class AppModel {
             if selectedLibrary != retainedLibrary {
                 selectedLibrary = retainedLibrary
             }
-            await refreshSelectedLibrary()
+            await refreshSelectedLibraryContent()
         } catch let error {
             guard operationGeneration == librariesGeneration,
-                  self.account?.id == account.id
+                self.account?.id == account.id
             else {
                 return
             }
@@ -1841,8 +1988,8 @@ final class AppModel {
                 libraryID: library.id
             )
             guard self.account?.id == account.id,
-                  selectedLibrary?.id == library.id,
-                  homeOperationGeneration == homeShelvesGeneration
+                selectedLibrary?.id == library.id,
+                homeOperationGeneration == homeShelvesGeneration
             else {
                 return
             }
@@ -1859,8 +2006,8 @@ final class AppModel {
             )
         } catch let error {
             guard self.account?.id == account.id,
-                  selectedLibrary?.id == library.id,
-                  homeOperationGeneration == homeShelvesGeneration
+                selectedLibrary?.id == library.id,
+                homeOperationGeneration == homeShelvesGeneration
             else {
                 return
             }
@@ -1878,19 +2025,38 @@ final class AppModel {
     }
 
     func refreshSelectedLibrary() async {
+        await refreshSelectedLibraryContent()
+    }
+
+    func refreshSelectedLibraryForPullToRefresh() async {
+        let telemetrySpan = remoteTelemetryTracer.beginSpan(
+            operation: .libraryRefresh,
+            source: .remote
+        )
+        let startingGeneration = homeShelvesGeneration
+        await refreshSelectedLibraryContent()
+        let expectedGeneration = startingGeneration &+ 1
+        let outcome =
+            homeShelvesGeneration == expectedGeneration
+            ? currentLibraryRefreshOutcome(includeLibraries: false)
+            : .cancelled
+        telemetrySpan.end(outcome)
+    }
+
+    private func refreshSelectedLibraryContent() async {
+        homeShelvesGeneration &+= 1
+        let operationGeneration = homeShelvesGeneration
         guard let account, let library = selectedLibrary else {
             return
         }
-        homeShelvesGeneration &+= 1
-        let operationGeneration = homeShelvesGeneration
         await diagnostics.record(
             .started(.loadHome, category: .api)
         )
 
         await reloadBooks(preservingLoadedContent: true)
         guard self.account?.id == account.id,
-              selectedLibrary?.id == library.id,
-              operationGeneration == homeShelvesGeneration
+            selectedLibrary?.id == library.id,
+            operationGeneration == homeShelvesGeneration
         else {
             return
         }
@@ -1903,8 +2069,8 @@ final class AppModel {
                 libraryID: library.id
             )
             guard self.account?.id == account.id,
-                  selectedLibrary?.id == library.id,
-                  operationGeneration == homeShelvesGeneration
+                selectedLibrary?.id == library.id,
+                operationGeneration == homeShelvesGeneration
             else {
                 return
             }
@@ -1924,8 +2090,8 @@ final class AppModel {
             )
         } catch let error {
             guard self.account?.id == account.id,
-                  selectedLibrary?.id == library.id,
-                  operationGeneration == homeShelvesGeneration
+                selectedLibrary?.id == library.id,
+                operationGeneration == homeShelvesGeneration
             else {
                 return
             }
@@ -1948,6 +2114,38 @@ final class AppModel {
                 )
             )
         }
+    }
+
+    private func currentLibraryRefreshOutcome(
+        includeLibraries: Bool
+    ) -> RemoteTelemetryOutcome {
+        if includeLibraries {
+            if case .failed(let failure) = librariesRefreshState {
+                return failure.remoteTelemetryOutcome
+            }
+            if case .failed(let failure) = libraries {
+                return failure.remoteTelemetryOutcome
+            }
+        }
+        if case .failed(let failure) = booksRefreshState {
+            return failure.remoteTelemetryOutcome
+        }
+        if case .failed(let failure) = books {
+            return failure.remoteTelemetryOutcome
+        }
+        if case .failed(let failure) = homeShelvesRefreshState {
+            return failure.remoteTelemetryOutcome
+        }
+        if case .failed(let failure) = homeShelves {
+            return failure.remoteTelemetryOutcome
+        }
+        guard account != nil else {
+            return .failed(.authentication)
+        }
+        guard includeLibraries || selectedLibrary != nil else {
+            return .failed(.unknown)
+        }
+        return Task.isCancelled ? .cancelled : .succeeded
     }
 
     func setLibrarySort(_ sort: LibraryItemSort) async {
@@ -3555,7 +3753,8 @@ final class AppModel {
         guard firstPage.limit > 0 else {
             throw .libraryRepository(.remote(.invalidPage))
         }
-        let lastAvailablePage = firstPage.total > 0
+        let lastAvailablePage =
+            firstPage.total > 0
             ? (firstPage.total - 1) / firstPage.limit
             : 0
         let lastPageToRefresh = min(currentPage.page, lastAvailablePage)
@@ -3565,7 +3764,7 @@ final class AppModel {
 
         var items = firstPage.items
         var itemIDs = Set(items.map(\.id))
-        for pageNumber in 1 ... lastPageToRefresh {
+        for pageNumber in 1...lastPageToRefresh {
             let request = try makeLibraryItemsPageRequest(
                 page: pageNumber,
                 limit: firstPage.limit,
@@ -3579,8 +3778,8 @@ final class AppModel {
                 request: request
             )
             guard nextPage.page == pageNumber,
-                  nextPage.limit == firstPage.limit,
-                  nextPage.total == firstPage.total
+                nextPage.limit == firstPage.limit,
+                nextPage.total == firstPage.total
             else {
                 throw .libraryRepository(.remote(.invalidPage))
             }

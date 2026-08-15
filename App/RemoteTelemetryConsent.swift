@@ -1,9 +1,13 @@
+import BleatCore
 import Foundation
+import UIKit
 
 @MainActor
 final class RemoteTelemetryConsentStore {
     nonisolated static let enabledKey =
         "bleat.remoteTelemetry.enabled.v1"
+    nonisolated static let generationKey =
+        "bleat.remoteTelemetry.storageGeneration.v1"
 
     private let defaults: UserDefaults
 
@@ -15,24 +19,328 @@ final class RemoteTelemetryConsentStore {
         defaults.bool(forKey: Self.enabledKey)
     }
 
-    func setEnabled(_ enabled: Bool) {
+    var storageGeneration: UUID? {
+        guard isEnabled,
+            let value = defaults.string(forKey: Self.generationKey)
+        else { return nil }
+        return UUID(uuidString: value)
+    }
+
+    @discardableResult
+    func setEnabled(_ enabled: Bool) -> UUID? {
+        let priorGeneration = storageGeneration
         defaults.set(enabled, forKey: Self.enabledKey)
+        if enabled {
+            let generation = priorGeneration ?? UUID()
+            defaults.set(
+                generation.uuidString.lowercased(),
+                forKey: Self.generationKey
+            )
+            return generation
+        }
+        defaults.removeObject(forKey: Self.generationKey)
+        return priorGeneration
+    }
+
+    func ensureEnabledStorageGeneration() -> UUID? {
+        guard isEnabled else { return nil }
+        if let storageGeneration { return storageGeneration }
+        return setEnabled(true)
     }
 }
 
-/// The single application boundary later telemetry exporters and token
-/// providers must implement. The synchronous call lets implementations treat
+/// The single application boundary for the private telemetry runtime. The
+/// synchronous call lets implementations treat
 /// `false` as an immediate stop signal: cancel export and token renewal before
 /// returning, then own any asynchronous credential clearing and buffer purge.
 /// Failures remain internal to the telemetry subsystem and must not fail the
 /// user's action.
 @MainActor
 protocol RemoteTelemetryConsentApplying: Sendable {
-    func applyRemoteTelemetryConsent(_ enabled: Bool)
+    func applyRemoteTelemetryConsent(
+        _ enabled: Bool,
+        storageGeneration: UUID?
+    )
+    func setRemoteTelemetryForeground(_ foreground: Bool)
+}
+
+extension RemoteTelemetryConsentApplying {
+    func setRemoteTelemetryForeground(_ foreground: Bool) {}
 }
 
 struct InactiveRemoteTelemetryConsentController:
     RemoteTelemetryConsentApplying
 {
-    func applyRemoteTelemetryConsent(_ enabled: Bool) {}
+    func applyRemoteTelemetryConsent(
+        _ enabled: Bool,
+        storageGeneration: UUID?
+    ) {}
+}
+
+@MainActor
+final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
+    let tracer = RemoteTelemetryTracer()
+    private let worker: RemoteTelemetryRuntimeWorker
+
+    init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
+        let version =
+            bundle.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "0"
+        let build =
+            bundle.object(forInfoDictionaryKey: "CFBundleVersion")
+            as? String ?? "0"
+        let systemVersion = processInfo.operatingSystemVersion
+        let platform: RemoteTelemetryPlatform
+        #if targetEnvironment(macCatalyst)
+            platform = .macOS
+        #else
+            platform =
+                UIDevice.current.userInterfaceIdiom == .pad
+                ? .iPadOS : .iOS
+        #endif
+        let resource = try? RemoteTelemetryResource(
+            applicationVersion: version,
+            applicationBuild: build,
+            platform: platform,
+            operatingSystemMajorVersion: systemVersion.majorVersion,
+            operatingSystemMinorVersion: systemVersion.minorVersion,
+            operatingSystemPatchVersion: systemVersion.patchVersion
+        )
+        let storageRootURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first?.appendingPathComponent(
+            "Bleat/RemoteTelemetry",
+            isDirectory: true
+        )
+        worker = RemoteTelemetryRuntimeWorker(
+            tracer: tracer,
+            resource: resource,
+            storageRootURL: storageRootURL
+        )
+    }
+
+    func applyRemoteTelemetryConsent(
+        _ enabled: Bool,
+        storageGeneration: UUID?
+    ) {
+        if enabled {
+            guard let storageGeneration else {
+                worker.disable(storageGeneration: nil)
+                return
+            }
+            worker.enable(storageGeneration: storageGeneration)
+        } else {
+            worker.disable(storageGeneration: storageGeneration)
+        }
+    }
+
+    func setRemoteTelemetryForeground(_ foreground: Bool) {
+        worker.setForeground(foreground)
+    }
+}
+
+private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
+    private enum State: Equatable {
+        case disabled
+        case initializing(UInt64)
+        case active(UInt64)
+        case failed(UInt64, RemoteTelemetryRuntimeFailure)
+        case shuttingDown(UInt64)
+    }
+
+    private let tracer: RemoteTelemetryTracer
+    private let resource: RemoteTelemetryResource?
+    private let storageRootURL: URL?
+    private let queue = DispatchQueue(
+        label: "app.bleat.remote-telemetry.runtime",
+        qos: .utility
+    )
+    private let lock = NSLock()
+    private var pipeline: RemoteTelemetryPipeline?
+    private var generation: UInt64 = 0
+    private var wantsEnabled = false
+    private var isForeground = false
+    private var state = State.disabled
+
+    init(
+        tracer: RemoteTelemetryTracer,
+        resource: RemoteTelemetryResource?,
+        storageRootURL: URL?
+    ) {
+        self.tracer = tracer
+        self.resource = resource
+        self.storageRootURL = storageRootURL
+    }
+
+    func enable(storageGeneration: UUID) {
+        let requestedGeneration = lock.withLock {
+            wantsEnabled = true
+            generation &+= 1
+            state = .initializing(generation)
+            return generation
+        }
+        tracer.prepareForActivation()
+        queue.async { [weak self] in
+            self?.buildPipeline(
+                for: requestedGeneration,
+                storageGeneration: storageGeneration
+            )
+        }
+    }
+
+    func disable(storageGeneration: UUID?) {
+        let oldPipeline = lock.withLock {
+            wantsEnabled = false
+            generation &+= 1
+            state = .shuttingDown(generation)
+            let oldPipeline = pipeline
+            pipeline = nil
+            return oldPipeline
+        }
+        tracer.deactivate()
+        oldPipeline?.deactivate()
+        let disabledGeneration = lock.withLock { generation }
+        queue.async { [weak self] in
+            oldPipeline?.purge()
+            self?.purgeStorageGenerations(
+                retaining: nil,
+                explicitlyRemoving: storageGeneration
+            )
+            if let oldPipeline {
+                DispatchQueue.global(qos: .utility).async {
+                    oldPipeline.shutdown()
+                }
+            }
+            self?.lock.withLock {
+                guard self?.generation == disabledGeneration,
+                    self?.wantsEnabled == false
+                else { return }
+                self?.state = .disabled
+            }
+        }
+    }
+
+    func setForeground(_ foreground: Bool) {
+        let current = lock.withLock {
+            isForeground = foreground
+            return pipeline
+        }
+        current?.setForeground(foreground)
+        guard !foreground, let current else { return }
+        DispatchQueue.global(qos: .utility).async {
+            current.flushForBackground(timeout: 2)
+        }
+    }
+
+    private func buildPipeline(
+        for requestedGeneration: UInt64,
+        storageGeneration: UUID
+    ) {
+        guard let resource else {
+            recordFailure(.invalidResource, generation: requestedGeneration)
+            return
+        }
+        guard let storageRootURL else {
+            recordFailure(.storageUnavailable, generation: requestedGeneration)
+            return
+        }
+        let shouldBuild = lock.withLock {
+            wantsEnabled && generation == requestedGeneration
+                && pipeline == nil
+        }
+        guard shouldBuild else { return }
+        purgeStorageGenerations(
+            retaining: storageGeneration,
+            explicitlyRemoving: nil
+        )
+        let storageURL = storageRootURL.appendingPathComponent(
+            Self.directoryName(for: storageGeneration),
+            isDirectory: true
+        )
+        let newPipeline: RemoteTelemetryPipeline
+        do {
+            newPipeline = try RemoteTelemetryPipeline(
+                resource: resource,
+                storageURL: storageURL,
+                tracerFacade: tracer
+            )
+        } catch let failure as RemoteTelemetryRuntimeFailure {
+            tracer.deactivate()
+            recordFailure(failure, generation: requestedGeneration)
+            return
+        } catch {
+            tracer.deactivate()
+            recordFailure(.storageUnavailable, generation: requestedGeneration)
+            return
+        }
+        let accepted = lock.withLock {
+            guard wantsEnabled, generation == requestedGeneration,
+                pipeline == nil
+            else {
+                return false
+            }
+            pipeline = newPipeline
+            state = .active(requestedGeneration)
+            newPipeline.setForeground(isForeground)
+            return true
+        }
+        guard !accepted else { return }
+        newPipeline.deactivate()
+        newPipeline.purge()
+        DispatchQueue.global(qos: .utility).async {
+            newPipeline.shutdown()
+        }
+    }
+
+    private func purgeStorageGenerations(
+        retaining retainedGeneration: UUID?,
+        explicitlyRemoving removedGeneration: UUID?
+    ) {
+        guard let storageRootURL else { return }
+        let retainedName = retainedGeneration.map {
+            Self.directoryName(for: $0)
+        }
+        let removedName = removedGeneration.map {
+            Self.directoryName(for: $0)
+        }
+        let contents =
+            (try? FileManager.default.contentsOfDirectory(
+                at: storageRootURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+        for url in contents {
+            guard url.lastPathComponent.hasPrefix("generation-") else {
+                continue
+            }
+            if let removedName {
+                guard url.lastPathComponent == removedName else { continue }
+            } else if url.lastPathComponent == retainedName {
+                continue
+            }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private static func directoryName(for generation: UUID) -> String {
+        "generation-\(generation.uuidString.lowercased())"
+    }
+
+    private func recordFailure(
+        _ failure: RemoteTelemetryRuntimeFailure,
+        generation requestedGeneration: UInt64
+    ) {
+        let accepted = lock.withLock {
+            guard generation == requestedGeneration, wantsEnabled else {
+                return false
+            }
+            state = .failed(requestedGeneration, failure)
+            return true
+        }
+        if accepted {
+            tracer.deactivate()
+        }
+    }
 }

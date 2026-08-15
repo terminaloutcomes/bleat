@@ -339,6 +339,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
+    private let remoteTelemetryTracer: any RemoteTelemetryTracing
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
     private let automaticLookaheadKey =
@@ -358,6 +359,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
     private var supersededAutomaticTasks: Set<AutomaticDownloadTaskKey> = []
+    private var transferSpans: [AutomaticDownloadTaskKey: RemoteTelemetrySpan] =
+        [:]
     private var automaticCachePins: [DownloadID: [UUID: Set<Int>]] = [:]
     private var deferredAutomaticCacheCleanup:
         [DownloadID: DeferredAutomaticCacheCleanup] = [:]
@@ -393,10 +396,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         defaults: UserDefaults = .standard,
         storageRootURL: URL? = nil,
         diagnostics: any DiagnosticRecording =
-            SystemDiagnosticRecorder.shared
+            SystemDiagnosticRecorder.shared,
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer()
     ) {
         self.service = service
         self.diagnostics = diagnostics
+        self.remoteTelemetryTracer = remoteTelemetryTracer
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         automaticLookaheadCount = Self.normalizedLookaheadCount(
@@ -449,6 +455,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await refresh()
         await discardLegacyAutomaticCaches()
         let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                let purpose = record(downloadID: identity.downloadID)?
+                    .manifest.purpose
+            else {
+                continue
+            }
+            beginTransferSpan(identity, purpose: purpose)
+        }
         for task in tasks where task.state == .suspended {
             guard let description = task.taskDescription,
                 let identity =
@@ -1033,6 +1051,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 continue
             }
             task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
         }
         for record in legacyRecords {
             try? await storage.remove(record)
@@ -1071,6 +1090,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 AutomaticDownloadTaskKey(identity)
             )
             task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
             if states[identity.trackIndex] == .downloading {
                 _ = try? await storage.removeTrackFiles(identity)
                 _ = try? await storage.markFailed(identity)
@@ -1129,6 +1149,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 purpose == .automaticCache
                 ? URLSessionTask.lowPriority
                 : URLSessionTask.defaultPriority
+            beginTransferSpan(identity, purpose: purpose)
             let key = AutomaticDownloadKey(
                 accountID: account.id,
                 itemID: detail.id
@@ -1165,6 +1186,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 continue
             }
             task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
         }
         do {
             try await storage.remove(record)
@@ -1210,6 +1232,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 continue
             }
             task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
             if let storage {
                 _ = try? await storage.markFailed(identity)
             }
@@ -1406,6 +1429,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 continue
             }
             task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
         }
         let accountRecords = records.filter {
             $0.manifest.accountID == accountID
@@ -1781,6 +1805,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity,
                 observedByteLength: observedByteLength
             )
+            finishTransferSpan(identity, outcome: .succeeded)
             await diagnostics.record(
                 .completed(.completeDownload, category: .download)
             )
@@ -1798,6 +1823,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 await handleAutomaticPlaybackActivity(activity)
             }
         } catch {
+            finishTransferSpan(identity, outcome: .failed(.localStorage))
             _ = try? await storage.markFailed(identity)
             clearTransferredBytes(for: identity)
             failure = .transferFailed
@@ -1818,9 +1844,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         if supersededAutomaticTasks.remove(
             AutomaticDownloadTaskKey(identity)
         ) != nil {
+            finishTransferSpan(identity, outcome: .cancelled)
             clearTransferredBytes(for: identity)
             return
         }
+        finishTransferSpan(identity, outcome: .failed(.media))
         if let storage {
             _ = try? await storage.markFailed(identity)
         }
@@ -1843,10 +1871,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         if supersededAutomaticTasks.remove(
             AutomaticDownloadTaskKey(identity)
         ) != nil {
+            finishTransferSpan(identity, outcome: .cancelled)
             clearTransferredBytes(for: identity)
             return
         }
         guard !deletingDownloadIDs.contains(identity.downloadID) else {
+            finishTransferSpan(identity, outcome: .cancelled)
             return
         }
         guard let response = task.response as? HTTPURLResponse else {
@@ -1859,11 +1889,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 scheduleReplacementDownload(
                     replacement,
                     taskDescription: description,
-                    identity: identity
+                    identity: identity,
+                    retryCount: 1,
+                    failureCategory: .transport
                 )
                 return
             }
             if error != nil, let storage {
+                finishTransferSpan(identity, outcome: .failed(.transport))
                 _ = try? await storage.markFailed(identity)
                 clearTransferredBytes(for: identity)
                 await refresh()
@@ -1895,7 +1928,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 scheduleReplacementDownload(
                     replacement,
                     taskDescription: description,
-                    identity: identity
+                    identity: identity,
+                    retryCount: 1,
+                    failureCategory: .authentication
                 )
                 return
             } catch {
@@ -1904,6 +1939,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         } else if error != nil || !(200..<300).contains(response.statusCode) {
             failure = .transferFailed
         }
+        finishTransferSpan(
+            identity,
+            outcome: .failed(
+                Self.remoteTelemetryFailureCategory(
+                    statusCode: response.statusCode,
+                    hasTransportError: error != nil
+                )
+            )
+        )
         if let storage {
             _ = try? await storage.markFailed(identity)
         }
@@ -1914,8 +1958,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private func scheduleReplacementDownload(
         _ request: URLRequest,
         taskDescription: String,
-        identity: DownloadTaskIdentity
+        identity: DownloadTaskIdentity,
+        retryCount: Int,
+        failureCategory: RemoteTelemetryFailureCategory
     ) {
+        finishTransferSpan(identity, outcome: .failed(failureCategory))
         var replacement = request
         let automatic =
             record(downloadID: identity.downloadID)?
@@ -1931,6 +1978,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             automatic
             ? URLSessionTask.lowPriority
             : URLSessionTask.defaultPriority
+        beginTransferSpan(
+            identity,
+            purpose: automatic ? .automaticCache : .manual,
+            retryCount: retryCount
+        )
         clearTransferredBytes(for: identity)
         if let record = record(downloadID: identity.downloadID),
             automaticDownloadIsBlocked(record)
@@ -1938,6 +1990,47 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             replacementTask.resume()
+        }
+    }
+
+    private func beginTransferSpan(
+        _ identity: DownloadTaskIdentity,
+        purpose: DownloadPurpose,
+        retryCount: Int = 0
+    ) {
+        let key = AutomaticDownloadTaskKey(identity)
+        guard transferSpans[key] == nil else { return }
+        transferSpans[key] = remoteTelemetryTracer.beginSpan(
+            operation: .downloadTransfer,
+            source: purpose == .automaticCache ? .cache : .remote,
+            retryBucket: RemoteTelemetryRetryBucket(
+                retryCount: retryCount
+            )
+        )
+    }
+
+    private func finishTransferSpan(
+        _ identity: DownloadTaskIdentity,
+        outcome: RemoteTelemetryOutcome
+    ) {
+        let span = transferSpans.removeValue(
+            forKey: AutomaticDownloadTaskKey(identity)
+        )
+        span?.end(outcome)
+    }
+
+    private static func remoteTelemetryFailureCategory(
+        statusCode: Int,
+        hasTransportError: Bool
+    ) -> RemoteTelemetryFailureCategory {
+        if hasTransportError { return .transport }
+        switch statusCode {
+        case 401: return .authentication
+        case 403: return .authorization
+        case 408: return .timeout
+        case 429: return .rateLimited
+        case 500...599: return .serverRejected
+        default: return .serverRejected
         }
     }
 
