@@ -12,42 +12,42 @@
 
 ### Task 1: PostgreSQL configuration and migrations
 
-- [ ] Add failing configuration and migration tests.
-- [ ] Add SeaORM PostgreSQL dependencies with Rustls through Cargo.
-- [ ] Implement typed database configuration, connection setup, and code-owned migrations.
-- [ ] Verify focused tests and commit.
+- [x] Add failing configuration and migration tests.
+- [x] Add SeaORM PostgreSQL dependencies with Rustls through Cargo.
+- [x] Implement typed database configuration, connection setup, and code-owned migrations.
+- [x] Verify focused tests and commit.
 
 ### Task 2: Installation persistence
 
-- [ ] Add failing persistence, status-transition, and counter-race tests.
-- [ ] Implement the installation entity and concrete SeaORM repository.
-- [ ] Verify exactly one concurrent compare-and-update advances the counter.
-- [ ] Commit the focused change.
+- [x] Add failing persistence, status-transition, and counter-race tests.
+- [x] Implement the installation entity and concrete SeaORM repository.
+- [x] Verify exactly one concurrent compare-and-update advances the counter.
+- [x] Commit the focused change.
 
 ### Task 3: Opaque challenge lifecycle
 
-- [ ] Add failing issuance, digest, expiry, purpose, binding, replay, cleanup, and race tests.
-- [ ] Implement CSPRNG generation, base64url encoding, SHA-256 persistence, bounded cleanup, and typed consumption outcomes.
-- [ ] Verify exactly one concurrent consumption succeeds.
-- [ ] Commit the focused change.
+- [x] Add failing issuance, digest, expiry, purpose, binding, replay, cleanup, and race tests.
+- [x] Implement CSPRNG generation, base64url encoding, SHA-256 persistence, bounded cleanup, and typed consumption outcomes.
+- [x] Verify exactly one concurrent consumption succeeds.
+- [x] Commit the focused change.
 
 ### Task 4: HTTP integration and readiness
 
-- [ ] Add failing HTTP contract, database-readiness, privacy, and rate-bound tests.
-- [ ] Inject database-backed application state into the Axum router.
-- [ ] Implement both challenge endpoints and database-aware readiness while retaining enrollment/token placeholders.
-- [ ] Verify focused integration tests and commit.
+- [x] Add failing HTTP contract, database-readiness, privacy, and rate-bound tests.
+- [x] Inject database-backed application state into the Axum router.
+- [x] Implement both challenge endpoints and database-aware readiness while retaining enrollment/token placeholders.
+- [x] Verify focused integration tests and commit.
 
 ### Task 5: Container and repository workflows
 
-- [ ] Add Dockerfile assertions and a failing disposable workflow smoke test.
-- [ ] Add a non-root multi-stage image, Compose PostgreSQL/API/test services, and cleanup-safe repository scripts.
-- [ ] Update `mise` tasks and current-behavior documentation.
-- [ ] Verify the image, disposable database suite, health/readiness, and challenge endpoints; commit.
+- [x] Add Dockerfile assertions and a failing disposable workflow smoke test.
+- [x] Add a non-root multi-stage image, Compose PostgreSQL/API/test services, and cleanup-safe repository scripts.
+- [x] Update `mise` tasks and current-behavior documentation.
+- [x] Verify the image, disposable database suite, health/readiness, and challenge endpoints; commit.
 
 ### Task 6: Final review and delivery
 
-- [ ] Audit every issue 64 acceptance criterion against code, tests, container output, and documentation.
-- [ ] Run `mise run api:validate`, release-container smoke tests, OpenSSL dependency checks, `git diff --check`, secret/logging checks, and process-termination checks.
-- [ ] Request code review and fix all critical or important findings test-first.
-- [ ] Create local scoped commit(s), leaving the branch unpushed and GitHub unchanged.
+- [x] Audit every issue 64 acceptance criterion against code, tests, container output, and documentation.
+- [x] Run `mise run api:validate`, release-container smoke tests, OpenSSL dependency checks, `git diff --check`, secret/logging checks, and process-termination checks.
+- [x] Review the complete scoped diff and fix all critical or important findings test-first.
+- [x] Create local scoped commit(s), leaving the branch unpushed and GitHub unchanged.
