@@ -64,6 +64,19 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_APP_ATTEST_ENVIRONMENT", value_enum, default_value_t = AppAttestEnvironment::Development)]
     pub app_attest_environment: AppAttestEnvironment,
 
+    #[arg(long, env = "BLEAT_API_DATABASE_URL", hide_env_values = true)]
+    pub database_url: Option<String>,
+
+    #[arg(long, env = "BLEAT_API_DATABASE_MAX_CONNECTIONS", default_value_t = 16)]
+    pub database_max_connections: usize,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_DATABASE_CONNECT_TIMEOUT_SECONDS",
+        default_value_t = 5
+    )]
+    pub database_connect_timeout_seconds: u64,
+
     #[arg(
         long,
         env = "BLEAT_API_CHALLENGE_LIFETIME_SECONDS",
@@ -102,6 +115,7 @@ pub struct Config {
     pub apple_team_id: Option<String>,
     pub app_identifier: Option<String>,
     pub app_attest_environment: AppAttestEnvironment,
+    pub database: DatabaseConfig,
     pub challenge_lifetime: Duration,
     pub token_lifetime: Duration,
     pub request_timeout: Duration,
@@ -110,6 +124,52 @@ pub struct Config {
     pub log_filter: String,
     pub log_format: LogFormat,
     pub telemetry: TelemetryExportConfig,
+}
+
+#[derive(Clone)]
+pub struct DatabaseConfig {
+    url: String,
+    pub max_connections: usize,
+    pub connect_timeout: Duration,
+}
+
+impl DatabaseConfig {
+    pub fn new(
+        url: String,
+        max_connections: usize,
+        connect_timeout: Duration,
+    ) -> Result<Self, ConfigError> {
+        let url = non_empty(Some(url)).ok_or(ConfigError::MissingDatabaseUrl)?;
+        let parsed = Url::from_str(&url).map_err(|_| ConfigError::InvalidDatabaseUrl)?;
+        if !matches!(parsed.scheme(), "postgres" | "postgresql")
+            || parsed.host_str().is_none()
+            || parsed.path().trim_matches('/').is_empty()
+        {
+            return Err(ConfigError::InvalidDatabaseUrl);
+        }
+        bounded_usize("maximum database connections", max_connections, 1, 128)?;
+        bounded_duration("database connect timeout", connect_timeout, 1, 60)?;
+        Ok(Self {
+            url,
+            max_connections,
+            connect_timeout,
+        })
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+}
+
+impl std::fmt::Debug for DatabaseConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DatabaseConfig")
+            .field("url", &"[REDACTED]")
+            .field("max_connections", &self.max_connections)
+            .field("connect_timeout", &self.connect_timeout)
+            .finish()
+    }
 }
 
 impl TryFrom<Arguments> for Config {
@@ -125,6 +185,13 @@ impl Config {
         arguments: Arguments,
         telemetry: TelemetryExportConfig,
     ) -> Result<Self, ConfigError> {
+        let database = DatabaseConfig::new(
+            arguments
+                .database_url
+                .ok_or(ConfigError::MissingDatabaseUrl)?,
+            arguments.database_max_connections,
+            Duration::from_secs(arguments.database_connect_timeout_seconds),
+        )?;
         let config = Self {
             bind_address: arguments.bind_address,
             public_issuer: arguments.public_issuer,
@@ -132,6 +199,7 @@ impl Config {
             apple_team_id: non_empty(arguments.apple_team_id),
             app_identifier: non_empty(arguments.app_identifier),
             app_attest_environment: arguments.app_attest_environment,
+            database,
             challenge_lifetime: Duration::from_secs(arguments.challenge_lifetime_seconds),
             token_lifetime: Duration::from_secs(arguments.token_lifetime_seconds),
             request_timeout: Duration::from_secs(arguments.request_timeout_seconds),
@@ -160,6 +228,18 @@ impl Config {
             self.max_concurrent_requests,
             1,
             1_024,
+        )?;
+        bounded_usize(
+            "maximum database connections",
+            self.database.max_connections,
+            1,
+            128,
+        )?;
+        bounded_duration(
+            "database connect timeout",
+            self.database.connect_timeout,
+            1,
+            60,
         )?;
 
         if self.log_filter.trim().is_empty() {
@@ -220,6 +300,10 @@ impl TelemetryExportConfig {
 pub enum ConfigError {
     #[error("{0} must be between {1} and {2}")]
     ValueOutOfRange(&'static str, u64, u64),
+    #[error("the PostgreSQL database URL is required")]
+    MissingDatabaseUrl,
+    #[error("the database URL must be a PostgreSQL URL with a database name")]
+    InvalidDatabaseUrl,
     #[error("the log filter must not be empty")]
     EmptyLogFilter,
     #[error("the production public issuer must use HTTPS")]
@@ -323,15 +407,26 @@ mod tests {
         Config::from_arguments(arguments(values), TelemetryExportConfig::default())
     }
 
+    fn development_arguments() -> Vec<&'static str> {
+        vec![
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+        ]
+    }
+
     #[test]
     fn development_defaults_are_bounded_and_use_es256() {
-        let config = config(&["bleat-api"]).expect("development defaults should validate");
+        let config =
+            config(&development_arguments()).expect("development defaults should validate");
 
         assert_eq!(config.bind_address.to_string(), DEFAULT_BIND_ADDRESS);
         assert_eq!(config.public_issuer.as_str(), "http://127.0.0.1:8080/");
         assert_eq!(config.deployment_mode, DeploymentMode::Development);
         assert_eq!(config.challenge_lifetime, Duration::from_secs(120));
         assert_eq!(config.token_lifetime, Duration::from_secs(600));
+        assert_eq!(config.database.max_connections, 16);
+        assert_eq!(config.database.connect_timeout, Duration::from_secs(5));
         assert_eq!(config.jwt_algorithm(), compact_jwt::JwaAlg::ES256);
         assert!(!config.telemetry.traces_enabled);
         assert!(!config.telemetry.logs_enabled);
@@ -341,6 +436,8 @@ mod tests {
     fn command_line_values_override_defaults() {
         let config = config(&[
             "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
             "--bind-address",
             "0.0.0.0:9000",
             "--challenge-lifetime-seconds",
@@ -362,6 +459,8 @@ mod tests {
     fn production_configuration_fails_closed() {
         let insecure = config(&[
             "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
             "--deployment-mode",
             "production",
             "--apple-team-id",
@@ -378,6 +477,8 @@ mod tests {
 
         let missing_team = config(&[
             "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
             "--deployment-mode",
             "production",
             "--public-issuer",
@@ -394,6 +495,8 @@ mod tests {
 
         let development_attest = config(&[
             "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
             "--deployment-mode",
             "production",
             "--public-issuer",
@@ -411,11 +514,41 @@ mod tests {
 
     #[test]
     fn numeric_limits_are_validated() {
-        let config = config(&["bleat-api", "--request-timeout-seconds", "0"]);
+        let config = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--request-timeout-seconds",
+            "0",
+        ]);
         assert_eq!(
             config.expect_err("zero timeout must fail"),
             ConfigError::ValueOutOfRange("request timeout", 1, 60)
         );
+    }
+
+    #[test]
+    fn database_configuration_is_required_and_redacted() {
+        let missing = config(&["bleat-api"]);
+        assert_eq!(
+            missing.expect_err("database URL must be required"),
+            ConfigError::MissingDatabaseUrl
+        );
+
+        let secret = "postgres://bleat:do-not-print@127.0.0.1:5432/bleat";
+        let invalid = config(&[
+            "bleat-api",
+            "--database-url",
+            secret,
+            "--database-max-connections",
+            "0",
+        ])
+        .expect_err("zero database connections must fail");
+        assert_eq!(
+            invalid,
+            ConfigError::ValueOutOfRange("maximum database connections", 1, 128)
+        );
+        assert!(!invalid.to_string().contains("do-not-print"));
     }
 
     #[test]

@@ -1,4 +1,6 @@
 pub mod config;
+pub mod database;
+pub mod entity;
 pub mod error;
 pub mod http;
 pub mod observability;

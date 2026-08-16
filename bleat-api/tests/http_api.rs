@@ -14,6 +14,10 @@ use uuid::Uuid;
 
 fn test_config(extra_arguments: &[&str]) -> Config {
     let arguments = std::iter::once("bleat-api")
+        .chain([
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+        ])
         .chain(extra_arguments.iter().copied())
         .collect::<Vec<_>>();
     Config::from_arguments(
