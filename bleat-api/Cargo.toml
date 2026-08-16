@@ -20,6 +20,7 @@ opentelemetry-appender-tracing = "0.32.0"
 opentelemetry-http = { version = "0.32.0", default-features = false }
 opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["trace", "logs", "http-proto", "reqwest-blocking-client", "reqwest-rustls", "internal-logs"] }
 opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["trace", "logs", "internal-logs"] }
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa"] }
 sea-orm = { version = "2.0.2", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres", "macros", "with-uuid", "with-chrono"] }
 sea-orm-migration = { version = "2.0.2", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { version = "1.0.229", features = ["derive"] }

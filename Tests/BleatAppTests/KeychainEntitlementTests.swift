@@ -1,4 +1,5 @@
-import BleatCore
+import Security
+@testable import BleatCore
 import XCTest
 
 final class KeychainEntitlementTests: XCTestCase {
@@ -37,5 +38,51 @@ final class KeychainEntitlementTests: XCTestCase {
         try await store.deleteCredentials(for: accountID)
         let deletedCredentials = try await store.credentials(for: accountID)
         XCTAssertNil(deletedCredentials)
+    }
+
+    func testApplicationHostPersistsDeviceOnlyTelemetryEnrollment()
+        async throws
+    {
+        let vault = TelemetryEnrollmentVault(
+            service: "com.yaleman.bleat.telemetry-tests.\(UUID().uuidString)"
+        )
+        let enrollment = TelemetryEnrollment(
+            keyID: "opaque-app-attest-key-id",
+            installationID: UUID()
+        )
+        addTeardownBlock { try await vault.delete() }
+
+        let initiallyStored = try await vault.enrollment()
+        XCTAssertNil(initiallyStored)
+        try await vault.save(enrollment)
+        let restored = try await vault.enrollment()
+        XCTAssertEqual(restored, enrollment)
+
+        try await vault.delete()
+        let deleted = try await vault.enrollment()
+        XCTAssertNil(deleted)
+    }
+
+    func testTelemetryEnrollmentVaultReportsInvalidConfiguration() async {
+        let vault = TelemetryEnrollmentVault(service: "")
+        do {
+            _ = try await vault.enrollment()
+            XCTFail("invalid Keychain configuration unexpectedly succeeded")
+        } catch let error as TelemetryEnrollmentVaultError {
+            XCTAssertEqual(error, .invalidConfiguration)
+        } catch {
+            XCTFail("unexpected error type: \(type(of: error))")
+        }
+    }
+
+    func testTelemetryEnrollmentVaultPreservesMissingEntitlementFailure() {
+        XCTAssertThrowsError(
+            try TelemetryEnrollmentVault.check(errSecMissingEntitlement)
+        ) { error in
+            XCTAssertEqual(
+                error as? TelemetryEnrollmentVaultError,
+                .missingEntitlement
+            )
+        }
     }
 }

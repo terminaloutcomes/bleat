@@ -288,14 +288,14 @@ mod tests {
 
         let sensitive_body = "sensitive-attestation-marker";
         let sensitive_authorization = "Bearer sensitive-token-marker";
-        let request = Request::post("/v1/token")
+        let request = Request::get("/readyz")
             .header("content-type", "application/json")
             .header("authorization", sensitive_authorization)
             .header(
                 "traceparent",
                 "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
             )
-            .body(Body::from(format!("{{\"evidence\":\"{sensitive_body}\"}}")))
+            .body(Body::from(sensitive_body))
             .expect("valid request");
 
         async {
@@ -340,11 +340,11 @@ mod tests {
         );
         assert_eq!(
             span_attribute(&spans[0].attributes, "http.request.method"),
-            Some(&Value::String("POST".into()))
+            Some(&Value::String("GET".into()))
         );
         assert_eq!(
             span_attribute(&spans[0].attributes, "http.route"),
-            Some(&Value::String("/v1/token".into()))
+            Some(&Value::String("/readyz".into()))
         );
         assert_eq!(
             span_attribute(&spans[0].attributes, "http.response.status_code"),

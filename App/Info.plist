@@ -8,6 +8,10 @@
 	<string>$(BLEAT_CLOUDKIT_MODE)</string>
 	<key>BleatDeveloperName</key>
 	<string>$(BLEAT_DEVELOPER_NAME)</string>
+	<key>BleatTelemetryAttesterMode</key>
+	<string>$(BLEAT_TELEMETRY_ATTESTER_MODE)</string>
+	<key>BleatTelemetryAuthenticationBaseURL</key>
+	<string>$(BLEAT_TELEMETRY_AUTH_BASE_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

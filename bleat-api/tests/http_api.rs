@@ -2,16 +2,27 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bleat_api::{
     config::{Arguments, Config, TelemetryExportConfig},
     database::connect_and_migrate,
-    installation::{InstallationEnvironment, InstallationRepository, NewInstallation},
+    installation::{
+        DisableOutcome, InstallationEnvironment, InstallationRepository, NewInstallation,
+    },
     router,
+    telemetry_auth::{
+        ClientDataPurpose, DevelopmentAssertion, DevelopmentAttestation, client_data_hash,
+    },
 };
 use clap::Parser;
+use compact_jwt::{Jwk, JwsEs256Verifier, JwsVerifier, JwtUnverified};
 use http_body_util::BodyExt;
+use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 use sea_orm::DatabaseConnection;
+use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::str::FromStr;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -52,6 +63,123 @@ async fn response_json(response: axum::response::Response) -> Value {
     serde_json::from_slice(&bytes).expect("response should be JSON")
 }
 
+async fn post_json(router: &axum::Router, path: &str, body: Value) -> axum::response::Response {
+    router
+        .clone()
+        .oneshot(
+            Request::post(path)
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("router should respond")
+}
+
+async fn development_challenge(router: &axum::Router, path: &str, body: Value) -> (Uuid, String) {
+    let response = post_json(router, path, body).await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response = response_json(response).await;
+    (
+        Uuid::parse_str(
+            response["challenge_id"]
+                .as_str()
+                .expect("challenge ID should be text"),
+        )
+        .expect("challenge ID should parse"),
+        response["challenge"]
+            .as_str()
+            .expect("challenge should be text")
+            .to_owned(),
+    )
+}
+
+fn development_key(seed: u8) -> SigningKey {
+    SigningKey::from_slice(&[seed; 32]).expect("test key should be valid")
+}
+
+fn development_key_id(signing_key: &SigningKey) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(
+        signing_key
+            .verifying_key()
+            .to_encoded_point(false)
+            .as_bytes(),
+    ))
+}
+
+fn development_attestation(
+    signing_key: &SigningKey,
+    signature_key: &SigningKey,
+    challenge_id: Uuid,
+    challenge: &str,
+) -> String {
+    let hash = client_data_hash(
+        ClientDataPurpose::AttestationEnroll,
+        challenge_id,
+        challenge,
+        None,
+    );
+    let signature: Signature = signature_key.sign(&hash);
+    let evidence = DevelopmentAttestation {
+        public_key: URL_SAFE_NO_PAD.encode(
+            signing_key
+                .verifying_key()
+                .to_encoded_point(false)
+                .as_bytes(),
+        ),
+        signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
+    };
+    URL_SAFE_NO_PAD.encode(serde_json::to_vec(&evidence).expect("evidence should encode"))
+}
+
+fn development_assertion(
+    signing_key: &SigningKey,
+    installation_id: Uuid,
+    challenge_id: Uuid,
+    challenge: &str,
+) -> String {
+    let hash = client_data_hash(
+        ClientDataPurpose::TokenIssue,
+        challenge_id,
+        challenge,
+        Some(installation_id),
+    );
+    let signature: Signature = signing_key.sign(&hash);
+    let evidence = DevelopmentAssertion {
+        signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
+    };
+    URL_SAFE_NO_PAD.encode(serde_json::to_vec(&evidence).expect("evidence should encode"))
+}
+
+async fn enroll_development(router: &axum::Router, signing_key: &SigningKey) -> Uuid {
+    let (challenge_id, challenge) =
+        development_challenge(router, "/v1/attestation/challenge", serde_json::json!({})).await;
+    let response = post_json(
+        router,
+        "/v1/attestation/enroll",
+        serde_json::json!({
+            "challenge_id": challenge_id,
+            "challenge": challenge,
+            "key_id": development_key_id(signing_key),
+            "attestation_object": development_attestation(
+                signing_key,
+                signing_key,
+                challenge_id,
+                &challenge,
+            ),
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response = response_json(response).await;
+    Uuid::parse_str(
+        response["installation_id"]
+            .as_str()
+            .expect("installation ID should be text"),
+    )
+    .expect("installation ID should parse")
+}
+
 #[tokio::test]
 async fn health_and_readiness_are_typed_and_receive_request_ids() {
     for (path, expected_status) in [("/healthz", "ok"), ("/readyz", "ready")] {
@@ -78,20 +206,51 @@ async fn health_and_readiness_are_typed_and_receive_request_ids() {
 }
 
 #[tokio::test]
-async fn unimplemented_verification_routes_return_bounded_typed_errors() {
-    for path in ["/v1/attestation/enroll", "/v1/token"] {
-        let response = test_router(&[])
+async fn production_verification_routes_reject_development_evidence() {
+    let production = [
+        "--deployment-mode",
+        "production",
+        "--public-issuer",
+        "https://telemetry.example.test",
+        "--apple-team-id",
+        "TEAM123456",
+        "--app-identifier",
+        "com.example.Bleat",
+        "--app-attest-environment",
+        "production",
+    ];
+    for (path, body) in [
+        (
+            "/v1/attestation/enroll",
+            serde_json::json!({
+                "challenge_id": Uuid::new_v4(),
+                "challenge": "development-evidence",
+                "key_id": "development-key",
+                "attestation_object": "development-evidence",
+            }),
+        ),
+        (
+            "/v1/token",
+            serde_json::json!({
+                "installation_id": Uuid::new_v4(),
+                "challenge_id": Uuid::new_v4(),
+                "challenge": "development-evidence",
+                "assertion_object": "development-evidence",
+            }),
+        ),
+    ] {
+        let response = test_router(&production)
             .await
             .oneshot(
                 Request::post(path)
                     .header("content-type", "application/json")
-                    .body(Body::from("{}"))
+                    .body(Body::from(body.to_string()))
                     .expect("valid request"),
             )
             .await
             .expect("router should respond");
 
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         let header_request_id = response
             .headers()
             .get("x-request-id")
@@ -100,10 +259,295 @@ async fn unimplemented_verification_routes_return_bounded_typed_errors() {
             .expect("request ID should be text")
             .to_owned();
         let body = response_json(response).await;
-        assert_eq!(body["error"]["code"], "temporarily_unavailable");
+        assert_eq!(body["error"]["code"], "authentication_rejected");
         assert_eq!(body["request_id"], header_request_id);
         assert!(body.to_string().len() < 300);
     }
+
+    for path in [
+        "/.well-known/openid-configuration",
+        "/.well-known/jwks.json",
+    ] {
+        let response = test_router(&production)
+            .await
+            .oneshot(
+                Request::get(path)
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("router should respond");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            response_json(response).await["error"]["code"],
+            "temporarily_unavailable"
+        );
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct TestTokenClaims {
+    scope: String,
+    environment: String,
+}
+
+#[tokio::test]
+async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
+    let router = test_router(&[]).await;
+    let signing_key = SigningKey::from_slice(&[9_u8; 32]).expect("test key should be valid");
+    let public_key = signing_key.verifying_key().to_encoded_point(false);
+    let public_key = public_key.as_bytes();
+    let key_id = URL_SAFE_NO_PAD.encode(Sha256::digest(public_key));
+
+    let challenge = post_json(&router, "/v1/attestation/challenge", serde_json::json!({})).await;
+    assert_eq!(challenge.status(), StatusCode::CREATED);
+    let challenge = response_json(challenge).await;
+    let challenge_id = Uuid::parse_str(
+        challenge["challenge_id"]
+            .as_str()
+            .expect("challenge ID should be text"),
+    )
+    .expect("challenge ID should parse");
+    let challenge_value = challenge["challenge"]
+        .as_str()
+        .expect("challenge should be text");
+    let hash = client_data_hash(
+        ClientDataPurpose::AttestationEnroll,
+        challenge_id,
+        challenge_value,
+        None,
+    );
+    let signature: Signature = signing_key.sign(&hash);
+    let evidence = DevelopmentAttestation {
+        public_key: URL_SAFE_NO_PAD.encode(public_key),
+        signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
+    };
+    let evidence =
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&evidence).expect("evidence should encode"));
+    let enrollment = post_json(
+        &router,
+        "/v1/attestation/enroll",
+        serde_json::json!({
+            "challenge_id": challenge_id,
+            "challenge": challenge_value,
+            "key_id": key_id,
+            "attestation_object": evidence,
+        }),
+    )
+    .await;
+    assert_eq!(enrollment.status(), StatusCode::CREATED);
+    let enrollment = response_json(enrollment).await;
+    let installation_id = Uuid::parse_str(
+        enrollment["installation_id"]
+            .as_str()
+            .expect("installation ID should be text"),
+    )
+    .expect("installation ID should parse");
+
+    let token_challenge = post_json(
+        &router,
+        "/v1/token/challenge",
+        serde_json::json!({ "installation_id": installation_id }),
+    )
+    .await;
+    assert_eq!(token_challenge.status(), StatusCode::CREATED);
+    let token_challenge = response_json(token_challenge).await;
+    let token_challenge_id = Uuid::parse_str(
+        token_challenge["challenge_id"]
+            .as_str()
+            .expect("challenge ID should be text"),
+    )
+    .expect("challenge ID should parse");
+    let token_challenge_value = token_challenge["challenge"]
+        .as_str()
+        .expect("challenge should be text");
+    let hash = client_data_hash(
+        ClientDataPurpose::TokenIssue,
+        token_challenge_id,
+        token_challenge_value,
+        Some(installation_id),
+    );
+    let signature: Signature = signing_key.sign(&hash);
+    let evidence = DevelopmentAssertion {
+        signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
+    };
+    let evidence =
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&evidence).expect("evidence should encode"));
+    let token = post_json(
+        &router,
+        "/v1/token",
+        serde_json::json!({
+            "installation_id": installation_id,
+            "challenge_id": token_challenge_id,
+            "challenge": token_challenge_value,
+            "assertion_object": evidence,
+        }),
+    )
+    .await;
+    assert_eq!(token.status(), StatusCode::OK);
+    let token = response_json(token).await;
+    assert_eq!(token["token_type"], "Bearer");
+    let access_token = token["access_token"]
+        .as_str()
+        .expect("access token should be text");
+
+    let discovery = router
+        .clone()
+        .oneshot(
+            Request::get("/.well-known/openid-configuration")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("discovery should respond");
+    assert_eq!(discovery.status(), StatusCode::OK);
+    let discovery = response_json(discovery).await;
+    assert_eq!(discovery["issuer"], "http://127.0.0.1:8080");
+    assert_eq!(
+        discovery["jwks_uri"],
+        "http://127.0.0.1:8080/.well-known/jwks.json"
+    );
+
+    let jwks = router
+        .oneshot(
+            Request::get("/.well-known/jwks.json")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("JWKS should respond");
+    assert_eq!(jwks.status(), StatusCode::OK);
+    let jwks = response_json(jwks).await;
+    let jwk: Jwk = serde_json::from_value(jwks["keys"][0].clone()).expect("JWKS key should decode");
+    let verifier = JwsEs256Verifier::try_from(&jwk).expect("JWK should verify ES256");
+    let unverified =
+        JwtUnverified::<TestTokenClaims>::from_str(access_token).expect("token should parse");
+    let verified = verifier.verify(&unverified).expect("token should verify");
+    assert_eq!(
+        verified.sub.as_deref(),
+        Some(installation_id.to_string().as_str())
+    );
+    assert_eq!(verified.aud.as_deref(), Some("bleat-telemetry"));
+    assert_eq!(verified.extensions.scope, "telemetry:write");
+    assert_eq!(verified.extensions.environment, "development");
+}
+
+#[tokio::test]
+async fn development_evidence_rejects_wrong_key_signature_and_replay() {
+    let router = test_router(&[]).await;
+    let signing_key = development_key(11);
+    let wrong_key = development_key(12);
+    let (challenge_id, challenge) =
+        development_challenge(&router, "/v1/attestation/challenge", serde_json::json!({})).await;
+    let valid_evidence =
+        development_attestation(&signing_key, &signing_key, challenge_id, &challenge);
+    let request = serde_json::json!({
+        "challenge_id": challenge_id,
+        "challenge": challenge,
+        "key_id": development_key_id(&signing_key),
+        "attestation_object": valid_evidence,
+    });
+
+    let wrong_key_id = post_json(
+        &router,
+        "/v1/attestation/enroll",
+        serde_json::json!({
+            "challenge_id": challenge_id,
+            "challenge": challenge,
+            "key_id": development_key_id(&wrong_key),
+            "attestation_object": request["attestation_object"],
+        }),
+    )
+    .await;
+    assert_eq!(wrong_key_id.status(), StatusCode::UNAUTHORIZED);
+
+    let wrong_signature = post_json(
+        &router,
+        "/v1/attestation/enroll",
+        serde_json::json!({
+            "challenge_id": challenge_id,
+            "challenge": challenge,
+            "key_id": development_key_id(&signing_key),
+            "attestation_object": development_attestation(
+                &signing_key,
+                &wrong_key,
+                challenge_id,
+                &challenge,
+            ),
+        }),
+    )
+    .await;
+    assert_eq!(wrong_signature.status(), StatusCode::UNAUTHORIZED);
+
+    let accepted = post_json(&router, "/v1/attestation/enroll", request.clone()).await;
+    assert_eq!(accepted.status(), StatusCode::CREATED);
+    let replay = post_json(&router, "/v1/attestation/enroll", request).await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn development_assertions_reject_wrong_signature_replay_and_disabled_installation() {
+    let database = database().await;
+    let config = test_config(&[]);
+    let router = router(&config, database.clone());
+    let signing_key = development_key(13);
+    let wrong_key = development_key(14);
+    let installation_id = enroll_development(&router, &signing_key).await;
+    let (challenge_id, challenge) = development_challenge(
+        &router,
+        "/v1/token/challenge",
+        serde_json::json!({ "installation_id": installation_id }),
+    )
+    .await;
+
+    let wrong_assertion = post_json(
+        &router,
+        "/v1/token",
+        serde_json::json!({
+            "installation_id": installation_id,
+            "challenge_id": challenge_id,
+            "challenge": challenge,
+            "assertion_object": development_assertion(
+                &wrong_key,
+                installation_id,
+                challenge_id,
+                &challenge,
+            ),
+        }),
+    )
+    .await;
+    assert_eq!(wrong_assertion.status(), StatusCode::UNAUTHORIZED);
+
+    let request = serde_json::json!({
+        "installation_id": installation_id,
+        "challenge_id": challenge_id,
+        "challenge": challenge,
+        "assertion_object": development_assertion(
+            &signing_key,
+            installation_id,
+            challenge_id,
+            &challenge,
+        ),
+    });
+    let accepted = post_json(&router, "/v1/token", request.clone()).await;
+    assert_eq!(accepted.status(), StatusCode::OK);
+    let replay = post_json(&router, "/v1/token", request).await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+
+    assert_eq!(
+        InstallationRepository::new(database)
+            .disable(installation_id)
+            .await
+            .expect("installation should disable"),
+        DisableOutcome::Disabled
+    );
+    let disabled = post_json(
+        &router,
+        "/v1/token/challenge",
+        serde_json::json!({ "installation_id": installation_id }),
+    )
+    .await;
+    assert_eq!(disabled.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

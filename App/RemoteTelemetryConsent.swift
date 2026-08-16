@@ -80,6 +80,7 @@ struct InactiveRemoteTelemetryConsentController:
 @MainActor
 final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let tracer = RemoteTelemetryTracer()
+    let tokenProvider: TelemetryTokenProvider?
     private let worker: RemoteTelemetryRuntimeWorker
 
     init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
@@ -119,12 +120,18 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             resource: resource,
             storageRootURL: storageRootURL
         )
+        tokenProvider = Self.makeTokenProvider(bundle: bundle)
     }
 
     func applyRemoteTelemetryConsent(
         _ enabled: Bool,
         storageGeneration: UUID?
     ) {
+        if let tokenProvider {
+            Task {
+                await tokenProvider.setEnabled(enabled)
+            }
+        }
         if enabled {
             guard let storageGeneration else {
                 worker.disable(storageGeneration: nil)
@@ -138,6 +145,53 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
 
     func setRemoteTelemetryForeground(_ foreground: Bool) {
         worker.setForeground(foreground)
+    }
+
+    private static func makeTokenProvider(
+        bundle: Bundle
+    ) -> TelemetryTokenProvider? {
+        guard let value = bundle.object(
+            forInfoDictionaryKey: "BleatTelemetryAuthenticationBaseURL"
+        ) as? String,
+            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let baseURL = URL(string: value)
+        else {
+            return nil
+        }
+
+        #if DEBUG
+            let allowsInsecureLoopback = true
+        #else
+            let allowsInsecureLoopback = false
+        #endif
+        guard let transport = try? URLSessionTelemetryAuthenticationTransport(
+            baseURL: baseURL,
+            allowsInsecureLoopback: allowsInsecureLoopback
+        ) else {
+            return nil
+        }
+
+        let attester: any TelemetryAttester
+        #if DEBUG
+            if bundle.object(
+                forInfoDictionaryKey: "BleatTelemetryAttesterMode"
+            ) as? String == "fake" {
+                attester = DevelopmentTelemetryAttester()
+            } else {
+                attester = AppAttestTelemetryAttester()
+            }
+        #else
+            attester = AppAttestTelemetryAttester()
+        #endif
+
+        let bundleID = bundle.bundleIdentifier ?? "com.yaleman.Bleat"
+        return TelemetryTokenProvider(
+            attester: attester,
+            transport: transport,
+            store: TelemetryEnrollmentVault(
+                service: "\(bundleID).telemetry-app-attest"
+            )
+        )
     }
 }
 

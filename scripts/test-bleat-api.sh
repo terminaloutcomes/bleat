@@ -27,6 +27,9 @@ done
 curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
 curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
 
+BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+  swift test --filter TelemetryAuthenticationLiveTests
+
 readonly challenge_response="$(
   curl --silent --fail-with-body \
     --header 'content-type: application/json' \

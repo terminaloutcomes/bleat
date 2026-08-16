@@ -1,9 +1,10 @@
 # bleat-api
 
-`bleat-api` is the Rust foundation for Bleat's anonymous telemetry
-authentication service. It uses PostgreSQL for installation state and
-single-use opaque challenges. App Attest verification, enrollment, and token
-signing remain reserved for their follow-up issues.
+`bleat-api` is Bleat's anonymous telemetry authentication service. It uses
+PostgreSQL for installation state and single-use opaque challenges. Development
+mode verifies deterministic fake P-256 evidence and issues ephemeral ES256
+tokens for end-to-end client testing. Production App Attest verification and
+persistent signing keys remain unavailable pending issues 65 and 66.
 
 ## Run locally
 
@@ -92,8 +93,12 @@ The service uses Rustls with system trust and does not support gRPC export.
 - `POST /v1/attestation/challenge` accepts `{}` and issues an unbound challenge.
 - `POST /v1/token/challenge` accepts `{ "installation_id": "<uuid>" }` and
   issues a challenge bound to an active installation.
-- `POST /v1/attestation/enroll` and `POST /v1/token` remain bounded typed
-  placeholders for App Attest verification and token signing.
+- `POST /v1/attestation/enroll` accepts `challenge_id`, `challenge`, `key_id`,
+  and a base64url `attestation_object`.
+- `POST /v1/token` accepts `installation_id`, `challenge_id`, `challenge`, and
+  a base64url `assertion_object`.
+- `GET /.well-known/openid-configuration` publishes development discovery.
+- `GET /.well-known/jwks.json` publishes the development ES256 public key.
 
 Challenge routes return `201` with `challenge_id`, `challenge`, and
 `expires_at`. A challenge is 32 bytes of operating-system randomness encoded as
@@ -105,8 +110,17 @@ Expired challenge cleanup and per-process issuance are bounded by configuration.
 Installation persistence records an opaque UUID, App Attest key identifier,
 65-byte P-256 public key, typed App Attest environment, active or disabled
 status, monotonic assertion counter, and timestamps. Counter advancement is an
-atomic compare-and-update operation. Enrollment and assertion verification will
-use this repository boundary in issues #65 and #66.
+atomic compare-and-update operation.
+
+Development enrollment and token issuance verify domain-separated canonical
+client-data hashes and fake P-256 proof-of-possession. Challenges are consumed
+before installations are created or counters are advanced, so failed or
+replayed evidence cannot be reused. Development JWTs live for ten minutes and
+contain `iss`, opaque installation `sub`, `aud=bleat-telemetry`,
+`scope=telemetry:write`, `iat`, `exp`, and `jti`. The ES256 signing key is
+generated at process startup and is intentionally not durable. Production mode
+rejects fake evidence and does not expose discovery or JWKS until the production
+verifier and persistent signing-key lifecycle are implemented.
 
 All database schema and data access code uses SeaORM and typed SeaQuery
 expressions. The service does not execute string-based SQL statements.

@@ -1555,6 +1555,25 @@ cannot export withdrawn data. The downstream exporter remains injectable;
 production uses an unavailable sink until authenticated OTLP delivery is added
 by issue 63.
 
+Telemetry authentication is fully lazy. Enabling consent creates no App Attest
+key, network request, challenge, enrollment, assertion, or token. The first
+`currentToken()` request starts enrollment or token issuance, and concurrent
+requests share that operation. A token with more than two minutes remaining is
+reused in memory; there are no refresh timers. Transient failures establish a
+bounded jittered backoff observed only by later token requests. Disabling
+consent cancels the active operation and clears the memory-only token while
+retaining enrollment for later re-enablement.
+
+The client gates App Attest on `DCAppAttestService.isSupported`, treats Mac
+Catalyst as unsupported, and retains only the App Attest key identifier plus an
+opaque backend installation identifier in one non-synchronizing, device-only
+Keychain record. Invalidated keys clear that record and restart enrollment.
+Debug iOS builds use the development App Attest entitlement and may select the
+deterministic fake attester; Release iOS builds use the production entitlement
+and cannot select the fake attester. The backend base URL comes only from
+`BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
+unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
+
 The telemetry authentication backend persists installation identity and
 challenge state in PostgreSQL through typed ORM statements. Installations use
 opaque UUIDs and retain the App Attest key identifier, 65-byte P-256 public key,
@@ -1563,9 +1582,15 @@ counter, and timestamps. Challenge responses contain 32 random bytes encoded as
 unpadded base64url, while persistence retains only the SHA-256 digest, typed
 purpose, optional installation binding, expiry, and consumption timestamp.
 Consumption and assertion-counter advancement are conditional atomic updates.
-The backend exposes database-aware readiness plus attestation and token
-challenge issuance; App Attest verification, enrollment, and signed token
-issuance remain tracked by issues 65 and 66.
+In development mode the backend verifies the fake attester's P-256
+proof-of-possession, enrolls through the same persisted installation boundary,
+and atomically advances assertion counters before issuing a ten-minute ES256
+JWT. Its signing key is ephemeral per process. Development discovery is exposed
+at `/.well-known/openid-configuration` and JWKS at
+`/.well-known/jwks.json`. Production mode rejects fake evidence and keeps these
+token endpoints unavailable. Production Apple App Attest verification remains
+tracked by issue 65; persistent signing keys and rotation remain tracked by
+issue 66.
 
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend

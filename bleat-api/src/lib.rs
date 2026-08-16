@@ -18,6 +18,7 @@ pub mod error;
 pub mod http;
 pub mod installation;
 pub mod observability;
+pub mod telemetry_auth;
 
 pub use http::router;
 

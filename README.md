@@ -974,9 +974,19 @@ physical device.
 
 The Rust telemetry-authentication service lives in `bleat-api/`. It provides
 database-aware health/readiness, PostgreSQL-backed installation state, and
-single-use opaque attestation and token challenges. App Attest enrollment and
-token signing remain typed placeholders for follow-up work. Run the disposable
-PostgreSQL and API stack locally with:
+single-use opaque attestation and token challenges. Its development mode also
+verifies deterministic fake P-256 evidence and issues ephemeral ES256 tokens
+for local Swift-to-PostgreSQL testing. Production App Attest verification and
+persistent signing-key rotation remain disabled until issues 65 and 66.
+
+The app reads the authentication service URL only from the
+`BLEAT_TELEMETRY_AUTH_BASE_URL` build setting. An empty value leaves telemetry
+authentication unavailable. Release builds require HTTPS; Debug builds may use
+HTTP only on loopback. Setting `BLEAT_TELEMETRY_ATTESTER_MODE=fake` selects the
+development attester in Debug builds only. Consent remains fully lazy: enabling
+telemetry performs no authentication work until a caller requests a token.
+
+Run the disposable PostgreSQL and API stack locally with:
 
 ```sh
 mise run api:run

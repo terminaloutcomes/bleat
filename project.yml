@@ -52,6 +52,8 @@ targets:
         BleatBuildDate: Unavailable
         BleatCloudKitMode: "$(BLEAT_CLOUDKIT_MODE)"
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
+        BleatTelemetryAuthenticationBaseURL: "$(BLEAT_TELEMETRY_AUTH_BASE_URL)"
+        BleatTelemetryAttesterMode: "$(BLEAT_TELEMETRY_ATTESTER_MODE)"
         NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
         NSBonjourServices:
           - _audiobookshelf._tcp
@@ -78,6 +80,8 @@ targets:
       base:
         BLEAT_CLOUDKIT_MODE: enabled
         BLEAT_DEVELOPER_NAME: James Hodgkinson
+        BLEAT_TELEMETRY_AUTH_BASE_URL: ""
+        BLEAT_TELEMETRY_ATTESTER_MODE: app-attest
         CODE_SIGN_ENTITLEMENTS: App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements
         CURRENT_PROJECT_VERSION: "1"
@@ -89,6 +93,11 @@ targets:
         "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
+      configs:
+        Debug:
+          BLEAT_APP_ATTEST_ENVIRONMENT: development
+        Release:
+          BLEAT_APP_ATTEST_ENVIRONMENT: production
     postBuildScripts:
       - path: scripts/write-build-metadata.sh
         name: Write Build Metadata

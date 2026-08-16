@@ -14,16 +14,26 @@ use opentelemetry::global;
 use opentelemetry_http::HeaderExtractor;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tracing::{Instrument, field, info, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
 use crate::{
-    challenge::{ChallengeRepository, ChallengeStoreError, IssuedChallenge},
-    config::Config,
+    challenge::{
+        ChallengeConsumeOutcome, ChallengePurpose, ChallengeRepository, ChallengeStoreError,
+        ExpectedChallenge, IssuedChallenge,
+    },
+    config::{Config, DeploymentMode},
     database,
     error::ApiError,
+    installation::{
+        CounterAdvanceOutcome, InstallationEnvironment, InstallationRepository,
+        InstallationStoreError, NewInstallation,
+    },
+    telemetry_auth::{
+        ClientDataPurpose, DevelopmentTokenIssuer, JwkSet, OpenIdConfiguration, TokenResponse,
+        client_data_hash, verify_development_assertion, verify_development_attestation,
+    },
 };
 
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
@@ -41,6 +51,9 @@ struct RequestLimits {
 struct AppState {
     database: DatabaseConnection,
     challenges: ChallengeRepository,
+    installations: InstallationRepository,
+    deployment_mode: DeploymentMode,
+    development_token_issuer: Option<Arc<DevelopmentTokenIssuer>>,
     challenge_lifetime: std::time::Duration,
     issuance_limiter: IssuanceLimiter,
 }
@@ -96,6 +109,29 @@ struct TokenChallengeRequest {
     installation_id: Uuid,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnrollmentRequest {
+    challenge_id: Uuid,
+    challenge: String,
+    key_id: String,
+    attestation_object: String,
+}
+
+#[derive(Debug, Serialize)]
+struct EnrollmentResponse {
+    installation_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenRequest {
+    installation_id: Uuid,
+    challenge_id: Uuid,
+    challenge: String,
+    assertion_object: String,
+}
+
 #[derive(Debug, Serialize)]
 struct ChallengeResponse {
     challenge_id: Uuid,
@@ -123,20 +159,31 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Router {
             database.clone(),
             config.challenge_cleanup_batch_size as u64,
         ),
+        installations: InstallationRepository::new(database.clone()),
+        deployment_mode: config.deployment_mode,
+        development_token_issuer: if config.deployment_mode == DeploymentMode::Development {
+            DevelopmentTokenIssuer::generate(&config.public_issuer, config.token_lifetime)
+                .ok()
+                .map(Arc::new)
+        } else {
+            None
+        },
         database,
         challenge_lifetime: config.challenge_lifetime,
         issuance_limiter: IssuanceLimiter::new(config.challenge_issuance_per_minute),
     };
     let protected_routes = Router::new()
         .route("/v1/attestation/challenge", post(attestation_challenge))
-        .route("/v1/attestation/enroll", post(unavailable))
+        .route("/v1/attestation/enroll", post(enroll))
         .route("/v1/token/challenge", post(token_challenge))
-        .route("/v1/token", post(unavailable))
+        .route("/v1/token", post(token))
         .with_state(state.clone());
 
     Router::new()
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
+        .route("/.well-known/openid-configuration", get(discovery))
+        .route("/.well-known/jwks.json", get(jwks))
         .with_state(state)
         .merge(apply_limits(
             protected_routes,
@@ -209,6 +256,164 @@ async fn token_challenge(
         .into_response())
 }
 
+async fn enroll(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    payload: Result<Json<EnrollmentRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(payload) = parse_json(payload, request_id)?;
+    if state.deployment_mode != DeploymentMode::Development {
+        return Err(ApiError::authentication_rejected(request_id.0));
+    }
+    let hash = client_data_hash(
+        ClientDataPurpose::AttestationEnroll,
+        payload.challenge_id,
+        &payload.challenge,
+        None,
+    );
+    let public_key =
+        verify_development_attestation(&payload.key_id, &payload.attestation_object, &hash)
+            .map_err(|_| ApiError::authentication_rejected(request_id.0))?;
+    consume_challenge(
+        &state,
+        payload.challenge_id,
+        &payload.challenge,
+        ExpectedChallenge {
+            purpose: ChallengePurpose::AttestationEnroll,
+            installation_id: None,
+        },
+        request_id,
+    )
+    .await?;
+    let installation = state
+        .installations
+        .create_verified(NewInstallation {
+            app_attest_key_id: payload.key_id,
+            public_key,
+            environment: InstallationEnvironment::Development,
+        })
+        .await
+        .map_err(|error| map_installation_error(error, request_id))?;
+    Ok((
+        StatusCode::CREATED,
+        Json(EnrollmentResponse {
+            installation_id: installation.id,
+        }),
+    )
+        .into_response())
+}
+
+async fn token(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    payload: Result<Json<TokenRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(payload) = parse_json(payload, request_id)?;
+    let Some(issuer) = state.development_token_issuer.as_ref() else {
+        return Err(ApiError::authentication_rejected(request_id.0));
+    };
+    let installation = state
+        .installations
+        .find_active(payload.installation_id)
+        .await
+        .map_err(|error| map_installation_error(error, request_id))?
+        .ok_or_else(|| ApiError::authentication_rejected(request_id.0))?;
+    if installation.environment != InstallationEnvironment::Development {
+        return Err(ApiError::authentication_rejected(request_id.0));
+    }
+    let hash = client_data_hash(
+        ClientDataPurpose::TokenIssue,
+        payload.challenge_id,
+        &payload.challenge,
+        Some(payload.installation_id),
+    );
+    verify_development_assertion(&installation.public_key, &payload.assertion_object, &hash)
+        .map_err(|_| ApiError::authentication_rejected(request_id.0))?;
+    consume_challenge(
+        &state,
+        payload.challenge_id,
+        &payload.challenge,
+        ExpectedChallenge {
+            purpose: ChallengePurpose::TokenIssue,
+            installation_id: Some(payload.installation_id),
+        },
+        request_id,
+    )
+    .await?;
+    let Some(next_counter) = installation.sign_count.checked_add(1) else {
+        return Err(ApiError::authentication_rejected(request_id.0));
+    };
+    match state
+        .installations
+        .advance_counter(
+            payload.installation_id,
+            installation.sign_count,
+            next_counter,
+        )
+        .await
+        .map_err(|error| map_installation_error(error, request_id))?
+    {
+        CounterAdvanceOutcome::Advanced => {}
+        CounterAdvanceOutcome::Conflict
+        | CounterAdvanceOutcome::Disabled
+        | CounterAdvanceOutcome::NotFound
+        | CounterAdvanceOutcome::InvalidTransition => {
+            return Err(ApiError::authentication_rejected(request_id.0));
+        }
+    }
+    let response: TokenResponse = issuer
+        .issue(payload.installation_id, Utc::now())
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    Ok(Json(response).into_response())
+}
+
+async fn discovery(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Result<Json<OpenIdConfiguration>, ApiError> {
+    let issuer = state
+        .development_token_issuer
+        .as_ref()
+        .ok_or_else(|| ApiError::temporarily_unavailable(request_id.0))?;
+    Ok(Json(issuer.discovery()))
+}
+
+async fn jwks(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Result<Json<JwkSet>, ApiError> {
+    let issuer = state
+        .development_token_issuer
+        .as_ref()
+        .ok_or_else(|| ApiError::temporarily_unavailable(request_id.0))?;
+    issuer
+        .jwks()
+        .map(Json)
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))
+}
+
+async fn consume_challenge(
+    state: &AppState,
+    challenge_id: Uuid,
+    challenge: &str,
+    expected: ExpectedChallenge,
+    request_id: RequestId,
+) -> Result<(), ApiError> {
+    match state
+        .challenges
+        .consume_at(challenge_id, challenge, expected, Utc::now())
+        .await
+        .map_err(|error| map_challenge_error(error, request_id))?
+    {
+        ChallengeConsumeOutcome::Consumed => Ok(()),
+        ChallengeConsumeOutcome::Invalid
+        | ChallengeConsumeOutcome::WrongPurpose
+        | ChallengeConsumeOutcome::WrongBinding
+        | ChallengeConsumeOutcome::Expired
+        | ChallengeConsumeOutcome::Replayed => Err(ApiError::authentication_rejected(request_id.0)),
+    }
+}
+
 fn parse_json<T>(
     payload: Result<Json<T>, JsonRejection>,
     request_id: RequestId,
@@ -241,12 +446,15 @@ fn map_challenge_error(error: ChallengeStoreError, request_id: RequestId) -> Api
     }
 }
 
-async fn unavailable(
-    Extension(request_id): Extension<RequestId>,
-    payload: Result<Json<Value>, JsonRejection>,
-) -> Result<Response, ApiError> {
-    let _payload = parse_json(payload, request_id)?;
-    Err(ApiError::temporarily_unavailable(request_id.0))
+fn map_installation_error(error: InstallationStoreError, request_id: RequestId) -> ApiError {
+    match error {
+        InstallationStoreError::Database => ApiError::temporarily_unavailable(request_id.0),
+        InstallationStoreError::InvalidKeyIdentifier
+        | InstallationStoreError::InvalidPublicKey
+        | InstallationStoreError::InvalidStoredState => {
+            ApiError::authentication_rejected(request_id.0)
+        }
+    }
 }
 
 async fn enforce_limits(
