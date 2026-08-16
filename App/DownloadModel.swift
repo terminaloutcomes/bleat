@@ -265,6 +265,22 @@ struct AutomaticCachePin: Hashable, Sendable {
     fileprivate let downloadID: DownloadID
 }
 
+struct AutomaticCachedPlaybackWindow: Sendable {
+    let downloadID: DownloadID
+    let tracks: [AppPlaybackTrack]
+    let trackIndexes: Set<Int>
+    let pin: AutomaticCachePin
+
+    var startTime: Double {
+        tracks.first?.startOffset ?? 0
+    }
+
+    var endTime: Double {
+        guard let last = tracks.last else { return startTime }
+        return last.startOffset + last.duration
+    }
+}
+
 private enum DeferredAutomaticCacheCleanup {
     case tracks(Set<Int>)
     case record
@@ -1639,6 +1655,103 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await self?.performDeferredAutomaticCacheCleanup(
                 for: pin.downloadID
             )
+        }
+    }
+
+    func automaticCachedPlaybackWindow(
+        for record: DownloadedBookRecord,
+        containing wholeBookTime: Double
+    ) async -> AutomaticCachedPlaybackWindow? {
+        guard record.manifest.purpose == .automaticCache,
+            wholeBookTime.isFinite,
+            wholeBookTime >= 0,
+            let targetIndexes = record.manifest.automaticTargetTrackIndexes,
+            !targetIndexes.isEmpty
+        else {
+            return nil
+        }
+
+        let eligible = record.manifest.entries
+            .filter { entry in
+                targetIndexes.contains(entry.trackIndex)
+                    && entry.state == .complete
+                    && entry.placement == .finalized
+                    && entry.observedByteLength == entry.expectedByteLength
+                    && entry.startOffset?.isFinite == true
+                    && entry.duration?.isFinite == true
+                    && (entry.startOffset ?? -1) >= 0
+                    && (entry.duration ?? 0) > 0
+            }
+            .sorted {
+                ($0.startOffset ?? 0, $0.trackIndex)
+                    < ($1.startOffset ?? 0, $1.trackIndex)
+            }
+        guard
+            let containingIndex = eligible.lastIndex(where: { entry in
+                guard let start = entry.startOffset,
+                    let duration = entry.duration
+                else {
+                    return false
+                }
+                return start <= wholeBookTime
+                    && wholeBookTime < start + duration
+            })
+        else {
+            return nil
+        }
+
+        var selected = [eligible[containingIndex]]
+        var expectedStart =
+            (eligible[containingIndex].startOffset ?? 0)
+            + (eligible[containingIndex].duration ?? 0)
+        for entry in eligible.dropFirst(containingIndex + 1) {
+            guard let start = entry.startOffset,
+                let duration = entry.duration,
+                abs(start - expectedStart) <= 0.25
+            else {
+                break
+            }
+            selected.append(entry)
+            expectedStart = start + duration
+        }
+
+        let selectedIndexes = Set(selected.map(\.trackIndex))
+        guard
+            let pin = pinAutomaticCacheTracks(
+                for: record,
+                trackIndexes: selectedIndexes
+            )
+        else {
+            return nil
+        }
+        do {
+            let urls = try await localTrackURLs(
+                for: record,
+                trackIndexes: selectedIndexes
+            )
+            let tracks = try selected.map { entry in
+                guard let url = urls[entry.trackIndex],
+                    let start = entry.startOffset,
+                    let duration = entry.duration
+                else {
+                    throw DownloadModelFailure.transferFailed
+                }
+                return AppPlaybackTrack(
+                    url: url,
+                    startOffset: start,
+                    duration: duration,
+                    title: "Track \(entry.trackIndex + 1)"
+                )
+            }
+            return AutomaticCachedPlaybackWindow(
+                downloadID: record.manifest.downloadID,
+                tracks: tracks,
+                trackIndexes: selectedIndexes,
+                pin: pin
+            )
+        } catch {
+            releaseAutomaticCachePin(pin)
+            return nil
         }
     }
 

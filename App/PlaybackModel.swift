@@ -315,6 +315,11 @@ struct AutomaticDownloadPlaybackGate {
     }
 }
 
+private enum CachedStreamingPreparation {
+    case ready(AppPlaybackPreparation)
+    case failed(AppFailure)
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -351,6 +356,14 @@ final class PlaybackModel {
     private var playbackWatchdogTask: Task<Void, Never>?
     private var playbackRecoveryTask: Task<Void, Never>?
     private var statisticsRecordingTask: Task<Void, Never>?
+    private var cachedStreamingPreparationTask: Task<Void, Never>?
+    private var cachedStreamingPreparationGeneration: UInt64 = 0
+    private var cachedStreamingPreparation: CachedStreamingPreparation?
+    private var cachedStreamingRetryAttempted = false
+    private var cachedContinuationTimeoutTask: Task<Void, Never>?
+    private var awaitingCachedContinuation = false
+    private var cachedContinuationShouldResume = true
+    private var automaticCachedPlaybackWindow: AutomaticCachedPlaybackWindow?
     private var pausedAt: Date?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
@@ -372,6 +385,18 @@ final class PlaybackModel {
     @ObservationIgnored
     private var automaticDownloadHandler:
         (@MainActor @Sendable (AutomaticDownloadActivity) async -> Void)?
+    @ObservationIgnored
+    private var automaticCachedWindowResolver:
+        (
+            @MainActor @Sendable (
+                AccountID,
+                LibraryItemID,
+                Double
+            ) async -> AutomaticCachedPlaybackWindow?
+        )?
+    @ObservationIgnored
+    private var automaticCachePinReleaser:
+        (@MainActor @Sendable (AutomaticCachePin?) -> Void)?
 
     private(set) var state: PlaybackState = .idle
     private(set) var syncState: PlaybackSyncState = .idle
@@ -562,6 +587,45 @@ final class PlaybackModel {
         automaticDownloadHandler = handler
     }
 
+    func setAutomaticCachedPlaybackHandlers(
+        resolve:
+            @escaping @MainActor @Sendable (
+                AccountID,
+                LibraryItemID,
+                Double
+            ) async -> AutomaticCachedPlaybackWindow?,
+        release:
+            @escaping @MainActor @Sendable (AutomaticCachePin?) -> Void
+    ) {
+        automaticCachedWindowResolver = resolve
+        automaticCachePinReleaser = release
+    }
+
+    func preferredDownloadedStartTime(
+        detail: LibraryBookDetail,
+        accountID: AccountID,
+        initialTime: Double?
+    ) -> Double {
+        if let initialTime {
+            return min(max(initialTime, 0), detail.duration)
+        }
+        let saved = positionStore.position(
+            accountID: accountID,
+            itemID: detail.id
+        )
+        switch DownloadedPositionReconciler.decide(
+            savedPosition: saved,
+            baseline: detail.progress,
+            remote: nil,
+            duration: detail.duration
+        ) {
+        case .conflict(let localTime, _), .local(let localTime):
+            return localTime
+        case .server(let serverTime):
+            return serverTime
+        }
+    }
+
     private func record(_ event: DiagnosticEvent) {
         Task {
             await diagnostics.record(event)
@@ -617,6 +681,9 @@ final class PlaybackModel {
             return
         }
         notifyAutomaticDownloadBandwidthReleased()
+        resetPlayer()
+        releaseAutomaticCachedPlaybackWindow()
+        resetCachedStreamingContinuation()
         activeAccount = nil
         localAccountID = nil
         preparation = nil
@@ -627,7 +694,6 @@ final class PlaybackModel {
         automaticDownloadBandwidthDecision = nil
         resetPlaybackRecoveryState()
         localPlaybackSession = nil
-        resetPlayer()
         setSleepTimer(minutes: nil)
         pausedAt = nil
         state = .preparing
@@ -660,7 +726,6 @@ final class PlaybackModel {
         pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
-
         do {
             let prepared = try await service.openPlayback(
                 for: account,
@@ -756,8 +821,13 @@ final class PlaybackModel {
         trackURLs: [URL],
         accountID: AccountID,
         account: ServerAccount?,
-        initialTime: Double? = nil
+        initialTime: Double? = nil,
+        automaticCachedWindow: AutomaticCachedPlaybackWindow? = nil
     ) async {
+        var unownedAutomaticCachePin = automaticCachedWindow?.pin
+        defer {
+            automaticCachePinReleaser?(unownedAutomaticCachePin)
+        }
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
             operation: .playbackPreparation,
             source: .downloaded
@@ -771,7 +841,7 @@ final class PlaybackModel {
                 count: trackURLs.count
             )
         )
-        guard !trackURLs.isEmpty else {
+        guard !trackURLs.isEmpty || automaticCachedWindow != nil else {
             state = .failed(.mediaUnavailable)
             telemetryOutcome = .failed(.media)
             await diagnostics.record(
@@ -795,11 +865,14 @@ final class PlaybackModel {
             return
         }
         await finishStatisticsSession()
-        await closeActiveSession()
+        closeActiveSessionWithoutWaiting()
         guard generation == operationGeneration else {
             return
         }
         notifyAutomaticDownloadBandwidthReleased()
+        resetPlayer()
+        releaseAutomaticCachedPlaybackWindow()
+        resetCachedStreamingContinuation()
         activeAccount = nil
         localAccountID = nil
         preparation = nil
@@ -810,7 +883,6 @@ final class PlaybackModel {
         automaticDownloadBandwidthDecision = nil
         resetPlaybackRecoveryState()
         localPlaybackSession = nil
-        resetPlayer()
         setSleepTimer(minutes: nil)
         pausedAt = nil
         state = .preparing
@@ -834,26 +906,40 @@ final class PlaybackModel {
         pendingBookmarkMutations = []
         bookmarkState = .idle
         positionConflict = nil
+        self.automaticCachedPlaybackWindow = automaticCachedWindow
+        unownedAutomaticCachePin = nil
 
         do {
-            var offset: Double = 0
-            var tracks: [AppPlaybackTrack] = []
-            for (index, url) in trackURLs.enumerated() {
-                let asset = AVURLAsset(url: url)
-                let loadedDuration = try await asset.load(.duration)
-                let seconds = loadedDuration.seconds
-                guard seconds.isFinite, seconds > 0 else {
-                    throw AppPlaybackBuildError.missingTracks
-                }
-                tracks.append(
-                    AppPlaybackTrack(
-                        url: url,
-                        startOffset: offset,
-                        duration: seconds,
-                        title: "Track \(index + 1)"
+            let tracks: [AppPlaybackTrack]
+            let playbackDuration: Double
+            if let automaticCachedWindow {
+                tracks = automaticCachedWindow.tracks
+                playbackDuration = detail.duration
+            } else {
+                var offset: Double = 0
+                var loadedTracks: [AppPlaybackTrack] = []
+                for (index, url) in trackURLs.enumerated() {
+                    let asset = AVURLAsset(url: url)
+                    let loadedDuration = try await asset.load(.duration)
+                    let seconds = loadedDuration.seconds
+                    guard seconds.isFinite, seconds > 0 else {
+                        throw AppPlaybackBuildError.missingTracks
+                    }
+                    loadedTracks.append(
+                        AppPlaybackTrack(
+                            url: url,
+                            startOffset: offset,
+                            duration: seconds,
+                            title: "Track \(index + 1)"
+                        )
                     )
-                )
-                offset += seconds
+                    offset += seconds
+                }
+                tracks = loadedTracks
+                playbackDuration = offset
+            }
+            guard !tracks.isEmpty else {
+                throw AppPlaybackBuildError.missingTracks
             }
             guard generation == operationGeneration else {
                 return
@@ -862,13 +948,13 @@ final class PlaybackModel {
                 sessionID: nil,
                 itemID: detail.id,
                 title: detail.title,
-                duration: offset,
+                duration: playbackDuration,
                 currentTime: min(
                     max(
                         initialTime ?? detail.progress?.currentTime ?? 0,
                         0
                     ),
-                    offset
+                    playbackDuration
                 ),
                 chapters: detail.chapters,
                 source: .direct(tracks)
@@ -877,6 +963,9 @@ final class PlaybackModel {
             activeAccount = account
             localAccountID = accountID
             preparation = prepared
+            activeDownloadDetail =
+                automaticCachedWindow == nil
+                ? nil : detail
             duration = prepared.duration
             if let initialTime {
                 currentTime = min(max(initialTime, 0), prepared.duration)
@@ -913,6 +1002,12 @@ final class PlaybackModel {
             } else {
                 state = .paused
             }
+            if automaticCachedWindow != nil, let account {
+                prepareStreamingContinuation(
+                    detail: detail,
+                    account: account
+                )
+            }
             await loadBookmarks()
         } catch {
             guard generation == operationGeneration else {
@@ -922,6 +1017,8 @@ final class PlaybackModel {
             localAccountID = nil
             preparation = nil
             resetPlayer()
+            releaseAutomaticCachedPlaybackWindow()
+            resetCachedStreamingContinuation()
             state = .failed(.mediaUnavailable)
             telemetryOutcome = .failed(.media)
             await diagnostics.record(
@@ -1256,6 +1353,24 @@ final class PlaybackModel {
             }
             return
         }
+        if awaitingCachedContinuation,
+            automaticCachedPlaybackWindow != nil
+        {
+            pausedAt = nil
+            playbackRequested = true
+            cachedContinuationShouldResume = true
+            transitionPlaybackState(to: .buffering)
+            startPlaybackWatchdog()
+            updateNowPlaying()
+            let operationGeneration = generation
+            Task { @MainActor [weak self] in
+                await self?.continueBeyondCachedWindow(
+                    operationGeneration: operationGeneration,
+                    resumePlayback: true
+                )
+            }
+            return
+        }
         pausedAt = nil
         playbackRequested = true
         hasConfirmedPlaybackAdvance = false
@@ -1357,6 +1472,7 @@ final class PlaybackModel {
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
+        resetCachedStreamingContinuation()
         player?.pause()
         state = .failed(failure)
         updateNowPlaying()
@@ -1509,6 +1625,31 @@ final class PlaybackModel {
         if continuation == .remainPaused {
             pausedAt = nil
         }
+        if let window = automaticCachedPlaybackWindow,
+            target < window.startTime || target >= window.endTime
+        {
+            if cachedStreamingPreparationTask == nil {
+                switch cachedStreamingPreparation {
+                case .ready:
+                    break
+                case .failed, nil:
+                    if let activeDownloadDetail, let activeAccount {
+                        prepareStreamingContinuation(
+                            detail: activeDownloadDetail,
+                            account: activeAccount
+                        )
+                    }
+                }
+            }
+            awaitingCachedContinuation = true
+            state = .buffering
+            await continueBeyondCachedWindow(
+                operationGeneration: operationGeneration,
+                requestedTime: target,
+                resumePlayback: continuation == .resume
+            )
+            return
+        }
         state = .preparing
         do {
             try await rebuildQueue(at: target)
@@ -1615,6 +1756,8 @@ final class PlaybackModel {
         await finishStatisticsSession()
         notifyAutomaticDownloadBandwidthReleased()
         resetPlayer()
+        releaseAutomaticCachedPlaybackWindow()
+        resetCachedStreamingContinuation()
         await closeActiveSession()
         guard generation == operationGeneration else {
             return
@@ -1817,7 +1960,7 @@ final class PlaybackModel {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.playbackEnded()
+                await self?.handlePlaybackQueueEnded()
             }
         }
     }
@@ -1860,6 +2003,118 @@ final class PlaybackModel {
             for: activeAccount,
             sessionID: sessionID
         )
+    }
+
+    private func closeActiveSessionWithoutWaiting() {
+        guard let activeAccount,
+            let sessionID = preparation?.sessionID
+        else {
+            return
+        }
+        Task { [service] in
+            try? await service.closePlayback(
+                for: activeAccount,
+                sessionID: sessionID
+            )
+        }
+    }
+
+    private func releaseAutomaticCachedPlaybackWindow() {
+        automaticCachePinReleaser?(automaticCachedPlaybackWindow?.pin)
+        automaticCachedPlaybackWindow = nil
+    }
+
+    private func resetCachedStreamingContinuation() {
+        cachedStreamingPreparationGeneration &+= 1
+        cachedStreamingPreparationTask?.cancel()
+        cachedStreamingPreparationTask = nil
+        if case .ready(let prepared) = cachedStreamingPreparation,
+            let sessionID = prepared.sessionID,
+            let activeAccount
+        {
+            Task { [service] in
+                try? await service.closePlayback(
+                    for: activeAccount,
+                    sessionID: sessionID
+                )
+            }
+        }
+        cachedStreamingPreparation = nil
+        cachedStreamingRetryAttempted = false
+        cachedContinuationTimeoutTask?.cancel()
+        cachedContinuationTimeoutTask = nil
+        awaitingCachedContinuation = false
+        cachedContinuationShouldResume = true
+    }
+
+    private func prepareStreamingContinuation(
+        detail: LibraryBookDetail,
+        account: ServerAccount,
+        isBoundaryRetry: Bool = false
+    ) {
+        if case .ready(let prepared) = cachedStreamingPreparation,
+            let sessionID = prepared.sessionID
+        {
+            Task { [service] in
+                try? await service.closePlayback(
+                    for: account,
+                    sessionID: sessionID
+                )
+            }
+        }
+        cachedStreamingRetryAttempted = isBoundaryRetry
+        cachedStreamingPreparationGeneration &+= 1
+        let preparationGeneration = cachedStreamingPreparationGeneration
+        cachedStreamingPreparationTask?.cancel()
+        cachedStreamingPreparation = nil
+        cachedStreamingPreparationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result: CachedStreamingPreparation
+            do {
+                result = .ready(
+                    try await service.openPlayback(
+                        for: account,
+                        itemID: detail.id,
+                        preference: .automatic,
+                        deviceInfo: Self.deviceInfo()
+                    )
+                )
+            } catch let error as AppServiceError {
+                result = .failed(
+                    AppFailure(
+                        operation: .openPlayback,
+                        serviceError: error
+                    )
+                )
+            } catch {
+                result = .failed(.playbackUnavailable)
+            }
+            guard
+                cachedStreamingPreparationGeneration
+                    == preparationGeneration,
+                !Task.isCancelled,
+                itemID == detail.id,
+                automaticCachedPlaybackWindow != nil
+            else {
+                if case .ready(let preparation) = result,
+                    let sessionID = preparation.sessionID
+                {
+                    try? await service.closePlayback(
+                        for: account,
+                        sessionID: sessionID
+                    )
+                }
+                return
+            }
+            cachedStreamingPreparationTask = nil
+            cachedStreamingPreparation = result
+            if awaitingCachedContinuation {
+                await continueBeyondCachedWindow(
+                    operationGeneration: generation,
+                    resumePlayback: cachedContinuationShouldResume
+                )
+            }
+        }
     }
 
     private func updateTimePitchAlgorithm() {
@@ -2501,6 +2756,21 @@ final class PlaybackModel {
         else {
             return
         }
+        if automaticCachedPlaybackWindow != nil {
+            guard
+                automaticDownloadBandwidthDecision
+                    != .allowAutomaticDownloads
+            else {
+                return
+            }
+            automaticDownloadBandwidthDecision = .allowAutomaticDownloads
+            if isPlaybackRequested {
+                notifyAutomaticDownloadProgress(force: true)
+            } else {
+                notifyAutomaticDownloadBandwidthReleased()
+            }
+            return
+        }
         let decision = automaticDownloadPlaybackGate.decision(
             isPlayingIntent: isPlaybackRequested,
             timeControlStatus: player.timeControlStatus,
@@ -2576,6 +2846,197 @@ final class PlaybackModel {
         }
     }
 
+    private func handlePlaybackQueueEnded() async {
+        guard automaticCachedPlaybackWindow != nil else {
+            playbackEnded()
+            return
+        }
+        await continueBeyondCachedWindow(
+            operationGeneration: generation
+        )
+    }
+
+    private func continueBeyondCachedWindow(
+        operationGeneration: UInt64,
+        requestedTime: Double? = nil,
+        resumePlayback: Bool = true
+    ) async {
+        guard generation == operationGeneration,
+            let window = automaticCachedPlaybackWindow,
+            let accountID,
+            let itemID
+        else {
+            return
+        }
+        guard requestedTime != nil || isPlaybackRequested else { return }
+        let continuationTime = min(
+            max(requestedTime ?? window.endTime, 0),
+            duration
+        )
+        guard requestedTime != nil || continuationTime < duration - 0.001 else {
+            playbackEnded()
+            return
+        }
+
+        if let resolver = automaticCachedWindowResolver {
+            let extended = await resolver(
+                accountID,
+                itemID,
+                continuationTime + 0.001
+            )
+            guard generation == operationGeneration else {
+                automaticCachePinReleaser?(extended?.pin)
+                return
+            }
+            let usableExtension: AutomaticCachedPlaybackWindow?
+            if let extended,
+                extended.startTime <= continuationTime,
+                extended.endTime > continuationTime + 0.001
+            {
+                usableExtension = extended
+            } else {
+                automaticCachePinReleaser?(extended?.pin)
+                usableExtension = nil
+            }
+            if let extended = usableExtension {
+                automaticCachedPlaybackWindow = extended
+                guard let previous = preparation else {
+                    automaticCachePinReleaser?(window.pin)
+                    automaticCachePinReleaser?(extended.pin)
+                    automaticCachedPlaybackWindow = nil
+                    fail(.mediaUnavailable)
+                    return
+                }
+                preparation = AppPlaybackPreparation(
+                    sessionID: nil,
+                    itemID: previous.itemID,
+                    title: previous.title,
+                    duration: previous.duration,
+                    currentTime: continuationTime,
+                    chapters: previous.chapters,
+                    source: .direct(extended.tracks)
+                )
+                do {
+                    try await rebuildQueue(at: continuationTime)
+                    automaticCachePinReleaser?(window.pin)
+                    guard generation == operationGeneration else { return }
+                    currentTime = continuationTime
+                    state = resumePlayback ? .ready : .paused
+                    if resumePlayback {
+                        play()
+                    }
+                    return
+                } catch {
+                    resetPlayer()
+                    automaticCachePinReleaser?(window.pin)
+                    releaseAutomaticCachedPlaybackWindow()
+                    fail(.mediaUnavailable)
+                    return
+                }
+            }
+        }
+
+        switch cachedStreamingPreparation {
+        case .ready(let remote):
+            await activateStreamingContinuation(
+                remote,
+                at: continuationTime,
+                operationGeneration: operationGeneration,
+                resumePlayback: resumePlayback
+            )
+        case .failed(let failure):
+            guard !cachedStreamingRetryAttempted,
+                let activeDownloadDetail,
+                let activeAccount
+            else {
+                fail(failure)
+                return
+            }
+            prepareStreamingContinuation(
+                detail: activeDownloadDetail,
+                account: activeAccount,
+                isBoundaryRetry: true
+            )
+            waitForCachedStreamingContinuation(
+                operationGeneration: operationGeneration,
+                resumePlayback: resumePlayback
+            )
+        case nil:
+            waitForCachedStreamingContinuation(
+                operationGeneration: operationGeneration,
+                resumePlayback: resumePlayback
+            )
+        }
+    }
+
+    private func waitForCachedStreamingContinuation(
+        operationGeneration: UInt64,
+        resumePlayback: Bool
+    ) {
+        awaitingCachedContinuation = true
+        cachedContinuationShouldResume = resumePlayback
+        transitionPlaybackState(to: .buffering)
+        updateNowPlaying()
+        cachedContinuationTimeoutTask?.cancel()
+        cachedContinuationTimeoutTask = Task {
+            @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard !Task.isCancelled,
+                let self,
+                self.generation == operationGeneration,
+                self.awaitingCachedContinuation
+            else {
+                return
+            }
+            self.generation &+= 1
+            self.awaitingCachedContinuation = false
+            self.fail(.playbackUnavailable)
+        }
+    }
+
+    private func activateStreamingContinuation(
+        _ remote: AppPlaybackPreparation,
+        at continuationTime: Double,
+        operationGeneration: UInt64,
+        resumePlayback: Bool = true
+    ) async {
+        guard generation == operationGeneration,
+            remote.itemID == itemID
+        else {
+            if let sessionID = remote.sessionID, let activeAccount {
+                try? await service.closePlayback(
+                    for: activeAccount,
+                    sessionID: sessionID
+                )
+            }
+            return
+        }
+        awaitingCachedContinuation = false
+        cachedContinuationTimeoutTask?.cancel()
+        cachedContinuationTimeoutTask = nil
+        persistLocalPosition()
+        await finishStatisticsSession()
+        guard generation == operationGeneration else { return }
+        localAccountID = nil
+        localPlaybackSession = nil
+        preparation = remote
+        duration = remote.duration
+        currentTime = min(max(continuationTime, 0), remote.duration)
+        do {
+            try await rebuildQueue(at: currentTime)
+            guard generation == operationGeneration else { return }
+            releaseAutomaticCachedPlaybackWindow()
+            cachedStreamingPreparation = nil
+            state = resumePlayback ? .ready : .paused
+            if resumePlayback {
+                play()
+            }
+            await loadBookmarks()
+        } catch {
+            fail(.mediaUnavailable)
+        }
+    }
+
     private func playbackEnded() {
         recordStatisticsSample(isAudibleAndAdvancing: false)
         playbackRequested = false
@@ -2587,6 +3048,8 @@ final class PlaybackModel {
         currentTime = duration
         setSleepTimer(minutes: nil)
         persistLocalPosition()
+        releaseAutomaticCachedPlaybackWindow()
+        resetCachedStreamingContinuation()
         state = .ended
         updateNowPlaying()
         notifyAutomaticDownloadFinished()

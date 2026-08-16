@@ -1280,6 +1280,25 @@ final class AppModel {
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
         }
+        playback.setAutomaticCachedPlaybackHandlers(
+            resolve: { [weak downloads] accountID, itemID, time in
+                guard let downloads,
+                    let record = downloads.record(
+                        accountID: accountID,
+                        itemID: itemID
+                    )
+                else {
+                    return nil
+                }
+                return await downloads.automaticCachedPlaybackWindow(
+                    for: record,
+                    containing: time
+                )
+            },
+            release: { [weak downloads] pin in
+                downloads?.releaseAutomaticCachePin(pin)
+            }
+        )
         return (playback, downloads)
     }
 
@@ -3126,6 +3145,63 @@ final class AppModel {
                 accountID: savedAccount.id,
                 itemID: itemID
             )
+        }
+
+        if let downloaded,
+            downloaded.manifest.purpose == .automaticCache
+        {
+            guard downloaded.detail.id == itemID,
+                downloaded.detail.libraryID == libraryID,
+                downloaded.manifest.itemID == itemID
+            else {
+                return await playbackStartFailure(
+                    .playbackIdentityMismatch,
+                    generation: generation
+                )
+            }
+            let resolved = PlaybackStartPositionResolver.resolve(
+                request.position,
+                duration: downloaded.detail.duration,
+                chapters: downloaded.detail.chapters
+            )
+            if case .failed(let failure) = resolved {
+                return await playbackStartFailure(
+                    failure.cause,
+                    generation: generation
+                )
+            }
+            let preferredTime = playback.preferredDownloadedStartTime(
+                detail: downloaded.detail,
+                accountID: savedAccount.id,
+                initialTime: resolved.explicitTime
+            )
+            if let window = await downloads.automaticCachedPlaybackWindow(
+                for: downloaded,
+                containing: preferredTime
+            ) {
+                guard playbackStartGeneration == generation else {
+                    downloads.releaseAutomaticCachePin(window.pin)
+                    return .superseded
+                }
+                playbackStartPhase = .preparingPlayback
+                await playback.startDownloaded(
+                    detail: downloaded.detail,
+                    trackURLs: [],
+                    accountID: savedAccount.id,
+                    account: savedAccount,
+                    initialTime: resolved.explicitTime,
+                    automaticCachedWindow: window
+                )
+                guard playbackStartGeneration == generation else {
+                    return .superseded
+                }
+                playbackStartPhase = .resolving
+                return playbackStartOutcome(
+                    source: .downloaded,
+                    accountID: savedAccount.id,
+                    itemID: itemID
+                )
+            }
         }
 
         let detail: LibraryBookDetail

@@ -635,7 +635,11 @@ M4B is downloaded once in full. Automatic transfers wait for stable playback,
 run at background priority, and suspend whenever the player needs bandwidth.
 Their status and displayed byte count cover only the active file window, so a
 fully cached window reads **Cached** at 100% without claiming the whole book is
-available offline. Completed files outside the active window still count
+available offline. Play starts immediately from a finalized, byte-verified
+cached window when it covers the requested position. Bleat keeps filling the
+window and prepares any later streaming continuation in the background; a
+full-book download remains the only guarantee that playback can reach the end
+without a connection. Completed files outside the active window still count
 toward device storage until cleanup removes them. Settings can delete
 automatic cache files after each completed chapter, when the book finishes,
 or—by default—24 hours after the book finishes. Cleanup never applies to an
@@ -653,11 +657,13 @@ downloads show status, stored and expected bytes, and the relevant Pause,
 Resume, Retry, Repair, Download Full Book, or Remove action there as well as in
 Downloads.
 Automatic cache failures retry only the active window and never appear as a
-full-book repair. Books play directly from local files only after every source
-file is verified, without opening a server playback session. Bleat audits
-completed files when restoring downloads and before playback; a missing or
-byte-corrupt track in an explicit download changes the book to Partial and
-exposes Repair. Repair preserves verified tracks, downloads only damaged
+full-book repair. Explicit full-book downloads play directly from local files
+without opening a server playback session. Automatic cached windows can also
+begin locally while later streaming continuation is prepared without blocking
+local controls. Bleat audits completed files when restoring downloads and
+before playback; a missing or byte-corrupt track in an explicit download
+changes the book to Partial and exposes Repair. Repair preserves verified
+tracks, downloads only damaged
 entries, and refuses to mix files when the server's plan changed.
 Local-file playback saves an account-scoped
 position every five seconds and on pause, seek, backgrounding, completion, and

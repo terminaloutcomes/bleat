@@ -803,7 +803,13 @@ For downloaded playback:
 3. Create a local playback-session record with UUIDv4 and play method `Local`.
 4. Queue it for later `/api/session/local` or `/api/session/local-all` synchronization.
 
-If some tracks are local and later tracks are not, playback may switch to streaming when online. It must not silently stall at the boundary.
+If the requested position is inside a finalized, byte-verified automatic cache
+window with complete timing metadata, build and start that local queue before
+awaiting any server playback-session work. Pin the files while the player owns
+them, extend from newly verified adjacent files when possible, and prepare a
+streaming continuation in the background. If later tracks are not local,
+switch to streaming at the exact whole-book position when online. It must not
+silently stall or report whole-book completion at the cached boundary.
 
 ### 9.3 Playback URL construction
 
@@ -1027,7 +1033,9 @@ A downloaded book has a manifest with `queued`, `downloading`, `partial`, `compl
 An automatic cache additionally has a window-scoped `queued`, `downloading`,
 `cached`, or `failed` state. It becomes `cached` when every target track is
 finalized at its expected byte length. Whole-book `complete` remains the only
-state that permits direct offline playback.
+state that guarantees uninterrupted whole-book offline playback. A completed
+automatic window may start from its verified local files and remains usable
+offline only to the end of that window.
 
 A book becomes `complete` only after:
 

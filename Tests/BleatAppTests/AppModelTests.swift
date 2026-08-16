@@ -6859,6 +6859,510 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "PlaybackStartAutomaticCache-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: summary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let playbackGate = AsyncGate()
+        let remotePreparation = playbackPreparation(
+            detail: detail,
+            audioURL: root.appendingPathComponent("source.wav"),
+            sessionID: "cached-continuation"
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(remotePreparation)],
+            playbackGate: playbackGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let started = expectation(
+            description: "Cached playback starts before remote preparation"
+        )
+        var outcome: PlaybackStartOutcome?
+        let start = Task { @MainActor in
+            outcome = await model.startPlayback(
+                book: summary,
+                account: account,
+                position: .absoluteTime(0.25)
+            )
+            started.fulfill()
+        }
+
+        await fulfillment(of: [started], timeout: 2)
+
+        XCTAssertEqual(outcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.05)
+        XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)
+        XCTAssertTrue(
+            model.playback.state == .buffering
+                || model.playback.state == .playing
+        )
+        await playbackGate.release()
+        await start.value
+        await model.playback.stop()
+    }
+
+    func testAutomaticCachedWindowRequiresVerifiedTimedLocalTrack()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "VerifiedAutomaticCache-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(account)),
+            storageRootURL: root
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+
+        let window = await model.automaticCachedPlaybackWindow(
+            for: record,
+            containing: 0.25
+        )
+        XCTAssertEqual(window?.trackIndexes, [0])
+        XCTAssertEqual(window?.startTime, 0)
+        XCTAssertEqual(window?.endTime, 1)
+        model.releaseAutomaticCachePin(window?.pin)
+
+        let outside = await model.automaticCachedPlaybackWindow(
+            for: record,
+            containing: 1.25
+        )
+        XCTAssertNil(outside)
+
+        let layout = try DownloadStorageLayout(rootURL: root)
+        try FileManager.default.removeItem(
+            at: layout.bookDirectory(
+                accountID: account.id,
+                itemID: detail.id
+            ).appendingPathComponent("00000.wav")
+        )
+        let corrupt = await model.automaticCachedPlaybackWindow(
+            for: record,
+            containing: 0.25
+        )
+        XCTAssertNil(corrupt)
+    }
+
+    func testCachedWindowStartDoesNotAwaitPreviousRemoteSessionClose()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let root = fixture.root.appendingPathComponent(
+            "CachedCloseHandoff",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let cachedSummary = fixtureBook(
+            id: "cached-item",
+            title: "Cached",
+            libraryID: fixture.detail.libraryID
+        )
+        let cachedDetail = fixtureBookDetail(item: cachedSummary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: cachedDetail,
+            purpose: .automaticCache
+        )
+        let closeGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "previous-stream"
+                    )
+                ),
+                .success(
+                    playbackPreparation(
+                        detail: cachedDetail,
+                        audioURL: root.appendingPathComponent("source.wav"),
+                        sessionID: "cached-continuation"
+                    )
+                ),
+            ],
+            playbackCloseGate: closeGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let first = await model.startPlayback(
+            detail: fixture.detail,
+            account: account
+        )
+        XCTAssertEqual(first, .started(source: .streamed))
+
+        let started = expectation(
+            description: "Cached start is independent of remote close"
+        )
+        var cachedOutcome: PlaybackStartOutcome?
+        let cachedStart = Task { @MainActor in
+            cachedOutcome = await model.startPlayback(
+                book: cachedSummary,
+                account: account,
+                position: .absoluteTime(0.25)
+            )
+            started.fulfill()
+        }
+        await closeGate.waitUntilEntered()
+        await fulfillment(of: [started], timeout: 2)
+
+        XCTAssertEqual(cachedOutcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.itemID, cachedDetail.id)
+        await closeGate.release()
+        await cachedStart.value
+        await model.playback.stop()
+    }
+
+    func testCachedSeekReusesPreparedStreamingSession() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "CachedSeekPreparedSession-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: summary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let remote = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "prepared-continuation"),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 2,
+            currentTime: 0,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: root.appendingPathComponent("source.wav"),
+                    startOffset: 0,
+                    duration: 2,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let preparationGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(remote)],
+            playbackGate: preparationGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let outcome = await model.startPlayback(
+            book: summary,
+            account: account,
+            position: .absoluteTime(0.25)
+        )
+        XCTAssertEqual(outcome, .started(source: .downloaded))
+        await preparationGate.waitUntilEntered()
+        await preparationGate.release()
+        await Task.yield()
+
+        await model.playback.seek(to: 1.25)
+
+        let didContinue = await waitUntil(timeout: .seconds(2)) {
+            model.playback.coverLoadPolicy == .allowNetwork
+        }
+        XCTAssertTrue(didContinue)
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 1)
+        XCTAssertFalse(isFailed(model.playback.state))
+        await model.playback.stop()
+    }
+
+    func testCachedBoundaryRetriesTransientStreamingPreparation()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "CachedBoundaryRetry-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: summary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let remote = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "retried-continuation"),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 2,
+            currentTime: 0,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: root.appendingPathComponent("source.wav"),
+                    startOffset: 0,
+                    duration: 2,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .failure(.playbackSession(.requestFailed)),
+                .success(remote),
+            ]
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let outcome = await model.startPlayback(
+            book: summary,
+            account: account,
+            position: .absoluteTime(0.75)
+        )
+        XCTAssertEqual(outcome, .started(source: .downloaded))
+
+        let didRetry = await waitUntil(timeout: .seconds(4)) {
+            model.playback.coverLoadPolicy == .allowNetwork
+        }
+        XCTAssertTrue(didRetry)
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 2)
+        XCTAssertFalse(isFailed(model.playback.state))
+        await model.playback.stop()
+    }
+
+    func testPausedCachedBoundaryResumesPreparedContinuation()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "PausedCachedBoundary-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: summary)
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let remote = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "paused-continuation"),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 2,
+            currentTime: 0,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: root.appendingPathComponent("source.wav"),
+                    startOffset: 0,
+                    duration: 2,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let preparationGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(remote)],
+            playbackGate: preparationGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        let outcome = await model.startPlayback(
+            book: summary,
+            account: account,
+            position: .absoluteTime(0.75)
+        )
+        XCTAssertEqual(outcome, .started(source: .downloaded))
+        await preparationGate.waitUntilEntered()
+        let didReachBoundary = await waitUntil(timeout: .seconds(3)) {
+            model.playback.currentTime >= 0.99
+        }
+        XCTAssertTrue(didReachBoundary)
+
+        model.playback.pause()
+        await preparationGate.release()
+        let didPause = await waitUntil(timeout: .seconds(2)) {
+            model.playback.state == .paused
+        }
+        XCTAssertTrue(didPause)
+        model.playback.play()
+
+        let didResumeContinuation = await waitUntil(timeout: .seconds(2)) {
+            model.playback.coverLoadPolicy == .allowNetwork
+        }
+        XCTAssertTrue(didResumeContinuation)
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 1)
+        XCTAssertFalse(isFailed(model.playback.state))
+        await model.playback.stop()
+    }
+
+    func testSupersededCachedStartReleasesIncomingPin() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "SupersededCachedPin-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache
+        )
+        let downloads = DownloadModel(
+            service: TestAppService(activeAccount: .success(account)),
+            storageRootURL: root
+        )
+        await downloads.start(account: account)
+        let record = try XCTUnwrap(downloads.records.first)
+        let resolvedFirstWindow =
+            await downloads.automaticCachedPlaybackWindow(
+                for: record,
+                containing: 0.25
+            )
+        let firstWindow = try XCTUnwrap(resolvedFirstWindow)
+        let resolvedIncomingWindow =
+            await downloads.automaticCachedPlaybackWindow(
+                for: record,
+                containing: 0.25
+            )
+        let incomingWindow = try XCTUnwrap(resolvedIncomingWindow)
+        let statisticsFinishGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            statisticsFinishGate: statisticsFinishGate
+        )
+        let playback = PlaybackModel(
+            service: service,
+            audioSessionActivation: {}
+        )
+        var releasedPins: Set<AutomaticCachePin> = []
+        playback.setAutomaticCachedPlaybackHandlers(
+            resolve: { _, _, _ in nil },
+            release: { pin in
+                if let pin {
+                    releasedPins.insert(pin)
+                    downloads.releaseAutomaticCachePin(pin)
+                }
+            }
+        )
+        await playback.startDownloaded(
+            detail: detail,
+            trackURLs: [],
+            accountID: account.id,
+            account: nil,
+            initialTime: 0.25,
+            automaticCachedWindow: firstWindow
+        )
+        let supersededStart = Task { @MainActor in
+            await playback.startDownloaded(
+                detail: detail,
+                trackURLs: [],
+                accountID: account.id,
+                account: nil,
+                initialTime: 0.25,
+                automaticCachedWindow: incomingWindow
+            )
+        }
+        await statisticsFinishGate.waitUntilEntered()
+        playback.pause()
+        await statisticsFinishGate.release()
+        await supersededStart.value
+
+        XCTAssertTrue(releasedPins.contains(incomingWindow.pin))
+        await playback.stop()
+    }
+
     func testPlaybackStartLoadsDetailWithoutChangingNavigationState()
         async throws
     {
@@ -7507,7 +8011,7 @@ final class AppModelTests: XCTestCase {
         await model.playback.stop()
     }
 
-    func testPlaybackStartExcludesIncompleteAndAutomaticDownloads()
+    func testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow()
         async throws
     {
         let account = try fixtureAccount()
@@ -7562,7 +8066,13 @@ final class AppModelTests: XCTestCase {
             let playbackRequests = await service.playbackOpenRequests()
             let detailRequests = await service.bookDetailRequests()
 
-            XCTAssertEqual(outcome, .started(source: .streamed))
+            XCTAssertEqual(
+                outcome,
+                .started(
+                    source: testCase.purpose == .automaticCache
+                        ? .downloaded : .streamed
+                )
+            )
             XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
             XCTAssertEqual(playbackRequests.count, 1)
             XCTAssertTrue(detailRequests.isEmpty)
@@ -7570,7 +8080,7 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    func testExcludedDownloadFetchesCanonicalDetailBeforeStreaming()
+    func testAutomaticCachedDownloadUsesPersistedAccessWhileOffline()
         async throws
     {
         let fixture = try playbackRecoveryFixture()
@@ -7632,14 +8142,12 @@ final class AppModelTests: XCTestCase {
             account: account
         )
 
-        XCTAssertEqual(
-            outcome,
-            .failed(AppFailure(.openPlayback, .explicitContentDenied))
-        )
+        XCTAssertEqual(outcome, .started(source: .downloaded))
         let detailRequests = await service.bookDetailRequests()
-        XCTAssertEqual(detailRequests.count, 1)
+        XCTAssertTrue(detailRequests.isEmpty)
         let playbackRequests = await service.playbackOpenRequests()
-        XCTAssertTrue(playbackRequests.isEmpty)
+        XCTAssertEqual(playbackRequests.count, 1)
+        await model.playback.stop()
     }
 
     func testTranscriptPlaybackPreparationFailureRemainsTyped()
@@ -9293,6 +9801,28 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    private func waitUntil(
+        timeout: Duration,
+        condition: @MainActor () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return condition()
+    }
+
+    private func isFailed(_ state: PlaybackState) -> Bool {
+        if case .failed = state {
+            return true
+        }
+        return false
+    }
+
     private static func downloadPlanJSON(secondSize: Int) -> String {
         """
         {
@@ -9766,6 +10296,8 @@ private actor TestAppService: AppServicing {
     private let localSessionSyncGate: AsyncGate?
     private let bookDetailGate: AsyncGate?
     private let playbackGate: AsyncGate?
+    private let playbackCloseGate: AsyncGate?
+    private let statisticsFinishGate: AsyncGate?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
     private let refreshPageGate: AsyncGate?
@@ -9879,6 +10411,8 @@ private actor TestAppService: AppServicing {
         localSessionSyncGate: AsyncGate? = nil,
         bookDetailGate: AsyncGate? = nil,
         playbackGate: AsyncGate? = nil,
+        playbackCloseGate: AsyncGate? = nil,
+        statisticsFinishGate: AsyncGate? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
         refreshPageGate: AsyncGate? = nil,
@@ -9929,6 +10463,8 @@ private actor TestAppService: AppServicing {
         self.localSessionSyncGate = localSessionSyncGate
         self.bookDetailGate = bookDetailGate
         self.playbackGate = playbackGate
+        self.playbackCloseGate = playbackCloseGate
+        self.statisticsFinishGate = statisticsFinishGate
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
         self.refreshPageGate = refreshPageGate
@@ -10341,6 +10877,17 @@ private actor TestAppService: AppServicing {
         sessionID: PlaybackSessionID
     ) async throws(AppServiceError) {
         recordedPlaybackCloseSessionIDs.append(sessionID)
+        if let playbackCloseGate {
+            await playbackCloseGate.enterAndWait()
+        }
+    }
+
+    func finishStatisticsSession(
+        _ sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) {
+        if let statisticsFinishGate {
+            await statisticsFinishGate.enterAndWait()
+        }
     }
 
     func syncPlayback(
