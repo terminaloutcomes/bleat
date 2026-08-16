@@ -6879,7 +6879,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeTimelineMetadata: false
         )
         let playbackGate = AsyncGate()
         let remotePreparation = playbackPreparation(
@@ -6981,6 +6982,102 @@ final class AppModelTests: XCTestCase {
             containing: 0.25
         )
         XCTAssertNil(corrupt)
+    }
+
+    func testAutomaticCachedWindowRecoversSingleFileBookTiming()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "SingleFileAutomaticCache-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            purpose: .automaticCache,
+            includeTimelineMetadata: false
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(account)),
+            storageRootURL: root
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+        XCTAssertNil(record.manifest.entries[0].startOffset)
+        XCTAssertNil(record.manifest.entries[0].duration)
+
+        let requestedTime = detail.duration * 0.8
+        let window = await model.automaticCachedPlaybackWindow(
+            for: record,
+            containing: requestedTime
+        )
+
+        XCTAssertEqual(window?.trackIndexes, [0])
+        XCTAssertEqual(window?.startTime, 0)
+        XCTAssertEqual(window?.endTime, detail.duration)
+        model.releaseAutomaticCachePin(window?.pin)
+    }
+
+    func testAutomaticCachedWindowDoesNotInferMultiFileTiming()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "MultiFileAutomaticCache-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let singleFileDetail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: singleFileDetail,
+            purpose: .automaticCache,
+            includeTimelineMetadata: false
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(account)),
+            storageRootURL: root
+        )
+        await model.start(account: account)
+        let stored = try XCTUnwrap(model.records.first)
+        let multiFileDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: stored.detail.id.rawValue,
+                title: stored.detail.title,
+                libraryID: stored.detail.libraryID,
+                trackCount: 2
+            )
+        )
+        let record = DownloadedBookRecord(
+            manifest: stored.manifest,
+            detail: multiFileDetail
+        )
+
+        let window = await model.automaticCachedPlaybackWindow(
+            for: record,
+            containing: multiFileDetail.duration * 0.8
+        )
+
+        XCTAssertNil(window)
     }
 
     func testCachedWindowStartDoesNotAwaitPreviousRemoteSessionClose()
@@ -9447,7 +9544,8 @@ final class AppModelTests: XCTestCase {
         libraryID: LibraryID,
         isExplicit: Bool = false,
         authors: [LibraryBookContributor] = [],
-        series: [LibraryBookSeries] = []
+        series: [LibraryBookSeries] = [],
+        trackCount: Int = 1
     ) -> LibraryBookSummary {
         LibraryBookSummary(
             id: LibraryItemID(rawValue: id),
@@ -9463,7 +9561,7 @@ final class AppModelTests: XCTestCase {
             publisher: nil,
             publishedYear: "2026",
             duration: 3_600,
-            trackCount: 1,
+            trackCount: trackCount,
             chapterCount: 2,
             addedAtMilliseconds: 1,
             updatedAtMilliseconds: 2,
@@ -9723,7 +9821,8 @@ final class AppModelTests: XCTestCase {
         account: ServerAccount,
         detail: LibraryBookDetail,
         purpose: DownloadPurpose = .manual,
-        complete: Bool = true
+        complete: Bool = true,
+        includeTimelineMetadata: Bool = true
     ) async throws {
         let source = root.appendingPathComponent(
             "source.wav",
@@ -9761,8 +9860,8 @@ final class AppModelTests: XCTestCase {
             mimeType: "audio/wav",
             safeExtension: .wav,
             destinationEntry: "00000.wav",
-            startOffset: 0,
-            duration: 1
+            startOffset: includeTimelineMetadata ? 0 : nil,
+            duration: includeTimelineMetadata ? 1 : nil
         )
         let plan = DownloadPlan(
             itemID: detail.id,

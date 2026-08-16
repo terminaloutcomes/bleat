@@ -281,6 +281,12 @@ struct AutomaticCachedPlaybackWindow: Sendable {
     }
 }
 
+private struct TimedAutomaticCacheEntry {
+    let entry: DownloadManifestEntry
+    let startOffset: Double
+    let duration: Double
+}
+
 private enum DeferredAutomaticCacheCleanup {
     case tracks(Set<Int>)
     case record
@@ -1672,29 +1678,49 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
 
         let eligible = record.manifest.entries
-            .filter { entry in
-                targetIndexes.contains(entry.trackIndex)
-                    && entry.state == .complete
-                    && entry.placement == .finalized
-                    && entry.observedByteLength == entry.expectedByteLength
-                    && entry.startOffset?.isFinite == true
-                    && entry.duration?.isFinite == true
-                    && (entry.startOffset ?? -1) >= 0
-                    && (entry.duration ?? 0) > 0
+            .compactMap { entry -> TimedAutomaticCacheEntry? in
+                guard targetIndexes.contains(entry.trackIndex),
+                    entry.state == .complete,
+                    entry.placement == .finalized,
+                    entry.observedByteLength == entry.expectedByteLength
+                else {
+                    return nil
+                }
+                if let startOffset = entry.startOffset,
+                    let duration = entry.duration,
+                    startOffset.isFinite,
+                    startOffset >= 0,
+                    duration.isFinite,
+                    duration > 0
+                {
+                    return TimedAutomaticCacheEntry(
+                        entry: entry,
+                        startOffset: startOffset,
+                        duration: duration
+                    )
+                }
+                guard record.manifest.entries.count == 1,
+                    targetIndexes == [entry.trackIndex],
+                    record.detail.audioFileCount == 1,
+                    record.detail.duration.isFinite,
+                    record.detail.duration > 0
+                else {
+                    return nil
+                }
+                return TimedAutomaticCacheEntry(
+                    entry: entry,
+                    startOffset: 0,
+                    duration: record.detail.duration
+                )
             }
             .sorted {
-                ($0.startOffset ?? 0, $0.trackIndex)
-                    < ($1.startOffset ?? 0, $1.trackIndex)
+                ($0.startOffset, $0.entry.trackIndex)
+                    < ($1.startOffset, $1.entry.trackIndex)
             }
         guard
-            let containingIndex = eligible.lastIndex(where: { entry in
-                guard let start = entry.startOffset,
-                    let duration = entry.duration
-                else {
-                    return false
-                }
-                return start <= wholeBookTime
-                    && wholeBookTime < start + duration
+            let containingIndex = eligible.lastIndex(where: { timed in
+                timed.startOffset <= wholeBookTime
+                    && wholeBookTime < timed.startOffset + timed.duration
             })
         else {
             return nil
@@ -1702,20 +1728,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
         var selected = [eligible[containingIndex]]
         var expectedStart =
-            (eligible[containingIndex].startOffset ?? 0)
-            + (eligible[containingIndex].duration ?? 0)
-        for entry in eligible.dropFirst(containingIndex + 1) {
-            guard let start = entry.startOffset,
-                let duration = entry.duration,
-                abs(start - expectedStart) <= 0.25
-            else {
+            eligible[containingIndex].startOffset
+            + eligible[containingIndex].duration
+        for timed in eligible.dropFirst(containingIndex + 1) {
+            guard abs(timed.startOffset - expectedStart) <= 0.25 else {
                 break
             }
-            selected.append(entry)
-            expectedStart = start + duration
+            selected.append(timed)
+            expectedStart = timed.startOffset + timed.duration
         }
 
-        let selectedIndexes = Set(selected.map(\.trackIndex))
+        let selectedIndexes = Set(selected.map(\.entry.trackIndex))
         guard
             let pin = pinAutomaticCacheTracks(
                 for: record,
@@ -1729,18 +1752,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 for: record,
                 trackIndexes: selectedIndexes
             )
-            let tracks = try selected.map { entry in
-                guard let url = urls[entry.trackIndex],
-                    let start = entry.startOffset,
-                    let duration = entry.duration
-                else {
+            let tracks = try selected.map { timed in
+                guard let url = urls[timed.entry.trackIndex] else {
                     throw DownloadModelFailure.transferFailed
                 }
                 return AppPlaybackTrack(
                     url: url,
-                    startOffset: start,
-                    duration: duration,
-                    title: "Track \(entry.trackIndex + 1)"
+                    startOffset: timed.startOffset,
+                    duration: timed.duration,
+                    title: "Track \(timed.entry.trackIndex + 1)"
                 )
             }
             return AutomaticCachedPlaybackWindow(

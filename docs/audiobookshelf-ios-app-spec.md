@@ -804,12 +804,16 @@ For downloaded playback:
 4. Queue it for later `/api/session/local` or `/api/session/local-all` synchronization.
 
 If the requested position is inside a finalized, byte-verified automatic cache
-window with complete timing metadata, build and start that local queue before
-awaiting any server playback-session work. Pin the files while the player owns
-them, extend from newly verified adjacent files when possible, and prepare a
-streaming continuation in the background. If later tracks are not local,
-switch to streaming at the exact whole-book position when online. It must not
-silently stall or report whole-book completion at the cached boundary.
+window, build and start that local queue before awaiting any server
+playback-session work. Complete per-file timing metadata defines the window for
+multi-file books. For an unambiguously single-file book, an older persisted
+manifest that omitted optional timing metadata may instead use offset zero and
+the authoritative cached book duration; never infer missing timing across
+multiple files. Pin the files while the player owns them, extend from newly
+verified adjacent files when possible, and prepare a streaming continuation in
+the background. If later tracks are not local, switch to streaming at the exact
+whole-book position when online. It must not silently stall or report
+whole-book completion at the cached boundary.
 
 ### 9.3 Playback URL construction
 

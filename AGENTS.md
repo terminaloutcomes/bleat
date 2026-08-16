@@ -110,6 +110,14 @@ relevant. Before handoff, audit changed and adjacent production paths for
 process-terminating constructs or executor assumptions and convert every
 recoverable case into a typed failure.
 
+Treat incomplete or older persisted data as an explicit reconciliation case,
+not as permission to silently fall through to a network-dependent path. Recover
+missing fields only from authoritative local data when the result is
+unambiguous; otherwise preserve the local data, surface a typed failure, and
+record a privacy-safe diagnostic. Regression fixtures must include real
+persisted shapes observed on devices, including valid bytes with absent optional
+metadata, rather than covering only ideal newly written records.
+
 ## UI
 
 - Use native pull-to-refresh for refreshable primary browsing surfaces. Do not
