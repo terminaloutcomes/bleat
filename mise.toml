@@ -20,16 +20,20 @@ description = "Lint bleat-api"
 run = "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings"
 
 [tasks."api:test"]
-description = "Test bleat-api"
-run = "cargo test --manifest-path bleat-api/Cargo.toml --all-features"
+description = "Test bleat-api against disposable PostgreSQL"
+run = "./scripts/test-bleat-api.sh"
 
 [tasks."api:build"]
 description = "Build the bleat-api release binary"
 run = "cargo build --manifest-path bleat-api/Cargo.toml --release"
 
 [tasks."api:run"]
-description = "Run bleat-api with local development defaults"
-run = "cargo run --manifest-path bleat-api/Cargo.toml"
+description = "Run bleat-api and PostgreSQL locally"
+run = "docker compose --file bleat-api/compose.yml up --build api"
+
+[tasks."api:down"]
+description = "Stop the local bleat-api and PostgreSQL"
+run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orphans"
 
 [tasks."api:validate"]
 description = "Run every bleat-api validation gate"
@@ -37,7 +41,7 @@ run = [
   "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check",
   "cargo check --manifest-path bleat-api/Cargo.toml --all-targets --all-features",
   "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings",
-  "cargo test --manifest-path bleat-api/Cargo.toml --all-features",
+  "./scripts/test-bleat-api.sh",
   "cargo build --manifest-path bleat-api/Cargo.toml --release",
 ]
 

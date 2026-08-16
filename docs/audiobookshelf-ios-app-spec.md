@@ -1555,6 +1555,18 @@ cannot export withdrawn data. The downstream exporter remains injectable;
 production uses an unavailable sink until authenticated OTLP delivery is added
 by issue 63.
 
+The telemetry authentication backend persists installation identity and
+challenge state in PostgreSQL through typed ORM statements. Installations use
+opaque UUIDs and retain the App Attest key identifier, 65-byte P-256 public key,
+typed App Attest environment, active or disabled status, monotonic assertion
+counter, and timestamps. Challenge responses contain 32 random bytes encoded as
+unpadded base64url, while persistence retains only the SHA-256 digest, typed
+purpose, optional installation binding, expiry, and consumption timestamp.
+Consumption and assertion-counter advancement are conditional atomic updates.
+The backend exposes database-aware readiness plus attestation and token
+challenge issuance; App Attest verification, enrollment, and signed token
+issuance remain tracked by issues 65 and 66.
+
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend
 JWTs, usernames, account or installation identifiers, server URLs or network

@@ -972,16 +972,18 @@ physical device.
 
 ## Run bleat-api
 
-The initial Rust telemetry-authentication service lives in `bleat-api/`. It
-currently provides health/readiness checks and typed placeholder routes for the
-later App Attest challenge, enrollment, and token work. Run it locally with:
+The Rust telemetry-authentication service lives in `bleat-api/`. It provides
+database-aware health/readiness, PostgreSQL-backed installation state, and
+single-use opaque attestation and token challenges. App Attest enrollment and
+token signing remain typed placeholders for follow-up work. Run the disposable
+PostgreSQL and API stack locally with:
 
 ```sh
 mise run api:run
 ```
 
-Run its formatting, type-checking, strict Clippy, test, and Release-build gates
-with:
+Run its formatting, type-checking, strict Clippy, PostgreSQL-backed tests,
+Release build, and live container checks with:
 
 ```sh
 mise run api:validate

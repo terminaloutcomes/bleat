@@ -1,9 +1,9 @@
 # bleat-api
 
 `bleat-api` is the Rust foundation for Bleat's anonymous telemetry
-authentication service. This initial service exposes health/readiness checks and
-reserved versioned authentication routes. Challenge validation, App Attest
-verification, persistence, and token signing are not implemented yet.
+authentication service. It uses PostgreSQL for installation state and
+single-use opaque challenges. App Attest verification, enrollment, and token
+signing remain reserved for their follow-up issues.
 
 ## Run locally
 
@@ -13,6 +13,7 @@ From the repository root:
 mise run api:run
 ```
 
+The supported local workflow starts both PostgreSQL and the API in containers.
 The development defaults listen on `127.0.0.1:8080`. Check the service with:
 
 ```sh
@@ -24,6 +25,14 @@ Run every Rust validation gate with:
 
 ```sh
 mise run api:validate
+```
+
+This runs formatting, compilation, strict Clippy, PostgreSQL-backed tests, a
+Release build, and live HTTP checks against the disposable container stack.
+Stop the development stack and delete its database volume with:
+
+```sh
+mise run api:down
 ```
 
 ## Service configuration
@@ -38,7 +47,12 @@ Flags and matching environment variables configure the service:
 | `--apple-team-id` | `BLEAT_API_APPLE_TEAM_ID` | unset |
 | `--app-identifier` | `BLEAT_API_APP_IDENTIFIER` | unset |
 | `--app-attest-environment` | `BLEAT_API_APP_ATTEST_ENVIRONMENT` | `development` |
+| `--database-url` | `BLEAT_API_DATABASE_URL` | required; supplied by the local container workflow |
+| `--database-max-connections` | `BLEAT_API_DATABASE_MAX_CONNECTIONS` | `16` |
+| `--database-connect-timeout-seconds` | `BLEAT_API_DATABASE_CONNECT_TIMEOUT_SECONDS` | `5` |
 | `--challenge-lifetime-seconds` | `BLEAT_API_CHALLENGE_LIFETIME_SECONDS` | `120` |
+| `--challenge-cleanup-batch-size` | `BLEAT_API_CHALLENGE_CLEANUP_BATCH_SIZE` | `1000` |
+| `--challenge-issuance-per-minute` | `BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE` | `600` |
 | `--token-lifetime-seconds` | `BLEAT_API_TOKEN_LIFETIME_SECONDS` | `600` |
 | `--request-timeout-seconds` | `BLEAT_API_REQUEST_TIMEOUT_SECONDS` | `10` |
 | `--max-request-body-bytes` | `BLEAT_API_MAX_REQUEST_BODY_BYTES` | `65536` |
@@ -46,9 +60,11 @@ Flags and matching environment variables configure the service:
 | `--log-filter` | `BLEAT_API_LOG_FILTER` | `bleat_api=info,opentelemetry=warn,opentelemetry_sdk=warn,opentelemetry-otlp=warn` |
 | `--log-format` | `BLEAT_API_LOG_FORMAT` | `compact` |
 
-Production mode requires an HTTPS public issuer, Apple team ID, app identifier,
-and the production App Attest environment. Invalid configuration stops startup
-before the listener is bound.
+Only PostgreSQL URLs are accepted. Production mode also requires an HTTPS
+public issuer, Apple team ID, app identifier, and the production App Attest
+environment. Invalid configuration or unavailable database migrations stop
+startup before the listener is bound. Database credentials are redacted from
+configuration diagnostics.
 
 ## OpenTelemetry
 
@@ -72,11 +88,25 @@ The service uses Rustls with system trust and does not support gRPC export.
 ## Routes
 
 - `GET /healthz` returns process liveness.
-- `GET /readyz` returns readiness after successful startup.
-- `POST /v1/attestation/challenge`
-- `POST /v1/attestation/enroll`
-- `POST /v1/token/challenge`
-- `POST /v1/token`
+- `GET /readyz` checks the PostgreSQL connection before returning readiness.
+- `POST /v1/attestation/challenge` accepts `{}` and issues an unbound challenge.
+- `POST /v1/token/challenge` accepts `{ "installation_id": "<uuid>" }` and
+  issues a challenge bound to an active installation.
+- `POST /v1/attestation/enroll` and `POST /v1/token` remain bounded typed
+  placeholders for App Attest verification and token signing.
 
-The four versioned routes currently accept bounded JSON and return the typed
-`temporarily_unavailable` response reserved for the later authentication work.
+Challenge routes return `201` with `challenge_id`, `challenge`, and
+`expires_at`. A challenge is 32 bytes of operating-system randomness encoded as
+unpadded base64url. PostgreSQL stores only its SHA-256 digest, purpose, optional
+installation binding, expiry, and consumption state. Consumption uses a
+conditional typed ORM update, so only one concurrent consumer can succeed.
+Expired challenge cleanup and per-process issuance are bounded by configuration.
+
+Installation persistence records an opaque UUID, App Attest key identifier,
+65-byte P-256 public key, typed App Attest environment, active or disabled
+status, monotonic assertion counter, and timestamps. Counter advancement is an
+atomic compare-and-update operation. Enrollment and assertion verification will
+use this repository boundary in issues #65 and #66.
+
+All database schema and data access code uses SeaORM and typed SeaQuery
+expressions. The service does not execute string-based SQL statements.
