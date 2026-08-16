@@ -123,8 +123,8 @@ ghcr.io/terminaloutcomes/bleat-api
 
 A push to `main` publishes `latest`. A `v*` Git tag publishes its exact semantic
 version without the `v` prefix. A same-repository pull request publishes the
-image under the full head commit SHA, with the build source pinned to that same
-commit. Fork pull requests build and validate the image but cannot publish it.
+image under the full PR merge commit SHA selected and attested by GitHub
+Actions. Fork pull requests build and validate the image but cannot publish it.
 
 Published images include signed provenance and an SBOM. The reusable workflow
 is pinned to an immutable commit from Docker's `v1` release line.
