@@ -257,8 +257,12 @@ mod tests {
             .with_resource(resource)
             .with_simple_exporter(log_exporter.clone())
             .build();
-        let arguments =
-            Arguments::try_parse_from(["bleat-api"]).expect("test arguments should parse");
+        let arguments = Arguments::try_parse_from([
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+        ])
+        .expect("test arguments should parse");
         let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
             .expect("test config should validate");
         let local = Buffer::default();
@@ -295,7 +299,7 @@ mod tests {
             .expect("valid request");
 
         async {
-            let response = router(&config)
+            let response = router(&config, sea_orm::DatabaseConnection::default())
                 .oneshot(request)
                 .await
                 .expect("router should respond");

@@ -1,4 +1,6 @@
-use bleat_api::{config::Config, observability::Observability, router};
+use bleat_api::{
+    config::Config, database::connect_and_migrate, observability::Observability, router,
+};
 use clap::Parser;
 use tokio::net::TcpListener;
 
@@ -6,6 +8,7 @@ use tokio::net::TcpListener;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::try_from(bleat_api::config::Arguments::parse())?;
     let observability = Observability::install(&config)?;
+    let database = connect_and_migrate(&config.database).await?;
     let listener = TcpListener::bind(config.bind_address).await?;
 
     tracing::info!(
@@ -16,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "bleat-api started"
     );
 
-    axum::serve(listener, router(&config))
+    axum::serve(listener, router(&config, database))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

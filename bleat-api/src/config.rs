@@ -84,6 +84,20 @@ pub struct Arguments {
     )]
     pub challenge_lifetime_seconds: u64,
 
+    #[arg(
+        long,
+        env = "BLEAT_API_CHALLENGE_CLEANUP_BATCH_SIZE",
+        default_value_t = 1_000
+    )]
+    pub challenge_cleanup_batch_size: usize,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE",
+        default_value_t = 600
+    )]
+    pub challenge_issuance_per_minute: usize,
+
     #[arg(long, env = "BLEAT_API_TOKEN_LIFETIME_SECONDS", default_value_t = 600)]
     pub token_lifetime_seconds: u64,
 
@@ -117,6 +131,8 @@ pub struct Config {
     pub app_attest_environment: AppAttestEnvironment,
     pub database: DatabaseConfig,
     pub challenge_lifetime: Duration,
+    pub challenge_cleanup_batch_size: usize,
+    pub challenge_issuance_per_minute: usize,
     pub token_lifetime: Duration,
     pub request_timeout: Duration,
     pub max_request_body_bytes: usize,
@@ -201,6 +217,8 @@ impl Config {
             app_attest_environment: arguments.app_attest_environment,
             database,
             challenge_lifetime: Duration::from_secs(arguments.challenge_lifetime_seconds),
+            challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
+            challenge_issuance_per_minute: arguments.challenge_issuance_per_minute,
             token_lifetime: Duration::from_secs(arguments.token_lifetime_seconds),
             request_timeout: Duration::from_secs(arguments.request_timeout_seconds),
             max_request_body_bytes: arguments.max_request_body_bytes,
@@ -215,6 +233,18 @@ impl Config {
 
     pub fn validate(&self) -> Result<(), ConfigError> {
         bounded_duration("challenge lifetime", self.challenge_lifetime, 30, 600)?;
+        bounded_usize(
+            "challenge cleanup batch size",
+            self.challenge_cleanup_batch_size,
+            1,
+            10_000,
+        )?;
+        bounded_usize(
+            "challenge issuance per minute",
+            self.challenge_issuance_per_minute,
+            1,
+            100_000,
+        )?;
         bounded_duration("token lifetime", self.token_lifetime, 60, 3_600)?;
         bounded_duration("request timeout", self.request_timeout, 1, 60)?;
         bounded_usize(
@@ -427,6 +457,8 @@ mod tests {
         assert_eq!(config.token_lifetime, Duration::from_secs(600));
         assert_eq!(config.database.max_connections, 16);
         assert_eq!(config.database.connect_timeout, Duration::from_secs(5));
+        assert_eq!(config.challenge_cleanup_batch_size, 1_000);
+        assert_eq!(config.challenge_issuance_per_minute, 600);
         assert_eq!(config.jwt_algorithm(), compact_jwt::JwaAlg::ES256);
         assert!(!config.telemetry.traces_enabled);
         assert!(!config.telemetry.logs_enabled);
@@ -549,6 +581,21 @@ mod tests {
             ConfigError::ValueOutOfRange("maximum database connections", 1, 128)
         );
         assert!(!invalid.to_string().contains("do-not-print"));
+    }
+
+    #[test]
+    fn challenge_resource_bounds_are_validated() {
+        let invalid = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--challenge-cleanup-batch-size",
+            "0",
+        ]);
+        assert_eq!(
+            invalid.expect_err("zero cleanup batch must fail"),
+            ConfigError::ValueOutOfRange("challenge cleanup batch size", 1, 10_000)
+        );
     }
 
     #[test]

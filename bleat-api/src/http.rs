@@ -9,15 +9,22 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use chrono::{DateTime, Utc};
 use opentelemetry::global;
 use opentelemetry_http::HeaderExtractor;
-use serde::Serialize;
+use sea_orm::DatabaseConnection;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{Instrument, field, info, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
-use crate::{config::Config, error::ApiError};
+use crate::{
+    challenge::{ChallengeRepository, ChallengeStoreError, IssuedChallenge},
+    config::Config,
+    database,
+    error::ApiError,
+};
 
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 
@@ -30,25 +37,107 @@ struct RequestLimits {
     permits: Arc<tokio::sync::Semaphore>,
 }
 
+#[derive(Clone)]
+struct AppState {
+    database: DatabaseConnection,
+    challenges: ChallengeRepository,
+    challenge_lifetime: std::time::Duration,
+    issuance_limiter: IssuanceLimiter,
+}
+
+#[derive(Clone)]
+struct IssuanceLimiter {
+    maximum: usize,
+    window: Arc<tokio::sync::Mutex<IssuanceWindow>>,
+}
+
+struct IssuanceWindow {
+    started: Instant,
+    issued: usize,
+}
+
+impl IssuanceLimiter {
+    fn new(maximum: usize) -> Self {
+        Self {
+            maximum,
+            window: Arc::new(tokio::sync::Mutex::new(IssuanceWindow {
+                started: Instant::now(),
+                issued: 0,
+            })),
+        }
+    }
+
+    async fn allow(&self) -> bool {
+        let mut window = self.window.lock().await;
+        if window.started.elapsed() >= std::time::Duration::from_secs(60) {
+            window.started = Instant::now();
+            window.issued = 0;
+        }
+        if window.issued >= self.maximum {
+            return false;
+        }
+        window.issued += 1;
+        true
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct StatusBody {
     status: &'static str,
 }
 
-pub fn router(config: &Config) -> Router {
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AttestationChallengeRequest {}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenChallengeRequest {
+    installation_id: Uuid,
+}
+
+#[derive(Debug, Serialize)]
+struct ChallengeResponse {
+    challenge_id: Uuid,
+    challenge: String,
+    expires_at: DateTime<Utc>,
+}
+
+impl From<IssuedChallenge> for ChallengeResponse {
+    fn from(challenge: IssuedChallenge) -> Self {
+        Self {
+            challenge_id: challenge.challenge_id,
+            challenge: challenge.challenge,
+            expires_at: challenge.expires_at,
+        }
+    }
+}
+
+pub fn router(config: &Config, database: DatabaseConnection) -> Router {
     let limits = RequestLimits {
         timeout: config.request_timeout,
         permits: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_requests)),
     };
+    let state = AppState {
+        challenges: ChallengeRepository::new(
+            database.clone(),
+            config.challenge_cleanup_batch_size as u64,
+        ),
+        database,
+        challenge_lifetime: config.challenge_lifetime,
+        issuance_limiter: IssuanceLimiter::new(config.challenge_issuance_per_minute),
+    };
     let protected_routes = Router::new()
-        .route("/v1/attestation/challenge", post(unavailable))
+        .route("/v1/attestation/challenge", post(attestation_challenge))
         .route("/v1/attestation/enroll", post(unavailable))
-        .route("/v1/token/challenge", post(unavailable))
-        .route("/v1/token", post(unavailable));
+        .route("/v1/token/challenge", post(token_challenge))
+        .route("/v1/token", post(unavailable))
+        .with_state(state.clone());
 
     Router::new()
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
+        .with_state(state)
         .merge(apply_limits(
             protected_routes,
             limits,
@@ -67,21 +156,96 @@ async fn health() -> Json<StatusBody> {
     Json(StatusBody { status: "ok" })
 }
 
-async fn ready() -> Json<StatusBody> {
-    Json(StatusBody { status: "ready" })
+async fn ready(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Result<Json<StatusBody>, ApiError> {
+    if database::is_ready(&state.database).await {
+        Ok(Json(StatusBody { status: "ready" }))
+    } else {
+        Err(ApiError::temporarily_unavailable(request_id.0))
+    }
+}
+
+async fn attestation_challenge(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    payload: Result<Json<AttestationChallengeRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(_payload) = parse_json(payload, request_id)?;
+    ensure_issuance_allowed(&state, request_id).await?;
+    let challenge = state
+        .challenges
+        .issue_attestation_at(state.challenge_lifetime, Utc::now())
+        .await
+        .map_err(|error| map_challenge_error(error, request_id))?;
+    Ok((
+        StatusCode::CREATED,
+        Json(ChallengeResponse::from(challenge)),
+    )
+        .into_response())
+}
+
+async fn token_challenge(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    payload: Result<Json<TokenChallengeRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(payload) = parse_json(payload, request_id)?;
+    ensure_issuance_allowed(&state, request_id).await?;
+    let challenge = state
+        .challenges
+        .issue_token_at(
+            payload.installation_id,
+            state.challenge_lifetime,
+            Utc::now(),
+        )
+        .await
+        .map_err(|error| map_challenge_error(error, request_id))?;
+    Ok((
+        StatusCode::CREATED,
+        Json(ChallengeResponse::from(challenge)),
+    )
+        .into_response())
+}
+
+fn parse_json<T>(
+    payload: Result<Json<T>, JsonRejection>,
+    request_id: RequestId,
+) -> Result<Json<T>, ApiError> {
+    payload.map_err(|rejection| {
+        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            ApiError::request_too_large(request_id.0)
+        } else {
+            ApiError::malformed(request_id.0)
+        }
+    })
+}
+
+async fn ensure_issuance_allowed(state: &AppState, request_id: RequestId) -> Result<(), ApiError> {
+    if state.issuance_limiter.allow().await {
+        Ok(())
+    } else {
+        Err(ApiError::issuance_rate_limited(request_id.0))
+    }
+}
+
+fn map_challenge_error(error: ChallengeStoreError, request_id: RequestId) -> ApiError {
+    match error {
+        ChallengeStoreError::AuthenticationRejected => {
+            ApiError::authentication_rejected(request_id.0)
+        }
+        ChallengeStoreError::RandomUnavailable | ChallengeStoreError::Database => {
+            ApiError::temporarily_unavailable(request_id.0)
+        }
+    }
 }
 
 async fn unavailable(
     Extension(request_id): Extension<RequestId>,
     payload: Result<Json<Value>, JsonRejection>,
 ) -> Result<Response, ApiError> {
-    let _payload = payload.map_err(|rejection| {
-        if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
-            ApiError::request_too_large(request_id.0)
-        } else {
-            ApiError::malformed(request_id.0)
-        }
-    })?;
+    let _payload = parse_json(payload, request_id)?;
     Err(ApiError::temporarily_unavailable(request_id.0))
 }
 

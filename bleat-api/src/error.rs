@@ -9,6 +9,7 @@ pub enum ErrorCode {
     RequestTooLarge,
     TemporarilyUnavailable,
     RateLimited,
+    AuthenticationRejected,
 }
 
 #[derive(Debug, Serialize)]
@@ -44,7 +45,7 @@ impl ApiError {
         Self {
             status: StatusCode::SERVICE_UNAVAILABLE,
             code: ErrorCode::TemporarilyUnavailable,
-            message: "authentication service is not available yet",
+            message: "authentication service is temporarily unavailable",
             request_id,
         }
     }
@@ -72,6 +73,24 @@ impl ApiError {
             status: StatusCode::SERVICE_UNAVAILABLE,
             code: ErrorCode::RateLimited,
             message: "request capacity is temporarily unavailable",
+            request_id,
+        }
+    }
+
+    pub fn issuance_rate_limited(request_id: Uuid) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: ErrorCode::RateLimited,
+            message: "challenge issuance rate exceeded",
+            request_id,
+        }
+    }
+
+    pub fn authentication_rejected(request_id: Uuid) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            code: ErrorCode::AuthenticationRejected,
+            message: "installation authentication was rejected",
             request_id,
         }
     }
