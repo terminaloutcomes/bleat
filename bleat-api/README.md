@@ -110,3 +110,21 @@ use this repository boundary in issues #65 and #66.
 
 All database schema and data access code uses SeaORM and typed SeaQuery
 expressions. The service does not execute string-based SQL statements.
+
+## Container images
+
+GitHub Actions builds the release container with Docker's maintained
+[`github-builder`](https://github.com/docker/github-builder) workflow and
+publishes it to:
+
+```text
+ghcr.io/terminaloutcomes/bleat-api
+```
+
+A push to `main` publishes `latest`. A `v*` Git tag publishes its exact semantic
+version without the `v` prefix. A same-repository pull request publishes the
+image under the full head commit SHA, with the build source pinned to that same
+commit. Fork pull requests build and validate the image but cannot publish it.
+
+Published images include signed provenance and an SBOM. The reusable workflow
+is pinned to an immutable commit from Docker's `v1` release line.
