@@ -1,5 +1,23 @@
 use sea_orm::entity::prelude::*;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(16))")]
+pub enum InstallationEnvironment {
+    #[sea_orm(string_value = "development")]
+    Development,
+    #[sea_orm(string_value = "production")]
+    Production,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(16))")]
+pub enum InstallationStatus {
+    #[sea_orm(string_value = "active")]
+    Active,
+    #[sea_orm(string_value = "disabled")]
+    Disabled,
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "installations")]
 pub struct Model {
@@ -7,8 +25,8 @@ pub struct Model {
     pub id: Uuid,
     pub app_attest_key_id: String,
     pub public_key: Vec<u8>,
-    pub environment: String,
-    pub status: String,
+    pub environment: InstallationEnvironment,
+    pub status: InstallationStatus,
     pub sign_count: i64,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,

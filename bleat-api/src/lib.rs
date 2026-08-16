@@ -3,6 +3,7 @@ pub mod database;
 pub mod entity;
 pub mod error;
 pub mod http;
+pub mod installation;
 pub mod observability;
 
 pub use http::router;
