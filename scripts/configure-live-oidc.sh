@@ -89,6 +89,7 @@ bleat_configure_keycloak_client() {
 
 bleat_configure_server() {
     local base_url="$1"
+    local redirect_subfolder="$2"
     local login_payload
     local access_token
     login_payload="$(
@@ -119,6 +120,7 @@ bleat_configure_server() {
         --arg logout "${bleat_oidc_base}/protocol/openid-connect/logout" \
         --arg client_id "${bleat_client_id}" \
         --arg client_secret "${bleat_client_secret}" \
+        --arg redirect_subfolder "${redirect_subfolder}" \
         '{
           authActiveAuthMethods: ["local", "openid"],
           authOpenIDIssuerURL: $issuer,
@@ -133,7 +135,8 @@ bleat_configure_server() {
           authOpenIDButtonText: "Sign in with Keycloak",
           authOpenIDAutoLaunch: false,
           authOpenIDAutoRegister: true,
-          authOpenIDMobileRedirectURIs: ["com.yaleman.bleat:/oauth2redirect"]
+          authOpenIDMobileRedirectURIs: ["bleat://oauth2redirect"],
+          authOpenIDSubfolderForRedirectURLs: $redirect_subfolder
         }'
     )"
 
@@ -148,9 +151,24 @@ bleat_configure_server() {
         --data "${payload}" \
         "${base_url}/api/auth-settings" \
         >/dev/null
+
+    /usr/bin/curl \
+        --fail \
+        --silent \
+        --show-error \
+        --max-time 10 \
+        --header "Authorization: Bearer ${access_token}" \
+        "${base_url}/api/auth-settings" \
+        | jq --exit-status \
+            --arg redirect_subfolder "${redirect_subfolder}" \
+            '.authOpenIDMobileRedirectURIs == ["bleat://oauth2redirect"]
+                and .authOpenIDSubfolderForRedirectURLs == $redirect_subfolder' \
+        >/dev/null
 }
 
 bleat_wait_keycloak
 bleat_configure_keycloak_client
-bleat_configure_server "http://127.0.0.1:${bleat_root_port}"
-bleat_configure_server "http://127.0.0.1:${bleat_prefix_port}/audiobookshelf"
+bleat_configure_server "http://127.0.0.1:${bleat_root_port}" ""
+bleat_configure_server \
+    "http://127.0.0.1:${bleat_prefix_port}/audiobookshelf" \
+    "/audiobookshelf"

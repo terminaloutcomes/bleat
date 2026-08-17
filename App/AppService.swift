@@ -3,6 +3,9 @@ import Foundation
 import Security
 import SwiftData
 
+private let bleatOpenIDCallbackURL =
+    "bleat://oauth2redirect"
+
 enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
 }
@@ -1004,7 +1007,7 @@ actor LiveAppService: AppServicing {
         let callbackURL: OpenIDCallbackURL
         do {
             callbackURL = try OpenIDCallbackURL(
-                "com.yaleman.bleat:/oauth2redirect"
+                bleatOpenIDCallbackURL
             )
         } catch {
             throw .onboarding(.openIDAuthenticationUnavailable)
@@ -1702,7 +1705,7 @@ actor LiveAppService: AppServicing {
         let callbackURL: OpenIDCallbackURL
         do {
             callbackURL = try OpenIDCallbackURL(
-                "com.yaleman.bleat:/oauth2redirect"
+                bleatOpenIDCallbackURL
             )
         } catch {
             throw .onboarding(.openIDAuthenticationUnavailable)

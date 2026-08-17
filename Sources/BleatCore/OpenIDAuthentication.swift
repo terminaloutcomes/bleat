@@ -12,7 +12,7 @@ public enum OpenIDCallbackURLValidationError:
     case malformed
     case webSchemeNotAllowed
     case reservedScheme
-    case missingCallbackPath
+    case missingCallbackTarget
     case containsCredentials
     case containsQueryOrFragment
 }
@@ -36,8 +36,10 @@ public struct OpenIDCallbackURL: Hashable, Sendable {
         guard scheme != "audiobookshelf" else {
             throw .reservedScheme
         }
-        guard !components.percentEncodedPath.isEmpty else {
-            throw .missingCallbackPath
+        guard components.host?.isEmpty == false
+            || !components.percentEncodedPath.isEmpty
+        else {
+            throw .missingCallbackTarget
         }
         guard components.user == nil, components.password == nil,
             components.port == nil

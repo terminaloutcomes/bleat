@@ -344,7 +344,9 @@ dismisses it, whether it is playing or paused.
 
 ### 5.4 Scene-local deep links
 
-Register the `bleat` URL scheme and parse only canonical Home, Library,
+Use `bleat://` as the sole canonical custom URL scheme for every Bleat-owned
+URL, including navigation and OIDC callbacks. Do not introduce a separate
+bundle-derived callback scheme. Parse only canonical Home, Library,
 Downloads, Now Playing, Settings, Search, Book, Author, and Series routes.
 Routes may qualify Search and entity destinations with an account and library.
 Keep navigation state scene-local, queue only the latest valid incoming route
@@ -514,11 +516,13 @@ Audiobookshelf acts as a bridge between the native client and its configured Ope
 
 #### Callback URI
 
-Use a private-use callback scheme derived from the app's bundle identifier, for example:
-
-`com.example.audiobookclient:/oauth/callback`
-
-Do not reuse `audiobookshelf://oauth`, which belongs to the official client and can collide with it. The chosen URI must be documented for users to add to Audiobookshelf's exact Allowed Mobile Redirect URIs list. If the product has an Associated Domain, a claimed HTTPS universal-link callback is preferable, but it is not required for 1.0.
+Use the exact callback URI `bleat://oauth2redirect`. The `bleat://` scheme is
+the sole canonical custom scheme for Bleat-owned URLs and is intentionally
+shared with scene-local navigation. Do not introduce a separate callback
+scheme derived from the bundle identifier. Do not reuse
+`audiobookshelf://oauth`, which belongs to the official client. Document the
+exact callback URI for users to add to Audiobookshelf's Allowed Mobile Redirect
+URIs list.
 
 #### Flow
 

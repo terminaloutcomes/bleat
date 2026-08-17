@@ -27,7 +27,7 @@ final class OpenIDAuthenticationLiveTests: XCTestCase {
             environment["BLEAT_ABS_PREFIX_PORT"] ?? "13379"
         ) ?? 13379
         let callbackURL = try OpenIDCallbackURL(
-            "com.yaleman.bleat:/oauth2redirect"
+            "bleat://oauth2redirect"
         )
         for (index, liveURL) in [rootURL, prefixURL].enumerated() {
             let server = try secureLiveServerURL(for: liveURL)

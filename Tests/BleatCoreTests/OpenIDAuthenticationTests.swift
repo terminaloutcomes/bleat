@@ -11,7 +11,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             URL(string: "https://identity.example/authorize")
         )
         let callbackURL = try XCTUnwrap(
-            URL(string: "com.example.bleat:/oauth/callback")
+            URL(string: "com.example.bleat://oauth-callback")
         )
         let cases:
             [(
@@ -88,7 +88,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         let callbackURL = try XCTUnwrap(
             URL(
                 string:
-                    "com.example.bleat:/oauth/callback?code=code&state=state"
+                    "com.example.bleat://oauth-callback?code=code&state=state"
             )
         )
         let anchor = ASPresentationAnchor()
@@ -281,7 +281,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
     func testCallbackURLValidation() throws {
         XCTAssertEqual(
             Self.callbackURL.url.absoluteString,
-            "com.example.bleat:/oauth/callback"
+            "com.example.bleat://oauth-callback"
         )
         XCTAssertEqual(
             Self.callbackURL.callbackScheme,
@@ -293,7 +293,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             ("https://example.com/oauth/callback", .webSchemeNotAllowed),
             ("http://example.com/oauth/callback", .webSchemeNotAllowed),
             ("audiobookshelf:/oauth", .reservedScheme),
-            ("com.example.bleat:", .missingCallbackPath),
+            ("com.example.bleat:", .missingCallbackTarget),
             (
                 "com.example.bleat://user@example.com/oauth/callback",
                 .containsCredentials
@@ -325,7 +325,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         let valid = try XCTUnwrap(
             URL(
                 string:
-                    "com.example.bleat:/oauth/callback?code=code&state=expected-state"
+                    "com.example.bleat://oauth-callback?code=code&state=expected-state"
             )
         )
         let values = try Self.callbackURL.authorizationValues(
@@ -345,35 +345,35 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 .invalidCallbackURL
             ),
             (
-                "com.example.bleat:/oauth/callback?code=code&state=expected-state#fragment",
+                "com.example.bleat://oauth-callback?code=code&state=expected-state#fragment",
                 .invalidCallbackURL
             ),
             (
-                "com.example.bleat:/oauth/callback?code=code",
+                "com.example.bleat://oauth-callback?code=code",
                 .missingState
             ),
             (
-                "com.example.bleat:/oauth/callback?code=code&state=",
+                "com.example.bleat://oauth-callback?code=code&state=",
                 .missingState
             ),
             (
-                "com.example.bleat:/oauth/callback?code=code&state=one&state=two",
+                "com.example.bleat://oauth-callback?code=code&state=one&state=two",
                 .missingState
             ),
             (
-                "com.example.bleat:/oauth/callback?code=code&state=wrong",
+                "com.example.bleat://oauth-callback?code=code&state=wrong",
                 .stateMismatch
             ),
             (
-                "com.example.bleat:/oauth/callback?state=expected-state",
+                "com.example.bleat://oauth-callback?state=expected-state",
                 .missingAuthorizationCode
             ),
             (
-                "com.example.bleat:/oauth/callback?code=&state=expected-state",
+                "com.example.bleat://oauth-callback?code=&state=expected-state",
                 .missingAuthorizationCode
             ),
             (
-                "com.example.bleat:/oauth/callback?code=one&code=two&state=expected-state",
+                "com.example.bleat://oauth-callback?code=one&code=two&state=expected-state",
                 .missingAuthorizationCode
             ),
         ]
@@ -628,7 +628,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 try XCTUnwrap(
                     URL(
                         string:
-                            "com.example.bleat:/oauth/callback?code=code"
+                            "com.example.bleat://oauth-callback?code=code"
                     )
                 ),
                 .missingState
@@ -637,7 +637,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 try XCTUnwrap(
                     URL(
                         string:
-                            "com.example.bleat:/oauth/callback?code=code&state=wrong"
+                            "com.example.bleat://oauth-callback?code=code&state=wrong"
                     )
                 ),
                 .stateMismatch
@@ -953,7 +953,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
     }
 
     private static let callbackURL = try! OpenIDCallbackURL(
-        "com.example.bleat:/oauth/callback"
+        "com.example.bleat://oauth-callback"
     )
 
     private static func queryItems(

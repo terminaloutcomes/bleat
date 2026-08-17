@@ -497,7 +497,8 @@ groups, with the same destinations.
 
 ## Open a Bleat link
 
-Bleat registers the `bleat` URL scheme for scene-local navigation. It accepts
+Bleat uses `bleat://` as its sole canonical custom URL scheme for every
+app-owned URL, including scene-local navigation and OIDC callbacks. It accepts
 Home, Library, Downloads, Now Playing, Settings (including Diagnostics,
 Listening Stats, and About), Search, and account/library-qualified Book,
 Author, and Series routes. Entity routes resolve their display labels using the
@@ -913,7 +914,9 @@ swift test --filter DownloadStorageTests
 ```
 
 The OIDC flow uses the server-provided button label and the registered
-`com.yaleman.bleat:/oauth2redirect` callback. OpenID Foundation AppAuth-iOS
+`bleat://oauth2redirect` callback. This deliberately uses the same canonical
+`bleat://` scheme as navigation; Bleat does not use or recommend a separate
+bundle-derived callback scheme. OpenID Foundation AppAuth-iOS
 `2.0.0` is pinned exactly for authorization-response, state, and PKCE handling;
 Bleat exposes no AppAuth types outside its internal adapter. Provider URLs,
 callback values, codes, verifiers, cookies, and tokens are excluded from
