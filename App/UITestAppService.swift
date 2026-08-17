@@ -627,13 +627,19 @@
                 throw .playbackSession(.requestFailed)
             }
             let title = Self.title(for: itemID)
-            return AppPlaybackPreparation(
-                sessionID: nil,
-                itemID: itemID,
-                title: title,
-                duration: 3_600,
-                currentTime: 0,
-                chapters: [
+            let usesLongChapterList = ProcessInfo.processInfo.arguments
+                .contains("--ui-testing-long-chapter-list")
+            let chapters =
+                usesLongChapterList
+                ? (0..<24).map { index in
+                    PlaybackChapter(
+                        id: index % 3,
+                        start: Double(index * 150),
+                        end: Double((index + 1) * 150),
+                        title: "Chapter \(index + 1)"
+                    )
+                }
+                : [
                     PlaybackChapter(
                         id: 0,
                         start: 0,
@@ -646,7 +652,14 @@
                         end: 3_600,
                         title: "Chapter Two"
                     ),
-                ],
+                ]
+            return AppPlaybackPreparation(
+                sessionID: nil,
+                itemID: itemID,
+                title: title,
+                duration: 3_600,
+                currentTime: usesLongChapterList ? 2_710 : 0,
+                chapters: chapters,
                 source: .direct([
                     AppPlaybackTrack(
                         url: URL(

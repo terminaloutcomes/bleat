@@ -557,10 +557,11 @@ struct NowPlaying: View {
                         .equatable()
 
                         if !playback.chapters.isEmpty {
-                            PlaybackChaptersMenu(
+                            PlaybackChaptersPicker(
                                 sourceID: ObjectIdentifier(playback),
                                 chapters: playback.chapters,
-                                currentChapterID: playback.currentChapter?.id
+                                currentChapterIndex:
+                                    playback.currentChapterIndex
                             ) { time in
                                 Task {
                                     await playback.seek(to: time)
@@ -770,36 +771,107 @@ struct NowPlaying: View {
     }
 }
 
-private struct PlaybackChaptersMenu: View, @MainActor Equatable {
+private struct PlaybackChaptersPicker: View, @MainActor Equatable {
     let sourceID: ObjectIdentifier
     let chapters: [PlaybackChapter]
-    let currentChapterID: Int?
+    let currentChapterIndex: Int?
     let onSelect: (Double) -> Void
+    @State private var isPresented = false
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.sourceID == rhs.sourceID
             && lhs.chapters == rhs.chapters
-            && lhs.currentChapterID == rhs.currentChapterID
+            && lhs.currentChapterIndex == rhs.currentChapterIndex
     }
 
     var body: some View {
-        Menu {
-            ForEach(chapters, id: \.id) { chapter in
-                Button {
-                    onSelect(chapter.start)
-                } label: {
-                    if chapter.id == currentChapterID {
-                        Label(chapter.title, systemImage: "checkmark")
-                    } else {
-                        Text(chapter.title)
-                    }
-                }
-            }
+        Button {
+            isPresented = true
         } label: {
             Image(systemName: "list.bullet")
         }
         .accessibilityLabel("Chapters")
         .accessibilityIdentifier("player.chapters")
+        .sheet(isPresented: $isPresented) {
+            PlaybackChapterPickerSheet(
+                chapters: chapters,
+                currentChapterIndex: currentChapterIndex
+            ) { time in
+                isPresented = false
+                onSelect(time)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private struct PlaybackChapterPickerSheet: View {
+    let chapters: [PlaybackChapter]
+    let currentChapterIndex: Int?
+    let onSelect: (Double) -> Void
+    @State private var scrollPosition: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(
+                        Array(chapters.enumerated()),
+                        id: \.offset
+                    ) { index, chapter in
+                        Button {
+                            onSelect(chapter.start)
+                        } label: {
+                            HStack {
+                                Text(chapter.title)
+                                    .foregroundStyle(.primary)
+                                    .multilineTextAlignment(.leading)
+                                Spacer()
+                                if index == currentChapterIndex {
+                                    Image(systemName: "checkmark")
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("player.chapter.\(index)")
+                        .accessibilityAddTraits(
+                            index == currentChapterIndex
+                                ? .isSelected : []
+                        )
+
+                        if index < chapters.count - 1 {
+                            Divider()
+                                .padding(.leading)
+                        }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollPosition(id: $scrollPosition, anchor: .center)
+            .navigationTitle("Chapters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                scrollPosition = currentChapterIndex
+            }
+            .onChange(of: currentChapterIndex) { _, newIndex in
+                scrollPosition = newIndex
+            }
+        }
+        .accessibilityIdentifier("player.chapterPicker")
     }
 }
 

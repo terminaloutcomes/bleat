@@ -529,10 +529,11 @@ Current-chapter scrubber moves of 10 minutes or more in either direction require
 confirmation; skip, chapter, audio-file, and system commands remain immediate.
 Now Playing identifies the narrator and current chapter, offers a chapter list
 for direct navigation, and shows an Audio Files menu for multi-file direct or
-downloaded books. Selecting a file seeks to its whole-book start position. The
-player also includes the native AirPlay route picker. Player content and
-secondary controls scroll when the screen or text size is too small to show
-them at once.
+downloaded books. The chapter list opens with the current chapter visible and
+as its only selected row. Selecting a chapter or file seeks directly to its
+whole-book start position. The player also includes the native AirPlay route
+picker. Player content and secondary controls scroll when the screen or text
+size is too small to show them at once.
 Bleat reports playback as active only after AVPlayer has a ready item and the
 whole-book playhead is advancing. Initial loading and later stalls show as
 buffering while Pause remains available. A stream that makes no progress for

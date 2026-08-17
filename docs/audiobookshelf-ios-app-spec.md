@@ -356,7 +356,8 @@ The full player contains:
 - configurable skip back and forward controls, defaulting to 15 and 30 seconds;
 - previous/next chapter;
 - speed picker;
-- chapter/file list;
+- chapter list that opens with the active chapter visible and uniquely
+  selected, plus direct file navigation;
 - sleep timer;
 - bookmarks;
 - AirPlay route picker;

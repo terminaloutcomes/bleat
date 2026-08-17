@@ -1165,8 +1165,53 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(chapters.waitForExistence(timeout: 3))
         XCTAssertTrue(chapters.isHittable)
         chapters.tap()
-        app.buttons["Chapter One"].tap()
+        app.buttons["player.chapter.0"].tap()
         XCTAssertFalse(alert.waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testChapterPickerOpensAtSoleCurrentChapter() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-long-chapter-list"]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.buttons["player.mini.open"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+
+        let chapters = app.buttons["player.chapters"]
+        XCTAssertTrue(chapters.waitForExistence(timeout: 3))
+        chapters.tap()
+
+        let currentChapter = app.buttons["player.chapter.18"]
+        XCTAssertTrue(currentChapter.waitForExistence(timeout: 3))
+        XCTAssertTrue(currentChapter.isHittable)
+        XCTAssertTrue(currentChapter.isSelected)
+        XCTAssertEqual(selectedChapterRowCount(in: app), 1)
+
+        let previousChapter = app.buttons["player.chapter.17"]
+        XCTAssertTrue(previousChapter.isHittable)
+        previousChapter.tap()
+        XCTAssertTrue(
+            app.otherElements["player.chapterPicker"]
+                .waitForNonExistence(timeout: 3)
+        )
+
+        chapters.tap()
+        XCTAssertTrue(previousChapter.waitForExistence(timeout: 3))
+        XCTAssertTrue(previousChapter.isHittable)
+        XCTAssertTrue(previousChapter.isSelected)
+        XCTAssertFalse(currentChapter.isSelected)
+        XCTAssertEqual(selectedChapterRowCount(in: app), 1)
     }
 
     @MainActor
@@ -1230,7 +1275,7 @@ final class BleatUITests: XCTestCase {
         let chapters = app.buttons["player.chapters"]
         XCTAssertTrue(chapters.waitForExistence(timeout: 3))
         chapters.tap()
-        let chapter = app.collectionViews.buttons["Chapter One"].firstMatch
+        let chapter = app.buttons["player.chapter.0"]
         XCTAssertTrue(chapter.waitForExistence(timeout: 3))
         try await Task.sleep(for: .seconds(2))
         XCTAssertTrue(chapter.exists)
@@ -1543,6 +1588,21 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    @MainActor
+    private func selectedChapterRowCount(in app: XCUIApplication) -> Int {
+        let rows = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@",
+                "player.chapter."
+            )
+        )
+        return (0..<rows.count).reduce(into: 0) { count, index in
+            if rows.element(boundBy: index).isSelected {
+                count += 1
+            }
+        }
     }
 
     enum ScrollDirection {

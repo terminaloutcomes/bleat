@@ -1889,6 +1889,64 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPlaybackChapterIndexResolverUsesTimelinePositionNotChapterID() {
+        let chapters = [
+            PlaybackChapter(
+                id: 4,
+                start: 0,
+                end: 10,
+                title: "First"
+            ),
+            PlaybackChapter(
+                id: 4,
+                start: 10,
+                end: 20,
+                title: "Middle"
+            ),
+            PlaybackChapter(
+                id: 9,
+                start: 20,
+                end: 30,
+                title: "Final"
+            ),
+        ]
+
+        XCTAssertNil(
+            PlaybackChapterIndexResolver.resolve(
+                chapters: chapters,
+                wholeBookTime: -1
+            )
+        )
+        XCTAssertEqual(
+            PlaybackChapterIndexResolver.resolve(
+                chapters: chapters,
+                wholeBookTime: 0
+            ),
+            0
+        )
+        XCTAssertEqual(
+            PlaybackChapterIndexResolver.resolve(
+                chapters: chapters,
+                wholeBookTime: 15
+            ),
+            1
+        )
+        XCTAssertEqual(
+            PlaybackChapterIndexResolver.resolve(
+                chapters: chapters,
+                wholeBookTime: 20
+            ),
+            2
+        )
+        XCTAssertEqual(
+            PlaybackChapterIndexResolver.resolve(
+                chapters: chapters,
+                wholeBookTime: 30
+            ),
+            2
+        )
+    }
+
     func
         testAutomaticDownloadWaitsForStablePlaybackAndReservesBandwidthAgainOnStall()
     {

@@ -123,6 +123,21 @@ enum PlaybackSeekContinuation: Equatable, Sendable {
     }
 }
 
+enum PlaybackChapterIndexResolver {
+    static func resolve(
+        chapters: [PlaybackChapter],
+        wholeBookTime: Double
+    ) -> Int? {
+        chapters.lastIndex {
+            $0.start <= wholeBookTime
+                && wholeBookTime < max($0.end, $0.start)
+        }
+            ?? chapters.lastIndex {
+                $0.start <= wholeBookTime
+            }
+    }
+}
+
 enum PlaybackWatchdogDecision: Equatable, Sendable {
     case none
     case showBuffering
@@ -498,14 +513,18 @@ final class PlaybackModel {
         }
     }
 
+    var currentChapterIndex: Int? {
+        PlaybackChapterIndexResolver.resolve(
+            chapters: chapters,
+            wholeBookTime: currentTime
+        )
+    }
+
     var currentChapter: PlaybackChapter? {
-        chapters.last {
-            $0.start <= currentTime
-                && currentTime < max($0.end, $0.start)
+        guard let currentChapterIndex else {
+            return nil
         }
-            ?? chapters.last {
-                $0.start <= currentTime
-            }
+        return chapters[currentChapterIndex]
     }
 
     var canMoveToPreviousChapter: Bool {
