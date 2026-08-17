@@ -62,7 +62,7 @@ fi
 
 if [[ "${build_without_paid_developer}" == "YES" ]]; then
   readonly app_attest_entitlement="com.apple.developer.devicecheck.appattest-environment"
-  readonly cloudkit_entitlement="com.apple.developer.icloud-services"
+  readonly cloudkit_entitlement_prefix="com.apple.developer.icloud-"
   readonly keychain_entitlement="keychain-access-groups"
   signed_entitlements="$(codesign -d --entitlements :- "${bleat_app}" 2>/dev/null)"
 
@@ -70,7 +70,7 @@ if [[ "${build_without_paid_developer}" == "YES" ]]; then
     echo "Personal-Team build unexpectedly contains the App Attest entitlement" >&2
     exit 1
   fi
-  if [[ "${signed_entitlements}" == *"${cloudkit_entitlement}"* ]]; then
+  if [[ "${signed_entitlements}" == *"${cloudkit_entitlement_prefix}"* ]]; then
     echo "Personal-Team build unexpectedly contains the CloudKit entitlement" >&2
     exit 1
   fi

@@ -66,11 +66,11 @@ if plutil -p "${fully_disabled_entitlements}" | rg -q 'icloud|appattest'; then
   exit 1
 fi
 
-if [[ "$(plutil -extract BleatCloudKitMode raw App/Info.plist)" != '$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)' ]]; then
+if [[ "$(plutil -extract BleatCloudKitMode raw App/Info.plist)" != "\$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)" ]]; then
   echo "Info.plist does not use the effective CloudKit mode" >&2
   exit 1
 fi
-if [[ "$(plutil -extract BleatAppAttestMode raw App/Info.plist)" != '$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)' ]]; then
+if [[ "$(plutil -extract BleatAppAttestMode raw App/Info.plist)" != "\$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)" ]]; then
   echo "Info.plist does not use the effective App Attest mode" >&2
   exit 1
 fi
