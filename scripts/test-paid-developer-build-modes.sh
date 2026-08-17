@@ -79,12 +79,22 @@ if ! plutil -p "${fully_disabled_entitlements}" | rg -q 'keychain-access-groups'
   exit 1
 fi
 
-if BUILD_WITHOUT_PAID_DEVELOPER=MAYBE \
-  BLEAT_CLOUDKIT_MODE=enabled \
-  BLEAT_APP_ATTEST_MODE=enabled \
-  ./scripts/validate-paid-developer-build-settings.sh >/dev/null 2>&1; then
-  echo "invalid global mode unexpectedly passed validation" >&2
-  exit 1
-fi
+assert_validation_fails() {
+  local global_mode="$1"
+  local cloudkit_mode="$2"
+  local app_attest_mode="$3"
+
+  if BUILD_WITHOUT_PAID_DEVELOPER="${global_mode}" \
+    BLEAT_CLOUDKIT_MODE="${cloudkit_mode}" \
+    BLEAT_APP_ATTEST_MODE="${app_attest_mode}" \
+    ./scripts/validate-paid-developer-build-settings.sh >/dev/null 2>&1; then
+    echo "invalid capability modes unexpectedly passed validation" >&2
+    exit 1
+  fi
+}
+
+assert_validation_fails MAYBE enabled enabled
+assert_validation_fails NO unsupported enabled
+assert_validation_fails NO enabled unsupported
 
 echo "Verified paid-capability build modes"

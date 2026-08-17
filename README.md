@@ -160,6 +160,16 @@ Mac-specific interface adaptation, and unlisted Mac media or background
 behavior are also not release gates.
 
 Build products and intermediate files are written beneath `.build/`.
+Remove repository-owned build and app-live artifacts older than seven days with:
+
+```sh
+mise run clean
+```
+
+Use `mise run clean -- --dry-run` to preview the cleanup. Run
+`mise run clean -- --all` to remove every known artifact regardless of age.
+The cleanup does not touch tracked fixtures, `.git`, or caches outside the
+repository.
 
 If `project.yml` changes, regenerate the checked-in project before building:
 

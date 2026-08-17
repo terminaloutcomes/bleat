@@ -21,7 +21,7 @@ fi
 
 readonly build_without_paid_developer="${BUILD_WITHOUT_PAID_DEVELOPER:-YES}"
 
-echo "Building Bleat for the configured device with bundle identifier ${bleat_bundle_id}..."
+echo "Building Bleat for the configured device..."
 
 xcodebuild \
   -project Bleat.xcodeproj \
@@ -56,7 +56,7 @@ fi
 
 built_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${bleat_app}/Info.plist")"
 if [[ "${built_bundle_id}" != "${bleat_bundle_id}" ]]; then
-  echo "built bundle identifier ${built_bundle_id} does not match ${bleat_bundle_id}" >&2
+  echo "built bundle identifier does not match the configured identifier" >&2
   exit 1
 fi
 
