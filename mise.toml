@@ -8,24 +8,31 @@ rust = "1.97.0"
 zola = "0.22.1"
 
 [tasks."api:fmt"]
-description = "Check bleat-api Rust formatting"
-run = "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check"
+description = "Fix bleat-api Rust formatting"
+dir = "./bleat-api"
+run = "cargo fmt --all"
 
 [tasks."api:check"]
 description = "Type-check bleat-api"
-run = "cargo check --manifest-path bleat-api/Cargo.toml --all-targets --all-features"
+dir = "./bleat-api"
+depends = ["api:fmt"]
+run = "cargo check --all-targets --all-features"
 
 [tasks."api:clippy"]
 description = "Lint bleat-api"
-run = "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings"
+depends = ["api:fmt"]
+dir = "./bleat-api"
+run = "cargo clippy --all-targets --all-features -- -D warnings"
 
 [tasks."api:test"]
 description = "Test bleat-api against disposable PostgreSQL"
+depends = ["api:fmt"]
 run = "./scripts/test-bleat-api.sh"
 
 [tasks."api:build"]
 description = "Build the bleat-api release binary"
-run = "cargo build --manifest-path bleat-api/Cargo.toml --release"
+dir = "./bleat-api"
+run = "cargo build --release"
 
 [tasks."api:run"]
 description = "Run bleat-api and PostgreSQL locally"
@@ -37,9 +44,9 @@ run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orpha
 
 [tasks."api:validate"]
 description = "Run every bleat-api validation gate"
+depends = ["api:check", "api:clippy"]
 run = [
   "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check",
-  "cargo check --manifest-path bleat-api/Cargo.toml --all-targets --all-features",
   "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings",
   "./scripts/test-bleat-api.sh",
   "cargo build --manifest-path bleat-api/Cargo.toml --release",
@@ -130,8 +137,7 @@ run = [
 
 [tasks."iphone:build"]
 description = "Build a development-signed Release app for a physical iPhone"
-#Until CloudKit is supported on physical devices by getting a "proper" account
-env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
@@ -171,7 +177,7 @@ xcrun devicectl device process launch \
 
 [tasks.iphone]
 description = "Build, install, and launch Bleat on a physical iPhone"
-env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
 run = """
 export BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
@@ -181,7 +187,7 @@ exec ./scripts/deploy-device.sh
 
 [tasks."ipad:build"]
 description = "Build a development-signed Release app for a physical iPad"
-env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
@@ -206,22 +212,11 @@ xcrun devicectl device install app \
 [tasks."ipad:launch"]
 description = "Launch Bleat on a physical iPad"
 depends = ["ipad:install"]
-run = """
-#!/usr/bin/env zsh
-set -euo pipefail
-
-: "${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
-
-xcrun devicectl device process launch \
-  --device "${BLEAT_IPAD_ID}" \
-  --terminate-existing \
-  "${bleat_bundle_id}"
-"""
+run = "./scripts/launch-ipad.sh"
 
 [tasks.ipad]
 description = "Build, install, and launch Bleat on a physical iPad"
-env = { BLEAT_CLOUDKIT_MODE = "disabled" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
@@ -231,3 +226,6 @@ exec ./scripts/deploy-device.sh
 
 [tasks.trufflehog]
 run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore' --exclude-detectors=ProtocolsIO,URI,CloudflareApiToken --no-verification"""
+
+[tasks.clippy]
+run = { task = "api:clippy" }
