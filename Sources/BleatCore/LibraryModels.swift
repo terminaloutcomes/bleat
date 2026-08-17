@@ -337,6 +337,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let series: [LibraryBookSeries]
     public let collapsedSeries: LibraryCollapsedSeries?
     public let genres: [String]
+    public let tags: [String]
     public let publisher: String?
     public let publishedYear: String?
     public let duration: Double
@@ -359,6 +360,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         series: [LibraryBookSeries] = [],
         collapsedSeries: LibraryCollapsedSeries? = nil,
         genres: [String],
+        tags: [String] = [],
         publisher: String?,
         publishedYear: String?,
         duration: Double,
@@ -380,6 +382,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         self.series = series
         self.collapsedSeries = collapsedSeries
         self.genres = genres
+        self.tags = tags
         self.publisher = publisher
         self.publishedYear = publishedYear
         self.duration = duration
@@ -393,7 +396,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, libraryID, title, subtitle, authorName, narratorName, seriesName
-        case authors, series, collapsedSeries, genres, publisher, publishedYear
+        case authors, series, collapsedSeries, genres, tags, publisher, publishedYear
         case duration, trackCount, chapterCount, addedAtMilliseconds
         case updatedAtMilliseconds, isExplicit, isAbridged
     }
@@ -411,6 +414,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         series = try values.decodeIfPresent([LibraryBookSeries].self, forKey: .series) ?? []
         collapsedSeries = try values.decodeIfPresent(LibraryCollapsedSeries.self, forKey: .collapsedSeries)
         genres = try values.decode([String].self, forKey: .genres)
+        tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
         publisher = try values.decodeIfPresent(String.self, forKey: .publisher)
         publishedYear = try values.decodeIfPresent(String.self, forKey: .publishedYear)
         duration = try values.decode(Double.self, forKey: .duration)
@@ -621,6 +625,7 @@ extension LibraryBookDetail {
             series: series,
             collapsedSeries: nil,
             genres: genres,
+            tags: tags,
             publisher: publisher,
             publishedYear: publishedYear,
             duration: duration,

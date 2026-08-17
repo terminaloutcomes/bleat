@@ -706,14 +706,32 @@
             for account: ServerAccount,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> DownloadPlan {
-            throw .downloadPlan(.invalidItemID)
+            DownloadPlan(
+                itemID: itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "ui-download",
+                        expectedByteLength: 1,
+                        mimeType: "audio/mp4",
+                        safeExtension: .m4b,
+                        destinationEntry: "00000.m4b",
+                        startOffset: 0,
+                        duration: 3_600
+                    )
+                ]
+            )
         }
 
         func authorizedDownloadRequest(
             for account: ServerAccount,
             identity: DownloadTaskIdentity
         ) async throws(AppServiceError) -> URLRequest {
-            throw .downloadAuthorization(.invalidAccountID)
+            URLRequest(
+                url: account.server.url
+                    .appending(path: "ui-download")
+                    .appending(path: identity.itemID.rawValue)
+            )
         }
 
         func replacementDownloadRequest(
@@ -721,7 +739,7 @@
             identity: DownloadTaskIdentity,
             rejectedRequest: URLRequest
         ) async throws(AppServiceError) -> URLRequest {
-            throw .downloadAuthorization(.invalidAccountID)
+            rejectedRequest
         }
 
         func replaceCover(
@@ -791,6 +809,27 @@
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookProgress? {
             nil
+        }
+
+        func allBookProgress(
+            for account: ServerAccount
+        ) async throws(AppServiceError) -> [LibraryBookProgress] {
+            [
+                LibraryBookProgress(
+                    id: "ui-progress",
+                    userID: account.user.id,
+                    libraryItemID: LibraryItemID(rawValue: "ui-book"),
+                    bookID: BookID(rawValue: "ui-book"),
+                    duration: 3_600,
+                    progress: 1,
+                    currentTime: 3_600,
+                    isFinished: true,
+                    hideFromContinueListening: false,
+                    lastUpdateMilliseconds: 1,
+                    startedAtMilliseconds: 1,
+                    finishedAtMilliseconds: 1
+                )
+            ]
         }
 
         func updateBookProgress(

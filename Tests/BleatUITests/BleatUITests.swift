@@ -511,6 +511,144 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookContextMenusCoverBrowseSurfacesWithoutActivatingCards() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+
+        homeBook.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Mark Unplayed"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Download"].exists)
+        XCTAssertTrue(app.buttons["Edit"].exists)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        app.buttons["Mark Unplayed"].tap()
+        XCTAssertTrue(app.buttons["Mark Unplayed"].waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+
+        tabButton("Library", in: app).tap()
+        assertContextMenu(
+            for: app.descendants(matching: .any)["library.book.ui-book"],
+            progressLabel: "Mark Played",
+            in: app
+        )
+
+        tabButton("Search", in: app).tap()
+        let searchField = app.searchFields.firstMatch
+        if !searchField.waitForExistence(timeout: 1) {
+            let presentSearch = app.navigationBars["Search"].buttons["Search"]
+            XCTAssertTrue(presentSearch.waitForExistence(timeout: 3))
+            presentSearch.tap()
+        }
+        searchField.tap()
+        searchField.typeText("Test")
+        assertContextMenu(
+            for: app.descendants(matching: .any)[
+                "search.book.ui-search-book"
+            ],
+            progressLabel: "Mark Played",
+            in: app
+        )
+
+        app.terminate()
+        let seriesApp = launch(scenario: "--ui-testing-signed-in")
+        let seriesHomeBook = seriesApp.descendants(matching: .any)[
+            "home.book.ui-book"
+        ]
+        XCTAssertTrue(seriesHomeBook.waitForExistence(timeout: 3))
+        seriesHomeBook.tap()
+        let series = seriesApp.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+        assertContextMenu(
+            for: seriesApp.descendants(matching: .any)["series.book.0"],
+            progressLabel: "Mark Played",
+            in: seriesApp
+        )
+        assertContextMenu(
+            for: seriesApp.descendants(matching: .any)[
+                "series.carousel.ui-series-one"
+            ],
+            progressLabel: "Mark Unplayed",
+            in: seriesApp
+        )
+    }
+
+    @MainActor
+    func testBookContextMenuPresentsExistingEditorAndTranscriptionDirectly() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-transcription-available"]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let download = app.buttons["Download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        download.tap()
+        XCTAssertTrue(download.waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Mark Unplayed"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Download"].exists)
+        let edit = app.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        edit.tap()
+        XCTAssertTrue(
+            app.textFields["metadata.title"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        app.buttons["Cancel"].tap()
+
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let transcribe = app.buttons["Transcribe"]
+        XCTAssertTrue(transcribe.waitForExistence(timeout: 3))
+        XCTAssertTrue(transcribe.isEnabled)
+        transcribe.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["transcription.view"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        app.buttons["Done"].tap()
+
+        tabButton("Downloads", in: app).tap()
+        let removeAll = app.buttons["downloads.removeAll"]
+        XCTAssertTrue(removeAll.waitForExistence(timeout: 3))
+        removeAll.tap()
+        let confirmRemove = app.buttons["Remove Downloads"]
+        XCTAssertTrue(confirmRemove.waitForExistence(timeout: 3))
+        confirmRemove.tap()
+        XCTAssertTrue(
+            app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testBookContextMenuRespectsPermissionsAndTranscriptionCapability() {
+        let app = launch(
+            scenario: "--ui-testing-limited-permissions",
+            additionalArguments: ["--ui-testing-transcription-unavailable"]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+
+        XCTAssertTrue(app.buttons["Mark Unplayed"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Download"].exists)
+        XCTAssertFalse(app.buttons["Edit"].exists)
+        let transcription = app.buttons[
+            "Transcription unavailable on this device"
+        ]
+        XCTAssertTrue(transcription.exists)
+        XCTAssertFalse(transcription.isEnabled)
+    }
+
+    @MainActor
     func testGroupedSearchSelectionsReachAuthorAndSeriesDestinations() {
         let app = launch(scenario: "--ui-testing-signed-in")
         XCTAssertTrue(
@@ -1588,6 +1726,21 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    @MainActor
+    private func assertContextMenu(
+        for element: XCUIElement,
+        progressLabel: String,
+        in app: XCUIApplication
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: 3))
+        element.press(forDuration: 1)
+        XCTAssertTrue(app.buttons[progressLabel].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        app.buttons[progressLabel].tap()
+        XCTAssertTrue(app.buttons[progressLabel].waitForNonExistence(timeout: 3))
     }
 
     @MainActor

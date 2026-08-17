@@ -23,7 +23,38 @@ public struct BookActionAvailability: Equatable, Sendable {
         user: AuthenticatedUser,
         detail: LibraryBookDetail
     ) {
-        access = Self.accessDecision(user: user, detail: detail)
+        self.init(
+            user: user,
+            libraryID: detail.libraryID,
+            isExplicit: detail.isExplicit,
+            tags: detail.tags
+        )
+    }
+
+    public init(
+        user: AuthenticatedUser,
+        summary: LibraryBookSummary
+    ) {
+        self.init(
+            user: user,
+            libraryID: summary.libraryID,
+            isExplicit: summary.isExplicit,
+            tags: summary.tags
+        )
+    }
+
+    private init(
+        user: AuthenticatedUser,
+        libraryID: LibraryID,
+        isExplicit: Bool,
+        tags: [String]
+    ) {
+        access = Self.accessDecision(
+            user: user,
+            libraryID: libraryID,
+            isExplicit: isExplicit,
+            tags: tags
+        )
         guard access == .allowed else {
             visibleActions = []
             return
@@ -47,20 +78,22 @@ public struct BookActionAvailability: Equatable, Sendable {
 
     private static func accessDecision(
         user: AuthenticatedUser,
-        detail: LibraryBookDetail
+        libraryID: LibraryID,
+        isExplicit: Bool,
+        tags: [String]
     ) -> LibraryItemAccessDecision {
         if !user.permissions.accessAllLibraries,
-           !user.accessibleLibraryIDs.contains(detail.libraryID)
+           !user.accessibleLibraryIDs.contains(libraryID)
         {
             return .inaccessibleLibrary
         }
-        if detail.isExplicit,
+        if isExplicit,
            !user.permissions.accessExplicitContent
         {
             return .explicitContentDenied
         }
         if !user.permissions.accessAllTags,
-           !hasAccessibleTags(user: user, itemTags: detail.tags)
+           !hasAccessibleTags(user: user, itemTags: tags)
         {
             return .inaccessibleTags
         }

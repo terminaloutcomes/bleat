@@ -572,6 +572,10 @@ protocol AppServicing: Sendable {
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookProgress?
 
+    func allBookProgress(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibraryBookProgress]
+
     func updateBookProgress(
         for account: ServerAccount,
         itemID: LibraryItemID,
@@ -2345,6 +2349,20 @@ actor LiveAppService: AppServicing {
                 accountID: account.id,
                 server: account.server,
                 itemID: itemID
+            )
+        } catch let error {
+            throw .progress(error)
+        }
+    }
+
+    func allBookProgress(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibraryBookProgress] {
+        do {
+            return try await coordinator.allBookProgress(
+                accountID: account.id,
+                userID: account.user.id,
+                server: account.server
             )
         } catch let error {
             throw .progress(error)

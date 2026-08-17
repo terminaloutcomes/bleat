@@ -1077,6 +1077,8 @@ private struct SignedInView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
     @State private var playbackFailure: AppFailure?
+    @State private var bookActionPresentation =
+        BookActionContextPresentation()
 
     var body: some View {
         GeometryReader { geometry in
@@ -1093,6 +1095,13 @@ private struct SignedInView: View {
         .sheet(isPresented: $navigation.showsPlayer) {
             NowPlaying(playback: model.playback)
 
+        }
+        .sheet(item: bookActionPresentation.requestBinding) { request in
+            BookActionPreparationView(
+                model: model,
+                request: request,
+                presentation: bookActionPresentation
+            )
         }
         .alert(
             "Allow Cellular Download?",
@@ -1132,6 +1141,10 @@ private struct SignedInView: View {
             }
         }
         .accessibilityIdentifier("app.signedIn")
+        .environment(bookActionPresentation)
+        .onChange(of: model.account?.id) {
+            bookActionPresentation.dismiss()
+        }
     }
 
     #if targetEnvironment(macCatalyst)
@@ -1365,6 +1378,332 @@ extension AppRootTab {
         case .search: "magnifyingglass"
         case .downloads: "arrow.down.circle"
         case .settings: "gearshape"
+        }
+    }
+}
+
+private enum BookContextAction: Hashable {
+    case markPlayed(Bool)
+    case download
+    case edit
+    case transcribe
+}
+
+private extension BookActionAvailability {
+    var canOpenEditor: Bool {
+        visibleActions.contains(.editMetadata)
+            || visibleActions.contains(.editCover)
+            || visibleActions.contains(.deleteFromServer)
+    }
+}
+
+@MainActor
+@Observable
+private final class BookActionContextPresentation {
+    struct Request: Identifiable {
+        let id = UUID()
+        let account: ServerAccount
+        let book: LibraryBookSummary
+        let action: BookContextAction
+    }
+
+    var request: Request?
+
+    var requestBinding: Binding<Request?> {
+        Binding(
+            get: { self.request },
+            set: { self.request = $0 }
+        )
+    }
+
+    func present(
+        action: BookContextAction,
+        account: ServerAccount,
+        book: LibraryBookSummary
+    ) {
+        request = Request(account: account, book: book, action: action)
+    }
+
+    func dismiss() {
+        request = nil
+    }
+}
+
+private enum BookTranscriptionMenu {
+    static var isAvailable: Bool {
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-transcription-unavailable"
+            ) {
+                return false
+            }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-transcription-available"
+            ) {
+                return true
+            }
+        #endif
+        return SpeechTranscriptionCapability.isAvailable
+    }
+
+    static var title: String {
+        isAvailable
+            ? "Transcribe"
+            : "Transcription unavailable on this device"
+    }
+}
+
+private struct BookActionContextMenuModifier: ViewModifier {
+    @Environment(BookActionContextPresentation.self) private var presentation
+    @Bindable var model: AppModel
+    let account: ServerAccount
+    let book: LibraryBookSummary
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .contextMenu {
+                    contextMenuContent
+                }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        let availability = BookActionAvailability(
+            user: account.user,
+            summary: book
+        )
+        if availability.access == .allowed {
+            Button(
+                model.isBookFinished(book.id)
+                    ? "Mark Unplayed" : "Mark Played",
+                systemImage: model.isBookFinished(book.id)
+                    ? "arrow.uturn.backward.circle" : "checkmark.circle"
+            ) {
+                begin(.markPlayed(!model.isBookFinished(book.id)))
+            }
+            .accessibilityIdentifier(
+                "book.context.\(book.id.rawValue).progress"
+            )
+
+            if availability.visibleActions.contains(.download),
+                canStartDownload
+            {
+                Button("Download", systemImage: "arrow.down.circle") {
+                    begin(.download)
+                }
+                .accessibilityIdentifier(
+                    "book.context.\(book.id.rawValue).download"
+                )
+            }
+
+            if availability.canOpenEditor {
+                Button("Edit", systemImage: "pencil") {
+                    begin(.edit)
+                }
+                .accessibilityIdentifier(
+                    "book.context.\(book.id.rawValue).edit"
+                )
+            }
+
+            #if os(iOS) && !targetEnvironment(macCatalyst)
+                Button(
+                    BookTranscriptionMenu.title,
+                    systemImage: "waveform.badge.mic"
+                ) {
+                    begin(.transcribe)
+                }
+                .disabled(!BookTranscriptionMenu.isAvailable)
+                .accessibilityIdentifier(
+                    "book.context.\(book.id.rawValue).transcribe"
+                )
+            #endif
+        }
+    }
+
+    private var canStartDownload: Bool {
+        guard let record = model.downloads.record(
+            accountID: account.id,
+            itemID: book.id
+        ) else {
+            return true
+        }
+        return record.manifest.purpose == .automaticCache
+    }
+
+    private func begin(_ action: BookContextAction) {
+        presentation.present(action: action, account: account, book: book)
+    }
+}
+
+private struct BookActionPreparationView: View {
+    @Bindable var model: AppModel
+    let request: BookActionContextPresentation.Request
+    @Bindable var presentation: BookActionContextPresentation
+
+    @State private var preparedDetail: LibraryBookDetail?
+    @State private var preparationFailure: AppFailure?
+    @State private var isPreparing = true
+
+    @ViewBuilder
+    var body: some View {
+        if let failure = preparationFailure {
+            ContentUnavailableView {
+                Label(failure.title, systemImage: failure.systemImage)
+            } description: {
+                Text(failure.message)
+            } actions: {
+                if failure.allowsRetry {
+                    Button("Try Again") {
+                        preparationFailure = nil
+                        preparedDetail = nil
+                        isPreparing = true
+                    }
+                    .accessibilityIdentifier(
+                        "book.context.\(request.book.id.rawValue).retry"
+                    )
+                }
+                Button("Cancel", role: .cancel) {
+                    presentation.dismiss()
+                }
+            }
+            .accessibilityIdentifier(
+                "book.context.\(request.book.id.rawValue).error"
+            )
+        } else if isPreparing {
+            ProgressView("Preparing \(request.book.title)")
+                .accessibilityIdentifier(
+                    "book.context.\(request.book.id.rawValue).loading"
+                )
+                .task(id: isPreparing) {
+                    await prepareSelectedAction()
+                }
+        } else if let detail = preparedDetail {
+            switch request.action {
+            case .edit:
+                MetadataEditorView(model: model, detail: detail) {
+                    presentation.dismiss()
+                    model.completeBookDeletion()
+                }
+            case .transcribe:
+                #if os(iOS) && !targetEnvironment(macCatalyst)
+                    ChapterTranscriptionView(
+                        detail: detail,
+                        account: request.account,
+                        appModel: model,
+                        downloads: model.downloads
+                    )
+                #else
+                    EmptyView()
+                #endif
+            case .download, .markPlayed:
+                EmptyView()
+            }
+        }
+    }
+
+    @MainActor
+    private func prepareSelectedAction() async {
+        switch await model.prepareBookAction(
+            for: request.book,
+            account: request.account
+        ) {
+        case .failed(let failure):
+            preparationFailure = failure
+            isPreparing = false
+        case .loaded(let detail):
+            let availability = BookActionAvailability(
+                user: request.account.user,
+                detail: detail
+            )
+            guard availability.access == .allowed else {
+                preparationFailure = AppFailure(
+                    operation(for: request.action),
+                    failureCause(for: availability.access)
+                )
+                isPreparing = false
+                return
+            }
+            switch request.action {
+            case .markPlayed(let isFinished):
+                await model.setFinished(isFinished, detail: detail)
+                if case .failed(let failure) = model.bookProgressUpdateState {
+                    preparationFailure = failure
+                    isPreparing = false
+                } else {
+                    presentation.dismiss()
+                }
+            case .download:
+                guard availability.visibleActions.contains(.download) else {
+                    preparationFailure = AppFailure(
+                        .download,
+                        .permissionDenied
+                    )
+                    isPreparing = false
+                    return
+                }
+                if let record = model.downloads.record(
+                    accountID: request.account.id,
+                    itemID: detail.id
+                ) {
+                    if record.manifest.purpose == .automaticCache {
+                        await model.downloads.downloadFullBook(
+                            record,
+                            account: request.account
+                        )
+                    }
+                } else {
+                    await model.downloads.download(
+                        detail: detail,
+                        account: request.account
+                    )
+                }
+                presentation.dismiss()
+            case .edit:
+                guard availability.canOpenEditor else {
+                    preparationFailure = AppFailure(
+                        .saveMetadata,
+                        .permissionDenied
+                    )
+                    isPreparing = false
+                    return
+                }
+                preparedDetail = detail
+                isPreparing = false
+            case .transcribe:
+                guard BookTranscriptionMenu.isAvailable else {
+                    presentation.dismiss()
+                    return
+                }
+                preparedDetail = detail
+                isPreparing = false
+            }
+        }
+    }
+
+    private func operation(
+        for action: BookContextAction
+    ) -> AppFailureOperation {
+        switch action {
+        case .markPlayed: .updateProgress
+        case .download: .download
+        case .edit: .saveMetadata
+        case .transcribe: .loadBook
+        }
+    }
+
+    private func failureCause(
+        for access: LibraryItemAccessDecision
+    ) -> AppFailureCause {
+        switch access {
+        case .allowed: .permissionDenied
+        case .inaccessibleLibrary: .inaccessibleLibrary
+        case .inaccessibleTags: .inaccessibleTags
+        case .explicitContentDenied: .explicitContentDenied
         }
     }
 }
@@ -1722,6 +2061,14 @@ private struct ShelfBookCard: View {
                 .frame(width: 148, height: 148)
             }
         }
+        .modifier(
+            BookActionContextMenuModifier(
+                model: model,
+                account: account,
+                book: book,
+                isEnabled: book.collapsedSeries == nil
+            )
+        )
     }
 }
 
@@ -2421,6 +2768,14 @@ private struct BookSummaryRow: View {
                 .frame(width: 64, height: 64)
             }
         }
+        .modifier(
+            BookActionContextMenuModifier(
+                model: model,
+                account: account,
+                book: book,
+                isEnabled: book.collapsedSeries == nil
+            )
+        )
     }
 }
 
@@ -2483,7 +2838,7 @@ private struct SeriesDetailView: View {
                 await model.loadSeries(destination)
             }
             .refreshable {
-                await model.loadSeries(destination)
+                await model.refreshSeries(destination)
             }
     }
 
@@ -2716,6 +3071,14 @@ private struct SeriesCarouselBookCard: View {
                 .frame(width: 180, height: 180)
             }
         }
+        .modifier(
+            BookActionContextMenuModifier(
+                model: model,
+                account: account,
+                book: book,
+                isEnabled: book.collapsedSeries == nil
+            )
+        )
     }
 }
 
@@ -2913,13 +3276,10 @@ private struct BookDetailView: View {
         guard let user = model.account?.user else {
             return false
         }
-        let actions = BookActionAvailability(
+        return BookActionAvailability(
             user: user,
             detail: detail
-        ).visibleActions
-        return actions.contains(.editMetadata)
-            || actions.contains(.editCover)
-            || actions.contains(.deleteFromServer)
+        ).canOpenEditor
     }
 
     private func canShowActionsMenu(_ detail: LibraryBookDetail) -> Bool {
@@ -2931,14 +3291,7 @@ private struct BookDetailView: View {
     }
 
     private var transcriptionMenuIsAvailable: Bool {
-        #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains(
-                "--ui-testing-transcription-available"
-            ) {
-                return true
-            }
-        #endif
-        return SpeechTranscriptionCapability.isAvailable
+        BookTranscriptionMenu.isAvailable
     }
 
     private var transcriptionMenuTitle: String {

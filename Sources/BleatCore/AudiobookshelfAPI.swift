@@ -660,6 +660,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
                       && Self.isValidOptionalDisplayString($0.sequence)
               }),
               media.metadata.genres.allSatisfy(Self.isValidDisplayString),
+              (media.tags ?? []).allSatisfy(Self.isValidDisplayString),
               media.duration.isFinite,
               media.duration >= 0,
               media.numTracks >= 0,
@@ -681,6 +682,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
             series: media.metadata.series ?? [],
             collapsedSeries: try collapsedSeries?.domainValue(),
             genres: media.metadata.genres,
+            tags: media.tags ?? [],
             publisher: Self.nonEmpty(media.metadata.publisher),
             publishedYear: Self.nonEmpty(media.metadata.publishedYear),
             duration: media.duration,
@@ -721,6 +723,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
 
 private struct LibraryBookDTO: Decodable, Sendable {
     let metadata: LibraryBookMetadataDTO
+    let tags: [String]?
     let numTracks: Int
     let numChapters: Int
     let duration: Double

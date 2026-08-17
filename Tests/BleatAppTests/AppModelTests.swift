@@ -4320,10 +4320,100 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.selectedLibrary, audiobookLibrary)
         XCTAssertEqual(model.books, .loaded(page))
         XCTAssertEqual(model.homeShelves, .loaded(shelves))
+        XCTAssertFalse(model.isBookFinished(page.items[0].id))
         let pageRequests = await service.pageRequests()
         XCTAssertEqual(pageRequests, [audiobookLibrary.id])
         let homeRequests = await service.homeRequests()
         XCTAssertEqual(homeRequests, [audiobookLibrary.id])
+    }
+
+    func testStartLoadsFinishedStateAndAccountSwitchSuppressesStaleProgress()
+        async throws
+    {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let firstItemID = LibraryItemID(rawValue: "first-item")
+        let secondItemID = LibraryItemID(rawValue: "second-item")
+        let firstGate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            allBookProgress: [
+                .success([
+                    fixtureProgress(
+                        userID: first.user.id,
+                        itemID: firstItemID,
+                        isFinished: true
+                    )
+                ]),
+                .success([
+                    fixtureProgress(
+                        userID: second.user.id,
+                        itemID: secondItemID,
+                        isFinished: true
+                    )
+                ]),
+            ],
+            firstAllBookProgressGate: firstGate
+        )
+        let model = AppModel(service: service)
+        let startTask = Task { await model.start() }
+        await firstGate.waitUntilEntered()
+
+        await model.switchAccount(to: second)
+
+        XCTAssertFalse(model.isBookFinished(firstItemID))
+        XCTAssertTrue(model.isBookFinished(secondItemID))
+        await firstGate.release()
+        await startTask.value
+        XCTAssertFalse(model.isBookFinished(firstItemID))
+        XCTAssertTrue(model.isBookFinished(secondItemID))
+    }
+
+    func testLiveProgressUpdatesFinishedStateImmediately() async throws {
+        let account = try fixtureAccount()
+        let itemID = LibraryItemID(rawValue: "live-item")
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(service: service)
+        await model.start()
+        for _ in 0 ..< 100 {
+            if await service.networkPathObserverCount() > 0 {
+                break
+            }
+            await Task.yield()
+        }
+        await service.emitNetworkPathUpdate()
+        for _ in 0 ..< 100 where !(await service.hasLiveUpdatesSubscriber()) {
+            await Task.yield()
+        }
+        let hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(hasSubscriber)
+
+        await service.emitLiveUpdate(
+            .event(
+                .playbackProgress(
+                    AudiobookshelfLivePlaybackProgress(
+                        itemID: itemID,
+                        sessionID: nil,
+                        deviceDescription: nil,
+                        currentTime: 60,
+                        duration: 60,
+                        isFinished: true,
+                        lastUpdateMilliseconds: 1
+                    )
+                )
+            )
+        )
+        for _ in 0 ..< 100 where !model.isBookFinished(itemID) {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(model.isBookFinished(itemID))
     }
 
     func testStartRunsOnlyOnce() async {
@@ -6536,7 +6626,8 @@ final class AppModelTests: XCTestCase {
         await model.setFinished(true, detail: detail)
 
         XCTAssertEqual(model.bookProgressUpdateState, .saved)
-        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        XCTAssertEqual(model.bookDetail, .idle)
+        XCTAssertTrue(model.isBookFinished(detail.id))
         let updates = await service.progressUpdateRequests()
         XCTAssertEqual(
             updates,
@@ -6559,6 +6650,70 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
+    }
+
+    func testSetFinishedSynchronizesOnlyMatchingSelectedDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let selectedDetail = fixtureBookDetail(item: item)
+        let otherItem = fixtureBook(
+            id: "item-2",
+            title: "Other Book",
+            libraryID: library.id
+        )
+        let otherDetail = fixtureBookDetail(item: otherItem)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(selectedDetail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadBookDetail(item)
+        await service.setBookDetail(.success(otherDetail))
+
+        await model.setFinished(true, detail: otherDetail)
+
+        XCTAssertEqual(model.bookDetail, .loaded(selectedDetail))
+        XCTAssertTrue(model.isBookFinished(otherDetail.id))
+    }
+
+    func testBookActionPreparationReusesDetailFetchWithoutChangingSelection()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let prepared = await model.prepareBookAction(for: item)
+        XCTAssertEqual(prepared, .loaded(detail))
+        XCTAssertEqual(model.bookDetail, .idle)
+        await service.setBookDetail(
+            .failure(
+                .bookDetail(
+                    .remote(
+                        .authentication(.requestTransportFailed)
+                    )
+                )
+            )
+        )
+        let failure = await model.prepareBookAction(for: item)
+        XCTAssertEqual(
+            failure,
+            .failed(AppFailure(.loadBook, .serverUnavailable))
+        )
+        if case .failed(let appFailure) = failure {
+            XCTAssertTrue(appFailure.allowsRetry)
+        } else {
+            XCTFail("Expected typed preparation failure")
+        }
+        XCTAssertEqual(model.bookDetail, .idle)
     }
 
     func testSetFinishedFailureDoesNotRefetchDetail() async throws {
@@ -9581,6 +9736,27 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    private func fixtureProgress(
+        userID: UserID,
+        itemID: LibraryItemID,
+        isFinished: Bool
+    ) -> LibraryBookProgress {
+        LibraryBookProgress(
+            id: "progress-\(itemID.rawValue)",
+            userID: userID,
+            libraryItemID: itemID,
+            bookID: BookID(rawValue: "book-\(itemID.rawValue)"),
+            duration: 60,
+            progress: isFinished ? 1 : 0,
+            currentTime: isFinished ? 60 : 0,
+            isFinished: isFinished,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 1,
+            startedAtMilliseconds: 1,
+            finishedAtMilliseconds: isFinished ? 1 : nil
+        )
+    }
+
     private func fixturePage(libraryID: LibraryID) -> LibraryItemsPage {
         LibraryItemsPage(
             items: [
@@ -10432,6 +10608,8 @@ private actor TestAppService: AppServicing {
     private var bookDeletionResult:
         Result<AppBookDeletionOutcome, AppServiceError>
     private var progressUpdateResult: Result<Void, AppServiceError>
+    private var allBookProgressResults:
+        [Result<[LibraryBookProgress], AppServiceError>]
     private var localSessionSyncResult:
         Result<[LocalPlaybackSessionSyncResult], AppServiceError>
     private var playbackResults:
@@ -10450,6 +10628,7 @@ private actor TestAppService: AppServicing {
     private let activeAccountGate: AsyncGate?
     private let bookmarksGate: AsyncGate?
     private let bookProgressGate: AsyncGate?
+    private let firstAllBookProgressGate: AsyncGate?
     private let localSessionSyncGate: AsyncGate?
     private let bookDetailGate: AsyncGate?
     private let playbackGate: AsyncGate?
@@ -10476,6 +10655,8 @@ private actor TestAppService: AppServicing {
             AsyncStream<AppEndpointDiagnostics>.Continuation] = [:]
     private var networkPathContinuations:
         [UUID: AsyncStream<AppNetworkPathState>.Continuation] = [:]
+    private var liveUpdatesContinuation:
+        AsyncStream<AudiobookshelfLiveUpdate>.Continuation?
 
     private var activeAccountRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
@@ -10494,6 +10675,7 @@ private actor TestAppService: AppServicing {
     private var recordedPlaybackSyncSessionIDs: [PlaybackSessionID] = []
     private var recordedBookmarkRequests: [BookmarkRequest] = []
     private var recordedBookProgressRequests: [LibraryItemID] = []
+    private var recordedAllBookProgressRequests: [AccountID] = []
     private var recordedMetadataSaveRequests: [MetadataSaveRequest] = []
     private var recordedCoverReplacementRequests: [CoverReplacementRequest] = []
     private var recordedBookDeletionRequests: [BookDeletionRequest] = []
@@ -10510,6 +10692,24 @@ private actor TestAppService: AppServicing {
         serverAddress: String
     ) async throws(AppServiceError) -> DiscoveredServer {
         throw .discoveryRequestFailed
+    }
+
+    func liveUpdates(
+        for account: ServerAccount
+    ) -> AsyncStream<AudiobookshelfLiveUpdate> {
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: AudiobookshelfLiveUpdate.self
+        )
+        liveUpdatesContinuation = continuation
+        return stream
+    }
+
+    func hasLiveUpdatesSubscriber() -> Bool {
+        liveUpdatesContinuation != nil
+    }
+
+    func emitLiveUpdate(_ update: AudiobookshelfLiveUpdate) {
+        liveUpdatesContinuation?.yield(update)
     }
 
     init(
@@ -10544,6 +10744,8 @@ private actor TestAppService: AppServicing {
                 .deleted
             ),
         progressUpdate: Result<Void, AppServiceError> = .success(()),
+        allBookProgress:
+            [Result<[LibraryBookProgress], AppServiceError>] = [.success([])],
         localSessionSync:
             Result<
                 [LocalPlaybackSessionSyncResult],
@@ -10565,6 +10767,7 @@ private actor TestAppService: AppServicing {
         activeAccountGate: AsyncGate? = nil,
         bookmarksGate: AsyncGate? = nil,
         bookProgressGate: AsyncGate? = nil,
+        firstAllBookProgressGate: AsyncGate? = nil,
         localSessionSyncGate: AsyncGate? = nil,
         bookDetailGate: AsyncGate? = nil,
         playbackGate: AsyncGate? = nil,
@@ -10602,6 +10805,7 @@ private actor TestAppService: AppServicing {
         coverReplacementResult = coverReplacement
         bookDeletionResult = bookDeletion
         progressUpdateResult = progressUpdate
+        allBookProgressResults = allBookProgress
         localSessionSyncResult = localSessionSync
         playbackResults = playback
         downloadPlanResult = downloadPlan
@@ -10617,6 +10821,7 @@ private actor TestAppService: AppServicing {
         self.activeAccountGate = activeAccountGate
         self.bookmarksGate = bookmarksGate
         self.bookProgressGate = bookProgressGate
+        self.firstAllBookProgressGate = firstAllBookProgressGate
         self.localSessionSyncGate = localSessionSyncGate
         self.bookDetailGate = bookDetailGate
         self.playbackGate = playbackGate
@@ -11230,6 +11435,24 @@ private actor TestAppService: AppServicing {
             await bookProgressGate.enterAndWait()
         }
         return nil
+    }
+
+    func allBookProgress(
+        for account: ServerAccount
+    ) async throws(AppServiceError) -> [LibraryBookProgress] {
+        recordedAllBookProgressRequests.append(account.id)
+        let result: Result<[LibraryBookProgress], AppServiceError>
+        if allBookProgressResults.count > 1 {
+            result = allBookProgressResults.removeFirst()
+        } else {
+            result = allBookProgressResults.first ?? .success([])
+        }
+        if recordedAllBookProgressRequests.count == 1,
+            let firstAllBookProgressGate
+        {
+            await firstAllBookProgressGate.enterAndWait()
+        }
+        return try value(from: result)
     }
 
     func updateBookProgress(

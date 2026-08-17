@@ -1,8 +1,60 @@
+import Foundation
 import XCTest
 
 @testable import BleatCore
 
 final class BookActionPolicyTests: XCTestCase {
+    func testSummaryAndDetailProduceIdenticalDecisions() {
+        let details = [
+            Self.detail(),
+            Self.detail(tags: ["allowed"]),
+            Self.detail(tags: ["blocked"], isExplicit: true),
+        ]
+        let users = [
+            Self.user(),
+            Self.user(download: false, update: false, delete: false),
+            Self.user(
+                accessAllLibraries: false,
+                accessibleLibraryIDs: [LibraryID(rawValue: "other")]
+            ),
+            Self.user(
+                accessAllTags: false,
+                selectedTagsNotAccessible: false,
+                selectedItemTags: ["allowed"]
+            ),
+            Self.user(
+                accessAllTags: false,
+                selectedTagsNotAccessible: true,
+                selectedItemTags: ["blocked"]
+            ),
+            Self.user(accessExplicitContent: false),
+        ]
+
+        for detail in details {
+            for user in users {
+                XCTAssertEqual(
+                    BookActionAvailability(user: user, summary: detail.summary),
+                    BookActionAvailability(user: user, detail: detail)
+                )
+            }
+        }
+    }
+
+    func testOlderCachedSummaryDecodesMissingTagsAsEmpty() throws {
+        let data = try JSONEncoder().encode(Self.detail().summary)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        object.removeValue(forKey: "tags")
+
+        let decoded = try JSONDecoder().decode(
+            LibraryBookSummary.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.tags, [])
+    }
+
     func testAllowedActionsExactlyMatchServerPermissions() {
         for download in [false, true] {
             for update in [false, true] {

@@ -99,6 +99,16 @@ final class ProgressSyncLiveTests: XCTestCase {
         )
         let finished = try XCTUnwrap(fetchedFinished)
         XCTAssertTrue(finished.isFinished)
+        let allFinished = try await coordinator.allBookProgress(
+            accountID: accountID,
+            userID: authenticated.user.id,
+            server: server
+        )
+        XCTAssertTrue(
+            allFinished.contains {
+                $0.libraryItemID == item.id && $0.isFinished
+            }
+        )
 
         try await coordinator.updateBookProgress(
             accountID: accountID,
@@ -113,5 +123,15 @@ final class ProgressSyncLiveTests: XCTestCase {
         )
         let unfinished = try XCTUnwrap(fetchedUnfinished)
         XCTAssertFalse(unfinished.isFinished)
+        let allUnfinished = try await coordinator.allBookProgress(
+            accountID: accountID,
+            userID: authenticated.user.id,
+            server: server
+        )
+        XCTAssertTrue(
+            allUnfinished.contains {
+                $0.libraryItemID == item.id && !$0.isFinished
+            }
+        )
     }
 }

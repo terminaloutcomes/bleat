@@ -147,6 +147,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   author and series navigation always uses the server's opaque identifiers.
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
+- A long press on any single-book Home, Library, Search, or Series card exposes
+  one native menu backed by the existing Book Detail actions: exactly one of
+  Mark Played or Mark Unplayed, permitted Download and Edit actions, and the
+  platform's transcription availability. Selecting an action loads canonical
+  detail through the normal repository, re-checks item access, and does not
+  navigate or activate the separate cover playback control. Collapsed-series
+  entries remain navigation-only.
 - In CarPlay I can browse Home shelves, choose an audiobook library, page and
   search its books, and play verified whole-book downloads.
 
@@ -165,6 +172,8 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   preparation without presenting an error or starting the stale audiobook.
 - Quick playback detail loading does not change Book Detail, bookmarks,
   selection, or navigation state.
+- Context-menu action preparation uses that same detail-loading boundary and
+  likewise does not change Book Detail, bookmarks, selection, or navigation.
 - Every Home, Library, Search, and Series cover that identifies one audiobook
   exposes the same account/item-scoped Play, Preparing, and Pause control.
   Playback and Book Detail navigation remain separate hit and accessibility

@@ -515,6 +515,14 @@ source. While preparation is in progress, only that book's control is disabled.
 Collapsed-series covers remain navigation-only because they do not identify one
 book. Book Detail retains its larger primary playback action.
 
+Long-press a single-book card or row on Home, Library, Search, or Series to use
+the same actions as Book Detail without navigating first. The menu offers one
+of **Mark Played** or **Mark Unplayed**, plus permitted Download and Edit
+actions; on iPhone and iPad it also reports whether on-device transcription is
+available. Actions load canonical detail through the existing online-first,
+cache-fallback path and re-check account access before continuing. Collapsed
+series remain navigation-only, and long-pressing never starts playback.
+
 Bleat opens native Audiobookshelf playback sessions and uses session-scoped
 direct-play or HLS URLs without putting access tokens in media URLs. The
 mini-player floats in a

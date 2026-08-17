@@ -386,6 +386,11 @@ enum BookProgressUpdateState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum BookActionPreparationResult: Equatable, Sendable {
+    case loaded(LibraryBookDetail)
+    case failed(AppFailure)
+}
+
 enum LibraryPaginationState: Equatable, Sendable {
     case idle
     case loading
@@ -1010,6 +1015,7 @@ final class AppModel {
     private var librariesGeneration: UInt64 = 0
     private var libraryPageGeneration: UInt64 = 0
     private var homeShelvesGeneration: UInt64 = 0
+    private var bookProgressGeneration: UInt64 = 0
     private var seriesPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
@@ -1073,6 +1079,7 @@ final class AppModel {
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
+    private(set) var bookFinishedStates: [LibraryItemID: Bool] = [:]
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var privateCloudSyncAvailable = true
@@ -1774,6 +1781,7 @@ final class AppModel {
             )
             return
         }
+        await refreshBookProgress(for: account)
         librariesGeneration &+= 1
         let operationGeneration = librariesGeneration
         await diagnostics.record(
@@ -1848,6 +1856,9 @@ final class AppModel {
     }
 
     func refreshLibraries() async {
+        if let account {
+            await refreshBookProgress(for: account)
+        }
         await refreshLibrariesContent()
     }
 
@@ -1857,6 +1868,9 @@ final class AppModel {
             source: .remote
         )
         let startingGeneration = librariesGeneration
+        if let account {
+            await refreshBookProgress(for: account)
+        }
         await refreshLibrariesContent()
         let expectedGeneration = startingGeneration &+ 1
         let outcome =
@@ -2044,6 +2058,9 @@ final class AppModel {
     }
 
     func refreshSelectedLibrary() async {
+        if let account {
+            await refreshBookProgress(for: account)
+        }
         await refreshSelectedLibraryContent()
     }
 
@@ -2053,6 +2070,9 @@ final class AppModel {
             source: .remote
         )
         let startingGeneration = homeShelvesGeneration
+        if let account {
+            await refreshBookProgress(for: account)
+        }
         await refreshSelectedLibraryContent()
         let expectedGeneration = startingGeneration &+ 1
         let outcome =
@@ -2505,6 +2525,13 @@ final class AppModel {
         }
     }
 
+    func refreshSeries(_ destination: SeriesDestination) async {
+        if let account {
+            await refreshBookProgress(for: account)
+        }
+        await loadSeries(destination)
+    }
+
     func loadNextSeriesPage() async {
         guard let destination = selectedSeries,
             let account,
@@ -2638,11 +2665,7 @@ final class AppModel {
         )
 
         do {
-            let detail = try await service.bookDetail(
-                for: account,
-                libraryID: book.libraryID,
-                itemID: book.id
-            )
+            let detail = try await fetchBookDetail(book, account: account)
             guard bookDetailGeneration == operationGeneration else {
                 return
             }
@@ -2667,6 +2690,43 @@ final class AppModel {
                 )
             )
         }
+    }
+
+    func prepareBookAction(
+        for book: LibraryBookSummary,
+        account expectedAccount: ServerAccount? = nil
+    ) async -> BookActionPreparationResult {
+        guard let account else {
+            return .failed(AppFailure(.loadBook, .authenticationRequired))
+        }
+        if let expectedAccount, expectedAccount.id != account.id {
+            return .failed(AppFailure(.loadBook, .authenticationRequired))
+        }
+        do {
+            let detail = try await fetchBookDetail(book, account: account)
+            guard self.account?.id == account.id else {
+                return .failed(AppFailure(.loadBook, .authenticationRequired))
+            }
+            return .loaded(detail)
+        } catch let error {
+            guard self.account?.id == account.id else {
+                return .failed(AppFailure(.loadBook, .authenticationRequired))
+            }
+            return .failed(
+                AppFailure(operation: .loadBook, serviceError: error)
+            )
+        }
+    }
+
+    private func fetchBookDetail(
+        _ book: LibraryBookSummary,
+        account: ServerAccount
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        try await service.bookDetail(
+            for: account,
+            libraryID: book.libraryID,
+            itemID: book.id
+        )
     }
 
     func loadBookBookmarks() async {
@@ -2895,10 +2955,19 @@ final class AppModel {
                 libraryID: detail.libraryID,
                 itemID: detail.id
             )
-            selectedBookID = updated.id
-            bookDetail = .loaded(updated)
+            guard self.account?.id == account.id else {
+                return
+            }
+            bookFinishedStates[updated.id] =
+                updated.progress?.isFinished ?? isFinished
+            if selectedBookID == updated.id {
+                bookDetail = .loaded(updated)
+            }
             bookProgressUpdateState = .saved
         } catch let error {
+            guard self.account?.id == account.id else {
+                return
+            }
             bookProgressUpdateState = .failed(
                 AppFailure(operation: .updateProgress, serviceError: error)
             )
@@ -3691,6 +3760,7 @@ final class AppModel {
                         itemIDs: change.itemIDs
                     )
                 case .playbackProgress(let progress):
+                    bookFinishedStates[progress.itemID] = progress.isFinished
                     scheduleLiveRefresh(
                         libraryChanged: false,
                         itemIDs: [progress.itemID]
@@ -3946,10 +4016,36 @@ final class AppModel {
         libraryPaginationState = .idle
         homeShelves = .idle
         homeShelvesRefreshState = .idle
+        bookProgressGeneration &+= 1
+        bookFinishedStates = [:]
         clearEntityBrowseFilter()
         resetSearch()
         resetBookDetail()
         resetSeriesBrowse()
+    }
+
+    func isBookFinished(_ itemID: LibraryItemID) -> Bool {
+        bookFinishedStates[itemID] ?? false
+    }
+
+    private func refreshBookProgress(for account: ServerAccount) async {
+        bookProgressGeneration &+= 1
+        let generation = bookProgressGeneration
+        do {
+            let progress = try await service.allBookProgress(for: account)
+            guard generation == bookProgressGeneration,
+                self.account?.id == account.id
+            else {
+                return
+            }
+            bookFinishedStates = Dictionary(
+                uniqueKeysWithValues: progress.map {
+                    ($0.libraryItemID, $0.isFinished)
+                }
+            )
+        } catch {
+            // Browsing remains available with the last known progress snapshot.
+        }
     }
 
     private static func sortAccounts(

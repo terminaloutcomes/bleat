@@ -36,6 +36,10 @@ public enum BookProgressError: Error, Equatable, Sendable {
     case malformedResponse
 }
 
+private struct AllBookProgressResponse: Decodable {
+    let mediaProgress: [LibraryBookProgressDTO]
+}
+
 extension AuthCoordinator {
     /// Implements the pinned v2.36.0 current-user progress contract.
     ///
@@ -65,6 +69,61 @@ extension AuthCoordinator {
             ).domainValue()
             else {
                 throw BookProgressError.malformedResponse
+            }
+            return progress
+        } catch let error as BookProgressError {
+            throw error
+        } catch {
+            throw .malformedResponse
+        }
+    }
+
+    public func allBookProgress(
+        accountID: AccountID,
+        userID: UserID,
+        server: NormalizedServerURL
+    ) async throws(BookProgressError) -> [LibraryBookProgress] {
+        let url: URL
+        do {
+            url = try AudiobookshelfRouteBuilder(server: server).url(
+                for: .allProgress
+            )
+        } catch let error {
+            throw .requestConstructionFailed(error)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let response: HTTPResponse
+        do {
+            response = try await sendAuthenticated(
+                request,
+                route: .allProgress,
+                accountID: accountID,
+                server: server
+            )
+        } catch let error as AuthenticatedRequestError {
+            throw .authenticationFailed(error)
+        } catch {
+            throw .requestFailed
+        }
+        guard response.statusCode == 200 else {
+            throw .unexpectedStatus(response.statusCode)
+        }
+        do {
+            let payload = try JSONDecoder().decode(
+                AllBookProgressResponse.self,
+                from: response.data
+            )
+            var seenItemIDs: Set<LibraryItemID> = []
+            var progress: [LibraryBookProgress] = []
+            for value in payload.mediaProgress where value.episodeID == nil {
+                guard let bookProgress = value.domainValue(),
+                    bookProgress.userID == userID,
+                    seenItemIDs.insert(bookProgress.libraryItemID).inserted
+                else {
+                    throw BookProgressError.malformedResponse
+                }
+                progress.append(bookProgress)
             }
             return progress
         } catch let error as BookProgressError {
