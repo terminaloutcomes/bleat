@@ -115,12 +115,29 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             "Bleat/RemoteTelemetry",
             isDirectory: true
         )
+        let tokenProvider = Self.makeTokenProvider(bundle: bundle)
+        self.tokenProvider = tokenProvider
+        let exporterConfiguration = Self.makeExporterConfiguration(
+            bundle: bundle
+        )
+        let downstreamExporterFactory: (@Sendable () ->
+            (any RemoteTelemetryDownstreamSpanExporter)?)? =
+            if let tokenProvider, let exporterConfiguration {
+                {
+                    AuthenticatedOtlpSpanExporter(
+                        configuration: exporterConfiguration,
+                        tokenProvider: tokenProvider
+                    )
+                }
+            } else {
+                nil
+            }
         worker = RemoteTelemetryRuntimeWorker(
             tracer: tracer,
             resource: resource,
-            storageRootURL: storageRootURL
+            storageRootURL: storageRootURL,
+            downstreamExporterFactory: downstreamExporterFactory
         )
-        tokenProvider = Self.makeTokenProvider(bundle: bundle)
     }
 
     func applyRemoteTelemetryConsent(
@@ -193,6 +210,22 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             )
         )
     }
+
+    private static func makeExporterConfiguration(
+        bundle: Bundle
+    ) -> AuthenticatedOtlpSpanExporterConfiguration? {
+        guard let value = bundle.object(
+            forInfoDictionaryKey: "BleatTelemetryOTLPEndpoint"
+        ) as? String,
+            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let endpoint = URL(string: value)
+        else {
+            return nil
+        }
+        return try? AuthenticatedOtlpSpanExporterConfiguration(
+            endpoint: endpoint
+        )
+    }
 }
 
 private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
@@ -207,6 +240,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     private let tracer: RemoteTelemetryTracer
     private let resource: RemoteTelemetryResource?
     private let storageRootURL: URL?
+    private let downstreamExporterFactory: (@Sendable () ->
+        (any RemoteTelemetryDownstreamSpanExporter)?)?
     private let queue = DispatchQueue(
         label: "app.bleat.remote-telemetry.runtime",
         qos: .utility
@@ -221,11 +256,14 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     init(
         tracer: RemoteTelemetryTracer,
         resource: RemoteTelemetryResource?,
-        storageRootURL: URL?
+        storageRootURL: URL?,
+        downstreamExporterFactory: (@Sendable () ->
+            (any RemoteTelemetryDownstreamSpanExporter)?)? = nil
     ) {
         self.tracer = tracer
         self.resource = resource
         self.storageRootURL = storageRootURL
+        self.downstreamExporterFactory = downstreamExporterFactory
     }
 
     func enable(storageGeneration: UUID) {
@@ -318,7 +356,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             newPipeline = try RemoteTelemetryPipeline(
                 resource: resource,
                 storageURL: storageURL,
-                tracerFacade: tracer
+                tracerFacade: tracer,
+                downstreamExporter: downstreamExporterFactory?()
             )
         } catch let failure as RemoteTelemetryRuntimeFailure {
             tracer.deactivate()

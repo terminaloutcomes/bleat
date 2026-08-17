@@ -12,6 +12,8 @@
 	<string>$(BLEAT_TELEMETRY_ATTESTER_MODE)</string>
 	<key>BleatTelemetryAuthenticationBaseURL</key>
 	<string>$(BLEAT_TELEMETRY_AUTH_BASE_URL)</string>
+	<key>BleatTelemetryOTLPEndpoint</key>
+	<string>$(BLEAT_TELEMETRY_OTLP_ENDPOINT)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

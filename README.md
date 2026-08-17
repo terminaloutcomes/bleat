@@ -725,9 +725,12 @@ opted-in runtime batches completed OpenTelemetry spans away from the main
 actor and durably retains failed batches for at most two hours and 128 MiB in
 protected, backup-excluded Application Support storage. Withdrawal immediately
 stops new spans and downstream attempts, invalidates the retained generation,
-and purges it asynchronously. Authenticated OTLP delivery is tracked separately
-in issue 63; until then the unavailable production sink retains eligible spans
-within those limits.
+and purges it asynchronously. When both telemetry endpoints are configured,
+one TLS gRPC channel sends each persisted OTLP batch with a bearer JWT resolved
+immediately before that RPC. An unauthenticated response invalidates only the
+rejected token and permits one refresh/retry; rotation does not rebuild the
+tracing or persistence pipeline. Missing or invalid configuration keeps the
+unavailable sink and retains eligible spans within the same limits.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path
@@ -985,6 +988,16 @@ authentication unavailable. Release builds require HTTPS; Debug builds may use
 HTTP only on loopback. Setting `BLEAT_TELEMETRY_ATTESTER_MODE=fake` selects the
 development attester in Debug builds only. Consent remains fully lazy: enabling
 telemetry performs no authentication work until a caller requests a token.
+
+The app reads the OTLP/gRPC origin from `BLEAT_TELEMETRY_OTLP_ENDPOINT`. It must
+be an HTTPS origin with an optional port and no credentials, path, query, or
+fragment. Production uses system certificate validation and the platform-best
+Darwin transport. The exporter reuses its channel across batches, attaches one
+fresh `authorization: Bearer <JWT>` metadata value per RPC, retries an
+`unauthenticated` result once with a newly issued token, and treats every other
+export failure as best-effort retained telemetry. Background deadlines and
+consent withdrawal cancel active token waits and RPCs without affecting app
+operations.
 
 Run the disposable PostgreSQL and API stack locally with:
 

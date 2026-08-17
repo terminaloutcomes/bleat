@@ -8,15 +8,21 @@
     {
         private let key: P256.Signing.PrivateKey?
 
-        public init() {
+        public convenience init() {
+            self.init(keySeed: 7)
+        }
+
+        init(keySeed: UInt8) {
             key = try? P256.Signing.PrivateKey(
-                rawRepresentation: Data(repeating: 7, count: 32)
+                rawRepresentation: Data(repeating: keySeed, count: 32)
             )
         }
 
         public var isSupported: Bool { key != nil }
 
-        public func generateKey() async throws(TelemetryAttesterError) -> String {
+        public func generateKey()
+            async throws(TelemetryAttesterError) -> String
+        {
             guard let key else { throw .unsupported }
             return Data(
                 SHA256.hash(data: key.publicKey.x963Representation)

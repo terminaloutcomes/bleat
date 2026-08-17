@@ -1,4 +1,22 @@
 services:
+  tls-fixture:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    volumes:
+      - ./TelemetryTLSFixture.Caddyfile:/etc/caddy/Caddyfile:ro
+      - telemetry-tls-data:/data
+      - telemetry-tls-config:/config
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -s /data/caddy/pki/authorities/local/root.crt &&
+          test -s /data/caddy/pki/authorities/local/intermediate.crt &&
+          test -s /data/caddy/certificates/local/localhost/localhost.crt &&
+          test -s /data/caddy/certificates/local/localhost/localhost.key
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
   postgres:
     image: postgres:17-bookworm
     environment:
@@ -45,3 +63,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+volumes:
+  telemetry-tls-data:
+  telemetry-tls-config:

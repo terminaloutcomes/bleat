@@ -1,0 +1,8 @@
+{
+    local_certs
+    admin off
+}
+
+https://localhost:8443 {
+    respond "ready"
+}

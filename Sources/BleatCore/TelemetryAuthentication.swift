@@ -100,6 +100,11 @@ public enum TelemetryTokenProviderError: Error, Equatable, Sendable {
     case temporarilyUnavailable
 }
 
+public protocol TelemetryTokenProviding: Sendable {
+    func currentToken() async throws(TelemetryTokenProviderError) -> String
+    func invalidateToken(ifCurrent token: String) async
+}
+
 public enum TelemetryClientDataPurpose: String, Sendable {
     case attestationEnroll = "attestation_enroll"
     case tokenIssue = "token_issue"
@@ -122,7 +127,7 @@ public enum TelemetryClientData {
     }
 }
 
-public actor TelemetryTokenProvider {
+public actor TelemetryTokenProvider: TelemetryTokenProviding {
     public typealias DateProvider = @Sendable () -> Date
     public typealias JitterProvider = @Sendable () -> Double
 
@@ -135,7 +140,15 @@ public actor TelemetryTokenProvider {
 
     private var enabled = false
     private var token: TelemetryBearerToken?
-    private var refreshTask: Task<TelemetryBearerToken, Error>?
+    private typealias RefreshResult = Result<
+        TelemetryBearerToken,
+        TelemetryTokenProviderError
+    >
+
+    private var refreshTask: Task<Void, Never>?
+    private var refreshID: UUID?
+    private var refreshWaiters:
+        [UUID: CheckedContinuation<RefreshResult, Never>] = [:]
     private var transientFailureCount = 0
     private var nextRetryAt: Date?
 
@@ -162,6 +175,12 @@ public actor TelemetryTokenProvider {
         guard !enabled else { return }
         refreshTask?.cancel()
         refreshTask = nil
+        refreshID = nil
+        let waiters = refreshWaiters.values
+        refreshWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: .failure(.disabled))
+        }
         token = nil
         transientFailureCount = 0
         nextRetryAt = nil
@@ -170,6 +189,7 @@ public actor TelemetryTokenProvider {
     public func currentToken() async throws(TelemetryTokenProviderError)
         -> String
     {
+        guard !Task.isCancelled else { throw .cancelled }
         guard enabled else { throw .disabled }
         guard attester.isSupported else { throw .unsupported }
         let now = dateProvider()
@@ -181,50 +201,96 @@ public actor TelemetryTokenProvider {
         if let nextRetryAt, nextRetryAt > now {
             throw .backingOff
         }
-        if let refreshTask {
-            let refreshed = try await value(from: refreshTask)
-            guard enabled else { throw .disabled }
-            return refreshed.value
+        let waiterID = UUID()
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                registerRefreshWaiter(
+                    id: waiterID,
+                    continuation: continuation
+                )
+            }
+        } onCancel: {
+            Task { await self.cancelRefreshWaiter(id: waiterID) }
         }
-
-        let task = Task { [attester, transport, store] in
-            try await Self.refresh(
-                attester: attester,
-                transport: transport,
-                store: store
-            )
-        }
-        refreshTask = task
-        do {
-            let refreshed = try await value(from: task)
-            guard enabled else { throw TelemetryTokenProviderError.disabled }
-            token = refreshed
-            transientFailureCount = 0
-            nextRetryAt = nil
-            refreshTask = nil
+        switch result {
+        case .success(let refreshed):
             return refreshed.value
-        } catch let failure as TelemetryTokenProviderError {
-            refreshTask = nil
-            recordBackoffIfNeeded(for: failure)
+        case .failure(let failure):
             throw failure
-        } catch {
-            refreshTask = nil
-            recordBackoffIfNeeded(for: .temporarilyUnavailable)
-            throw .temporarilyUnavailable
         }
     }
 
-    private func value(
-        from task: Task<TelemetryBearerToken, Error>
-    ) async throws(TelemetryTokenProviderError) -> TelemetryBearerToken {
-        do {
-            return try await task.value
-        } catch is CancellationError {
-            throw .cancelled
-        } catch let failure as TelemetryTokenProviderError {
-            throw failure
-        } catch {
-            throw .temporarilyUnavailable
+    public func invalidateToken(ifCurrent rejectedToken: String) {
+        guard token?.value == rejectedToken else { return }
+        token = nil
+        transientFailureCount = 0
+        nextRetryAt = nil
+    }
+
+    private func registerRefreshWaiter(
+        id: UUID,
+        continuation: CheckedContinuation<RefreshResult, Never>
+    ) {
+        guard !Task.isCancelled else {
+            continuation.resume(returning: .failure(.cancelled))
+            return
+        }
+        refreshWaiters[id] = continuation
+        guard refreshTask == nil else { return }
+
+        let id = UUID()
+        refreshID = id
+        refreshTask = Task { [attester, transport, store] in
+            let result: RefreshResult
+            do {
+                result = .success(
+                    try await Self.refresh(
+                        attester: attester,
+                        transport: transport,
+                        store: store
+                    )
+                )
+            } catch {
+                result = .failure(Self.map(error))
+            }
+            self.completeRefresh(id: id, result: result)
+        }
+    }
+
+    private func cancelRefreshWaiter(id: UUID) {
+        guard let waiter = refreshWaiters.removeValue(forKey: id) else {
+            return
+        }
+        waiter.resume(returning: .failure(.cancelled))
+        guard refreshWaiters.isEmpty else { return }
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshID = nil
+    }
+
+    private func completeRefresh(id: UUID, result: RefreshResult) {
+        guard refreshID == id else { return }
+        refreshTask = nil
+        refreshID = nil
+
+        let completed: RefreshResult
+        if !enabled {
+            completed = .failure(.disabled)
+        } else {
+            completed = result
+            switch result {
+            case .success(let refreshed):
+                token = refreshed
+                transientFailureCount = 0
+                nextRetryAt = nil
+            case .failure(let failure):
+                recordBackoffIfNeeded(for: failure)
+            }
+        }
+        let waiters = refreshWaiters.values
+        refreshWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: completed)
         }
     }
 

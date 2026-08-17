@@ -1552,8 +1552,16 @@ deadline and adds no telemetry background mode. Withdrawal synchronously gates
 new spans and downstream attempts and invalidates the current storage
 generation before asynchronous shutdown and purge, so rapid re-enablement
 cannot export withdrawn data. The downstream exporter remains injectable;
-production uses an unavailable sink until authenticated OTLP delivery is added
-by issue 63.
+when authentication and OTLP origins are configured, production creates one
+TLS gRPC channel using the platform-best Darwin transport and system trust.
+Every export resolves the current memory-only token immediately before the RPC
+and attaches exactly one bearer authorization metadata value. A typed gRPC
+unauthenticated result compare-invalidates the rejected token and permits one
+refresh/retry; permission rejection and transport failures do not retry inside
+the exporter and leave the persisted batch available to the existing bounded
+drain policy. Token renewal does not recreate the tracer provider, batch
+processor, persistence exporter, or gRPC channel. Missing or invalid transport
+configuration retains the unavailable sink.
 
 Telemetry authentication is fully lazy. Enabling consent creates no App Attest
 key, network request, challenge, enrollment, assertion, or token. The first
@@ -1573,6 +1581,12 @@ deterministic fake attester; Release iOS builds use the production entitlement
 and cannot select the fake attester. The backend base URL comes only from
 `BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
 unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
+The OTLP origin comes only from `BLEAT_TELEMETRY_OTLP_ENDPOINT` and must be an
+HTTPS origin without credentials, path, query, or fragment. Local integration
+tests may inject an ephemeral private CA into a test-only NIOSSL client; shipped
+configuration has no custom trust root or verification bypass. Background
+deadlines and withdrawal cancel active RPCs, while exporter shutdown closes the
+shared channel and its event-loop resources asynchronously.
 
 The telemetry authentication backend persists installation identity and
 challenge state in PostgreSQL through typed ORM statements. Installations use

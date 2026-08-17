@@ -33,6 +33,14 @@ let package = Package(
                 "https://github.com/open-telemetry/opentelemetry-swift-core.git",
             exact: "2.3.0"
         ),
+        .package(
+            url: "https://github.com/open-telemetry/opentelemetry-swift.git",
+            exact: "2.3.0"
+        ),
+        .package(
+            url: "https://github.com/grpc/grpc-swift.git",
+            exact: "1.27.0"
+        ),
     ],
     targets: [
         .target(
@@ -47,6 +55,11 @@ let package = Package(
                     name: "OpenTelemetrySdk",
                     package: "opentelemetry-swift-core"
                 ),
+                .product(
+                    name: "OpenTelemetryProtocolExporter",
+                    package: "opentelemetry-swift"
+                ),
+                .product(name: "GRPC", package: "grpc-swift"),
             ]
         ),
         .target(
@@ -71,7 +84,14 @@ let package = Package(
         ),
         .testTarget(
             name: "BleatCoreLiveTests",
-            dependencies: ["BleatCore"]
+            dependencies: [
+                "BleatCore",
+                .product(
+                    name: "OpenTelemetryProtocolExporter",
+                    package: "opentelemetry-swift"
+                ),
+                .product(name: "GRPC", package: "grpc-swift"),
+            ]
         ),
         .testTarget(
             name: "BleatTranscriptionTests",

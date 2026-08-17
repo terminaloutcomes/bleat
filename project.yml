@@ -54,6 +54,7 @@ targets:
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
         BleatTelemetryAuthenticationBaseURL: "$(BLEAT_TELEMETRY_AUTH_BASE_URL)"
         BleatTelemetryAttesterMode: "$(BLEAT_TELEMETRY_ATTESTER_MODE)"
+        BleatTelemetryOTLPEndpoint: "$(BLEAT_TELEMETRY_OTLP_ENDPOINT)"
         NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
         NSBonjourServices:
           - _audiobookshelf._tcp
@@ -82,6 +83,7 @@ targets:
         BLEAT_DEVELOPER_NAME: James Hodgkinson
         BLEAT_TELEMETRY_AUTH_BASE_URL: ""
         BLEAT_TELEMETRY_ATTESTER_MODE: app-attest
+        BLEAT_TELEMETRY_OTLP_ENDPOINT: ""
         CODE_SIGN_ENTITLEMENTS: App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements
         CURRENT_PROJECT_VERSION: "1"

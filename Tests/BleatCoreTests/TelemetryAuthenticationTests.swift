@@ -154,6 +154,73 @@ final class TelemetryAuthenticationTests: XCTestCase {
         XCTAssertEqual(attester.assertionCount, 1)
     }
 
+    func testCancellingOnlyWaiterCancelsUnderlyingRefresh() async {
+        let transport = FakeTelemetryTransport(tokenDelay: .seconds(30))
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore(
+                value: TelemetryEnrollment(
+                    keyID: "stored-key",
+                    installationID: FakeTelemetryTransport.installationID
+                )
+            )
+        )
+        await provider.setEnabled(true)
+
+        let waiter = Task { try await provider.currentToken() }
+        while await transport.tokenCount == 0 {
+            await Task.yield()
+        }
+        waiter.cancel()
+
+        await XCTAssertThrowsTelemetryError(.cancelled) {
+            try await waiter.value
+        }
+        while await transport.tokenCancellationCount == 0 {
+            await Task.yield()
+        }
+        let cancellationCount = await transport.tokenCancellationCount
+        XCTAssertEqual(cancellationCount, 1)
+    }
+
+    func testCancellingOneWaiterPreservesRefreshForConcurrentWaiter()
+        async throws
+    {
+        let transport = FakeTelemetryTransport(tokenDelay: .milliseconds(100))
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore(
+                value: TelemetryEnrollment(
+                    keyID: "stored-key",
+                    installationID: FakeTelemetryTransport.installationID
+                )
+            )
+        )
+        await provider.setEnabled(true)
+
+        let cancelledWaiter = Task { try await provider.currentToken() }
+        while await transport.tokenCount == 0 {
+            await Task.yield()
+        }
+        let survivingWaiter = Task { try await provider.currentToken() }
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+        cancelledWaiter.cancel()
+
+        await XCTAssertThrowsTelemetryError(.cancelled) {
+            try await cancelledWaiter.value
+        }
+        let token = try await survivingWaiter.value
+        let tokenCount = await transport.tokenCount
+        let cancellationCount = await transport.tokenCancellationCount
+        XCTAssertEqual(token, "token-1")
+        XCTAssertEqual(tokenCount, 1)
+        XCTAssertEqual(cancellationCount, 0)
+    }
+
     func testInvalidStoredKeyClearsEnrollmentAndRestartsOnce() async throws {
         let attester = FakeTelemetryAttester(invalidateFirstAssertion: true)
         let store = MemoryEnrollmentStore(
@@ -201,6 +268,33 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let deleteCount = await store.deleteCount
         XCTAssertEqual(deleteCount, 0)
         XCTAssertEqual(attester.generateKeyCount, 0)
+    }
+
+    func testInvalidationOnlyClearsTheTokenThatWasRejected() async throws {
+        let transport = FakeTelemetryTransport()
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore(
+                value: TelemetryEnrollment(
+                    keyID: "stored-key",
+                    installationID: FakeTelemetryTransport.installationID
+                )
+            )
+        )
+        await provider.setEnabled(true)
+
+        let first = try await provider.currentToken()
+        await provider.invalidateToken(ifCurrent: "a-late-rejected-token")
+        let unchanged = try await provider.currentToken()
+        await provider.invalidateToken(ifCurrent: first)
+        let refreshed = try await provider.currentToken()
+        let tokenChallengeCount = await transport.tokenChallengeCount
+
+        XCTAssertEqual(first, "token-1")
+        XCTAssertEqual(unchanged, first)
+        XCTAssertEqual(refreshed, "token-2")
+        XCTAssertEqual(tokenChallengeCount, 2)
     }
 
     func testDisablingCancelsRefreshAndClearsMemoryToken() async throws {
@@ -394,6 +488,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     private(set) var enrollmentCount = 0
     private(set) var tokenChallengeCount = 0
     private(set) var tokenCount = 0
+    private(set) var tokenCancellationCount = 0
 
     init(
         clock: TestClock = TestClock(Date(timeIntervalSince1970: 2_000_000_000)),
@@ -456,6 +551,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
             do {
                 try await Task.sleep(for: tokenDelay)
             } catch {
+                tokenCancellationCount += 1
                 throw .cancelled
             }
         }
