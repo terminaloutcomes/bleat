@@ -99,7 +99,7 @@ description = "Run live app journeys on a disposable iOS Simulator"
 run = ["./scripts/test-app-live.sh"]
 
 [tasks.clean]
-description = "Remove repository build artifacts older than seven days"
+description = "Remove repository build artifacts"
 run = ["./scripts/clean-build-artifacts.sh"]
 
 [tasks.screenshots]
