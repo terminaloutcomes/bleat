@@ -95,6 +95,7 @@
 		492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsent.swift; sourceTree = "<group>"; };
+		4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttester.swift; sourceTree = "<group>"; };
 		523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTroubleshooterView.swift; sourceTree = "<group>"; };
@@ -107,6 +108,8 @@
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		74A1612593F0EC1117D0ADD8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyServerDiscoveryTests.swift; sourceTree = "<group>"; };
+		81E92F3B7112D982A4EC5916 /* Bleat.cloudkit-enabled.app-attest-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-enabled.entitlements"; sourceTree = "<group>"; };
+		81F0EDAD38A8432D9D34BAB3 /* Bleat.cloudkit-disabled.app-attest-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.entitlements"; sourceTree = "<group>"; };
 		83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		9AB1ED02686BB81111FD34C9 /* Bleat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Bleat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessor.swift; sourceTree = "<group>"; };
@@ -116,12 +119,11 @@
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttesterTests.swift; sourceTree = "<group>"; };
 		B2BC7735A08B9D198087831D /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		B458AC215D720282F4321F56 /* Bleat.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Bleat.icon; sourceTree = "<group>"; };
 		B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryTestSupport.swift; sourceTree = "<group>"; };
 		B5A82F11A48563C7E31708E0 /* BleatReleaseScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatReleaseScreenshotTests.swift; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.enabled.entitlements; sourceTree = "<group>"; };
-		C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Bleat.disabled.entitlements; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsentTests.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
@@ -223,8 +225,10 @@
 				32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
 				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
-				C1E1324EDAE7D5BEE23A9E36 /* Bleat.disabled.entitlements */,
-				C16382A32C84EE758A545BAB /* Bleat.enabled.entitlements */,
+				B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */,
+				81F0EDAD38A8432D9D34BAB3 /* Bleat.cloudkit-disabled.app-attest-enabled.entitlements */,
+				4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */,
+				81E92F3B7112D982A4EC5916 /* Bleat.cloudkit-enabled.app-attest-enabled.entitlements */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
 				481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */,
 				A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */,
@@ -322,6 +326,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
 			buildPhases = (
+				CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */,
 				A478EF5EDBF8264EFEDEBD5B /* Sources */,
 				59425BEF486F1F479E902607 /* Resources */,
 				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
@@ -418,6 +423,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate Paid Developer Build Settings";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\ncase \"${BUILD_WITHOUT_PAID_DEVELOPER:-}\" in\n  YES | NO) ;;\n  *)\n    echo \"BUILD_WITHOUT_PAID_DEVELOPER must be YES or NO\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_CLOUDKIT_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_CLOUDKIT_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_APP_ATTEST_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_APP_ATTEST_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -654,13 +679,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = Bleat;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BLEAT_APP_ATTEST_ENVIRONMENT = development;
+				BLEAT_APP_ATTEST_MODE = enabled;
 				BLEAT_CLOUDKIT_MODE = enabled;
 				BLEAT_DEVELOPER_NAME = "James Hodgkinson";
+				BLEAT_EFFECTIVE_APP_ATTEST_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_APP_ATTEST_MODE)";
+				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
+				BLEAT_PAID_DEVELOPER_YES_APP_ATTEST_MODE = disabled;
+				BLEAT_PAID_DEVELOPER_YES_CLOUDKIT_MODE = disabled;
 				BLEAT_TELEMETRY_ATTESTER_MODE = "app-attest";
 				BLEAT_TELEMETRY_AUTH_BASE_URL = "";
 				BLEAT_TELEMETRY_OTLP_ENDPOINT = "";
-				CODE_SIGN_ENTITLEMENTS = "App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements";
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
+				BUILD_WITHOUT_PAID_DEVELOPER = NO;
+				CODE_SIGN_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -706,13 +739,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = Bleat;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BLEAT_APP_ATTEST_ENVIRONMENT = production;
+				BLEAT_APP_ATTEST_MODE = enabled;
 				BLEAT_CLOUDKIT_MODE = enabled;
 				BLEAT_DEVELOPER_NAME = "James Hodgkinson";
+				BLEAT_EFFECTIVE_APP_ATTEST_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_APP_ATTEST_MODE)";
+				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
+				BLEAT_PAID_DEVELOPER_YES_APP_ATTEST_MODE = disabled;
+				BLEAT_PAID_DEVELOPER_YES_CLOUDKIT_MODE = disabled;
 				BLEAT_TELEMETRY_ATTESTER_MODE = "app-attest";
 				BLEAT_TELEMETRY_AUTH_BASE_URL = "";
 				BLEAT_TELEMETRY_OTLP_ENDPOINT = "";
-				CODE_SIGN_ENTITLEMENTS = "App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements";
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements";
+				BUILD_WITHOUT_PAID_DEVELOPER = NO;
+				CODE_SIGN_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;

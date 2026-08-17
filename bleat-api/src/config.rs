@@ -33,10 +33,28 @@ pub enum AppAttestEnvironment {
     Production,
 }
 
+impl std::fmt::Display for AppAttestEnvironment {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Development => formatter.write_str("development"),
+            Self::Production => formatter.write_str("production"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum LogFormat {
     Compact,
     Json,
+}
+
+impl std::fmt::Display for LogFormat {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Compact => formatter.write_str("compact"),
+            Self::Json => formatter.write_str("json"),
+        }
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -65,7 +83,7 @@ pub struct Arguments {
     pub app_attest_environment: AppAttestEnvironment,
 
     #[arg(long, env = "BLEAT_API_DATABASE_URL", hide_env_values = true)]
-    pub database_url: Option<String>,
+    pub database_url: String,
 
     #[arg(long, env = "BLEAT_API_DATABASE_MAX_CONNECTIONS", default_value_t = 16)]
     pub database_max_connections: usize,
@@ -202,9 +220,7 @@ impl Config {
         telemetry: TelemetryExportConfig,
     ) -> Result<Self, ConfigError> {
         let database = DatabaseConfig::new(
-            arguments
-                .database_url
-                .ok_or(ConfigError::MissingDatabaseUrl)?,
+            arguments.database_url,
             arguments.database_max_connections,
             Duration::from_secs(arguments.database_connect_timeout_seconds),
         )?;
@@ -561,9 +577,16 @@ mod tests {
 
     #[test]
     fn database_configuration_is_required_and_redacted() {
-        let missing = config(&["bleat-api"]);
+        let missing = Arguments::try_parse_from(["bleat-api"])
+            .expect_err("database URL argument must be required");
         assert_eq!(
-            missing.expect_err("database URL must be required"),
+            missing.kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
+
+        assert_eq!(
+            DatabaseConfig::new(String::new(), 16, Duration::from_secs(5))
+                .expect_err("empty database URL must fail"),
             ConfigError::MissingDatabaseUrl
         );
 

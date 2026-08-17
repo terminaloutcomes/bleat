@@ -65,7 +65,10 @@ Only PostgreSQL URLs are accepted. Production mode also requires an HTTPS
 public issuer, Apple team ID, app identifier, and the production App Attest
 environment. Invalid configuration or unavailable database migrations stop
 startup before the listener is bound. Database credentials are redacted from
-configuration diagnostics.
+configuration diagnostics. Once the database is ready and the listener is
+bound, the `bleat-api started` event records the effective non-secret service
+settings. It reports whether Apple identifiers are configured without emitting
+their values, and never includes the database URL or OTLP connection details.
 
 ## OpenTelemetry
 

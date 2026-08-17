@@ -102,32 +102,39 @@ Compile an unsigned Mac Catalyst Release app:
 mise run macos:compile
 ```
 
-### CloudKit build modes
+### Paid developer capability build modes
 
-`BLEAT_CLOUDKIT_MODE` is a build setting with two supported values:
+`BUILD_WITHOUT_PAID_DEVELOPER` accepts exactly `YES` or `NO` and defaults to
+`NO`. Set it to `YES` for a Personal Team build: it overrides the individual
+capability settings, removes both CloudKit and App Attest from signing, and
+retains the Keychain entitlement.
 
-- `enabled` is the default for paid-team, beta, and distribution builds. It
-  selects the CloudKit entitlements and makes private iCloud synchronization
-  available in Settings.
-- `disabled` selects CloudKit-free entitlements for Personal Team builds. It
-  leaves statistics local, keeps all credentials device-only, and omits the
-  iCloud synchronization controls.
+When the global setting is `NO`, the individual settings remain available:
 
-The repository's Xcode, test, archive, and `mise` workflows forward this
-setting. For example:
+- `BLEAT_CLOUDKIT_MODE=enabled|disabled` controls CloudKit signing and runtime
+  synchronization.
+- `BLEAT_APP_ATTEST_MODE=enabled|disabled` controls App Attest signing and
+  whether the system App Attest telemetry attester is available.
+
+Both individual settings default to `enabled` for paid-team, beta, and
+distribution builds. Unsupported values fail the build. The selected effective
+modes are embedded in `Info.plist`, and Xcode selects the matching entitlement
+file from all four CloudKit/App Attest combinations.
+
+The physical-device workflows set the global Personal Team mode automatically:
 
 ```sh
-BLEAT_CLOUDKIT_MODE=disabled mise run iphone:build
+mise run iphone:build
 ```
 
-For direct Xcode command-line builds, pass the same build setting:
+For a direct Personal Team Xcode build, pass the global setting:
 
 ```sh
 xcodebuild \
   -project Bleat.xcodeproj \
   -scheme Bleat \
   -destination 'generic/platform=iOS' \
-  BLEAT_CLOUDKIT_MODE=disabled \
+  BUILD_WITHOUT_PAID_DEVELOPER=YES \
   build
 ```
 
@@ -388,18 +395,17 @@ in the repository, then build, install, and launch the Release app:
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 export BLEAT_IPHONE_ID="YOUR_IPHONE_UDID"
 export BLEAT_IPAD_ID="YOUR_IPAD_UDID"
-export BLEAT_CLOUDKIT_MODE=disabled
 mise run iphone
 mise run ipad
 ```
 
 The individual stages are available as `iphone:build`, `iphone:install`, and
-`iphone:launch`, with matching `ipad:*` tasks. Personal Teams do not support
-the CloudKit capability, so the physical-device tasks set
-`BLEAT_CLOUDKIT_MODE=disabled`. The disabled mode selects CloudKit-free signing
-entitlements, hides iCloud synchronization, leaves statistics local, and
-stores native credentials in the device-only Keychain. Paid-team and
-distribution builds default to `enabled`.
+`iphone:launch`, with matching `ipad:*` tasks. The physical-device tasks and
+direct `scripts/build-device.sh` usage default to
+`BUILD_WITHOUT_PAID_DEVELOPER=YES`, which omits CloudKit and App Attest while
+retaining device-only Keychain access. A paid team can explicitly run the
+direct script with `BUILD_WITHOUT_PAID_DEVELOPER=NO` and select either
+individual capability mode.
 
 If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
 set a stable alternative such as
@@ -438,7 +444,8 @@ local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
 
-Builds made with `BLEAT_CLOUDKIT_MODE=disabled` omit the CloudKit entitlement
+Builds whose effective CloudKit mode is `disabled`, whether selected directly
+or forced by `BUILD_WITHOUT_PAID_DEVELOPER=YES`, omit the CloudKit entitlement
 entirely. They do not initialize CloudKit or show its Settings controls, and
 their stable native credentials remain device-only.
 
@@ -986,8 +993,11 @@ The app reads the authentication service URL only from the
 `BLEAT_TELEMETRY_AUTH_BASE_URL` build setting. An empty value leaves telemetry
 authentication unavailable. Release builds require HTTPS; Debug builds may use
 HTTP only on loopback. Setting `BLEAT_TELEMETRY_ATTESTER_MODE=fake` selects the
-development attester in Debug builds only. Consent remains fully lazy: enabling
-telemetry performs no authentication work until a caller requests a token.
+development attester in Debug builds only, independently of the App Attest
+build capability. The system App Attest implementation is unavailable unless
+the effective `BLEAT_APP_ATTEST_MODE` is exactly `enabled`. Consent remains
+fully lazy: enabling telemetry performs no authentication work until a caller
+requests a token.
 
 The app reads the OTLP/gRPC origin from `BLEAT_TELEMETRY_OTLP_ENDPOINT`. It must
 be an HTTPS origin with an optional port and no credentials, path, query, or

@@ -57,6 +57,8 @@ xcodebuild \
     -configuration Release \
     -destination 'generic/platform=iOS' \
     -archivePath "${bleat_archive_path}" \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     "${bleat_signing_arguments[@]}" \
     archive

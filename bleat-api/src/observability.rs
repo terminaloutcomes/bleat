@@ -58,6 +58,32 @@ impl Observability {
     }
 }
 
+pub fn log_startup_settings(config: &Config) {
+    tracing::info!(
+        bind_address = %config.bind_address,
+        public_issuer = %config.public_issuer,
+        deployment_environment = %config.deployment_mode,
+        app_attest_environment = %config.app_attest_environment,
+        apple_team_id_configured = config.apple_team_id.is_some(),
+        app_identifier_configured = config.app_identifier.is_some(),
+        database_max_connections = config.database.max_connections,
+        database_connect_timeout_seconds = config.database.connect_timeout.as_secs(),
+        challenge_lifetime_seconds = config.challenge_lifetime.as_secs(),
+        challenge_cleanup_batch_size = config.challenge_cleanup_batch_size,
+        challenge_issuance_per_minute = config.challenge_issuance_per_minute,
+        token_lifetime_seconds = config.token_lifetime.as_secs(),
+        request_timeout_seconds = config.request_timeout.as_secs(),
+        max_request_body_bytes = config.max_request_body_bytes,
+        max_concurrent_requests = config.max_concurrent_requests,
+        log_filter = %config.log_filter,
+        log_format = %config.log_format,
+        otlp_traces_enabled = config.telemetry.traces_enabled,
+        otlp_logs_enabled = config.telemetry.logs_enabled,
+        jwt_algorithm = "ES256",
+        "bleat-api started"
+    );
+}
+
 #[derive(Debug, Error)]
 pub enum ObservabilityError {
     #[error("invalid local log filter")]
@@ -235,6 +261,97 @@ mod tests {
                     .clone(),
             )
             .expect("test logs should be UTF-8")
+        }
+    }
+
+    #[test]
+    fn startup_event_reports_settings_without_sensitive_values() {
+        let database_secret = "database-secret-marker";
+        let apple_team_id = "apple-team-id-marker";
+        let app_identifier = "app-identifier-marker";
+        let database_url =
+            format!("postgres://bleat:{database_secret}@database.example:5432/bleat");
+        let arguments = Arguments::try_parse_from([
+            "bleat-api",
+            "--database-url",
+            &database_url,
+            "--bind-address",
+            "0.0.0.0:9000",
+            "--public-issuer",
+            "https://telemetry.example/issuer",
+            "--apple-team-id",
+            apple_team_id,
+            "--app-identifier",
+            app_identifier,
+            "--database-max-connections",
+            "24",
+            "--database-connect-timeout-seconds",
+            "7",
+            "--challenge-lifetime-seconds",
+            "180",
+            "--challenge-cleanup-batch-size",
+            "750",
+            "--challenge-issuance-per-minute",
+            "450",
+            "--token-lifetime-seconds",
+            "900",
+            "--request-timeout-seconds",
+            "12",
+            "--max-request-body-bytes",
+            "131072",
+            "--max-concurrent-requests",
+            "96",
+            "--log-format",
+            "json",
+        ])
+        .expect("test arguments should parse");
+        let config = Config::from_arguments(
+            arguments,
+            TelemetryExportConfig {
+                traces_enabled: true,
+                logs_enabled: false,
+            },
+        )
+        .expect("test config should validate");
+        let local = Buffer::default();
+        let subscriber = Registry::default().with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(local.clone()),
+        );
+
+        tracing::subscriber::with_default(subscriber, || log_startup_settings(&config));
+
+        let output = local.contents();
+        for expected in [
+            "bleat-api started",
+            "0.0.0.0:9000",
+            "https://telemetry.example/issuer",
+            "development",
+            "database_max_connections\":24",
+            "database_connect_timeout_seconds\":7",
+            "challenge_lifetime_seconds\":180",
+            "challenge_cleanup_batch_size\":750",
+            "challenge_issuance_per_minute\":450",
+            "token_lifetime_seconds\":900",
+            "request_timeout_seconds\":12",
+            "max_request_body_bytes\":131072",
+            "max_concurrent_requests\":96",
+            "apple_team_id_configured\":true",
+            "app_identifier_configured\":true",
+            "otlp_traces_enabled\":true",
+            "otlp_logs_enabled\":false",
+            "jwt_algorithm\":\"ES256\"",
+        ] {
+            assert!(output.contains(expected), "missing {expected} in {output}");
+        }
+        for sensitive in [
+            database_secret,
+            &database_url,
+            apple_team_id,
+            app_identifier,
+        ] {
+            assert!(!output.contains(sensitive));
         }
     }
 

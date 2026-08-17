@@ -11,7 +11,10 @@
 #![deny(clippy::trivially_copy_pass_by_ref)]
 
 use bleat_api::{
-    config::Config, database::connect_and_migrate, observability::Observability, router,
+    config::Config,
+    database::connect_and_migrate,
+    observability::{Observability, log_startup_settings},
+    router,
 };
 use clap::Parser;
 use tokio::net::TcpListener;
@@ -23,13 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = connect_and_migrate(&config.database).await?;
     let listener = TcpListener::bind(config.bind_address).await?;
 
-    tracing::info!(
-        bind_address = %config.bind_address,
-        deployment_environment = %config.deployment_mode,
-        otlp_traces_enabled = config.telemetry.traces_enabled,
-        otlp_logs_enabled = config.telemetry.logs_enabled,
-        "bleat-api started"
-    );
+    log_startup_settings(&config);
 
     axum::serve(listener, router(&config, database))
         .with_graceful_shutdown(shutdown_signal())

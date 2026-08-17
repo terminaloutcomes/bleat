@@ -4,8 +4,10 @@
 <dict>
 	<key>BleatBuildDate</key>
 	<string>Unavailable</string>
+	<key>BleatAppAttestMode</key>
+	<string>$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)</string>
 	<key>BleatCloudKitMode</key>
-	<string>$(BLEAT_CLOUDKIT_MODE)</string>
+	<string>$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)</string>
 	<key>BleatDeveloperName</key>
 	<string>$(BLEAT_DEVELOPER_NAME)</string>
 	<key>BleatTelemetryAttesterMode</key>

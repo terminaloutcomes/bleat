@@ -15,6 +15,8 @@ xcodebuild \
   ${BUILD_VERBOSE_FLAG} \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -derivedDataPath .build/xcode-derived \
+  BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+  BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
   build
 

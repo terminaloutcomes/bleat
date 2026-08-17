@@ -1301,9 +1301,15 @@ retain or delete the private CloudKit zone. `BLEAT_CLOUDKIT_MODE=disabled`
 selects CloudKit-free entitlements for development teams that do not support
 the capability; those builds do not initialize or present CloudKit
 synchronization. `enabled` is the default and the only other supported value.
-The selected value is embedded in the app's information property list so
-signing capabilities and runtime behavior use the same build mode; a missing or
-unknown runtime value fails closed as disabled.
+`BLEAT_APP_ATTEST_MODE` likewise accepts only `enabled` or `disabled` and
+defaults to `enabled`. `BUILD_WITHOUT_PAID_DEVELOPER` accepts only `YES` or
+`NO`, defaults to `NO`, and when `YES` overrides both effective capability
+modes to `disabled`. Xcode selects one of four iOS entitlement files from the
+effective CloudKit/App Attest matrix; the fully disabled file retains only the
+Personal-Team-compatible Keychain entitlement. Unsupported build values fail
+the build. The effective modes are embedded in the app's information property
+list so signing capabilities and runtime behavior use the same values; a
+missing or unknown runtime value fails closed as disabled.
 
 ## 13. Local data model
 
@@ -1576,9 +1582,12 @@ The client gates App Attest on `DCAppAttestService.isSupported`, treats Mac
 Catalyst as unsupported, and retains only the App Attest key identifier plus an
 opaque backend installation identifier in one non-synchronizing, device-only
 Keychain record. Invalidated keys clear that record and restart enrollment.
-Debug iOS builds use the development App Attest entitlement and may select the
-deterministic fake attester; Release iOS builds use the production entitlement
-and cannot select the fake attester. The backend base URL comes only from
+When App Attest is enabled, Debug iOS builds use its development entitlement
+and Release iOS builds use its production entitlement. Debug may select the
+deterministic fake attester; Release cannot. System App Attest is unavailable unless
+the effective `BLEAT_APP_ATTEST_MODE` is exactly `enabled`; the Debug fake
+attester remains available independently for disposable development tests. The
+backend base URL comes only from
 `BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
 unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
 The OTLP origin comes only from `BLEAT_TELEMETRY_OTLP_ENDPOINT` and must be an

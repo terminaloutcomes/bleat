@@ -19,7 +19,9 @@ if [ -d "${bleat_app}" ]; then
   rm -rf "${bleat_app}"
 fi
 
-echo "Building Bleat for device ${BLEAT_DEVICE_ID} with bundle identifier ${bleat_bundle_id}..."
+readonly build_without_paid_developer="${BUILD_WITHOUT_PAID_DEVELOPER:-YES}"
+
+echo "Building Bleat for the configured device with bundle identifier ${bleat_bundle_id}..."
 
 xcodebuild \
   -project Bleat.xcodeproj \
@@ -33,6 +35,8 @@ xcodebuild \
   DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \
   CODE_SIGN_STYLE=Automatic \
   PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
+  BUILD_WITHOUT_PAID_DEVELOPER="${build_without_paid_developer}" \
+  BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
   build | {
     # rg exits 1 when it filters every line; the successful build must remain
@@ -54,4 +58,31 @@ built_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${ble
 if [[ "${built_bundle_id}" != "${bleat_bundle_id}" ]]; then
   echo "built bundle identifier ${built_bundle_id} does not match ${bleat_bundle_id}" >&2
   exit 1
+fi
+
+if [[ "${build_without_paid_developer}" == "YES" ]]; then
+  readonly app_attest_entitlement="com.apple.developer.devicecheck.appattest-environment"
+  readonly cloudkit_entitlement="com.apple.developer.icloud-services"
+  readonly keychain_entitlement="keychain-access-groups"
+  signed_entitlements="$(codesign -d --entitlements :- "${bleat_app}" 2>/dev/null)"
+
+  if [[ "${signed_entitlements}" == *"${app_attest_entitlement}"* ]]; then
+    echo "Personal-Team build unexpectedly contains the App Attest entitlement" >&2
+    exit 1
+  fi
+  if [[ "${signed_entitlements}" == *"${cloudkit_entitlement}"* ]]; then
+    echo "Personal-Team build unexpectedly contains the CloudKit entitlement" >&2
+    exit 1
+  fi
+  if [[ "${signed_entitlements}" != *"${keychain_entitlement}"* ]]; then
+    echo "Personal-Team build is missing the Keychain entitlement" >&2
+    exit 1
+  fi
+
+  built_app_attest_mode="$(/usr/libexec/PlistBuddy -c 'Print :BleatAppAttestMode' "${bleat_app}/Info.plist")"
+  built_cloudkit_mode="$(/usr/libexec/PlistBuddy -c 'Print :BleatCloudKitMode' "${bleat_app}/Info.plist")"
+  if [[ "${built_app_attest_mode}" != "disabled" || "${built_cloudkit_mode}" != "disabled" ]]; then
+    echo "Personal-Team build did not record both effective modes as disabled" >&2
+    exit 1
+  fi
 fi

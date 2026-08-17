@@ -50,7 +50,8 @@ targets:
               - bleat
               - com.yaleman.bleat
         BleatBuildDate: Unavailable
-        BleatCloudKitMode: "$(BLEAT_CLOUDKIT_MODE)"
+        BleatAppAttestMode: "$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)"
+        BleatCloudKitMode: "$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)"
         BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
         BleatTelemetryAuthenticationBaseURL: "$(BLEAT_TELEMETRY_AUTH_BASE_URL)"
         BleatTelemetryAttesterMode: "$(BLEAT_TELEMETRY_ATTESTER_MODE)"
@@ -79,13 +80,21 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
+        BUILD_WITHOUT_PAID_DEVELOPER: NO
+        BLEAT_APP_ATTEST_MODE: enabled
         BLEAT_CLOUDKIT_MODE: enabled
+        BLEAT_EFFECTIVE_APP_ATTEST_MODE: "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_APP_ATTEST_MODE)"
+        BLEAT_EFFECTIVE_CLOUDKIT_MODE: "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)"
+        BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE: "$(BLEAT_APP_ATTEST_MODE)"
+        BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE: "$(BLEAT_CLOUDKIT_MODE)"
+        BLEAT_PAID_DEVELOPER_YES_APP_ATTEST_MODE: disabled
+        BLEAT_PAID_DEVELOPER_YES_CLOUDKIT_MODE: disabled
         BLEAT_DEVELOPER_NAME: James Hodgkinson
         BLEAT_TELEMETRY_AUTH_BASE_URL: ""
         BLEAT_TELEMETRY_ATTESTER_MODE: app-attest
         BLEAT_TELEMETRY_OTLP_ENDPOINT: ""
-        CODE_SIGN_ENTITLEMENTS: App/Bleat.$(BLEAT_CLOUDKIT_MODE).entitlements
-        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_CLOUDKIT_MODE).entitlements
+        CODE_SIGN_ENTITLEMENTS: App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements
         CURRENT_PROJECT_VERSION: "1"
         DEAD_CODE_STRIPPING: YES
         MARKETING_VERSION: "0.1.1"
@@ -100,6 +109,11 @@ targets:
           BLEAT_APP_ATTEST_ENVIRONMENT: development
         Release:
           BLEAT_APP_ATTEST_ENVIRONMENT: production
+    preBuildScripts:
+      - path: scripts/validate-paid-developer-build-settings.sh
+        name: Validate Paid Developer Build Settings
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
     postBuildScripts:
       - path: scripts/write-build-metadata.sh
         name: Write Build Metadata

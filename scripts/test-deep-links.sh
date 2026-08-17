@@ -178,6 +178,8 @@ xcodebuild \
     -configuration Debug \
     -destination "id=${bleat_simulator_id}" \
     -derivedDataPath "${bleat_derived_data}" \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     build
 
@@ -202,6 +204,8 @@ xcodebuild \
     -scheme Bleat \
     -destination "id=${bleat_simulator_id}" \
     -derivedDataPath "${bleat_derived_data}" \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG EXTERNAL_URL_DRIVER' \
     -parallel-testing-enabled NO \

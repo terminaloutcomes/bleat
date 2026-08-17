@@ -5,6 +5,42 @@ import XCTest
 
 @MainActor
 final class RemoteTelemetryConsentTests: XCTestCase {
+    func testSystemAppAttestRequiresEnabledEffectiveBuildMode() {
+        XCTAssertEqual(
+            RemoteTelemetryAttesterSelection.resolve(
+                appAttestMode: "enabled",
+                requestedMode: "app-attest"
+            ),
+            .appAttest
+        )
+        XCTAssertEqual(
+            RemoteTelemetryAttesterSelection.resolve(
+                appAttestMode: "disabled",
+                requestedMode: "app-attest"
+            ),
+            .unavailable
+        )
+        XCTAssertEqual(
+            RemoteTelemetryAttesterSelection.resolve(
+                appAttestMode: nil,
+                requestedMode: "app-attest"
+            ),
+            .unavailable
+        )
+    }
+
+    #if DEBUG
+        func testDevelopmentAttesterIgnoresAppAttestBuildMode() {
+            XCTAssertEqual(
+                RemoteTelemetryAttesterSelection.resolve(
+                    appAttestMode: "disabled",
+                    requestedMode: "fake"
+                ),
+                .development
+            )
+        }
+    #endif
+
     func testConsentDefaultsOffAndPersistsOnlyExplicitChanges() throws {
         let suite = "RemoteTelemetryConsentTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

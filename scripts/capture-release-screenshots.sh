@@ -662,7 +662,7 @@ bleat_capture_device() {
         -derivedDataPath "${bleat_derived_data}" \
         -parallel-testing-enabled NO \
         ENABLE_TESTABILITY=YES \
-        BLEAT_CLOUDKIT_MODE=disabled build-for-testing
+        BUILD_WITHOUT_PAID_DEVELOPER=YES build-for-testing
     bleat_xctestrun="$(find "${bleat_derived_data}/Build/Products" -name '*.xctestrun' -print -quit)"
     [[ -n "${bleat_xctestrun}" ]] || bleat_fail "Xcode did not produce an xctestrun file"
     plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_APP_URL' -string "${bleat_base_url}" "${bleat_xctestrun}"

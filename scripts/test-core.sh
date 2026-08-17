@@ -4,6 +4,7 @@ set -euo pipefail
 
 swift test --enable-code-coverage
 swift build -c release
+./scripts/test-paid-developer-build-modes.sh
 
 if [[ "${BLEAT_SKIP_SIMULATOR:-0}" == "1" ]]; then
     exit 0
@@ -22,6 +23,8 @@ xcodebuild \
     -project Bleat.xcodeproj \
     -resolvePackageDependencies \
     -scheme Bleat \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -derivedDataPath .build/xcode-derived
 
@@ -33,6 +36,8 @@ xcodebuild \
     -configuration Release \
     -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath .build/xcode-derived \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     build
 
@@ -43,6 +48,8 @@ xcodebuild \
     -scheme Bleat \
     -destination "${simulator_destination}" \
     -derivedDataPath .build/xcode-derived \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     -only-testing:BleatAppTests \
@@ -55,6 +62,8 @@ xcodebuild \
     -scheme Bleat \
     -destination "${simulator_destination}" \
     -derivedDataPath .build/xcode-derived \
+    BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
+    BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     -parallel-testing-enabled YES \

@@ -77,6 +77,27 @@ struct InactiveRemoteTelemetryConsentController:
     ) {}
 }
 
+enum RemoteTelemetryAttesterSelection: Equatable {
+    case unavailable
+    case development
+    case appAttest
+
+    static func resolve(
+        appAttestMode: String?,
+        requestedMode: String?
+    ) -> Self {
+        #if DEBUG
+            if requestedMode == "fake" {
+                return .development
+            }
+        #endif
+        guard appAttestMode == "enabled" else {
+            return .unavailable
+        }
+        return .appAttest
+    }
+}
+
 @MainActor
 final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let tracer = RemoteTelemetryTracer()
@@ -120,18 +141,21 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         let exporterConfiguration = Self.makeExporterConfiguration(
             bundle: bundle
         )
-        let downstreamExporterFactory: (@Sendable () ->
-            (any RemoteTelemetryDownstreamSpanExporter)?)? =
-            if let tokenProvider, let exporterConfiguration {
-                {
-                    AuthenticatedOtlpSpanExporter(
-                        configuration: exporterConfiguration,
-                        tokenProvider: tokenProvider
-                    )
+        let downstreamExporterFactory:
+            (
+                @Sendable () ->
+                    (any RemoteTelemetryDownstreamSpanExporter)?
+            )? =
+                if let tokenProvider, let exporterConfiguration {
+                    {
+                        AuthenticatedOtlpSpanExporter(
+                            configuration: exporterConfiguration,
+                            tokenProvider: tokenProvider
+                        )
+                    }
+                } else {
+                    nil
                 }
-            } else {
-                nil
-            }
         worker = RemoteTelemetryRuntimeWorker(
             tracer: tracer,
             resource: resource,
@@ -167,9 +191,10 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     private static func makeTokenProvider(
         bundle: Bundle
     ) -> TelemetryTokenProvider? {
-        guard let value = bundle.object(
-            forInfoDictionaryKey: "BleatTelemetryAuthenticationBaseURL"
-        ) as? String,
+        guard
+            let value = bundle.object(
+                forInfoDictionaryKey: "BleatTelemetryAuthenticationBaseURL"
+            ) as? String,
             !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let baseURL = URL(string: value)
         else {
@@ -181,25 +206,36 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         #else
             let allowsInsecureLoopback = false
         #endif
-        guard let transport = try? URLSessionTelemetryAuthenticationTransport(
-            baseURL: baseURL,
-            allowsInsecureLoopback: allowsInsecureLoopback
-        ) else {
+        guard
+            let transport = try? URLSessionTelemetryAuthenticationTransport(
+                baseURL: baseURL,
+                allowsInsecureLoopback: allowsInsecureLoopback
+            )
+        else {
             return nil
         }
 
-        let attester: any TelemetryAttester
-        #if DEBUG
-            if bundle.object(
+        let selection = RemoteTelemetryAttesterSelection.resolve(
+            appAttestMode: bundle.object(
+                forInfoDictionaryKey: "BleatAppAttestMode"
+            ) as? String,
+            requestedMode: bundle.object(
                 forInfoDictionaryKey: "BleatTelemetryAttesterMode"
-            ) as? String == "fake" {
+            ) as? String
+        )
+        let attester: any TelemetryAttester
+        switch selection {
+        case .unavailable:
+            return nil
+        case .development:
+            #if DEBUG
                 attester = DevelopmentTelemetryAttester()
-            } else {
-                attester = AppAttestTelemetryAttester()
-            }
-        #else
+            #else
+                return nil
+            #endif
+        case .appAttest:
             attester = AppAttestTelemetryAttester()
-        #endif
+        }
 
         let bundleID = bundle.bundleIdentifier ?? "com.yaleman.Bleat"
         return TelemetryTokenProvider(
@@ -214,9 +250,10 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     private static func makeExporterConfiguration(
         bundle: Bundle
     ) -> AuthenticatedOtlpSpanExporterConfiguration? {
-        guard let value = bundle.object(
-            forInfoDictionaryKey: "BleatTelemetryOTLPEndpoint"
-        ) as? String,
+        guard
+            let value = bundle.object(
+                forInfoDictionaryKey: "BleatTelemetryOTLPEndpoint"
+            ) as? String,
             !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let endpoint = URL(string: value)
         else {
@@ -240,8 +277,11 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     private let tracer: RemoteTelemetryTracer
     private let resource: RemoteTelemetryResource?
     private let storageRootURL: URL?
-    private let downstreamExporterFactory: (@Sendable () ->
-        (any RemoteTelemetryDownstreamSpanExporter)?)?
+    private let downstreamExporterFactory:
+        (
+            @Sendable () ->
+                (any RemoteTelemetryDownstreamSpanExporter)?
+        )?
     private let queue = DispatchQueue(
         label: "app.bleat.remote-telemetry.runtime",
         qos: .utility
@@ -257,8 +297,10 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         tracer: RemoteTelemetryTracer,
         resource: RemoteTelemetryResource?,
         storageRootURL: URL?,
-        downstreamExporterFactory: (@Sendable () ->
-            (any RemoteTelemetryDownstreamSpanExporter)?)? = nil
+        downstreamExporterFactory: (
+            @Sendable () ->
+                (any RemoteTelemetryDownstreamSpanExporter)?
+        )? = nil
     ) {
         self.tracer = tracer
         self.resource = resource
