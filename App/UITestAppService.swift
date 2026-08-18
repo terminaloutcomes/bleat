@@ -13,6 +13,7 @@
         case submissionProgress = "--ui-testing-submission-progress"
         case playback = "--ui-testing-playback"
         case launching = "--ui-testing-launching"
+        case unavailableStartup = "--ui-testing-unavailable-startup"
     }
 
     private enum UITestScenarioStorage {
@@ -23,6 +24,8 @@
             "--ui-testing-clear-deep-link-receipt"
         static let resetRemoteTelemetryConsentArgument =
             "--ui-testing-reset-telemetry-consent"
+        static let enableRemoteTelemetryConsentArgument =
+            "--ui-testing-enable-telemetry-consent"
     }
 
     private struct FixtureIDs: Sendable {
@@ -37,6 +40,12 @@
             ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-open-settings"
             )
+        }
+
+        static var bootstrapError: AppBootstrapError? {
+            ProcessInfo.processInfo.arguments.contains(
+                UITestScenario.unavailableStartup.rawValue
+            ) ? .persistenceUnavailable : nil
         }
 
         private let scenario: UITestScenario
@@ -57,6 +66,17 @@
             ) {
                 UserDefaults.standard.removeObject(
                     forKey: RemoteTelemetryConsentStore.enabledKey
+                )
+            }
+            if arguments.contains(
+                UITestScenarioStorage.enableRemoteTelemetryConsentArgument
+            ) {
+                UserDefaults.standard.set(
+                    true,
+                    forKey: RemoteTelemetryConsentStore.enabledKey
+                )
+                UserDefaults.standard.removeObject(
+                    forKey: RemoteTelemetryConsentStore.generationKey
                 )
             }
             if arguments.contains(UITestScenarioStorage.clearArgument) {

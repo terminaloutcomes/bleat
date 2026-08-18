@@ -52,7 +52,7 @@ struct RootView: View {
     @Bindable var model: AppModel
     @State private var navigation = AppNavigationCoordinator()
     @State private var deepLinkInbox = AppDeepLinkInbox.shared
-    @State private var isShowingPrivacySettings = false
+    @State private var isShowingDiagnostics = false
     @Environment(\.scenePhase) private var scenePhase
     @ColourSchemePreference private var colourScheme
 
@@ -82,12 +82,11 @@ struct RootView: View {
                         }
                     }
                     .accessibilityIdentifier("app.retry")
-                    Button("Privacy") {
-                        isShowingPrivacySettings = true
+                    Button("Diagnostics") {
+                        isShowingDiagnostics = true
                     }
-                    .accessibilityIdentifier("app.privacy")
+                    .accessibilityIdentifier("app.diagnostics")
                 }
-                .accessibilityIdentifier("app.unavailable")
                 .tint(colourScheme.color)
             }
         }
@@ -160,19 +159,16 @@ struct RootView: View {
         } message: { change in
             Text(cloudServerConfigurationChangeMessage(change))
         }
-        .sheet(isPresented: $isShowingPrivacySettings) {
+        .sheet(isPresented: $isShowingDiagnostics) {
             NavigationStack {
-                Form {
-                    RemoteTelemetryConsentSection(model: model)
-                }
-                .navigationTitle("Privacy")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            isShowingPrivacySettings = false
+                DiagnosticsView(model: model)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                isShowingDiagnostics = false
+                            }
                         }
                     }
-                }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -401,7 +397,14 @@ private struct NativeLoginView: View {
                     )
                 }
 
-                RemoteTelemetryConsentSection(model: model)
+                Section {
+                    NavigationLink {
+                        DiagnosticsView(model: model)
+                    } label: {
+                        Label("Diagnostics", systemImage: "stethoscope")
+                    }
+                    .accessibilityIdentifier("login.diagnostics")
+                }
 
             }
             #if targetEnvironment(macCatalyst)
@@ -1013,6 +1016,8 @@ private struct DiagnosticsView: View {
                     "diagnostics.bonjourTroubleshooter"
                 )
             }
+
+            RemoteTelemetryConsentSection(model: model)
 
             Section {
                 ShareLink(
@@ -4149,14 +4154,14 @@ private struct RemoteTelemetryConsentSection: View {
                     }
                 )
             )
-            .accessibilityIdentifier("settings.telemetry.enabled")
+            .accessibilityIdentifier("diagnostics.telemetry.enabled")
         } header: {
             Text("Privacy")
         } footer: {
             Text(
                 "Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, and timing. Audiobook content, credentials, accounts, servers, searches, transcripts, and device identifiers are excluded. You can turn this off at any time without affecting local Diagnostics."
             )
-            .accessibilityIdentifier("settings.telemetry.explanation")
+            .accessibilityIdentifier("diagnostics.telemetry.explanation")
         }
     }
 }
@@ -4358,8 +4363,6 @@ private struct SettingsView: View {
                         "settings.playback.resumeRewind"
                     )
                 }
-
-                RemoteTelemetryConsentSection(model: model)
 
                 Section {
                     Picker(

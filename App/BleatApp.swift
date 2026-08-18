@@ -30,6 +30,7 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                     service: testService,
                     nearbyServerDiscovery:
                         UnavailableNearbyServerDiscovery(),
+                    bootstrapError: UITestAppService.bootstrapError,
                     diagnostics: diagnostics,
                     diagnosticLogStore: diagnosticLogStore,
                     remoteTelemetryConsentController: remoteTelemetry,

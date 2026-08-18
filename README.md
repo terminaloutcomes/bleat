@@ -742,13 +742,13 @@ Activity** identifies which of those paths most recently reached a server.
 Diagnostics also distinguishes a local endpoint that is not yet validated,
 being checked, available, or temporarily unavailable.
 
-The Settings **Privacy** section also records device-local, default-off consent
-for **Share diagnostic telemetry**. The reviewed schema permits only bounded
-technical operation, outcome, timing, app-version, and operating-system data;
+The Diagnostics **Privacy** section also records device-local, default-off
+consent for **Share diagnostic telemetry**. The reviewed schema permits only
+bounded technical operation, outcome, timing, app-version, and operating-system data;
 it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and device or installation identifiers. Turning the setting
-off does not affect local Diagnostics. The same privacy control remains
-available while signed out and when application startup is unavailable. The
+off does not affect local Diagnostics. The Diagnostics screen remains available
+while signed out and when application startup is unavailable. The
 opted-in runtime batches completed OpenTelemetry spans away from the main
 actor and durably retains failed batches for at most two hours and 128 MiB in
 protected, backup-excluded Application Support storage. Withdrawal immediately

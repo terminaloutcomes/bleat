@@ -918,16 +918,25 @@ final class BleatUITests: XCTestCase {
         )
         tabButton("Settings", in: app).tap()
 
+        XCTAssertFalse(
+            app.switches["diagnostics.telemetry.enabled"].exists
+        )
         Self.scrollUntilHittable(
             app: app,
-            identifier: "settings.telemetry.enabled",
+            identifier: "settings.diagnostics",
             direction: .up
         )
-        var telemetry = app.switches["settings.telemetry.enabled"]
+        app.buttons["settings.diagnostics"].tap()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.telemetry.enabled",
+            direction: .up
+        )
+        var telemetry = app.switches["diagnostics.telemetry.enabled"]
         XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
         XCTAssertEqual(telemetry.value as? String, "0")
         XCTAssertTrue(
-            app.staticTexts["settings.telemetry.explanation"].exists
+            app.staticTexts["diagnostics.telemetry.explanation"].exists
         )
 
         telemetry.coordinate(
@@ -941,12 +950,53 @@ final class BleatUITests: XCTestCase {
 
         app.terminate()
         app = launch(scenario: "--ui-testing-signed-out")
+        XCTAssertFalse(
+            app.switches["diagnostics.telemetry.enabled"].exists
+        )
         Self.scrollUntilHittable(
             app: app,
-            identifier: "settings.telemetry.enabled",
+            identifier: "login.diagnostics",
             direction: .up
         )
-        telemetry = app.switches["settings.telemetry.enabled"]
+        app.buttons["login.diagnostics"].tap()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.telemetry.enabled",
+            direction: .up
+        )
+        telemetry = app.switches["diagnostics.telemetry.enabled"]
+        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
+        XCTAssertEqual(telemetry.value as? String, "1")
+
+        telemetry.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
+        ).tap()
+        let disabled = expectation(
+            for: NSPredicate(format: "value == %@", "0"),
+            evaluatedWith: telemetry
+        )
+        wait(for: [disabled], timeout: 3)
+    }
+
+    @MainActor
+    func testDiagnosticTelemetryConsentCanBeWithdrawnWhenStartupUnavailable() {
+        let app = launch(
+            scenario: "--ui-testing-unavailable-startup",
+            additionalArguments: [
+                "--ui-testing-enable-telemetry-consent"
+            ]
+        )
+
+        let diagnostics = app.buttons["app.diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
+        diagnostics.tap()
+
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.telemetry.enabled",
+            direction: .up
+        )
+        let telemetry = app.switches["diagnostics.telemetry.enabled"]
         XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
         XCTAssertEqual(telemetry.value as? String, "1")
 

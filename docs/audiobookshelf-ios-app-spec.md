@@ -1544,14 +1544,14 @@ redacted `OSLog` categories.
 Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
 diagnose bounded technical application operations without collecting user,
 server, account, or audiobook content. It defaults off and may be enabled only
-through the device-local **Share diagnostic telemetry** Settings control. The
-consent preference is not synchronized through iCloud. Disabling it persists
-withdrawal before synchronously notifying the remote telemetry runtime; that
+through the device-local **Share diagnostic telemetry** control on the
+Diagnostics screen. The consent preference is not synchronized through iCloud.
+Disabling it persists withdrawal before synchronously notifying the remote telemetry runtime; that
 runtime must stop export and token renewal before returning, then clear
 memory-only telemetry credentials and purge buffered remote telemetry. The
-control remains available while signed out and through the unavailable-startup
-screen. Telemetry initialization or runtime failure must never affect launch,
-browsing, authentication, downloads, playback, transcription,
+Diagnostics screen remains available while signed out and through the
+unavailable-startup screen. Telemetry initialization or runtime failure must
+never affect launch, browsing, authentication, downloads, playback, transcription,
 synchronization, or local Diagnostics.
 
 The reviewed resource allowlist is `service.name=bleat`, normalized numeric app
