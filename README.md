@@ -370,9 +370,9 @@ BLEAT_DEVELOPMENT_TEAM=YOURTEAMID \
 ```
 
 Open `.build/Bleat.xcarchive` in Xcode Organizer, choose **Distribute App**,
-then **TestFlight & App Store** to upload build `0.1.1 (1)`. Upload requires a
-paid Apple Developer team, a matching App Store Connect application, and an
-account permitted to distribute it.
+then **TestFlight & App Store** to upload the archive. Upload requires a paid
+Apple Developer team, a matching App Store Connect application, and an account
+permitted to distribute it.
 
 Pushing `main` with a changed `MARKETING_VERSION` in `project.yml` validates an
 unsigned Release archive and publishes `v<version>` as a GitHub Release. The
@@ -765,7 +765,7 @@ constrained by Low Data Mode and resume with a catch-up refresh when the path
 becomes unconstrained. REST requests, downloads, covers, and playback remain
 independent of that optional realtime connection, and socket progress never
 changes the foreground player's timeline.
-**About** shows the app icon, version, build number, build timestamp, developer,
+**About** shows the app icon, version, build timestamp, developer,
 and bundle identifier.
 All builds provide **Export Diagnostics** for sharing the current snapshot.
 Development builds additionally provide **Export Recent Logs**, which shares a

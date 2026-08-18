@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.2 - 2026-08-18
+
 ### Added
 
 - Added Select and Select All controls for ordered, one-at-a-time chapter
@@ -15,6 +17,13 @@
 
 ### Changed
 
+- Adopted the registered TerminalOutcomes app identity and paid CloudKit and
+  App Attest capabilities for signed device and distribution builds.
+- Made server-configuration edits push immediately to CloudKit, require
+  confirmation on receiving devices, and ignore delayed predecessor
+  generations.
+- Made devices without local session tokens establish their own session from
+  the synchronized native login before making the original API request.
 - Made configured local servers retry automatically on launch and network
   changes, retain successful validation across temporary failures, and fall
   back from local playback and downloads to the primary server.

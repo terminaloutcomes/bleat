@@ -190,7 +190,6 @@
 
         private static let environment = DiagnosticsEnvironment(
             appVersion: "1.2.3",
-            appBuild: "45",
             operatingSystem: "iOS Test"
         )
     }

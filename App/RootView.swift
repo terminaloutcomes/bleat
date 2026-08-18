@@ -915,8 +915,7 @@ private struct DiagnosticsView: View {
             Section("App") {
                 LabeledContent(
                     "Version",
-                    value:
-                        "\(report.environment.appVersion) (\(report.environment.appBuild))"
+                    value: report.environment.appVersion
                 )
                 LabeledContent(
                     "Operating System",

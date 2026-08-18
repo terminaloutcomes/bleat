@@ -311,7 +311,7 @@
                 Generated: \(formatter.string(from: generatedAt))
                 Window start: \(formatter.string(from: cutoff))
                 Window end: \(formatter.string(from: generatedAt))
-                App: \(environment.appVersion) (\(environment.appBuild))
+                App: \(environment.appVersion)
                 Operating system: \(environment.operatingSystem)
                 Truncated: \(historyWasTruncated ? "yes" : "no")
 

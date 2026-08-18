@@ -5023,7 +5023,6 @@ final class AppModelTests: XCTestCase {
             generatedAt: Date(timeIntervalSince1970: 1_721_865_600),
             environment: DiagnosticsEnvironment(
                 appVersion: "0.1.0",
-                appBuild: "7",
                 operatingSystem: "iOS 26.0"
             )
         )
@@ -5046,7 +5045,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(report.webSocketState, "Disconnected")
         XCTAssertEqual(report.localServerState, "Validated — available")
         XCTAssertTrue(report.errorCodes.isEmpty)
-        XCTAssertTrue(report.text.contains("App: 0.1.0 (7)"))
+        XCTAssertTrue(report.text.contains("App: 0.1.0"))
         XCTAssertTrue(report.text.contains("Server version: 2.36.0"))
         XCTAssertTrue(
             report.text.contains(
@@ -5111,7 +5110,6 @@ final class AppModelTests: XCTestCase {
         let report = model.diagnosticsReport(
             environment: DiagnosticsEnvironment(
                 appVersion: "0.1.0",
-                appBuild: "7",
                 operatingSystem: "iOS 26.0"
             )
         )

@@ -4,7 +4,6 @@ import SwiftUI
 struct AppMetadata: Equatable {
     let appName: String
     let version: String
-    let buildNumber: String
     let compileDate: Date?
     let developerName: String
     let bundleIdentifier: String
@@ -20,11 +19,6 @@ struct AppMetadata: Equatable {
         )
         version = Self.value(
             for: "CFBundleShortVersionString",
-            in: infoDictionary,
-            fallback: "Unavailable"
-        )
-        buildNumber = Self.value(
-            for: "CFBundleVersion",
             in: infoDictionary,
             fallback: "Unavailable"
         )
@@ -101,7 +95,6 @@ struct AboutView: View {
 
             Section("App") {
                 LabeledContent("Version", value: metadata.version)
-                LabeledContent("Build", value: metadata.buildNumber)
                 LabeledContent("Compiled", value: metadata.formattedCompileDate)
                     .monospacedDigit()
                 LabeledContent("Developer", value: metadata.developerName)

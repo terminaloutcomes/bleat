@@ -4,7 +4,6 @@ import UIKit
 
 struct DiagnosticsEnvironment: Equatable, Sendable {
     let appVersion: String
-    let appBuild: String
     let operatingSystem: String
 
     @MainActor
@@ -14,9 +13,6 @@ struct DiagnosticsEnvironment: Equatable, Sendable {
         return DiagnosticsEnvironment(
             appVersion: bundle.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
-            ) as? String ?? "Unknown",
-            appBuild: bundle.object(
-                forInfoDictionaryKey: "CFBundleVersion"
             ) as? String ?? "Unknown",
             operatingSystem: "\(device.systemName) \(device.systemVersion)"
         )
@@ -57,7 +53,7 @@ struct DiagnosticsReport: Equatable, Sendable {
         return """
             Bleat Diagnostics
             Generated: \(formatter.string(from: generatedAt))
-            App: \(environment.appVersion) (\(environment.appBuild))
+            App: \(environment.appVersion)
             Operating system: \(environment.operatingSystem)
             App state: \(appState)
             Saved accounts: \(accountCount)
