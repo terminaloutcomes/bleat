@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — Bleat{% endblock title %}
+{% block description %}{{ page.description }}{% endblock description %}
+
+{% block header %}
+<a class="inline-flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="{{ get_url(path='@/_index.md') }}" aria-label="Bleat home">
+  <img class="size-10 rounded-xl shadow-lg shadow-ink/25" src="{{ get_url(path='bleat.svg') }}" alt="">
+  <span class="text-xl font-semibold tracking-tight text-white">Bleat</span>
+</a>
+{% endblock header %}
+
+{% block main %}
+<main id="main-content" class="flex flex-1 items-center">
+  <article class="mx-auto w-full max-w-4xl px-6 pb-24 pt-12 sm:px-8 sm:pb-32 sm:pt-20 lg:px-10">
+    <div class="rounded-3xl border border-white/10 bg-ink/55 p-7 shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-10 lg:p-12">
+      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Age suitability</p>
+      <h1 class="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Content comes from your library.</h1>
+      <p class="mt-7 max-w-3xl text-lg leading-8 text-muted-lilac">Bleat is an app for listening to audiobooks from an Audiobookshelf server chosen and controlled by you or your library administrator.</p>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="library-content-heading">
+        <h2 id="library-content-heading" class="text-2xl font-semibold tracking-tight text-white">Your library controls the content</h2>
+        <div class="mt-4 space-y-4 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <p>Bleat does not provide, select, or host audiobooks. Titles, descriptions, cover art, and audio shown in Bleat come from the connected Audiobookshelf library.</p>
+          <p>The library owner or administrator decides what is available and is responsible for determining whether that content is suitable for each listener.</p>
+        </div>
+      </section>
+    </div>
+  </article>
+</main>
+{% endblock main %}
