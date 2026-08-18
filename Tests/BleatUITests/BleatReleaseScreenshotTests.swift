@@ -24,6 +24,12 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let server = app.textFields["login.server"]
         XCTAssertTrue(server.waitForExistence(timeout: 20))
         server.tap()
+        if let value = server.value as? String, !value.isEmpty {
+            server.press(forDuration: 1)
+            let selectAll = app.menuItems["Select All"]
+            XCTAssertTrue(selectAll.waitForExistence(timeout: 2))
+            selectAll.tap()
+        }
         server.typeText(environment.server)
         app.textFields["login.username"].tap()
         app.textFields["login.username"].typeText(environment.username)
