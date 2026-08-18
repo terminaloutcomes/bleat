@@ -242,7 +242,6 @@ enum PlaybackStartPositionResolver {
 enum AppLaunchStage: Equatable, Sendable {
     case preparing
     case reticulatingSplines
-    case syncingData
     case restoringAccount
     case restoringDownloads
 
@@ -252,8 +251,6 @@ enum AppLaunchStage: Equatable, Sendable {
             "Preparing Bleat"
         case .reticulatingSplines:
             "reticulating splines…"
-        case .syncingData:
-            "Syncing your data"
         case .restoringAccount:
             "Restoring your account"
         case .restoringDownloads:
@@ -1036,6 +1033,8 @@ final class AppModel {
     private var localSessionSyncTask: Task<Void, Never>?
     @ObservationIgnored
     private var networkPathUpdatesTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var privateCloudStartupSyncTask: Task<Void, Never>?
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
@@ -1340,21 +1339,7 @@ final class AppModel {
                 privateCloudSyncEnabled = false
             }
             if privateCloudSyncEnabled {
-                launchStage = .syncingData
-                privateCloudState = .syncing
-                do {
-                    queueCloudServerConfigurationChanges(
-                        try await service.synchronizePrivateCloud()
-                    )
-                    privateCloudState = .idle
-                } catch let error {
-                    privateCloudState = .failed(
-                        AppFailure(
-                            operation: .privateCloudSync,
-                            serviceError: error
-                        )
-                    )
-                }
+                privateCloudState = .idle
             } else {
                 privateCloudState = .disabled
             }
@@ -1399,6 +1384,7 @@ final class AppModel {
                     .completed(.appStart, category: .app)
                 )
                 telemetryOutcome = .succeeded
+                schedulePrivateCloudSyncAfterLaunch()
                 return
             }
             account = restoredAccount
@@ -1417,6 +1403,7 @@ final class AppModel {
                 .completed(.appStart, category: .app)
             )
             telemetryOutcome = .succeeded
+            schedulePrivateCloudSyncAfterLaunch()
         } catch let error {
             let failure = AppFailure(operation: .appStart, serviceError: error)
             telemetryOutcome = failure.remoteTelemetryOutcome
@@ -3479,6 +3466,28 @@ final class AppModel {
             return
         }
         privateCloudState = .syncing
+        await performPrivateCloudSynchronization()
+    }
+
+    private func schedulePrivateCloudSyncAfterLaunch() {
+        guard privateCloudSyncAvailable,
+            privateCloudSyncEnabled,
+            privateCloudState != .syncing,
+            privateCloudStartupSyncTask == nil
+        else {
+            return
+        }
+        privateCloudState = .syncing
+        privateCloudStartupSyncTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            await performPrivateCloudSynchronization()
+            privateCloudStartupSyncTask = nil
+        }
+    }
+
+    private func performPrivateCloudSynchronization() async {
         do {
             queueCloudServerConfigurationChanges(
                 try await service.synchronizePrivateCloud()

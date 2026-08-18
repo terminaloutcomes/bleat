@@ -453,6 +453,11 @@ local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
 
+Launch restores local accounts and downloads before starting private iCloud
+synchronization as background maintenance. A slow CloudKit operation never
+holds the app on its launch screen; synchronization state and retry remain
+available in Settings.
+
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from
 CloudKit is never applied silently: Bleat shows the current and incoming server
