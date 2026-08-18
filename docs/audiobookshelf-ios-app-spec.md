@@ -1629,6 +1629,20 @@ token endpoints unavailable. Production Apple App Attest verification remains
 tracked by issue 65; persistent signing keys and rotation remain tracked by
 issue 66.
 
+The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
+configuration against the development token service. The validated baseline
+checks exact issuer and audience authentication, rejects missing or malformed
+credentials and messages larger than 1 MiB, bounds memory, batching, retry, and
+the in-memory exporter queue, forwards accepted traces only over a private
+internal route, and remains healthy when that exporter is unavailable. The
+captured trace is checked for authentication and installation data. The token's
+`telemetry:write` scope remains part of the single-purpose token. Stock
+Collector processors can inspect verified claims and silently drop telemetry,
+but the stock OIDC authenticator cannot hard-reject an OTLP RPC based on a
+custom claim. Hard scope rejection is not required while the issuer produces
+only this narrow telemetry token with exact issuer and audience semantics. No
+per-installation telemetry accounting is required.
+
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend
 JWTs, usernames, account or installation identifiers, server URLs or network

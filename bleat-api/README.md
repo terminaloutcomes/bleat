@@ -89,6 +89,28 @@ OpenTelemetry SDK. Header values may contain credentials and are never logged.
 Remote exporter failures do not affect health, readiness, or request handling.
 The service uses Rustls with system trust and does not support gRPC export.
 
+## Telemetry Collector baseline
+
+`TelemetryCollector.yaml` is the stock OpenTelemetry Collector Contrib ingress
+configuration exercised by `scripts/test-bleat-api.sh`. The disposable stack
+pins the Collector image by version and digest, validates both Collector
+configurations, and sends the accepted trace to the private capture service in
+`TelemetryCollectorCapture.yaml`.
+
+The ingress validates the token issuer and `aud=bleat-telemetry` through OIDC,
+accepts only authenticated OTLP/gRPC traffic, caps each received message at
+1 MiB, and applies bounded memory, batch, retry, and in-memory queue settings.
+The live test proves that a valid Bleat ES256 JWT reaches the private exporter,
+missing and malformed credentials are rejected, oversized payloads fail, the
+captured trace contains no authentication or installation data, and ingress
+remains healthy while the private exporter is unavailable.
+
+The JWT continues to carry `scope=telemetry:write`. Collector processors can
+inspect verified claims and silently drop telemetry, but the stock OIDC
+authenticator cannot hard-reject an OTLP RPC based on a custom claim. Hard
+scope rejection is not required for this baseline because the issuer produces
+only this narrow telemetry token with exact issuer and audience semantics.
+
 ## Routes
 
 - `GET /healthz` returns process liveness.

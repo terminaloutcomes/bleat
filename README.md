@@ -1042,6 +1042,14 @@ Release build, and live container checks with:
 mise run api:validate
 ```
 
+The live workflow also validates a pinned stock OpenTelemetry Collector Contrib
+configuration. It proves issuer/audience authentication, rejection of missing
+or malformed credentials and oversized messages, private trace delivery without
+authentication data, bounded exporter failure, and Collector health while the
+private exporter is unavailable. The single-purpose token still carries
+`telemetry:write`, but hard claim-based RPC rejection is not required for this
+baseline; it does not add per-installation accounting.
+
 Local structured logs remain active when optional OTLP/HTTP trace and log
 export is configured. See `bleat-api/README.md` for the complete configuration
 and route contract.

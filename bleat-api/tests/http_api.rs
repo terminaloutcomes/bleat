@@ -407,6 +407,10 @@ async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
         discovery["jwks_uri"],
         "http://127.0.0.1:8080/.well-known/jwks.json"
     );
+    assert_eq!(
+        discovery["id_token_signing_alg_values_supported"],
+        serde_json::json!(["ES256"])
+    );
 
     let jwks = router
         .oneshot(

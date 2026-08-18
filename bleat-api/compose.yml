@@ -39,11 +39,67 @@ services:
     environment:
       BLEAT_API_BIND_ADDRESS: 0.0.0.0:8080
       BLEAT_API_DATABASE_URL: postgres://bleat:development-only@postgres:5432/bleat
+      BLEAT_API_PUBLIC_ISSUER: ${BLEAT_API_PUBLIC_ISSUER:-http://127.0.0.1:18080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BLEAT_API_TEST_PORT:-18080}:8080"
+
+  telemetry-capture:
+    image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./TelemetryCollectorCapture.yaml:/etc/otelcol/config.yaml:ro
+      - ${BLEAT_TELEMETRY_CAPTURE_DIRECTORY:-/tmp/bleat-telemetry-capture}:/output
+    networks:
+      - telemetry-private
+
+  telemetry-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      BLEAT_TELEMETRY_ISSUER: http://host.docker.internal:${BLEAT_API_TEST_PORT:-18080}
+      BLEAT_TELEMETRY_PRIVATE_OTLP_ENDPOINT: telemetry-capture:4317
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./TelemetryCollector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      api:
+        condition: service_started
+      telemetry-capture:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT:-14317}:4317"
+      - "127.0.0.1:${BLEAT_TELEMETRY_COLLECTOR_HEALTH_TEST_PORT:-13133}:13133"
+    networks:
+      - default
+      - telemetry-private
+
+  telemetry-collector-outage:
+    image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      BLEAT_TELEMETRY_ISSUER: http://host.docker.internal:${BLEAT_API_TEST_PORT:-18080}
+      BLEAT_TELEMETRY_PRIVATE_OTLP_ENDPOINT: unavailable:4317
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./TelemetryCollector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT:-24317}:4317"
+      - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_HEALTH_TEST_PORT:-23133}:13133"
+      - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_METRICS_TEST_PORT:-28888}:8888"
+    networks:
+      - default
+      - telemetry-private
+
   tests:
     build:
       context: ..
@@ -67,3 +123,7 @@ services:
 volumes:
   telemetry-tls-data:
   telemetry-tls-config:
+
+networks:
+  telemetry-private:
+    internal: true

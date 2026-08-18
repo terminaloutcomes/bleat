@@ -141,6 +141,7 @@ pub struct OpenIdConfiguration {
     pub issuer: String,
     pub jwks_uri: String,
     pub token_endpoint: String,
+    pub id_token_signing_alg_values_supported: [&'static str; 1],
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -214,6 +215,7 @@ impl DevelopmentTokenIssuer {
             issuer: self.issuer.clone(),
             jwks_uri: format!("{}/.well-known/jwks.json", self.issuer),
             token_endpoint: format!("{}/v1/token", self.issuer),
+            id_token_signing_alg_values_supported: ["ES256"],
         }
     }
 
