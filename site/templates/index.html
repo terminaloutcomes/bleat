@@ -1,34 +1,7 @@
-<!doctype html>
-<html lang="{{ config.default_language }}">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="{{ config.description }}">
-    <meta name="theme-color" content="#2b025d">
-    <title>{{ config.title }} — Native Audiobookshelf listening</title>
-    <link rel="icon" type="image/svg+xml" href="{{ get_url(path='bleat.svg') }}">
-    <link rel="stylesheet" href="{{ get_url(path='styles.css', cachebust=true) }}">
-  </head>
-  <body class="bg-ink font-sans text-mist antialiased">
-    <div class="relative isolate overflow-hidden">
-      <div aria-hidden="true" class="absolute inset-x-0 top-0 -z-10 h-[50rem] overflow-hidden bg-plum">
-        <div class="absolute -left-40 top-12 size-96 rounded-full bg-lilac/30 blur-3xl"></div>
-        <div class="absolute right-0 top-48 size-[28rem] rounded-full bg-violet/60 blur-3xl"></div>
-        <div class="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-ink to-transparent"></div>
-      </div>
+{% extends "base.html" %}
 
-      <header class="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8 lg:px-10">
-        <!-- <a class="inline-flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="#top" aria-label="Bleat home">
-          <img class="size-10 rounded-xl shadow-lg shadow-ink/25" src="{{ get_url(path='bleat.svg') }}" alt="">
-          <span class="text-xl font-semibold tracking-tight text-white">Bleat</span>
-        </a> -->
-        <!-- <nav aria-label="Primary navigation" class="hidden items-center gap-7 text-sm font-medium text-muted-lilac sm:flex">
-          <a class="rounded-md transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="#about">About</a>
-          <a class="rounded-md transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="#listening">Listening</a>
-        </nav> -->
-      </header>
-
-      <main id="top">
+{% block main %}
+      <main id="top" class="flex-1">
         <section id="about" class="mx-auto grid max-w-6xl gap-12 px-6 pb-28 pt-18 sm:px-8 sm:pb-36 sm:pt-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-20 lg:px-10">
           <div>
             <h1 class="max-w-3xl text-5xl font-semibold tracking-[-0.045em] text-white sm:text-6xl lg:text-7xl">Your library, made for listening.</h1>
@@ -113,13 +86,4 @@
         </section>
 
       </main>
-
-      <footer class="border-t border-white/10 px-6 py-8 sm:px-8 lg:px-10">
-        <div class="mx-auto flex max-w-6xl items-center justify-between text-sm text-muted-lilac">
-          <span>Bleat - <a href="https://terminaloutcomes.com">A Terminal Outcomes project</a></span>
-          <span><a href="mailto:bleat@terminaloutcomes.com">Contact</a></span>
-        </div>
-      </footer>
-    </div>
-  </body>
-</html>
+{% endblock main %}
