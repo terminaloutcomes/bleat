@@ -147,6 +147,8 @@ targets:
   BleatUITests:
     type: bundle.ui-testing
     platform: iOS
+    supportedDestinations:
+      - iOS
     sources:
       - path: Tests/BleatUITests
     dependencies:
