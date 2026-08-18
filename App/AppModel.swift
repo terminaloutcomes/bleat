@@ -1084,6 +1084,8 @@ final class AppModel {
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
+    private(set) var pendingCloudServerConfigurationChanges:
+        [CloudServerConfigurationChange] = []
     private(set) var remoteTelemetryEnabled: Bool
     let playback: PlaybackModel
     let downloads: DownloadModel
@@ -1341,7 +1343,9 @@ final class AppModel {
                 launchStage = .syncingData
                 privateCloudState = .syncing
                 do {
-                    try await service.synchronizePrivateCloud()
+                    queueCloudServerConfigurationChanges(
+                        try await service.synchronizePrivateCloud()
+                    )
                     privateCloudState = .idle
                 } catch let error {
                     privateCloudState = .failed(
@@ -1652,6 +1656,24 @@ final class AppModel {
                 await downloads.start(account: updated)
                 await loadLibraries()
                 startLiveUpdates(for: updated)
+            }
+            if privateCloudSyncEnabled {
+                privateCloudState = .syncing
+                do {
+                    try await service
+                        .forcePushPrivateCloudServerConfiguration(updated)
+                    pendingCloudServerConfigurationChanges.removeAll {
+                        $0.id == updated.id
+                    }
+                    privateCloudState = .idle
+                } catch let error {
+                    privateCloudState = .failed(
+                        AppFailure(
+                            operation: .privateCloudSync,
+                            serviceError: error
+                        )
+                    )
+                }
             }
             loginStatus = .idle
             return .saved
@@ -3458,7 +3480,9 @@ final class AppModel {
         }
         privateCloudState = .syncing
         do {
-            try await service.synchronizePrivateCloud()
+            queueCloudServerConfigurationChanges(
+                try await service.synchronizePrivateCloud()
+            )
             accounts = try await service.accounts()
             if let active = try await service.activeAccount() {
                 account = active
@@ -3477,12 +3501,56 @@ final class AppModel {
         }
     }
 
+    func resolveCloudServerConfigurationChange(
+        _ change: CloudServerConfigurationChange,
+        accept: Bool
+    ) async {
+        privateCloudState = .syncing
+        do {
+            try await service.resolvePrivateCloudServerConfigurationChange(
+                accountID: change.id,
+                accept: accept
+            )
+            pendingCloudServerConfigurationChanges.removeAll {
+                $0.id == change.id
+            }
+            privateCloudState = .idle
+            guard accept else {
+                return
+            }
+            await stopLiveUpdatesAndWait()
+            hasStarted = false
+            phase = .launching
+            launchStage = initialLaunchStage
+            await start()
+        } catch let error {
+            privateCloudState = .failed(
+                AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
+    private func queueCloudServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) {
+        for change in changes {
+            pendingCloudServerConfigurationChanges.removeAll {
+                $0.id == change.id
+            }
+            pendingCloudServerConfigurationChanges.append(change)
+        }
+    }
+
     func setPrivateCloudSyncEnabled(
         _ enabled: Bool,
         deleteCloudData: Bool = false
     ) async {
         guard privateCloudSyncAvailable else {
             privateCloudSyncEnabled = false
+            pendingCloudServerConfigurationChanges.removeAll()
             privateCloudState = .disabled
             return
         }
@@ -3493,6 +3561,9 @@ final class AppModel {
                 deleteCloudData: deleteCloudData
             )
             privateCloudSyncEnabled = enabled
+            if !enabled {
+                pendingCloudServerConfigurationChanges.removeAll()
+            }
             privateCloudState = enabled ? .idle : .disabled
         } catch let error {
             privateCloudState = .failed(

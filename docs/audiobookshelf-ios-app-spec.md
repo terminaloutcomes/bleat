@@ -1307,11 +1307,19 @@ Listening history contains personal behavioral data. It receives the same file p
 - Structured statistics remain eligible for encrypted device backup; downloaded audio and regenerable covers remain excluded.
 
 Private CloudKit synchronization is opt-out and uses
-`iCloud.com.yaleman.Bleat`. Mergeable ledger records, completion
+`iCloud.com.terminaloutcomes.Bleat`. Mergeable ledger records, completion
 milestones, non-secret account descriptors, and playback/download preferences
 use the private database. Access and refresh tokens never enter CloudKit or
 iCloud Keychain. Disabling synchronization keeps all local data and offers to
-retain or delete the private CloudKit zone. `BLEAT_CLOUDKIT_MODE=disabled`
+retain or delete the private CloudKit zone. Saving primary or local server
+settings immediately pushes the updated non-secret account descriptor. A
+different account descriptor fetched from CloudKit remains pending until the
+user explicitly accepts its server URLs or keeps the device's current URLs;
+keeping the device values pushes them back to CloudKit. A cloud-only account
+likewise requires confirmation before it is added locally. Account descriptors
+carry a generation ID and predecessor identity; a delayed predecessor is stale
+and must be ignored and replaced without prompting or changing local settings.
+`BLEAT_CLOUDKIT_MODE=disabled`
 selects CloudKit-free entitlements for development teams that do not support
 the capability; those builds do not initialize or present CloudKit
 synchronization. `enabled` is the default and the only other supported value.

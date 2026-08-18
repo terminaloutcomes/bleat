@@ -88,4 +88,4 @@ public struct SeriesID: RawRepresentable, Hashable, Codable, Sendable {
     }
 }
 
-public let AppIdentifier: String = "com.yaleman.Bleat"
+public let AppIdentifier: String = "com.terminaloutcomes.Bleat"

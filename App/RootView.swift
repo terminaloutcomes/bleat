@@ -128,6 +128,38 @@ struct RootView: View {
                 Text(failure.message)
             }
         }
+        .alert(
+            "Use Server Settings from iCloud?",
+            isPresented: Binding(
+                get: {
+                    !model.pendingCloudServerConfigurationChanges.isEmpty
+                },
+                set: { _ in }
+            ),
+            presenting: model.pendingCloudServerConfigurationChanges.first
+        ) { change in
+            Button("Use iCloud Settings") {
+                Task {
+                    await model.resolveCloudServerConfigurationChange(
+                        change,
+                        accept: true
+                    )
+                }
+            }
+            Button(
+                change.current == nil ? "Don't Add" : "Keep This Device",
+                role: .cancel
+            ) {
+                Task {
+                    await model.resolveCloudServerConfigurationChange(
+                        change,
+                        accept: false
+                    )
+                }
+            }
+        } message: { change in
+            Text(cloudServerConfigurationChangeMessage(change))
+        }
         .sheet(isPresented: $isShowingPrivacySettings) {
             NavigationStack {
                 Form {
@@ -152,6 +184,19 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    private func cloudServerConfigurationChangeMessage(
+        _ change: CloudServerConfigurationChange
+    ) -> String {
+        let incomingLocal = change.incoming.localServer?.url.absoluteString
+            ?? "None"
+        if let current = change.current {
+            let currentLocal = current.localServer?.url.absoluteString
+                ?? "None"
+            return "This device uses primary \(current.server.url.absoluteString) and local \(currentLocal). iCloud returned primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
+        }
+        return "iCloud returned a saved account using primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
     }
 
 }

@@ -1,4 +1,5 @@
 import CloudKit
+import CryptoKit
 import Foundation
 
 public enum PrivateCloudSyncStatus: Equatable, Sendable {
@@ -15,6 +16,45 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     case invalidRecord
     case persistenceFailed
     case cloudUnavailable
+}
+
+public struct CloudServerConfigurationChange:
+    Equatable, Identifiable, Sendable
+{
+    public let current: ServerAccount?
+    public let incoming: ServerAccount
+
+    public var id: AccountID {
+        incoming.id
+    }
+
+    public init(current: ServerAccount?, incoming: ServerAccount) {
+        self.current = current
+        self.incoming = incoming
+    }
+}
+
+struct CloudServerAccountRecordPayload: Codable, Equatable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let generationID: UUID
+    let supersededGenerationID: UUID?
+    let supersededPayloadDigest: Data?
+    let account: ServerAccount
+
+    init(
+        generationID: UUID = UUID(),
+        supersededGenerationID: UUID? = nil,
+        supersededPayloadDigest: Data?,
+        account: ServerAccount
+    ) {
+        schemaVersion = Self.currentSchemaVersion
+        self.generationID = generationID
+        self.supersededGenerationID = supersededGenerationID
+        self.supersededPayloadDigest = supersededPayloadDigest
+        self.account = account
+    }
 }
 
 public enum HeadphoneCommandAction:
@@ -266,7 +306,7 @@ public actor CloudConfigurationStore {
     }
 }
 
-private actor PrivateCloudSyncStore {
+actor PrivateCloudSyncStore {
     static let zoneName = "BleatPrivateData"
     static let payloadKey = "payload"
 
@@ -280,6 +320,14 @@ private actor PrivateCloudSyncStore {
     private let ignoredStatisticsKey =
         "bleat.cloudKit.ignoredStatisticsAccounts.v1"
     private var records: [CKRecord.ID: CKRecord] = [:]
+    private var pendingAccountChanges:
+        [AccountID: CloudServerConfigurationChange] = [:]
+
+    private enum IncomingRecordResolution {
+        case applyRemote
+        case preserveLocal(Data)
+        case requestAccountConfirmation(CloudServerConfigurationChange)
+    }
 
     init(
         statistics: StatisticsRepository,
@@ -341,12 +389,14 @@ private actor PrivateCloudSyncStore {
             )
         }
         for account in accountValues {
+            guard pendingAccountChanges[account.id] == nil else {
+                continue
+            }
             prepared.append(
-                try record(
-                    type: "ServerAccount",
-                    name: "account.\(account.id.rawValue)",
-                    value: account,
-                    zoneID: zoneID
+                try accountRecord(
+                    account,
+                    zoneID: zoneID,
+                    forceNewGeneration: false
                 )
             )
         }
@@ -373,9 +423,7 @@ private actor PrivateCloudSyncStore {
         deletions: [CKDatabase.RecordZoneChange.Deletion]
     ) async throws {
         for modification in modifications {
-            let record = modification.record
-            records[record.recordID] = record
-            try await apply(record)
+            try await applyFetchedRecord(modification.record)
         }
         for deletion in deletions {
             records.removeValue(forKey: deletion.recordID)
@@ -384,6 +432,85 @@ private actor PrivateCloudSyncStore {
                 recordType: deletion.recordType
             )
         }
+    }
+
+    func applyFetchedRecord(_ record: CKRecord) async throws {
+        let resolution = try await resolveIncomingRecord(
+            record,
+            previousRecord: records[record.recordID]
+        )
+        switch resolution {
+        case .applyRemote:
+            records[record.recordID] = record
+            try await apply(record)
+        case .preserveLocal(let data):
+            record[Self.payloadKey] = data as CKRecordValue
+            records[record.recordID] = record
+        case .requestAccountConfirmation(let change):
+            records[record.recordID] = record
+            pendingAccountChanges[change.id] = change
+        }
+    }
+
+    func prepareAccountRecord(
+        _ account: ServerAccount,
+        zoneID: CKRecordZone.ID
+    ) throws -> CKRecord {
+        pendingAccountChanges[account.id] = nil
+        let record = try accountRecord(
+            account,
+            zoneID: zoneID,
+            forceNewGeneration: true
+        )
+        records[record.recordID] = record
+        return record
+    }
+
+    func pendingServerConfigurationChanges()
+        -> [CloudServerConfigurationChange]
+    {
+        pendingAccountChanges.values.sorted {
+            $0.incoming.user.username.localizedStandardCompare(
+                $1.incoming.user.username
+            ) == .orderedAscending
+        }
+    }
+
+    func acceptServerConfigurationChange(
+        accountID: AccountID
+    ) async throws {
+        guard let change = pendingAccountChanges.removeValue(
+            forKey: accountID
+        ) else {
+            return
+        }
+        do {
+            try await accounts.save(change.incoming)
+        } catch {
+            pendingAccountChanges[accountID] = change
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+    }
+
+    func rejectServerConfigurationChange(
+        accountID: AccountID,
+        zoneID: CKRecordZone.ID
+    ) async throws -> CKRecord? {
+        guard let change = pendingAccountChanges.removeValue(
+            forKey: accountID
+        ) else {
+            return nil
+        }
+        guard let current = change.current else {
+            var ignored = ignoredAccountIDs()
+            ignored.insert(accountID.rawValue)
+            defaults.set(
+                Array(ignored).sorted(),
+                forKey: ignoredAccountsKey
+            )
+            return nil
+        }
+        return try prepareAccountRecord(current, zoneID: zoneID)
     }
 
     func allRecordIDs() -> [CKRecord.ID] {
@@ -473,6 +600,44 @@ private actor PrivateCloudSyncStore {
         return record
     }
 
+    private func accountRecord(
+        _ account: ServerAccount,
+        zoneID: CKRecordZone.ID,
+        forceNewGeneration: Bool
+    ) throws -> CKRecord {
+        let recordID = CKRecord.ID(
+            recordName: "account.\(account.id.rawValue)",
+            zoneID: zoneID
+        )
+        let record =
+            records[recordID]
+            ?? CKRecord(recordType: "ServerAccount", recordID: recordID)
+        let previousData = record[Self.payloadKey] as? Data
+        if !forceNewGeneration,
+            let previousData,
+            try decodeAccountPayload(previousData).account == account
+        {
+            return record
+        }
+        let payload = CloudServerAccountRecordPayload(
+            supersededGenerationID: previousData.flatMap {
+                try? JSONDecoder().decode(
+                    CloudServerAccountRecordPayload.self,
+                    from: $0
+                ).generationID
+            },
+            supersededPayloadDigest: previousData.map(Self.payloadDigest),
+            account: account
+        )
+        do {
+            record[Self.payloadKey] =
+                try JSONEncoder().encode(payload) as CKRecordValue
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+        return record
+    }
+
     private func apply(_ record: CKRecord) async throws {
         guard let data = record[Self.payloadKey] as? Data else {
             throw PrivateCloudSyncError.invalidRecord
@@ -522,10 +687,7 @@ private actor PrivateCloudSyncStore {
                     try await statistics.upsertRemoteSessions([value])
                 }
             case "ServerAccount":
-                let value = try JSONDecoder().decode(
-                    ServerAccount.self,
-                    from: data
-                )
+                let value = try decodeAccountPayload(data).account
                 if !ignoredAccountIDs().contains(value.id.rawValue) {
                     try await accounts.save(value)
                 }
@@ -543,6 +705,103 @@ private actor PrivateCloudSyncStore {
         } catch {
             throw PrivateCloudSyncError.invalidRecord
         }
+    }
+
+    private func resolveIncomingRecord(
+        _ record: CKRecord,
+        previousRecord: CKRecord?
+    ) async throws -> IncomingRecordResolution {
+        guard let incomingData = record[Self.payloadKey] as? Data else {
+            throw PrivateCloudSyncError.invalidRecord
+        }
+
+        do {
+            switch record.recordType {
+            case "ServerAccount":
+                let incomingPayload = try decodeAccountPayload(incomingData)
+                let incoming = incomingPayload.account
+                if ignoredAccountIDs().contains(incoming.id.rawValue) {
+                    return .applyRemote
+                }
+                let current = try await accounts.account(id: incoming.id)
+                if let previousRecord,
+                    let previousData =
+                        previousRecord[Self.payloadKey] as? Data,
+                    let previousPayload = try? JSONDecoder().decode(
+                        CloudServerAccountRecordPayload.self,
+                        from: previousData
+                    ),
+                    previousPayload.schemaVersion
+                        == CloudServerAccountRecordPayload
+                        .currentSchemaVersion,
+                    previousPayload.account == current,
+                    previousPayload.supersededGenerationID
+                        == incomingPayload.generationID
+                        || previousPayload.supersededPayloadDigest
+                            == Self.payloadDigest(incomingData)
+                {
+                    return .preserveLocal(previousData)
+                }
+                guard current != incoming else {
+                    return .applyRemote
+                }
+                return .requestAccountConfirmation(
+                    CloudServerConfigurationChange(
+                        current: current,
+                        incoming: incoming
+                    )
+                )
+            case "Configuration":
+                guard let previousRecord,
+                    let previousData = previousRecord[Self.payloadKey] as? Data
+                else {
+                    return .applyRemote
+                }
+                let previous = try JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self,
+                    from: previousData
+                )
+                let incoming = try JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self,
+                    from: incomingData
+                )
+                let local = await configuration.snapshot()
+                guard local != previous, local != incoming else {
+                    return .applyRemote
+                }
+                return .preserveLocal(try JSONEncoder().encode(local))
+            default:
+                return .applyRemote
+            }
+        } catch let error as PrivateCloudSyncError {
+            throw error
+        } catch {
+            throw PrivateCloudSyncError.invalidRecord
+        }
+    }
+
+    private func decodeAccountPayload(
+        _ data: Data
+    ) throws -> CloudServerAccountRecordPayload {
+        if let payload = try? JSONDecoder().decode(
+            CloudServerAccountRecordPayload.self,
+            from: data
+        ) {
+            guard payload.schemaVersion
+                == CloudServerAccountRecordPayload.currentSchemaVersion
+            else {
+                throw PrivateCloudSyncError.invalidRecord
+            }
+            return payload
+        }
+        return CloudServerAccountRecordPayload(
+            supersededPayloadDigest: nil,
+            account: try JSONDecoder().decode(ServerAccount.self, from: data)
+        )
+    }
+
+    private static func payloadDigest(_ data: Data) -> Data {
+        Data(SHA256.hash(data: data))
     }
 
     private func applyDeletion(
@@ -624,7 +883,7 @@ public final class PrivateCloudSyncCoordinator:
     @unchecked Sendable
 {
     public static let containerIdentifier =
-        "iCloud.com.yaleman.Bleat"
+        "iCloud.com.terminaloutcomes.Bleat"
 
     private let store: PrivateCloudSyncStore
     private let defaults: UserDefaults
@@ -713,6 +972,87 @@ public final class PrivateCloudSyncCoordinator:
             default:
                 throw .cloudUnavailable
             }
+        } catch let error as PrivateCloudSyncError {
+            throw error
+        } catch {
+            throw .cloudUnavailable
+        }
+    }
+
+    public func forcePushServerConfiguration(
+        _ account: ServerAccount
+    ) async throws(PrivateCloudSyncError) {
+        guard isEnabled else {
+            throw .disabled
+        }
+        guard let engine else {
+            throw .cloudUnavailable
+        }
+        do {
+            let record = try await store.prepareAccountRecord(
+                account,
+                zoneID: zoneID
+            )
+            engine.state.add(
+                pendingRecordZoneChanges: [
+                    .saveRecord(record.recordID)
+                ]
+            )
+            try await engine.sendChanges(
+                CKSyncEngine.SendChangesOptions(
+                    scope: .recordIDs([record.recordID])
+                )
+            )
+        } catch let error as CKError {
+            switch error.code {
+            case .notAuthenticated, .accountTemporarilyUnavailable:
+                throw .accountUnavailable
+            default:
+                throw .cloudUnavailable
+            }
+        } catch let error as PrivateCloudSyncError {
+            throw error
+        } catch {
+            throw .cloudUnavailable
+        }
+    }
+
+    public func pendingServerConfigurationChanges() async
+        -> [CloudServerConfigurationChange]
+    {
+        await store.pendingServerConfigurationChanges()
+    }
+
+    public func resolveServerConfigurationChange(
+        accountID: AccountID,
+        accept: Bool
+    ) async throws(PrivateCloudSyncError) {
+        do {
+            if accept {
+                try await store.acceptServerConfigurationChange(
+                    accountID: accountID
+                )
+                return
+            }
+            guard let record = try await store.rejectServerConfigurationChange(
+                accountID: accountID,
+                zoneID: zoneID
+            ) else {
+                return
+            }
+            guard let engine else {
+                throw PrivateCloudSyncError.cloudUnavailable
+            }
+            engine.state.add(
+                pendingRecordZoneChanges: [
+                    .saveRecord(record.recordID)
+                ]
+            )
+            try await engine.sendChanges(
+                CKSyncEngine.SendChangesOptions(
+                    scope: .recordIDs([record.recordID])
+                )
+            )
         } catch let error as PrivateCloudSyncError {
             throw error
         } catch {

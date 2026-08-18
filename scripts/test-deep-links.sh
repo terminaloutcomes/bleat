@@ -5,12 +5,12 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_run_id="$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
-readonly bleat_bundle_identifier="com.yaleman.Bleat"
+readonly bleat_bundle_identifier="com.terminaloutcomes.Bleat"
 readonly bleat_device_type="${BLEAT_DEEP_LINK_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
 readonly bleat_receipt_key="bleatUITestLastDeepLinkReceipt"
 readonly bleat_driver_ready_key="bleatUITestExternalURLDriverReady"
 readonly bleat_driver_complete_key="bleatUITestExternalURLDriverComplete"
-readonly bleat_driver_bundle_identifier="com.yaleman.BleatUITests.xctrunner"
+readonly bleat_driver_bundle_identifier="com.terminaloutcomes.BleatUITests.xctrunner"
 
 if [[ -n "${BLEAT_DEEP_LINK_DERIVED_DATA:-}" ]]; then
     readonly bleat_derived_data="${BLEAT_DEEP_LINK_DERIVED_DATA}"

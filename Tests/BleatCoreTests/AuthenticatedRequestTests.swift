@@ -1201,6 +1201,63 @@ final class AuthenticatedRequestTests: XCTestCase {
         }
     }
 
+    func testMissingSessionTokensUseSynchronizedNativeLogin() async throws {
+        let accountID = AccountID(rawValue: "cloud-account")
+        let server = try NormalizedServerURL("https://example.com")
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "user-id"),
+            username: "reader",
+            password: "saved-password"
+        )
+        let recoveredTokens = try AuthenticationTokens(
+            accessToken: "device-access",
+            refreshToken: "device-refresh"
+        )
+        let store = RequestCredentialStore(
+            credentials: [:],
+            nativeLogins: [accountID: nativeLogin]
+        )
+        let transport = ScriptedRequestTransport(responses: [
+            .success(
+                .json(
+                    Self.authenticationJSON(
+                        accessToken: recoveredTokens.accessToken,
+                        refreshToken: recoveredTokens.refreshToken
+                    )
+                )
+            ),
+            .success(.json(Self.authenticationJSON())),
+            .success(.init(data: Data(), statusCode: 200)),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+
+        let response = try await coordinator.sendAuthenticated(
+            try Self.request(for: .libraries, server: server),
+            route: .libraries,
+            accountID: accountID,
+            server: server
+        )
+        let requestPaths = await transport.recordedRequests().map(\.url?.path)
+        let storedTokens = try await store.credentials(for: accountID)
+        let storedNativeLogin = try await store.nativeLoginCredentials(
+            for: accountID
+        )
+        let requiresReauthentication = await coordinator
+            .requiresReauthentication(for: accountID)
+
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(
+            requestPaths,
+            ["/login", "/api/authorize", "/api/libraries"]
+        )
+        XCTAssertEqual(storedTokens, recoveredTokens)
+        XCTAssertEqual(storedNativeLogin, nativeLogin)
+        XCTAssertFalse(requiresReauthentication)
+    }
+
     func testCredentialFailuresAreTyped() async throws {
         let missingFixture = try Fixture(
             responses: [],

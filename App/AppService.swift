@@ -636,6 +636,16 @@ protocol AppServicing: Sendable {
     func isPrivateCloudSyncEnabled() async -> Bool
 
     func synchronizePrivateCloud() async throws(AppServiceError)
+        -> [CloudServerConfigurationChange]
+
+    func forcePushPrivateCloudServerConfiguration(
+        _ account: ServerAccount
+    ) async throws(AppServiceError)
+
+    func resolvePrivateCloudServerConfigurationChange(
+        accountID: AccountID,
+        accept: Bool
+    ) async throws(AppServiceError)
 
     func setPrivateCloudSyncEnabled(
         _ enabled: Bool,
@@ -853,7 +863,20 @@ extension AppServicing {
         true
     }
 
-    func synchronizePrivateCloud() async throws(AppServiceError) {}
+    func synchronizePrivateCloud() async throws(AppServiceError)
+        -> [CloudServerConfigurationChange]
+    {
+        []
+    }
+
+    func forcePushPrivateCloudServerConfiguration(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {}
+
+    func resolvePrivateCloudServerConfigurationChange(
+        accountID: AccountID,
+        accept: Bool
+    ) async throws(AppServiceError) {}
 
     func setPrivateCloudSyncEnabled(
         _ enabled: Bool,
@@ -948,9 +971,9 @@ actor LiveAppService: AppServicing {
                     forKey: "bleat.cloudKit.enabled.v1"
                 ))
         credentialStore = TokenVault(
-            tokenService: "com.yaleman.Bleat.session-tokens",
-            nativeLoginService: "com.yaleman.Bleat.native-login",
-            legacyService: "com.yaleman.Bleat.credentials",
+            tokenService: "com.terminaloutcomes.Bleat.session-tokens",
+            nativeLoginService: "com.terminaloutcomes.Bleat.native-login",
+            legacyService: "com.terminaloutcomes.Bleat.credentials",
             synchronizesNativeLogin: privateCloudEnabled
         )
         coordinator = Coordinator(
@@ -2561,15 +2584,68 @@ actor LiveAppService: AppServicing {
         privateCloudSync?.isEnabled ?? false
     }
 
-    func synchronizePrivateCloud() async throws(AppServiceError) {
+    func synchronizePrivateCloud() async throws(AppServiceError)
+        -> [CloudServerConfigurationChange]
+    {
         guard let privateCloudSync else {
             throw .privateCloud(.disabled)
         }
         do {
             try await privateCloudSync.synchronize()
+            return await privateCloudSync
+                .pendingServerConfigurationChanges()
+        } catch let error as PrivateCloudSyncError {
+            throw .privateCloud(error)
+        }
+    }
+
+    func forcePushPrivateCloudServerConfiguration(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(.disabled)
+        }
+        do {
+            try await privateCloudSync.forcePushServerConfiguration(account)
         } catch let error {
             throw .privateCloud(error)
         }
+    }
+
+    func resolvePrivateCloudServerConfigurationChange(
+        accountID: AccountID,
+        accept: Bool
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(.disabled)
+        }
+        do {
+            try await privateCloudSync.resolveServerConfigurationChange(
+                accountID: accountID,
+                accept: accept
+            )
+        } catch let error {
+            throw .privateCloud(error)
+        }
+        guard accept else {
+            return
+        }
+        let account: ServerAccount?
+        do {
+            account = try await accountStore.account(id: accountID)
+        } catch let error {
+            throw .accountStore(error)
+        }
+        guard let account else {
+            return
+        }
+        await endpointRouter.configure(
+            primary: account.server,
+            local:
+                account.localServerValidated
+                ? account.localServer
+                : nil
+        )
     }
 
     func setPrivateCloudSyncEnabled(

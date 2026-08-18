@@ -237,7 +237,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             attester = AppAttestTelemetryAttester()
         }
 
-        let bundleID = bundle.bundleIdentifier ?? "com.yaleman.Bleat"
+        let bundleID = bundle.bundleIdentifier ?? "com.terminaloutcomes.Bleat"
         return TelemetryTokenProvider(
             attester: attester,
             transport: transport,

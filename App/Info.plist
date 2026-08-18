@@ -42,7 +42,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>bleat</string>
-				<string>com.yaleman.bleat</string>
+				<string>com.terminaloutcomes.bleat</string>
 			</array>
 		</dict>
 	</array>

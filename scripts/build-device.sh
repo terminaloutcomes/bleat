@@ -19,7 +19,7 @@ if [ -d "${bleat_app}" ]; then
   rm -rf "${bleat_app}"
 fi
 
-readonly build_without_paid_developer="${BUILD_WITHOUT_PAID_DEVELOPER:-YES}"
+readonly build_without_paid_developer="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}"
 
 echo "Building Bleat for the configured device..."
 

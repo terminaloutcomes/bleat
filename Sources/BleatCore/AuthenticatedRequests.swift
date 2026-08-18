@@ -116,7 +116,10 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.requestDoesNotMatchRoute
         }
 
-        let initialTokens = try await storedCredentials(for: accountID)
+        let initialTokens = try await credentialsForInitialRequest(
+            accountID: accountID,
+            server: server
+        )
         let tracedRequest = TracedHTTPRequest(
             request: request,
             endpoint: route.diagnosticEndpoint,
@@ -210,6 +213,64 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.missingCredentials
         }
         return credentials
+    }
+
+    private func credentialsForInitialRequest(
+        accountID: AccountID,
+        server: NormalizedServerURL
+    ) async throws(AuthenticatedRequestError) -> AuthenticationTokens {
+        do {
+            return try await storedCredentials(for: accountID)
+        } catch AuthenticatedRequestError.missingCredentials {
+            // A second device intentionally has no synchronized session tokens.
+            // Use its synchronized native login to establish a fresh local
+            // session before issuing the original request.
+        } catch let error as AuthenticatedRequestError {
+            throw error
+        } catch {
+            throw .credentialsReadFailed
+        }
+
+        let nativeLogin: NativeLoginCredentials
+        do {
+            guard let savedLogin = try await credentialStore
+                .nativeLoginCredentials(for: accountID)
+            else {
+                throw AuthenticatedRequestError.missingCredentials
+            }
+            nativeLogin = savedLogin
+        } catch let error as AuthenticatedRequestError {
+            throw error
+        } catch {
+            reauthenticationRequiredAccounts.remove(accountID)
+            throw .savedLoginCredentialsReadFailed
+        }
+
+        do {
+            let result = try await Self.authenticateLocally(
+                accountID: accountID,
+                server: server,
+                username: nativeLogin.username,
+                password: nativeLogin.password,
+                expectedUserID: nativeLogin.userID,
+                persistCredentials: true,
+                transport: transport,
+                credentialStore: credentialStore
+            )
+            reauthenticationRequiredAccounts.remove(accountID)
+            return result.tokens
+        } catch let error as LocalAuthenticationError {
+            switch error.recoveryDisposition {
+            case .retryable:
+                reauthenticationRequiredAccounts.remove(accountID)
+            case .reauthenticationRequired:
+                reauthenticationRequiredAccounts.insert(accountID)
+            }
+            throw .automaticReauthenticationFailed(error)
+        } catch {
+            reauthenticationRequiredAccounts.remove(accountID)
+            throw .automaticReauthenticationTransportFailed
+        }
     }
 
     private func send(

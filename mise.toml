@@ -141,11 +141,11 @@ run = [
 
 [tasks."iphone:build"]
 description = "Build a development-signed Release app for a physical iPhone"
-env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "NO" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
-export BLEAT_DEVICE_BUILD_DIRECTORY
+export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
 exec ./scripts/build-device.sh
 """
 
@@ -181,7 +181,7 @@ xcrun devicectl device process launch \
 
 [tasks.iphone]
 description = "Build, install, and launch Bleat on a physical iPhone"
-env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "NO" }
 run = """
 export BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
@@ -191,7 +191,7 @@ exec ./scripts/deploy-device.sh
 
 [tasks."ipad:build"]
 description = "Build a development-signed Release app for a physical iPad"
-env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "NO" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
@@ -220,7 +220,7 @@ run = "./scripts/launch-ipad.sh"
 
 [tasks.ipad]
 description = "Build, install, and launch Bleat on a physical iPad"
-env = { BUILD_WITHOUT_PAID_DEVELOPER = "YES" }
+env = { BUILD_WITHOUT_PAID_DEVELOPER = "NO" }
 run = """
 BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"

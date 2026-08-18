@@ -49,7 +49,7 @@ final class AppNetworkPathMonitor: @unchecked Sendable {
         }
         monitor.start(
             queue: DispatchQueue(
-                label: "com.yaleman.Bleat.network-path-monitor",
+                label: "com.terminaloutcomes.Bleat.network-path-monitor",
                 qos: .utility
             )
         )

@@ -5,7 +5,7 @@ import OSLog
 import dnssd
 
 private let bonjourLog = Logger(
-    subsystem: "com.yaleman.bleat",
+    subsystem: "com.terminaloutcomes.bleat",
     category: "bonjour-discovery"
 )
 

@@ -121,7 +121,7 @@ distribution builds. Unsupported values fail the build. The selected effective
 modes are embedded in `Info.plist`, and Xcode selects the matching entitlement
 file from all four CloudKit/App Attest combinations.
 
-The physical-device workflows set the global Personal Team mode automatically:
+The physical-device workflows use paid capabilities by default:
 
 ```sh
 mise run iphone:build
@@ -410,14 +410,9 @@ mise run ipad
 The individual stages are available as `iphone:build`, `iphone:install`, and
 `iphone:launch`, with matching `ipad:*` tasks. The physical-device tasks and
 direct `scripts/build-device.sh` usage default to
-`BUILD_WITHOUT_PAID_DEVELOPER=YES`, which omits CloudKit and App Attest while
-retaining device-only Keychain access. A paid team can explicitly run the
-direct script with `BUILD_WITHOUT_PAID_DEVELOPER=NO` and select either
-individual capability mode.
-
-If Apple reports that `com.yaleman.Bleat` is unavailable for the selected team,
-set a stable alternative such as
-`BLEAT_BUNDLE_ID=com.yaleman.Bleat.personal` before running the tasks.
+`BUILD_WITHOUT_PAID_DEVELOPER=NO`, enabling CloudKit and App Attest. Set
+`BUILD_WITHOUT_PAID_DEVELOPER=YES` explicitly for a Personal Team build that
+omits those capabilities while retaining device-only Keychain access.
 
 ## Sign in
 
@@ -447,10 +442,18 @@ configuration in the app.
 Private iCloud synchronization is enabled by default and can be turned off in
 Settings. It merges account descriptors, playback and download preferences,
 listening slices, completion milestones, and imported server sessions in
-`iCloud.com.yaleman.Bleat`. Turning synchronization off always keeps
+`iCloud.com.terminaloutcomes.Bleat`. Turning synchronization off always keeps
 local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
+
+Saving an account's primary or local server settings immediately pushes that
+account descriptor to CloudKit. A different account descriptor fetched from
+CloudKit is never applied silently: Bleat shows the current and incoming server
+URLs and asks whether to use the iCloud settings or keep this device's settings.
+Each pushed descriptor carries a generation ID and its predecessor identity, so
+a delayed predecessor is ignored instead of prompting or reverting the device.
+Keeping the device settings pushes them back to CloudKit.
 
 Builds whose effective CloudKit mode is `disabled`, whether selected directly
 or forced by `BUILD_WITHOUT_PAID_DEVELOPER=YES`, omit the CloudKit entitlement

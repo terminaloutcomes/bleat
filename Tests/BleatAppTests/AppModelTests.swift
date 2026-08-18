@@ -4670,12 +4670,28 @@ final class AppModelTests: XCTestCase {
                 selectedItemTags: account.user.selectedItemTags
             )
         )
+        let delayedCloudAccount = try ServerAccount(
+            id: account.id,
+            server: NormalizedServerURL("https://old.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: account.serverVersion,
+            authenticationMethods: account.authenticationMethods,
+            user: account.user
+        )
         let service = TestAppService(
             activeAccount: .success(account),
-            login: .success(updated)
+            login: .success(updated),
+            privateCloudSyncChanges: [
+                CloudServerConfigurationChange(
+                    current: account,
+                    incoming: delayedCloudAccount
+                )
+            ]
         )
         let model = AppModel(service: service)
         await model.start()
+        XCTAssertFalse(model.pendingCloudServerConfigurationChanges.isEmpty)
 
         let result = await model.updateAccount(
             account,
@@ -4688,6 +4704,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(result, .saved)
         XCTAssertEqual(model.account, updated)
         XCTAssertEqual(model.accounts, [updated])
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        let forcedCloudAccounts = await service.forcedCloudAccounts()
+        XCTAssertEqual(forcedCloudAccounts, [updated])
         let requests = await service.accountUpdateRequests()
         XCTAssertEqual(
             requests,
@@ -4702,6 +4721,81 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
+    }
+
+    func testCloudServerConfigurationChangeWaitsForUserDecision()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: NormalizedServerURL("https://local.example"),
+            localServerValidated: true,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let change = CloudServerConfigurationChange(
+            current: current,
+            incoming: incoming
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [change]
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        XCTAssertEqual(
+            model.pendingCloudServerConfigurationChanges,
+            [change]
+        )
+        XCTAssertEqual(model.account, current)
+
+        await model.resolveCloudServerConfigurationChange(
+            change,
+            accept: false
+        )
+
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        let resolutions = await service.cloudResolutions()
+        XCTAssertEqual(resolutions.count, 1)
+        XCTAssertEqual(resolutions[0].accountID, current.id)
+        XCTAssertFalse(resolutions[0].accept)
+    }
+
+    func testDisablingCloudSyncClearsPendingServerConfigurationChange()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [
+                CloudServerConfigurationChange(
+                    current: current,
+                    incoming: incoming
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await model.setPrivateCloudSyncEnabled(false)
+
+        XCTAssertFalse(model.privateCloudSyncEnabled)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        XCTAssertEqual(model.privateCloudState, .disabled)
     }
 
     func testOpenIDReauthenticationUsesSavedAccount() async throws {
@@ -10649,6 +10743,7 @@ private actor TestAppService: AppServicing {
     private let transcriptionTaskStateSaveResults:
         [Result<Void, AppServiceError>]
     private let privateCloudSyncAvailable: Bool
+    private var privateCloudSyncChanges: [CloudServerConfigurationChange]
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
@@ -10683,6 +10778,9 @@ private actor TestAppService: AppServicing {
     private var recordedLocalSessionSyncRequests: [LocalSessionSyncRequest] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
+    private var recordedForcedCloudAccounts: [ServerAccount] = []
+    private var recordedCloudResolutions:
+        [(accountID: AccountID, accept: Bool)] = []
     private var recordedTranscriptionTaskStates:
         [CachedChapterTranscriptionTaskState] = []
     private var transcriptionTaskStateSaveAttempts = 0
@@ -10789,6 +10887,7 @@ private actor TestAppService: AppServicing {
         transcriptionTaskStateSaveResults:
             [Result<Void, AppServiceError>] = [],
         privateCloudSyncAvailable: Bool = true,
+        privateCloudSyncChanges: [CloudServerConfigurationChange] = [],
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
         accountsResult = accounts
@@ -10841,6 +10940,7 @@ private actor TestAppService: AppServicing {
         self.transcriptionTaskStateSaveResults =
             transcriptionTaskStateSaveResults
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
+        self.privateCloudSyncChanges = privateCloudSyncChanges
         configuredEndpointDiagnostics = endpointDiagnostics
     }
 
@@ -10954,10 +11054,35 @@ private actor TestAppService: AppServicing {
         networkPathContinuations[token] = nil
     }
 
-    func synchronizePrivateCloud() async throws(AppServiceError) {
+    func synchronizePrivateCloud() async throws(AppServiceError)
+        -> [CloudServerConfigurationChange]
+    {
         if let privateCloudSyncGate {
             await privateCloudSyncGate.enterAndWait()
         }
+        return privateCloudSyncChanges
+    }
+
+    func forcePushPrivateCloudServerConfiguration(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        recordedForcedCloudAccounts.append(account)
+    }
+
+    func resolvePrivateCloudServerConfigurationChange(
+        accountID: AccountID,
+        accept: Bool
+    ) async throws(AppServiceError) {
+        recordedCloudResolutions.append((accountID, accept))
+        privateCloudSyncChanges.removeAll { $0.id == accountID }
+    }
+
+    func forcedCloudAccounts() -> [ServerAccount] {
+        recordedForcedCloudAccounts
+    }
+
+    func cloudResolutions() -> [(accountID: AccountID, accept: Bool)] {
+        recordedCloudResolutions
     }
 
     func endpointDiagnostics(

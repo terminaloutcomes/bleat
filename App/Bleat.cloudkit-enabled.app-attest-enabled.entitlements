@@ -6,7 +6,7 @@
 	<string>$(BLEAT_APP_ATTEST_ENVIRONMENT)</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
-		<string>iCloud.com.yaleman.Bleat</string>
+		<string>iCloud.com.terminaloutcomes.Bleat</string>
 	</array>
 	<key>com.apple.developer.icloud-services</key>
 	<array>
