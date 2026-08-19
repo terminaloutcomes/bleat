@@ -455,8 +455,9 @@ copy.
 
 Launch restores local accounts and downloads before starting private iCloud
 synchronization as background maintenance. A slow CloudKit operation never
-holds the app on its launch screen; synchronization state and retry remain
-available in Settings.
+holds the app on its launch screen. Settings exposes active synchronization,
+allows it to be cancelled, and offers an explicit retry after cancellation or
+failure.
 
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from

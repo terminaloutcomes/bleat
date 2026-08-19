@@ -1313,7 +1313,8 @@ use the private database. Access and refresh tokens never enter CloudKit or
 iCloud Keychain. Launch restores authoritative local state before scheduling
 CloudKit synchronization as non-blocking background maintenance; a slow or
 failed CloudKit operation never delays the signed-in or signed-out transition,
-and remains retryable from Settings. Disabling synchronization keeps all local
+and an active operation can be cancelled and retried from Settings without
+overlapping the abandoned operation. Disabling synchronization keeps all local
 data and offers to retain or delete the private CloudKit zone. Saving primary
 or local server settings immediately pushes the updated non-secret account
 descriptor. A

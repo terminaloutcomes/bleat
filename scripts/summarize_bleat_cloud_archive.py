@@ -1,3 +1,11 @@
+# Usage:
+#   python3 scripts/summarize_bleat_cloud_archive.py
+#
+# Input: /tmp/bleat-cloud-state-inner.bin must contain the binary keyed archive
+# extracted from Bleat's persisted CKSyncEngine state. The script recursively
+# decodes that archive and prints only counts, flags, and timestamps for sync
+# bookkeeping fields; it does not print record payloads or modify the archive.
+
 import datetime
 import plistlib
 from pathlib import Path

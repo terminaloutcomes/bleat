@@ -4159,6 +4159,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(synchronizationFinished)
     }
 
+    func testCloudSyncCanBeCancelledAndRetriedWithoutOverlap() async {
+        let privateCloudGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncGate: privateCloudGate
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await privateCloudGate.waitUntilEntered()
+
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        XCTAssertTrue(model.canCancelPrivateCloudSynchronization)
+
+        await model.cancelPrivateCloudSynchronization()
+
+        XCTAssertEqual(model.privateCloudState, .cancelled)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+        let cancellationCount =
+            await service.privateCloudCancellationRequestCount()
+        XCTAssertEqual(cancellationCount, 1)
+
+        await privateCloudGate.reset()
+        let retry = Task { @MainActor in
+            await model.synchronizePrivateCloud()
+        }
+        await privateCloudGate.waitUntilEntered()
+
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        XCTAssertTrue(model.canCancelPrivateCloudSynchronization)
+
+        await privateCloudGate.release()
+        await retry.value
+
+        XCTAssertEqual(model.privateCloudState, .idle)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+    }
+
     func testStartKeepsCloudSyncDisabledWhenUnavailable() async {
         let accountsGate = AsyncGate()
         let service = TestAppService(
@@ -10772,6 +10811,7 @@ private actor TestAppService: AppServicing {
     private var recordedRemovedAccounts: [ServerAccount] = []
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
+    private var privateCloudCancellationRequests = 0
     private var recordedCloudResolutions:
         [(accountID: AccountID, accept: Bool)] = []
     private var recordedTranscriptionTaskStates:
@@ -11054,6 +11094,15 @@ private actor TestAppService: AppServicing {
             await privateCloudSyncGate.enterAndWait()
         }
         return privateCloudSyncChanges
+    }
+
+    func cancelPrivateCloudSynchronization() async {
+        privateCloudCancellationRequests += 1
+        await privateCloudSyncGate?.release()
+    }
+
+    func privateCloudCancellationRequestCount() -> Int {
+        privateCloudCancellationRequests
     }
 
     func forcePushPrivateCloudServerConfiguration(

@@ -638,6 +638,8 @@ protocol AppServicing: Sendable {
     func synchronizePrivateCloud() async throws(AppServiceError)
         -> [CloudServerConfigurationChange]
 
+    func cancelPrivateCloudSynchronization() async
+
     func forcePushPrivateCloudServerConfiguration(
         _ account: ServerAccount
     ) async throws(AppServiceError)
@@ -868,6 +870,8 @@ extension AppServicing {
     {
         []
     }
+
+    func cancelPrivateCloudSynchronization() async {}
 
     func forcePushPrivateCloudServerConfiguration(
         _ account: ServerAccount
@@ -2597,6 +2601,10 @@ actor LiveAppService: AppServicing {
         } catch let error as PrivateCloudSyncError {
             throw .privateCloud(error)
         }
+    }
+
+    func cancelPrivateCloudSynchronization() async {
+        await privateCloudSync?.cancelSynchronization()
     }
 
     func forcePushPrivateCloudServerConfiguration(

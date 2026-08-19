@@ -12,6 +12,7 @@ public enum PrivateCloudSyncStatus: Equatable, Sendable {
 
 public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     case disabled
+    case cancelled
     case accountUnavailable
     case invalidRecord
     case persistenceFailed
@@ -966,6 +967,9 @@ public final class PrivateCloudSyncCoordinator:
                 )
             )
         } catch let error as CKError {
+            if error.code == .operationCancelled || Task.isCancelled {
+                throw .cancelled
+            }
             switch error.code {
             case .notAuthenticated, .accountTemporarilyUnavailable:
                 throw .accountUnavailable
@@ -974,9 +978,18 @@ public final class PrivateCloudSyncCoordinator:
             }
         } catch let error as PrivateCloudSyncError {
             throw error
+        } catch is CancellationError {
+            throw .cancelled
         } catch {
             throw .cloudUnavailable
         }
+    }
+
+    public func cancelSynchronization() async {
+        guard let engine else {
+            return
+        }
+        await engine.cancelOperations()
     }
 
     public func forcePushServerConfiguration(

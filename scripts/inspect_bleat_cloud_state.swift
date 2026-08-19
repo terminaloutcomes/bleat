@@ -1,3 +1,13 @@
+// Usage:
+//   swiftc -parse-as-library scripts/inspect_bleat_cloud_state.swift \
+//     -o /tmp/inspect-bleat-cloud-state
+//   /tmp/inspect-bleat-cloud-state
+//
+// Input: /tmp/bleat-cloud-state.json must contain the JSON-encoded
+// CKSyncEngine.State.Serialization copied from Bleat's persisted preferences.
+// The inspector disables automatic synchronization before reporting pending
+// database and record changes; it does not modify the input file.
+
 import CloudKit
 import Foundation
 
