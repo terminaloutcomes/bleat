@@ -4123,10 +4123,6 @@ final class AppModelTests: XCTestCase {
             "reticulating splines…"
         )
         XCTAssertEqual(
-            AppLaunchStage.syncingData.message,
-            "Syncing your data"
-        )
-        XCTAssertEqual(
             AppLaunchStage.restoringAccount.message,
             "Restoring your account"
         )
@@ -4136,43 +4132,73 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testStartPublishesStagesAsStartupWorkBegins() async {
+    func testStartDoesNotWaitForPrivateCloudSync() async {
         let privateCloudGate = AsyncGate()
-        let accountsGate = AsyncGate()
-        let activeAccountGate = AsyncGate()
         let service = TestAppService(
             activeAccount: .success(nil),
-            privateCloudSyncGate: privateCloudGate,
-            accountsGate: accountsGate,
-            activeAccountGate: activeAccountGate
+            privateCloudSyncGate: privateCloudGate
         )
         let model = AppModel(
             service: service,
             initialLaunchStage: .reticulatingSplines
         )
 
-        let start = Task { @MainActor in
-            await model.start()
-        }
+        await model.start()
 
+        XCTAssertEqual(model.phase, .signedOut)
         await privateCloudGate.waitUntilEntered()
-        XCTAssertEqual(model.phase, .launching)
-        XCTAssertEqual(model.launchStage, .syncingData)
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertEqual(model.privateCloudState, .syncing)
 
         await privateCloudGate.release()
-        await accountsGate.waitUntilEntered()
-        XCTAssertEqual(model.launchStage, .restoringAccount)
-
-        await accountsGate.release()
-        await activeAccountGate.waitUntilEntered()
-        XCTAssertEqual(model.launchStage, .restoringAccount)
-
-        await activeAccountGate.release()
-        await start.value
-        XCTAssertEqual(model.phase, .signedOut)
+        let synchronizationFinished = await waitUntil(
+            timeout: .seconds(1)
+        ) {
+            model.privateCloudState == .idle
+        }
+        XCTAssertTrue(synchronizationFinished)
     }
 
-    func testStartSkipsSyncingStageWhenPrivateCloudIsUnavailable() async {
+    func testCloudSyncCanBeCancelledAndRetriedWithoutOverlap() async {
+        let privateCloudGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncGate: privateCloudGate
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await privateCloudGate.waitUntilEntered()
+
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        XCTAssertTrue(model.canCancelPrivateCloudSynchronization)
+
+        await model.cancelPrivateCloudSynchronization()
+
+        XCTAssertEqual(model.privateCloudState, .cancelled)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+        let cancellationCount =
+            await service.privateCloudCancellationRequestCount()
+        XCTAssertEqual(cancellationCount, 1)
+
+        await privateCloudGate.reset()
+        let retry = Task { @MainActor in
+            await model.synchronizePrivateCloud()
+        }
+        await privateCloudGate.waitUntilEntered()
+
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        XCTAssertTrue(model.canCancelPrivateCloudSynchronization)
+
+        await privateCloudGate.release()
+        await retry.value
+
+        XCTAssertEqual(model.privateCloudState, .idle)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+    }
+
+    func testStartKeepsCloudSyncDisabledWhenUnavailable() async {
         let accountsGate = AsyncGate()
         let service = TestAppService(
             activeAccount: .success(nil),
@@ -4190,11 +4216,11 @@ final class AppModelTests: XCTestCase {
 
         await accountsGate.waitUntilEntered()
         XCTAssertEqual(model.launchStage, .restoringAccount)
-        XCTAssertNotEqual(model.launchStage, .syncingData)
 
         await accountsGate.release()
         await start.value
         XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertEqual(model.privateCloudState, .disabled)
     }
 
     func testRetryStartResetsTheInitialLaunchStage() async {
@@ -4691,6 +4717,10 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(service: service)
         await model.start()
+        let cloudChangeQueued = await waitUntil(timeout: .seconds(2)) {
+            !model.pendingCloudServerConfigurationChanges.isEmpty
+        }
+        XCTAssertTrue(cloudChangeQueued)
         XCTAssertFalse(model.pendingCloudServerConfigurationChanges.isEmpty)
 
         let result = await model.updateAccount(
@@ -4748,6 +4778,10 @@ final class AppModelTests: XCTestCase {
 
         await model.start()
 
+        let cloudChangeQueued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(cloudChangeQueued)
         XCTAssertEqual(
             model.pendingCloudServerConfigurationChanges,
             [change]
@@ -10777,6 +10811,7 @@ private actor TestAppService: AppServicing {
     private var recordedRemovedAccounts: [ServerAccount] = []
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
+    private var privateCloudCancellationRequests = 0
     private var recordedCloudResolutions:
         [(accountID: AccountID, accept: Bool)] = []
     private var recordedTranscriptionTaskStates:
@@ -11059,6 +11094,15 @@ private actor TestAppService: AppServicing {
             await privateCloudSyncGate.enterAndWait()
         }
         return privateCloudSyncChanges
+    }
+
+    func cancelPrivateCloudSynchronization() async {
+        privateCloudCancellationRequests += 1
+        await privateCloudSyncGate?.release()
+    }
+
+    func privateCloudCancellationRequestCount() -> Int {
+        privateCloudCancellationRequests
     }
 
     func forcePushPrivateCloudServerConfiguration(

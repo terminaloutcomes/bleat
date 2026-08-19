@@ -4532,22 +4532,48 @@ private struct SettingsView: View {
                     }
                 )
             )
-            .disabled(model.privateCloudState == .syncing)
+            .disabled(
+                model.privateCloudState == .syncing
+                    || model.privateCloudState == .cancelling
+            )
             .accessibilityIdentifier("settings.icloud.enabled")
 
-            Button(
-                "Sync Now",
-                systemImage: "arrow.triangle.2.circlepath"
-            ) {
-                Task {
-                    await model.synchronizePrivateCloud()
+            if model.canCancelPrivateCloudSynchronization {
+                Button(
+                    "Cancel Sync",
+                    systemImage: "xmark.circle",
+                    role: .destructive
+                ) {
+                    Task {
+                        await model.cancelPrivateCloudSynchronization()
+                    }
                 }
+                .accessibilityIdentifier("settings.icloud.cancel")
+            } else if model.privateCloudState == .cancelling {
+                ProgressView("Cancelling…")
+                    .accessibilityIdentifier("settings.icloud.cancelling")
+            } else {
+                Button(
+                    model.privateCloudState == .cancelled
+                        ? "Retry Sync" : "Sync Now",
+                    systemImage: "arrow.triangle.2.circlepath"
+                ) {
+                    Task {
+                        await model.synchronizePrivateCloud()
+                    }
+                }
+                .disabled(
+                    !model.privateCloudSyncEnabled
+                        || model.privateCloudState == .syncing
+                )
+                .accessibilityIdentifier("settings.icloud.syncNow")
             }
-            .disabled(
-                !model.privateCloudSyncEnabled
-                    || model.privateCloudState == .syncing
-            )
-            .accessibilityIdentifier("settings.icloud.syncNow")
+
+            if model.privateCloudState == .cancelled {
+                Text("iCloud synchronization was cancelled.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings.icloud.cancelled")
+            }
 
             if case .failed(let failure) = model.privateCloudState {
                 Text(failure.message)

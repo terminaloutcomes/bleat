@@ -242,7 +242,6 @@ enum PlaybackStartPositionResolver {
 enum AppLaunchStage: Equatable, Sendable {
     case preparing
     case reticulatingSplines
-    case syncingData
     case restoringAccount
     case restoringDownloads
 
@@ -252,8 +251,6 @@ enum AppLaunchStage: Equatable, Sendable {
             "Preparing Bleat"
         case .reticulatingSplines:
             "reticulating splines…"
-        case .syncingData:
-            "Syncing your data"
         case .restoringAccount:
             "Restoring your account"
         case .restoringDownloads:
@@ -341,6 +338,8 @@ enum PrivateCloudState: Equatable, Sendable {
     case disabled
     case idle
     case syncing
+    case cancelling
+    case cancelled
     case failed(AppFailure)
 }
 
@@ -697,6 +696,8 @@ struct AppFailure: Equatable, Sendable {
             return .localStorageUnavailable
         case .privateCloud(let error):
             switch error {
+            case .cancelled:
+                return .requestCancelled
             case .accountUnavailable:
                 return .authenticationRequired
             case .disabled:
@@ -1036,6 +1037,10 @@ final class AppModel {
     private var localSessionSyncTask: Task<Void, Never>?
     @ObservationIgnored
     private var networkPathUpdatesTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var privateCloudSyncTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var privateCloudSyncGeneration: UInt64 = 0
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
@@ -1084,6 +1089,7 @@ final class AppModel {
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
+    private(set) var canCancelPrivateCloudSynchronization = false
     private(set) var pendingCloudServerConfigurationChanges:
         [CloudServerConfigurationChange] = []
     private(set) var remoteTelemetryEnabled: Bool
@@ -1340,21 +1346,7 @@ final class AppModel {
                 privateCloudSyncEnabled = false
             }
             if privateCloudSyncEnabled {
-                launchStage = .syncingData
-                privateCloudState = .syncing
-                do {
-                    queueCloudServerConfigurationChanges(
-                        try await service.synchronizePrivateCloud()
-                    )
-                    privateCloudState = .idle
-                } catch let error {
-                    privateCloudState = .failed(
-                        AppFailure(
-                            operation: .privateCloudSync,
-                            serviceError: error
-                        )
-                    )
-                }
+                privateCloudState = .idle
             } else {
                 privateCloudState = .disabled
             }
@@ -1399,6 +1391,7 @@ final class AppModel {
                     .completed(.appStart, category: .app)
                 )
                 telemetryOutcome = .succeeded
+                schedulePrivateCloudSyncAfterLaunch()
                 return
             }
             account = restoredAccount
@@ -1417,6 +1410,7 @@ final class AppModel {
                 .completed(.appStart, category: .app)
             )
             telemetryOutcome = .succeeded
+            schedulePrivateCloudSyncAfterLaunch()
         } catch let error {
             let failure = AppFailure(operation: .appStart, serviceError: error)
             telemetryOutcome = failure.remoteTelemetryOutcome
@@ -3474,24 +3468,104 @@ final class AppModel {
     func synchronizePrivateCloud() async {
         guard privateCloudSyncAvailable,
             privateCloudSyncEnabled,
-            privateCloudState != .syncing
+            privateCloudSyncTask == nil
         else {
             return
         }
+        guard let task = beginPrivateCloudSynchronization() else {
+            return
+        }
+        await task.value
+    }
+
+    func cancelPrivateCloudSynchronization() async {
+        guard let task = privateCloudSyncTask,
+            canCancelPrivateCloudSynchronization
+        else {
+            return
+        }
+        privateCloudSyncGeneration &+= 1
+        canCancelPrivateCloudSynchronization = false
+        privateCloudState = .cancelling
+        task.cancel()
+        await service.cancelPrivateCloudSynchronization()
+        await task.value
+        privateCloudSyncTask = nil
+        privateCloudState = privateCloudSyncEnabled ? .cancelled : .disabled
+    }
+
+    private func schedulePrivateCloudSyncAfterLaunch() {
+        guard privateCloudSyncAvailable,
+            privateCloudSyncEnabled,
+            privateCloudSyncTask == nil
+        else {
+            return
+        }
+        _ = beginPrivateCloudSynchronization()
+    }
+
+    private func beginPrivateCloudSynchronization() -> Task<Void, Never>? {
+        guard privateCloudSyncTask == nil else {
+            return nil
+        }
+        privateCloudSyncGeneration &+= 1
+        let generation = privateCloudSyncGeneration
         privateCloudState = .syncing
+        canCancelPrivateCloudSynchronization = true
+        let task = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            await performPrivateCloudSynchronization(generation: generation)
+            guard privateCloudSyncGeneration == generation else {
+                return
+            }
+            privateCloudSyncTask = nil
+            canCancelPrivateCloudSynchronization = false
+        }
+        privateCloudSyncTask = task
+        return task
+    }
+
+    private func performPrivateCloudSynchronization(generation: UInt64) async {
         do {
-            queueCloudServerConfigurationChanges(
-                try await service.synchronizePrivateCloud()
-            )
-            accounts = try await service.accounts()
-            if let active = try await service.activeAccount() {
+            let changes = try await service.synchronizePrivateCloud()
+            guard privateCloudSyncGeneration == generation,
+                !Task.isCancelled
+            else {
+                return
+            }
+            let synchronizedAccounts = try await service.accounts()
+            let active = try await service.activeAccount()
+            guard privateCloudSyncGeneration == generation,
+                !Task.isCancelled
+            else {
+                return
+            }
+            queueCloudServerConfigurationChanges(changes)
+            accounts = synchronizedAccounts
+            if let active {
                 account = active
             }
             playback.reloadSyncedPreferences()
             downloads.reloadSyncedPreferences()
-            privateCloudState = .idle
             await loadStatistics()
+            guard privateCloudSyncGeneration == generation,
+                !Task.isCancelled
+            else {
+                return
+            }
+            privateCloudState = .idle
         } catch let error {
+            guard privateCloudSyncGeneration == generation,
+                !Task.isCancelled
+            else {
+                return
+            }
+            if case .privateCloud(.cancelled) = error {
+                privateCloudState = .cancelled
+                return
+            }
             privateCloudState = .failed(
                 AppFailure(
                     operation: .privateCloudSync,

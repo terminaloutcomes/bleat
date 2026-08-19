@@ -279,13 +279,17 @@ Successful output contains only the screenshots and a non-sensitive manifest:
 .build/release-screenshots/
   manifest.json
   iphone/01-home.png … 07-settings.png
+  iphone/01-home-dark.png … 07-settings-dark.png
   ipad/01-home.png … 07-settings.png
+  ipad/01-home-dark.png … 07-settings-dark.png
 ```
 
-On failure, redacted Compose logs and the relevant `.xcresult` bundles remain
-under the same directory for inspection. Everything else—including generated
-media, Caddy certificates, Docker volumes, credentials, and simulators—is
-removed automatically.
+By default the harness captures both light and dark appearances in a single
+run; dark screenshots use a `-dark` filename suffix (for example
+`01-home-dark.png`). On failure, redacted Compose logs and the relevant
+`.xcresult` bundles remain under the same directory for inspection. Everything
+else—including generated media, Caddy certificates, Docker volumes, credentials,
+and simulators—is removed automatically.
 
 The default task selects the latest installed iOS runtime. Override it when a
 release requires a specific installed runtime or presentation:
@@ -293,18 +297,20 @@ release requires a specific installed runtime or presentation:
 ```sh
 BLEAT_SCREENSHOT_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-26-3 \
 BLEAT_SCREENSHOT_DEVICES='com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB' \
-BLEAT_SCREENSHOT_APPEARANCE=light \
+BLEAT_SCREENSHOT_APPEARANCES=light,dark \
 BLEAT_SCREENSHOT_LOCALE=en_AU \
 mise run screenshots
 ```
 
-The device list must contain one supported iPhone and one supported iPad. The
-harness reports the available runtime device types when a selection is
+`BLEAT_SCREENSHOT_APPEARANCES` accepts a comma-separated list of `light` and/or
+`dark` (default `light,dark`). Set it to a single appearance to capture only
+that set. The device list must contain one supported iPhone and one supported
+iPad. The harness reports the available runtime device types when a selection is
 unavailable. Add a scene by extending the ordered `screenshots` list in the
-fixture and adding a matching named attachment in
-`BleatReleaseScreenshotTests`; bump `schemaVersion` when the fixture contract
-changes. Validate fixture changes without Docker or a Simulator with `mise run
-screenshots:check`.
+fixture and adding a matching named attachment in `BleatReleaseScreenshotTests`;
+the harness derives the `-dark` filename for each scene automatically. Bump
+`schemaVersion` when the fixture contract changes. Validate fixture changes
+without Docker or a Simulator with `mise run screenshots:check`.
 
 ## Open in Xcode
 
@@ -446,6 +452,12 @@ listening slices, completion milestones, and imported server sessions in
 local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
+
+Launch restores local accounts and downloads before starting private iCloud
+synchronization as background maintenance. A slow CloudKit operation never
+holds the app on its launch screen. Settings exposes active synchronization,
+allows it to be cancelled, and offers an explicit retry after cancellation or
+failure.
 
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from

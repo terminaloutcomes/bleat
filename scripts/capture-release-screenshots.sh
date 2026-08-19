@@ -13,7 +13,7 @@ readonly bleat_abs_image="${BLEAT_SCREENSHOT_ABS_IMAGE:-${bleat_abs_image_defaul
 readonly bleat_run_id="$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
 readonly bleat_compose_project="bleat-release-screenshots-${bleat_run_id}"
 readonly bleat_password="$(/usr/bin/uuidgen)"
-readonly bleat_appearance="${BLEAT_SCREENSHOT_APPEARANCE:-light}"
+readonly bleat_appearances_raw="${BLEAT_SCREENSHOT_APPEARANCES:-light,dark}"
 readonly bleat_locale="${BLEAT_SCREENSHOT_LOCALE:-en_AU}"
 readonly bleat_requested_port="${BLEAT_SCREENSHOT_PORT:-}"
 readonly bleat_device_types_raw="${BLEAT_SCREENSHOT_DEVICES:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB}"
@@ -33,6 +33,7 @@ bleat_xctestrun=""
 bleat_captured_dimensions=""
 typeset -a bleat_simulators
 typeset -a bleat_result_bundles
+typeset -a bleat_appearances
 
 bleat_fail() {
     print -u2 -- "$*"
@@ -458,11 +459,44 @@ bleat_configure_simulator() {
     xcrun simctl shutdown "${simulator}"
     xcrun simctl boot "${simulator}"
     xcrun simctl bootstatus "${simulator}" -b
-    xcrun simctl ui "${simulator}" appearance "${bleat_appearance}"
     xcrun simctl status_bar "${simulator}" override \
         --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 \
         --batteryState charged --batteryLevel 100
     xcrun simctl keychain "${simulator}" add-root-cert "${bleat_ca_file}"
+}
+
+bleat_suffixed_filename() {
+    local base="$1"
+    local appearance="$2"
+    if [[ "${appearance}" == "dark" ]]; then
+        print -r -- "${base%.png}-dark.png"
+    else
+        print -r -- "${base}"
+    fi
+}
+
+bleat_expected_screenshot_names() {
+    local appearance="$1"
+    local base
+    while IFS= read -r base; do
+        bleat_suffixed_filename "${base}" "${appearance}"
+    done < <(jq --raw-output '.screenshots[].file' "${bleat_fixture}")
+}
+
+bleat_expected_screenshot_names_json() {
+    local appearance="$1"
+    jq --compact-output --arg appearance "${appearance}" '
+        [.screenshots[].file
+            | if $appearance == "dark" then sub("\\.png$"; "-dark.png") else . end]
+    ' "${bleat_fixture}"
+}
+
+bleat_set_xctestrun_env() {
+    local key="$1"
+    local value="$2"
+    if ! plutil -replace "${key}" -string "${value}" "${bleat_xctestrun}" >/dev/null 2>&1; then
+        plutil -insert "${key}" -string "${value}" "${bleat_xctestrun}"
+    fi
 }
 
 bleat_image_dimensions() {
@@ -481,10 +515,11 @@ bleat_expected_dimensions() {
 
 bleat_validate_attachment_manifest() {
     local attachment_manifest="$1"
+    local appearance="$2"
     [[ -f "${attachment_manifest}" ]] \
         || bleat_fail "Screenshot attachment manifest is missing"
     local expected_names
-    expected_names="$(jq --compact-output '[.screenshots[].file]' "${bleat_fixture}")"
+    expected_names="$(bleat_expected_screenshot_names_json "${appearance}")"
     jq --exit-status --argjson expected "${expected_names}" '
         def isScreenshotName($expectedName):
             . == $expectedName
@@ -502,7 +537,7 @@ bleat_validate_attachment_manifest() {
         | ($found | length == ($expected | length))
           and ($found | unique | length == ($expected | length))
     ' "${attachment_manifest}" >/dev/null \
-        || bleat_fail "Result bundle does not contain exactly the required named screenshot attachments"
+        || bleat_fail "Result bundle does not contain exactly the required named screenshot attachments for ${appearance}"
 }
 
 bleat_exported_attachment_name() {
@@ -555,7 +590,8 @@ bleat_validate_exported_artifacts() {
     local attachment_directory="$2"
     local expected_dimensions="$3"
     local device_label="$4"
-    bleat_validate_attachment_manifest "${attachment_manifest}"
+    local appearance="$5"
+    bleat_validate_attachment_manifest "${attachment_manifest}" "${appearance}"
 
     local filename exported_name
     while IFS= read -r filename; do
@@ -565,19 +601,20 @@ bleat_validate_exported_artifacts() {
         bleat_validate_exported_screenshot \
             "${attachment_directory}/${exported_name}" "${expected_dimensions}" \
             "${device_label}" "${filename}"
-    done < <(jq --raw-output '.screenshots[].file' "${bleat_fixture}")
+    done < <(bleat_expected_screenshot_names "${appearance}")
 }
 
 bleat_export_screenshots() {
     local result_bundle="$1"
     local device_label="$2"
     local expected_dimensions="$3"
-    local exported_directory="${bleat_work_directory}/attachments-${device_label}"
+    local appearance="$4"
+    local exported_directory="${bleat_work_directory}/attachments-${device_label}-${appearance}"
     local destination_directory="${bleat_output_directory}/${device_label}"
     mkdir -p "${exported_directory}" "${destination_directory}"
     xcrun xcresulttool export attachments --path "${result_bundle}" \
         --output-path "${exported_directory}" >/dev/null
-    bleat_validate_attachment_manifest "${exported_directory}/manifest.json"
+    bleat_validate_attachment_manifest "${exported_directory}/manifest.json" "${appearance}"
 
     local filename exported_name
     while IFS= read -r filename; do
@@ -591,7 +628,7 @@ bleat_export_screenshots() {
         bleat_validate_exported_screenshot \
             "${destination_directory}/${filename}" "${expected_dimensions}" \
             "${device_label}" "${filename}"
-    done < <(jq --raw-output '.screenshots[].file' "${bleat_fixture}")
+    done < <(bleat_expected_screenshot_names "${appearance}")
 }
 
 bleat_build_manifest() {
@@ -605,18 +642,39 @@ bleat_build_manifest() {
     commit="$(git -C "${bleat_repository_root}" rev-parse HEAD)"
     local dirty=false
     [[ -n "$(git -C "${bleat_repository_root}" status --porcelain)" ]] && dirty=true
+    local appearances_json
+    appearances_json="$(jq --compact-output -n --args '$ARGS.positional' -- "${bleat_appearances[@]}")"
+    local screenshots_json
+    screenshots_json="$(
+        jq --compact-output --argjson appearances "${appearances_json}" '
+            .screenshots as $base
+            | $appearances
+            | map(
+                . as $appearance
+                | $base | map(
+                    . + {
+                        appearance: $appearance,
+                        file: (if $appearance == "dark"
+                            then (.file | sub("\\.png$"; "-dark.png"))
+                            else .file end)
+                    }
+                )
+            ) | add
+        ' "${bleat_fixture}"
+    )"
     jq --null-input \
         --arg app_version "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${bleat_derived_data}/Build/Products/Release-iphonesimulator/Bleat.app/Info.plist")" \
         --arg build_number "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${bleat_derived_data}/Build/Products/Release-iphonesimulator/Bleat.app/Info.plist")" \
         --arg commit "${commit}" --arg xcode "${xcode_version}" \
         --arg runtime "${bleat_runtime}" --arg locale "${bleat_locale}" \
-        --arg appearance "${bleat_appearance}" --arg iphone_dimensions "${iphone_dimensions}" \
+        --argjson appearances "${appearances_json}" \
+        --arg iphone_dimensions "${iphone_dimensions}" \
         --arg ipad_dimensions "${ipad_dimensions}" --arg iphone_type "${iphone_type}" \
         --arg ipad_type "${ipad_type}" --arg abs_image "${bleat_abs_image}" \
         --arg caddy_image 'caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d' \
         --argjson dirty "${dirty}" \
         --argjson schema_version "$(jq '.schemaVersion' "${bleat_fixture}")" \
-        --argjson screenshots "$(jq '.screenshots' "${bleat_fixture}")" '
+        --argjson screenshots "${screenshots_json}" '
             {
                 app: {version: $app_version, build: $build_number},
                 git: {commit: $commit, dirtyWorktree: $dirty},
@@ -624,7 +682,7 @@ bleat_build_manifest() {
                 simulator: ({
                     runtime: $runtime,
                     locale: $locale,
-                    appearance: $appearance,
+                    appearances: $appearances,
                     iphone: {deviceType: $iphone_type, pixelDimensions: $iphone_dimensions, orientation: "portrait"}
                 } + (if $ipad_dimensions == "" then {} else {
                     ipad: {deviceType: $ipad_type, pixelDimensions: $ipad_dimensions, orientation: "portrait"}
@@ -670,27 +728,47 @@ bleat_capture_device() {
     plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_PASSWORD' -string "${bleat_password}" "${bleat_xctestrun}"
     plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_ENABLED' -string '1' "${bleat_xctestrun}"
 
-    local result_bundle="${bleat_output_directory}/results/${label}.xcresult"
     mkdir -p "${bleat_output_directory}/results"
-    bleat_result_bundles+=("${result_bundle}")
-    xcodebuild -quiet -xctestrun "${bleat_xctestrun}" \
-        -destination "id=${simulator}" -parallel-testing-enabled NO \
-        -resultBundlePath "${result_bundle}" \
-        -only-testing:BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
-        test-without-building
-    [[ -f "${result_bundle}/Info.plist" ]] \
-        || bleat_fail "Screenshot test did not produce a result bundle for ${label}"
-    bleat_export_screenshots "${result_bundle}" "${label}" "${dimensions}"
+    local appearance
+    for appearance in "${bleat_appearances[@]}"; do
+        xcrun simctl ui "${simulator}" appearance "${appearance}"
+        bleat_set_xctestrun_env 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_APPEARANCE' "${appearance}"
+
+        local result_bundle="${bleat_output_directory}/results/${label}-${appearance}.xcresult"
+        bleat_result_bundles+=("${result_bundle}")
+        xcodebuild -quiet -xctestrun "${bleat_xctestrun}" \
+            -destination "id=${simulator}" -parallel-testing-enabled NO \
+            -resultBundlePath "${result_bundle}" \
+            -only-testing:BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
+            test-without-building
+        [[ -f "${result_bundle}/Info.plist" ]] \
+            || bleat_fail "Screenshot test did not produce a result bundle for ${label} ${appearance}"
+        bleat_export_screenshots "${result_bundle}" "${label}" "${dimensions}" "${appearance}"
+    done
     bleat_captured_dimensions="${dimensions}"
+}
+
+bleat_resolve_appearances() {
+    local raw appearance
+    local -a parsed
+    for raw in "${(@s:,:)bleat_appearances_raw}"; do
+        appearance="${raw//[[:space:]]/}"
+        case "${appearance}" in
+            light|dark) ;;
+            *) bleat_fail "BLEAT_SCREENSHOT_APPEARANCES must be a comma-separated list of light and/or dark (got: ${bleat_appearances_raw})" ;;
+        esac
+        if (( ${parsed[(Ie)${appearance}]} == 0 )); then
+            parsed+=("${appearance}")
+        fi
+    done
+    (( ${#parsed} >= 1 )) || bleat_fail "BLEAT_SCREENSHOT_APPEARANCES must contain at least one appearance"
+    bleat_appearances=("${parsed[@]}")
 }
 
 bleat_main() {
     bleat_validate_fixture
     bleat_require_prerequisites
-    case "${bleat_appearance}" in
-        light|dark) ;;
-        *) bleat_fail "BLEAT_SCREENSHOT_APPEARANCE must be light or dark" ;;
-    esac
+    bleat_resolve_appearances
     [[ "${bleat_locale}" == [a-z][a-z]_[A-Z][A-Z] ]] \
         || bleat_fail "BLEAT_SCREENSHOT_LOCALE must use a language_REGION value such as en_AU"
     bleat_resolve_runtime
@@ -763,10 +841,14 @@ case "${1:-}" in
             || bleat_fail "BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY is required"
         [[ -n "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS:-}" ]] \
             || bleat_fail "BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS is required"
-        bleat_validate_exported_artifacts \
-            "${BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST}" \
-            "${BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY}" \
-            "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS}" artifact-check
+        bleat_resolve_appearances
+        local appearance
+        for appearance in "${bleat_appearances[@]}"; do
+            bleat_validate_exported_artifacts \
+                "${BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST}" \
+                "${BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY}" \
+                "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS}" artifact-check "${appearance}"
+        done
         ;;
     --validate-manifest)
         [[ -n "${BLEAT_SCREENSHOT_MANIFEST:-}" ]] \

@@ -1,9 +1,12 @@
 import XCTest
 
 final class BleatReleaseScreenshotTests: XCTestCase {
+    private var screenshotSuffix: String = ""
+
     @MainActor
     func testReleaseScreenshots() throws {
         let environment = try screenshotEnvironment()
+        screenshotSuffix = environment.appearance == "dark" ? "-dark" : ""
         let app = XCUIApplication()
         app.launch()
 
@@ -237,8 +240,16 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func attachScreenshot(named name: String) {
+        let suffixed: String
+        if screenshotSuffix.isEmpty {
+            suffixed = name
+        } else if name.hasSuffix(".png") {
+            suffixed = String(name.dropLast(4)) + screenshotSuffix + ".png"
+        } else {
+            suffixed = name + screenshotSuffix
+        }
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = name
+        attachment.name = suffixed
         attachment.lifetime = .keepAlways
         add(attachment)
     }
@@ -256,10 +267,12 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         else {
             throw ScreenshotEnvironmentError.incomplete
         }
+        let appearance = environment["BLEAT_SCREENSHOT_APPEARANCE"] ?? "light"
         return ScreenshotEnvironment(
             server: server,
             username: username,
-            password: password
+            password: password,
+            appearance: appearance
         )
     }
 }
@@ -268,6 +281,7 @@ private struct ScreenshotEnvironment {
     let server: String
     let username: String
     let password: String
+    let appearance: String
 }
 
 private enum ScreenshotEnvironmentError: Error {

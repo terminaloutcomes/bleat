@@ -54,53 +54,71 @@ readonly bleat_attachment_directory="${bleat_temporary_directory}/attachments"
 readonly bleat_attachment_manifest="${bleat_temporary_directory}/attachments.json"
 mkdir -p "${bleat_attachment_directory}"
 jq --null-input --argjson screenshots "$(jq '[.screenshots[].file]' "${bleat_fixture}")" '
-    [{attachments: ($screenshots | map({
-        suggestedHumanReadableName: sub("\\.png$"; "_0_fixture.png"),
-        exportedFileName: (. | sub("\\.png$"; "-attachment.png"))
-    }))}]
+    [{
+        attachments: (
+            ($screenshots | map({
+                suggestedHumanReadableName: sub("\\.png$"; "_0_fixture.png"),
+                exportedFileName: (. | sub("\\.png$"; "-attachment.png"))
+            }))
+            + ($screenshots | map({
+                suggestedHumanReadableName: sub("\\.png$"; "-dark_0_fixture.png"),
+                exportedFileName: (. | sub("\\.png$"; "-dark-attachment.png"))
+            }))
+        )
+    }]
 ' >"${bleat_attachment_manifest}"
 
-while IFS= read -r filename; do
+bleat_make_attachment() {
+    local stem="$1"
     sips -z 2868 1320 \
         "${bleat_repository_root}/TestSupport/ReleaseScreenshots/covers/thirteen-hours-of-goat-sounds.png" \
-        --out "${bleat_attachment_directory}/${filename%.png}-attachment.png" >/dev/null
+        --out "${bleat_attachment_directory}/${stem}-attachment.png" >/dev/null
+}
+base_file=""
+while IFS= read -r base_file; do
+    bleat_make_attachment "${base_file%.png}"
+    bleat_make_attachment "${base_file%.png}-dark"
 done < <(jq --raw-output '.screenshots[].file' "${bleat_fixture}")
 
+BLEAT_SCREENSHOT_APPEARANCES=light,dark \
 BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
 BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
 BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
-"${bleat_harness}" --validate-artifacts
+    "${bleat_harness}" --validate-artifacts
 
-jq '.[0].attachments |= .[1:]' "${bleat_attachment_manifest}" \
-    >"${bleat_temporary_directory}/missing-attachment.json"
-if BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/missing-attachment.json" \
+jq '.[0].attachments |= map(select(.suggestedHumanReadableName | endswith("-dark_0_fixture.png") | not))' \
+    "${bleat_attachment_manifest}" >"${bleat_temporary_directory}/missing-dark.json"
+if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
+    BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/missing-dark.json" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
-    print -u2 "The artifact validator accepted a missing capture"
+    print -u2 "The artifact validator accepted a missing dark capture"
     exit 1
 fi
 
-jq '.[0].attachments[1].suggestedHumanReadableName = .[0].attachments[0].suggestedHumanReadableName' \
-    "${bleat_attachment_manifest}" >"${bleat_temporary_directory}/duplicate-attachment.json"
-if BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/duplicate-attachment.json" \
+jq '.[0].attachments[8].suggestedHumanReadableName = .[0].attachments[7].suggestedHumanReadableName' \
+    "${bleat_attachment_manifest}" >"${bleat_temporary_directory}/duplicate-dark.json"
+if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
+    BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/duplicate-dark.json" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
-    print -u2 "The artifact validator accepted a duplicate capture"
+    print -u2 "The artifact validator accepted a duplicate dark capture"
     exit 1
 fi
 
 sips -z 2752 2064 \
-    "${bleat_attachment_directory}/01-home-attachment.png" --out \
-    "${bleat_temporary_directory}/invalid-dimensions.png" >/dev/null
-mv "${bleat_temporary_directory}/invalid-dimensions.png" \
-    "${bleat_attachment_directory}/01-home-attachment.png"
-if BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
+    "${bleat_attachment_directory}/01-home-dark-attachment.png" --out \
+    "${bleat_temporary_directory}/invalid-dark-dimensions.png" >/dev/null
+mv "${bleat_temporary_directory}/invalid-dark-dimensions.png" \
+    "${bleat_attachment_directory}/01-home-dark-attachment.png"
+if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
+    BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
-    print -u2 "The artifact validator accepted invalid screenshot dimensions"
+    print -u2 "The artifact validator accepted invalid dark screenshot dimensions"
     exit 1
 fi
 
