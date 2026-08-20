@@ -94,6 +94,33 @@ public struct UserPermissions: Codable, Hashable, Sendable {
         case accessExplicitContent
         case selectedTagsNotAccessible
     }
+
+    /// Decodes permissions tolerantly: any key that is absent defaults to
+    /// `false` rather than failing the decode.
+    ///
+    /// Audiobookshelf introduces permission fields additively and does not
+    /// backfill existing users' stored permission blobs — for example
+    /// `createEreader`, added in advplyr/audiobookshelf#3531 with no
+    /// migration. The server serialises permissions as-stored, so an account
+    /// created before a permission existed arrives without that key. Decoding
+    /// every field as required would abort the entire login payload for such
+    /// accounts; defaulting a missing permission to "not granted" is both
+    /// safe and forward-compatible with permissions added in the future.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func flag(_ key: CodingKeys) throws -> Bool {
+            try container.decodeIfPresent(Bool.self, forKey: key) ?? false
+        }
+        self.download = try flag(.download)
+        self.update = try flag(.update)
+        self.delete = try flag(.delete)
+        self.upload = try flag(.upload)
+        self.createEReader = try flag(.createEReader)
+        self.accessAllLibraries = try flag(.accessAllLibraries)
+        self.accessAllTags = try flag(.accessAllTags)
+        self.accessExplicitContent = try flag(.accessExplicitContent)
+        self.selectedTagsNotAccessible = try flag(.selectedTagsNotAccessible)
+    }
 }
 
 public struct AuthenticatedUser: Codable, Hashable, Sendable {

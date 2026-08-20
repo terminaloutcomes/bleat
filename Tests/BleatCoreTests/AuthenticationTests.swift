@@ -782,6 +782,97 @@ final class AuthenticationTests: XCTestCase {
         }
     }
 
+    func testUserPermissionsToleratesMissingKeys() throws {
+        // Audiobookshelf adds permission fields additively and does not
+        // backfill existing users' stored permission blobs (e.g. `createEreader`,
+        // added in advplyr/audiobookshelf#3531 with no migration). An account
+        // created before a permission existed is serialised without that key,
+        // so decoding must default it rather than failing the whole payload.
+        let empty = try JSONDecoder().decode(
+            UserPermissions.self,
+            from: Data("{}".utf8)
+        )
+        XCTAssertFalse(empty.download)
+        XCTAssertFalse(empty.createEReader)
+        XCTAssertFalse(empty.accessAllLibraries)
+        XCTAssertFalse(empty.selectedTagsNotAccessible)
+
+        // A real Audiobookshelf 2.36 permissions blob from an account that
+        // predates `createEreader`: every other key is present, only the new
+        // one is missing.
+        let legacy = try JSONDecoder().decode(
+            UserPermissions.self,
+            from: Data(
+                """
+                {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                }
+                """.utf8
+            )
+        )
+        XCTAssertTrue(legacy.download)
+        XCTAssertTrue(legacy.accessAllLibraries)
+        XCTAssertTrue(legacy.accessAllTags)
+        XCTAssertTrue(legacy.accessExplicitContent)
+        XCTAssertFalse(legacy.update)
+        XCTAssertFalse(legacy.createEReader)
+    }
+
+    func testLoginSucceedsWhenPermissionKeyMissing() async throws {
+        // End-to-end: a login response whose permissions omit `createEreader`
+        // must still authenticate instead of failing to decode the whole
+        // payload (which surfaced as "incomplete / inconsistent data").
+        let payload = Data(
+            """
+            {
+              "user": {
+                "id": "user-id",
+                "username": "reader",
+                "type": "user",
+                "permissions": {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                },
+                "librariesAccessible": [],
+                "itemTagsSelected": [],
+                "accessToken": "access-token",
+                "refreshToken": "refresh-token"
+              }
+            }
+            """.utf8
+        )
+        let transport = AuthenticationHTTPTransport(
+            responses: [.json(payload), .json(payload)]
+        )
+        let store = RecordingCredentialStore()
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let account = try await coordinator.login(
+            accountID: AccountID(rawValue: "legacy-account"),
+            server: try NormalizedServerURL("https://example.com"),
+            username: "reader",
+            password: "test-password"
+        )
+        XCTAssertEqual(account.user.username, "reader")
+        XCTAssertFalse(account.user.permissions.createEReader)
+        XCTAssertTrue(account.user.permissions.accessAllLibraries)
+    }
+
     private static func authenticationJSON(
         userID: String = "user-id",
         accessToken: String? = nil,
