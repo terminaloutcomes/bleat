@@ -173,7 +173,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case libraryCache(LibraryCacheError)
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
-    case privateCloud(PrivateCloudSyncError)
+    case privateCloud(PrivateCloudSyncFailure)
 }
 
 enum LocalServerValidationPolicy: Equatable, Sendable {
@@ -640,6 +640,13 @@ protocol AppServicing: Sendable {
 
     func cancelPrivateCloudSynchronization() async
 
+    func pendingPrivateCloudConfigurationConflict() async
+        -> CloudConfigurationConflict?
+
+    func resolvePrivateCloudConfigurationConflict(
+        _ resolution: CloudConfigurationConflictResolution
+    ) async throws(AppServiceError)
+
     func forcePushPrivateCloudServerConfiguration(
         _ account: ServerAccount
     ) async throws(AppServiceError)
@@ -873,6 +880,24 @@ extension AppServicing {
 
     func cancelPrivateCloudSynchronization() async {}
 
+    func pendingPrivateCloudConfigurationConflict() async
+        -> CloudConfigurationConflict?
+    {
+        nil
+    }
+
+    func resolvePrivateCloudConfigurationConflict(
+        _ resolution: CloudConfigurationConflictResolution
+    ) async throws(AppServiceError) {
+        throw .privateCloud(
+            PrivateCloudSyncFailure(
+                operation: resolution == .keepThisDevice
+                    ? .keepLocalConfiguration : .acceptCloudConfiguration,
+                cause: .disabled
+            )
+        )
+    }
+
     func forcePushPrivateCloudServerConfiguration(
         _ account: ServerAccount
     ) async throws(AppServiceError) {}
@@ -934,6 +959,9 @@ actor LiveAppService: AppServicing {
     init(
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
+        privateCloudEvents: (
+            any PrivateCloudSyncEventRecording
+        )? = nil,
         openIDBrowserProvider: @escaping @MainActor @Sendable ()
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
@@ -1008,7 +1036,11 @@ actor LiveAppService: AppServicing {
             privateCloudSync = PrivateCloudSyncCoordinator(
                 statistics: statisticsRepository,
                 accounts: accountStore,
-                credentialStore: credentialStore
+                credentialStore: credentialStore,
+                eventRecorder: privateCloudEvents
+                    ?? DiagnosticPrivateCloudSyncEventRecorder(
+                        diagnostics: diagnostics
+                    )
             )
         } else {
             privateCloudSync = nil
@@ -2592,13 +2624,18 @@ actor LiveAppService: AppServicing {
         -> [CloudServerConfigurationChange]
     {
         guard let privateCloudSync else {
-            throw .privateCloud(.disabled)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize,
+                    cause: .disabled
+                )
+            )
         }
         do {
             try await privateCloudSync.synchronize()
             return await privateCloudSync
                 .pendingServerConfigurationChanges()
-        } catch let error as PrivateCloudSyncError {
+        } catch let error {
             throw .privateCloud(error)
         }
     }
@@ -2607,11 +2644,44 @@ actor LiveAppService: AppServicing {
         await privateCloudSync?.cancelSynchronization()
     }
 
+    func pendingPrivateCloudConfigurationConflict() async
+        -> CloudConfigurationConflict?
+    {
+        await privateCloudSync?.pendingConfigurationConflict()
+    }
+
+    func resolvePrivateCloudConfigurationConflict(
+        _ resolution: CloudConfigurationConflictResolution
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: resolution == .keepThisDevice
+                        ? .keepLocalConfiguration
+                        : .acceptCloudConfiguration,
+                    cause: .disabled
+                )
+            )
+        }
+        do {
+            try await privateCloudSync.resolveConfigurationConflict(
+                resolution
+            )
+        } catch let error {
+            throw .privateCloud(error)
+        }
+    }
+
     func forcePushPrivateCloudServerConfiguration(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
         guard let privateCloudSync else {
-            throw .privateCloud(.disabled)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .pushServerConfiguration,
+                    cause: .disabled
+                )
+            )
         }
         do {
             try await privateCloudSync.forcePushServerConfiguration(account)
@@ -2625,7 +2695,12 @@ actor LiveAppService: AppServicing {
         accept: Bool
     ) async throws(AppServiceError) {
         guard let privateCloudSync else {
-            throw .privateCloud(.disabled)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .disabled
+                )
+            )
         }
         do {
             try await privateCloudSync.resolveServerConfigurationChange(
@@ -2661,7 +2736,12 @@ actor LiveAppService: AppServicing {
         deleteCloudData: Bool
     ) async throws(AppServiceError) {
         guard let privateCloudSync else {
-            throw .privateCloud(.disabled)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: enabled ? .enable : .disable,
+                    cause: .disabled
+                )
+            )
         }
         let accountIDs: [AccountID]
         do {
@@ -2686,10 +2766,15 @@ actor LiveAppService: AppServicing {
                 )
                 throw error
             }
-        } catch let error as PrivateCloudSyncError {
+        } catch let error as PrivateCloudSyncFailure {
             throw .privateCloud(error)
         } catch {
-            throw .privateCloud(.persistenceFailed)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: enabled ? .enable : .disable,
+                    cause: .persistenceFailed
+                )
+            )
         }
     }
 
@@ -2698,7 +2783,12 @@ actor LiveAppService: AppServicing {
         includeStatistics: Bool
     ) async throws(AppServiceError) {
         guard let privateCloudSync else {
-            throw .privateCloud(.disabled)
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .deleteAccount,
+                    cause: .disabled
+                )
+            )
         }
         do {
             try await privateCloudSync.deleteAccountEverywhere(

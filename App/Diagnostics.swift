@@ -37,6 +37,7 @@ struct DiagnosticsReport: Equatable, Sendable {
     let searchState: String
     let playbackState: String
     let playbackSyncState: String
+    let privateCloudState: String
     let downloadCount: Int
     let errorCodes: [String]
 
@@ -70,6 +71,7 @@ struct DiagnosticsReport: Equatable, Sendable {
             Search: \(searchState)
             Playback: \(playbackState)
             Playback sync: \(playbackSyncState)
+            iCloud sync: \(privateCloudState)
             Downloads: \(downloadCount)
             Active error codes: \(errors)
 
@@ -108,6 +110,7 @@ extension AppModel {
             searchState: searchResults.diagnosticsLabel,
             playbackState: playback.state.diagnosticsLabel,
             playbackSyncState: playback.syncState.diagnosticsLabel,
+            privateCloudState: privateCloudState.diagnosticsLabel,
             downloadCount: downloads.records.count,
             errorCodes: activeDiagnosticsErrors
         )
@@ -134,8 +137,9 @@ extension AppModel {
                 bookmarkFailure,
                 bookEditFailure,
                 bookDeletionFailure,
+                privateCloudState.failure,
             ].compactMap(\.self))
-        return Array(Set(errors.map(\.diagnosticsCode))).sorted()
+        return Array(Set(errors.flatMap(\.diagnosticsCodes))).sorted()
     }
 
     private var bookmarkFailure: AppFailure? {
@@ -273,6 +277,26 @@ extension PlaybackSyncState {
     }
 }
 
+extension PrivateCloudState {
+    fileprivate var diagnosticsLabel: String {
+        switch self {
+        case .disabled: "Disabled"
+        case .idle: "Idle"
+        case .syncing: "Syncing"
+        case .cancelling: "Cancelling"
+        case .cancelled: "Cancelled"
+        case .failed: "Failed"
+        }
+    }
+
+    fileprivate var failure: AppFailure? {
+        if case .failed(let failure) = self {
+            return failure
+        }
+        return nil
+    }
+}
+
 extension AppFailure {
     var diagnosticFailureCode: DiagnosticFailureCode {
         switch (operation, cause) {
@@ -322,10 +346,37 @@ extension AppFailure {
         case (_, .unknownPlaybackChapter): .unknownPlaybackChapter
         case (_, .invalidPlaybackChapterOffset):
             .invalidPlaybackChapterOffset
+        case (_, .privateCloud(let failure)):
+            failure.cause.diagnosticFailureCode
         }
     }
 
-    fileprivate var diagnosticsCode: String {
-        diagnosticFailureCode.rawValue
+    fileprivate var diagnosticsCodes: [String] {
+        var codes = [diagnosticFailureCode.rawValue]
+        if case .privateCloud(let failure) = cause,
+            case .cloudKit(let cloudKit) = failure.cause
+        {
+            codes.append("cloudkit_\(cloudKit.code.diagnosticCode)")
+            codes.append(
+                contentsOf: cloudKit.partialFailureCodes.map {
+                    "cloudkit_partial_\($0.diagnosticCode)"
+                }
+            )
+        }
+        return codes
+    }
+}
+
+extension PrivateCloudSyncError {
+    fileprivate var diagnosticFailureCode: DiagnosticFailureCode {
+        switch self {
+        case .disabled: .privateCloudDisabled
+        case .cancelled: .privateCloudCancelled
+        case .invalidRecord: .privateCloudInvalidRecord
+        case .persistenceFailed: .privateCloudPersistenceFailed
+        case .engineUnavailable: .privateCloudEngineUnavailable
+        case .cloudKit: .privateCloudKitFailed
+        case .unexpected: .privateCloudUnexpected
+        }
     }
 }

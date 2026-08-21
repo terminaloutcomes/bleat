@@ -99,6 +99,33 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         XCTAssertEqual(invalidatedTokens, ["one", "two"])
     }
 
+    func testLogExporterRefreshesOnceAndDisableGatesQueuedRecords() async {
+        let provider = SequenceTokenProvider(tokens: ["expired", "renewed"])
+        let client = RecordingOtlpLogClient(
+            results: [.unauthenticated, .success]
+        )
+        let exporter = AuthenticatedOtlpLogExporter(
+            tokenProvider: provider,
+            client: client,
+            timeout: 2
+        )
+
+        XCTAssertEqual(exporter.export(logRecords: [logRecord()]), .success)
+        XCTAssertEqual(client.exportCount, 2)
+        XCTAssertEqual(
+            client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" },
+            ["authorization=Bearer renewed"]
+        )
+        let invalidated = await provider.invalidatedTokens
+        XCTAssertEqual(invalidated, ["expired"])
+
+        exporter.disable()
+        XCTAssertEqual(exporter.export(logRecords: [logRecord()]), .failure)
+        XCTAssertEqual(client.exportCount, 2)
+        exporter.shutdown()
+        XCTAssertEqual(client.shutdownCount, 1)
+    }
+
     func testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller() async {
         for result in [
             RemoteTelemetryOtlpExportResult.rejected,
@@ -335,6 +362,22 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             hasEnded: true
         )
     }
+
+    nonisolated private func logRecord() -> ReadableLogRecord {
+        ReadableLogRecord(
+            resource: Resource(),
+            instrumentationScopeInfo: InstrumentationScopeInfo(
+                name: "app.bleat.test"
+            ),
+            timestamp: Date(timeIntervalSince1970: 2),
+            severity: .error,
+            body: .string("CloudKit synchronization lifecycle"),
+            attributes: [
+                "bleat.cloudkit.operation": .string("synchronize")
+            ],
+            eventName: "bleat.cloudkit.sync.failed"
+        )
+    }
 }
 
 private let standardOutputCaptureLock = NSLock()
@@ -491,6 +534,46 @@ private final class RecordingOtlpClient:
     func cancelActiveExports() {
         lock.withLock { cancellations += 1 }
     }
+
+    func shutdown() {
+        lock.withLock { shutdowns += 1 }
+    }
+}
+
+private final class RecordingOtlpLogClient:
+    RemoteTelemetryOtlpLogClient, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var results: [RemoteTelemetryOtlpExportResult]
+    private var metadata: [[(String, String)]] = []
+    private var shutdowns = 0
+
+    init(results: [RemoteTelemetryOtlpExportResult]) {
+        self.results = results
+    }
+
+    var recordedMetadata: [[(String, String)]] {
+        lock.withLock { metadata }
+    }
+
+    var exportCount: Int { lock.withLock { metadata.count } }
+    var shutdownCount: Int { lock.withLock { shutdowns } }
+
+    func export(
+        logs: [ReadableLogRecord],
+        metadata: [(String, String)],
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) -> RemoteTelemetryOtlpExportResult {
+        guard isActive() else { return .cancelled }
+        return lock.withLock {
+            self.metadata.append(metadata)
+            guard !results.isEmpty else { return .failure }
+            return results.removeFirst()
+        }
+    }
+
+    func cancelActiveExports() {}
 
     func shutdown() {
         lock.withLock { shutdowns += 1 }

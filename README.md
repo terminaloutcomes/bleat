@@ -457,7 +457,18 @@ Launch restores local accounts and downloads before starting private iCloud
 synchronization as background maintenance. A slow CloudKit operation never
 holds the app on its launch screen. Settings exposes active synchronization,
 allows it to be cancelled, and offers an explicit retry after cancellation or
-failure.
+failure. CloudKit failures remain distinct from Audiobookshelf failures:
+Settings names iCloud as the failing service, chooses retry behavior from the
+typed CloudKit code, and local diagnostics retain the operation, exact code,
+partial-failure codes, and retry delay without recording record identifiers or
+localized error descriptions. Bleat retains each successful record's CloudKit
+system fields across launches. A stale-change-tag response is reconciled from
+the returned server record: identical data adopts the current server version,
+a newer unambiguous local edit is rebased and retried once, and an ambiguous
+preference conflict pauses synchronization. Bleat shows only the settings that
+differ and asks whether to upload this device's complete current settings or
+apply the complete iCloud settings. The pending choice survives relaunch and
+blocks automatic configuration uploads until it is resolved.
 
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from
@@ -761,16 +772,21 @@ it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and device or installation identifiers. Turning the setting
 off does not affect local Diagnostics. The Diagnostics screen remains available
 while signed out and when application startup is unavailable. The
-opted-in runtime batches completed OpenTelemetry spans away from the main
-actor and durably retains failed batches for at most two hours and 128 MiB in
+opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
+lifecycle log records away from the main
+actor. It durably retains failed span batches for at most two hours and 128 MiB in
 protected, backup-excluded Application Support storage. Withdrawal immediately
-stops new spans and downstream attempts, invalidates the retained generation,
+stops new spans and logs and downstream attempts, invalidates the retained generation,
 and purges it asynchronously. When both telemetry endpoints are configured,
 one TLS gRPC channel sends each persisted OTLP batch with a bearer JWT resolved
 immediately before that RPC. An unauthenticated response invalidates only the
 rejected token and permits one refresh/retry; rotation does not rebuild the
 tracing or persistence pipeline. Missing or invalid configuration keeps the
-unavailable sink and retains eligible spans within the same limits.
+unavailable sink and retains eligible spans within the same limits. CloudKit
+logs use static bodies and a closed attribute allowlist containing only the
+typed operation, outcome, failure category, exact CloudKit code, retryability,
+partial codes, retry delay, and duration. Their SDK queue is memory-only and
+bounded to 2,048 records; it is not replayed after relaunch.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path

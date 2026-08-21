@@ -139,20 +139,30 @@ awk '
 ' <<<"${outage_metrics}"
 
 for _ in {1..30}; do
-  if [[ -s "${BLEAT_TELEMETRY_CAPTURE_DIRECTORY}/traces.json" ]]; then
+  if [[ -s "${BLEAT_TELEMETRY_CAPTURE_DIRECTORY}/traces.json" \
+    && -s "${BLEAT_TELEMETRY_CAPTURE_DIRECTORY}/logs.json" ]]; then
     break
   fi
   sleep 1
 done
 
 readonly captured_telemetry="${BLEAT_TELEMETRY_CAPTURE_DIRECTORY}/traces.json"
+readonly captured_logs="${BLEAT_TELEMETRY_CAPTURE_DIRECTORY}/logs.json"
 test -s "${captured_telemetry}"
+test -s "${captured_logs}"
 jq --slurp -e '
   .. | objects
   | select(has("name") and .name == "bleat.app.launch")
 ' "${captured_telemetry}" >/dev/null
+jq --slurp -e '
+  .. | objects
+  | select(
+      has("eventName")
+      and .eventName == "bleat.cloudkit.sync.failed"
+    )
+' "${captured_logs}" >/dev/null
 if rg -i 'authorization|bearer|telemetry:write|installation' \
-  "${captured_telemetry}"; then
+  "${captured_telemetry}" "${captured_logs}"; then
   print -u2 "captured telemetry contains authentication data"
   exit 1
 fi

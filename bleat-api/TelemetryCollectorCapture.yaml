@@ -10,8 +10,12 @@ receivers:
         max_recv_msg_size_mib: 1
 
 exporters:
-  file:
+  file/traces:
     path: /output/traces.json
+    format: json
+    flush_interval: 100ms
+  file/logs:
+    path: /output/logs.json
     format: json
     flush_interval: 100ms
 
@@ -20,7 +24,10 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [file]
+      exporters: [file/traces]
+    logs:
+      receivers: [otlp]
+      exporters: [file/logs]
   telemetry:
     logs:
       level: warn

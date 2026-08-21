@@ -1328,6 +1328,25 @@ and must be ignored and replaced without prompting or changing local settings.
 selects CloudKit-free entitlements for development teams that do not support
 the capability; those builds do not initialize or present CloudKit
 synchronization. `enabled` is the default and the only other supported value.
+Every CloudKit operation and CKSyncEngine persistence/apply callback emits a
+typed local diagnostic lifecycle. Failures preserve their originating
+operation, exact `CKError.Code`, privacy-safe partial-failure codes, and retry
+delay through service, presentation, and diagnostics boundaries; UI copy must
+identify iCloud and must never translate a CloudKit failure into an
+Audiobookshelf outage. Local diagnostics exclude localized descriptions,
+CloudKit record identifiers, and CloudKit `userInfo`. When remote diagnostic
+telemetry consent is active, the same typed lifecycle emits a reviewed
+OpenTelemetry span and log record; otherwise it remains on-device only.
+Successful record system fields, including server change tags, must survive
+process relaunch. A `serverRecordChanged` save failure is resolved against the
+returned server record: matching payloads adopt its current system fields,
+unambiguous newer local configuration is rebased and retried once, and an
+ambiguous preference merge remains pending without overwriting either value.
+The app shows the fields that differ and requires the user to choose the
+complete current device snapshot or complete iCloud snapshot. The pending
+choice survives relaunch, suppresses automatic configuration uploads, and each
+typed resolution operation emits the same local and consent-gated remote
+diagnostic lifecycle as other CloudKit operations.
 `BLEAT_APP_ATTEST_MODE` likewise accepts only `enabled` or `disabled` and
 defaults to `enabled`. `BUILD_WITHOUT_PAID_DEVELOPER` accepts only `YES` or
 `NO`, defaults to `NO`, and when `YES` overrides both effective capability
@@ -1564,12 +1583,23 @@ version and build, typed Apple platform, and numeric operating-system version.
 Hardware model and installation identifiers are excluded. The reviewed span
 names are app launch, account connection, library refresh, playback preparation,
 playback start, download transfer, playback progress synchronization, and
-transcription. Span attributes are limited to a subsystem derived from the span
+transcription, plus private CloudKit synchronization. Span attributes are limited to a subsystem derived from the span
 name, typed success/cancellation/failure outcome, privacy-safe failure category,
 optional downloaded/streamed/offline/remote/cache source, and a retry bucket of
 none, one, two, or three-or-more. Duration comes from span timing and is not an
 application-supplied attribute. Application code must not receive an arbitrary
 span-name or attribute-dictionary API.
+
+The reviewed log schema is initially limited to private CloudKit lifecycle
+events. Its event names and static body are closed; attributes may contain only
+the typed CloudKit operation, outcome, privacy-safe failure category, exact
+CloudKit code, partial codes, retryability, retry delay, and duration. Raw
+errors, descriptions, `userInfo`, records, accounts, servers, and correlation
+identifiers are excluded. Logs use the same consent generation, resource,
+authenticated OTLP origin, foreground/background lifecycle, and synchronous
+withdrawal gate as spans. Their SDK queue is memory-only, bounded to 2,048
+records, and is not replayed after relaunch; the two-hour/128 MiB persistent
+policy remains specific to completed span batches.
 
 When enabled, the reviewed collection policy samples every eligible trace.
 Temporary retained telemetry is limited to two hours and 128 MiB, has no

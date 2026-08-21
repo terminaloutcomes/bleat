@@ -48,6 +48,13 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
             model = AppModel(
                 service: try LiveAppService(
                     diagnostics: diagnostics,
+                    privateCloudEvents:
+                        CompositePrivateCloudSyncEventRecorder([
+                            DiagnosticPrivateCloudSyncEventRecorder(
+                                diagnostics: diagnostics
+                            ),
+                            remoteTelemetry.privateCloudEvents,
+                        ]),
                     openIDBrowserProvider: {
                         SystemOpenIDBrowserSession(
                             anchorProvider: {

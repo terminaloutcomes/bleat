@@ -67,6 +67,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case syncPlayback = "sync_playback"
     case syncLocalSessions = "sync_local_sessions"
     case syncBookmarks = "sync_bookmarks"
+    case privateCloudSync = "private_cloud_sync"
     case exportRecentLogs = "export_recent_logs"
 }
 
@@ -154,6 +155,57 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case authenticationBridgeFailed = "authentication_bridge_failed"
     case authenticationCallbackInvalid = "authentication_callback_invalid"
     case authenticationCredentialInvalid = "authentication_credential_invalid"
+    case privateCloudDisabled = "private_cloud_disabled"
+    case privateCloudCancelled = "private_cloud_cancelled"
+    case privateCloudInvalidRecord = "private_cloud_invalid_record"
+    case privateCloudPersistenceFailed = "private_cloud_persistence_failed"
+    case privateCloudEngineUnavailable = "private_cloud_engine_unavailable"
+    case privateCloudKitFailed = "private_cloudkit_failed"
+    case privateCloudUnexpected = "private_cloud_unexpected"
+}
+
+/// Privacy-safe CloudKit detail retained in local diagnostics. Values are
+/// derived from typed failures; CloudKit descriptions and userInfo never cross
+/// this boundary because they can contain record identifiers.
+public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
+    public let operation: PrivateCloudSyncOperation
+    public let cloudKitCode: String?
+    public let partialFailureCodes: [String]
+    public let retryAfterMilliseconds: Int?
+    public let unexpectedErrorDomain: String?
+    public let unexpectedErrorCode: Int?
+
+    public init(
+        operation: PrivateCloudSyncOperation,
+        failure: PrivateCloudSyncError? = nil
+    ) {
+        self.operation = operation
+        switch failure {
+        case .cloudKit(let failure):
+            cloudKitCode = failure.code.diagnosticCode
+            partialFailureCodes = failure.partialFailureCodes.map(
+                \.diagnosticCode
+            )
+            retryAfterMilliseconds = failure.retryAfterSeconds.map {
+                Int(($0 * 1_000).rounded())
+            }
+            unexpectedErrorDomain = nil
+            unexpectedErrorCode = nil
+        case .unexpected(let error):
+            cloudKitCode = nil
+            partialFailureCodes = []
+            retryAfterMilliseconds = nil
+            unexpectedErrorDomain = error.domain
+            unexpectedErrorCode = error.code
+        case .disabled, .cancelled, .invalidRecord, .persistenceFailed,
+            .engineUnavailable, .none:
+            cloudKitCode = nil
+            partialFailureCodes = []
+            retryAfterMilliseconds = nil
+            unexpectedErrorDomain = nil
+            unexpectedErrorCode = nil
+        }
+    }
 }
 
 public enum DiagnosticEndpoint: String, Codable, CaseIterable, Sendable {
@@ -238,6 +290,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let fromState: DiagnosticState?
     public let toState: DiagnosticState?
     public let failureCode: DiagnosticFailureCode?
+    public let privateCloud: PrivateCloudDiagnosticDetail?
 
     private init(
         category: DiagnosticCategory,
@@ -252,7 +305,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         count: Int? = nil,
         fromState: DiagnosticState? = nil,
         toState: DiagnosticState? = nil,
-        failureCode: DiagnosticFailureCode? = nil
+        failureCode: DiagnosticFailureCode? = nil,
+        privateCloud: PrivateCloudDiagnosticDetail? = nil
     ) {
         self.category = category
         self.level = level
@@ -267,6 +321,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.fromState = fromState
         self.toState = toState
         self.failureCode = failureCode
+        self.privateCloud = privateCloud
     }
 
     public static func started(
@@ -349,6 +404,56 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         )
     }
 
+    public static func privateCloudStarted(
+        operation: PrivateCloudSyncOperation,
+        correlationID: UUID
+    ) -> DiagnosticEvent {
+        DiagnosticEvent(
+            category: .sync,
+            level: .debug,
+            name: .operationStarted,
+            operation: .privateCloudSync,
+            correlationID: correlationID,
+            privateCloud: PrivateCloudDiagnosticDetail(operation: operation)
+        )
+    }
+
+    public static func privateCloudCompleted(
+        operation: PrivateCloudSyncOperation,
+        correlationID: UUID,
+        durationMilliseconds: Int
+    ) -> DiagnosticEvent {
+        DiagnosticEvent(
+            category: .sync,
+            level: .info,
+            name: .operationCompleted,
+            operation: .privateCloudSync,
+            correlationID: correlationID,
+            durationMilliseconds: durationMilliseconds,
+            privateCloud: PrivateCloudDiagnosticDetail(operation: operation)
+        )
+    }
+
+    public static func privateCloudFailed(
+        failure: PrivateCloudSyncFailure,
+        correlationID: UUID,
+        durationMilliseconds: Int
+    ) -> DiagnosticEvent {
+        DiagnosticEvent(
+            category: .sync,
+            level: failure.cause == .cancelled ? .notice : .error,
+            name: .operationFailed,
+            operation: .privateCloudSync,
+            correlationID: correlationID,
+            durationMilliseconds: durationMilliseconds,
+            failureCode: failure.cause.diagnosticFailureCode,
+            privateCloud: PrivateCloudDiagnosticDetail(
+                operation: failure.operation,
+                failure: failure.cause
+            )
+        )
+    }
+
     public static var historyTruncated: DiagnosticEvent {
         DiagnosticEvent(
             category: .app,
@@ -395,7 +500,45 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         if let failureCode {
             fields.append("failure=\(failureCode.rawValue)")
         }
+        if let privateCloud {
+            fields.append("cloud_operation=\(privateCloud.operation.rawValue)")
+            if let cloudKitCode = privateCloud.cloudKitCode {
+                fields.append("cloudkit_code=\(cloudKitCode)")
+            }
+            if !privateCloud.partialFailureCodes.isEmpty {
+                fields.append(
+                    "cloudkit_partial_codes=\(privateCloud.partialFailureCodes.joined(separator: ","))"
+                )
+            }
+            if let retryAfterMilliseconds =
+                privateCloud.retryAfterMilliseconds
+            {
+                fields.append("retry_after_ms=\(retryAfterMilliseconds)")
+            }
+            if let unexpectedErrorDomain =
+                privateCloud.unexpectedErrorDomain
+            {
+                fields.append("error_domain=\(unexpectedErrorDomain)")
+            }
+            if let unexpectedErrorCode = privateCloud.unexpectedErrorCode {
+                fields.append("error_code=\(unexpectedErrorCode)")
+            }
+        }
         return fields.joined(separator: " ")
+    }
+}
+
+extension PrivateCloudSyncError {
+    fileprivate var diagnosticFailureCode: DiagnosticFailureCode {
+        switch self {
+        case .disabled: .privateCloudDisabled
+        case .cancelled: .privateCloudCancelled
+        case .invalidRecord: .privateCloudInvalidRecord
+        case .persistenceFailed: .privateCloudPersistenceFailed
+        case .engineUnavailable: .privateCloudEngineUnavailable
+        case .cloudKit: .privateCloudKitFailed
+        case .unexpected: .privateCloudUnexpected
+        }
     }
 }
 

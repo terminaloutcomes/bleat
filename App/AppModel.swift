@@ -416,7 +416,7 @@ enum AppFailureOperation: String, Equatable, Sendable {
     }
 }
 
-enum AppFailureCause: String, Equatable, Sendable {
+enum AppFailureCause: Equatable, Sendable {
     case persistenceUnavailable, invalidInput, serverRequiresHTTPS,
         serverNotReady
     case serverUnsupported, localLoginUnavailable, invalidCredentials
@@ -431,6 +431,7 @@ enum AppFailureCause: String, Equatable, Sendable {
     case inaccessibleLibrary, inaccessibleTags, explicitContentDenied
     case invalidPlaybackPosition, unknownPlaybackChapter
     case invalidPlaybackChapterOffset
+    case privateCloud(PrivateCloudSyncFailure)
 
     static let notFound = Self.itemNotFound
     static let accessDenied = Self.permissionDenied
@@ -450,6 +451,7 @@ struct AppFailure: Equatable, Sendable {
 
     var title: String {
         switch cause {
+        case .privateCloud(let failure): failure.presentationTitle
         case .accountUnavailable: "Account unavailable"
         case .playbackIdentityMismatch: "Audiobook mismatch"
         case .inaccessibleLibrary, .inaccessibleTags,
@@ -489,6 +491,7 @@ struct AppFailure: Equatable, Sendable {
 
     var message: String {
         switch cause {
+        case .privateCloud(let failure): failure.presentationMessage
         case .accountUnavailable:
             "That saved account is no longer available."
         case .playbackIdentityMismatch:
@@ -562,6 +565,7 @@ struct AppFailure: Equatable, Sendable {
 
     var systemImage: String {
         switch cause {
+        case .privateCloud(let failure): failure.systemImage
         case .accountUnavailable, .authenticationRequired:
             "person.crop.circle.badge.exclamationmark"
         case .playbackIdentityMismatch, .invalidPlaybackPosition,
@@ -592,7 +596,10 @@ struct AppFailure: Equatable, Sendable {
     }
 
     var allowsRetry: Bool {
-        operation.isSafeToRetry
+        if case .privateCloud(let failure) = cause {
+            return operation.isSafeToRetry && failure.isRetryable
+        }
+        return operation.isSafeToRetry
             && (cause == .invalidServerResponse
                 || cause == .localStorageUnavailable
                 || cause == .unavailableOffline
@@ -695,20 +702,7 @@ struct AppFailure: Equatable, Sendable {
         case .accountStore, .libraryCache, .transcriptCache, .statistics:
             return .localStorageUnavailable
         case .privateCloud(let error):
-            switch error {
-            case .cancelled:
-                return .requestCancelled
-            case .accountUnavailable:
-                return .authenticationRequired
-            case .disabled:
-                return .requestRejected
-            case .invalidRecord:
-                return .invalidServerResponse
-            case .persistenceFailed:
-                return .localStorageUnavailable
-            case .cloudUnavailable:
-                return .serverUnavailable
-            }
+            return .privateCloud(error)
         case .libraryRepository(let error), .bookDetail(let error):
             return repositoryCause(error)
         case .pageRequest, .homeRequest, .searchRequest, .metadataPatch:
@@ -964,6 +958,8 @@ extension AppFailure {
 extension AppFailureCause {
     var remoteTelemetryFailureCategory: RemoteTelemetryFailureCategory {
         switch self {
+        case .privateCloud(let failure):
+            failure.remoteTelemetryFailureCategory
         case .invalidCredentials, .authenticationRequired,
             .authenticationCallbackInvalid,
             .authenticationCredentialInvalid:
@@ -997,6 +993,148 @@ extension AppFailureCause {
             .invalidPlaybackChapterOffset, .authenticationCancelled,
             .requestCancelled:
             .unknown
+        }
+    }
+}
+
+extension PrivateCloudSyncFailure {
+    fileprivate var presentationTitle: String {
+        switch cause {
+        case .cancelled: "iCloud sync cancelled"
+        case .cloudKit(let failure):
+            switch failure.code {
+            case .notAuthenticated: "Sign in to iCloud"
+            case .accountTemporarilyUnavailable: "iCloud account unavailable"
+            case .quotaExceeded: "iCloud storage full"
+            case .permissionFailure, .managedAccountRestricted:
+                "iCloud access denied"
+            case .requestRateLimited: "iCloud sync delayed"
+            default: "iCloud sync unavailable"
+            }
+        case .disabled: "iCloud sync is off"
+        case .invalidRecord: "Invalid iCloud data"
+        case .persistenceFailed: "Local storage unavailable"
+        case .engineUnavailable: "iCloud sync unavailable"
+        case .unexpected: "iCloud sync failed"
+        }
+    }
+
+    fileprivate var presentationMessage: String {
+        switch cause {
+        case .disabled:
+            "Turn on iCloud synchronization before syncing."
+        case .cancelled:
+            "iCloud synchronization was cancelled."
+        case .invalidRecord:
+            "Bleat received incomplete or inconsistent data from iCloud."
+        case .persistenceFailed:
+            "Bleat could not save or read the iCloud data on this device."
+        case .engineUnavailable:
+            "Bleat could not initialize iCloud synchronization."
+        case .unexpected:
+            "Bleat encountered an unexpected iCloud synchronization error."
+        case .cloudKit(let failure):
+            cloudKitMessage(failure)
+        }
+    }
+
+    fileprivate var systemImage: String {
+        switch cause {
+        case .cloudKit(let failure):
+            switch failure.code {
+            case .networkUnavailable, .networkFailure,
+                .serviceUnavailable, .serverResponseLost:
+                "icloud.slash"
+            case .notAuthenticated, .accountTemporarilyUnavailable:
+                "person.crop.circle.badge.exclamationmark"
+            case .quotaExceeded:
+                "externaldrive.badge.exclamationmark"
+            case .permissionFailure, .managedAccountRestricted:
+                "lock.trianglebadge.exclamationmark"
+            default:
+                "exclamationmark.triangle"
+            }
+        case .persistenceFailed:
+            "externaldrive.badge.exclamationmark"
+        case .cancelled:
+            "xmark.circle"
+        case .disabled:
+            "icloud.slash"
+        case .invalidRecord, .engineUnavailable, .unexpected:
+            "exclamationmark.triangle"
+        }
+    }
+
+    fileprivate var isRetryable: Bool {
+        switch cause {
+        case .cloudKit(let failure): failure.isRetryable
+        case .cancelled, .persistenceFailed, .engineUnavailable: true
+        case .disabled, .invalidRecord, .unexpected: false
+        }
+    }
+
+    fileprivate var remoteTelemetryFailureCategory:
+        RemoteTelemetryFailureCategory
+    {
+        switch cause {
+        case .cloudKit(let failure):
+            switch failure.code {
+            case .notAuthenticated, .accountTemporarilyUnavailable:
+                .authentication
+            case .permissionFailure, .managedAccountRestricted:
+                .authorization
+            case .networkUnavailable, .networkFailure, .serverResponseLost:
+                .transport
+            case .requestRateLimited, .zoneBusy:
+                .rateLimited
+            case .badContainer, .missingEntitlement, .badDatabase,
+                .incompatibleVersion:
+                .unsupported
+            case .partialFailure, .invalidArguments,
+                .serverRecordChanged, .constraintViolation,
+                .changeTokenExpired, .batchRequestFailed:
+                .invalidResponse
+            default:
+                .serverRejected
+            }
+        case .persistenceFailed:
+            .localStorage
+        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+            .unexpected:
+            .unknown
+        }
+    }
+
+    private func cloudKitMessage(_ failure: CloudKitFailure) -> String {
+        switch failure.code {
+        case .notAuthenticated:
+            "Sign in to iCloud in Settings to synchronize Bleat."
+        case .accountTemporarilyUnavailable:
+            "Your iCloud account is temporarily unavailable. Try again when iCloud is ready."
+        case .networkUnavailable, .networkFailure, .serverResponseLost:
+            "Bleat could not reach iCloud. Check this device's connection and try again."
+        case .serviceUnavailable, .zoneBusy:
+            "iCloud is temporarily unavailable. Try again later."
+        case .requestRateLimited:
+            if let retryAfter = failure.retryAfterSeconds {
+                "iCloud asked Bleat to wait before synchronizing again. Try again in \(max(1, Int(retryAfter.rounded(.up)))) seconds."
+            } else {
+                "iCloud asked Bleat to wait before synchronizing again."
+            }
+        case .quotaExceeded:
+            "There is not enough iCloud storage to synchronize Bleat."
+        case .permissionFailure, .managedAccountRestricted:
+            "This iCloud account is not permitted to synchronize Bleat."
+        case .badContainer, .missingEntitlement, .badDatabase,
+            .incompatibleVersion:
+            "Bleat's iCloud configuration is unavailable in this build."
+        case .partialFailure, .serverRecordChanged, .batchRequestFailed,
+            .changeTokenExpired, .constraintViolation:
+            "Bleat could not merge the iCloud data safely. Try again before changing local data."
+        case .operationCancelled:
+            "iCloud synchronization was cancelled."
+        default:
+            "Bleat could not complete iCloud synchronization."
         }
     }
 }
@@ -1092,6 +1230,8 @@ final class AppModel {
     private(set) var canCancelPrivateCloudSynchronization = false
     private(set) var pendingCloudServerConfigurationChanges:
         [CloudServerConfigurationChange] = []
+    private(set) var pendingCloudConfigurationConflict:
+        CloudConfigurationConflict?
     private(set) var remoteTelemetryEnabled: Bool
     let playback: PlaybackModel
     let downloads: DownloadModel
@@ -3530,6 +3670,8 @@ final class AppModel {
     private func performPrivateCloudSynchronization(generation: UInt64) async {
         do {
             let changes = try await service.synchronizePrivateCloud()
+            let configurationConflict =
+                await service.pendingPrivateCloudConfigurationConflict()
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {
@@ -3543,6 +3685,7 @@ final class AppModel {
                 return
             }
             queueCloudServerConfigurationChanges(changes)
+            pendingCloudConfigurationConflict = configurationConflict
             accounts = synchronizedAccounts
             if let active {
                 account = active
@@ -3562,7 +3705,9 @@ final class AppModel {
             else {
                 return
             }
-            if case .privateCloud(.cancelled) = error {
+            if case .privateCloud(let failure) = error,
+                failure.cause == .cancelled
+            {
                 privateCloudState = .cancelled
                 return
             }
@@ -3607,6 +3752,29 @@ final class AppModel {
         }
     }
 
+    func resolveCloudConfigurationConflict(
+        _ resolution: CloudConfigurationConflictResolution
+    ) async -> AppFailure? {
+        privateCloudState = .syncing
+        do {
+            try await service.resolvePrivateCloudConfigurationConflict(
+                resolution
+            )
+            pendingCloudConfigurationConflict = nil
+            playback.reloadSyncedPreferences()
+            downloads.reloadSyncedPreferences()
+            privateCloudState = .idle
+            return nil
+        } catch let error {
+            let failure = AppFailure(
+                operation: .privateCloudSync,
+                serviceError: error
+            )
+            privateCloudState = .failed(failure)
+            return failure
+        }
+    }
+
     private func queueCloudServerConfigurationChanges(
         _ changes: [CloudServerConfigurationChange]
     ) {
@@ -3625,6 +3793,7 @@ final class AppModel {
         guard privateCloudSyncAvailable else {
             privateCloudSyncEnabled = false
             pendingCloudServerConfigurationChanges.removeAll()
+            pendingCloudConfigurationConflict = nil
             privateCloudState = .disabled
             return
         }
@@ -3637,6 +3806,7 @@ final class AppModel {
             privateCloudSyncEnabled = enabled
             if !enabled {
                 pendingCloudServerConfigurationChanges.removeAll()
+                pendingCloudConfigurationConflict = nil
             }
             privateCloudState = enabled ? .idle : .disabled
         } catch let error {

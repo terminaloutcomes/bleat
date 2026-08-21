@@ -101,10 +101,16 @@ enum RemoteTelemetryAttesterSelection: Equatable {
 @MainActor
 final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let tracer = RemoteTelemetryTracer()
+    let logger = RemoteTelemetryLogger()
+    let privateCloudEvents: any PrivateCloudSyncEventRecording
     let tokenProvider: TelemetryTokenProvider?
     private let worker: RemoteTelemetryRuntimeWorker
 
     init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
+        privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: tracer,
+            logger: logger
+        )
         let version =
             bundle.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
@@ -141,14 +147,11 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         let exporterConfiguration = Self.makeExporterConfiguration(
             bundle: bundle
         )
-        let downstreamExporterFactory:
-            (
-                @Sendable () ->
-                    (any RemoteTelemetryDownstreamSpanExporter)?
-            )? =
+        let downstreamExportersFactory:
+            (@Sendable () -> AuthenticatedOtlpExporters?)? =
                 if let tokenProvider, let exporterConfiguration {
                     {
-                        AuthenticatedOtlpSpanExporter(
+                        AuthenticatedOtlpExporters(
                             configuration: exporterConfiguration,
                             tokenProvider: tokenProvider
                         )
@@ -158,9 +161,10 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 }
         worker = RemoteTelemetryRuntimeWorker(
             tracer: tracer,
+            logger: logger,
             resource: resource,
             storageRootURL: storageRootURL,
-            downstreamExporterFactory: downstreamExporterFactory
+            downstreamExportersFactory: downstreamExportersFactory
         )
     }
 
@@ -275,13 +279,11 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     }
 
     private let tracer: RemoteTelemetryTracer
+    private let logger: RemoteTelemetryLogger
     private let resource: RemoteTelemetryResource?
     private let storageRootURL: URL?
-    private let downstreamExporterFactory:
-        (
-            @Sendable () ->
-                (any RemoteTelemetryDownstreamSpanExporter)?
-        )?
+    private let downstreamExportersFactory:
+        (@Sendable () -> AuthenticatedOtlpExporters?)?
     private let queue = DispatchQueue(
         label: "app.bleat.remote-telemetry.runtime",
         qos: .utility
@@ -295,17 +297,17 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
 
     init(
         tracer: RemoteTelemetryTracer,
+        logger: RemoteTelemetryLogger,
         resource: RemoteTelemetryResource?,
         storageRootURL: URL?,
-        downstreamExporterFactory: (
-            @Sendable () ->
-                (any RemoteTelemetryDownstreamSpanExporter)?
-        )? = nil
+        downstreamExportersFactory:
+            (@Sendable () -> AuthenticatedOtlpExporters?)? = nil
     ) {
         self.tracer = tracer
+        self.logger = logger
         self.resource = resource
         self.storageRootURL = storageRootURL
-        self.downstreamExporterFactory = downstreamExporterFactory
+        self.downstreamExportersFactory = downstreamExportersFactory
     }
 
     func enable(storageGeneration: UUID) {
@@ -316,6 +318,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             return generation
         }
         tracer.prepareForActivation()
+        logger.prepareForActivation()
         queue.async { [weak self] in
             self?.buildPipeline(
                 for: requestedGeneration,
@@ -334,6 +337,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             return oldPipeline
         }
         tracer.deactivate()
+        logger.deactivate()
         oldPipeline?.deactivate()
         let disabledGeneration = lock.withLock { generation }
         queue.async { [weak self] in
@@ -394,19 +398,28 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             isDirectory: true
         )
         let newPipeline: RemoteTelemetryPipeline
+        let downstream = downstreamExportersFactory?()
         do {
             newPipeline = try RemoteTelemetryPipeline(
                 resource: resource,
                 storageURL: storageURL,
                 tracerFacade: tracer,
-                downstreamExporter: downstreamExporterFactory?()
+                loggerFacade: logger,
+                downstreamExporter: downstream?.spans,
+                downstreamLogExporter: downstream?.logs
             )
         } catch let failure as RemoteTelemetryRuntimeFailure {
+            downstream?.spans.shutdown(explicitTimeout: 0)
+            downstream?.logs.shutdown(explicitTimeout: 0)
             tracer.deactivate()
+            logger.deactivate()
             recordFailure(failure, generation: requestedGeneration)
             return
         } catch {
+            downstream?.spans.shutdown(explicitTimeout: 0)
+            downstream?.logs.shutdown(explicitTimeout: 0)
             tracer.deactivate()
+            logger.deactivate()
             recordFailure(.storageUnavailable, generation: requestedGeneration)
             return
         }

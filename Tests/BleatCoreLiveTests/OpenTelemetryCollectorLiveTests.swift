@@ -91,6 +91,37 @@
                 .failure
             )
 
+            let logGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            let logChannel = ClientConnection.insecure(group: logGroup)
+                .connect(host: "127.0.0.1", port: port)
+            let logClient = GrpcRemoteTelemetryOtlpLogClient(
+                channel: logChannel,
+                closeTransport: {
+                    logChannel.close().whenComplete { _ in
+                        logGroup.shutdownGracefully { _ in }
+                    }
+                }
+            )
+            defer { logClient.shutdown() }
+            XCTAssertEqual(
+                logClient.export(
+                    logs: [cloudKitLog()],
+                    metadata: [("authorization", "Bearer \(token)")],
+                    timeout: 10,
+                    isActive: { true }
+                ),
+                .success
+            )
+            XCTAssertEqual(
+                logClient.export(
+                    logs: [cloudKitLog()],
+                    metadata: [],
+                    timeout: 10,
+                    isActive: { true }
+                ),
+                .unauthenticated
+            )
+
             let outageGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
             let outageChannel = ClientConnection.insecure(group: outageGroup)
                 .connect(host: "127.0.0.1", port: outagePort)
@@ -141,6 +172,27 @@
 
         private func oversizedSpan() -> SpanData {
             span(extraAttribute: String(repeating: "x", count: 2 * 1_024 * 1_024))
+        }
+
+        private func cloudKitLog() -> ReadableLogRecord {
+            ReadableLogRecord(
+                resource: Resource(
+                    attributes: ["service.name": .string("bleat")]
+                ),
+                instrumentationScopeInfo: InstrumentationScopeInfo(
+                    name: "app.bleat.remote-telemetry"
+                ),
+                timestamp: Date(timeIntervalSince1970: 2),
+                severity: .error,
+                body: .string("CloudKit synchronization lifecycle"),
+                attributes: [
+                    "bleat.subsystem": .string("synchronization"),
+                    "bleat.cloudkit.operation": .string("synchronize"),
+                    "bleat.cloudkit.code": .string("network_failure"),
+                    "bleat.outcome": .string("failed"),
+                ],
+                eventName: "bleat.cloudkit.sync.failed"
+            )
         }
     }
 
