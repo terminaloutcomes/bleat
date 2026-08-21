@@ -1206,6 +1206,25 @@ final class AppModel {
     private(set) var books: ResourceState<LibraryItemsPage> = .idle
     private(set) var booksRefreshState: ResourceRefreshState = .idle
     private(set) var libraryPaginationState: LibraryPaginationState = .idle
+    private let libraryPageMerger = LibraryPageMerger()
+
+    #if DEBUG || BLEAT_UI_TESTING
+        /// Resident memory snapshot exposed via accessibility label
+        /// `perf.memory` for the performance UI test. Only updated when the
+        /// `--ui-testing-large-library` launch argument is present.
+        private(set) var perfMemoryLabel: String = ""
+
+        private var isPerformanceTestMode: Bool {
+            ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-large-library"
+            )
+        }
+
+        private func captureMemorySnapshotIfNeeded() {
+            guard isPerformanceTestMode else { return }
+            perfMemoryLabel = "\(ProcessMemory.residentBytes)"
+        }
+    #endif
     private(set) var librarySort: LibraryItemSort = .title
     private(set) var librarySortDescending = false
     private(set) var libraryBrowseFilter: LibraryBrowseFilter = .all
@@ -1551,6 +1570,9 @@ final class AppModel {
             )
             telemetryOutcome = .succeeded
             schedulePrivateCloudSyncAfterLaunch()
+            #if DEBUG || BLEAT_UI_TESTING
+                captureMemorySnapshotIfNeeded()
+            #endif
         } catch let error {
             let failure = AppFailure(operation: .appStart, serviceError: error)
             telemetryOutcome = failure.remoteTelemetryOutcome
@@ -2520,19 +2542,24 @@ final class AppModel {
             else {
                 return
             }
-            let existingIDs = Set(latestPage.items.map(\.id))
-            let newItems = nextPage.items.filter {
-                !existingIDs.contains($0.id)
-            }
-            books = .loaded(
-                LibraryItemsPage(
-                    items: latestPage.items + newItems,
-                    total: nextPage.total,
-                    page: nextPage.page,
-                    limit: nextPage.limit
-                )
+            let mergedPage = await libraryPageMerger.merge(
+                current: latestPage,
+                next: nextPage
             )
+            guard operationGeneration == libraryPageGeneration,
+                self.account?.id == account.id,
+                selectedLibrary?.id == library.id,
+                libraryBrowseFilter == filter,
+                case .loaded(let currentPage) = books,
+                currentPage.page == latestPage.page
+            else {
+                return
+            }
+            books = .loaded(mergedPage)
             libraryPaginationState = .idle
+            #if DEBUG || BLEAT_UI_TESTING
+                captureMemorySnapshotIfNeeded()
+            #endif
         } catch let error {
             guard operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,

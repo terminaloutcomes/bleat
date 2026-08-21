@@ -16,6 +16,11 @@ TestSupport/ServerHarness/media-large/
 build/
 /bleat-api/target/
 
+# test harness files
+TestSupport/ServerHarness/media-large/*
+!TestSupport/ServerHarness/media-large/.gitkeep
+
+
 # Website build products
 site/node_modules/
 site/public/

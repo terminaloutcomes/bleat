@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || BLEAT_UI_TESTING
     import BleatCore
     import Foundation
 
@@ -14,6 +14,7 @@
         case playback = "--ui-testing-playback"
         case launching = "--ui-testing-launching"
         case unavailableStartup = "--ui-testing-unavailable-startup"
+        case largeLibrary = "--ui-testing-large-library"
     }
 
     private enum UITestScenarioStorage {
@@ -128,8 +129,9 @@
                     .emptyLibraryRefreshFailure,
                     .limitedPermissions,
                     .playback,
+                    .largeLibrary,
                 ]
-                    .contains(scenario)
+                .contains(scenario)
             else {
                 return []
             }
@@ -150,8 +152,9 @@
                     .emptyLibraryRefreshFailure,
                     .limitedPermissions,
                     .playback,
+                    .largeLibrary,
                 ]
-                    .contains(scenario)
+                .contains(scenario)
             else {
                 return nil
             }
@@ -166,9 +169,11 @@
             serverAddress: String
         ) async throws(AppServiceError) -> DiscoveredServer {
             let account = try account()
-            guard let version = AudiobookshelfServerVersion(
-                account.serverVersion
-            ) else {
+            guard
+                let version = AudiobookshelfServerVersion(
+                    account.serverVersion
+                )
+            else {
                 throw .accountStore(.persistenceFailed)
             }
             return DiscoveredServer(
@@ -247,6 +252,12 @@
             libraryID: LibraryID,
             request: LibraryItemsPageRequest
         ) async throws(AppServiceError) -> LibraryItemsPage {
+            if scenario == .largeLibrary {
+                return Self.largeLibraryPage(
+                    libraryID: libraryID,
+                    request: request
+                )
+            }
             let ids = try Self.fixtureIDs()
             if request.filter == nil, request.page == 0 {
                 firstPageRequests += 1
@@ -444,6 +455,29 @@
             libraryID: LibraryID,
             query: String
         ) async throws(AppServiceError) -> LibrarySearchResults {
+            if scenario == .largeLibrary {
+                let trimmed = query.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                guard !trimmed.isEmpty else {
+                    return LibrarySearchResults(books: [])
+                }
+                let matchCount = min(20, Self.largeLibraryCount)
+                let request: LibraryItemsPageRequest
+                do {
+                    request = try LibraryItemsPageRequest(
+                        page: 0,
+                        limit: matchCount
+                    )
+                } catch let error {
+                    throw AppServiceError.pageRequest(error)
+                }
+                let page = Self.largeLibraryPage(
+                    libraryID: libraryID,
+                    request: request
+                )
+                return LibrarySearchResults(books: page.items)
+            }
             guard query == "Test" else {
                 return LibrarySearchResults(books: [])
             }
@@ -994,6 +1028,66 @@
             ]
         }
 
+        private static func largeLibraryPage(
+            libraryID: LibraryID,
+            request: LibraryItemsPageRequest
+        ) -> LibraryItemsPage {
+            let total = largeLibraryCount
+            let limit = request.limit
+            let start = request.page * limit
+            let end = min(start + limit, total)
+            let items: [LibraryBookSummary] = (start..<end).map { index in
+                let authorName = "Author \(index % 8)"
+                let authorID = AuthorID(rawValue: "author-\(index % 8)")
+                let years = ["1950", "1970", "1990", "2010", "2020"]
+                let baseMillis =
+                    Int64(1_700_000_000_000)
+                    + Int64(index) * 3_600_000
+                return LibraryBookSummary(
+                    id: LibraryItemID(rawValue: "book-\(index)"),
+                    libraryID: libraryID,
+                    title: "Book Title \(index)",
+                    subtitle: nil,
+                    authorName: authorName,
+                    narratorName: nil,
+                    seriesName: nil,
+                    authors: authorID.map {
+                        [LibraryBookContributor(id: $0, name: authorName)]
+                    } ?? [],
+                    series: [],
+                    collapsedSeries: nil,
+                    genres: ["Fiction"],
+                    tags: [],
+                    publisher: nil,
+                    publishedYear: years[index % years.count],
+                    duration: Double(45 + (index % 436)),
+                    trackCount: (index % 20) + 1,
+                    chapterCount: (index % 150) + 1,
+                    addedAtMilliseconds: baseMillis,
+                    updatedAtMilliseconds: baseMillis
+                        + Int64((index % 24) * 3_600_000),
+                    isExplicit: index % 10 == 0,
+                    isAbridged: index % 25 == 0
+                )
+            }
+            return LibraryItemsPage(
+                items: items,
+                total: total,
+                page: request.page,
+                limit: limit
+            )
+        }
+
+        private static var largeLibraryCount: Int {
+            if let raw = ProcessInfo.processInfo.environment[
+                "BLEAT_PERF_SEED_COUNT"],
+                let value = Int(raw), value > 0
+            {
+                return value
+            }
+            return 10_000
+        }
+
         private static func makeAccount(
             hasManagementPermissions: Bool,
             deniesPlayback: Bool
@@ -1044,5 +1138,4 @@
             }
         }
     }
-
 #endif

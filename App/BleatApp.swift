@@ -26,7 +26,7 @@ final class AppBootstrap {
         #endif
         let remoteTelemetry = RemoteTelemetryController()
 
-        #if DEBUG
+        #if DEBUG || BLEAT_UI_TESTING
             if let testService = UITestAppService.current() {
                 model = AppModel(
                     service: testService,

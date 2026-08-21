@@ -45,6 +45,7 @@ services:
       - root-metadata:/metadata
       - caddy-data:/caddy-data:ro
       - ./media:/audiobooks:ro
+      - ./media-large:/audiobooks-large:ro
     depends_on:
       caddy:
         condition: service_healthy
@@ -68,6 +69,7 @@ services:
       - prefix-metadata:/metadata
       - caddy-data:/caddy-data:ro
       - ./media:/audiobooks:ro
+      - ./media-large:/audiobooks-large:ro
     depends_on:
       caddy:
         condition: service_healthy
