@@ -3,9 +3,11 @@ import BleatTranscription
 import Foundation
 import SwiftUI
 
+let websiteURL = "https://bleat.terminaloutcomes.com"
+
 enum AppDocumentationLink {
     static let openIDSetupGuide = URL(
-        string: "https://bleat.terminaloutcomes.com/help/oidc-setup/"
+        string: websiteURL + "/help/oidc-setup/"
     )
 }
 
@@ -191,14 +193,18 @@ struct RootView: View {
     private func cloudServerConfigurationChangeMessage(
         _ change: CloudServerConfigurationChange
     ) -> String {
-        let incomingLocal = change.incoming.localServer?.url.absoluteString
+        let incomingLocal =
+            change.incoming.localServer?.url.absoluteString
             ?? "None"
         if let current = change.current {
-            let currentLocal = current.localServer?.url.absoluteString
+            let currentLocal =
+                current.localServer?.url.absoluteString
                 ?? "None"
-            return "This device uses primary \(current.server.url.absoluteString) and local \(currentLocal). iCloud returned primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
+            return
+                "This device uses primary \(current.server.url.absoluteString) and local \(currentLocal). iCloud returned primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
         }
-        return "iCloud returned a saved account using primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
+        return
+            "iCloud returned a saved account using primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
     }
 
 }
@@ -333,37 +339,6 @@ private struct NativeLoginView: View {
                     nearbyServers
                 }
 
-                if supportsLocalLogin {
-                    Section("Account") {
-                        TextField("Username", text: $username)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .accessibilityIdentifier("login.username")
-                        if isPasswordVisible {
-                            TextField("Password", text: $password)
-                                .textContentType(.password)
-                                .accessibilityIdentifier("login.password")
-                        } else {
-                            SecureField("Password", text: $password)
-                                .textContentType(.password)
-                                .accessibilityIdentifier("login.password")
-                        }
-                        Button {
-                            isPasswordVisible.toggle()
-                        } label: {
-                            Image(
-                                systemName: isPasswordVisible
-                                    ? "eye.slash" : "eye"
-                            )
-                        }
-                        .accessibilityLabel(
-                            isPasswordVisible
-                                ? "Hide password" : "Show password"
-                        )
-                    }
-                }
-
                 if supportsOpenIDLogin {
                     Section {
                         Button(
@@ -382,6 +357,55 @@ private struct NativeLoginView: View {
                         }
                         .disabled(isSubmitting)
                         .accessibilityIdentifier("login.openid")
+                        // the if-let is here because the URL is a result not a constant, so it may not be available at the time of rendering in weird ways
+                        if let setupGuideURL =
+                            AppDocumentationLink.openIDSetupGuide
+                        {
+                            Link(destination: setupGuideURL) {
+                                Label(
+                                    "OpenID Setup Guide",
+                                    systemImage: "questionmark.circle"
+                                )
+                            }
+                            .accessibilityIdentifier(
+                                "login.openidSetupGuide"
+                            )
+                        }
+                    }
+                }
+
+                if supportsLocalLogin {
+                    Section("Account") {
+                        TextField("Username", text: $username)
+                            .textContentType(.username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("login.username")
+                        if isPasswordVisible {
+                            TextField("Password", text: $password)
+                                .textContentType(.password)
+                                .accessibilityIdentifier("login.password")
+                        } else {
+                            SecureField("Password", text: $password)
+                                .textContentType(.password)
+                                .accessibilityIdentifier("login.password")
+
+                        }
+                        Button {
+                            isPasswordVisible.toggle()
+                        } label: {
+                            Label(
+                                isPasswordVisible
+                                    ? "Hide password" : "Show password",
+                                systemImage: isPasswordVisible
+                                    ? "eye.slash" : "eye"
+                            )
+
+                        }
+                        .accessibilityLabel(
+                            isPasswordVisible
+                                ? "Hide password" : "Show password"
+                        )
                     }
                 }
 
@@ -411,19 +435,6 @@ private struct NativeLoginView: View {
                     }
                     .accessibilityIdentifier("login.diagnostics")
 
-                    if let setupGuideURL =
-                        AppDocumentationLink.openIDSetupGuide
-                    {
-                        Link(destination: setupGuideURL) {
-                            Label(
-                                "OpenID Setup Guide",
-                                systemImage: "questionmark.circle"
-                            )
-                        }
-                        .accessibilityIdentifier(
-                            "login.openidSetupGuide"
-                        )
-                    }
                 }
 
             }
@@ -1458,8 +1469,8 @@ private enum BookContextAction: Hashable {
     case transcribe
 }
 
-private extension BookActionAvailability {
-    var canOpenEditor: Bool {
+extension BookActionAvailability {
+    fileprivate var canOpenEditor: Bool {
         visibleActions.contains(.editMetadata)
             || visibleActions.contains(.editCover)
             || visibleActions.contains(.deleteFromServer)
@@ -1595,10 +1606,12 @@ private struct BookActionContextMenuModifier: ViewModifier {
     }
 
     private var canStartDownload: Bool {
-        guard let record = model.downloads.record(
-            accountID: account.id,
-            itemID: book.id
-        ) else {
+        guard
+            let record = model.downloads.record(
+                accountID: account.id,
+                itemID: book.id
+            )
+        else {
             return true
         }
         return record.manifest.purpose == .automaticCache
