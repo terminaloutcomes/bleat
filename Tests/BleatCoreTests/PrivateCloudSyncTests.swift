@@ -5,6 +5,123 @@ import XCTest
 @testable import BleatCore
 
 final class PrivateCloudSyncTests: XCTestCase {
+    func testCloudKitFailurePreservesExactCodeRetryAndPartialCodes() {
+        let error = CKError(
+            .partialFailure,
+            userInfo: [
+                CKErrorRetryAfterKey: 2.5,
+                CKPartialErrorsByItemIDKey: [
+                    "first": CKError(.networkFailure),
+                    "second": CKError(.permissionFailure),
+                    "duplicate": CKError(.networkFailure),
+                ],
+            ]
+        )
+
+        let failure = CloudKitFailure(error)
+
+        XCTAssertEqual(failure.code, .partialFailure)
+        XCTAssertEqual(
+            failure.partialFailureCodes,
+            [.networkFailure, .permissionFailure]
+        )
+        XCTAssertEqual(failure.retryAfterSeconds, 2.5)
+        XCTAssertTrue(failure.isRetryable)
+    }
+
+    func testOnlyConflictPartialFailureAllowsOneReconciliationRetry() {
+        let conflict = CloudKitFailure(
+            CKError(
+                .partialFailure,
+                userInfo: [
+                    CKPartialErrorsByItemIDKey: [
+                        "record": CKError(.serverRecordChanged),
+                        "batch": CKError(.batchRequestFailed),
+                    ]
+                ]
+            )
+        )
+        let mixed = CloudKitFailure(
+            CKError(
+                .partialFailure,
+                userInfo: [
+                    CKPartialErrorsByItemIDKey: [
+                        "record": CKError(.serverRecordChanged),
+                        "permission": CKError(.permissionFailure),
+                    ]
+                ]
+            )
+        )
+
+        XCTAssertTrue(conflict.canRetryAfterConflictReconciliation)
+        XCTAssertFalse(mixed.canRetryAfterConflictReconciliation)
+        XCTAssertEqual(
+            conflict.sendRecovery(
+                hasPendingConfigurationConflict: true,
+                attempt: 0
+            ),
+            .awaitUserResolution
+        )
+        XCTAssertEqual(
+            conflict.sendRecovery(
+                hasPendingConfigurationConflict: false,
+                attempt: 0
+            ),
+            .retry
+        )
+        XCTAssertEqual(
+            conflict.sendRecovery(
+                hasPendingConfigurationConflict: false,
+                attempt: 1
+            ),
+            .fail
+        )
+        XCTAssertEqual(
+            mixed.sendRecovery(
+                hasPendingConfigurationConflict: true,
+                attempt: 0
+            ),
+            .fail
+        )
+    }
+
+    func testCloudKitDiagnosticIncludesOperationAndTypedFailureDetails() {
+        let correlationID = UUID()
+        let failure = PrivateCloudSyncFailure(
+            operation: .applyFetchedChanges,
+            cause: .cloudKit(
+                CloudKitFailure(
+                    CKError(
+                        .requestRateLimited,
+                        userInfo: [CKErrorRetryAfterKey: 1.25]
+                    )
+                )
+            )
+        )
+
+        let event = DiagnosticEvent.privateCloudFailed(
+            failure: failure,
+            correlationID: correlationID,
+            durationMilliseconds: 17
+        )
+
+        XCTAssertEqual(event.operation, .privateCloudSync)
+        XCTAssertEqual(event.failureCode, .privateCloudKitFailed)
+        XCTAssertEqual(event.privateCloud?.operation, .applyFetchedChanges)
+        XCTAssertEqual(
+            event.privateCloud?.cloudKitCode,
+            "request_rate_limited"
+        )
+        XCTAssertEqual(event.privateCloud?.retryAfterMilliseconds, 1_250)
+        XCTAssertTrue(
+            event.text.contains("cloud_operation=apply_fetched_changes")
+        )
+        XCTAssertTrue(
+            event.text.contains("cloudkit_code=request_rate_limited")
+        )
+        XCTAssertFalse(event.text.contains("localizedDescription"))
+    }
+
     func testConfigurationSnapshotDefaultsHeadphoneCommands() async throws {
         let suite = makeSuite()
         defer {
@@ -322,7 +439,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
-    func testFetchedConfigurationDoesNotOverwriteLocalEditSinceBaseline()
+    func testFetchedConfigurationConflictWaitsForUserDecision()
         async throws
     {
         let fixture = try makeSyncStoreFixture()
@@ -347,8 +464,390 @@ final class PrivateCloudSyncTests: XCTestCase {
             cloudConfigurationRecord
         )
         let preserved = await fixture.configuration.snapshot()
+        let conflict = await fixture.store.configurationConflict()
 
         XCTAssertEqual(preserved, localEdit)
+        XCTAssertEqual(
+            conflict,
+            CloudConfigurationConflict(
+                local: localEdit,
+                iCloud: makeSnapshot(
+                    previousCommandAction: .skipBackward,
+                    nextCommandAction: .skipForward
+                )
+            )
+        )
+    }
+
+    func testMatchingServerConflictCachesServerRecordWithoutAnotherSave()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let clientRecord = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let serverRecord = CKRecord(
+            recordType: clientRecord.recordType,
+            recordID: clientRecord.recordID
+        )
+        serverRecord[PrivateCloudSyncStore.payloadKey] =
+            clientRecord[PrivateCloudSyncStore.payloadKey]
+
+        let pending = try await fixture.store
+            .reconcileSentRecordZoneChanges(
+                savedRecords: [],
+                deletedRecordIDs: [],
+                failedRecordSaves: [
+                    (
+                        record: clientRecord,
+                        error: serverConflictError(
+                            clientRecord: clientRecord,
+                            serverRecord: serverRecord
+                        )
+                    )
+                ],
+                failedRecordDeletes: [:]
+            )
+        let cached = await fixture.store.record(for: clientRecord.recordID)
+
+        XCTAssertTrue(pending.isEmpty)
+        XCTAssertTrue(cached === serverRecord)
+    }
+
+    func testConfigurationConflictAfterNewLocalEditRebasesAndRetries()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let clientRecord = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let serverRecord = CKRecord(
+            recordType: clientRecord.recordType,
+            recordID: clientRecord.recordID
+        )
+        let serverSnapshot = makeSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter
+        )
+        serverRecord[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(serverSnapshot) as CKRecordValue
+        let localEdit = makeSnapshot(
+            previousCommandAction: .previousChapter,
+            nextCommandAction: .nextChapter
+        )
+        try await fixture.configuration.apply(localEdit)
+
+        let pending = try await fixture.store
+            .reconcileSentRecordZoneChanges(
+                savedRecords: [],
+                deletedRecordIDs: [],
+                failedRecordSaves: [
+                    (
+                        record: clientRecord,
+                        error: serverConflictError(
+                            clientRecord: clientRecord,
+                            serverRecord: serverRecord
+                        )
+                    )
+                ],
+                failedRecordDeletes: [:]
+            )
+        let cachedValue = await fixture.store.record(
+            for: clientRecord.recordID
+        )
+        let cached = try XCTUnwrap(cachedValue)
+        let cachedData = try XCTUnwrap(
+            cached[PrivateCloudSyncStore.payloadKey] as? Data
+        )
+
+        XCTAssertEqual(pending, [.saveRecord(clientRecord.recordID)])
+        XCTAssertTrue(cached === serverRecord)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: cachedData
+            ),
+            localEdit
+        )
+    }
+
+    func testAmbiguousSentConfigurationConflictWaitsForUserDecision()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let clientRecord = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let serverRecord = CKRecord(
+            recordType: clientRecord.recordType,
+            recordID: clientRecord.recordID
+        )
+        let serverSnapshot = makeSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter
+        )
+        serverRecord[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(serverSnapshot) as CKRecordValue
+
+        let pending = try await fixture.store
+            .reconcileSentRecordZoneChanges(
+                savedRecords: [],
+                deletedRecordIDs: [],
+                failedRecordSaves: [
+                    (
+                        record: clientRecord,
+                        error: serverConflictError(
+                            clientRecord: clientRecord,
+                            serverRecord: serverRecord
+                        )
+                    )
+                ],
+                failedRecordDeletes: [:]
+            )
+        let conflict = await fixture.store.configurationConflict()
+
+        XCTAssertTrue(pending.isEmpty)
+        XCTAssertEqual(
+            conflict,
+            CloudConfigurationConflict(
+                local: makeSnapshot(
+                    previousCommandAction: .skipBackward,
+                    nextCommandAction: .skipForward
+                ),
+                iCloud: serverSnapshot
+            )
+        )
+    }
+
+    func testUsingICloudResolvesConfigurationConflict() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let record = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let cloud = makeSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter
+        )
+        record[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(cloud) as CKRecordValue
+        try await fixture.store.applyFetchedRecord(record)
+
+        let outgoing = try await fixture.store.resolveConfigurationConflict(
+            .useICloud
+        )
+        let remainingConflict = await fixture.store.configurationConflict()
+        let applied = await fixture.configuration.snapshot()
+
+        XCTAssertNil(outgoing)
+        XCTAssertNil(remainingConflict)
+        XCTAssertEqual(applied, cloud)
+    }
+
+    func testKeepingThisDevicePreparesCurrentConfigurationForUpload()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let record = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let local = makeSnapshot(
+            previousCommandAction: .previousChapter,
+            nextCommandAction: .nextChapter
+        )
+        try await fixture.configuration.apply(local)
+        try await fixture.store.applyFetchedRecord(record)
+
+        let outgoingValue = try await fixture.store
+            .resolveConfigurationConflict(.keepThisDevice)
+        let outgoing = try XCTUnwrap(
+            outgoingValue
+        )
+        let payload = try XCTUnwrap(
+            outgoing[PrivateCloudSyncStore.payloadKey] as? Data
+        )
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: payload
+            ),
+            local
+        )
+        let remainingConflict = await fixture.store.configurationConflict()
+        XCTAssertNotNil(remainingConflict)
+    }
+
+    func testSavedRecordSystemFieldsSurviveStoreRecreation() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let recordID = CKRecord.ID(
+            recordName: "configuration.singleton",
+            zoneID: fixture.zoneID
+        )
+        let savedRecord = CKRecord(
+            recordType: "Configuration",
+            recordID: recordID
+        )
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [savedRecord],
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        let restored = await restoredStore.record(for: recordID)
+
+        XCTAssertEqual(restored?.recordID, recordID)
+        XCTAssertEqual(restored?.recordType, "Configuration")
+    }
+
+    func testPendingConfigurationConflictSurvivesStoreRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let clientRecord = try XCTUnwrap(
+            records.first { $0.recordType == "Configuration" }
+        )
+        let serverRecord = CKRecord(
+            recordType: clientRecord.recordType,
+            recordID: clientRecord.recordID
+        )
+        let cloud = makeSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter
+        )
+        serverRecord[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(cloud) as CKRecordValue
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [],
+            deletedRecordIDs: [],
+            failedRecordSaves: [
+                (
+                    record: clientRecord,
+                    error: serverConflictError(
+                        clientRecord: clientRecord,
+                        serverRecord: serverRecord
+                    )
+                )
+            ],
+            failedRecordDeletes: [:]
+        )
+
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+        let restoredConflict = await restoredStore.configurationConflict()
+        let prepared = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertEqual(
+            restoredConflict,
+            CloudConfigurationConflict(
+                local: makeSnapshot(
+                    previousCommandAction: .skipBackward,
+                    nextCommandAction: .skipForward
+                ),
+                iCloud: cloud
+            )
+        )
+        XCTAssertFalse(
+            prepared.contains { $0.recordType == "Configuration" }
+        )
+    }
+
+    func testInvalidPersistedConfigurationConflictFailsClosed()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        fixture.defaults.set(
+            Data([0x00, 0x01]),
+            forKey: "bleat.cloudKit.pendingConfigurationConflict.v1"
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        do {
+            _ = try await restoredStore.prepareRecords(
+                zoneID: fixture.zoneID
+            )
+            XCTFail("Expected invalid persisted conflict to stop uploads")
+        } catch let error as PrivateCloudSyncError {
+            XCTAssertEqual(error, .invalidRecord)
+        }
     }
 
     private func makeSuite() -> String {
@@ -411,6 +910,19 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
+    private func serverConflictError(
+        clientRecord: CKRecord,
+        serverRecord: CKRecord
+    ) -> CKError {
+        CKError(
+            .serverRecordChanged,
+            userInfo: [
+                CKRecordChangedErrorClientRecordKey: clientRecord,
+                CKRecordChangedErrorServerRecordKey: serverRecord,
+            ]
+        )
+    }
+
     private func makeSyncStoreFixture() throws -> SyncStoreFixture {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         let modelConfiguration = ModelConfiguration(
@@ -423,7 +935,14 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
         let accounts = AccountStore(modelContainer: container)
         let suite = makeSuite()
-        let configuration = try makeStore(suite: suite)
+        let configurationDefaults = try XCTUnwrap(
+            UserDefaults(suiteName: suite)
+        )
+        let recordDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let configuration = CloudConfigurationStore(
+            defaults: configurationDefaults
+        )
+        let statistics = StatisticsRepository(modelContainer: container)
         return SyncStoreFixture(
             suite: suite,
             zoneID: CKRecordZone.ID(
@@ -432,13 +951,14 @@ final class PrivateCloudSyncTests: XCTestCase {
             ),
             accounts: accounts,
             configuration: configuration,
+            defaults: recordDefaults,
+            statistics: statistics,
             store: PrivateCloudSyncStore(
-                statistics: StatisticsRepository(
-                    modelContainer: container
-                ),
+                statistics: statistics,
                 accounts: accounts,
                 credentialStore: nil,
-                configuration: configuration
+                configuration: configuration,
+                defaults: PrivateCloudDefaultsReference(recordDefaults)
             )
         )
     }
@@ -449,6 +969,8 @@ private struct SyncStoreFixture {
     let zoneID: CKRecordZone.ID
     let accounts: AccountStore
     let configuration: CloudConfigurationStore
+    let defaults: UserDefaults
+    let statistics: StatisticsRepository
     let store: PrivateCloudSyncStore
 }
 

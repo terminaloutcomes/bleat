@@ -167,6 +167,22 @@ struct RootView: View {
         } message: { change in
             Text(cloudServerConfigurationChangeMessage(change))
         }
+        .sheet(
+            item: Binding(
+                get: { model.pendingCloudConfigurationConflict },
+                set: { _ in }
+            )
+        ) { conflict in
+            CloudConfigurationConflictView(
+                conflict: conflict,
+                onResolve: { resolution in
+                    await model.resolveCloudConfigurationConflict(
+                        resolution
+                    )?.message
+                }
+            )
+            .interactiveDismissDisabled()
+        }
         .sheet(isPresented: $isShowingDiagnostics) {
             NavigationStack {
                 DiagnosticsView(model: model)
@@ -207,6 +223,172 @@ struct RootView: View {
             "iCloud returned a saved account using primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
     }
 
+}
+
+private struct CloudConfigurationConflictView: View {
+    let conflict: CloudConfigurationConflict
+    let onResolve: (CloudConfigurationConflictResolution) async -> String?
+    @State private var isResolving = false
+    @State private var resolutionError: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(differences) { difference in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(difference.label)
+                                .font(.headline)
+                            LabeledContent(
+                                "This Device",
+                                value: difference.local
+                            )
+                            LabeledContent(
+                                "iCloud",
+                                value: difference.iCloud
+                            )
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                } footer: {
+                    Text(
+                        "Choose which complete set of settings Bleat should "
+                            + "keep. The other set will be replaced."
+                    )
+                }
+
+                Section {
+                    Button("Keep This Device") {
+                        beginResolution(.keepThisDevice)
+                    }
+                    Button("Use iCloud") {
+                        beginResolution(.useICloud)
+                    }
+                }
+                .disabled(isResolving)
+
+                if let resolutionError {
+                    Section {
+                        Label(
+                            resolutionError,
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Settings Changed")
+        }
+    }
+
+    private func beginResolution(
+        _ resolution: CloudConfigurationConflictResolution
+    ) {
+        guard !isResolving else { return }
+        isResolving = true
+        resolutionError = nil
+        Task {
+            resolutionError = await onResolve(resolution)
+            isResolving = false
+        }
+    }
+
+    private var differences: [CloudConfigurationDifference] {
+        let local = conflict.local
+        let cloud = conflict.iCloud
+        var values: [CloudConfigurationDifference] = []
+        values.appendIfChanged(
+            "Playback Speed",
+            local: local.defaultPlaybackRate.formatted() + "×",
+            iCloud: cloud.defaultPlaybackRate.formatted() + "×"
+        )
+        values.appendIfChanged(
+            "Resume Rewind",
+            local: duration(local.resumeRewindSeconds),
+            iCloud: duration(cloud.resumeRewindSeconds)
+        )
+        values.appendIfChanged(
+            "Skip Back",
+            local: duration(local.skipBackwardSeconds),
+            iCloud: duration(cloud.skipBackwardSeconds)
+        )
+        values.appendIfChanged(
+            "Skip Forward",
+            local: duration(local.skipForwardSeconds),
+            iCloud: duration(cloud.skipForwardSeconds)
+        )
+        values.appendIfChanged(
+            "Previous Headphone Command",
+            local: local.previousCommandAction.label,
+            iCloud: cloud.previousCommandAction.label
+        )
+        values.appendIfChanged(
+            "Next Headphone Command",
+            local: local.nextCommandAction.label,
+            iCloud: cloud.nextCommandAction.label
+        )
+        values.appendIfChanged(
+            "Download Network",
+            local: networkPolicy(local.downloadNetworkPolicy),
+            iCloud: networkPolicy(cloud.downloadNetworkPolicy)
+        )
+        values.appendIfChanged(
+            "Automatic Download Lookahead",
+            local: fileCount(local.automaticDownloadLookahead),
+            iCloud: fileCount(cloud.automaticDownloadLookahead)
+        )
+        values.appendIfChanged(
+            "Delete Automatic Downloads",
+            local: cleanupPolicy(local.automaticDownloadCleanupPolicy),
+            iCloud: cleanupPolicy(cloud.automaticDownloadCleanupPolicy)
+        )
+        return values
+    }
+
+    private func duration(_ seconds: Int) -> String {
+        "\(seconds) second\(seconds == 1 ? "" : "s")"
+    }
+
+    private func fileCount(_ count: Int) -> String {
+        "\(count) file\(count == 1 ? "" : "s")"
+    }
+
+    private func networkPolicy(_ value: String) -> String {
+        switch DownloadNetworkPolicy(rawValue: value) {
+        case .wifiOnly: "Wi-Fi Only"
+        case .allowCellular: "Wi-Fi and Cellular"
+        case nil: value
+        }
+    }
+
+    private func cleanupPolicy(_ value: String) -> String {
+        AutomaticDownloadCleanupPolicy(rawValue: value)?.label ?? value
+    }
+}
+
+private struct CloudConfigurationDifference: Identifiable {
+    let label: String
+    let local: String
+    let iCloud: String
+
+    var id: String { label }
+}
+
+extension Array where Element == CloudConfigurationDifference {
+    fileprivate mutating func appendIfChanged(
+        _ label: String,
+        local: String,
+        iCloud: String
+    ) {
+        guard local != iCloud else { return }
+        append(
+            CloudConfigurationDifference(
+                label: label,
+                local: local,
+                iCloud: iCloud
+            )
+        )
+    }
 }
 
 private struct LaunchingView: View {
@@ -4587,8 +4769,7 @@ private struct SettingsView: View {
                     .accessibilityIdentifier("settings.icloud.cancelling")
             } else {
                 Button(
-                    model.privateCloudState == .cancelled
-                        ? "Retry Sync" : "Sync Now",
+                    privateCloudSyncButtonTitle,
                     systemImage: "arrow.triangle.2.circlepath"
                 ) {
                     Task {
@@ -4598,6 +4779,7 @@ private struct SettingsView: View {
                 .disabled(
                     !model.privateCloudSyncEnabled
                         || model.privateCloudState == .syncing
+                        || !privateCloudFailureAllowsRetry
                 )
                 .accessibilityIdentifier("settings.icloud.syncNow")
             }
@@ -4620,6 +4802,22 @@ private struct SettingsView: View {
                 "Syncs listening statistics, account details, preferences, and native usernames and passwords. Access and refresh tokens stay on this device."
             )
         }
+    }
+
+    private var privateCloudSyncButtonTitle: String {
+        switch model.privateCloudState {
+        case .cancelled, .failed:
+            "Retry Sync"
+        case .disabled, .idle, .syncing, .cancelling:
+            "Sync Now"
+        }
+    }
+
+    private var privateCloudFailureAllowsRetry: Bool {
+        if case .failed(let failure) = model.privateCloudState {
+            return failure.allowsRetry
+        }
+        return true
     }
 
     private var downloadStorageText: String {

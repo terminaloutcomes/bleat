@@ -1,6 +1,7 @@
 import AVFoundation
 import BleatCore
 import BleatTranscription
+import CloudKit
 import MediaPlayer
 import Observation
 import UIKit
@@ -4198,6 +4199,48 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
     }
 
+    func testCloudKitFailureIsNotPresentedAsAudiobookshelfOutage() async {
+        let failure = PrivateCloudSyncFailure(
+            operation: .synchronize,
+            cause: .cloudKit(
+                CloudKitFailure(CKError(.networkFailure))
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncResult: .failure(.privateCloud(failure))
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        let didFail = await waitUntil(timeout: .seconds(1)) {
+            if case .failed = model.privateCloudState { return true }
+            return false
+        }
+
+        XCTAssertTrue(didFail)
+        guard case .failed(let presented) = model.privateCloudState else {
+            return XCTFail("Expected a typed iCloud failure")
+        }
+        XCTAssertEqual(presented.title, "iCloud sync unavailable")
+        XCTAssertTrue(presented.message.contains("iCloud"))
+        XCTAssertFalse(presented.message.contains("Audiobookshelf"))
+        XCTAssertTrue(presented.allowsRetry)
+        let report = model.diagnosticsReport(
+            environment: DiagnosticsEnvironment(
+                appVersion: "1",
+                operatingSystem: "iOS 26"
+            )
+        )
+        XCTAssertEqual(report.privateCloudState, "Failed")
+        XCTAssertTrue(
+            report.errorCodes.contains("private_cloudkit_failed")
+        )
+        XCTAssertTrue(
+            report.errorCodes.contains("cloudkit_network_failure")
+        )
+    }
+
     func testStartKeepsCloudSyncDisabledWhenUnavailable() async {
         let accountsGate = AsyncGate()
         let service = TestAppService(
@@ -4798,6 +4841,48 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(resolutions.count, 1)
         XCTAssertEqual(resolutions[0].accountID, current.id)
         XCTAssertFalse(resolutions[0].accept)
+    }
+
+    func testCloudConfigurationConflictWaitsForExplicitResolution()
+        async throws
+    {
+        let local = cloudConfigurationSnapshot(
+            previousCommandAction: .previousChapter,
+            nextCommandAction: .nextChapter
+        )
+        let cloud = cloudConfigurationSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter
+        )
+        let conflict = CloudConfigurationConflict(
+            local: local,
+            iCloud: cloud
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudConfigurationConflict: conflict
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        let conflictQueued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudConfigurationConflict == conflict
+        }
+        XCTAssertTrue(conflictQueued)
+
+        let resolutionFailure = await model.resolveCloudConfigurationConflict(
+            .keepThisDevice
+        )
+        let resolutions = await service.cloudConfigurationResolutions()
+
+        XCTAssertNil(resolutionFailure)
+        XCTAssertNil(model.pendingCloudConfigurationConflict)
+        XCTAssertEqual(
+            resolutions,
+            [.keepThisDevice]
+        )
+        XCTAssertEqual(model.privateCloudState, .idle)
     }
 
     func testDisablingCloudSyncClearsPendingServerConfigurationChange()
@@ -10775,7 +10860,10 @@ private actor TestAppService: AppServicing {
     private let transcriptionTaskStateSaveResults:
         [Result<Void, AppServiceError>]
     private let privateCloudSyncAvailable: Bool
-    private var privateCloudSyncChanges: [CloudServerConfigurationChange]
+    private var privateCloudSyncResult:
+        Result<[CloudServerConfigurationChange], AppServiceError>
+    private var privateCloudConfigurationConflict:
+        CloudConfigurationConflict?
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
@@ -10814,6 +10902,8 @@ private actor TestAppService: AppServicing {
     private var privateCloudCancellationRequests = 0
     private var recordedCloudResolutions:
         [(accountID: AccountID, accept: Bool)] = []
+    private var recordedCloudConfigurationResolutions:
+        [CloudConfigurationConflictResolution] = []
     private var recordedTranscriptionTaskStates:
         [CachedChapterTranscriptionTaskState] = []
     private var transcriptionTaskStateSaveAttempts = 0
@@ -10921,6 +11011,9 @@ private actor TestAppService: AppServicing {
             [Result<Void, AppServiceError>] = [],
         privateCloudSyncAvailable: Bool = true,
         privateCloudSyncChanges: [CloudServerConfigurationChange] = [],
+        privateCloudConfigurationConflict: CloudConfigurationConflict? = nil,
+        privateCloudSyncResult:
+            Result<[CloudServerConfigurationChange], AppServiceError>? = nil,
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
         accountsResult = accounts
@@ -10973,7 +11066,10 @@ private actor TestAppService: AppServicing {
         self.transcriptionTaskStateSaveResults =
             transcriptionTaskStateSaveResults
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
-        self.privateCloudSyncChanges = privateCloudSyncChanges
+        self.privateCloudSyncResult = privateCloudSyncResult
+            ?? .success(privateCloudSyncChanges)
+        self.privateCloudConfigurationConflict =
+            privateCloudConfigurationConflict
         configuredEndpointDiagnostics = endpointDiagnostics
     }
 
@@ -11093,12 +11189,25 @@ private actor TestAppService: AppServicing {
         if let privateCloudSyncGate {
             await privateCloudSyncGate.enterAndWait()
         }
-        return privateCloudSyncChanges
+        return try value(from: privateCloudSyncResult)
     }
 
     func cancelPrivateCloudSynchronization() async {
         privateCloudCancellationRequests += 1
         await privateCloudSyncGate?.release()
+    }
+
+    func pendingPrivateCloudConfigurationConflict() async
+        -> CloudConfigurationConflict?
+    {
+        privateCloudConfigurationConflict
+    }
+
+    func resolvePrivateCloudConfigurationConflict(
+        _ resolution: CloudConfigurationConflictResolution
+    ) async throws(AppServiceError) {
+        recordedCloudConfigurationResolutions.append(resolution)
+        privateCloudConfigurationConflict = nil
     }
 
     func privateCloudCancellationRequestCount() -> Int {
@@ -11116,7 +11225,10 @@ private actor TestAppService: AppServicing {
         accept: Bool
     ) async throws(AppServiceError) {
         recordedCloudResolutions.append((accountID, accept))
-        privateCloudSyncChanges.removeAll { $0.id == accountID }
+        if case .success(var changes) = privateCloudSyncResult {
+            changes.removeAll { $0.id == accountID }
+            privateCloudSyncResult = .success(changes)
+        }
     }
 
     func forcedCloudAccounts() -> [ServerAccount] {
@@ -11125,6 +11237,12 @@ private actor TestAppService: AppServicing {
 
     func cloudResolutions() -> [(accountID: AccountID, accept: Bool)] {
         recordedCloudResolutions
+    }
+
+    func cloudConfigurationResolutions()
+        -> [CloudConfigurationConflictResolution]
+    {
+        recordedCloudConfigurationResolutions
     }
 
     func endpointDiagnostics(
@@ -11801,6 +11919,23 @@ private actor TestAppService: AppServicing {
             throw error
         }
     }
+}
+
+private func cloudConfigurationSnapshot(
+    previousCommandAction: HeadphoneCommandAction,
+    nextCommandAction: HeadphoneCommandAction
+) -> CloudConfigurationSnapshot {
+    CloudConfigurationSnapshot(
+        defaultPlaybackRate: 1,
+        resumeRewindSeconds: 10,
+        skipBackwardSeconds: 15,
+        skipForwardSeconds: 30,
+        previousCommandAction: previousCommandAction,
+        nextCommandAction: nextCommandAction,
+        downloadNetworkPolicy: "wifiOnly",
+        automaticDownloadLookahead: 2,
+        automaticDownloadCleanupPolicy: "afterTwentyFourHours"
+    )
 }
 
 private actor AppDiagnosticRecorderSpy: DiagnosticRecording {

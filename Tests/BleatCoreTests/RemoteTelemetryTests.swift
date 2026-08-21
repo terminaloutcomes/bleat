@@ -1,4 +1,5 @@
 @preconcurrency import OpenTelemetrySdk
+import CloudKit
 import XCTest
 
 @testable import BleatCore
@@ -18,6 +19,7 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.download.transfer",
                 "bleat.playback.progress_sync",
                 "bleat.transcription.run",
+                "bleat.cloudkit.sync",
             ]
         )
 
@@ -45,6 +47,79 @@ final class RemoteTelemetryTests: XCTestCase {
                 "transport"
             )
         }
+    }
+
+    func testCloudKitLifecycleProducesReviewedLogsAndSpan() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let spanExporter = RecordingSpanExporter()
+        let logExporter = RecordingLogExporter()
+        let tracer = RemoteTelemetryTracer()
+        let logger = RemoteTelemetryLogger()
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory,
+            tracerFacade: tracer,
+            loggerFacade: logger,
+            downstreamExporter: spanExporter,
+            downstreamLogExporter: logExporter
+        )
+        let recorder = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: tracer,
+            logger: logger
+        )
+        let correlationID = UUID()
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: correlationID,
+                operation: .synchronize,
+                phase: .started
+            )
+        )
+        let cloudFailure = CloudKitFailure(
+            CKError(
+                .requestRateLimited,
+                userInfo: [CKErrorRetryAfterKey: 1.25]
+            )
+        )
+        let failure = PrivateCloudSyncFailure(
+            operation: .synchronize,
+            cause: .cloudKit(cloudFailure)
+        )
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: correlationID,
+                operation: .synchronize,
+                phase: .failed(failure),
+                durationMilliseconds: 42
+            )
+        )
+        pipeline.flush(timeout: 2)
+
+        XCTAssertEqual(
+            spanExporter.recordedSpans.map(\.name),
+            [RemoteTelemetryOperation.privateCloudSync.rawValue]
+        )
+        let logs = logExporter.recordedLogs
+        XCTAssertEqual(logs.count, 2)
+        let failed = try XCTUnwrap(logs.last)
+        XCTAssertEqual(failed.eventName, "bleat.cloudkit.sync.failed")
+        XCTAssertEqual(failed.body, .string("CloudKit synchronization lifecycle"))
+        XCTAssertEqual(
+            failed.attributes["bleat.cloudkit.operation"],
+            .string("synchronize")
+        )
+        XCTAssertEqual(
+            failed.attributes["bleat.cloudkit.code"],
+            .string("request_rate_limited")
+        )
+        XCTAssertEqual(failed.attributes["bleat.retryable"], .bool(true))
+        XCTAssertEqual(failed.attributes["bleat.retry_after_ms"], .int(1_250))
+        XCTAssertEqual(failed.attributes["bleat.duration_ms"], .int(42))
+        XCTAssertNil(failed.attributes["error.description"])
+        pipeline.deactivate()
+        pipeline.purge()
+        pipeline.shutdown()
     }
 
     func testOutcomeEncodingNeverIncludesRawErrorText() {
@@ -765,6 +840,35 @@ private final class RecordingSpanExporter:
     func shutdown(explicitTimeout: TimeInterval?) {}
 
     func cancelActiveExports() {}
+}
+
+private final class RecordingLogExporter:
+    RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var logs: [ReadableLogRecord] = []
+
+    var recordedLogs: [ReadableLogRecord] {
+        lock.withLock { logs }
+    }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> ExportResult {
+        lock.withLock { logs.append(contentsOf: logRecords) }
+        return .success
+    }
+
+    func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult {
+        .success
+    }
+
+    func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func cancelActiveExports() {}
+
+    func disable() {}
 }
 
 private final class CancellableBlockingSpanExporter:

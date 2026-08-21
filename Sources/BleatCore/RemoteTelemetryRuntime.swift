@@ -10,10 +10,148 @@ public enum RemoteTelemetryRuntimeFailure: Error, Equatable, Sendable {
     case exportFailed
 }
 
-public protocol RemoteTelemetryDownstreamSpanExporter: SpanExporter {
+public protocol RemoteTelemetryDownstreamSpanExporter: SpanExporter,
+    Sendable
+{
     /// Stops any currently executing transport work before returning. Issue 63's
     /// authenticated exporter must implement this as a real transport cancel.
     func cancelActiveExports()
+}
+
+public protocol RemoteTelemetryDownstreamLogExporter: LogRecordExporter,
+    Sendable
+{
+    func cancelActiveExports()
+    func disable()
+}
+
+extension RemoteTelemetryDownstreamLogExporter {
+    public func disable() {
+        cancelActiveExports()
+    }
+}
+
+/// Stable consent-gated facade for the reviewed CloudKit log schema.
+public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
+    @unchecked Sendable
+{
+    private enum State {
+        case disabled
+        case initializing([PrivateCloudSyncEvent])
+        case active(any OpenTelemetryApi.Logger)
+    }
+
+    private let lock = NSLock()
+    private var state = State.disabled
+    private let maximumInitializingLogs = 2_048
+
+    public init() {}
+
+    public func prepareForActivation() {
+        lock.withLock {
+            guard case .disabled = state else { return }
+            state = .initializing([])
+        }
+    }
+
+    func activate(_ logger: any OpenTelemetryApi.Logger) {
+        let buffered = lock.withLock {
+            guard case .initializing(let buffered) = state else {
+                return [PrivateCloudSyncEvent]()
+            }
+            state = .active(logger)
+            return buffered
+        }
+        for event in buffered {
+            Self.emit(event, using: logger)
+        }
+    }
+
+    public func deactivate() {
+        lock.withLock { state = .disabled }
+    }
+
+    public func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent) {
+        let logger: (any OpenTelemetryApi.Logger)? = lock.withLock {
+            switch state {
+            case .disabled:
+                return nil
+            case .active(let logger):
+                return logger
+            case .initializing(var buffered):
+                if buffered.count < maximumInitializingLogs {
+                    buffered.append(event)
+                    state = .initializing(buffered)
+                }
+                return nil
+            }
+        }
+        if let logger {
+            Self.emit(event, using: logger)
+        }
+    }
+
+    private static func emit(
+        _ event: PrivateCloudSyncEvent,
+        using logger: any OpenTelemetryApi.Logger
+    ) {
+        var attributes: [String: AttributeValue] = [
+            "bleat.subsystem": .string(
+                RemoteTelemetrySubsystem.synchronization.rawValue
+            ),
+            "bleat.cloudkit.operation": .string(event.operation.rawValue),
+        ]
+        let eventName: String
+        let severity: Severity
+        switch event.phase {
+        case .started:
+            eventName = "bleat.cloudkit.sync.started"
+            severity = .debug
+            attributes["bleat.outcome"] = .string("started")
+        case .completed:
+            eventName = "bleat.cloudkit.sync.completed"
+            severity = .info
+            attributes["bleat.outcome"] = .string("succeeded")
+        case .failed(let failure):
+            eventName = "bleat.cloudkit.sync.failed"
+            severity = failure.cause == .cancelled ? .warn : .error
+            attributes["bleat.outcome"] = .string(
+                failure.cause == .cancelled ? "cancelled" : "failed"
+            )
+            attributes["bleat.failure.category"] = .string(
+                failure.cause.remoteTelemetryFailureCategory.rawValue
+            )
+            attributes["bleat.retryable"] = .bool(
+                failure.cause.isRetryable
+            )
+            if case .cloudKit(let cloudKit) = failure.cause {
+                attributes["bleat.cloudkit.code"] = .string(
+                    cloudKit.code.diagnosticCode
+                )
+                if !cloudKit.partialFailureCodes.isEmpty {
+                    attributes["bleat.cloudkit.partial_codes"] =
+                        AttributeValue(
+                            cloudKit.partialFailureCodes.map(\.diagnosticCode)
+                        )
+                }
+                if let retryAfter = cloudKit.retryAfterSeconds {
+                    attributes["bleat.retry_after_ms"] = .int(
+                        Int((retryAfter * 1_000).rounded())
+                    )
+                }
+            }
+        }
+        if let duration = event.durationMilliseconds {
+            attributes["bleat.duration_ms"] = .int(duration)
+        }
+        logger.logRecordBuilder()
+            .setTimestamp(event.timestamp)
+            .setSeverity(severity)
+            .setEventName(eventName)
+            .setBody(.string("CloudKit synchronization lifecycle"))
+            .setAttributes(attributes)
+            .emit()
+    }
 }
 
 /// A stable application-facing tracer whose active OpenTelemetry tracer may be
@@ -222,7 +360,7 @@ private final class OpenTelemetrySpanBox: @unchecked Sendable {
 }
 
 final class UnavailableRemoteTelemetrySpanExporter:
-    RemoteTelemetryDownstreamSpanExporter
+    RemoteTelemetryDownstreamSpanExporter, @unchecked Sendable
 {
     func export(
         spans: [SpanData],
@@ -232,6 +370,27 @@ final class UnavailableRemoteTelemetrySpanExporter:
     }
 
     func flush(explicitTimeout: TimeInterval?) -> SpanExporterResultCode {
+        .failure
+    }
+
+    func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func cancelActiveExports() {}
+
+    func disable() {}
+}
+
+final class UnavailableRemoteTelemetryLogExporter:
+    RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
+{
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> ExportResult {
+        .failure
+    }
+
+    func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult {
         .failure
     }
 
@@ -664,18 +823,27 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
 /// while consent changes replace or deactivate this pipeline.
 public final class RemoteTelemetryPipeline: @unchecked Sendable {
     private let provider: TracerProviderSdk
+    private let loggerProvider: LoggerProviderSdk
     private let exporter: BoundedPersistentSpanExporter
+    private let logExporter: any RemoteTelemetryDownstreamLogExporter
     private let tracerFacade: RemoteTelemetryTracer
+    private let loggerFacade: RemoteTelemetryLogger
     private var processor: BatchSpanProcessor
+    private var logProcessor: BatchLogRecordProcessor
 
     public init(
         resource: RemoteTelemetryResource,
         storageURL: URL,
         tracerFacade: RemoteTelemetryTracer,
+        loggerFacade: RemoteTelemetryLogger = RemoteTelemetryLogger(),
         policy: RemoteTelemetryCollectionPolicy = .default,
-        downstreamExporter: (any RemoteTelemetryDownstreamSpanExporter)? = nil
+        downstreamExporter: (any RemoteTelemetryDownstreamSpanExporter)? = nil,
+        downstreamLogExporter: (
+            any RemoteTelemetryDownstreamLogExporter
+        )? = nil
     ) throws {
         tracerFacade.prepareForActivation()
+        loggerFacade.prepareForActivation()
         let attributes = resource.encodedAttributes.mapValues {
             AttributeValue.string($0)
         }
@@ -686,6 +854,11 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
             policy: policy
         )
         let processor = BatchSpanProcessor(spanExporter: exporter)
+        let logExporter = downstreamLogExporter
+            ?? UnavailableRemoteTelemetryLogExporter()
+        let logProcessor = BatchLogRecordProcessor(
+            logRecordExporter: logExporter
+        )
         let limits = SpanLimits()
             .settingAttributeCountLimit(8)
             .settingEventCountLimit(0)
@@ -696,13 +869,25 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
             sampler: Samplers.alwaysOn,
             spanProcessors: [processor]
         )
+        loggerProvider = LoggerProviderBuilder()
+            .with(resource: Resource(attributes: attributes))
+            .with(processors: [logProcessor])
+            .build()
         self.exporter = exporter
+        self.logExporter = logExporter
         self.tracerFacade = tracerFacade
+        self.loggerFacade = loggerFacade
         self.processor = processor
+        self.logProcessor = logProcessor
         tracerFacade.activate(
             provider.get(
                 instrumentationName: "app.bleat.remote-telemetry",
                 instrumentationVersion: resource.applicationVersion
+            )
+        )
+        loggerFacade.activate(
+            loggerProvider.get(
+                instrumentationScopeName: "app.bleat.remote-telemetry"
             )
         )
     }
@@ -713,11 +898,13 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
 
     public func flush(timeout: TimeInterval) {
         provider.forceFlush(timeout: timeout)
+        _ = logProcessor.forceFlush(explicitTimeout: timeout)
         _ = exporter.flush(explicitTimeout: timeout)
     }
 
     public func flushForBackground(timeout: TimeInterval) {
         provider.forceFlush(timeout: timeout)
+        _ = logProcessor.forceFlush(explicitTimeout: timeout)
         _ = exporter.flush(
             explicitTimeout: timeout,
             allowWhileBackgrounded: true
@@ -726,8 +913,10 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
 
     public func deactivate() {
         tracerFacade.deactivate()
+        loggerFacade.deactivate()
         provider.resetSpanProcessors()
         exporter.disable()
+        logExporter.disable()
     }
 
     public func purge() {
@@ -736,5 +925,6 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
 
     public func shutdown() {
         processor.shutdown(explicitTimeout: 2)
+        _ = logProcessor.shutdown(explicitTimeout: 2)
     }
 }

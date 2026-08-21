@@ -73,6 +73,7 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
     case downloadTransfer = "bleat.download.transfer"
     case playbackProgressSync = "bleat.playback.progress_sync"
     case transcription = "bleat.transcription.run"
+    case privateCloudSync = "bleat.cloudkit.sync"
 
     var subsystem: RemoteTelemetrySubsystem {
         switch self {
@@ -86,10 +87,97 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
             .playback
         case .downloadTransfer:
             .download
-        case .playbackProgressSync:
+        case .playbackProgressSync, .privateCloudSync:
             .synchronization
         case .transcription:
             .transcription
+        }
+    }
+}
+
+/// The reviewed CloudKit log boundary. It intentionally accepts the typed
+/// lifecycle event rather than an arbitrary body or attributes dictionary.
+public protocol RemoteTelemetryLogging: Sendable {
+    func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent)
+}
+
+public struct InactiveRemoteTelemetryLogger: RemoteTelemetryLogging {
+    public init() {}
+
+    public func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent) {}
+}
+
+public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
+    PrivateCloudSyncEventRecording
+{
+    private let tracer: any RemoteTelemetryTracing
+    private let logger: any RemoteTelemetryLogging
+    private var spans: [UUID: RemoteTelemetrySpan] = [:]
+
+    public init(
+        tracer: any RemoteTelemetryTracing,
+        logger: any RemoteTelemetryLogging
+    ) {
+        self.tracer = tracer
+        self.logger = logger
+    }
+
+    public func record(_ event: PrivateCloudSyncEvent) {
+        logger.recordPrivateCloudEvent(event)
+        switch event.phase {
+        case .started:
+            spans[event.correlationID] = tracer.beginSpan(
+                operation: .privateCloudSync
+            )
+        case .completed:
+            spans.removeValue(forKey: event.correlationID)?.end(.succeeded)
+        case .failed(let failure):
+            spans.removeValue(forKey: event.correlationID)?.end(
+                failure.remoteTelemetryOutcome
+            )
+        }
+    }
+}
+
+extension PrivateCloudSyncFailure {
+    fileprivate var remoteTelemetryOutcome: RemoteTelemetryOutcome {
+        switch cause {
+        case .cancelled:
+            .cancelled
+        default:
+            .failed(cause.remoteTelemetryFailureCategory)
+        }
+    }
+}
+
+extension PrivateCloudSyncError {
+    var remoteTelemetryFailureCategory: RemoteTelemetryFailureCategory {
+        switch self {
+        case .cloudKit(let failure):
+            switch failure.code {
+            case .notAuthenticated, .accountTemporarilyUnavailable:
+                .authentication
+            case .permissionFailure, .managedAccountRestricted:
+                .authorization
+            case .networkUnavailable, .networkFailure, .serverResponseLost:
+                .transport
+            case .requestRateLimited, .zoneBusy:
+                .rateLimited
+            case .badContainer, .missingEntitlement, .badDatabase,
+                .incompatibleVersion:
+                .unsupported
+            case .partialFailure, .invalidArguments,
+                .serverRecordChanged, .constraintViolation,
+                .changeTokenExpired, .batchRequestFailed:
+                .invalidResponse
+            default:
+                .serverRejected
+            }
+        case .persistenceFailed:
+            .localStorage
+        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+            .unexpected:
+            .unknown
         }
     }
 }

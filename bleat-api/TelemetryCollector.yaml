@@ -46,6 +46,10 @@ service:
       receivers: [otlp/bleat]
       processors: [memory_limiter, batch]
       exporters: [otlp/private]
+    logs:
+      receivers: [otlp/bleat]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/private]
   telemetry:
     logs:
       level: info
