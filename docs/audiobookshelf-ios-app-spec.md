@@ -524,6 +524,12 @@ scheme derived from the bundle identifier. Do not reuse
 exact callback URI for users to add to Audiobookshelf's Allowed Mobile Redirect
 URIs list.
 
+The public administrator guide at
+`https://bleat.terminaloutcomes.com/help/oidc-setup/` documents the complete
+Audiobookshelf and provider setup. Keep an external-system-browser link to that
+stable URL on the add-server surface without adding account, server, or
+authentication data to it.
+
 #### Flow
 
 1. Create an in-memory `OAuthAttempt` scoped to the draft account:

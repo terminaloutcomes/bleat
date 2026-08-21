@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — Bleat{% endblock title %}
+{% block description %}{{ page.description }}{% endblock description %}
+
+{% block main %}
+<main id="main-content" class="flex-1">
+  <article class="mx-auto w-full max-w-4xl px-6 pb-24 pt-12 sm:px-8 sm:pb-32 sm:pt-20 lg:px-10">
+    <div class="rounded-3xl border border-white/10 bg-ink/55 p-7 shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-10 lg:p-12">
+      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Administrator guide</p>
+      <h1 class="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Set up OpenID Connect for Bleat</h1>
+      <p class="mt-7 max-w-3xl text-lg leading-8 text-muted-lilac">Bleat uses the OpenID Connect configuration already owned by your Audiobookshelf server. Configure Audiobookshelf as the client at your identity provider, then allow Audiobookshelf to return mobile sign-ins to Bleat.</p>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="relationship-heading">
+        <h2 id="relationship-heading" class="text-2xl font-semibold tracking-tight text-white">This has layers, like an onion.</h2>
+        <div class="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-5">
+          <pre class="min-w-max text-base leading-8 text-mist" aria-label="Bleat connects to Audiobookshelf, which connects to the OpenID provider">Bleat
+  → Audiobookshelf
+       → OpenID provider</pre>
+        </div>
+        <div class="mt-5 space-y-4 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8 [&_a]:text-lilac [&_a]:underline [&_a]:decoration-lilac/50 [&_a]:underline-offset-4 [&_a:hover]:text-white [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-4 [&_a:focus-visible]:outline-lilac">
+          <p><strong class="font-semibold text-white">Audiobookshelf is the OIDC client.</strong> Register Audiobookshelf—not Bleat—with <a href="https://kanidm.com">Kanidm</a>, <a href="https://www.keycloak.org/">Keycloak</a>, <a href="https://goauthentik.io">Authentik</a>, or another provider. The provider issues credentials to Audiobookshelf; Bleat receives only Audiobookshelf credentials through its mobile bridge.</p>
+          <p>Users enter credentials only in the system browser and auth interface. They never enter credentials into Bleat.</p>
+        </div>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="before-heading">
+        <h2 id="before-heading" class="text-2xl font-semibold tracking-tight text-white">Before you start</h2>
+        <ul class="mt-5 list-disc space-y-3 pl-6 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <li>Use Audiobookshelf 2.26.0 or newer, which is Bleat's minimum supported server version.</li>
+          <li>Give Audiobookshelf and the provider stable HTTPS addresses with certificates trusted by iOS and by each server.</li>
+          <li>Have administrator access to both Audiobookshelf and the identity provider.</li>
+        </ul>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="provider-heading">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Step 1</p>
+        <h2 id="provider-heading" class="mt-3 text-2xl font-semibold tracking-tight text-white">Register Audiobookshelf at the auth provider</h2>
+        <div class="mt-5 space-y-4 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <p><strong>This is the part where you register Audiobookshelf with your auth provider. These details might change and you should refer to Audiobookshelf's documentation for up-to-date advice!</strong></p>
+          <p>Create one OIDC client for Audiobookshelf using the authorization-code flow. Record its client ID and client secret for Audiobookshelf.</p>
+          <p>Allow the exact Audiobookshelf mobile redirect that matches the public server URL:</p>
+          <div class="space-y-3" aria-label="Audiobookshelf mobile redirect URI examples">
+            <div class="overflow-x-auto rounded-xl border border-white/10 bg-black/25 px-4 py-3"><code class="whitespace-nowrap text-sm text-mist sm:text-base">https://&lt;audiobookshelf-host&gt;/auth/openid/mobile-redirect</code></div>
+            <div class="overflow-x-auto rounded-xl border border-white/10 bg-black/25 px-4 py-3"><code class="whitespace-nowrap text-sm text-mist sm:text-base">https://&lt;audiobookshelf-host&gt;/&lt;prefix&gt;/auth/openid/mobile-redirect</code></div>
+          </div>
+          <p>Use the root-hosted form only when Audiobookshelf is served at the host root. Use the prefixed form when its public base URL contains a path.</p>
+          <p>Audiobookshelf web login may also require the sibling <code class="rounded bg-black/25 px-1.5 py-1 text-mist">/auth/openid/callback</code> redirect shown in its Authentication settings. Follow the provider's instructions for client type, scopes, claims, signing algorithm, and exact redirect matching.</p>
+        </div>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="server-heading">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Step 2</p>
+        <h2 id="server-heading" class="mt-3 text-2xl font-semibold tracking-tight text-white">Configure Audiobookshelf</h2>
+        <ol class="mt-5 list-decimal space-y-4 pl-6 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <li>In Audiobookshelf, open <strong class="font-semibold text-white">Settings → Authentication</strong> and enable <strong class="font-semibold text-white">OpenID Connect Authentication</strong>.</li>
+          <li>Enter the provider issuer URL. Use Audiobookshelf's auto-populate action where supported, then verify the authorization, token, user-info, JWKS, and optional logout endpoints.</li>
+          <li>Enter the Audiobookshelf client ID and secret from the provider, and select a signing algorithm the provider advertises.</li>
+          <li>If Audiobookshelf is served below a path prefix, select that prefix under <strong class="font-semibold text-white">Web Redirect URLs Subfolder</strong>. Confirm the mobile callback displayed by Audiobookshelf exactly matches the URI registered at the provider.</li>
+          <li>Under <strong class="font-semibold text-white">Allowed Mobile Redirect URIs</strong>, add Bleat's exact callback:</li>
+        </ol>
+        <div class="mt-5 overflow-x-auto rounded-xl border border-lilac/40 bg-lilac/10 px-4 py-4 text-center">
+          <code class="whitespace-nowrap text-base font-semibold text-white sm:text-lg">bleat://oauth2redirect</code>
+        </div>
+        <p class="mt-5 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">Do not use a wildcard and do not substitute a bundle identifier. Configure the button label, automatic launch, user matching, and registration policy for your site, then save the settings.</p>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="verify-heading">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-lilac">Step 3</p>
+        <h2 id="verify-heading" class="mt-3 text-2xl font-semibold tracking-tight text-white">Verify Audiobookshelf first</h2>
+        <div class="mt-5 space-y-4 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <p>Open the server's public <code class="rounded bg-black/25 px-1.5 py-1 text-mist">/status</code> endpoint beneath the same base URL you will enter in Bleat. Its JSON response must list <code class="rounded bg-black/25 px-1.5 py-1 text-mist">openid</code> in <code class="rounded bg-black/25 px-1.5 py-1 text-mist">authMethods</code>.</p>
+          <div class="overflow-x-auto rounded-xl border border-white/10 bg-black/25 px-4 py-3"><code class="whitespace-nowrap text-sm text-mist sm:text-base">https://&lt;audiobookshelf-host&gt;/&lt;prefix&gt;/status</code></div>
+          <p>Confirm OIDC login works in Audiobookshelf's web interface and that its logs show the expected public HTTPS redirect. Then enter the same Audiobookshelf base URL in Bleat. Bleat should show the server-configured OpenID button.</p>
+        </div>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="troubleshooting-heading">
+        <h2 id="troubleshooting-heading" class="text-2xl font-semibold tracking-tight text-white">Troubleshooting</h2>
+        <div class="mt-5 space-y-5 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <div><h3 class="font-semibold text-white">Bleat does not show an OpenID button</h3><p class="mt-1">Check the server's <code class="rounded bg-black/25 px-1.5 py-1 text-mist">/status</code> response. Audiobookshelf is not advertising OIDC when <code class="rounded bg-black/25 px-1.5 py-1 text-mist">openid</code> is absent from <code class="rounded bg-black/25 px-1.5 py-1 text-mist">authMethods</code>; finish or correct its Authentication settings first.</p></div>
+          <div><h3 class="font-semibold text-white">The provider reports a redirect URI mismatch</h3><p class="mt-1">Compare the entire provider redirect character for character with Audiobookshelf's displayed mobile callback. Check the scheme, host, port, path prefix, and trailing path. Register exact URIs instead of wildcards.</p></div>
+          <div><h3 class="font-semibold text-white">The browser returns to an error or the wrong path</h3><p class="mt-1">Confirm the reverse proxy preserves the public host, HTTPS scheme, and Audiobookshelf prefix. Select the matching redirect subfolder in Audiobookshelf, and make sure the prefixed mobile redirect reaches Audiobookshelf rather than a proxy 404 page.</p></div>
+          <div><h3 class="font-semibold text-white">The provider login succeeds but Bleat does not reopen</h3><p class="mt-1">Confirm <code class="rounded bg-black/25 px-1.5 py-1 text-mist">bleat://oauth2redirect</code> is an exact Allowed Mobile Redirect URI in Audiobookshelf. It belongs there—not in the provider's client redirect list.</p></div>
+          <div><h3 class="font-semibold text-white">HTTPS or certificate errors appear</h3><p class="mt-1">Bleat uses normal system trust and has no certificate bypass. The Audiobookshelf certificate must be trusted by the device, and Audiobookshelf must trust and resolve the provider's HTTPS endpoint.</p></div>
+          <div><h3 class="font-semibold text-white">Audiobookshelf reports issuer, token, claim, or signature errors</h3><p class="mt-1">Compare its issuer, client credentials, endpoints, signing algorithm, scopes, and claim mappings with the provider configuration. These are Audiobookshelf-to-provider failures; changing Bleat cannot repair them.</p></div>
+        </div>
+      </section>
+
+      <section class="mt-10 border-t border-white/10 pt-8" aria-labelledby="references-heading">
+        <h2 id="references-heading" class="text-2xl font-semibold tracking-tight text-white">Upstream documentation</h2>
+        <ul class="mt-5 list-disc space-y-3 pl-6 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8">
+          <li><a class="rounded-sm text-lilac underline decoration-lilac/50 underline-offset-4 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="https://audiobookshelf.org/docs/documentation/server-management/oidc-authentication">Audiobookshelf OIDC authentication</a></li>
+          <li><a class="rounded-sm text-lilac underline decoration-lilac/50 underline-offset-4 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="https://kanidm.github.io/kanidm/master/integrations/oauth2.html">Kanidm OAuth2 and OIDC integration</a></li>
+          <li><a class="rounded-sm text-lilac underline decoration-lilac/50 underline-offset-4 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="https://www.keycloak.org/docs/latest/server_admin/#_clients">Keycloak client configuration</a></li>
+          <li><a class="rounded-sm text-lilac underline decoration-lilac/50 underline-offset-4 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="https://docs.goauthentik.io/add-secure-apps/providers/oauth2/">authentik OAuth2 and OIDC provider</a></li>
+        </ul>
+      </section>
+    </div>
+  </article>
+</main>
+{% endblock main %}

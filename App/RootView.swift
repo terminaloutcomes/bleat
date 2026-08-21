@@ -3,6 +3,12 @@ import BleatTranscription
 import Foundation
 import SwiftUI
 
+enum AppDocumentationLink {
+    static let openIDSetupGuide = URL(
+        string: "https://bleat.terminaloutcomes.com/help/oidc-setup/"
+    )
+}
+
 enum BookDetailPlaybackAction: Equatable {
     case start
     case resume
@@ -404,6 +410,20 @@ private struct NativeLoginView: View {
                         Label("Diagnostics", systemImage: "stethoscope")
                     }
                     .accessibilityIdentifier("login.diagnostics")
+
+                    if let setupGuideURL =
+                        AppDocumentationLink.openIDSetupGuide
+                    {
+                        Link(destination: setupGuideURL) {
+                            Label(
+                                "OpenID Setup Guide",
+                                systemImage: "questionmark.circle"
+                            )
+                        }
+                        .accessibilityIdentifier(
+                            "login.openidSetupGuide"
+                        )
+                    }
                 }
 
             }
