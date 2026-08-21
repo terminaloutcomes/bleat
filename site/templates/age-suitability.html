@@ -3,13 +3,6 @@
 {% block title %}{{ page.title }} — Bleat{% endblock title %}
 {% block description %}{{ page.description }}{% endblock description %}
 
-{% block header %}
-<a class="inline-flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="{{ get_url(path='@/_index.md') }}" aria-label="Bleat home">
-  <img class="size-10 rounded-xl shadow-lg shadow-ink/25" src="{{ get_url(path='bleat.svg') }}" alt="">
-  <span class="text-xl font-semibold tracking-tight text-white">Bleat</span>
-</a>
-{% endblock header %}
-
 {% block main %}
 <main id="main-content" class="flex flex-1 items-center">
   <article class="mx-auto w-full max-w-4xl px-6 pb-24 pt-12 sm:px-8 sm:pb-32 sm:pt-20 lg:px-10">

@@ -18,15 +18,24 @@
       </div>
 
       <header class="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8 lg:px-10">
-        {% block header %}{% endblock header %}
+        {% block header %}
+        <a class="inline-flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="{{ get_url(path='@/_index.md') }}" aria-label="Bleat home">
+          <img class="size-10 rounded-xl shadow-lg shadow-ink/25" src="{{ get_url(path='bleat.svg') }}" alt="">
+          <span class="text-xl font-semibold tracking-tight text-white">Bleat</span>
+        </a>
+        {% endblock header %}
       </header>
 
       {% block main %}{% endblock main %}
 
       <footer class="border-t border-white/10 px-6 py-8 sm:px-8 lg:px-10">
-        <div class="mx-auto flex max-w-6xl items-center justify-between text-sm text-muted-lilac">
+        <div class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-muted-lilac sm:flex-row sm:items-center sm:justify-between">
           <span>Bleat - <a class="rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="https://terminaloutcomes.com">A Terminal Outcomes project</a></span>
-          <span><a class="rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="mailto:bleat@terminaloutcomes.com">Contact</a></span>
+          <nav class="flex flex-wrap gap-x-5 gap-y-3" aria-label="Footer">
+            <a class="rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="{{ get_url(path='@/help/_index.md') }}">Help and troubleshooting</a>
+            <a class="rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="{{ get_url(path='@/age-suitability.md') }}">Age suitability</a>
+            <a class="rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac" href="mailto:bleat@terminaloutcomes.com">Contact</a>
+          </nav>
         </div>
       </footer>
     </div>
