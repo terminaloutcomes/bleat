@@ -94,6 +94,25 @@ public struct UserPermissions: Codable, Hashable, Sendable {
         case accessExplicitContent
         case selectedTagsNotAccessible
     }
+
+    /// Audiobookshelf added `createEreader` without backfilling existing users:
+    /// https://github.com/advplyr/audiobookshelf/pull/3531
+    /// Missing permissions default to `false`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func flag(_ key: CodingKeys) throws -> Bool {
+            try container.decodeIfPresent(Bool.self, forKey: key) ?? false
+        }
+        self.download = try flag(.download)
+        self.update = try flag(.update)
+        self.delete = try flag(.delete)
+        self.upload = try flag(.upload)
+        self.createEReader = try flag(.createEReader)
+        self.accessAllLibraries = try flag(.accessAllLibraries)
+        self.accessAllTags = try flag(.accessAllTags)
+        self.accessExplicitContent = try flag(.accessExplicitContent)
+        self.selectedTagsNotAccessible = try flag(.selectedTagsNotAccessible)
+    }
 }
 
 public struct AuthenticatedUser: Codable, Hashable, Sendable {

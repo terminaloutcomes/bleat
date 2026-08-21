@@ -782,6 +782,89 @@ final class AuthenticationTests: XCTestCase {
         }
     }
 
+    func testUserPermissionsDefaultsMissingKeysToFalse() throws {
+        // Older accounts may be missing newly added permissions.
+        let empty = try JSONDecoder().decode(
+            UserPermissions.self,
+            from: Data("{}".utf8)
+        )
+        XCTAssertFalse(empty.download)
+        XCTAssertFalse(empty.createEReader)
+        XCTAssertFalse(empty.accessAllLibraries)
+        XCTAssertFalse(empty.selectedTagsNotAccessible)
+
+        // This Audiobookshelf 2.36 example predates `createEreader`.
+        let legacy = try JSONDecoder().decode(
+            UserPermissions.self,
+            from: Data(
+                """
+                {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                }
+                """.utf8
+            )
+        )
+        XCTAssertTrue(legacy.download)
+        XCTAssertTrue(legacy.accessAllLibraries)
+        XCTAssertTrue(legacy.accessAllTags)
+        XCTAssertTrue(legacy.accessExplicitContent)
+        XCTAssertFalse(legacy.update)
+        XCTAssertFalse(legacy.createEReader)
+    }
+
+    func testLoginSucceedsWhenPermissionKeyMissing() async throws {
+        // A missing permission must not prevent login.
+        let payload = Data(
+            """
+            {
+              "user": {
+                "id": "user-id",
+                "username": "reader",
+                "type": "user",
+                "permissions": {
+                  "download": true,
+                  "update": false,
+                  "delete": false,
+                  "upload": false,
+                  "accessAllLibraries": true,
+                  "accessAllTags": true,
+                  "accessExplicitContent": true,
+                  "selectedTagsNotAccessible": false
+                },
+                "librariesAccessible": [],
+                "itemTagsSelected": [],
+                "accessToken": "access-token",
+                "refreshToken": "refresh-token"
+              }
+            }
+            """.utf8
+        )
+        let transport = AuthenticationHTTPTransport(
+            responses: [.json(payload), .json(payload)]
+        )
+        let store = RecordingCredentialStore()
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        )
+        let account = try await coordinator.login(
+            accountID: AccountID(rawValue: "legacy-account"),
+            server: try NormalizedServerURL("https://example.com"),
+            username: "reader",
+            password: "test-password"
+        )
+        XCTAssertEqual(account.user.username, "reader")
+        XCTAssertFalse(account.user.permissions.createEReader)
+        XCTAssertTrue(account.user.permissions.accessAllLibraries)
+    }
+
     private static func authenticationJSON(
         userID: String = "user-id",
         accessToken: String? = nil,
