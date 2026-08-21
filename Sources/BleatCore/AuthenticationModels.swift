@@ -95,7 +95,8 @@ public struct UserPermissions: Codable, Hashable, Sendable {
         case selectedTagsNotAccessible
     }
 
-    /// Audiobookshelf does not backfill new permission fields for existing users.
+    /// Audiobookshelf added `createEreader` without backfilling existing users:
+    /// https://github.com/advplyr/audiobookshelf/pull/3531
     /// Missing permissions default to `false`.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
