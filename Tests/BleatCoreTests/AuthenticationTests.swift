@@ -782,12 +782,8 @@ final class AuthenticationTests: XCTestCase {
         }
     }
 
-    func testUserPermissionsToleratesMissingKeys() throws {
-        // Audiobookshelf adds permission fields additively and does not
-        // backfill existing users' stored permission blobs (e.g. `createEreader`,
-        // added in advplyr/audiobookshelf#3531 with no migration). An account
-        // created before a permission existed is serialised without that key,
-        // so decoding must default it rather than failing the whole payload.
+    func testUserPermissionsDefaultsMissingKeysToFalse() throws {
+        // Older accounts may be missing newly added permissions.
         let empty = try JSONDecoder().decode(
             UserPermissions.self,
             from: Data("{}".utf8)
@@ -797,9 +793,7 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertFalse(empty.accessAllLibraries)
         XCTAssertFalse(empty.selectedTagsNotAccessible)
 
-        // A real Audiobookshelf 2.36 permissions blob from an account that
-        // predates `createEreader`: every other key is present, only the new
-        // one is missing.
+        // This Audiobookshelf 2.36 example predates `createEreader`.
         let legacy = try JSONDecoder().decode(
             UserPermissions.self,
             from: Data(
@@ -826,9 +820,7 @@ final class AuthenticationTests: XCTestCase {
     }
 
     func testLoginSucceedsWhenPermissionKeyMissing() async throws {
-        // End-to-end: a login response whose permissions omit `createEreader`
-        // must still authenticate instead of failing to decode the whole
-        // payload (which surfaced as "incomplete / inconsistent data").
+        // A missing permission must not prevent login.
         let payload = Data(
             """
             {
