@@ -151,6 +151,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case uncertainMutation = "uncertain_mutation"
     case authenticationCancelled = "authentication_cancelled"
     case authenticationSessionInProgress = "authentication_session_in_progress"
+    case authenticationPresentationUnavailable =
+        "authentication_presentation_unavailable"
     case authenticationBrowserFailed = "authentication_browser_failed"
     case authenticationBridgeFailed = "authentication_bridge_failed"
     case authenticationCallbackInvalid = "authentication_callback_invalid"

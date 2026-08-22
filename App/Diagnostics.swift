@@ -329,6 +329,8 @@ extension AppFailure {
         case (_, .authenticationCancelled): .authenticationCancelled
         case (_, .authenticationSessionInProgress):
             .authenticationSessionInProgress
+        case (_, .authenticationPresentationUnavailable):
+            .authenticationPresentationUnavailable
         case (_, .authenticationBrowserFailed): .authenticationBrowserFailed
         case (_, .authenticationBridgeFailed): .authenticationBridgeFailed
         case (_, .authenticationCallbackInvalid):

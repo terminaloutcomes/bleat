@@ -9324,6 +9324,15 @@ final class AppModelTests: XCTestCase {
                 .invalidCredentials
             ),
             (
+                .login,
+                .onboarding(
+                    .openIDAuthenticationFailed(
+                        .presentationAnchorUnavailable
+                    )
+                ),
+                .authenticationPresentationUnavailable
+            ),
+            (
                 .appStart, .accountStore(.persistenceFailed),
                 .localStorageUnavailable
             ),

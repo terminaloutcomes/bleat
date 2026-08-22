@@ -425,7 +425,8 @@ enum AppFailureCause: Equatable, Sendable {
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
     case authenticationCancelled, authenticationSessionInProgress
-    case authenticationBrowserFailed, authenticationBridgeFailed
+    case authenticationPresentationUnavailable, authenticationBrowserFailed
+    case authenticationBridgeFailed
     case authenticationCallbackInvalid, authenticationCredentialInvalid
     case accountUnavailable, playbackIdentityMismatch
     case inaccessibleLibrary, inaccessibleTags, explicitContentDenied
@@ -482,6 +483,8 @@ struct AppFailure: Equatable, Sendable {
         case .requestRejected: "Request rejected"
         case .authenticationCancelled: "Sign-in cancelled"
         case .authenticationSessionInProgress: "Sign-in already in progress"
+        case .authenticationPresentationUnavailable:
+            "Sign-in window unavailable"
         case .authenticationBrowserFailed: "Browser sign-in unavailable"
         case .authenticationBridgeFailed: "Sign-in bridge unavailable"
         case .authenticationCallbackInvalid: "Invalid sign-in callback"
@@ -548,6 +551,8 @@ struct AppFailure: Equatable, Sendable {
             "The system browser sign-in was cancelled."
         case .authenticationSessionInProgress:
             "Finish or cancel the current sign-in attempt before starting another."
+        case .authenticationPresentationUnavailable:
+            "Bleat could not find an active app window for system browser sign-in."
         case .authenticationBrowserFailed:
             "Bleat could not start or complete the system browser sign-in session."
         case .authenticationBridgeFailed:
@@ -590,7 +595,9 @@ struct AppFailure: Equatable, Sendable {
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
         case .serverNotReady, .serverUnsupported, .localLoginUnavailable,
             .invalidCredentials, .authenticationCancelled,
-            .authenticationSessionInProgress, .authenticationBrowserFailed:
+            .authenticationSessionInProgress,
+            .authenticationPresentationUnavailable,
+            .authenticationBrowserFailed:
             "exclamationmark.circle"
         }
     }
@@ -766,6 +773,8 @@ struct AppFailure: Equatable, Sendable {
             .invalidInput
         case .attemptAlreadyInProgress:
             .authenticationSessionInProgress
+        case .presentationAnchorUnavailable:
+            .authenticationPresentationUnavailable
         case .randomGenerationFailed, .browserFailed:
             .authenticationBrowserFailed
         case .browserCancelled:
@@ -990,7 +999,9 @@ extension AppFailureCause {
         case .invalidInput, .serverRequiresHTTPS,
             .authenticationSessionInProgress, .accountUnavailable,
             .invalidPlaybackPosition, .unknownPlaybackChapter,
-            .invalidPlaybackChapterOffset, .authenticationCancelled,
+            .invalidPlaybackChapterOffset,
+            .authenticationPresentationUnavailable,
+            .authenticationCancelled,
             .requestCancelled:
             .unknown
         }
