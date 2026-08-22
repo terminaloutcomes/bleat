@@ -4026,13 +4026,19 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testConstrainedPathSuspendsLiveUpdatesWithoutSigningOut()
+    func testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST()
         async throws
     {
+        let playbackFixture = try playbackRecoveryFixture()
+        defer { playbackFixture.cleanUp() }
         let account = try fixtureAccount()
+        let library = fixtureLibrary()
         let service = TestAppService(
             accounts: .success([account]),
-            activeAccount: .success(account)
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id))
         )
         let model = AppModel(service: service)
         await model.start()
@@ -4063,6 +4069,98 @@ final class AppModelTests: XCTestCase {
             model.liveUpdateConnectionState,
             .suspendedForLowDataMode
         )
+        var lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 0)
+        XCTAssertEqual(lifecycle.stops, 0)
+        var hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertFalse(hasSubscriber)
+
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            lifecycle = await service.liveUpdatesLifecycleCounts()
+            if lifecycle.starts == 1,
+                await service.hasLiveUpdatesSubscriber()
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 0)
+        hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(hasSubscriber)
+
+        await model.playback.startDownloaded(
+            detail: playbackFixture.detail,
+            trackURLs: [playbackFixture.audioURL],
+            accountID: account.id,
+            account: account,
+            initialTime: 0.75
+        )
+        model.playback.setRate(1.35)
+        model.playback.pause()
+        let playbackItemID = model.playback.itemID
+        let playbackTime = model.playback.currentTime
+        let playbackRate = model.playback.rate
+        let playbackState = model.playback.state
+        let playbackChapter = model.playback.currentChapterIndex
+
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: true,
+                isExpensive: false
+            )
+        )
+        for _ in 0..<100 {
+            lifecycle = await service.liveUpdatesLifecycleCounts()
+            if lifecycle.stops == 1,
+                !(await service.hasLiveUpdatesSubscriber())
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 1)
+        hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertFalse(hasSubscriber)
+        XCTAssertEqual(model.playback.itemID, playbackItemID)
+        XCTAssertEqual(model.playback.currentTime, playbackTime, accuracy: 0.01)
+        XCTAssertEqual(model.playback.rate, playbackRate, accuracy: 0.001)
+        XCTAssertEqual(model.playback.state, playbackState)
+        XCTAssertEqual(model.playback.currentChapterIndex, playbackChapter)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+
+        let constrainedRESTBaseline = await service.libraryRequestCount()
+        await model.refreshLibraries()
+        let constrainedRESTCount = await service.libraryRequestCount()
+        XCTAssertEqual(
+            constrainedRESTCount,
+            constrainedRESTBaseline + 1
+        )
+
+        let catchUpBaseline = await service.libraryRequestCount()
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            lifecycle = await service.liveUpdatesLifecycleCounts()
+            if lifecycle.starts == 2,
+                await service.libraryRequestCount() > catchUpBaseline
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 2)
+        XCTAssertEqual(lifecycle.stops, 1)
+        hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(hasSubscriber)
+        let catchUpCount = await service.libraryRequestCount()
+        XCTAssertEqual(catchUpCount, catchUpBaseline + 1)
+        await model.playback.stop()
     }
 
     func testPendingLocalSessionUploadDoesNotBlockLaunch() async throws {
@@ -4470,8 +4568,10 @@ final class AppModelTests: XCTestCase {
     }
 
     func testLiveProgressUpdatesFinishedStateImmediately() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
         let account = try fixtureAccount()
-        let itemID = LibraryItemID(rawValue: "live-item")
+        let itemID = fixture.detail.id
         let service = TestAppService(activeAccount: .success(account))
         let model = AppModel(service: service)
         await model.start()
@@ -4487,6 +4587,21 @@ final class AppModelTests: XCTestCase {
         }
         let hasSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertTrue(hasSubscriber)
+
+        await model.playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: account.id,
+            account: account,
+            initialTime: 0.75
+        )
+        model.playback.setRate(1.35)
+        model.playback.pause()
+        let playbackItemID = model.playback.itemID
+        let playbackTime = model.playback.currentTime
+        let playbackRate = model.playback.rate
+        let playbackState = model.playback.state
+        let playbackChapter = model.playback.currentChapterIndex
 
         await service.emitLiveUpdate(
             .event(
@@ -4508,6 +4623,13 @@ final class AppModelTests: XCTestCase {
         }
 
         XCTAssertTrue(model.isBookFinished(itemID))
+        XCTAssertEqual(model.playback.itemID, playbackItemID)
+        XCTAssertEqual(model.playback.currentTime, playbackTime, accuracy: 0.01)
+        XCTAssertEqual(model.playback.rate, playbackRate, accuracy: 0.001)
+        XCTAssertEqual(model.playback.state, playbackState)
+        XCTAssertEqual(model.playback.currentChapterIndex, playbackChapter)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        await model.playback.stop()
     }
 
     func testStartRunsOnlyOnce() async {
@@ -11092,8 +11214,12 @@ private actor TestAppService: AppServicing {
         [UUID: AsyncStream<AppNetworkPathState>.Continuation] = [:]
     private var liveUpdatesContinuation:
         AsyncStream<AudiobookshelfLiveUpdate>.Continuation?
+    private var liveUpdatesToken: UUID?
+    private var liveUpdatesStartCount = 0
+    private var liveUpdatesStopCount = 0
 
     private var activeAccountRequests = 0
+    private var libraryRequests = 0
     private var recordedActivatedAccounts: [ServerAccount] = []
     private var recordedLogins: [LoginRequest] = []
     private var recordedOpenIDLogins: [String] = []
@@ -11138,15 +11264,44 @@ private actor TestAppService: AppServicing {
     func liveUpdates(
         for account: ServerAccount
     ) -> AsyncStream<AudiobookshelfLiveUpdate> {
+        liveUpdatesStartCount += 1
+        let token = UUID()
         let (stream, continuation) = AsyncStream.makeStream(
             of: AudiobookshelfLiveUpdate.self
         )
+        liveUpdatesToken = token
         liveUpdatesContinuation = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task {
+                await self?.liveUpdatesDidTerminate(token: token)
+            }
+        }
         return stream
+    }
+
+    func stopLiveUpdates(for accountID: AccountID) async {
+        guard let token = liveUpdatesToken else {
+            return
+        }
+        liveUpdatesContinuation?.finish()
+        liveUpdatesDidTerminate(token: token)
+    }
+
+    private func liveUpdatesDidTerminate(token: UUID) {
+        guard liveUpdatesToken == token else {
+            return
+        }
+        liveUpdatesStopCount += 1
+        liveUpdatesToken = nil
+        liveUpdatesContinuation = nil
     }
 
     func hasLiveUpdatesSubscriber() -> Bool {
         liveUpdatesContinuation != nil
+    }
+
+    func liveUpdatesLifecycleCounts() -> (starts: Int, stops: Int) {
+        (liveUpdatesStartCount, liveUpdatesStopCount)
     }
 
     func emitLiveUpdate(_ update: AudiobookshelfLiveUpdate) {
@@ -11646,7 +11801,8 @@ private actor TestAppService: AppServicing {
     func libraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {
-        try value(from: librariesResult)
+        libraryRequests += 1
+        return try value(from: librariesResult)
     }
 
     func page(
@@ -12060,6 +12216,10 @@ private actor TestAppService: AppServicing {
 
     func accountUpdateRequests() -> [AccountUpdateRequest] {
         recordedAccountUpdates
+    }
+
+    func libraryRequestCount() -> Int {
+        libraryRequests
     }
 
     func pageRequests() -> [LibraryID] {
