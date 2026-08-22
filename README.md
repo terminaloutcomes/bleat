@@ -366,6 +366,13 @@ Validate a Release archive without signing:
 mise run archive
 ```
 
+Release archives and physical-device builds require
+`BLEAT_TELEMETRY_AUTH_BASE_URL` and `BLEAT_TELEMETRY_OTLP_ENDPOINT` to be
+exported as HTTPS URLs. Keep local values in an ignored environment file such
+as `.envrc`; the supported build scripts pass them to Xcode and verify the
+values embedded in the built application. Direct Xcode GUI builds do not read
+`.envrc` and must receive these build settings through Xcode instead.
+
 The archive is written to `.build/Bleat.xcarchive` and is checked for a valid
 bundle plus the required `PrivacyInfo.xcprivacy` manifest. The manifest
 declares only the app's local preferences, app-container file metadata, and
@@ -389,7 +396,9 @@ permitted to distribute it.
 Pushing `main` with a changed `MARKETING_VERSION` in `project.yml` validates an
 unsigned Release archive and publishes `v<version>` as a GitHub Release. The
 release notes come from the matching `## <version> - YYYY-MM-DD` section in
-`CHANGELOG.md`. This GitHub release does not upload to App Store Connect.
+`CHANGELOG.md`. Configure GitHub repository variables named
+`BLEAT_TELEMETRY_AUTH_BASE_URL` and `BLEAT_TELEMETRY_OTLP_ENDPOINT` before a
+version-changing push. This GitHub release does not upload to App Store Connect.
 
 Remaining first-release delivery work is tracked in
 [GitHub issue #35](https://github.com/terminaloutcomes/bleat/issues/35) for CI,
