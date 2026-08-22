@@ -210,6 +210,7 @@ bleat_seed_navigation_metadata() {
 
 bleat_seed_library() {
     local base_url="$1"
+    local expected_count="${2:-${BLEAT_SEED_ITEM_COUNT:-3}}"
     local access_token
     local libraries_payload
     local library_id
@@ -275,18 +276,98 @@ bleat_seed_library() {
             print -r -- "${items_payload}" \
                 | jq --exit-status --raw-output '.total'
         )"
-        if [[ "${item_count}" == "3" ]]; then
-            bleat_seed_navigation_metadata \
-                "${base_url}" \
-                "${access_token}" \
-                "${items_payload}"
+        if [[ "${item_count}" == "${expected_count}" ]]; then
+            if [[ "${expected_count}" == "3" ]]; then
+                bleat_seed_navigation_metadata \
+                    "${base_url}" \
+                    "${access_token}" \
+                    "${items_payload}"
+            fi
             return 0
         fi
         sleep 1
     done
 
     print -u2 \
-        "Expected 3 seeded media items from ${base_url}, received ${item_count}"
+        "Expected ${expected_count} seeded media items from ${base_url}, received ${item_count}"
+    return 1
+}
+
+# Seeds the large synthetic library used by the 10,000-book performance
+# baseline (issue #46). The library is only created when
+# BLEAT_LARGE_LIBRARY_COUNT is set; the existing 3-item "Bleat Live Fixtures"
+# library is untouched. The scan poll timeout scales with the count because
+# scanning thousands of folders takes minutes.
+bleat_seed_large_library() {
+    local base_url="$1"
+    local expected_count="${BLEAT_LARGE_LIBRARY_COUNT:?BLEAT_LARGE_LIBRARY_COUNT is required}"
+    local access_token
+    local library_id
+    local items_payload
+    local item_count
+    local attempt
+    local max_attempts=$(( expected_count / 20 + 120 ))
+
+    access_token="$(bleat_login_access_token "${base_url}")"
+    library_id="$(
+        /usr/bin/curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --header "Authorization: Bearer ${access_token}" \
+            "${base_url}/api/libraries" \
+            | jq --raw-output \
+                '.libraries[]? | select(.name == "Bleat Large Fixtures") | .id' \
+            | head -n 1
+    )"
+
+    if [[ -z "${library_id}" ]]; then
+        library_id="$(
+            /usr/bin/curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                --request POST \
+                --header "Authorization: Bearer ${access_token}" \
+                --header 'Content-Type: application/json' \
+                --data '{"name":"Bleat Large Fixtures","folders":[{"fullPath":"/audiobooks-large"}],"mediaType":"book","provider":"google"}' \
+                "${base_url}/api/libraries" \
+                | jq --exit-status --raw-output \
+                    '.id | select(type == "string" and length > 0)'
+        )"
+    fi
+
+    /usr/bin/curl \
+        --fail \
+        --silent \
+        --show-error \
+        --max-time 10 \
+        --request POST \
+        --header "Authorization: Bearer ${access_token}" \
+        "${base_url}/api/libraries/${library_id}/scan" \
+        >/dev/null
+
+    for attempt in {1..${max_attempts}}; do
+        item_count="$(
+            /usr/bin/curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                --header "Authorization: Bearer ${access_token}" \
+                "${base_url}/api/libraries/${library_id}/items?limit=1&page=0" \
+                | jq --raw-output '.total // "0"'
+        )"
+        if [[ "${item_count}" == "${expected_count}" ]]; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    print -u2 \
+        "Expected ${expected_count} large-library items from ${base_url}, received ${item_count}"
     return 1
 }
 
@@ -300,6 +381,10 @@ bleat_seed() {
     bleat_initialize "${bleat_prefix_url}"
     bleat_seed_library "${bleat_root_url}"
     bleat_seed_library "${bleat_prefix_url}"
+    if [[ -n "${BLEAT_LARGE_LIBRARY_COUNT:-}" ]]; then
+        bleat_seed_large_library "${bleat_root_url}"
+        bleat_seed_large_library "${bleat_prefix_url}"
+    fi
 }
 
 bleat_redact() {
@@ -336,6 +421,15 @@ case "${1:-}" in
         bleat_wait
         bleat_seed
         ;;
+    seed-large)
+        bleat_wait
+        if [[ -z "${BLEAT_LARGE_LIBRARY_COUNT:-}" ]]; then
+            print -u2 "BLEAT_LARGE_LIBRARY_COUNT is required for seed-large"
+            exit 64
+        fi
+        bleat_seed_large_library "${bleat_root_url}"
+        bleat_seed_large_library "${bleat_prefix_url}"
+        ;;
     reset)
         bleat_down
         bleat_compose up --detach --wait
@@ -366,7 +460,7 @@ case "${1:-}" in
         bleat_down
         ;;
     *)
-        print -u2 "Usage: $0 {up|wait|seed|reset|status|artifacts [directory]|ca <destination>|stop|down}"
+        print -u2 "Usage: $0 {up|wait|seed|seed-large|reset|status|artifacts [directory]|ca <destination>|stop|down}"
         exit 64
         ;;
 esac

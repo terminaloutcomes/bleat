@@ -5475,6 +5475,184 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    // MARK: - 10,000-book performance baseline (issue #46, spec section 19)
+
+    /// Loading all 10,000 books (500 pages at the app default limit of 20)
+    /// through `loadNextBooksPage` must preserve pagination and deduplicate
+    /// every received page while `LibraryPageMerger` performs the growing
+    /// collection work away from the main actor.
+    func testTenKBooksLoadNextBooksPagePerformance() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let libraryID = library.id
+        let totalBooks = 10_000
+        let pageLimit = 20
+        let pageCount = totalBooks / pageLimit
+
+        let makeBook: @Sendable (Int) -> LibraryBookSummary =
+            { index in
+                let authorName = "Author \(index % 8)"
+                let authorID = AuthorID(rawValue: "author-\(index % 8)")!
+                let years = ["1950", "1970", "1990", "2010", "2020"]
+                let baseMillis =
+                    Int64(1_700_000_000_000)
+                    + Int64(index) * 3_600_000
+                return LibraryBookSummary(
+                    id: LibraryItemID(rawValue: "book-\(index)"),
+                    libraryID: libraryID,
+                    title: "Book Title \(index)",
+                    subtitle: nil,
+                    authorName: authorName,
+                    narratorName: nil,
+                    seriesName: nil,
+                    authors: [
+                        LibraryBookContributor(id: authorID, name: authorName)
+                    ],
+                    series: [],
+                    collapsedSeries: nil,
+                    genres: ["Fiction"],
+                    tags: [],
+                    publisher: nil,
+                    publishedYear: years[index % years.count],
+                    duration: Double(45 + (index % 436)),
+                    trackCount: (index % 20) + 1,
+                    chapterCount: (index % 150) + 1,
+                    addedAtMilliseconds: baseMillis,
+                    updatedAtMilliseconds: baseMillis
+                        + Int64((index % 24) * 3_600_000),
+                    isExplicit: index % 10 == 0,
+                    isAbridged: index % 25 == 0
+                )
+            }
+        let provider:
+            @Sendable (Int) -> Result<LibraryItemsPage, AppServiceError> =
+                { pageIndex in
+                    let start = pageIndex * pageLimit
+                    let end = min(start + pageLimit, totalBooks)
+                    var items = (start..<end).map(makeBook)
+                    if start > 0 {
+                        // Every subsequent page repeats the preceding page's last
+                        // item so the full sweep exercises de-duplication.
+                        items.append(makeBook(start - 1))
+                    }
+                    return .success(
+                        LibraryItemsPage(
+                            items: items,
+                            total: totalBooks,
+                            page: pageIndex,
+                            limit: pageLimit
+                        )
+                    )
+                }
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            pagedProvider: provider
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        guard case .loaded(let firstPage) = model.books else {
+            XCTFail("first page must load during start()")
+            return
+        }
+        XCTAssertEqual(firstPage.items.count, pageLimit)
+        XCTAssertEqual(firstPage.total, totalBooks)
+
+        let heartbeat = Task { @MainActor in
+            var ticks = 0
+            while !Task.isCancelled {
+                ticks &+= 1
+                await Task.yield()
+            }
+            return ticks
+        }
+        defer { heartbeat.cancel() }
+        let sampleIndices: Set<Int> = [1, pageCount / 2, pageCount - 1]
+        var sampleTimings: [(call: Int, seconds: Double)] = []
+        let sweepStart = CACurrentMediaTime()
+        var callsMade = 0
+        var lastItemCount = firstPage.items.count
+        while case .loaded(let current) = model.books, current.hasNextPage {
+            let callIndex = callsMade + 1
+            let callStart = CACurrentMediaTime()
+            await model.loadNextBooksPage()
+            let callElapsed = CACurrentMediaTime() - callStart
+            if sampleIndices.contains(callIndex) {
+                sampleTimings.append((callIndex, callElapsed))
+            }
+            callsMade &+= 1
+            // Guard against a non-advancing loop or runaway sweep.
+            guard case .loaded(let after) = model.books,
+                after.items.count >= lastItemCount,
+                callsMade <= pageCount
+            else {
+                let stuckCount: Int
+                if case .loaded(let stuck) = model.books {
+                    stuckCount = stuck.items.count
+                } else {
+                    stuckCount = -1
+                }
+                XCTFail(
+                    "loadNextBooksPage stalled at call #\(callIndex) "
+                        + "with \(stuckCount) items"
+                )
+                return
+            }
+            lastItemCount = after.items.count
+        }
+        let sweepElapsed = CACurrentMediaTime() - sweepStart
+
+        guard case .loaded(let final) = model.books else {
+            XCTFail("books must remain loaded after sweep")
+            return
+        }
+        heartbeat.cancel()
+        let mainActorTicks = await heartbeat.value
+        let finalIDs = final.items.map(\.id)
+        XCTAssertEqual(
+            final.items.count,
+            totalBooks,
+            "all 10k books must accumulate"
+        )
+        XCTAssertEqual(
+            Set(finalIDs).count,
+            totalBooks,
+            "overlapping pages must not publish duplicate books"
+        )
+        XCTAssertEqual(final.page, pageCount - 1)
+        XCTAssertEqual(final.limit, pageLimit)
+        XCTAssertFalse(final.hasNextPage)
+        XCTAssertEqual(model.libraryPaginationState, .idle)
+        XCTAssertEqual(
+            callsMade,
+            pageCount - 1,
+            "must advance through every page after start"
+        )
+        XCTAssertGreaterThan(
+            mainActorTicks,
+            0,
+            "the main actor must advance while AppModel loads and merges pages"
+        )
+        XCTAssertLessThan(
+            sweepElapsed,
+            30.0,
+            "10k-page sweep exceeded 30s"
+        )
+
+        for timing in sampleTimings {
+            print(
+                "perf-sample loadNextBooksPage call #\(timing.call): "
+                    + "\(String(format: "%.6f", timing.seconds))s"
+            )
+        }
+        print(
+            "perf-summary loadNextBooksPage sweep: \(callsMade) calls, "
+                + "\(String(format: "%.6f", sweepElapsed))s total, "
+                + "\(final.items.count) books"
+        )
+    }
+
     func testIdenticalRefreshPreservesLoadedPagesWithoutPublishing()
         async throws
     {
@@ -10819,6 +10997,12 @@ private actor TestAppService: AppServicing {
             LibraryItemsPage,
             AppServiceError
         >
+    /// Optional closure returning a synthetic page for a given zero-based
+    /// page index, used by the performance suite to page through a large
+    /// generated dataset without a server. When set, `page(...)` returns
+    /// `pagedProvider(request.page)` for every request, including page 0.
+    private let pagedProvider:
+        (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)?
     private var homeShelvesResult:
         Result<
             [LibraryBookShelf],
@@ -10973,6 +11157,9 @@ private actor TestAppService: AppServicing {
         nextPage: Result<LibraryItemsPage, AppServiceError> = .failure(
             .libraryRepository(.noCachedValue)
         ),
+        pagedProvider:
+            (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)? =
+            nil,
         homeShelves: Result<[LibraryBookShelf], AppServiceError> = .success(
             []
         ),
@@ -11049,6 +11236,7 @@ private actor TestAppService: AppServicing {
         librariesResult = libraries
         firstPageResult = firstPage
         nextPageResult = nextPage
+        self.pagedProvider = pagedProvider
         homeShelvesResult = homeShelves
         searchResult = search.map { LibrarySearchResults(books: $0) }
         bookDetailResult = bookDetail
@@ -11474,6 +11662,9 @@ private actor TestAppService: AppServicing {
             request.filter == browsePageGateFilter
         {
             await browsePageGate.enterAndWait()
+        }
+        if let pagedProvider {
+            return try value(from: pagedProvider(request.page))
         }
         if request.page == 0,
             recordedPageRequests.count > 1,

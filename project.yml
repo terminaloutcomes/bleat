@@ -157,3 +157,17 @@ schemes:
       gatherCoverageData: true
       targets:
         - BleatAppTests
+
+  BleatPerformance:
+    build:
+      targets:
+        BleatApp: all
+        BleatUITests:
+          - test
+    run:
+      config: Release
+    test:
+      config: Release
+      gatherCoverageData: false
+      targets:
+        - BleatUITests

@@ -1,0 +1,7 @@
+# Keep this directory in version control so the docker compose bind mount
+# path exists. Generated books are produced by
+# TestSupport/ServerHarness/generate-large-library.sh and must not be
+# committed.
+*
+!.gitignore
+!.gitkeep

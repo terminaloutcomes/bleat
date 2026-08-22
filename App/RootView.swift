@@ -98,6 +98,16 @@ struct RootView: View {
                 .tint(colourScheme.color)
             }
         }
+        #if DEBUG || BLEAT_UI_TESTING
+            .overlay(alignment: .topTrailing) {
+                if !model.perfMemoryLabel.isEmpty {
+                    Text(model.perfMemoryLabel)
+                    .accessibilityIdentifier("perf.memory")
+                    .font(.caption2)
+                    .opacity(0)
+                }
+            }
+        #endif
         .task {
             model.setRemoteTelemetryForeground(scenePhase == .active)
             await model.start()
