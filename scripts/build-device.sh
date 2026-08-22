@@ -8,6 +8,18 @@ if [[ "${BUILD_VERBOSE}" == "true" ]]; then
   BUILD_VERBOSE_FLAG=""
 fi
 
+readonly bleat_telemetry_auth_base_url="${BLEAT_TELEMETRY_AUTH_BASE_URL:?Set BLEAT_TELEMETRY_AUTH_BASE_URL to the production HTTPS authentication origin}"
+readonly bleat_telemetry_otlp_endpoint="${BLEAT_TELEMETRY_OTLP_ENDPOINT:?Set BLEAT_TELEMETRY_OTLP_ENDPOINT to the production HTTPS OTLP origin}"
+
+if [[ "${bleat_telemetry_auth_base_url}" != https://?* ]]; then
+  echo "BLEAT_TELEMETRY_AUTH_BASE_URL must be an HTTPS URL" >&2
+  exit 1
+fi
+if [[ "${bleat_telemetry_otlp_endpoint}" != https://?* ]]; then
+  echo "BLEAT_TELEMETRY_OTLP_ENDPOINT must be an HTTPS URL" >&2
+  exit 1
+fi
+
 : "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 : "${BLEAT_DEVICE_ID:?Set BLEAT_DEVICE_ID to the connected device UDID}"
 : "${BLEAT_DEVICE_BUILD_DIRECTORY:?Set BLEAT_DEVICE_BUILD_DIRECTORY to the device build directory}"
@@ -38,6 +50,8 @@ xcodebuild \
   BUILD_WITHOUT_PAID_DEVELOPER="${build_without_paid_developer}" \
   BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
+  BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_telemetry_auth_base_url}" \
+  BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_telemetry_otlp_endpoint}" \
   build | {
     # rg exits 1 when it filters every line; the successful build must remain
     # successful in that quiet-output case.
@@ -57,6 +71,14 @@ fi
 built_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${bleat_app}/Info.plist")"
 if [[ "${built_bundle_id}" != "${bleat_bundle_id}" ]]; then
   echo "built bundle identifier does not match the configured identifier" >&2
+  exit 1
+fi
+
+built_telemetry_auth_base_url="$(/usr/libexec/PlistBuddy -c 'Print :BleatTelemetryAuthenticationBaseURL' "${bleat_app}/Info.plist")"
+built_telemetry_otlp_endpoint="$(/usr/libexec/PlistBuddy -c 'Print :BleatTelemetryOTLPEndpoint' "${bleat_app}/Info.plist")"
+if [[ "${built_telemetry_auth_base_url}" != "${bleat_telemetry_auth_base_url}" \
+  || "${built_telemetry_otlp_endpoint}" != "${bleat_telemetry_otlp_endpoint}" ]]; then
+  echo "built telemetry configuration does not match the supplied environment" >&2
   exit 1
 fi
 
