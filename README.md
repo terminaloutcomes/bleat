@@ -1019,6 +1019,9 @@ candidate. On AP16, verify:
   AirPlay controls, including removed-output pause behavior;
 - download continuation across backgrounding and relaunch, followed by local
   playback with the server unavailable;
+- Low Data Mode suspends the foreground WebSocket without blocking REST or
+  downloaded playback, then reconnects once with a catch-up refresh after Low
+  Data Mode is disabled;
 - account removal deletes its downloads, plus progress conflict resolution;
 - VoiceOver and the largest Dynamic Type setting across login, Library, Book
   Detail, Downloads, mini-player, and Now Playing.
