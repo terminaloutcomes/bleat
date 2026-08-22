@@ -12,6 +12,7 @@ unsafe_code = "forbid"
 axum = "0.8.9"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
+ciborium = "0.2.2"
 clap = { version = "4.6.6", features = ["derive", "env"] }
 compact_jwt = { version = "0.5.7", default-features = false }
 getrandom = "0.4.3"
@@ -20,7 +21,10 @@ opentelemetry-appender-tracing = "0.32.0"
 opentelemetry-http = { version = "0.32.0", default-features = false }
 opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["trace", "logs", "http-proto", "reqwest-blocking-client", "reqwest-rustls", "internal-logs"] }
 opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["trace", "logs", "internal-logs"] }
-p256 = { version = "0.13.2", default-features = false, features = ["ecdsa"] }
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa", "pkcs8"] }
+rustls-pemfile = "2.2.0"
+rustls-pki-types = "1.15.1"
+rustls-webpki = { version = "0.103.15", features = ["aws-lc-rs"] }
 sea-orm = { version = "2.0.2", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres", "macros", "with-uuid", "with-chrono"] }
 sea-orm-migration = { version = "2.0.2", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -33,8 +37,11 @@ tracing-opentelemetry = { version = "0.33.0", default-features = false }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5.8"
 uuid = { version = "1.24.1", features = ["v4", "serde"] }
+x509-parser = "0.18.1"
 
 [dev-dependencies]
 http-body-util = "0.1.5"
 opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["testing", "trace", "logs"] }
+proptest = "1.11.0"
+rcgen = "0.14.9"
 tower = { version = "0.5.3", features = ["util"] }

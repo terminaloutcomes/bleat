@@ -206,7 +206,7 @@ mod tests {
     use clap::Parser;
     use opentelemetry::{
         Key, Value,
-        trace::{SpanId, TraceId, TracerProvider as _},
+        trace::{SpanId, TraceId},
     };
     use opentelemetry_sdk::{
         Resource,
@@ -417,6 +417,7 @@ mod tests {
 
         async {
             let response = router(&config, sea_orm::DatabaseConnection::default())
+                .expect("router should build")
                 .oneshot(request)
                 .await
                 .expect("router should respond");

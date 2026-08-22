@@ -1036,8 +1036,9 @@ The Rust telemetry-authentication service lives in `bleat-api/`. It provides
 database-aware health/readiness, PostgreSQL-backed installation state, and
 single-use opaque attestation and token challenges. Its development mode also
 verifies deterministic fake P-256 evidence and issues ephemeral ES256 tokens
-for local Swift-to-PostgreSQL testing. Production App Attest verification and
-persistent signing-key rotation remain disabled until issues 65 and 66.
+for local Swift-to-PostgreSQL testing. Production mode validates Apple App
+Attest enrollment and replay-safe assertions; persistent signing-key rotation
+and production JWT issuance remain disabled until issue 66.
 
 On iOS, the authentication service URL comes from
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/gRPC origin comes from

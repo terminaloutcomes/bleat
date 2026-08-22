@@ -3,8 +3,9 @@
 `bleat-api` is Bleat's anonymous telemetry authentication service. It uses
 PostgreSQL for installation state and single-use opaque challenges. Development
 mode verifies deterministic fake P-256 evidence and issues ephemeral ES256
-tokens for end-to-end client testing. Production App Attest verification and
-persistent signing keys remain unavailable pending issues 65 and 66.
+tokens for end-to-end client testing. Production mode verifies Apple App Attest
+enrollment and assertions; persistent signing keys and production JWT issuance
+remain unavailable pending issue 66.
 
 ## Run locally
 
@@ -48,6 +49,8 @@ Flags and matching environment variables configure the service:
 | `--apple-team-id` | `BLEAT_API_APPLE_TEAM_ID` | unset |
 | `--app-identifier` | `BLEAT_API_APP_IDENTIFIER` | unset |
 | `--app-attest-environment` | `BLEAT_API_APP_ATTEST_ENVIRONMENT` | `development` |
+| `--app-attest-bundle-versions` | `BLEAT_API_APP_ATTEST_BUNDLE_VERSIONS` | unset |
+| `--app-attest-validation-categories` | `BLEAT_API_APP_ATTEST_VALIDATION_CATEGORIES` | unset |
 | `--database-url` | `BLEAT_API_DATABASE_URL` | required; supplied by the local container workflow |
 | `--database-max-connections` | `BLEAT_API_DATABASE_MAX_CONNECTIONS` | `16` |
 | `--database-connect-timeout-seconds` | `BLEAT_API_DATABASE_CONNECT_TIMEOUT_SECONDS` | `5` |
@@ -63,7 +66,11 @@ Flags and matching environment variables configure the service:
 
 Only PostgreSQL URLs are accepted. Production mode also requires an HTTPS
 public issuer, Apple team ID, app identifier, and the production App Attest
-environment. Invalid configuration or unavailable database migrations stop
+environment. It also requires comma-separated allowlists for accepted Apple
+bundle versions and validation categories. Apple's currently documented
+application categories are `1` through `6` and `10`; configure only the
+categories appropriate to the deployed build, such as TestFlight (`2`) or App
+Store (`4`). Invalid configuration or unavailable database migrations stop
 startup before the listener is bound. Database credentials are redacted from
 configuration diagnostics. Once the database is ready and the listener is
 bound, the `bleat-api started` event records the effective non-secret service
@@ -143,9 +150,39 @@ before installations are created or counters are advanced, so failed or
 replayed evidence cannot be reused. Development JWTs live for ten minutes and
 contain `iss`, opaque installation `sub`, `aud=bleat-telemetry`,
 `scope=telemetry:write`, `iat`, `exp`, and `jti`. The ES256 signing key is
-generated at process startup and is intentionally not durable. Production mode
-rejects fake evidence and does not expose discovery or JWKS until the production
-verifier and persistent signing-key lifecycle are implemented.
+generated at process startup and is intentionally not durable.
+
+Production enrollment follows Apple's App Attest validation sequence. It
+strictly and boundedly parses the attestation CBOR and authenticator data,
+validates the certificate path, nonce, App ID hash, environment AAGUID,
+credential ID, certificate and encoded COSE public keys, bundle version, and
+validation category before persisting an installation. Assertions are checked
+against that stored public key and environment, the token-purpose challenge,
+the configured application policy, and an atomically advanced monotonic
+counter. Externally these failures share the small authentication error shape;
+internal categories contain no evidence, challenge, signature, key ID, or
+installation identifier. Production token requests reach an authenticated
+installation principal after these checks, but return temporary unavailability
+until issue 66 supplies the persistent signer. Discovery and JWKS remain
+development-only until then.
+
+## Apple App Attest trust anchor
+
+`trust/Apple_App_Attestation_Root_CA.pem` is Apple's public App Attest root,
+obtained from `https://www.apple.com/certificateauthority/Apple_App_Attestation_Root_CA.pem`.
+The verifier embeds it at build time and pins the SHA-256 fingerprint of its DER
+certificate:
+
+```text
+1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932
+```
+
+Authentication never downloads trust material at runtime. When Apple publishes
+a replacement, obtain it from Apple's certificate-authority site, independently
+confirm its published provenance, inspect its subject and validity, replace the
+PEM, and update both the pinned DER fingerprint and its regression test in the
+same reviewed change. Run `mise run api:validate` before deployment; an
+unparseable root or fingerprint mismatch prevents production router startup.
 
 All database schema and data access code uses SeaORM and typed SeaQuery
 expressions. The service does not execute string-based SQL statements.

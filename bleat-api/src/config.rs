@@ -82,6 +82,20 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_APP_ATTEST_ENVIRONMENT", value_enum, default_value_t = AppAttestEnvironment::Development)]
     pub app_attest_environment: AppAttestEnvironment,
 
+    #[arg(
+        long,
+        env = "BLEAT_API_APP_ATTEST_BUNDLE_VERSIONS",
+        value_delimiter = ','
+    )]
+    pub app_attest_bundle_versions: Vec<String>,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_APP_ATTEST_VALIDATION_CATEGORIES",
+        value_delimiter = ','
+    )]
+    pub app_attest_validation_categories: Vec<u32>,
+
     #[arg(long, env = "BLEAT_API_DATABASE_URL", hide_env_values = true)]
     pub database_url: String,
 
@@ -147,6 +161,8 @@ pub struct Config {
     pub apple_team_id: Option<String>,
     pub app_identifier: Option<String>,
     pub app_attest_environment: AppAttestEnvironment,
+    pub app_attest_bundle_versions: Vec<String>,
+    pub app_attest_validation_categories: Vec<u32>,
     pub database: DatabaseConfig,
     pub challenge_lifetime: Duration,
     pub challenge_cleanup_batch_size: usize,
@@ -231,6 +247,12 @@ impl Config {
             apple_team_id: non_empty(arguments.apple_team_id),
             app_identifier: non_empty(arguments.app_identifier),
             app_attest_environment: arguments.app_attest_environment,
+            app_attest_bundle_versions: arguments
+                .app_attest_bundle_versions
+                .into_iter()
+                .filter_map(|value| non_empty(Some(value)))
+                .collect(),
+            app_attest_validation_categories: arguments.app_attest_validation_categories,
             database,
             challenge_lifetime: Duration::from_secs(arguments.challenge_lifetime_seconds),
             challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
@@ -305,6 +327,23 @@ impl Config {
             if self.app_attest_environment != AppAttestEnvironment::Production {
                 return Err(ConfigError::ProductionAppAttestRequired);
             }
+            if self.app_attest_bundle_versions.is_empty() {
+                return Err(ConfigError::MissingProductionValue(
+                    "App Attest bundle-version allowlist",
+                ));
+            }
+            if self.app_attest_validation_categories.is_empty() {
+                return Err(ConfigError::MissingProductionValue(
+                    "App Attest validation-category allowlist",
+                ));
+            }
+            if self
+                .app_attest_validation_categories
+                .iter()
+                .any(|value| !matches!(value, 1..=6 | 10))
+            {
+                return Err(ConfigError::InvalidAppAttestValidationCategory);
+            }
         }
 
         Ok(())
@@ -358,6 +397,8 @@ pub enum ConfigError {
     MissingProductionValue(&'static str),
     #[error("production configuration accepts production App Attest evidence only")]
     ProductionAppAttestRequired,
+    #[error("App Attest validation categories must use an Apple application category")]
+    InvalidAppAttestValidationCategory,
     #[error("{0} must be an absolute HTTP or HTTPS URL without a query or fragment")]
     InvalidOtlpEndpoint(&'static str),
     #[error("{0} must be http/protobuf when configured")]
@@ -557,6 +598,48 @@ mod tests {
         assert_eq!(
             development_attest.expect_err("development evidence must fail"),
             ConfigError::ProductionAppAttestRequired
+        );
+
+        let missing_bundle_versions = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example",
+            "--apple-team-id",
+            "TEAM",
+            "--app-identifier",
+            "com.example.bleat",
+            "--app-attest-environment",
+            "production",
+        ]);
+        assert_eq!(
+            missing_bundle_versions.expect_err("bundle versions must be required"),
+            ConfigError::MissingProductionValue("App Attest bundle-version allowlist")
+        );
+
+        let missing_validation_categories = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example",
+            "--apple-team-id",
+            "TEAM",
+            "--app-identifier",
+            "com.example.bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+        ]);
+        assert_eq!(
+            missing_validation_categories.expect_err("validation categories must be required"),
+            ConfigError::MissingProductionValue("App Attest validation-category allowlist")
         );
     }
 
