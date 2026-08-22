@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // The OTLP request construction in this file is derived from
-// opentelemetry-swift 2.3.0's OtlpTraceExporter. Bleat owns the surrounding
+// opentelemetry-swift 2.4.1's OtlpTraceExporter. Bleat owns the surrounding
 // token and lifecycle handling because the upstream exporter fixes metadata
 // when it is initialized.
 
