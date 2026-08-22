@@ -206,8 +206,8 @@ The optional public-key-set file is bounded JSON with this shape:
 
 Private `d` values, non-ES256 keys, duplicate key IDs, invalid windows, and
 windows shorter than the token lifetime plus 30 seconds of clock skew are
-rejected. An unexpired window must also have at least that safe overlap
-remaining when the service starts.
+rejected. A service restart continues publishing every key until its configured
+`publish_until`, including during the final token-expiry overlap.
 
 Rotate without invalidating otherwise-valid tokens:
 

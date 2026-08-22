@@ -9,12 +9,14 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bleat_api::{
     config::{Arguments, Config, TelemetryExportConfig},
     database::connect_and_migrate,
+    http::RouterBuildError,
     installation::{
         DisableOutcome, InstallationEnvironment, InstallationRepository, NewInstallation,
     },
     router,
     telemetry_auth::{
-        ClientDataPurpose, DevelopmentAssertion, DevelopmentAttestation, client_data_hash,
+        ClientDataPurpose, DevelopmentAssertion, DevelopmentAttestation, TokenIssuerError,
+        client_data_hash,
     },
 };
 use clap::Parser;
@@ -85,6 +87,43 @@ async fn production_router() -> axum::Router {
     let result = router(&config, database().await).expect("production router should build");
     std::fs::remove_file(path).expect("production test key should be removed");
     result
+}
+
+#[tokio::test]
+async fn production_router_preserves_the_signing_configuration_failure() {
+    let path = std::env::temp_dir().join(format!("bleat-invalid-jwt-{}.der", Uuid::new_v4()));
+    std::fs::write(&path, b"not-a-signing-key").expect("invalid test key should be written");
+    let path_argument = path.to_string_lossy().into_owned();
+    let config = test_config(&[
+        "--deployment-mode",
+        "production",
+        "--public-issuer",
+        "https://telemetry.example.test",
+        "--apple-team-id",
+        "TEAM123456",
+        "--app-identifier",
+        "com.example.Bleat",
+        "--app-attest-environment",
+        "production",
+        "--app-attest-bundle-versions",
+        "1",
+        "--app-attest-validation-categories",
+        "2,4",
+        "--jwt-signing-key-file",
+        path_argument.as_str(),
+    ]);
+    let error = router(&config, database().await)
+        .expect_err("invalid signing material should prevent router construction");
+    std::fs::remove_file(path).expect("invalid test key should be removed");
+
+    assert_eq!(
+        error,
+        RouterBuildError::TokenIssuer(TokenIssuerError::SigningKeyConfiguration)
+    );
+    assert_eq!(
+        error.to_string(),
+        "JWT signing configuration is invalid: token signing-key configuration is invalid"
+    );
 }
 
 async fn response_json(response: axum::response::Response) -> Value {

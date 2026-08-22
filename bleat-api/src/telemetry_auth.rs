@@ -406,7 +406,10 @@ fn validate_claims(
         .ok_or(TokenValidationError::Claims)?;
     let issued_at = token.iat.ok_or(TokenValidationError::Claims)?;
     let expires_at = token.exp.ok_or(TokenValidationError::Claims)?;
-    if expires_at - issued_at != token_lifetime.num_seconds() || expires_at <= issued_at {
+    let actual_lifetime = expires_at
+        .checked_sub(issued_at)
+        .ok_or(TokenValidationError::Claims)?;
+    if actual_lifetime != token_lifetime.num_seconds() || expires_at <= issued_at {
         return Err(TokenValidationError::Claims);
     }
     let now = now.timestamp();
@@ -454,12 +457,10 @@ fn load_scheduled_public_keys(
     let key_set: ScheduledPublicKeySet =
         serde_json::from_value(raw).map_err(|_| TokenIssuerError::PublicKeyConfiguration)?;
     let minimum_overlap = token_lifetime + chrono::Duration::seconds(TOKEN_CLOCK_SKEW_SECONDS);
-    let now = Utc::now();
     for key in &key_set.keys {
         valid_public_key_id(&key.jwk)?;
         if key.publish_from >= key.publish_until
             || key.publish_until - key.publish_from < minimum_overlap
-            || (key.publish_until > now && key.publish_until - now < minimum_overlap)
         {
             return Err(TokenIssuerError::PublicKeyConfiguration);
         }
@@ -478,16 +479,18 @@ fn contains_private_key_material(value: &serde_json::Value) -> bool {
 }
 
 fn valid_public_key_id(jwk: &Jwk) -> Result<&str, TokenIssuerError> {
-    match jwk {
+    let kid = match jwk {
         Jwk::EC {
             crv: EcCurve::P256,
             alg: Some(JwaAlg::ES256),
             use_: Some(JwkUse::Sig),
             kid: Some(kid),
             ..
-        } if !kid.trim().is_empty() && kid.len() <= 128 => Ok(kid),
-        _ => Err(TokenIssuerError::PublicKeyConfiguration),
-    }
+        } if !kid.trim().is_empty() && kid.len() <= 128 => kid,
+        _ => return Err(TokenIssuerError::PublicKeyConfiguration),
+    };
+    JwsEs256Verifier::try_from(jwk).map_err(|_| TokenIssuerError::PublicKeyConfiguration)?;
+    Ok(kid)
 }
 
 fn jwk_key_id(jwk: &Jwk) -> Option<&str> {
@@ -703,6 +706,35 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn extreme_numeric_dates_are_rejected_without_overflow() {
+        let signer = signer(30);
+        let issuer = issuer_with_signer(signer.clone(), Vec::new());
+        let token = signer
+            .sign(&Jwt {
+                iss: Some("https://telemetry.example".to_owned()),
+                sub: Some(Uuid::new_v4().to_string()),
+                aud: Some(TOKEN_AUDIENCE.to_owned()),
+                exp: Some(i64::MAX),
+                nbf: None,
+                iat: Some(i64::MIN),
+                jti: None,
+                extensions: TelemetryClaims {
+                    scope: TOKEN_SCOPE.to_owned(),
+                },
+                claims: BTreeMap::new(),
+            })
+            .expect("test token should sign")
+            .to_string();
+
+        assert_eq!(
+            issuer
+                .validate(&token, Utc::now())
+                .expect_err("extreme dates should be rejected"),
+            TokenValidationError::Claims
+        );
     }
 
     #[test]
@@ -925,6 +957,79 @@ mod tests {
             .err()
             .expect("invalid private key should be rejected"),
             TokenIssuerError::SigningKeyConfiguration
+        );
+    }
+
+    #[test]
+    fn retiring_key_remains_valid_during_the_final_overlap() {
+        let active = signer(31);
+        let active_der = active
+            .private_key_to_der()
+            .expect("active key should export");
+        let active_file = TemporaryFile::write("jwt-restart-active.der", &active_der);
+        let retired = signer(32)
+            .public_key_as_jwk()
+            .expect("retired public key should export");
+        let now = Utc::now();
+        let key_set = serde_json::json!({
+            "keys": [{
+                "jwk": retired,
+                "publish_from": now - chrono::Duration::minutes(20),
+                "publish_until": now + chrono::Duration::minutes(1),
+            }]
+        });
+        let key_set_file = TemporaryFile::write(
+            "jwt-restart-public.json",
+            &serde_json::to_vec(&key_set).expect("key set should encode"),
+        );
+
+        let issuer = TokenIssuer::from_files(
+            &Url::parse("https://telemetry.example").expect("issuer should parse"),
+            std::time::Duration::from_secs(600),
+            &active_file.0,
+            Some(&key_set_file.0),
+        )
+        .expect("a retiring key should not prevent restart");
+        assert_eq!(
+            issuer.jwks_at(now).expect("JWKS should publish").keys.len(),
+            2
+        );
+    }
+
+    #[test]
+    fn malformed_scheduled_public_key_is_rejected_at_startup() {
+        let active = signer(33);
+        let active_der = active
+            .private_key_to_der()
+            .expect("active key should export");
+        let active_file = TemporaryFile::write("jwt-invalid-public-active.der", &active_der);
+        let overlap = signer(34)
+            .public_key_as_jwk()
+            .expect("overlap public key should export");
+        let now = Utc::now();
+        let mut key_set = serde_json::json!({
+            "keys": [{
+                "jwk": overlap,
+                "publish_from": now - chrono::Duration::minutes(1),
+                "publish_until": now + chrono::Duration::minutes(11),
+            }]
+        });
+        key_set["keys"][0]["jwk"]["x"] = serde_json::json!("AA");
+        let key_set_file = TemporaryFile::write(
+            "jwt-invalid-public.json",
+            &serde_json::to_vec(&key_set).expect("key set should encode"),
+        );
+
+        assert_eq!(
+            TokenIssuer::from_files(
+                &Url::parse("https://telemetry.example").expect("issuer should parse"),
+                std::time::Duration::from_secs(600),
+                &active_file.0,
+                Some(&key_set_file.0),
+            )
+            .err()
+            .expect("malformed public coordinates should be rejected"),
+            TokenIssuerError::PublicKeyConfiguration
         );
     }
 }

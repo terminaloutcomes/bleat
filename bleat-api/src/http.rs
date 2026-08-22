@@ -39,7 +39,8 @@ use crate::{
         CounterAdvanceOutcome, InstallationRepository, InstallationStoreError, NewInstallation,
     },
     telemetry_auth::{
-        ClientDataPurpose, JWKS_CACHE_SECONDS, TokenIssuer, TokenResponse, client_data_hash,
+        ClientDataPurpose, JWKS_CACHE_SECONDS, TokenIssuer, TokenIssuerError, TokenResponse,
+        client_data_hash,
     },
 };
 
@@ -156,12 +157,12 @@ impl From<IssuedChallenge> for ChallengeResponse {
     }
 }
 
-#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum RouterBuildError {
     #[error("production App Attest verification configuration is invalid")]
     AppAttest,
-    #[error("JWT signing configuration is invalid")]
-    TokenIssuer,
+    #[error("JWT signing configuration is invalid: {0}")]
+    TokenIssuer(#[source] TokenIssuerError),
 }
 
 pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, RouterBuildError> {
@@ -199,7 +200,9 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
             config
                 .jwt_signing_key_file
                 .as_ref()
-                .ok_or(RouterBuildError::TokenIssuer)?
+                .ok_or(RouterBuildError::TokenIssuer(
+                    TokenIssuerError::SigningKeyConfiguration,
+                ))?
                 .as_path(),
             config
                 .jwt_public_key_set_file
@@ -207,7 +210,7 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
                 .map(|path| path.as_path()),
         ),
     };
-    let token_issuer = Arc::new(token_issuer.map_err(|_| RouterBuildError::TokenIssuer)?);
+    let token_issuer = Arc::new(token_issuer.map_err(RouterBuildError::TokenIssuer)?);
     let state = AppState {
         challenges: ChallengeRepository::new(
             database.clone(),

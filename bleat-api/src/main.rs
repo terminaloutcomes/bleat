@@ -24,11 +24,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::try_from(bleat_api::config::Arguments::parse())?;
     let observability = Observability::install(&config)?;
     let database = connect_and_migrate(&config.database).await?;
+    let app = router(&config, database)?;
     let listener = TcpListener::bind(config.bind_address).await?;
 
     log_startup_settings(&config);
 
-    axum::serve(listener, router(&config, database)?)
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
