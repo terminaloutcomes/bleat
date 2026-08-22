@@ -84,19 +84,99 @@ impl AppAttestFailureCategory {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppAttestVerificationStage {
+    Verification,
+    EvidenceDecoding,
+    AttestationEnvelope,
+    AttestationFormat,
+    AttestationStatement,
+    AttestationReceipt,
+    AttestationCertificates,
+    AttestationAuthenticatorLength,
+    AttestationAuthenticatorFlags,
+    AttestationEnvironment,
+    AttestationCredential,
+    AttestationCounter,
+    AttestationCoseKey,
+    AttestationExtensions,
+    AttestationCertificateChain,
+    AttestationNonceExtension,
+    AttestationNonce,
+    AttestationApplication,
+    AttestationPolicy,
+    AssertionEnvelope,
+    AssertionSignature,
+    AssertionAuthenticatorLength,
+    AssertionAuthenticatorFlags,
+    AssertionExtensions,
+    AssertionApplication,
+    AssertionCounter,
+    AssertionSignatureVerification,
+}
+
+impl AppAttestVerificationStage {
+    pub const fn metric_name(self) -> &'static str {
+        match self {
+            Self::Verification => "verification",
+            Self::EvidenceDecoding => "evidence.decoding",
+            Self::AttestationEnvelope => "attestation.envelope",
+            Self::AttestationFormat => "attestation.format",
+            Self::AttestationStatement => "attestation.statement",
+            Self::AttestationReceipt => "attestation.receipt",
+            Self::AttestationCertificates => "attestation.certificates",
+            Self::AttestationAuthenticatorLength => "attestation.authenticator.length",
+            Self::AttestationAuthenticatorFlags => "attestation.authenticator.flags",
+            Self::AttestationEnvironment => "attestation.environment",
+            Self::AttestationCredential => "attestation.credential",
+            Self::AttestationCounter => "attestation.counter",
+            Self::AttestationCoseKey => "attestation.cose_key",
+            Self::AttestationExtensions => "attestation.extensions",
+            Self::AttestationCertificateChain => "attestation.certificate_chain",
+            Self::AttestationNonceExtension => "attestation.nonce_extension",
+            Self::AttestationNonce => "attestation.nonce",
+            Self::AttestationApplication => "attestation.application",
+            Self::AttestationPolicy => "attestation.policy",
+            Self::AssertionEnvelope => "assertion.envelope",
+            Self::AssertionSignature => "assertion.signature",
+            Self::AssertionAuthenticatorLength => "assertion.authenticator.length",
+            Self::AssertionAuthenticatorFlags => "assertion.authenticator.flags",
+            Self::AssertionExtensions => "assertion.extensions",
+            Self::AssertionApplication => "assertion.application",
+            Self::AssertionCounter => "assertion.counter",
+            Self::AssertionSignatureVerification => "assertion.signature_verification",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[error("App Attest evidence was rejected")]
 pub struct AppAttestVerificationError {
     category: AppAttestFailureCategory,
+    stage: AppAttestVerificationStage,
 }
 
 impl AppAttestVerificationError {
     const fn new(category: AppAttestFailureCategory) -> Self {
-        Self { category }
+        Self {
+            category,
+            stage: AppAttestVerificationStage::Verification,
+        }
+    }
+
+    const fn at(mut self, stage: AppAttestVerificationStage) -> Self {
+        if matches!(self.stage, AppAttestVerificationStage::Verification) {
+            self.stage = stage;
+        }
+        self
     }
 
     pub const fn category(self) -> AppAttestFailureCategory {
         self.category
+    }
+
+    pub const fn stage(self) -> AppAttestVerificationStage {
+        self.stage
     }
 }
 
@@ -304,40 +384,47 @@ impl ProductionAppAttestVerifier {
     ) -> Result<VerifiedAttestation, AppAttestVerificationError> {
         let decoded = decode_evidence(evidence, MAX_DECODED_ATTESTATION_BYTES)?;
         let parsed = ParsedAttestation::parse(&decoded)?;
-        verify_certificate_chain(&parsed.certificates, &self.trust_anchor)?;
+        verify_certificate_chain(&parsed.certificates, &self.trust_anchor)
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationCertificateChain))?;
 
         let authenticator = AttestationAuthenticatorData::parse(&parsed.authenticator_data)?;
         let expected_app_hash: [u8; 32] = Sha256::digest(self.app_id.as_bytes()).into();
         if authenticator.rp_id_hash != expected_app_hash {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationApplication));
         }
         if authenticator.counter != 0 {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::InvalidCounter,
-            ));
+            return Err(
+                AppAttestVerificationError::new(AppAttestFailureCategory::InvalidCounter)
+                    .at(AppAttestVerificationStage::AttestationCounter),
+            );
         }
         if authenticator.environment != self.environment {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongEnvironment,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationEnvironment));
         }
         if !self.policy.accepts(&authenticator.claims) {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationPolicy));
         }
 
         let decoded_key_id = STANDARD.decode(key_id).map_err(|_| {
             AppAttestVerificationError::new(AppAttestFailureCategory::InvalidCredential)
+                .at(AppAttestVerificationStage::AttestationCredential)
         })?;
         if decoded_key_id.len() != APP_ATTEST_KEY_ID_BYTES
             || authenticator.credential_id != decoded_key_id
         {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::InvalidCredential,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationCredential));
         }
 
         let leaf = parsed.certificates.first().ok_or_else(|| {
@@ -365,15 +452,17 @@ impl ProductionAppAttestVerifier {
             ));
         }
 
-        let certificate_nonce = extract_certificate_nonce(&certificate)?;
+        let certificate_nonce = extract_certificate_nonce(&certificate)
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationNonceExtension))?;
         let mut nonce_input = Vec::with_capacity(parsed.authenticator_data.len() + 32);
         nonce_input.extend_from_slice(&parsed.authenticator_data);
         nonce_input.extend_from_slice(client_data_hash);
         let expected_nonce: [u8; 32] = Sha256::digest(nonce_input).into();
         if certificate_nonce != expected_nonce {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::InvalidNonce,
-            ));
+            return Err(
+                AppAttestVerificationError::new(AppAttestFailureCategory::InvalidNonce)
+                    .at(AppAttestVerificationStage::AttestationNonce),
+            );
         }
 
         Ok(VerifiedAttestation {
@@ -393,7 +482,8 @@ impl ProductionAppAttestVerifier {
         if installation_environment != self.environment {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongEnvironment,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationEnvironment));
         }
         let decoded = decode_evidence(evidence, MAX_DECODED_ASSERTION_BYTES)?;
         let parsed = ParsedAssertion::parse(&decoded)?;
@@ -402,17 +492,20 @@ impl ProductionAppAttestVerifier {
         if authenticator.rp_id_hash != expected_app_hash {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
-            ));
+            )
+            .at(AppAttestVerificationStage::AssertionApplication));
         }
         if authenticator.counter == 0 || authenticator.counter <= previous_counter {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::AssertionReplay,
-            ));
+            return Err(
+                AppAttestVerificationError::new(AppAttestFailureCategory::AssertionReplay)
+                    .at(AppAttestVerificationStage::AssertionCounter),
+            );
         }
         if !self.policy.accepts(&authenticator.claims) {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
-            ));
+            )
+            .at(AppAttestVerificationStage::AssertionExtensions));
         }
 
         let key = VerifyingKey::from_sec1_bytes(public_key).map_err(|_| {
@@ -420,6 +513,7 @@ impl ProductionAppAttestVerifier {
         })?;
         let signature = Signature::from_der(&parsed.signature).map_err(|_| {
             AppAttestVerificationError::new(AppAttestFailureCategory::MalformedEvidence)
+                .at(AppAttestVerificationStage::AssertionSignature)
         })?;
         let mut nonce_input = Vec::with_capacity(parsed.authenticator_data.len() + 32);
         nonce_input.extend_from_slice(&parsed.authenticator_data);
@@ -427,6 +521,7 @@ impl ProductionAppAttestVerifier {
         let nonce = Sha256::digest(nonce_input);
         key.verify(&nonce, &signature).map_err(|_| {
             AppAttestVerificationError::new(AppAttestFailureCategory::InvalidSignature)
+                .at(AppAttestVerificationStage::AssertionSignatureVerification)
         })?;
         Ok(VerifiedAssertion {
             counter: authenticator.counter,
@@ -457,17 +552,20 @@ fn decode_evidence(
     maximum_decoded: usize,
 ) -> Result<Vec<u8>, AppAttestVerificationError> {
     if encoded.len() > MAX_ENCODED_EVIDENCE_BYTES {
-        return Err(AppAttestVerificationError::new(
-            AppAttestFailureCategory::OversizedEvidence,
-        ));
+        return Err(
+            AppAttestVerificationError::new(AppAttestFailureCategory::OversizedEvidence)
+                .at(AppAttestVerificationStage::EvidenceDecoding),
+        );
     }
     let decoded = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
         AppAttestVerificationError::new(AppAttestFailureCategory::MalformedEvidence)
+            .at(AppAttestVerificationStage::EvidenceDecoding)
     })?;
     if decoded.len() > maximum_decoded {
-        return Err(AppAttestVerificationError::new(
-            AppAttestFailureCategory::OversizedEvidence,
-        ));
+        return Err(
+            AppAttestVerificationError::new(AppAttestFailureCategory::OversizedEvidence)
+                .at(AppAttestVerificationStage::EvidenceDecoding),
+        );
     }
     Ok(decoded)
 }
@@ -480,26 +578,36 @@ struct ParsedAttestation {
 
 impl ParsedAttestation {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
-        let mut fields = decode_cbor_map(encoded, &["fmt", "attStmt", "authData"])?;
-        let format = take_text(&mut fields, "fmt")?;
+        let mut fields = decode_cbor_map(encoded, &["fmt", "attStmt", "authData"])
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationEnvelope))?;
+        let format = take_text(&mut fields, "fmt")
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationFormat))?;
         if format != "apple-appattest" {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::MalformedEvidence,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationFormat));
         }
-        let authenticator_data = take_bytes(&mut fields, "authData")?;
+        let authenticator_data = take_bytes(&mut fields, "authData")
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationEnvelope))?;
         if authenticator_data.len() > MAX_AUTHENTICATOR_DATA_BYTES {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::OversizedEvidence,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationAuthenticatorLength));
         }
-        let statement = fields.remove("attStmt").ok_or_else(malformed)?;
-        let mut statement = value_map(statement, &["x5c", "receipt"])?;
-        let receipt = take_bytes(&mut statement, "receipt")?;
+        let statement = fields
+            .remove("attStmt")
+            .ok_or_else(|| malformed().at(AppAttestVerificationStage::AttestationStatement))?;
+        let mut statement = value_map(statement, &["x5c", "receipt"])
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationStatement))?;
+        let receipt = take_bytes(&mut statement, "receipt")
+            .map_err(|error| error.at(AppAttestVerificationStage::AttestationReceipt))?;
         if receipt.is_empty() || receipt.len() > MAX_RECEIPT_BYTES {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::MalformedEvidence,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationReceipt));
         }
         let certificates = match statement.remove("x5c") {
             Some(Value::Array(values)) if values.len() == 2 => values
@@ -512,11 +620,14 @@ impl ParsedAttestation {
                     }
                     Value::Bytes(_) => Err(AppAttestVerificationError::new(
                         AppAttestFailureCategory::OversizedEvidence,
-                    )),
-                    _ => Err(malformed()),
+                    )
+                    .at(AppAttestVerificationStage::AttestationCertificates)),
+                    _ => Err(malformed().at(AppAttestVerificationStage::AttestationCertificates)),
                 })
                 .collect::<Result<Vec<_>, _>>()?,
-            _ => return Err(malformed()),
+            _ => {
+                return Err(malformed().at(AppAttestVerificationStage::AttestationCertificates));
+            }
         };
         Ok(Self {
             certificates,
@@ -533,12 +644,15 @@ struct ParsedAssertion {
 
 impl ParsedAssertion {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
-        let mut fields = decode_cbor_map(encoded, &["signature", "authenticatorData"])?;
-        let signature = take_bytes(&mut fields, "signature")?;
+        let mut fields = decode_cbor_map(encoded, &["signature", "authenticatorData"])
+            .map_err(|error| error.at(AppAttestVerificationStage::AssertionEnvelope))?;
+        let signature = take_bytes(&mut fields, "signature")
+            .map_err(|error| error.at(AppAttestVerificationStage::AssertionSignature))?;
         if signature.is_empty() || signature.len() > 80 {
-            return Err(malformed());
+            return Err(malformed().at(AppAttestVerificationStage::AssertionSignature));
         }
-        let authenticator_data = take_bytes(&mut fields, "authenticatorData")?;
+        let authenticator_data = take_bytes(&mut fields, "authenticatorData")
+            .map_err(|error| error.at(AppAttestVerificationStage::AssertionEnvelope))?;
         Ok(Self {
             signature,
             authenticator_data,
@@ -617,14 +731,14 @@ impl<'a> AttestationAuthenticatorData<'a> {
     fn parse(encoded: &'a [u8]) -> Result<Self, AppAttestVerificationError> {
         let minimum = ATTESTATION_CREDENTIAL_ID_OFFSET + APP_ATTEST_KEY_ID_BYTES;
         if encoded.len() < minimum || encoded.len() > MAX_AUTHENTICATOR_DATA_BYTES {
-            return Err(malformed());
+            return Err(malformed().at(AppAttestVerificationStage::AttestationAuthenticatorLength));
         }
         let flags = encoded[32];
         // Apple sets only the attested-credential-data bit here, even though
         // its App Attest claims follow the COSE key. This matches Apple's
         // published attestation validation fixture.
         if flags != ATTESTED_CREDENTIAL_DATA_FLAG {
-            return Err(malformed());
+            return Err(malformed().at(AppAttestVerificationStage::AttestationAuthenticatorFlags));
         }
         let rp_id_hash = encoded[0..32].try_into().map_err(|_| malformed())?;
         let counter = u32::from_be_bytes(encoded[33..37].try_into().map_err(|_| malformed())?);
@@ -636,7 +750,8 @@ impl<'a> AttestationAuthenticatorData<'a> {
             _ => {
                 return Err(AppAttestVerificationError::new(
                     AppAttestFailureCategory::WrongEnvironment,
-                ));
+                )
+                .at(AppAttestVerificationStage::AttestationEnvironment));
             }
         };
         let credential_id_length =
@@ -644,7 +759,8 @@ impl<'a> AttestationAuthenticatorData<'a> {
         if credential_id_length != APP_ATTEST_KEY_ID_BYTES {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::InvalidCredential,
-            ));
+            )
+            .at(AppAttestVerificationStage::AttestationCredential));
         }
         let credential_id = &encoded[ATTESTATION_CREDENTIAL_ID_OFFSET..minimum];
         let (encoded_public_key, claims) = parse_attestation_tail(&encoded[minimum..])?;
@@ -669,14 +785,17 @@ impl AssertionAuthenticatorData {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
         if encoded.len() <= ASSERTION_AUTHENTICATOR_DATA_BYTES
             || encoded.len() > MAX_AUTHENTICATOR_DATA_BYTES
-            || encoded[32] != EXTENSION_DATA_FLAG
         {
-            return Err(malformed());
+            return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorLength));
+        }
+        if encoded[32] != EXTENSION_DATA_FLAG {
+            return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
         }
         Ok(Self {
             rp_id_hash: encoded[0..32].try_into().map_err(|_| malformed())?,
             counter: u32::from_be_bytes(encoded[33..37].try_into().map_err(|_| malformed())?),
-            claims: parse_claims(&encoded[ASSERTION_AUTHENTICATOR_DATA_BYTES..])?,
+            claims: parse_claims(&encoded[ASSERTION_AUTHENTICATOR_DATA_BYTES..])
+                .map_err(|error| error.at(AppAttestVerificationStage::AssertionExtensions))?,
         })
     }
 }
@@ -690,13 +809,17 @@ fn parse_attestation_tail(
     encoded: &[u8],
 ) -> Result<([u8; COSE_P256_PUBLIC_KEY_BYTES], AppAttestClaims), AppAttestVerificationError> {
     let mut cursor = Cursor::new(encoded);
-    let cose_key: Value = ciborium::from_reader(&mut cursor).map_err(|_| malformed())?;
-    let consumed = usize::try_from(cursor.position()).map_err(|_| malformed())?;
+    let cose_key: Value = ciborium::from_reader(&mut cursor)
+        .map_err(|_| malformed().at(AppAttestVerificationStage::AttestationCoseKey))?;
+    let consumed = usize::try_from(cursor.position())
+        .map_err(|_| malformed().at(AppAttestVerificationStage::AttestationCoseKey))?;
     if consumed >= encoded.len() {
-        return Err(malformed());
+        return Err(malformed().at(AppAttestVerificationStage::AttestationExtensions));
     }
-    let public_key = parse_cose_public_key(cose_key)?;
-    let claims = parse_claims(&encoded[consumed..])?;
+    let public_key = parse_cose_public_key(cose_key)
+        .map_err(|error| error.at(AppAttestVerificationStage::AttestationCoseKey))?;
+    let claims = parse_claims(&encoded[consumed..])
+        .map_err(|error| error.at(AppAttestVerificationStage::AttestationExtensions))?;
     Ok((public_key, claims))
 }
 
@@ -1184,6 +1307,40 @@ mod tests {
         ] {
             assert_eq!(category.metric_name(), expected);
         }
+    }
+
+    #[test]
+    fn rejection_stages_distinguish_production_parser_failures() {
+        let Err(envelope_error) = ParsedAttestation::parse(b"not cbor") else {
+            panic!("invalid CBOR should be rejected");
+        };
+        assert_eq!(
+            envelope_error.stage(),
+            AppAttestVerificationStage::AttestationEnvelope
+        );
+
+        let signing_key = SigningKey::from_slice(&[21; 32]).expect("test key should be valid");
+        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let key_id: [u8; 32] = Sha256::digest(public_key.as_bytes()).into();
+        let mut authenticator = attestation_authenticator_data(
+            TEAM_ID,
+            APP_IDENTIFIER,
+            AppAttestEnvironment::Production,
+            &key_id,
+            public_key.as_bytes(),
+        );
+        authenticator[32] = 0xff;
+        let Err(flags_error) = AttestationAuthenticatorData::parse(&authenticator) else {
+            panic!("invalid flags should be rejected");
+        };
+        assert_eq!(
+            flags_error.stage(),
+            AppAttestVerificationStage::AttestationAuthenticatorFlags
+        );
+        assert_eq!(
+            flags_error.stage().metric_name(),
+            "attestation.authenticator.flags"
+        );
     }
 
     #[test]

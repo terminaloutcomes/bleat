@@ -454,9 +454,15 @@ fn map_verification_error(
     error: AppAttestVerificationError,
     request_id: RequestId,
 ) -> ApiError {
+    let category = error.category().metric_name();
+    let stage = error.stage().metric_name();
+    let span = tracing::Span::current();
+    span.record("app_attest.failure.category", category);
+    span.record("app_attest.failure.stage", stage);
     warn!(
         operation,
-        category = error.category().metric_name(),
+        category,
+        stage,
         request_id = %request_id.0,
         "installation authentication rejected"
     );
@@ -633,6 +639,8 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         url.path = %route,
         url.scheme = %url_scheme,
         user_agent.original = field::Empty,
+        app_attest.failure.category = field::Empty,
+        app_attest.failure.stage = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );
