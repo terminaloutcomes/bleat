@@ -30,7 +30,7 @@
                 let keyPath = environment["BLEAT_TELEMETRY_TLS_KEY"]
             else {
                 throw XCTSkip(
-                    "Run scripts/test-bleat-api.sh to provide TLS and token fixtures"
+                    "Run scripts/test-telemetry.sh to provide TLS and token fixtures"
                 )
             }
 

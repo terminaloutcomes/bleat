@@ -1063,20 +1063,33 @@ Run the disposable PostgreSQL and API stack locally with:
 mise run api:run
 ```
 
-Run its formatting, type-checking, strict Clippy, PostgreSQL-backed tests,
-Release build, and live container checks with:
+Run its formatting, type-checking, strict Clippy, independently containerized
+PostgreSQL tests, and Release build with:
 
 ```sh
 mise run api:validate
 ```
 
-The live workflow also validates a pinned stock OpenTelemetry Collector Contrib
-configuration. It proves issuer/audience authentication, rejection of missing
-or malformed credentials and oversized messages, private trace delivery without
-authentication data, bounded exporter failure, and Collector health while the
-private exporter is unavailable. The single-purpose token still carries
-`telemetry:write`, but hard claim-based RPC rejection is not required for this
-baseline; it does not add per-installation accounting.
+Run the disposable fake-attester-to-private-sink integration gate separately:
+
+```sh
+mise run test:telemetry
+```
+
+That command creates isolated PostgreSQL, API, TLS-fixture, authenticated stock
+Collector, outage Collector, and private capture containers with generated test
+credentials and random loopback ports. It drives the reviewed Swift telemetry
+pipeline through enrollment, JWT issuance, authenticated OTLP export, and sink
+capture; validates issuer/audience authentication, missing or malformed
+credentials, the 1 MiB request limit, bounded exporter outage, and the exact
+privacy allowlist; then removes its containers, volumes, and temporary capture.
+Privacy-safe artifacts from a failed run are retained beneath
+`TestSupport/ServerHarness/artifacts/telemetry/`.
+
+The single-purpose token carries `telemetry:write`, but stock Collector cannot
+hard-reject arbitrary custom claims at RPC authentication time. The issuer
+creates only this narrow token, and the baseline deliberately adds neither a
+separate gateway nor per-installation accounting.
 
 Local structured logs remain active when optional OTLP/HTTP trace and log
 export is configured. See `bleat-api/README.md` for the complete configuration
