@@ -1,7 +1,7 @@
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    sea_query::Expr,
+    SqlErr, sea_query::Expr,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -53,6 +53,8 @@ pub enum InstallationStoreError {
     InvalidPublicKey,
     #[error("stored installation state is invalid")]
     InvalidStoredState,
+    #[error("the App Attest key is already enrolled")]
+    DuplicateKey,
     #[error("installation persistence is temporarily unavailable")]
     Database,
 }
@@ -95,7 +97,10 @@ impl InstallationRepository {
         }
         .insert(&self.database)
         .await
-        .map_err(|_| InstallationStoreError::Database)?;
+        .map_err(|error| match error.sql_err() {
+            Some(SqlErr::UniqueConstraintViolation(_)) => InstallationStoreError::DuplicateKey,
+            _ => InstallationStoreError::Database,
+        })?;
         Installation::try_from(model)
     }
 

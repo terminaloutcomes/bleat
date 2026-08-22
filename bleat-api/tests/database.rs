@@ -8,7 +8,7 @@ use bleat_api::{
     database::{Migrator, connect_and_migrate},
     installation::{
         CounterAdvanceOutcome, InstallationEnvironment, InstallationRepository, InstallationStatus,
-        NewInstallation,
+        InstallationStoreError, NewInstallation,
     },
 };
 use chrono::{Duration as ChronoDuration, Utc};
@@ -152,6 +152,28 @@ async fn assertion_counter_compare_and_update_accepts_only_one_racer() {
             .await
             .expect("invalid transition should be typed"),
         CounterAdvanceOutcome::InvalidTransition
+    );
+}
+
+#[tokio::test]
+async fn an_attested_key_can_only_enroll_once() {
+    let _database_lock = DATABASE_TEST_LOCK.lock().await;
+    let repository = repository().await;
+    let installation = NewInstallation {
+        app_attest_key_id: format!("duplicate-key-{}", Uuid::new_v4()),
+        public_key: vec![4; 65],
+        environment: InstallationEnvironment::Production,
+    };
+    repository
+        .create_verified(installation.clone())
+        .await
+        .expect("first enrollment should persist");
+    assert_eq!(
+        repository
+            .create_verified(installation)
+            .await
+            .expect_err("duplicate key enrollment should be rejected"),
+        InstallationStoreError::DuplicateKey
     );
 }
 

@@ -1675,10 +1675,14 @@ proof-of-possession, enrolls through the same persisted installation boundary,
 and atomically advances assertion counters before issuing a ten-minute ES256
 JWT. Its signing key is ephemeral per process. Development discovery is exposed
 at `/.well-known/openid-configuration` and JWKS at
-`/.well-known/jwks.json`. Production mode rejects fake evidence and keeps these
-token endpoints unavailable. Production Apple App Attest verification remains
-tracked by issue 65; persistent signing keys and rotation remain tracked by
-issue 66.
+`/.well-known/jwks.json`. Production mode uses a structurally separate verifier
+that validates Apple's certificate path and pinned App Attest root, attestation
+nonce, App ID hash, AAGUID environment, credential and certificate/COSE public
+key consistency, and configured bundle-version and validation-category policy.
+It verifies assertions with the stored key and environment before atomically
+advancing the monotonic counter; replay and concurrent counter conflicts are
+rejected. Production keeps token issuance, discovery, and JWKS unavailable
+until persistent signing keys and rotation are implemented by issue 66.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service. The validated baseline

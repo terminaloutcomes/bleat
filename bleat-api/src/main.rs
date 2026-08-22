@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log_startup_settings(&config);
 
-    axum::serve(listener, router(&config, database))
+    axum::serve(listener, router(&config, database)?)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

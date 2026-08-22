@@ -10,6 +10,7 @@
 #![deny(clippy::needless_pass_by_value)]
 #![deny(clippy::trivially_copy_pass_by_ref)]
 
+pub mod app_attest;
 pub mod challenge;
 pub mod config;
 pub mod database;

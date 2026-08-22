@@ -4,6 +4,7 @@ WORKDIR /workspace
 COPY bleat-api/Cargo.toml bleat-api/Cargo.lock bleat-api/
 COPY bleat-api/src bleat-api/src
 COPY bleat-api/tests bleat-api/tests
+COPY bleat-api/trust bleat-api/trust
 RUN cargo build --locked --manifest-path bleat-api/Cargo.toml --release
 
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime

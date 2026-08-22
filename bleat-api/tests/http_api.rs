@@ -50,7 +50,7 @@ async fn database() -> DatabaseConnection {
 
 async fn test_router(extra_arguments: &[&str]) -> axum::Router {
     let config = test_config(extra_arguments);
-    router(&config, database().await)
+    router(&config, database().await).expect("router should build")
 }
 
 async fn response_json(response: axum::response::Response) -> Value {
@@ -218,6 +218,10 @@ async fn production_verification_routes_reject_development_evidence() {
         "com.example.Bleat",
         "--app-attest-environment",
         "production",
+        "--app-attest-bundle-versions",
+        "1",
+        "--app-attest-validation-categories",
+        "2,4",
     ];
     for (path, body) in [
         (
@@ -493,7 +497,7 @@ async fn development_evidence_rejects_wrong_key_signature_and_replay() {
 async fn development_assertions_reject_wrong_signature_replay_and_disabled_installation() {
     let database = database().await;
     let config = test_config(&[]);
-    let router = router(&config, database.clone());
+    let router = router(&config, database.clone()).expect("router should build");
     let signing_key = development_key(13);
     let wrong_key = development_key(14);
     let installation_id = enroll_development(&router, &signing_key).await;
@@ -594,6 +598,7 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
         .expect("installation should persist");
     let config = test_config(&[]);
     let token = router(&config, database)
+        .expect("router should build")
         .oneshot(
             Request::post("/v1/token/challenge")
                 .header("content-type", "application/json")
@@ -660,7 +665,7 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
 async fn readiness_reports_database_failure_without_details() {
     let database = database().await;
     let config = test_config(&[]);
-    let router = router(&config, database.clone());
+    let router = router(&config, database.clone()).expect("router should build");
     database.close().await.expect("test pool should close");
 
     let response = router
