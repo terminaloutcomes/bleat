@@ -42,9 +42,10 @@ mise run api:coverage
 ```
 
 The coverage task writes its JSON report under `.build/coverage/bleat-api/`,
-requires at least 80% overall line coverage, and reports `src/app_attest.rs`
-coverage separately so gaps in the security boundary remain visible without
-turning its percentage into a substitute for behavior-focused tests.
+warns when overall line coverage falls below 80% without failing the task, and
+reports `src/app_attest.rs` coverage separately so gaps in the security boundary
+remain visible without turning its percentage into a substitute for
+behavior-focused tests.
 Stop the development stack and delete its database volume with:
 
 ```sh

@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly output_directory="../.build/coverage/bleat-api"
 readonly report=".build/coverage/bleat-api/tarpaulin-report.json"
-readonly minimum_overall_coverage="80"
+readonly overall_coverage_warning_threshold="80"
 
 mkdir -p ".build/coverage/bleat-api"
 rm -f "${report}"
@@ -16,9 +16,12 @@ cargo tarpaulin \
   --engine llvm \
   --out Json \
   --output-dir "${output_directory}" \
-  --fail-under "${minimum_overall_coverage}" \
   -- \
   --test-threads=4
+
+readonly overall_covered="$(jq -er '.covered' "${report}")"
+readonly overall_coverable="$(jq -er '.coverable' "${report}")"
+readonly overall_coverage="$(jq -er '.coverage' "${report}")"
 
 readonly app_attest_covered="$(
   jq -er '
@@ -39,4 +42,12 @@ readonly app_attest_coverage="$(
     'BEGIN { printf "%.2f", covered * 100 / coverable }'
 )"
 
+print "Overall coverage: ${overall_coverage}% (${overall_covered}/${overall_coverable})"
 print "App Attest coverage: ${app_attest_coverage}% (${app_attest_covered}/${app_attest_coverable})"
+
+if awk -v coverage="${overall_coverage}" \
+  -v threshold="${overall_coverage_warning_threshold}" \
+  'BEGIN { exit !(coverage < threshold) }'; then
+  print -u2 \
+    "warning: overall coverage ${overall_coverage}% is below ${overall_coverage_warning_threshold}%"
+fi

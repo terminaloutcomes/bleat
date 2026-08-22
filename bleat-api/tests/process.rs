@@ -1,10 +1,48 @@
-use std::{net::TcpListener, process::Command};
+use std::{
+    net::TcpListener,
+    process::{Command, Output, Stdio},
+    time::Duration,
+};
 
 use uuid::Uuid;
 
 mod support;
 
 use support::TestPostgres;
+
+const PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn output_with_timeout(command: &mut Command) -> Output {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("bleat-api process should start");
+    let deadline = tokio::time::Instant::now() + PROCESS_TIMEOUT;
+
+    loop {
+        match child
+            .try_wait()
+            .expect("bleat-api process status should be readable")
+        {
+            Some(_) => {
+                return child
+                    .wait_with_output()
+                    .expect("bleat-api process output should be readable");
+            }
+            None if tokio::time::Instant::now() >= deadline => {
+                child
+                    .kill()
+                    .expect("timed-out bleat-api process should be terminated");
+                child
+                    .wait()
+                    .expect("timed-out bleat-api process should be reaped");
+                panic!("bleat-api process did not exit within {PROCESS_TIMEOUT:?}");
+            }
+            None => tokio::time::sleep(Duration::from_millis(10)).await,
+        }
+    }
+}
 
 #[tokio::test]
 async fn signing_configuration_failure_happens_before_listener_bind() {
@@ -42,7 +80,7 @@ async fn signing_configuration_failure_happens_before_listener_bind() {
         "--jwt-signing-key-file",
         &missing_signing_key,
     ]);
-    let output = command.output().expect("bleat-api process should run");
+    let output = output_with_timeout(&mut command).await;
 
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).expect("process stderr should be UTF-8");
