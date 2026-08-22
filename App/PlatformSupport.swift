@@ -87,6 +87,7 @@ enum PlatformClipboard {
 
 enum PlatformDevice {
     static var operatingSystem: String { ProcessInfo.processInfo.operatingSystemVersionString }
+    @MainActor
     static var model: String {
         #if os(iOS)
         UIDevice.current.model

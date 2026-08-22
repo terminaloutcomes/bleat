@@ -1093,10 +1093,8 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             return account
-        } catch let error as AccountOnboardingError {
+        } catch let error {
             throw .onboarding(error)
-        } catch {
-            throw .onboarding(.authenticationRequestFailed)
         }
     }
 
@@ -1789,10 +1787,8 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             return authenticated
-        } catch let error as AccountOnboardingError {
+        } catch let error {
             throw .onboarding(error)
-        } catch {
-            throw .onboarding(.authenticationRequestFailed)
         }
     }
 

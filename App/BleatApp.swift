@@ -60,15 +60,22 @@ final class AppBootstrap {
                         SystemOpenIDBrowserSession(
                             anchorProvider: {
                                 #if os(iOS)
-                                UIApplication.shared.connectedScenes
+                                let activeScenes = UIApplication.shared
+                                    .connectedScenes
                                     .compactMap {
                                         $0 as? UIWindowScene
                                     }
-                                    .flatMap(\.windows)
+                                    .filter {
+                                        $0.activationState
+                                            == .foregroundActive
+                                    }
+                                let windows = activeScenes.flatMap(\.windows)
+                                return windows
                                     .first(where: \.isKeyWindow)
-                                    ?? UIWindow()
+                                    ?? windows.first
                                 #else
-                                NSApplication.shared.keyWindow ?? NSWindow()
+                                return NSApplication.shared.keyWindow
+                                    ?? NSWindow()
                                 #endif
                             }
                         )
