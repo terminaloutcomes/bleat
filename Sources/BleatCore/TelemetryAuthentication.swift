@@ -151,6 +151,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         [UUID: CheckedContinuation<RefreshResult, Never>] = [:]
     private var transientFailureCount = 0
     private var nextRetryAt: Date?
+    private var terminalFailure: TelemetryTokenProviderError?
 
     public init(
         attester: any TelemetryAttester,
@@ -184,6 +185,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         token = nil
         transientFailureCount = 0
         nextRetryAt = nil
+        terminalFailure = nil
     }
 
     public func currentToken() async throws(TelemetryTokenProviderError)
@@ -192,6 +194,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         guard !Task.isCancelled else { throw .cancelled }
         guard enabled else { throw .disabled }
         guard attester.isSupported else { throw .unsupported }
+        if let terminalFailure { throw terminalFailure }
         let now = dateProvider()
         if let token,
             token.expiresAt.timeIntervalSince(now) > refreshWindow
@@ -283,8 +286,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
                 token = refreshed
                 transientFailureCount = 0
                 nextRetryAt = nil
+                terminalFailure = nil
             case .failure(let failure):
-                recordBackoffIfNeeded(for: failure)
+                recordFailure(failure)
             }
         }
         let waiters = refreshWaiters.values
@@ -294,9 +298,11 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         }
     }
 
-    private func recordBackoffIfNeeded(
-        for failure: TelemetryTokenProviderError
-    ) {
+    private func recordFailure(_ failure: TelemetryTokenProviderError) {
+        if failure == .authenticationRejected {
+            terminalFailure = failure
+            return
+        }
         guard failure == .temporarilyUnavailable else { return }
         transientFailureCount = min(transientFailureCount + 1, 6)
         let base = min(pow(2, Double(transientFailureCount - 1)), 32)

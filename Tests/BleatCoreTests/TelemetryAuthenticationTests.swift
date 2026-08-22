@@ -253,11 +253,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
                 installationID: FakeTelemetryTransport.installationID
             )
         )
+        let transport = FakeTelemetryTransport(
+            tokenChallengeFailure: .authenticationRejected
+        )
         let provider = TelemetryTokenProvider(
             attester: attester,
-            transport: FakeTelemetryTransport(
-                tokenChallengeFailure: .authenticationRejected
-            ),
+            transport: transport,
             store: store
         )
         await provider.setEnabled(true)
@@ -265,9 +266,49 @@ final class TelemetryAuthenticationTests: XCTestCase {
         await XCTAssertThrowsTelemetryError(.authenticationRejected) {
             try await provider.currentToken()
         }
+        await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+            try await provider.currentToken()
+        }
         let deleteCount = await store.deleteCount
+        let tokenChallengeCount = await transport.tokenChallengeCount
         XCTAssertEqual(deleteCount, 0)
         XCTAssertEqual(attester.generateKeyCount, 0)
+        XCTAssertEqual(tokenChallengeCount, 1)
+    }
+
+    func testEnrollmentRejectionStopsRetriesUntilReenabled() async {
+        let attester = FakeTelemetryAttester()
+        let transport = FakeTelemetryTransport(
+            enrollmentFailure: .authenticationRejected
+        )
+        let provider = TelemetryTokenProvider(
+            attester: attester,
+            transport: transport,
+            store: MemoryEnrollmentStore()
+        )
+        await provider.setEnabled(true)
+
+        for _ in 0..<2 {
+            await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+                try await provider.currentToken()
+            }
+        }
+        var challengeCount = await transport.attestationChallengeCount
+        var enrollmentCount = await transport.enrollmentCount
+        XCTAssertEqual(challengeCount, 1)
+        XCTAssertEqual(enrollmentCount, 1)
+        XCTAssertEqual(attester.generateKeyCount, 1)
+
+        await provider.setEnabled(false)
+        await provider.setEnabled(true)
+        await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+            try await provider.currentToken()
+        }
+        challengeCount = await transport.attestationChallengeCount
+        enrollmentCount = await transport.enrollmentCount
+        XCTAssertEqual(challengeCount, 2)
+        XCTAssertEqual(enrollmentCount, 2)
+        XCTAssertEqual(attester.generateKeyCount, 2)
     }
 
     func testInvalidationOnlyClearsTheTokenThatWasRejected() async throws {
@@ -482,6 +523,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     private let clock: TestClock
     private let tokenLifetimes: [TimeInterval]
     private let tokenDelay: Duration?
+    private let enrollmentFailure: TelemetryAuthenticationTransportError?
     private let tokenChallengeFailure: TelemetryAuthenticationTransportError?
     private var remainingAttestationChallengeFailures: Int
     private(set) var attestationChallengeCount = 0
@@ -495,11 +537,13 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         tokenLifetimes: [TimeInterval] = [600],
         tokenDelay: Duration? = nil,
         attestationChallengeFailures: Int = 0,
+        enrollmentFailure: TelemetryAuthenticationTransportError? = nil,
         tokenChallengeFailure: TelemetryAuthenticationTransportError? = nil
     ) {
         self.clock = clock
         self.tokenLifetimes = tokenLifetimes
         self.tokenDelay = tokenDelay
+        self.enrollmentFailure = enrollmentFailure
         self.tokenChallengeFailure = tokenChallengeFailure
         remainingAttestationChallengeFailures = attestationChallengeFailures
     }
@@ -526,6 +570,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         attestationObject: Data
     ) async throws(TelemetryAuthenticationTransportError) -> UUID {
         enrollmentCount += 1
+        if let enrollmentFailure { throw enrollmentFailure }
         return Self.installationID
     }
 

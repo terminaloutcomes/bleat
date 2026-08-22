@@ -620,7 +620,10 @@ impl<'a> AttestationAuthenticatorData<'a> {
             return Err(malformed());
         }
         let flags = encoded[32];
-        if flags != (ATTESTED_CREDENTIAL_DATA_FLAG | EXTENSION_DATA_FLAG | 0x01) {
+        // Apple sets only the attested-credential-data bit here, even though
+        // its App Attest claims follow the COSE key. This matches Apple's
+        // published attestation validation fixture.
+        if flags != ATTESTED_CREDENTIAL_DATA_FLAG {
             return Err(malformed());
         }
         let rp_id_hash = encoded[0..32].try_into().map_err(|_| malformed())?;
@@ -666,7 +669,7 @@ impl AssertionAuthenticatorData {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
         if encoded.len() <= ASSERTION_AUTHENTICATOR_DATA_BYTES
             || encoded.len() > MAX_AUTHENTICATOR_DATA_BYTES
-            || encoded[32] != (EXTENSION_DATA_FLAG | 0x01)
+            || encoded[32] != EXTENSION_DATA_FLAG
         {
             return Err(malformed());
         }
@@ -979,7 +982,7 @@ mod tests {
         data.extend_from_slice(&Sha256::digest(
             format!("{team_id}.{app_identifier}").as_bytes(),
         ));
-        data.push(ATTESTED_CREDENTIAL_DATA_FLAG | EXTENSION_DATA_FLAG | 0x01);
+        data.push(ATTESTED_CREDENTIAL_DATA_FLAG);
         data.extend_from_slice(&0_u32.to_be_bytes());
         match environment {
             AppAttestEnvironment::Development => data.extend_from_slice(b"appattestdevelop"),
@@ -1000,7 +1003,7 @@ mod tests {
         data.extend_from_slice(&Sha256::digest(
             format!("{team_id}.{app_identifier}").as_bytes(),
         ));
-        data.push(EXTENSION_DATA_FLAG | 0x01);
+        data.push(EXTENSION_DATA_FLAG);
         data.extend_from_slice(&counter.to_be_bytes());
         data.extend_from_slice(&encode_cbor_bytes(&app_attest_claims()));
         data
@@ -1384,6 +1387,27 @@ mod tests {
                 AppAttestFailureCategory::MalformedEvidence,
             );
         }
+    }
+
+    #[test]
+    fn attestation_authenticator_accepts_apple_documented_flag_shape() {
+        let signing_key = SigningKey::from_slice(&[22; 32]).expect("test key should be valid");
+        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let key_id: [u8; 32] = Sha256::digest(public_key.as_bytes()).into();
+        let encoded = attestation_authenticator_data(
+            TEAM_ID,
+            APP_IDENTIFIER,
+            AppAttestEnvironment::Production,
+            &key_id,
+            public_key.as_bytes(),
+        );
+
+        assert_eq!(encoded[32], 0x40);
+        let parsed = AttestationAuthenticatorData::parse(&encoded)
+            .expect("Apple-documented authenticator flags should parse");
+        assert_eq!(parsed.credential_id, key_id);
+        assert_eq!(parsed.claims.validation_category, VALIDATION_CATEGORY);
+        assert_eq!(parsed.claims.bundle_version, BUNDLE_VERSION);
     }
 
     #[test]
