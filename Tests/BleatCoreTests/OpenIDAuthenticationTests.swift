@@ -64,17 +64,8 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
 
         let anchor = ASPresentationAnchor()
-        let defaultBrowser = SystemOpenIDBrowserSession(
+        _ = SystemOpenIDBrowserSession(
             anchorProvider: { anchor }
-        )
-        let presentationSession = ASWebAuthenticationSession(
-            url: authorizationURL,
-            callbackURLScheme: "com.example.bleat"
-        ) { _, _ in }
-        XCTAssertTrue(
-            defaultBrowser.presentationAnchor(
-                for: presentationSession
-            ) === anchor
         )
     }
 
@@ -114,15 +105,46 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
         XCTAssertTrue(session.didStart)
         XCTAssertFalse(session.prefersEphemeralWebBrowserSession)
-        XCTAssertTrue(session.presentationContextProvider === browser)
-
         let presentationSession = ASWebAuthenticationSession(
             url: authorizationURL,
             callbackURLScheme: "com.example.bleat"
         ) { _, _ in }
-        XCTAssertTrue(
-            browser.presentationAnchor(for: presentationSession) === anchor
+        let presentationContext = try XCTUnwrap(
+            session.presentationContextProvider
         )
+        XCTAssertTrue(
+            presentationContext.presentationAnchor(
+                for: presentationSession
+            ) === anchor
+        )
+    }
+
+    @MainActor
+    func testSystemBrowserSessionRejectsMissingPresentationAnchor()
+        async throws
+    {
+        let authorizationURL = try XCTUnwrap(
+            URL(string: "https://identity.example/authorize")
+        )
+        let factory = OpenIDWebSessionFactory(behavior: .wait)
+        let browser = SystemOpenIDBrowserSession(
+            anchorProvider: { nil },
+            sessionFactory: factory
+        )
+
+        do {
+            _ = try await browser.authenticate(
+                at: authorizationURL,
+                callbackScheme: "com.example.bleat"
+            )
+            XCTFail("Expected missing presentation anchor failure")
+        } catch {
+            XCTAssertEqual(
+                error as? OpenIDBrowserError,
+                .presentationAnchorUnavailable
+            )
+        }
+        XCTAssertTrue(factory.sessions.isEmpty)
     }
 
     @MainActor
@@ -558,6 +580,10 @@ final class OpenIDAuthenticationTests: XCTestCase {
     func testBrowserCancellationAndFailureCleanUp() async throws {
         let cases: [(OpenIDBrowserError, OpenIDAuthenticationError)] = [
             (.cancelled, .browserCancelled),
+            (
+                .presentationAnchorUnavailable,
+                .presentationAnchorUnavailable
+            ),
             (.alreadyActive, .browserFailed),
             (.failed, .browserFailed),
         ]

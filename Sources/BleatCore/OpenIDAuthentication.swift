@@ -108,6 +108,7 @@ public struct OpenIDCallbackURL: Hashable, Sendable {
 public enum OpenIDBrowserError: Error, Equatable, Sendable {
     case cancelled
     case alreadyActive
+    case presentationAnchorUnavailable
     case failed
 }
 
@@ -210,16 +211,22 @@ struct SystemOpenIDWebAuthenticationSessionFactory:
 @MainActor
 public final class SystemOpenIDBrowserSession:
     NSObject,
-    ASWebAuthenticationPresentationContextProviding,
     OpenIDBrowserSession
 {
-    private let anchorProvider: @MainActor @Sendable () -> ASPresentationAnchor
+    private struct ActiveSession {
+        let session: any OpenIDWebAuthenticationSession
+        let presentationContext:
+            any ASWebAuthenticationPresentationContextProviding
+    }
+
+    private let anchorProvider:
+        @MainActor @Sendable () -> ASPresentationAnchor?
     private let sessionFactory: any OpenIDWebAuthenticationSessionFactory
-    private var activeSession: (any OpenIDWebAuthenticationSession)?
+    private var activeSession: ActiveSession?
 
     public init(
         anchorProvider:
-            @escaping @MainActor @Sendable () -> ASPresentationAnchor
+            @escaping @MainActor @Sendable () -> ASPresentationAnchor?
     ) {
         self.anchorProvider = anchorProvider
         sessionFactory = SystemOpenIDWebAuthenticationSessionFactory()
@@ -227,7 +234,7 @@ public final class SystemOpenIDBrowserSession:
 
     init(
         anchorProvider:
-            @escaping @MainActor @Sendable () -> ASPresentationAnchor,
+            @escaping @MainActor @Sendable () -> ASPresentationAnchor?,
         sessionFactory: any OpenIDWebAuthenticationSessionFactory
     ) {
         self.anchorProvider = anchorProvider
@@ -240,6 +247,9 @@ public final class SystemOpenIDBrowserSession:
     ) async throws -> URL {
         guard activeSession == nil else {
             throw OpenIDBrowserError.alreadyActive
+        }
+        guard let anchor = anchorProvider() else {
+            throw OpenIDBrowserError.presentationAnchorUnavailable
         }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -266,9 +276,15 @@ public final class SystemOpenIDBrowserSession:
                     }
                 }
             }
-            session.presentationContextProvider = self
+            let presentationContext = OpenIDPresentationContext(
+                anchor: anchor
+            )
+            session.presentationContextProvider = presentationContext
             session.prefersEphemeralWebBrowserSession = false
-            activeSession = session
+            activeSession = ActiveSession(
+                session: session,
+                presentationContext: presentationContext
+            )
 
             if !session.start(), completionGate.claimCompletion() {
                 activeSession = nil
@@ -279,14 +295,8 @@ public final class SystemOpenIDBrowserSession:
         }
     }
 
-    public func presentationAnchor(
-        for session: ASWebAuthenticationSession
-    ) -> ASPresentationAnchor {
-        anchorProvider()
-    }
-
     public func presentLogout(at logoutURL: URL) {
-        guard activeSession == nil else {
+        guard activeSession == nil, let anchor = anchorProvider() else {
             return
         }
         let session = ASWebAuthenticationSession(
@@ -297,12 +307,34 @@ public final class SystemOpenIDBrowserSession:
                 self?.activeSession = nil
             }
         }
-        session.presentationContextProvider = self
+        let presentationContext = OpenIDPresentationContext(anchor: anchor)
+        session.presentationContextProvider = presentationContext
         session.prefersEphemeralWebBrowserSession = false
-        activeSession = session
+        activeSession = ActiveSession(
+            session: session,
+            presentationContext: presentationContext
+        )
         if !session.start() {
             activeSession = nil
         }
+    }
+}
+
+@MainActor
+private final class OpenIDPresentationContext:
+    NSObject,
+    ASWebAuthenticationPresentationContextProviding
+{
+    private let anchor: ASPresentationAnchor
+
+    init(anchor: ASPresentationAnchor) {
+        self.anchor = anchor
+    }
+
+    func presentationAnchor(
+        for session: ASWebAuthenticationSession
+    ) -> ASPresentationAnchor {
+        anchor
     }
 }
 
@@ -407,6 +439,7 @@ public enum OpenIDAuthenticationError: Error, Equatable, Sendable {
     case missingProviderRedirect
     case invalidProviderRedirect
     case browserCancelled
+    case presentationAnchorUnavailable
     case browserFailed
     case invalidCallbackURL
     case missingState
@@ -903,6 +936,12 @@ private enum AppAuthAuthorizationFlow {
                             continuation.resume(
                                 throwing:
                                     OpenIDAuthenticationError.browserCancelled
+                            )
+                        case .presentationAnchorUnavailable:
+                            continuation.resume(
+                                throwing:
+                                    OpenIDAuthenticationError
+                                    .presentationAnchorUnavailable
                             )
                         case .alreadyActive, .failed:
                             continuation.resume(

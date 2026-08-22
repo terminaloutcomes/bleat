@@ -54,11 +54,19 @@ func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
 final class BleatUITests: XCTestCase {
     @MainActor
     func testLoginExposesOpenIDSetupGuide() {
-        let app = launch(scenario: "--ui-testing-signed-out")
+        let app = launch(scenario: "--ui-testing-openid")
+        let server = app.textFields["login.server"]
+        XCTAssertTrue(server.waitForExistence(timeout: 3))
+        server.tap()
+        server.typeText("https://books.example")
+
+        let openIDLogin = app.buttons["login.openid"]
         let setupGuide = app.descendants(matching: .any)[
             "login.openidSetupGuide"
         ]
 
+        XCTAssertTrue(openIDLogin.waitForExistence(timeout: 3))
+        XCTAssertEqual(openIDLogin.label, "Sign in with OpenID")
         XCTAssertTrue(setupGuide.waitForExistence(timeout: 3))
         XCTAssertEqual(setupGuide.label, "OpenID Setup Guide")
         XCTAssertTrue(setupGuide.isEnabled)
