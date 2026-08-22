@@ -4,16 +4,21 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{DefaultBodyLimit, Extension, MatchedPath, State, rejection::JsonRejection},
-    http::{HeaderName, HeaderValue, Request, StatusCode},
+    http::{
+        HeaderMap, HeaderName, HeaderValue, Request, StatusCode,
+        header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH},
+    },
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use opentelemetry::global;
 use opentelemetry_http::HeaderExtractor;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tracing::{Instrument, field, info, info_span, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
@@ -34,8 +39,7 @@ use crate::{
         CounterAdvanceOutcome, InstallationRepository, InstallationStoreError, NewInstallation,
     },
     telemetry_auth::{
-        ClientDataPurpose, DevelopmentTokenIssuer, JwkSet, OpenIdConfiguration, TokenResponse,
-        client_data_hash,
+        ClientDataPurpose, JWKS_CACHE_SECONDS, TokenIssuer, TokenResponse, client_data_hash,
     },
 };
 
@@ -56,7 +60,7 @@ struct AppState {
     challenges: ChallengeRepository,
     installations: InstallationRepository,
     evidence_verifier: Arc<InstallationEvidenceVerifier>,
-    development_token_issuer: Option<Arc<DevelopmentTokenIssuer>>,
+    token_issuer: Arc<TokenIssuer>,
     challenge_lifetime: std::time::Duration,
     issuance_limiter: IssuanceLimiter,
 }
@@ -152,9 +156,13 @@ impl From<IssuedChallenge> for ChallengeResponse {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("production App Attest verification configuration is invalid")]
-pub struct RouterBuildError;
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+pub enum RouterBuildError {
+    #[error("production App Attest verification configuration is invalid")]
+    AppAttest,
+    #[error("JWT signing configuration is invalid")]
+    TokenIssuer,
+}
 
 pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, RouterBuildError> {
     let limits = RequestLimits {
@@ -164,17 +172,42 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
     let evidence_verifier = match config.deployment_mode {
         DeploymentMode::Development => InstallationEvidenceVerifier::Development,
         DeploymentMode::Production => InstallationEvidenceVerifier::production(
-            config.apple_team_id.as_deref().ok_or(RouterBuildError)?,
-            config.app_identifier.as_deref().ok_or(RouterBuildError)?,
+            config
+                .apple_team_id
+                .as_deref()
+                .ok_or(RouterBuildError::AppAttest)?,
+            config
+                .app_identifier
+                .as_deref()
+                .ok_or(RouterBuildError::AppAttest)?,
             config.app_attest_environment,
             AppAttestPolicy::new(
                 config.app_attest_bundle_versions.clone(),
                 config.app_attest_validation_categories.iter().copied(),
             )
-            .map_err(|_| RouterBuildError)?,
+            .map_err(|_| RouterBuildError::AppAttest)?,
         )
-        .map_err(|_| RouterBuildError)?,
+        .map_err(|_| RouterBuildError::AppAttest)?,
     };
+    let token_issuer = match config.deployment_mode {
+        DeploymentMode::Development => {
+            TokenIssuer::generate(&config.public_issuer, config.token_lifetime)
+        }
+        DeploymentMode::Production => TokenIssuer::from_files(
+            &config.public_issuer,
+            config.token_lifetime,
+            config
+                .jwt_signing_key_file
+                .as_ref()
+                .ok_or(RouterBuildError::TokenIssuer)?
+                .as_path(),
+            config
+                .jwt_public_key_set_file
+                .as_ref()
+                .map(|path| path.as_path()),
+        ),
+    };
+    let token_issuer = Arc::new(token_issuer.map_err(|_| RouterBuildError::TokenIssuer)?);
     let state = AppState {
         challenges: ChallengeRepository::new(
             database.clone(),
@@ -182,13 +215,7 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
         ),
         installations: InstallationRepository::new(database.clone()),
         evidence_verifier: Arc::new(evidence_verifier),
-        development_token_issuer: if config.deployment_mode == DeploymentMode::Development {
-            DevelopmentTokenIssuer::generate(&config.public_issuer, config.token_lifetime)
-                .ok()
-                .map(Arc::new)
-        } else {
-            None
-        },
+        token_issuer,
         database,
         challenge_lifetime: config.challenge_lifetime,
         issuance_limiter: IssuanceLimiter::new(config.challenge_issuance_per_minute),
@@ -329,12 +356,24 @@ async fn token(
 ) -> Result<Response, ApiError> {
     let Json(payload) = parse_json(payload, request_id)?;
     let principal = authenticate_installation(&state, &payload, request_id).await?;
-    let Some(issuer) = state.development_token_issuer.as_ref() else {
-        return Err(ApiError::temporarily_unavailable(request_id.0));
-    };
-    let response: TokenResponse = issuer
+    let response: TokenResponse = state
+        .token_issuer
         .issue(principal.installation_id, Utc::now())
-        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+        .map_err(|_| {
+            warn!(
+                operation = "token.issue",
+                category = "token.signer_failure",
+                request_id = %request_id.0,
+                "token issuance failed"
+            );
+            ApiError::temporarily_unavailable(request_id.0)
+        })?;
+    info!(
+        operation = "token.issue",
+        outcome = "issued",
+        request_id = %request_id.0,
+        "telemetry token issued"
+    );
     Ok(Json(response).into_response())
 }
 
@@ -422,27 +461,57 @@ fn map_verification_error(
 
 async fn discovery(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Extension(request_id): Extension<RequestId>,
-) -> Result<Json<OpenIdConfiguration>, ApiError> {
-    let issuer = state
-        .development_token_issuer
-        .as_ref()
-        .ok_or_else(|| ApiError::temporarily_unavailable(request_id.0))?;
-    Ok(Json(issuer.discovery()))
+) -> Result<Response, ApiError> {
+    cacheable_json(&state.token_issuer.discovery(), &headers, request_id)
 }
 
 async fn jwks(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Extension(request_id): Extension<RequestId>,
-) -> Result<Json<JwkSet>, ApiError> {
-    let issuer = state
-        .development_token_issuer
-        .as_ref()
-        .ok_or_else(|| ApiError::temporarily_unavailable(request_id.0))?;
-    issuer
-        .jwks()
-        .map(Json)
-        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))
+) -> Result<Response, ApiError> {
+    let jwks = state
+        .token_issuer
+        .jwks_at(Utc::now())
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    cacheable_json(&jwks, &headers, request_id)
+}
+
+fn cacheable_json(
+    value: &impl Serialize,
+    request_headers: &HeaderMap,
+    request_id: RequestId,
+) -> Result<Response, ApiError> {
+    let body =
+        serde_json::to_vec(value).map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    let etag = format!("\"{}\"", URL_SAFE_NO_PAD.encode(Sha256::digest(&body)));
+    let etag_header = HeaderValue::from_str(&etag)
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    let not_modified = request_headers
+        .get(IF_NONE_MATCH)
+        .is_some_and(|candidate| candidate.as_bytes() == etag.as_bytes());
+    let mut response = if not_modified {
+        Response::new(Body::empty())
+    } else {
+        Response::new(Body::from(body))
+    };
+    *response.status_mut() = if not_modified {
+        StatusCode::NOT_MODIFIED
+    } else {
+        StatusCode::OK
+    };
+    response.headers_mut().insert(ETAG, etag_header);
+    let cache_control = HeaderValue::from_str(&format!("public, max-age={JWKS_CACHE_SECONDS}"))
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    response.headers_mut().insert(CACHE_CONTROL, cache_control);
+    if !not_modified {
+        response
+            .headers_mut()
+            .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    }
+    Ok(response)
 }
 
 async fn consume_challenge(

@@ -1,6 +1,9 @@
 use axum::{
     body::Body,
-    http::{Request, StatusCode},
+    http::{
+        Request, StatusCode,
+        header::{CACHE_CONTROL, ETAG, IF_NONE_MATCH},
+    },
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bleat_api::{
@@ -15,7 +18,7 @@ use bleat_api::{
     },
 };
 use clap::Parser;
-use compact_jwt::{Jwk, JwsEs256Verifier, JwsVerifier, JwtUnverified};
+use compact_jwt::{Jwk, JwsEs256Signer, JwsEs256Verifier, JwsVerifier, JwtUnverified};
 use http_body_util::BodyExt;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 use sea_orm::DatabaseConnection;
@@ -51,6 +54,37 @@ async fn database() -> DatabaseConnection {
 async fn test_router(extra_arguments: &[&str]) -> axum::Router {
     let config = test_config(extra_arguments);
     router(&config, database().await).expect("router should build")
+}
+
+async fn production_router() -> axum::Router {
+    let signer = JwsEs256Signer::generate_es256().expect("production test signer should generate");
+    let key = signer
+        .private_key_to_der()
+        .expect("production test signer should export");
+    let path = std::env::temp_dir().join(format!("bleat-production-jwt-{}.der", Uuid::new_v4()));
+    std::fs::write(&path, key.as_slice()).expect("production test key should be written");
+    let path_argument = path.to_string_lossy().into_owned();
+    let config = test_config(&[
+        "--deployment-mode",
+        "production",
+        "--public-issuer",
+        "https://telemetry.example.test",
+        "--apple-team-id",
+        "TEAM123456",
+        "--app-identifier",
+        "com.example.Bleat",
+        "--app-attest-environment",
+        "production",
+        "--app-attest-bundle-versions",
+        "1",
+        "--app-attest-validation-categories",
+        "2,4",
+        "--jwt-signing-key-file",
+        path_argument.as_str(),
+    ]);
+    let result = router(&config, database().await).expect("production router should build");
+    std::fs::remove_file(path).expect("production test key should be removed");
+    result
 }
 
 async fn response_json(response: axum::response::Response) -> Value {
@@ -207,22 +241,7 @@ async fn health_and_readiness_are_typed_and_receive_request_ids() {
 
 #[tokio::test]
 async fn production_verification_routes_reject_development_evidence() {
-    let production = [
-        "--deployment-mode",
-        "production",
-        "--public-issuer",
-        "https://telemetry.example.test",
-        "--apple-team-id",
-        "TEAM123456",
-        "--app-identifier",
-        "com.example.Bleat",
-        "--app-attest-environment",
-        "production",
-        "--app-attest-bundle-versions",
-        "1",
-        "--app-attest-validation-categories",
-        "2,4",
-    ];
+    let production = production_router().await;
     for (path, body) in [
         (
             "/v1/attestation/enroll",
@@ -243,8 +262,8 @@ async fn production_verification_routes_reject_development_evidence() {
             }),
         ),
     ] {
-        let response = test_router(&production)
-            .await
+        let response = production
+            .clone()
             .oneshot(
                 Request::post(path)
                     .header("content-type", "application/json")
@@ -272,8 +291,8 @@ async fn production_verification_routes_reject_development_evidence() {
         "/.well-known/openid-configuration",
         "/.well-known/jwks.json",
     ] {
-        let response = test_router(&production)
-            .await
+        let response = production
+            .clone()
             .oneshot(
                 Request::get(path)
                     .body(Body::empty())
@@ -281,18 +300,15 @@ async fn production_verification_routes_reject_development_evidence() {
             )
             .await
             .expect("router should respond");
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(
-            response_json(response).await["error"]["code"],
-            "temporarily_unavailable"
-        );
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[CACHE_CONTROL], "public, max-age=60");
+        assert!(response.headers().contains_key(ETAG));
     }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 struct TestTokenClaims {
     scope: String,
-    environment: String,
 }
 
 #[tokio::test]
@@ -437,7 +453,58 @@ async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
     );
     assert_eq!(verified.aud.as_deref(), Some("bleat-telemetry"));
     assert_eq!(verified.extensions.scope, "telemetry:write");
-    assert_eq!(verified.extensions.environment, "development");
+    assert!(verified.nbf.is_none());
+    assert!(verified.jti.is_none());
+    assert!(verified.claims.is_empty());
+}
+
+#[tokio::test]
+async fn discovery_and_jwks_support_bounded_conditional_caching() {
+    let router = test_router(&[]).await;
+    for path in [
+        "/.well-known/openid-configuration",
+        "/.well-known/jwks.json",
+    ] {
+        let first = router
+            .clone()
+            .oneshot(
+                Request::get(path)
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("metadata should respond");
+        assert_eq!(first.status(), StatusCode::OK);
+        assert_eq!(first.headers()[CACHE_CONTROL], "public, max-age=60");
+        let etag = first.headers()[ETAG]
+            .to_str()
+            .expect("ETag should be text")
+            .to_owned();
+        assert!(!response_json(first).await.is_null());
+
+        let cached = router
+            .clone()
+            .oneshot(
+                Request::get(path)
+                    .header(IF_NONE_MATCH, etag)
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("conditional metadata should respond");
+        assert_eq!(cached.status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(cached.headers()[CACHE_CONTROL], "public, max-age=60");
+        assert_eq!(
+            cached
+                .into_body()
+                .collect()
+                .await
+                .expect("cached response body should collect")
+                .to_bytes()
+                .len(),
+            0
+        );
+    }
 }
 
 #[tokio::test]

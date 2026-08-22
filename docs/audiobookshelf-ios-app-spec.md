@@ -1673,16 +1673,27 @@ Consumption and assertion-counter advancement are conditional atomic updates.
 In development mode the backend verifies the fake attester's P-256
 proof-of-possession, enrolls through the same persisted installation boundary,
 and atomically advances assertion counters before issuing a ten-minute ES256
-JWT. Its signing key is ephemeral per process. Development discovery is exposed
-at `/.well-known/openid-configuration` and JWKS at
-`/.well-known/jwks.json`. Production mode uses a structurally separate verifier
-that validates Apple's certificate path and pinned App Attest root, attestation
-nonce, App ID hash, AAGUID environment, credential and certificate/COSE public
-key consistency, and configured bundle-version and validation-category policy.
-It verifies assertions with the stored key and environment before atomically
-advancing the monotonic counter; replay and concurrent counter conflicts are
-rejected. Production keeps token issuance, discovery, and JWKS unavailable
-until persistent signing keys and rotation are implemented by issue 66.
+JWT. Development signing remains ephemeral per process. Production loads one
+SEC1 DER P-256 private key from a mounted deployment secret and fails before
+binding if the key is missing or invalid. Both modes issue only `iss`, opaque
+installation `sub`, `aud=bleat-telemetry`, `scope=telemetry:write`, `iat`, and
+`exp`; there is no refresh token or additional identity claim. Discovery is
+exposed at `/.well-known/openid-configuration` and JWKS at
+`/.well-known/jwks.json`, with bounded public caching, deterministic ETags, and
+conditional responses. A public-only scheduled key set supports rotation: a
+new key is prepublished before activation and the prior public key remains
+available for at least the maximum token lifetime plus clock skew. Private keys
+never enter that set, the container image, normal logs, or repository fixtures.
+
+Production mode uses a structurally separate verifier that validates Apple's
+certificate path and pinned App Attest root, attestation nonce, App ID hash,
+AAGUID environment, credential and certificate/COSE public key consistency,
+and configured bundle-version and validation-category policy. It verifies
+assertions with the stored key and environment before atomically advancing the
+monotonic counter; replay and concurrent counter conflicts are rejected. Only
+that authenticated installation principal can reach signing. Disabling an
+installation prevents future issuance, while an already-issued token expires
+naturally within ten minutes.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service. The validated baseline

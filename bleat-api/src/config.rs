@@ -1,4 +1,9 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 use clap::{Parser, ValueEnum};
 use serde::Serialize;
@@ -133,6 +138,16 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_TOKEN_LIFETIME_SECONDS", default_value_t = 600)]
     pub token_lifetime_seconds: u64,
 
+    #[arg(long, env = "BLEAT_API_JWT_SIGNING_KEY_FILE", hide_env_values = true)]
+    pub jwt_signing_key_file: Option<PathBuf>,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_JWT_PUBLIC_KEY_SET_FILE",
+        hide_env_values = true
+    )]
+    pub jwt_public_key_set_file: Option<PathBuf>,
+
     #[arg(long, env = "BLEAT_API_REQUEST_TIMEOUT_SECONDS", default_value_t = 10)]
     pub request_timeout_seconds: u64,
 
@@ -168,6 +183,8 @@ pub struct Config {
     pub challenge_cleanup_batch_size: usize,
     pub challenge_issuance_per_minute: usize,
     pub token_lifetime: Duration,
+    pub jwt_signing_key_file: Option<SecretFilePath>,
+    pub jwt_public_key_set_file: Option<SecretFilePath>,
     pub request_timeout: Duration,
     pub max_request_body_bytes: usize,
     pub max_concurrent_requests: usize,
@@ -181,6 +198,21 @@ pub struct DatabaseConfig {
     url: String,
     pub max_connections: usize,
     pub connect_timeout: Duration,
+}
+
+#[derive(Clone)]
+pub struct SecretFilePath(PathBuf);
+
+impl SecretFilePath {
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for SecretFilePath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("[REDACTED]")
+    }
 }
 
 impl DatabaseConfig {
@@ -258,6 +290,8 @@ impl Config {
             challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
             challenge_issuance_per_minute: arguments.challenge_issuance_per_minute,
             token_lifetime: Duration::from_secs(arguments.token_lifetime_seconds),
+            jwt_signing_key_file: secret_file_path(arguments.jwt_signing_key_file),
+            jwt_public_key_set_file: secret_file_path(arguments.jwt_public_key_set_file),
             request_timeout: Duration::from_secs(arguments.request_timeout_seconds),
             max_request_body_bytes: arguments.max_request_body_bytes,
             max_concurrent_requests: arguments.max_concurrent_requests,
@@ -318,6 +352,14 @@ impl Config {
             if self.public_issuer.scheme() != "https" {
                 return Err(ConfigError::ProductionIssuerMustUseHttps);
             }
+            if self.public_issuer.username() != ""
+                || self.public_issuer.password().is_some()
+                || self.public_issuer.query().is_some()
+                || self.public_issuer.fragment().is_some()
+                || self.public_issuer.path() != "/"
+            {
+                return Err(ConfigError::InvalidProductionIssuer);
+            }
             if self.apple_team_id.is_none() {
                 return Err(ConfigError::MissingProductionValue("Apple team ID"));
             }
@@ -344,6 +386,11 @@ impl Config {
             {
                 return Err(ConfigError::InvalidAppAttestValidationCategory);
             }
+            if self.jwt_signing_key_file.is_none() {
+                return Err(ConfigError::MissingProductionValue("JWT signing-key file"));
+            }
+        } else if self.jwt_signing_key_file.is_some() || self.jwt_public_key_set_file.is_some() {
+            return Err(ConfigError::ProductionSigningConfigurationOnly);
         }
 
         Ok(())
@@ -393,10 +440,16 @@ pub enum ConfigError {
     EmptyLogFilter,
     #[error("the production public issuer must use HTTPS")]
     ProductionIssuerMustUseHttps,
+    #[error(
+        "the production public issuer must be an origin URL without credentials, path, query, or fragment"
+    )]
+    InvalidProductionIssuer,
     #[error("production configuration requires {0}")]
     MissingProductionValue(&'static str),
     #[error("production configuration accepts production App Attest evidence only")]
     ProductionAppAttestRequired,
+    #[error("JWT signing-key files are accepted only in production mode")]
+    ProductionSigningConfigurationOnly,
     #[error("App Attest validation categories must use an Apple application category")]
     InvalidAppAttestValidationCategory,
     #[error("{0} must be an absolute HTTP or HTTPS URL without a query or fragment")]
@@ -410,6 +463,10 @@ fn non_empty(value: Option<String>) -> Option<String> {
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     })
+}
+
+fn secret_file_path(value: Option<PathBuf>) -> Option<SecretFilePath> {
+    value.and_then(|path| (!path.as_os_str().is_empty()).then_some(SecretFilePath(path)))
 }
 
 fn bounded_duration(
@@ -516,6 +573,8 @@ mod tests {
         assert_eq!(config.database.connect_timeout, Duration::from_secs(5));
         assert_eq!(config.challenge_cleanup_batch_size, 1_000);
         assert_eq!(config.challenge_issuance_per_minute, 600);
+        assert!(config.jwt_signing_key_file.is_none());
+        assert!(config.jwt_public_key_set_file.is_none());
         assert_eq!(config.jwt_algorithm(), compact_jwt::JwaAlg::ES256);
         assert!(!config.telemetry.traces_enabled);
         assert!(!config.telemetry.logs_enabled);
@@ -641,6 +700,101 @@ mod tests {
             missing_validation_categories.expect_err("validation categories must be required"),
             ConfigError::MissingProductionValue("App Attest validation-category allowlist")
         );
+
+        let missing_signing_key = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example",
+            "--apple-team-id",
+            "TEAM",
+            "--app-identifier",
+            "com.example.bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+            "--app-attest-validation-categories",
+            "4",
+        ]);
+        assert_eq!(
+            missing_signing_key.expect_err("JWT signing key must be required"),
+            ConfigError::MissingProductionValue("JWT signing-key file")
+        );
+
+        let issuer_with_path = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example/path",
+            "--apple-team-id",
+            "TEAM",
+            "--app-identifier",
+            "com.example.bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+            "--app-attest-validation-categories",
+            "4",
+            "--jwt-signing-key-file",
+            "/run/secrets/jwt.der",
+        ]);
+        assert_eq!(
+            issuer_with_path.expect_err("issuer paths must be rejected"),
+            ConfigError::InvalidProductionIssuer
+        );
+
+        let development_signing_key = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--jwt-signing-key-file",
+            "/private/signing-key.der",
+        ]);
+        assert_eq!(
+            development_signing_key.expect_err("development must use ephemeral signing"),
+            ConfigError::ProductionSigningConfigurationOnly
+        );
+    }
+
+    #[test]
+    fn signing_key_paths_are_redacted() {
+        let config = config(&[
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example",
+            "--apple-team-id",
+            "TEAM",
+            "--app-identifier",
+            "com.example.bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+            "--app-attest-validation-categories",
+            "4",
+            "--jwt-signing-key-file",
+            "/private/signing-key.der",
+            "--jwt-public-key-set-file",
+            "/private/public-keys.json",
+        ])
+        .expect("production signing configuration should validate");
+
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("signing-key.der"));
+        assert!(!debug.contains("public-keys.json"));
+        assert!(debug.contains("[REDACTED]"));
     }
 
     #[test]

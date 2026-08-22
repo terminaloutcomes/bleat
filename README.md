@@ -1037,8 +1037,10 @@ database-aware health/readiness, PostgreSQL-backed installation state, and
 single-use opaque attestation and token challenges. Its development mode also
 verifies deterministic fake P-256 evidence and issues ephemeral ES256 tokens
 for local Swift-to-PostgreSQL testing. Production mode validates Apple App
-Attest enrollment and replay-safe assertions; persistent signing-key rotation
-and production JWT issuance remain disabled until issue 66.
+Attest enrollment and replay-safe assertions, then issues the same narrow
+short-lived JWT from a mounted P-256 signing key. Public-only overlap keys,
+OIDC discovery, and JWKS support bounded signing-key rotation without embedding
+private deployment material in the repository or container image.
 
 On iOS, the authentication service URL comes from
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/gRPC origin comes from

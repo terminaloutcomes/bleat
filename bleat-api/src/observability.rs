@@ -72,6 +72,8 @@ pub fn log_startup_settings(config: &Config) {
         challenge_cleanup_batch_size = config.challenge_cleanup_batch_size,
         challenge_issuance_per_minute = config.challenge_issuance_per_minute,
         token_lifetime_seconds = config.token_lifetime.as_secs(),
+        jwt_signing_key_configured = config.jwt_signing_key_file.is_some(),
+        jwt_rotation_keys_configured = config.jwt_public_key_set_file.is_some(),
         request_timeout_seconds = config.request_timeout.as_secs(),
         max_request_body_bytes = config.max_request_body_bytes,
         max_concurrent_requests = config.max_concurrent_requests,

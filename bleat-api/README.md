@@ -4,8 +4,8 @@
 PostgreSQL for installation state and single-use opaque challenges. Development
 mode verifies deterministic fake P-256 evidence and issues ephemeral ES256
 tokens for end-to-end client testing. Production mode verifies Apple App Attest
-enrollment and assertions; persistent signing keys and production JWT issuance
-remain unavailable pending issue 66.
+enrollment and assertions, then issues narrow ES256 tokens from a mounted
+deployment signing key.
 
 ## Run locally
 
@@ -58,6 +58,8 @@ Flags and matching environment variables configure the service:
 | `--challenge-cleanup-batch-size` | `BLEAT_API_CHALLENGE_CLEANUP_BATCH_SIZE` | `1000` |
 | `--challenge-issuance-per-minute` | `BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE` | `600` |
 | `--token-lifetime-seconds` | `BLEAT_API_TOKEN_LIFETIME_SECONDS` | `600` |
+| `--jwt-signing-key-file` | `BLEAT_API_JWT_SIGNING_KEY_FILE` | unset; required in production |
+| `--jwt-public-key-set-file` | `BLEAT_API_JWT_PUBLIC_KEY_SET_FILE` | unset |
 | `--request-timeout-seconds` | `BLEAT_API_REQUEST_TIMEOUT_SECONDS` | `10` |
 | `--max-request-body-bytes` | `BLEAT_API_MAX_REQUEST_BODY_BYTES` | `65536` |
 | `--max-concurrent-requests` | `BLEAT_API_MAX_CONCURRENT_REQUESTS` | `64` |
@@ -71,11 +73,16 @@ bundle versions and validation categories. Apple's currently documented
 application categories are `1` through `6` and `10`; configure only the
 categories appropriate to the deployed build, such as TestFlight (`2`) or App
 Store (`4`). Invalid configuration or unavailable database migrations stop
-startup before the listener is bound. Database credentials are redacted from
-configuration diagnostics. Once the database is ready and the listener is
-bound, the `bleat-api started` event records the effective non-secret service
-settings. It reports whether Apple identifiers are configured without emitting
-their values, and never includes the database URL or OTLP connection details.
+startup before the listener is bound. The production issuer must be an HTTPS
+origin without credentials, a path, a query, or a fragment. The JWT signing-key
+file contains an unencrypted SEC1 DER P-256 private key supplied through a
+mounted deployment secret; it is never copied into the image or repository.
+The optional public-key-set file contains public rotation keys only. Database
+credentials and signing-key paths are redacted from configuration diagnostics.
+Once the database is ready and the listener is bound, the `bleat-api started`
+event records the effective non-secret service settings. It reports only
+whether Apple identifiers and signing configuration are present, and never
+includes the database URL, key paths, or OTLP connection details.
 
 ## OpenTelemetry
 
@@ -129,8 +136,14 @@ only this narrow telemetry token with exact issuer and audience semantics.
   and a base64url `attestation_object`.
 - `POST /v1/token` accepts `installation_id`, `challenge_id`, `challenge`, and
   a base64url `assertion_object`.
-- `GET /.well-known/openid-configuration` publishes development discovery.
-- `GET /.well-known/jwks.json` publishes the development ES256 public key.
+- `GET /.well-known/openid-configuration` publishes the exact configured issuer,
+  token endpoint, JWKS URI, and ES256 algorithm.
+- `GET /.well-known/jwks.json` publishes the active ES256 public key plus any
+  public rotation keys inside their configured publication windows.
+
+The discovery and JWKS responses use deterministic strong ETags and
+`Cache-Control: public, max-age=60`; matching `If-None-Match` requests return
+`304` without a body.
 
 Challenge routes return `201` with `challenge_id`, `challenge`, and
 `expires_at`. A challenge is 32 bytes of operating-system randomness encoded as
@@ -149,8 +162,9 @@ client-data hashes and fake P-256 proof-of-possession. Challenges are consumed
 before installations are created or counters are advanced, so failed or
 replayed evidence cannot be reused. Development JWTs live for ten minutes and
 contain `iss`, opaque installation `sub`, `aud=bleat-telemetry`,
-`scope=telemetry:write`, `iat`, `exp`, and `jti`. The ES256 signing key is
-generated at process startup and is intentionally not durable.
+`scope=telemetry:write`, `iat`, and `exp`, with no refresh token or additional
+claims. The ES256 signing key is generated at process startup and is
+intentionally not durable.
 
 Production enrollment follows Apple's App Attest validation sequence. It
 strictly and boundedly parses the attestation CBOR and authenticator data,
@@ -161,10 +175,53 @@ against that stored public key and environment, the token-purpose challenge,
 the configured application policy, and an atomically advanced monotonic
 counter. Externally these failures share the small authentication error shape;
 internal categories contain no evidence, challenge, signature, key ID, or
-installation identifier. Production token requests reach an authenticated
-installation principal after these checks, but return temporary unavailability
-until issue 66 supplies the persistent signer. Discovery and JWKS remain
-development-only until then.
+installation identifier. Production token requests use that authenticated
+principal to issue the same narrow ten-minute JWT from the mounted signing key.
+Disabling an installation prevents subsequent authentication and issuance;
+already-issued tokens expire naturally within their bounded lifetime.
+
+## JWT signing-key rotation
+
+The optional public-key-set file is bounded JSON with this shape:
+
+```json
+{
+  "keys": [
+    {
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "<base64url-public-x>",
+        "y": "<base64url-public-y>",
+        "alg": "ES256",
+        "use": "sig",
+        "kid": "<stable-key-id>"
+      },
+      "publish_from": "2026-08-22T00:00:00Z",
+      "publish_until": "2026-08-22T00:20:00Z"
+    }
+  ]
+}
+```
+
+Private `d` values, non-ES256 keys, duplicate key IDs, invalid windows, and
+windows shorter than the token lifetime plus 30 seconds of clock skew are
+rejected. An unexpired window must also have at least that safe overlap
+remaining when the service starts.
+
+Rotate without invalidating otherwise-valid tokens:
+
+1. Add the new public JWK to the public-key-set file and restart the service.
+2. Wait at least the 60-second JWKS cache lifetime.
+3. Mount the new private key as the active signing key, retain the old public
+   JWK in the public-key-set file, and restart the service.
+4. Keep the old public key published through the last old token expiry plus
+   30 seconds of clock skew; its configured window then removes it from JWKS.
+
+The active private key is the only private signing material loaded. Rotation
+entries are public verification keys and can be distributed independently.
+Ordinary logs record only bounded issuance outcomes, never JWTs, installation
+identifiers, key material, or key-file paths.
 
 ## Apple App Attest trust anchor
 
