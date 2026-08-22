@@ -1,6 +1,5 @@
 import BleatCore
 import Foundation
-import UIKit
 
 struct DiagnosticsEnvironment: Equatable, Sendable {
     let appVersion: String
@@ -9,12 +8,11 @@ struct DiagnosticsEnvironment: Equatable, Sendable {
     @MainActor
     static var current: DiagnosticsEnvironment {
         let bundle = Bundle.main
-        let device = UIDevice.current
         return DiagnosticsEnvironment(
             appVersion: bundle.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "Unknown",
-            operatingSystem: "\(device.systemName) \(device.systemVersion)"
+            operatingSystem: PlatformDevice.operatingSystem
         )
     }
 }

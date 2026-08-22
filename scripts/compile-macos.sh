@@ -14,7 +14,7 @@ xcodebuild \
   -scheme Bleat \
   ${BUILD_VERBOSE_FLAG} \
   -configuration Release \
-  -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+  -destination 'generic/platform=macOS' \
   -derivedDataPath .build/xcode-derived \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \

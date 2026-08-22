@@ -10,7 +10,7 @@ fi
 
 : "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
-readonly bleat_app=".build/macos-signed/Build/Products/Release-maccatalyst/Bleat.app"
+readonly bleat_app=".build/macos-signed/Build/Products/Release/Bleat.app"
 # shellcheck disable=SC2155
 readonly entitlements_file="$(mktemp "${TMPDIR:-/tmp}/bleat-entitlements.XXXXXX")"
 # shellcheck disable=SC2155
@@ -22,7 +22,7 @@ xcodebuild \
   -scheme BleatMac \
   -configuration Release \
   ${BUILD_VERBOSE_FLAG} \
-  -destination 'platform=macOS,variant=Mac Catalyst' \
+  -destination 'platform=macOS' \
   -derivedDataPath .build/macos-signed \
   -allowProvisioningUpdates \
   DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \

@@ -5,6 +5,12 @@ import XCTest
 
 @MainActor
 final class RemoteTelemetryConsentTests: XCTestCase {
+    #if os(macOS)
+        func testNativeMacOSDoesNotCreateTelemetryTokenProvider() {
+            XCTAssertNil(RemoteTelemetryController().tokenProvider)
+        }
+    #endif
+
     func testSystemAppAttestRequiresEnabledEffectiveBuildMode() {
         XCTAssertEqual(
             RemoteTelemetryAttesterSelection.resolve(

@@ -1,6 +1,8 @@
 import BleatCore
 import Foundation
+#if os(iOS)
 import UIKit
+#endif
 
 @MainActor
 final class RemoteTelemetryConsentStore {
@@ -104,74 +106,78 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let logger = RemoteTelemetryLogger()
     let privateCloudEvents: any PrivateCloudSyncEventRecording
     let tokenProvider: TelemetryTokenProvider?
-    private let worker: RemoteTelemetryRuntimeWorker
+    private let worker: RemoteTelemetryRuntimeWorker?
 
     init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
         privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
             tracer: tracer,
             logger: logger
         )
-        let version =
-            bundle.object(
-                forInfoDictionaryKey: "CFBundleShortVersionString"
-            ) as? String ?? "0"
-        let build =
-            bundle.object(forInfoDictionaryKey: "CFBundleVersion")
-            as? String ?? "0"
-        let systemVersion = processInfo.operatingSystemVersion
-        let platform: RemoteTelemetryPlatform
-        #if targetEnvironment(macCatalyst)
-            platform = .macOS
+        #if os(macOS)
+            // Remote telemetry export is not in scope for the native macOS app.
+            // Do not create App Attest state, tokens, persisted batches, or OTLP
+            // traffic on that platform.
+            tokenProvider = nil
+            worker = nil
         #else
-            platform =
+            let version =
+                bundle.object(
+                    forInfoDictionaryKey: "CFBundleShortVersionString"
+                ) as? String ?? "0"
+            let build =
+                bundle.object(forInfoDictionaryKey: "CFBundleVersion")
+                as? String ?? "0"
+            let systemVersion = processInfo.operatingSystemVersion
+            let platform: RemoteTelemetryPlatform =
                 UIDevice.current.userInterfaceIdiom == .pad
                 ? .iPadOS : .iOS
-        #endif
-        let resource = try? RemoteTelemetryResource(
-            applicationVersion: version,
-            applicationBuild: build,
-            platform: platform,
-            operatingSystemMajorVersion: systemVersion.majorVersion,
-            operatingSystemMinorVersion: systemVersion.minorVersion,
-            operatingSystemPatchVersion: systemVersion.patchVersion
-        )
-        let storageRootURL = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first?.appendingPathComponent(
-            "Bleat/RemoteTelemetry",
-            isDirectory: true
-        )
-        let tokenProvider = Self.makeTokenProvider(bundle: bundle)
-        self.tokenProvider = tokenProvider
-        let exporterConfiguration = Self.makeExporterConfiguration(
-            bundle: bundle
-        )
-        let downstreamExportersFactory:
-            (@Sendable () -> AuthenticatedOtlpExporters?)? =
-                if let tokenProvider, let exporterConfiguration {
-                    {
-                        AuthenticatedOtlpExporters(
-                            configuration: exporterConfiguration,
-                            tokenProvider: tokenProvider
-                        )
+            let resource = try? RemoteTelemetryResource(
+                applicationVersion: version,
+                applicationBuild: build,
+                platform: platform,
+                operatingSystemMajorVersion: systemVersion.majorVersion,
+                operatingSystemMinorVersion: systemVersion.minorVersion,
+                operatingSystemPatchVersion: systemVersion.patchVersion
+            )
+            let storageRootURL = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first?.appendingPathComponent(
+                "Bleat/RemoteTelemetry",
+                isDirectory: true
+            )
+            let tokenProvider = Self.makeTokenProvider(bundle: bundle)
+            self.tokenProvider = tokenProvider
+            let exporterConfiguration = Self.makeExporterConfiguration(
+                bundle: bundle
+            )
+            let downstreamExportersFactory:
+                (@Sendable () -> AuthenticatedOtlpExporters?)? =
+                    if let tokenProvider, let exporterConfiguration {
+                        {
+                            AuthenticatedOtlpExporters(
+                                configuration: exporterConfiguration,
+                                tokenProvider: tokenProvider
+                            )
+                        }
+                    } else {
+                        nil
                     }
-                } else {
-                    nil
-                }
-        worker = RemoteTelemetryRuntimeWorker(
-            tracer: tracer,
-            logger: logger,
-            resource: resource,
-            storageRootURL: storageRootURL,
-            downstreamExportersFactory: downstreamExportersFactory
-        )
+            worker = RemoteTelemetryRuntimeWorker(
+                tracer: tracer,
+                logger: logger,
+                resource: resource,
+                storageRootURL: storageRootURL,
+                downstreamExportersFactory: downstreamExportersFactory
+            )
+        #endif
     }
 
     func applyRemoteTelemetryConsent(
         _ enabled: Bool,
         storageGeneration: UUID?
     ) {
+        guard let worker else { return }
         if let tokenProvider {
             Task {
                 await tokenProvider.setEnabled(enabled)
@@ -189,7 +195,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     }
 
     func setRemoteTelemetryForeground(_ foreground: Bool) {
-        worker.setForeground(foreground)
+        worker?.setForeground(foreground)
     }
 
     private static func makeTokenProvider(

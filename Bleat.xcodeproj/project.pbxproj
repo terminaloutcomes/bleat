@@ -10,6 +10,7 @@
 		012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */; };
 		01DD46D2990FCB9441F50362 /* Bleat.icon in Resources */ = {isa = PBXBuildFile; fileRef = B458AC215D720282F4321F56 /* Bleat.icon */; };
 		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
+		0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */; };
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */; };
 		212CB9A152C459B1BFDFBBCF /* CoverImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */; };
@@ -45,6 +46,7 @@
 		9C2AED3A3DFEB50C76339275 /* BleatReleaseScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A82F11A48563C7E31708E0 /* BleatReleaseScreenshotTests.swift */; };
 		9EF6CCB025A3F5968759DDB8 /* AppAttestTelemetryAttester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */; };
 		9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */; };
+		A51C841C32B1D6C4A7C0C4CC /* CoverImageProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98328ED26C5D97372814A7E2 /* CoverImageProcessorTests.swift */; };
 		AA52BE76FF8BA97DA914DC49 /* CarPlayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */; };
 		AB7C3A9C94547D9FB53D1C4B /* BleatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 05BA90A0AA1604ECD1B8BCC9 /* BleatCore */; };
 		B6C10C962CA72B7128D294C9 /* RemoteTelemetryConsent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */; };
@@ -113,10 +115,11 @@
 		81F0EDAD38A8432D9D34BAB3 /* Bleat.cloudkit-disabled.app-attest-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.entitlements"; sourceTree = "<group>"; };
 		83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentationLinkTests.swift; sourceTree = "<group>"; };
+		98328ED26C5D97372814A7E2 /* CoverImageProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessorTests.swift; sourceTree = "<group>"; };
 		9AB1ED02686BB81111FD34C9 /* Bleat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Bleat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E5B7432546E8AA37553ACC4 /* CoverImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageProcessor.swift; sourceTree = "<group>"; };
 		9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStore.swift; sourceTree = "<group>"; };
-		A7BFAE347AEDFB9E315AD92C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSupport.swift; sourceTree = "<group>"; };
 		A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.enabled.entitlements; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttesterTests.swift; sourceTree = "<group>"; };
@@ -168,6 +171,7 @@
 				AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */,
 				543E50567C1D837B42834F5F /* AppMetadataTests.swift */,
 				26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */,
+				98328ED26C5D97372814A7E2 /* CoverImageProcessorTests.swift */,
 				0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */,
 				167198E5BD5E2D8F310D77E3 /* DiagnosticLogStoreTests.swift */,
 				979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */,
@@ -246,13 +250,13 @@
 				4950BC670E13077D21391E19 /* DiagnosticLogStore.swift */,
 				83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */,
 				6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */,
-				A7BFAE347AEDFB9E315AD92C /* Info.plist */,
 				12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */,
 				F8D22D9E035F6E4DE28DE0B5 /* LocalPlaybackSessionStore.swift */,
 				F2675018070436D35F6FC0FF /* MetadataEditorView.swift */,
 				555C0318F83AFD25BAE18A54 /* NearbyServerDiscovery.swift */,
 				F892257918F5A179B138847A /* NetworkPathMonitor.swift */,
 				46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */,
+				A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */,
 				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
 				9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */,
 				DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */,
@@ -459,6 +463,7 @@
 				9895D563B5F16CA7F25E7F96 /* AppMetadataTests.swift in Sources */,
 				5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */,
 				509E512BD4358EA5BCBA799D /* AudioChapterSliceExporterTests.swift in Sources */,
+				A51C841C32B1D6C4A7C0C4CC /* CoverImageProcessorTests.swift in Sources */,
 				421E1D94991D910E1C6FAA04 /* DeepLinkTests.swift in Sources */,
 				6E053570A66A3B972AE16A4F /* DiagnosticLogStoreTests.swift in Sources */,
 				18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */,
@@ -507,6 +512,7 @@
 				7DA9590A2267DF4B5A0E9C91 /* NearbyServerDiscovery.swift in Sources */,
 				6D4C2A7EA41FCD9E6684DBD7 /* NetworkPathMonitor.swift in Sources */,
 				3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */,
+				0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */,
 				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
 				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
 				012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */,
@@ -582,7 +588,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -647,7 +653,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -705,8 +711,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = App/Info.plist;
-				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
+				INFOPLIST_FILE = "App/Info-macOS.plist";
+				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -715,8 +722,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -769,8 +776,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = App/Info.plist;
-				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
+				INFOPLIST_FILE = "App/Info-macOS.plist";
+				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -779,8 +787,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -793,7 +801,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -801,8 +808,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).BleatTests";
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -816,7 +823,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -824,8 +830,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).BleatTests";
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";

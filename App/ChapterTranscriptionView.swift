@@ -1588,7 +1588,7 @@ struct ChapterTranscriptionView: View {
                 }
             }
             .navigationTitle("Transcription")
-            .navigationBarTitleDisplayMode(.inline)
+            .iOSInlineNavigationTitle()
             .searchable(
                 text: $searchQuery,
                 prompt: "Search Transcriptions"
@@ -2062,7 +2062,7 @@ struct ChapterTranscriptionView: View {
     ) -> some View {
         Menu {
             Button("Copy Text", systemImage: "doc.on.doc") {
-                UIPasteboard.general.string = segment.text
+                PlatformClipboard.copy(segment.text)
             }
             .accessibilityIdentifier("transcription.copyText")
 
