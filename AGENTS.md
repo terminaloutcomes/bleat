@@ -97,6 +97,12 @@ Preserve both the originating operation and typed failure cause through service,
 model, UI, and diagnostics boundaries. Do not collapse distinct failures into a
 generic unavailable/failed state: translate them only into a typed,
 privacy-safe presentation cause, with retry behavior decided from that type.
+Observability must emit a stable machine-readable code for the most specific
+typed failure cause and the exact processing stage that rejected it. A broad
+category may be included for aggregation, but must never replace the specific
+cause or stage. When a value is sensitive, omit the value while retaining its
+typed validation failure; privacy is not justification for erasing diagnostic
+specificity.
 
 Treat every recoverable failure as data, never as a reason to terminate the
 application. Production code must not use force unwraps, forced casts, `try!`,
