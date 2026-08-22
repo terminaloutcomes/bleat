@@ -199,6 +199,18 @@ principal to issue the same narrow ten-minute JWT from the mounted signing key.
 Disabling an installation prevents subsequent authentication and issuance;
 already-issued tokens expire naturally within their bounded lifetime.
 
+The production authenticator-data parser is kept aligned with Apple's public
+[Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide).
+Its published 2026 authenticator data is retained as a versioned regression
+fixture under `tests/fixtures/apple-app-attest/`. In particular, Apple encodes
+`apple_validation_category_01` as a four-byte little-endian byte string, not as
+a CBOR integer; `apple_bundle_version_01` is a CBOR text string. The fixture test
+checks the RP ID hash, counter, production AAGUID, credential ID, COSE public-key
+hash, validation category, and bundle version together. The complete synthetic
+production-verifier tests additionally cover certificate-chain, nonce, policy,
+and assertion-signature validation without depending on Apple or external
+configuration.
+
 ## JWT signing-key rotation
 
 The optional public-key-set file is bounded JSON with this shape:

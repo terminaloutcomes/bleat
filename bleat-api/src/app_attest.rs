@@ -871,7 +871,9 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
         &["apple_validation_category_01", "apple_bundle_version_01"],
     )?;
     let validation_category = match fields.remove("apple_validation_category_01") {
-        Some(Value::Integer(value)) => u32::try_from(value).map_err(|_| malformed())?,
+        Some(Value::Bytes(value)) if value.len() == size_of::<u32>() => {
+            u32::from_le_bytes(value.try_into().map_err(|_| malformed())?)
+        }
         _ => return Err(malformed()),
     };
     let bundle_version = take_text(&mut fields, "apple_bundle_version_01")?;
@@ -1152,7 +1154,7 @@ mod tests {
         Value::Map(vec![
             (
                 Value::Text("apple_validation_category_01".to_owned()),
-                Value::Integer(VALIDATION_CATEGORY.into()),
+                Value::Bytes(VALIDATION_CATEGORY.to_le_bytes().to_vec()),
             ),
             (
                 Value::Text("apple_bundle_version_01".to_owned()),
@@ -1568,6 +1570,39 @@ mod tests {
     }
 
     #[test]
+    fn apple_validation_guide_authenticator_data_parses_exact_claim_encoding() {
+        // Public fixture from Apple's App Attest Attestation Object Validation Guide:
+        // https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide
+        let encoded = STANDARD
+            .decode(include_str!(
+                "../tests/fixtures/apple-app-attest/2026-validation-guide-authenticator-data.b64"
+            ).trim())
+            .expect("Apple fixture should be valid base64");
+
+        let parsed = AttestationAuthenticatorData::parse(&encoded)
+            .expect("Apple fixture authenticator data should parse");
+
+        assert_eq!(
+            parsed.rp_id_hash,
+            Sha256::digest(b"1234567890.com.example.myapp").as_slice()
+        );
+        assert_eq!(parsed.counter, 0);
+        assert_eq!(parsed.environment, InstallationEnvironment::Production);
+        assert_eq!(
+            parsed.credential_id,
+            STANDARD
+                .decode("zgSY9YSD+7TaDXssY6WlOPVS1K3Lmk+pFhlcSWE+ZV0=")
+                .expect("Apple fixture key ID should be valid base64")
+        );
+        assert_eq!(
+            Sha256::digest(parsed.encoded_public_key).as_slice(),
+            parsed.credential_id
+        );
+        assert_eq!(parsed.claims.validation_category, 1);
+        assert_eq!(parsed.claims.bundle_version, "1");
+    }
+
+    #[test]
     fn authenticator_cose_and_claim_parsers_reject_boundary_shapes() {
         let signing_key = SigningKey::from_slice(&[23; 32]).expect("test key should be valid");
         let public_key = signing_key.verifying_key().to_encoded_point(false);
@@ -1640,7 +1675,7 @@ mod tests {
             Value::Map(vec![
                 (
                     Value::Text("apple_validation_category_01".to_owned()),
-                    Value::Integer(VALIDATION_CATEGORY.into()),
+                    Value::Bytes(VALIDATION_CATEGORY.to_le_bytes().to_vec()),
                 ),
                 (
                     Value::Text("apple_bundle_version_01".to_owned()),
