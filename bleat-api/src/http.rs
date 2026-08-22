@@ -456,13 +456,29 @@ fn map_verification_error(
 ) -> ApiError {
     let category = error.category().metric_name();
     let stage = error.stage().metric_name();
+    let detail = error.detail().metric_name();
+    let observed_type = error.observed_type().map(|value| value.metric_name());
     let span = tracing::Span::current();
     span.record("app_attest.failure.category", category);
     span.record("app_attest.failure.stage", stage);
+    span.record("app_attest.failure.detail", detail);
+    if let Some(observed_type) = observed_type {
+        span.record("app_attest.observed.cbor_type", observed_type);
+    }
+    if let Some(observed_length) = error.observed_length() {
+        span.record("app_attest.observed.length", observed_length);
+    }
+    if let Some(observed_count) = error.observed_count() {
+        span.record("app_attest.observed.count", observed_count);
+    }
     warn!(
         operation,
         category,
         stage,
+        detail,
+        observed_type,
+        observed_length = error.observed_length(),
+        observed_count = error.observed_count(),
         request_id = %request_id.0,
         "installation authentication rejected"
     );
@@ -641,6 +657,10 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         user_agent.original = field::Empty,
         app_attest.failure.category = field::Empty,
         app_attest.failure.stage = field::Empty,
+        app_attest.failure.detail = field::Empty,
+        app_attest.observed.cbor_type = field::Empty,
+        app_attest.observed.length = field::Empty,
+        app_attest.observed.count = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );

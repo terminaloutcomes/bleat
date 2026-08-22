@@ -115,6 +115,76 @@ pub enum AppAttestVerificationStage {
     AssertionSignatureVerification,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppAttestFailureDetail {
+    Unspecified,
+    ExtensionsCbor,
+    ExtensionsTrailingData,
+    ExtensionsNotMap,
+    ExtensionsFieldCount,
+    ExtensionsKeyType,
+    ExtensionsUnknownKey,
+    ExtensionsDuplicateKey,
+    ValidationCategoryMissing,
+    ValidationCategoryType,
+    ValidationCategoryLength,
+    BundleVersionMissing,
+    BundleVersionType,
+    BundleVersionLength,
+}
+
+impl AppAttestFailureDetail {
+    pub const fn metric_name(self) -> &'static str {
+        match self {
+            Self::Unspecified => "unspecified",
+            Self::ExtensionsCbor => "extensions.cbor",
+            Self::ExtensionsTrailingData => "extensions.trailing_data",
+            Self::ExtensionsNotMap => "extensions.not_map",
+            Self::ExtensionsFieldCount => "extensions.field_count",
+            Self::ExtensionsKeyType => "extensions.key_type",
+            Self::ExtensionsUnknownKey => "extensions.unknown_key",
+            Self::ExtensionsDuplicateKey => "extensions.duplicate_key",
+            Self::ValidationCategoryMissing => "extensions.validation_category.missing",
+            Self::ValidationCategoryType => "extensions.validation_category.type",
+            Self::ValidationCategoryLength => "extensions.validation_category.length",
+            Self::BundleVersionMissing => "extensions.bundle_version.missing",
+            Self::BundleVersionType => "extensions.bundle_version.type",
+            Self::BundleVersionLength => "extensions.bundle_version.length",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CborValueKind {
+    Integer,
+    Bytes,
+    Float,
+    Text,
+    Bool,
+    Null,
+    Tag,
+    Array,
+    Map,
+    Other,
+}
+
+impl CborValueKind {
+    pub const fn metric_name(self) -> &'static str {
+        match self {
+            Self::Integer => "integer",
+            Self::Bytes => "bytes",
+            Self::Float => "float",
+            Self::Text => "text",
+            Self::Bool => "bool",
+            Self::Null => "null",
+            Self::Tag => "tag",
+            Self::Array => "array",
+            Self::Map => "map",
+            Self::Other => "other",
+        }
+    }
+}
+
 impl AppAttestVerificationStage {
     pub const fn metric_name(self) -> &'static str {
         match self {
@@ -154,6 +224,10 @@ impl AppAttestVerificationStage {
 pub struct AppAttestVerificationError {
     category: AppAttestFailureCategory,
     stage: AppAttestVerificationStage,
+    detail: AppAttestFailureDetail,
+    observed_type: Option<CborValueKind>,
+    observed_length: Option<usize>,
+    observed_count: Option<usize>,
 }
 
 impl AppAttestVerificationError {
@@ -161,6 +235,10 @@ impl AppAttestVerificationError {
         Self {
             category,
             stage: AppAttestVerificationStage::Verification,
+            detail: AppAttestFailureDetail::Unspecified,
+            observed_type: None,
+            observed_length: None,
+            observed_count: None,
         }
     }
 
@@ -171,12 +249,48 @@ impl AppAttestVerificationError {
         self
     }
 
+    const fn with_detail(mut self, detail: AppAttestFailureDetail) -> Self {
+        self.detail = detail;
+        self
+    }
+
+    const fn with_observed_type(mut self, observed_type: CborValueKind) -> Self {
+        self.observed_type = Some(observed_type);
+        self
+    }
+
+    const fn with_observed_length(mut self, observed_length: usize) -> Self {
+        self.observed_length = Some(observed_length);
+        self
+    }
+
+    const fn with_observed_count(mut self, observed_count: usize) -> Self {
+        self.observed_count = Some(observed_count);
+        self
+    }
+
     pub const fn category(self) -> AppAttestFailureCategory {
         self.category
     }
 
     pub const fn stage(self) -> AppAttestVerificationStage {
         self.stage
+    }
+
+    pub const fn detail(self) -> AppAttestFailureDetail {
+        self.detail
+    }
+
+    pub const fn observed_type(self) -> Option<CborValueKind> {
+        self.observed_type
+    }
+
+    pub const fn observed_length(self) -> Option<usize> {
+        self.observed_length
+    }
+
+    pub const fn observed_count(self) -> Option<usize> {
+        self.observed_count
     }
 }
 
@@ -866,24 +980,91 @@ fn parse_cose_public_key(
 }
 
 fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerificationError> {
-    let mut fields = decode_cbor_map(
-        encoded,
-        &["apple_validation_category_01", "apple_bundle_version_01"],
-    )?;
+    let mut cursor = Cursor::new(encoded);
+    let value: Value = ciborium::from_reader(&mut cursor)
+        .map_err(|_| malformed().with_detail(AppAttestFailureDetail::ExtensionsCbor))?;
+    if cursor.position() != encoded.len() as u64 {
+        return Err(malformed().with_detail(AppAttestFailureDetail::ExtensionsTrailingData));
+    }
+    let Value::Map(entries) = value else {
+        return Err(malformed()
+            .with_detail(AppAttestFailureDetail::ExtensionsNotMap)
+            .with_observed_type(cbor_value_kind(&value)));
+    };
+    if entries.len() != 2 {
+        return Err(malformed()
+            .with_detail(AppAttestFailureDetail::ExtensionsFieldCount)
+            .with_observed_count(entries.len()));
+    }
+    let mut fields = BTreeMap::new();
+    for (key, value) in entries {
+        let Value::Text(key) = key else {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::ExtensionsKeyType)
+                .with_observed_type(cbor_value_kind(&key)));
+        };
+        if !["apple_validation_category_01", "apple_bundle_version_01"].contains(&key.as_str()) {
+            return Err(malformed().with_detail(AppAttestFailureDetail::ExtensionsUnknownKey));
+        }
+        if fields.insert(key, value).is_some() {
+            return Err(malformed().with_detail(AppAttestFailureDetail::ExtensionsDuplicateKey));
+        }
+    }
     let validation_category = match fields.remove("apple_validation_category_01") {
         Some(Value::Bytes(value)) if value.len() == size_of::<u32>() => {
             u32::from_le_bytes(value.try_into().map_err(|_| malformed())?)
         }
-        _ => return Err(malformed()),
+        Some(Value::Bytes(value)) => {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::ValidationCategoryLength)
+                .with_observed_type(CborValueKind::Bytes)
+                .with_observed_length(value.len()));
+        }
+        Some(value) => {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::ValidationCategoryType)
+                .with_observed_type(cbor_value_kind(&value)));
+        }
+        None => {
+            return Err(malformed().with_detail(AppAttestFailureDetail::ValidationCategoryMissing));
+        }
     };
-    let bundle_version = take_text(&mut fields, "apple_bundle_version_01")?;
+    let bundle_version = match fields.remove("apple_bundle_version_01") {
+        Some(Value::Text(value)) => value,
+        Some(value) => {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::BundleVersionType)
+                .with_observed_type(cbor_value_kind(&value)));
+        }
+        None => {
+            return Err(malformed().with_detail(AppAttestFailureDetail::BundleVersionMissing));
+        }
+    };
     if bundle_version.is_empty() || bundle_version.len() > MAX_BUNDLE_VERSION_BYTES {
-        return Err(malformed());
+        return Err(malformed()
+            .with_detail(AppAttestFailureDetail::BundleVersionLength)
+            .with_observed_type(CborValueKind::Text)
+            .with_observed_length(bundle_version.len()));
     }
     Ok(AppAttestClaims {
         validation_category,
         bundle_version,
     })
+}
+
+fn cbor_value_kind(value: &Value) -> CborValueKind {
+    match value {
+        Value::Integer(_) => CborValueKind::Integer,
+        Value::Bytes(_) => CborValueKind::Bytes,
+        Value::Float(_) => CborValueKind::Float,
+        Value::Text(_) => CborValueKind::Text,
+        Value::Bool(_) => CborValueKind::Bool,
+        Value::Null => CborValueKind::Null,
+        Value::Tag(_, _) => CborValueKind::Tag,
+        Value::Array(_) => CborValueKind::Array,
+        Value::Map(_) => CborValueKind::Map,
+        _ => CborValueKind::Other,
+    }
 }
 
 fn verify_certificate_chain(
@@ -1600,6 +1781,80 @@ mod tests {
         );
         assert_eq!(parsed.claims.validation_category, 1);
         assert_eq!(parsed.claims.bundle_version, "1");
+    }
+
+    #[test]
+    fn claim_parser_preserves_safe_structural_failure_details() {
+        let cases = [
+            (
+                Value::Map(vec![(
+                    Value::Text("apple_bundle_version_01".to_owned()),
+                    Value::Text(BUNDLE_VERSION.to_owned()),
+                )]),
+                AppAttestFailureDetail::ExtensionsFieldCount,
+                None,
+                None,
+                Some(1),
+            ),
+            (
+                Value::Map(vec![
+                    (
+                        Value::Text("apple_validation_category_01".to_owned()),
+                        Value::Integer(VALIDATION_CATEGORY.into()),
+                    ),
+                    (
+                        Value::Text("apple_bundle_version_01".to_owned()),
+                        Value::Text(BUNDLE_VERSION.to_owned()),
+                    ),
+                ]),
+                AppAttestFailureDetail::ValidationCategoryType,
+                Some(CborValueKind::Integer),
+                None,
+                None,
+            ),
+            (
+                Value::Map(vec![
+                    (
+                        Value::Text("apple_validation_category_01".to_owned()),
+                        Value::Bytes(vec![1, 0, 0]),
+                    ),
+                    (
+                        Value::Text("apple_bundle_version_01".to_owned()),
+                        Value::Text(BUNDLE_VERSION.to_owned()),
+                    ),
+                ]),
+                AppAttestFailureDetail::ValidationCategoryLength,
+                Some(CborValueKind::Bytes),
+                Some(3),
+                None,
+            ),
+            (
+                Value::Map(vec![
+                    (
+                        Value::Text("apple_validation_category_01".to_owned()),
+                        Value::Bytes(VALIDATION_CATEGORY.to_le_bytes().to_vec()),
+                    ),
+                    (
+                        Value::Text("apple_bundle_version_01".to_owned()),
+                        Value::Bytes(vec![1]),
+                    ),
+                ]),
+                AppAttestFailureDetail::BundleVersionType,
+                Some(CborValueKind::Bytes),
+                None,
+                None,
+            ),
+        ];
+
+        for (claims, detail, observed_type, observed_length, observed_count) in cases {
+            let error = parse_claims(&encode_cbor_bytes(&claims))
+                .err()
+                .expect("invalid claims should preserve their structural failure");
+            assert_eq!(error.detail(), detail);
+            assert_eq!(error.observed_type(), observed_type);
+            assert_eq!(error.observed_length(), observed_length);
+            assert_eq!(error.observed_count(), observed_count);
+        }
     }
 
     #[test]
