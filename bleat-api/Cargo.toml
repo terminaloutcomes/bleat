@@ -38,10 +38,12 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5.8"
 uuid = { version = "1.24.1", features = ["v4", "serde"] }
 x509-parser = "0.18.1"
+zeroize = "1.8.2"
 
 [dev-dependencies]
 http-body-util = "0.1.5"
 opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["testing", "trace", "logs"] }
 proptest = "1.11.0"
 rcgen = "0.14.9"
+testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 tower = { version = "0.5.3", features = ["util"] }

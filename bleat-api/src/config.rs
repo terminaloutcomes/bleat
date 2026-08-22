@@ -1,4 +1,9 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 use clap::{Parser, ValueEnum};
 use serde::Serialize;
@@ -133,6 +138,16 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_TOKEN_LIFETIME_SECONDS", default_value_t = 600)]
     pub token_lifetime_seconds: u64,
 
+    #[arg(long, env = "BLEAT_API_JWT_SIGNING_KEY_FILE", hide_env_values = true)]
+    pub jwt_signing_key_file: Option<PathBuf>,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_JWT_PUBLIC_KEY_SET_FILE",
+        hide_env_values = true
+    )]
+    pub jwt_public_key_set_file: Option<PathBuf>,
+
     #[arg(long, env = "BLEAT_API_REQUEST_TIMEOUT_SECONDS", default_value_t = 10)]
     pub request_timeout_seconds: u64,
 
@@ -168,6 +183,8 @@ pub struct Config {
     pub challenge_cleanup_batch_size: usize,
     pub challenge_issuance_per_minute: usize,
     pub token_lifetime: Duration,
+    pub jwt_signing_key_file: Option<SecretFilePath>,
+    pub jwt_public_key_set_file: Option<SecretFilePath>,
     pub request_timeout: Duration,
     pub max_request_body_bytes: usize,
     pub max_concurrent_requests: usize,
@@ -181,6 +198,21 @@ pub struct DatabaseConfig {
     url: String,
     pub max_connections: usize,
     pub connect_timeout: Duration,
+}
+
+#[derive(Clone)]
+pub struct SecretFilePath(PathBuf);
+
+impl SecretFilePath {
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for SecretFilePath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("[REDACTED]")
+    }
 }
 
 impl DatabaseConfig {
@@ -258,6 +290,8 @@ impl Config {
             challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
             challenge_issuance_per_minute: arguments.challenge_issuance_per_minute,
             token_lifetime: Duration::from_secs(arguments.token_lifetime_seconds),
+            jwt_signing_key_file: secret_file_path(arguments.jwt_signing_key_file),
+            jwt_public_key_set_file: secret_file_path(arguments.jwt_public_key_set_file),
             request_timeout: Duration::from_secs(arguments.request_timeout_seconds),
             max_request_body_bytes: arguments.max_request_body_bytes,
             max_concurrent_requests: arguments.max_concurrent_requests,
@@ -318,6 +352,14 @@ impl Config {
             if self.public_issuer.scheme() != "https" {
                 return Err(ConfigError::ProductionIssuerMustUseHttps);
             }
+            if self.public_issuer.username() != ""
+                || self.public_issuer.password().is_some()
+                || self.public_issuer.query().is_some()
+                || self.public_issuer.fragment().is_some()
+                || self.public_issuer.path() != "/"
+            {
+                return Err(ConfigError::InvalidProductionIssuer);
+            }
             if self.apple_team_id.is_none() {
                 return Err(ConfigError::MissingProductionValue("Apple team ID"));
             }
@@ -344,6 +386,11 @@ impl Config {
             {
                 return Err(ConfigError::InvalidAppAttestValidationCategory);
             }
+            if self.jwt_signing_key_file.is_none() {
+                return Err(ConfigError::MissingProductionValue("JWT signing-key file"));
+            }
+        } else if self.jwt_signing_key_file.is_some() || self.jwt_public_key_set_file.is_some() {
+            return Err(ConfigError::ProductionSigningConfigurationOnly);
         }
 
         Ok(())
@@ -393,10 +440,16 @@ pub enum ConfigError {
     EmptyLogFilter,
     #[error("the production public issuer must use HTTPS")]
     ProductionIssuerMustUseHttps,
+    #[error(
+        "the production public issuer must be an origin URL without credentials, path, query, or fragment"
+    )]
+    InvalidProductionIssuer,
     #[error("production configuration requires {0}")]
     MissingProductionValue(&'static str),
     #[error("production configuration accepts production App Attest evidence only")]
     ProductionAppAttestRequired,
+    #[error("JWT signing-key files are accepted only in production mode")]
+    ProductionSigningConfigurationOnly,
     #[error("App Attest validation categories must use an Apple application category")]
     InvalidAppAttestValidationCategory,
     #[error("{0} must be an absolute HTTP or HTTPS URL without a query or fragment")]
@@ -410,6 +463,10 @@ fn non_empty(value: Option<String>) -> Option<String> {
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     })
+}
+
+fn secret_file_path(value: Option<PathBuf>) -> Option<SecretFilePath> {
+    value.and_then(|path| (!path.as_os_str().is_empty()).then_some(SecretFilePath(path)))
 }
 
 fn bounded_duration(
@@ -484,28 +541,57 @@ fn validate_protocol(
 mod tests {
     use std::collections::HashMap;
 
+    use clap::{CommandFactory, FromArgMatches};
+
     use super::*;
 
-    fn arguments(values: &[&str]) -> Arguments {
-        Arguments::try_parse_from(values).expect("test arguments should parse")
+    fn development_arguments() -> Arguments {
+        Arguments {
+            bind_address: DEFAULT_BIND_ADDRESS
+                .parse()
+                .expect("default bind address should parse"),
+            public_issuer: Url::parse(DEFAULT_ISSUER).expect("default issuer should parse"),
+            deployment_mode: DeploymentMode::Development,
+            apple_team_id: None,
+            app_identifier: None,
+            app_attest_environment: AppAttestEnvironment::Development,
+            app_attest_bundle_versions: Vec::new(),
+            app_attest_validation_categories: Vec::new(),
+            database_url: "postgres://bleat:development@127.0.0.1:5432/bleat".to_owned(),
+            database_max_connections: 16,
+            database_connect_timeout_seconds: 5,
+            challenge_lifetime_seconds: 120,
+            challenge_cleanup_batch_size: 1_000,
+            challenge_issuance_per_minute: 600,
+            token_lifetime_seconds: 600,
+            jwt_signing_key_file: None,
+            jwt_public_key_set_file: None,
+            request_timeout_seconds: 10,
+            max_request_body_bytes: 65_536,
+            max_concurrent_requests: 64,
+            log_filter: DEFAULT_LOG_FILTER.to_owned(),
+            log_format: LogFormat::Compact,
+        }
     }
 
-    fn config(values: &[&str]) -> Result<Config, ConfigError> {
-        Config::from_arguments(arguments(values), TelemetryExportConfig::default())
+    fn config(configure: impl FnOnce(&mut Arguments)) -> Result<Config, ConfigError> {
+        let mut arguments = development_arguments();
+        configure(&mut arguments);
+        Config::from_arguments(arguments, TelemetryExportConfig::default())
     }
 
-    fn development_arguments() -> Vec<&'static str> {
-        vec![
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-        ]
+    fn parse_arguments_without_environment(
+        values: impl IntoIterator<Item = impl Into<std::ffi::OsString> + Clone>,
+    ) -> Result<Arguments, clap::Error> {
+        let matches = Arguments::command()
+            .mut_args(|argument| argument.env(None::<&'static str>))
+            .try_get_matches_from(values)?;
+        Arguments::from_arg_matches(&matches)
     }
 
     #[test]
-    fn development_defaults_are_bounded_and_use_es256() {
-        let config =
-            config(&development_arguments()).expect("development defaults should validate");
+    fn development_configuration_is_bounded_and_uses_es256() {
+        let config = config(|_| {}).expect("development defaults should validate");
 
         assert_eq!(config.bind_address.to_string(), DEFAULT_BIND_ADDRESS);
         assert_eq!(config.public_issuer.as_str(), "http://127.0.0.1:8080/");
@@ -516,14 +602,16 @@ mod tests {
         assert_eq!(config.database.connect_timeout, Duration::from_secs(5));
         assert_eq!(config.challenge_cleanup_batch_size, 1_000);
         assert_eq!(config.challenge_issuance_per_minute, 600);
+        assert!(config.jwt_signing_key_file.is_none());
+        assert!(config.jwt_public_key_set_file.is_none());
         assert_eq!(config.jwt_algorithm(), compact_jwt::JwaAlg::ES256);
         assert!(!config.telemetry.traces_enabled);
         assert!(!config.telemetry.logs_enabled);
     }
 
     #[test]
-    fn command_line_values_override_defaults() {
-        let config = config(&[
+    fn command_line_parser_is_explicitly_isolated_from_environment() {
+        let arguments = parse_arguments_without_environment([
             "bleat-api",
             "--database-url",
             "postgres://bleat:development@127.0.0.1:5432/bleat",
@@ -536,7 +624,9 @@ mod tests {
             "--log-format",
             "json",
         ])
-        .expect("valid overrides should be accepted");
+        .expect("valid command-line values should parse");
+        let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
+            .expect("valid overrides should be accepted");
 
         assert_eq!(config.bind_address.to_string(), "0.0.0.0:9000");
         assert_eq!(config.challenge_lifetime, Duration::from_secs(60));
@@ -546,112 +636,120 @@ mod tests {
 
     #[test]
     fn production_configuration_fails_closed() {
-        let insecure = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--deployment-mode",
-            "production",
-            "--apple-team-id",
-            "TEAM",
-            "--app-identifier",
-            "com.example.bleat",
-            "--app-attest-environment",
-            "production",
-        ]);
+        let production = |arguments: &mut Arguments| {
+            arguments.deployment_mode = DeploymentMode::Production;
+            arguments.apple_team_id = Some("TEAM".to_owned());
+            arguments.app_identifier = Some("com.example.bleat".to_owned());
+            arguments.app_attest_environment = AppAttestEnvironment::Production;
+        };
+        let insecure = config(production);
         assert_eq!(
             insecure.expect_err("HTTP issuer must fail"),
             ConfigError::ProductionIssuerMustUseHttps
         );
 
-        let missing_team = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example",
-            "--app-identifier",
-            "com.example.bleat",
-            "--app-attest-environment",
-            "production",
-        ]);
+        let missing_team = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+            arguments.apple_team_id = None;
+        });
         assert_eq!(
             missing_team.expect_err("team ID must be required"),
             ConfigError::MissingProductionValue("Apple team ID")
         );
 
-        let development_attest = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example",
-            "--apple-team-id",
-            "TEAM",
-            "--app-identifier",
-            "com.example.bleat",
-        ]);
+        let development_attest = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+            arguments.app_attest_environment = AppAttestEnvironment::Development;
+        });
         assert_eq!(
             development_attest.expect_err("development evidence must fail"),
             ConfigError::ProductionAppAttestRequired
         );
 
-        let missing_bundle_versions = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example",
-            "--apple-team-id",
-            "TEAM",
-            "--app-identifier",
-            "com.example.bleat",
-            "--app-attest-environment",
-            "production",
-        ]);
+        let missing_bundle_versions = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+        });
         assert_eq!(
             missing_bundle_versions.expect_err("bundle versions must be required"),
             ConfigError::MissingProductionValue("App Attest bundle-version allowlist")
         );
 
-        let missing_validation_categories = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example",
-            "--apple-team-id",
-            "TEAM",
-            "--app-identifier",
-            "com.example.bleat",
-            "--app-attest-environment",
-            "production",
-            "--app-attest-bundle-versions",
-            "1",
-        ]);
+        let missing_validation_categories = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+        });
         assert_eq!(
             missing_validation_categories.expect_err("validation categories must be required"),
             ConfigError::MissingProductionValue("App Attest validation-category allowlist")
         );
+
+        let missing_signing_key = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+            arguments.app_attest_validation_categories = vec![4];
+        });
+        assert_eq!(
+            missing_signing_key.expect_err("JWT signing key must be required"),
+            ConfigError::MissingProductionValue("JWT signing-key file")
+        );
+
+        let issuer_with_path = config(|arguments| {
+            production(arguments);
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example/path").expect("test issuer should parse");
+            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+            arguments.app_attest_validation_categories = vec![4];
+            arguments.jwt_signing_key_file = Some(PathBuf::from("/run/secrets/jwt.der"));
+        });
+        assert_eq!(
+            issuer_with_path.expect_err("issuer paths must be rejected"),
+            ConfigError::InvalidProductionIssuer
+        );
+
+        let development_signing_key = config(|arguments| {
+            arguments.jwt_signing_key_file = Some(PathBuf::from("/private/signing-key.der"));
+        });
+        assert_eq!(
+            development_signing_key.expect_err("development must use ephemeral signing"),
+            ConfigError::ProductionSigningConfigurationOnly
+        );
+    }
+
+    #[test]
+    fn signing_key_paths_are_redacted() {
+        let config = config(|arguments| {
+            arguments.deployment_mode = DeploymentMode::Production;
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example").expect("test issuer should parse");
+            arguments.apple_team_id = Some("TEAM".to_owned());
+            arguments.app_identifier = Some("com.example.bleat".to_owned());
+            arguments.app_attest_environment = AppAttestEnvironment::Production;
+            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+            arguments.app_attest_validation_categories = vec![4];
+            arguments.jwt_signing_key_file = Some(PathBuf::from("/private/signing-key.der"));
+            arguments.jwt_public_key_set_file = Some(PathBuf::from("/private/public-keys.json"));
+        })
+        .expect("production signing configuration should validate");
+
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("signing-key.der"));
+        assert!(!debug.contains("public-keys.json"));
+        assert!(debug.contains("[REDACTED]"));
     }
 
     #[test]
     fn numeric_limits_are_validated() {
-        let config = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--request-timeout-seconds",
-            "0",
-        ]);
+        let config = config(|arguments| arguments.request_timeout_seconds = 0);
         assert_eq!(
             config.expect_err("zero timeout must fail"),
             ConfigError::ValueOutOfRange("request timeout", 1, 60)
@@ -660,7 +758,7 @@ mod tests {
 
     #[test]
     fn database_configuration_is_required_and_redacted() {
-        let missing = Arguments::try_parse_from(["bleat-api"])
+        let missing = parse_arguments_without_environment(["bleat-api"])
             .expect_err("database URL argument must be required");
         assert_eq!(
             missing.kind(),
@@ -674,13 +772,10 @@ mod tests {
         );
 
         let secret = "postgres://bleat:do-not-print@127.0.0.1:5432/bleat";
-        let invalid = config(&[
-            "bleat-api",
-            "--database-url",
-            secret,
-            "--database-max-connections",
-            "0",
-        ])
+        let invalid = config(|arguments| {
+            arguments.database_url = secret.to_owned();
+            arguments.database_max_connections = 0;
+        })
         .expect_err("zero database connections must fail");
         assert_eq!(
             invalid,
@@ -691,13 +786,7 @@ mod tests {
 
     #[test]
     fn challenge_resource_bounds_are_validated() {
-        let invalid = config(&[
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--challenge-cleanup-batch-size",
-            "0",
-        ]);
+        let invalid = config(|arguments| arguments.challenge_cleanup_batch_size = 0);
         assert_eq!(
             invalid.expect_err("zero cleanup batch must fail"),
             ConfigError::ValueOutOfRange("challenge cleanup batch size", 1, 10_000)

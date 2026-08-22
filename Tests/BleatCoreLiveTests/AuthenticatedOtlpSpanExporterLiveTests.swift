@@ -12,7 +12,7 @@
     @testable import BleatCore
 
     final class AuthenticatedOtlpSpanExporterLiveTests: XCTestCase {
-        func testRotatesRealJWTAgainstTLSGrpcEndpointOnOneChannel()
+        func testRefreshesRealJWTAgainstTLSGrpcEndpointOnOneChannel()
             async throws
         {
             let environment = ProcessInfo.processInfo.environment
@@ -108,7 +108,6 @@
             XCTAssertEqual(snapshot.connectionCount, 1)
             XCTAssertEqual(snapshot.authorizationCounts, [1, 1])
             XCTAssertTrue(snapshot.everyAuthorizationIsBearerJWT)
-            XCTAssertEqual(snapshot.distinctAuthorizationCount, 2)
             XCTAssertGreaterThan(snapshot.resourceSpanCount, 0)
         }
 
@@ -164,7 +163,6 @@
             let connectionCount: Int
             let authorizationCounts: [Int]
             let everyAuthorizationIsBearerJWT: Bool
-            let distinctAuthorizationCount: Int
             let resourceSpanCount: Int
         }
 
@@ -188,7 +186,6 @@
                         return value.dropFirst("Bearer ".count)
                             .split(separator: ".").count == 3
                     },
-                    distinctAuthorizationCount: Set(flattened).count,
                     resourceSpanCount: resourceSpans
                 )
             }

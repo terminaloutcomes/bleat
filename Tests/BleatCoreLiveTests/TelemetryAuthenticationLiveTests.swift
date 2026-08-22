@@ -51,10 +51,24 @@
             let claims = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: payload) as? [String: Any]
             )
+            let discoveryURL = baseURL.appending(
+                path: ".well-known/openid-configuration"
+            )
+            let (discoveryData, discoveryResponse) = try await URLSession.shared.data(
+                from: discoveryURL
+            )
+            XCTAssertEqual((discoveryResponse as? HTTPURLResponse)?.statusCode, 200)
+            let discovery = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: discoveryData) as? [String: Any]
+            )
             XCTAssertEqual(claims["sub"] as? String, installationID.uuidString.lowercased())
+            XCTAssertEqual(claims["iss"] as? String, discovery["issuer"] as? String)
             XCTAssertEqual(claims["aud"] as? String, "bleat-telemetry")
             XCTAssertEqual(claims["scope"] as? String, "telemetry:write")
-            XCTAssertEqual(claims["environment"] as? String, "development")
+            XCTAssertEqual(
+                Set(claims.keys),
+                ["iss", "sub", "aud", "scope", "iat", "exp"]
+            )
             let now = Date().timeIntervalSince1970
             let issuedAt = try XCTUnwrap(claims["iat"] as? Double)
             let expiresAt = try XCTUnwrap(claims["exp"] as? Double)

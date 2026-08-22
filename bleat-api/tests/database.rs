@@ -4,7 +4,6 @@ use bleat_api::{
         ChallengeConsumeOutcome, ChallengePurpose, ChallengeRepository, ChallengeStoreError,
         ExpectedChallenge,
     },
-    config::DatabaseConfig,
     database::{Migrator, connect_and_migrate},
     installation::{
         CounterAdvanceOutcome, InstallationEnvironment, InstallationRepository, InstallationStatus,
@@ -17,36 +16,28 @@ use sea_orm_migration::{MigratorTrait, SchemaManager};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-static DATABASE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+mod support;
 
-fn test_database() -> DatabaseConfig {
-    DatabaseConfig::new(
-        std::env::var("BLEAT_API_TEST_DATABASE_URL")
-            .expect("BLEAT_API_TEST_DATABASE_URL must name the disposable PostgreSQL database"),
-        4,
-        std::time::Duration::from_secs(5),
-    )
-    .expect("test database configuration should be valid")
-}
+use support::TestPostgres;
 
-async fn database() -> DatabaseConnection {
-    connect_and_migrate(&test_database())
+async fn database(postgres: &TestPostgres) -> DatabaseConnection {
+    connect_and_migrate(&postgres.config())
         .await
         .expect("test database should connect")
 }
 
-async fn repository() -> InstallationRepository {
-    InstallationRepository::new(database().await)
+async fn repository(postgres: &TestPostgres) -> InstallationRepository {
+    InstallationRepository::new(database(postgres).await)
 }
 
-async fn challenge_repository() -> ChallengeRepository {
-    ChallengeRepository::new(database().await, 100)
+async fn challenge_repository(postgres: &TestPostgres) -> ChallengeRepository {
+    ChallengeRepository::new(database(postgres).await, 100)
 }
 
 #[tokio::test]
 async fn migrations_create_the_issue_64_schema_and_are_repeatable() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let database = connect_and_migrate(&test_database())
+    let postgres = TestPostgres::start().await;
+    let database = connect_and_migrate(&postgres.config())
         .await
         .expect("initial migration should succeed");
     Migrator::up(&database, None)
@@ -70,8 +61,8 @@ async fn migrations_create_the_issue_64_schema_and_are_repeatable() {
 
 #[tokio::test]
 async fn installation_state_persists_and_disabling_is_typed() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let repository = repository().await;
+    let postgres = TestPostgres::start().await;
+    let repository = repository(&postgres).await;
     let key_id = format!("test-key-{}", Uuid::new_v4());
     let created = repository
         .create_verified(NewInstallation {
@@ -113,8 +104,8 @@ async fn installation_state_persists_and_disabling_is_typed() {
 
 #[tokio::test]
 async fn assertion_counter_compare_and_update_accepts_only_one_racer() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let repository = repository().await;
+    let postgres = TestPostgres::start().await;
+    let repository = repository(&postgres).await;
     let installation = repository
         .create_verified(NewInstallation {
             app_attest_key_id: format!("counter-key-{}", Uuid::new_v4()),
@@ -157,8 +148,8 @@ async fn assertion_counter_compare_and_update_accepts_only_one_racer() {
 
 #[tokio::test]
 async fn an_attested_key_can_only_enroll_once() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let repository = repository().await;
+    let postgres = TestPostgres::start().await;
+    let repository = repository(&postgres).await;
     let installation = NewInstallation {
         app_attest_key_id: format!("duplicate-key-{}", Uuid::new_v4()),
         public_key: vec![4; 65],
@@ -179,8 +170,8 @@ async fn an_attested_key_can_only_enroll_once() {
 
 #[tokio::test]
 async fn opaque_challenge_is_unique_and_only_its_digest_is_persisted() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let database = database().await;
+    let postgres = TestPostgres::start().await;
+    let database = database(&postgres).await;
     let repository = ChallengeRepository::new(database.clone(), 100);
     let now = Utc::now();
     let first = repository
@@ -208,8 +199,8 @@ async fn opaque_challenge_is_unique_and_only_its_digest_is_persisted() {
 
 #[tokio::test]
 async fn challenge_consumption_is_purpose_bound_expiring_and_replay_safe() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let repository = challenge_repository().await;
+    let postgres = TestPostgres::start().await;
+    let repository = challenge_repository(&postgres).await;
     let now = Utc::now();
     let challenge = repository
         .issue_attestation_at(std::time::Duration::from_secs(120), now)
@@ -268,8 +259,8 @@ async fn challenge_consumption_is_purpose_bound_expiring_and_replay_safe() {
 
 #[tokio::test]
 async fn concurrent_challenge_consumption_has_exactly_one_winner() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let repository = challenge_repository().await;
+    let postgres = TestPostgres::start().await;
+    let repository = challenge_repository(&postgres).await;
     let now = Utc::now();
     let challenge = repository
         .issue_attestation_at(std::time::Duration::from_secs(120), now)
@@ -306,8 +297,8 @@ async fn concurrent_challenge_consumption_has_exactly_one_winner() {
 
 #[tokio::test]
 async fn token_challenges_require_an_active_installation_binding() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let database = database().await;
+    let postgres = TestPostgres::start().await;
+    let database = database(&postgres).await;
     let installations = InstallationRepository::new(database.clone());
     let challenges = ChallengeRepository::new(database, 100);
     let installation = installations
@@ -343,8 +334,8 @@ async fn token_challenges_require_an_active_installation_binding() {
 
 #[tokio::test]
 async fn challenge_cleanup_removes_only_the_configured_expired_batch() {
-    let _database_lock = DATABASE_TEST_LOCK.lock().await;
-    let database = database().await;
+    let postgres = TestPostgres::start().await;
+    let database = database(&postgres).await;
     let challenges = ChallengeRepository::new(database.clone(), 1);
     bleat_api::entity::challenge::Entity::delete_many()
         .filter(bleat_api::entity::challenge::Column::ExpiresAt.lte(Utc::now()))
