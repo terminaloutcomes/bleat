@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8275",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 7","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

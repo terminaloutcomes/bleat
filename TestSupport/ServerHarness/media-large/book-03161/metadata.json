@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3161",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Fantasy","Mystery","Biography"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

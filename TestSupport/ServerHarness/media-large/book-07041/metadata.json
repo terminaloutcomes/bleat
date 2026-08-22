@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7041",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 9","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2137",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["History","Romance"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

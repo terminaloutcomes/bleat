@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4400",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 8","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-8"]
+}

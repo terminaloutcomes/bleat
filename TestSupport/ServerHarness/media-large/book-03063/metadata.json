@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3063",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

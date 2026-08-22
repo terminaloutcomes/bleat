@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 285",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fiction"],
+    "series": [{"name":"Series 9","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

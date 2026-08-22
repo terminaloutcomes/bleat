@@ -1,7 +1,6 @@
 import BleatCore
 import Foundation
 import MediaPlayer
-import UIKit
 
 enum PlaybackRemoteCommand: Equatable, Sendable {
     case play
@@ -111,8 +110,12 @@ struct NowPlayingSnapshot: Equatable, Sendable {
 }
 
 enum NowPlayingArtwork {
-    nonisolated static func make(from image: UIImage) -> MPMediaItemArtwork {
-        let provider: @Sendable (CGSize) -> UIImage = { _ in image }
+    nonisolated static func make(from image: PlatformImage) -> MPMediaItemArtwork {
+        #if os(iOS)
+        let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
+        #else
+        let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
+        #endif
         return MPMediaItemArtwork(
             boundsSize: image.size,
             requestHandler: provider

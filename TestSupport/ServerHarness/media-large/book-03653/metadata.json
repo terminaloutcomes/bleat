@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3653",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9959",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

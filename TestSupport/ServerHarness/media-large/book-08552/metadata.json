@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8552",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 8","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

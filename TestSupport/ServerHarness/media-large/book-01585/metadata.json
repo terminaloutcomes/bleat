@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1585",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 1","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

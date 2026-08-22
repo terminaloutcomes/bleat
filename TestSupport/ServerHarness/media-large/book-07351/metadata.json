@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7351",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 7","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

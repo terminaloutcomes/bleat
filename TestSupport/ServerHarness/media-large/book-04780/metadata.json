@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4780",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 4","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-1"]
+}

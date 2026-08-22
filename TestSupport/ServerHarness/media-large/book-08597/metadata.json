@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8597",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

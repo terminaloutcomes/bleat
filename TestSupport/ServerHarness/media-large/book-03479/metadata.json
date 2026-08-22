@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3479",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

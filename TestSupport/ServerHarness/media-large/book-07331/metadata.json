@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7331",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 11","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

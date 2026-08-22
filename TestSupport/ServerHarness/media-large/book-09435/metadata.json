@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9435",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Drama"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

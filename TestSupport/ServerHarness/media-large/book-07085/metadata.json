@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7085",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

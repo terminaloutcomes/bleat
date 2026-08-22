@@ -1,7 +1,9 @@
 import AVFoundation
 import BleatCore
 import Observation
+#if os(iOS)
 import UIKit
+#endif
 
 enum PlaybackState: Equatable, Sendable {
     case idle
@@ -1805,10 +1807,12 @@ final class PlaybackModel {
         syncState = .idle
         positionConflict = nil
         nowPlayingCoordinator.clear()
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation
         )
+        #endif
         await diagnostics.record(
             .completed(.closePlayback, category: .playback)
         )
@@ -1853,9 +1857,11 @@ final class PlaybackModel {
     }
 
     static func activateAudioSession() throws {
+        #if os(iOS)
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playback, mode: .spokenAudio)
         try audioSession.setActive(true)
+        #endif
     }
 
     private func updateRemoteSkipIntervals() {
@@ -1866,6 +1872,7 @@ final class PlaybackModel {
     }
 
     private func observeAudioSession() {
+        #if os(iOS)
         let center = NotificationCenter.default
         audioSessionObservers.append(
             center.addObserver(
@@ -1929,6 +1936,7 @@ final class PlaybackModel {
                 }
             }
         )
+        #endif
     }
 
     private func installObservers(
@@ -3560,17 +3568,17 @@ final class PlaybackModel {
 
     private static func deviceInfo() -> PlaybackDeviceInfo {
         PlaybackDeviceInfo(
-            deviceID: UIDevice.current.identifierForVendor?
-                .uuidString.lowercased() ?? "bleat-ios-device",
+            deviceID: InstallationIdentifierStore().identifier,
             clientName: "Bleat",
             clientVersion: Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "0.1",
             manufacturer: "Apple",
-            model: UIDevice.current.model
+            model: PlatformDevice.model
         )
     }
 
+    #if os(iOS)
     private func handleInterruption(
         typeValue: UInt?,
         optionsValue: UInt
@@ -3611,6 +3619,7 @@ final class PlaybackModel {
         }
         pause()
     }
+    #endif
 
     func handleMediaServicesReset() async {
         guard preparation != nil,

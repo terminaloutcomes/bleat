@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3137",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

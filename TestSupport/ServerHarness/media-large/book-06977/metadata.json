@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6977",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

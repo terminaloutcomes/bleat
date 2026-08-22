@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3095",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3203",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

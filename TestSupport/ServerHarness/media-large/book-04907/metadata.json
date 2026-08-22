@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4907",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

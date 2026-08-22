@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6303",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Comedy"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

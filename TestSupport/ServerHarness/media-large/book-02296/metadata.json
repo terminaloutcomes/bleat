@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2296",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure","Horror"],
+    "series": [{"name":"Series 4","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

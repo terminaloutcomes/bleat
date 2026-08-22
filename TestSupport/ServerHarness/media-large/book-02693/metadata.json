@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2693",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fantasy","Mystery","Biography"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

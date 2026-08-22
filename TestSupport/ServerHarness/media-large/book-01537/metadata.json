@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1537",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

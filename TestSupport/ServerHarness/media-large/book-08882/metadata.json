@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8882",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 2","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

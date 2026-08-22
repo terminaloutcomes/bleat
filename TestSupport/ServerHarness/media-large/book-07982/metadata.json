@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7982",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 2","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

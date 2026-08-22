@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 125",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6706",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Comedy","Fiction"],
+    "series": [{"name":"Series 10","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

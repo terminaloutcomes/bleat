@@ -1,9 +1,9 @@
 # Audiobookshelf iOS Client — Product and Technical Specification
 
 Status: Implementation-audited draft 1.3
-Platform: iPhone and iPad; signed Mac Catalyst authentication runtime
+Platform: iPhone, iPad, and native macOS
 UI framework: SwiftUI
-Minimum OS: iOS 26.0; Mac Catalyst 18 on macOS 15
+Minimum OS: iOS 26.0; macOS 26.0
 Language mode: Swift 6 with strict concurrency checking
 Backend: Audiobookshelf 2.26.0 or newer
 Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`
@@ -27,8 +27,8 @@ Build a native iOS audiobook client for one or more Audiobookshelf servers. The 
 
 This is an audiobook app, not a general Audiobookshelf administration client;
 item deletion is limited to the current book editor.
-The same application target supports development-signed Mac Catalyst 18 on
-macOS 15 or newer. Signed launch, native login, split Keychain credential
+The same application target supports native macOS 26. Signed launch, native
+login, split Keychain credential
 persistence, and account restoration are implemented; their signed runtime
 journey is tracked in
 [GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
@@ -474,7 +474,7 @@ previously successful validation; only explicit URL replacement/removal or
 account removal clears it.
 
 The app monitors changes to the available network path using the platform
-Network framework on iOS and Mac Catalyst. A path change clears the temporary
+Network framework on iOS and native macOS. A path change clears the temporary
 local-endpoint failure state and performs a non-mutating `GET <local>/status`
 probe for each validated local alias and an authenticated native-credential
 probe for an unvalidated alias. The app does not infer home-network
@@ -1340,9 +1340,9 @@ operation, exact `CKError.Code`, privacy-safe partial-failure codes, and retry
 delay through service, presentation, and diagnostics boundaries; UI copy must
 identify iCloud and must never translate a CloudKit failure into an
 Audiobookshelf outage. Local diagnostics exclude localized descriptions,
-CloudKit record identifiers, and CloudKit `userInfo`. When remote diagnostic
-telemetry consent is active, the same typed lifecycle emits a reviewed
-OpenTelemetry span and log record; otherwise it remains on-device only.
+CloudKit record identifiers, and CloudKit `userInfo`. On native macOS, remote
+OpenTelemetry export is out of scope and the same typed lifecycle remains
+on-device only. The iOS build retains the reviewed remote telemetry behavior.
 Successful record system fields, including server change tags, must survive
 process relaunch. A `serverRecordChanged` save failure is resolved against the
 returned server record: matching payloads adopt its current system fields,
@@ -1576,13 +1576,15 @@ diagnose bounded technical application operations without collecting user,
 server, account, or audiobook content. It defaults off and may be enabled only
 through the device-local **Share diagnostic telemetry** control on the
 Diagnostics screen. The consent preference is not synchronized through iCloud.
-Disabling it persists withdrawal before synchronously notifying the remote telemetry runtime; that
-runtime must stop export and token renewal before returning, then clear
-memory-only telemetry credentials and purge buffered remote telemetry. The
-Diagnostics screen remains available while signed out and through the
-unavailable-startup screen. Telemetry initialization or runtime failure must
-never affect launch, browsing, authentication, downloads, playback, transcription,
-synchronization, or local Diagnostics.
+Remote export is out of scope on native macOS: that build must not create App
+Attest keys, request telemetry tokens, retain export batches, or send OTLP.
+On iOS, disabling it persists withdrawal before synchronously notifying the
+remote telemetry runtime; that runtime must stop export and token renewal before
+returning, then clear memory-only telemetry credentials and purge buffered
+remote telemetry. The Diagnostics screen remains available while signed out and
+through the unavailable-startup screen. Telemetry initialization or runtime
+failure must never affect launch, browsing, authentication, downloads, playback,
+transcription, synchronization, or local Diagnostics.
 
 The reviewed resource allowlist is `service.name=bleat`, normalized numeric app
 version and build, typed Apple platform, and numeric operating-system version.
@@ -1948,7 +1950,7 @@ The 1.0 release is acceptable only when:
   including paginated history import, archive import/export, advanced views,
   and the performance work described in section 12;
 - [managed CarPlay entitlement and real-environment validation](https://github.com/terminaloutcomes/bleat/issues/24);
-- [signed Mac Catalyst authentication and Keychain persistence validation](https://github.com/terminaloutcomes/bleat/issues/25);
+- [signed native macOS authentication and Keychain persistence validation](https://github.com/terminaloutcomes/bleat/issues/25);
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;
 - Siri/App Intents;

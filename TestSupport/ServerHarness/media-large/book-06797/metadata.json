@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6797",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

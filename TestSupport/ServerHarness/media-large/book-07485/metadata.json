@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7485",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Drama"],
+    "series": [{"name":"Series 9","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

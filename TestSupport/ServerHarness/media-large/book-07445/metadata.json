@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7445",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

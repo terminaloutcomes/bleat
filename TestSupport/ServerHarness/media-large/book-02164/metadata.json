@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2164",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 4","sequence":"4"}],
+    "year": "2020",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

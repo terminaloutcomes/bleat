@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1113",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

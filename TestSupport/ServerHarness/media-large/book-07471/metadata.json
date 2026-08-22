@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7471",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 7","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

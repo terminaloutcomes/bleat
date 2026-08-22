@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7952",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 8","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

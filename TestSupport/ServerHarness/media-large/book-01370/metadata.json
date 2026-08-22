@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1370",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 5"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 2","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-2"]
+}

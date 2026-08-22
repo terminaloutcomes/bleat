@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7534",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 10","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

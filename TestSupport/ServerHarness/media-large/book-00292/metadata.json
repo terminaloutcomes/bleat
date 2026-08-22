@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 292",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 4","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

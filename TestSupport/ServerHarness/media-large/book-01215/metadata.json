@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1215",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Romance"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

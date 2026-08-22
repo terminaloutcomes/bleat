@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9793",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 1","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

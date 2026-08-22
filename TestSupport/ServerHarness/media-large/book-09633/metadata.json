@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9633",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Non-Fiction"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4874",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 2","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

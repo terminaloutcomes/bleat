@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9416",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 8","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

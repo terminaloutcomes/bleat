@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4963",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 7","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9714",
+    "authors": ["Philosopher"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 6","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 0",
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

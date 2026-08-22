@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1784",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 8","sequence":"4"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

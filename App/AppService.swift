@@ -110,7 +110,7 @@ enum BleatCloudKitBuildMode: String, Sendable {
 
 enum BleatCloudKitCapability {
     static var isAvailable: Bool {
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             isAvailable(
                 buildMode: .current,
                 containerIdentifiers: entitledContainerIdentifiers
@@ -130,7 +130,7 @@ enum BleatCloudKitCapability {
             ) == true
     }
 
-    #if targetEnvironment(macCatalyst)
+    #if os(macOS)
         private static var entitledContainerIdentifiers: [String]? {
             guard let task = SecTaskCreateFromSelf(nil) else {
                 return nil

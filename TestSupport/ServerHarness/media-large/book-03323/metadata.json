@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3323",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

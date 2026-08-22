@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3259",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 7","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

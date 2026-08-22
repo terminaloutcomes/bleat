@@ -75,7 +75,7 @@ struct RootView: View {
             case .signedIn:
                 SignedInView(model: model, navigation: navigation)
                     .tint(colourScheme.color)
-                    #if targetEnvironment(macCatalyst)
+                    #if os(macOS)
                         .id(colourScheme)
                     #endif
             case .unavailable(let failure):
@@ -512,9 +512,7 @@ private struct NativeLoginView: View {
                         "Server URL",
                         text: $serverAddress
                     )
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
+                    .iOSServerURLInput()
                     .accessibilityLabel("Server URL")
                     .accessibilityIdentifier("login.server")
 
@@ -560,8 +558,7 @@ private struct NativeLoginView: View {
                     Section("Account") {
                         TextField("Username", text: $username)
                             .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                            .iOSNoAutocapitalization()
                             .accessibilityIdentifier("login.username")
                         if isPasswordVisible {
                             TextField("Password", text: $password)
@@ -620,7 +617,7 @@ private struct NativeLoginView: View {
                 }
 
             }
-            #if targetEnvironment(macCatalyst)
+            #if os(macOS)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     Text("Please log into a server")
                     .font(.subheadline)
@@ -868,18 +865,14 @@ private struct AccountEditorView: View {
                         "Primary server URL",
                         text: $serverAddress
                     )
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
+                    .iOSServerURLInput()
                     .accessibilityIdentifier("accountEditor.server")
 
                     TextField(
                         "Local server URL (optional)",
                         text: $localServerAddress
                     )
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
+                    .iOSServerURLInput()
                     .accessibilityIdentifier("accountEditor.localServer")
 
                     if currentAccount.localServer != nil {
@@ -891,25 +884,7 @@ private struct AccountEditorView: View {
                     }
                 }
 
-                Section {
-                    TextField("Username", text: $username)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("accountEditor.username")
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                        .accessibilityIdentifier(
-                            "accountEditor.password"
-                        )
-                } header: {
-                    Text("Credentials")
-                } footer: {
-                    Text(
-                        "Leave password blank to keep the existing saved "
-                            + "credentials."
-                    )
-                }
+                credentialsSection
 
                 if case .failed(let failure) = model.loginStatus {
                     Section {
@@ -1002,12 +977,7 @@ private struct AccountEditorView: View {
                 }
             } message: {
                 if let localValidationFailure {
-                    Text(
-                        localValidationFailure.message
-                            + " The primary details can still be saved. The "
-                            + "local address will be kept but disabled until "
-                            + "it can be verified."
-                    )
+                    Text("\(localValidationFailure.message) The primary details can still be saved. The local address will be kept but disabled until it can be verified.")
                 }
             }
             .confirmationDialog(
@@ -1046,6 +1016,22 @@ private struct AccountEditorView: View {
             } message: {
                 Text(removalDataMessage)
             }
+        }
+    }
+
+    private var credentialsSection: some View {
+        Section {
+            TextField("Username", text: $username)
+                .textContentType(.username)
+                .iOSNoAutocapitalization()
+                .accessibilityIdentifier("accountEditor.username")
+            SecureField("Password", text: $password)
+                .textContentType(.password)
+                .accessibilityIdentifier("accountEditor.password")
+        } header: {
+            Text("Credentials")
+        } footer: {
+            Text("Leave password blank to keep the existing saved credentials.")
         }
     }
 
@@ -1344,11 +1330,10 @@ private struct SignedInView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            #if targetEnvironment(macCatalyst)
+            #if os(macOS)
                 VStack(spacing: 0) {
                     TopTabBar(selection: $navigation.selectedTab)
                     catalystTabs(containerHeight: geometry.size.height)
-                        .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             #else
                 mobileTabs(containerHeight: geometry.size.height)
@@ -1409,7 +1394,7 @@ private struct SignedInView: View {
         }
     }
 
-    #if targetEnvironment(macCatalyst)
+    #if os(macOS)
         private func catalystTabs(containerHeight: CGFloat) -> some View {
             TabView(selection: $navigation.selectedTab) {
                 Tab("Home", systemImage: "house", value: .home) {
@@ -1772,18 +1757,16 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 )
             }
 
-            #if os(iOS) && !targetEnvironment(macCatalyst)
-                Button(
-                    BookTranscriptionMenu.title,
-                    systemImage: "waveform.badge.mic"
-                ) {
-                    begin(.transcribe)
-                }
-                .disabled(!BookTranscriptionMenu.isAvailable)
-                .accessibilityIdentifier(
-                    "book.context.\(book.id.rawValue).transcribe"
-                )
-            #endif
+            Button(
+                BookTranscriptionMenu.title,
+                systemImage: "waveform.badge.mic"
+            ) {
+                begin(.transcribe)
+            }
+            .disabled(!BookTranscriptionMenu.isAvailable)
+            .accessibilityIdentifier(
+                "book.context.\(book.id.rawValue).transcribe"
+            )
         }
     }
 
@@ -1854,16 +1837,13 @@ private struct BookActionPreparationView: View {
                     model.completeBookDeletion()
                 }
             case .transcribe:
-                #if os(iOS) && !targetEnvironment(macCatalyst)
-                    ChapterTranscriptionView(
-                        detail: detail,
-                        account: request.account,
-                        appModel: model,
-                        downloads: model.downloads
-                    )
-                #else
-                    EmptyView()
-                #endif
+                ChapterTranscriptionView(
+                    detail: detail,
+                    account: request.account,
+                    appModel: model,
+                    downloads: model.downloads
+                )
+
             case .download, .markPlayed:
                 EmptyView()
             }
@@ -3097,7 +3077,7 @@ private struct SeriesDetailView: View {
     var body: some View {
         content
             .navigationTitle(destination.name)
-            .navigationBarTitleDisplayMode(.inline)
+            .iOSInlineNavigationTitle()
             .task(id: destination) {
                 await model.loadSeries(destination)
             }
@@ -3377,14 +3357,14 @@ private struct BookDetailView: View {
             }
         }
         .navigationTitle(book.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .iOSInlineNavigationTitle()
         .task(id: book.id.rawValue) {
             await model.loadBookDetail(book)
         }
         .toolbar {
             if let detail = loadedDetail {
                 if canShowActionsMenu(detail) {
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .primaryAction) {
                         Menu {
                             if canOpenEditor(detail) {
                                 Button("Edit", systemImage: "pencil") {
@@ -3412,7 +3392,7 @@ private struct BookDetailView: View {
                                 )
                             }
 
-                            #if os(iOS) && !targetEnvironment(macCatalyst)
+                            #if os(iOS)
                                 Button(
                                     transcriptionMenuTitle,
                                     systemImage: "waveform.badge.mic"
@@ -3445,7 +3425,7 @@ private struct BookDetailView: View {
                 }
             }
         }
-        #if os(iOS) && !targetEnvironment(macCatalyst)
+        #if os(iOS)
             .sheet(isPresented: $showChapterTranscription) {
                 if let detail = loadedDetail,
                     let account = model.account
@@ -3547,7 +3527,7 @@ private struct BookDetailView: View {
     }
 
     private func canShowActionsMenu(_ detail: LibraryBookDetail) -> Bool {
-        #if os(iOS) && !targetEnvironment(macCatalyst)
+        #if os(iOS)
             true
         #else
             canOpenEditor(detail)

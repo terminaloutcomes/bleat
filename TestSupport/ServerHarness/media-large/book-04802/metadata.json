@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4802",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 0"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 2","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

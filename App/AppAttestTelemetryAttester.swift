@@ -12,6 +12,7 @@ protocol AppAttestServicing: Sendable {
     ) async throws -> Data
 }
 
+#if os(iOS)
 private final class SystemAppAttestService:
     AppAttestServicing, @unchecked Sendable
 {
@@ -40,6 +41,16 @@ private final class SystemAppAttestService:
         )
     }
 }
+#else
+private final class SystemAppAttestService:
+    AppAttestServicing, @unchecked Sendable
+{
+    var isSupported: Bool { false }
+    func generateKey() async throws -> String { throw TelemetryAttesterError.unsupported }
+    func attestKey(_ keyID: String, clientDataHash: Data) async throws -> Data { throw TelemetryAttesterError.unsupported }
+    func generateAssertion(_ keyID: String, clientDataHash: Data) async throws -> Data { throw TelemetryAttesterError.unsupported }
+}
+#endif
 
 final class AppAttestTelemetryAttester:
     TelemetryAttester, @unchecked Sendable
@@ -51,7 +62,7 @@ final class AppAttestTelemetryAttester:
     }
 
     var isSupported: Bool {
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             false
         #else
             service.isSupported

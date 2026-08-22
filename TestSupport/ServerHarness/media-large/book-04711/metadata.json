@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4711",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["History","Romance"],
+    "series": [{"name":"Series 7","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

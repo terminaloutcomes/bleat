@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9621",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Science Fiction"],
+    "series": [{"name":"Series 9","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

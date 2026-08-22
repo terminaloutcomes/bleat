@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3767",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

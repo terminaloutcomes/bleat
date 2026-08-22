@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3169",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 1","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

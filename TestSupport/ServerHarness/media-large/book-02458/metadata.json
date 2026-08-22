@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2458",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 10","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4567",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 7","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

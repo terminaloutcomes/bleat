@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7787",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7814",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 2","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

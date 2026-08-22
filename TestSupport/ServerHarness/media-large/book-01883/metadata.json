@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1883",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 281",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8123",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7665",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 9","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

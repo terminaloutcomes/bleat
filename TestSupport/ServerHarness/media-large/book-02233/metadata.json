@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2233",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 1","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9013",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 1","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

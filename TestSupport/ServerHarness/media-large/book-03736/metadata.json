@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3736",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["History","Romance"],
+    "series": [{"name":"Series 4","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

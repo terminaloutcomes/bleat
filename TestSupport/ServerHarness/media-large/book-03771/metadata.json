@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3771",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Science Fiction"],
+    "series": [{"name":"Series 3","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

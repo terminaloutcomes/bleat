@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8457",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 9","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

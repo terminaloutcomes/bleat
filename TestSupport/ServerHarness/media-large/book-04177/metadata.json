@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4177",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

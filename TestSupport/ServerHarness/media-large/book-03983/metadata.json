@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3983",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 0"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

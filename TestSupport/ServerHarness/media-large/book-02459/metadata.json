@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2459",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Fantasy","Mystery","Biography"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

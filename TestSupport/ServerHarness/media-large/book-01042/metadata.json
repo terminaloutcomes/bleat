@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1042",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fantasy","Mystery"],
+    "series": [{"name":"Series 10","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

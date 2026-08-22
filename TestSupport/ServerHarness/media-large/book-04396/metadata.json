@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4396",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Fantasy","Mystery"],
+    "series": [{"name":"Series 4","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

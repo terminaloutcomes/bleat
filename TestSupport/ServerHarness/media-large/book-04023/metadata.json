@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4023",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Romance"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

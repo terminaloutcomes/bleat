@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5567",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

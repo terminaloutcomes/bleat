@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8800",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 4","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-7"]
+}

@@ -4,17 +4,38 @@ import BleatTranscription
 import CloudKit
 import MediaPlayer
 import Observation
-import UIKit
 import XCTest
 
 @testable import Bleat
 
-#if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+#if os(iOS)
+    import UIKit
+#endif
+
+#if os(iOS) && canImport(CarPlay)
     import CarPlay
 #endif
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    #if os(iOS)
+        func testPlatformImagePixelSizeIncludesUIImageScale() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let rendered = UIGraphicsImageRenderer(
+            size: CGSize(width: 2, height: 3),
+            format: format
+        ).image { _ in }
+        let cgImage = try XCTUnwrap(rendered.cgImage)
+        let image = UIImage(cgImage: cgImage, scale: 3, orientation: .up)
+
+        XCTAssertEqual(
+            PlatformImageSupport.pixelSize(of: image),
+            CGSize(width: 2, height: 3)
+        )
+        }
+    #endif
+
     func testPlaybackPreparationAndStartEmitReviewedTelemetry() async throws {
         let fixture = try playbackRecoveryFixture()
         defer { fixture.cleanUp() }
@@ -992,7 +1013,8 @@ final class AppModelTests: XCTestCase {
             coordinator.isCached(chapterID: chapter.id, for: bookKey))
     }
 
-    func testVisibleAndActiveTranscriptCachesSurviveMemoryWarning()
+    #if os(iOS)
+        func testVisibleAndActiveTranscriptCachesSurviveMemoryWarning()
         async throws
     {
         let account = try fixtureAccount()
@@ -1081,7 +1103,8 @@ final class AppModelTests: XCTestCase {
             in: coordinator,
             bookKey: activeBookKey
         )
-    }
+        }
+    #endif
 
     func testPlaybackDoesNotBlockOrCancelTranscription() async throws {
         let playbackFixture = try playbackRecoveryFixture()
@@ -1627,7 +1650,8 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testBookCoverLoaderDeduplicatesAndCachesAccountScopedImages()
+    #if os(iOS)
+        func testBookCoverLoaderDeduplicatesAndCachesAccountScopedImages()
         async throws
     {
         let imageData = try XCTUnwrap(
@@ -1669,9 +1693,9 @@ final class AppModelTests: XCTestCase {
         )
         let secondAccountRequestCount = await fetcher.requestCount
         XCTAssertEqual(secondAccountRequestCount, 2)
-    }
+        }
 
-    func testBookCoverLoaderReusesBoundedDiskCacheAfterMemoryEviction()
+        func testBookCoverLoaderReusesBoundedDiskCacheAfterMemoryEviction()
         async throws
     {
         let imageData = try XCTUnwrap(
@@ -1719,9 +1743,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(first)
         XCTAssertNotNil(second)
         XCTAssertEqual(requestCount, 1)
-    }
+        }
 
-    func testBookCoverLoaderRoutesThroughCentralEndpointAndFallsBack()
+        func testBookCoverLoaderRoutesThroughCentralEndpointAndFallsBack()
         async throws
     {
         let imageData = try XCTUnwrap(
@@ -1772,7 +1796,8 @@ final class AppModelTests: XCTestCase {
                 purpose: .cover
             )
         )
-    }
+        }
+    #endif
 
     func testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection() {
         // under the 300 second limit
@@ -2661,7 +2686,7 @@ final class AppModelTests: XCTestCase {
             forHTTPHeaderField: "Authorization"
         )
 
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             XCTAssertEqual(first.networkPolicy, .allowCellular)
             XCTAssertFalse(DownloadModel.supportsNetworkPolicySelection)
             first.setNetworkPolicy(.wifiOnly)
@@ -2688,7 +2713,7 @@ final class AppModelTests: XCTestCase {
             DownloadNetworkPolicy.allowCellular.applying(to: request)
                 .allowsExpensiveNetworkAccess
         )
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             XCTAssertEqual(
                 DownloadNetworkDecision.decide(
                     policy: .allowCellular,
@@ -9214,7 +9239,8 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    nonisolated func testNowPlayingArtworkCanRenderOffMainActor() async {
+    #if os(iOS)
+        nonisolated func testNowPlayingArtworkCanRenderOffMainActor() async {
         let image = await MainActor.run {
             UIGraphicsImageRenderer(
                 size: CGSize(width: 2, height: 2)
@@ -9242,9 +9268,9 @@ final class AppModelTests: XCTestCase {
         }
 
         XCTAssertNotNil(renderedImage)
-    }
+        }
 
-    func testNowPlayingRetriesCoverWhenAccountIdentityArrives() async throws {
+        func testNowPlayingRetriesCoverWhenAccountIdentityArrives() async throws {
         let imageData = try XCTUnwrap(
             UIGraphicsImageRenderer(
                 size: CGSize(width: 2, height: 2)
@@ -9292,7 +9318,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requestCount, 2)
         XCTAssertNotNil(artwork)
         coordinator.clear()
-    }
+        }
+    #endif
 
     func testFeaturedPlaybackRateCyclesAndRemoteFailuresAreTyped() {
         let coordinator = NowPlayingCoordinator(

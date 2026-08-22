@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9958",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 10","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

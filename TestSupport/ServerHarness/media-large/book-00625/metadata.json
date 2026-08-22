@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 625",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 1","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

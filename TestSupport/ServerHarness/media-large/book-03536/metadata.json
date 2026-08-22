@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3536",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 8","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

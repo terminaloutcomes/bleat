@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4267",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 7","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

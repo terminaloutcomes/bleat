@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8747",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

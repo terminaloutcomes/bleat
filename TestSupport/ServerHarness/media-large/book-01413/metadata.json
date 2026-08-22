@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1413",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Horror"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

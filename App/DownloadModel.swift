@@ -219,7 +219,7 @@ enum DownloadNetworkDecision: Equatable, Sendable {
         expectedBytes: Int64,
         largeDownloadThresholdBytes: Int64
     ) -> DownloadNetworkDecision {
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             return .schedule
         #else
             guard policy == .allowCellular,
@@ -352,7 +352,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
 
     static var supportsNetworkPolicySelection: Bool {
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             false
         #else
             true
@@ -649,7 +649,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private static func loadNetworkPolicy(
         from defaults: UserDefaults
     ) -> DownloadNetworkPolicy {
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             .allowCellular
         #else
             defaults.string(forKey: "bleat.downloads.networkPolicy.v1")
@@ -2296,11 +2296,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     nonisolated func urlSessionDidFinishEvents(
         forBackgroundURLSession session: URLSession
     ) {
+        #if os(iOS)
         Task { @MainActor in
             let completion =
                 BleatAppDelegate.backgroundDownloadCompletion
             BleatAppDelegate.backgroundDownloadCompletion = nil
             completion?()
         }
+        #endif
     }
 }

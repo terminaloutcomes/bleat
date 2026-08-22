@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5071",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 7","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

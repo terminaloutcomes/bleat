@@ -1,7 +1,6 @@
 import BleatCore
 import CryptoKit
 import SwiftUI
-import UIKit
 
 enum BookCoverURL {
     static func make(
@@ -48,7 +47,7 @@ private struct BookCoverCacheKey: Hashable, Sendable {
 
 private struct LoadedBookCover: @unchecked Sendable {
     let data: Data
-    let image: UIImage
+    let image: PlatformImage
 }
 
 actor BookCoverImageLoader {
@@ -64,7 +63,7 @@ actor BookCoverImageLoader {
     private let fetch: Fetch
     private let diskCapacity: Int
     private let cacheRoot: URL?
-    private let memory = NSCache<NSString, UIImage>()
+    private let memory = NSCache<NSString, PlatformImage>()
     private var endpointRouter: ServerEndpointRouter?
     private var memoryKeys: [AccountID: Set<String>] = [:]
     private var inFlight:
@@ -88,7 +87,7 @@ actor BookCoverImageLoader {
         for url: URL,
         accountID: AccountID?,
         policy: BookCoverLoadPolicy = .allowNetwork
-    ) async -> UIImage? {
+    ) async -> PlatformImage? {
         guard let accountID else {
             guard policy == .allowNetwork else {
                 return nil
@@ -169,11 +168,12 @@ actor BookCoverImageLoader {
     }
 
     private func storeInMemory(
-        _ image: UIImage,
+        _ image: PlatformImage,
         for key: BookCoverCacheKey
     ) {
-        let width = Double(image.size.width * image.scale)
-        let height = Double(image.size.height * image.scale)
+        let size = PlatformImageSupport.pixelSize(of: image)
+        let width = Double(size.width)
+        let height = Double(size.height)
         let maximumPixels = Double(Self.memoryCapacity / 4)
         let pixelCount =
             width.isFinite && height.isFinite && width > 0 && height > 0
@@ -217,7 +217,7 @@ actor BookCoverImageLoader {
                     let response = response as? HTTPURLResponse,
                     (200...299).contains(response.statusCode),
                     data.count <= maximumResponseBytes,
-                    let image = UIImage(data: data)
+                    let image = PlatformImageSupport.image(from: data)
                 else {
                     if candidate.isLocal,
                         let primary = candidate.primary
@@ -252,7 +252,7 @@ actor BookCoverImageLoader {
         return nil
     }
 
-    private func loadFromDisk(for key: BookCoverCacheKey) -> UIImage? {
+    private func loadFromDisk(for key: BookCoverCacheKey) -> PlatformImage? {
         guard let url = diskURL(for: key),
             let values = try? url.resourceValues(
                 forKeys: [.isRegularFileKey, .fileSizeKey]
@@ -261,7 +261,7 @@ actor BookCoverImageLoader {
             let fileSize = values.fileSize,
             (0...Self.maximumResponseBytes).contains(fileSize),
             let data = try? Data(contentsOf: url),
-            let image = UIImage(data: data)
+            let image = PlatformImageSupport.image(from: data)
         else {
             return nil
         }
@@ -394,7 +394,7 @@ actor BookCoverImageLoader {
 private enum BookCoverLoadState {
     case idle
     case loading
-    case loaded(UIImage)
+    case loaded(PlatformImage)
     case failed
 }
 
@@ -443,8 +443,7 @@ struct BookCoverView: View {
         Group {
             switch state {
             case .loaded(let image):
-                Image(uiImage: image)
-                    .resizable()
+                PlatformImageSupport.resizableView(for: image)
                     .scaledToFill()
             case .idle, .loading:
                 placeholder

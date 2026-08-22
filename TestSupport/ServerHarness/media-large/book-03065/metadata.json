@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3065",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

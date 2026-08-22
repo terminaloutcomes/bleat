@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 518",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 2","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3735",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Biography"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

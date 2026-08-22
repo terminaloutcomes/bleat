@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2032",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 4","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

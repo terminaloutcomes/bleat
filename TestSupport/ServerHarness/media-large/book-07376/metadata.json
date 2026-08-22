@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7376",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 5"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 8","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

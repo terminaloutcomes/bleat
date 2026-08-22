@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8326",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 10","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

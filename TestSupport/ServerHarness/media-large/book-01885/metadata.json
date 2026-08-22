@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1885",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 1","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

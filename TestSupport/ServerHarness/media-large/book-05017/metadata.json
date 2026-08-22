@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5017",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

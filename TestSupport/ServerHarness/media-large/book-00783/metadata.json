@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 783",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7697",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4901",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

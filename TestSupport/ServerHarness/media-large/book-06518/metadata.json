@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6518",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 1"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 2","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

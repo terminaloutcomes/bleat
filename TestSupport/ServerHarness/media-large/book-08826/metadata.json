@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8826",
+    "authors": ["Writer One"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fiction"],
+    "series": [{"name":"Series 6","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 0",
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

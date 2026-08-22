@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7048",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fantasy","Mystery"],
+    "series": [{"name":"Series 4","sequence":"8"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

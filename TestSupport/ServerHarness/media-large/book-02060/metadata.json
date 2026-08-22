@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2060",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 8","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-8"]
+}

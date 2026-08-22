@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6190",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Fantasy","Mystery"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-7"]
+}

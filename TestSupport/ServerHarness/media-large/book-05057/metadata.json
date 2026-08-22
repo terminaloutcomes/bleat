@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5057",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

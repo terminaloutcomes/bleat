@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5677",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2320",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 4","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-7"]
+}

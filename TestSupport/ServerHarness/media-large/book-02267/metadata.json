@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2267",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

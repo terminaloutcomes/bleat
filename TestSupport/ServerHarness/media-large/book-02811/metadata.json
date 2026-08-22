@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2811",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 3","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

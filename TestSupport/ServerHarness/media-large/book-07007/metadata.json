@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7007",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Non-Fiction","Science Fiction","Fantasy"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

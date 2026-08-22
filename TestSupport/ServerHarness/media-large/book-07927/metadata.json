@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7927",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 7","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

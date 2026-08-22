@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8503",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 7","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

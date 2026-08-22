@@ -1,7 +1,6 @@
 import BleatCore
 import PhotosUI
 import SwiftUI
-import UIKit
 
 private enum PendingCoverState: Equatable {
     case unchanged
@@ -93,7 +92,7 @@ struct MetadataEditorView: View {
                 }
             }
             .navigationTitle("Edit Book")
-            .navigationBarTitleDisplayMode(.inline)
+            .iOSInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -245,10 +244,9 @@ struct MetadataEditorView: View {
         Section("Cover") {
             Group {
                 if case .ready(let data) = pendingCover,
-                    let image = UIImage(data: data)
+                    let image = PlatformImageSupport.image(from: data)
                 {
-                    Image(uiImage: image)
-                        .resizable()
+                    PlatformImageSupport.resizableView(for: image)
                         .scaledToFit()
                 } else {
                     BookCoverView(

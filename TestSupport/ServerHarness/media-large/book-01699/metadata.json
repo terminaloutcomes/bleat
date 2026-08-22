@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1699",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 7","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

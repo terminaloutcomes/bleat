@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9892",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 4","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

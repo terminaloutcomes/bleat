@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3060",
+    "authors": ["Author One"],
+    "narrators": ["Narrator 1"],
+    "genres": ["History"],
+    "series": [],
+    "year": "1950",
+    "publisher":"Publisher 0",
+    "explicit": true
+  },
+  "tags": ["tag-0"]
+}

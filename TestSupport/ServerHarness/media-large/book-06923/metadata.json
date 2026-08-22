@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6923",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Thriller","Adventure","Horror"],
+    "series": [{"name":"Series 11","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

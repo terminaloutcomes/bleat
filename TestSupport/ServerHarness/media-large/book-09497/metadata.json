@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9497",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Thriller","Adventure","Horror"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

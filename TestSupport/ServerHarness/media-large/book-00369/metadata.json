@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 369",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 5"],
+    "genres": ["History"],
+    "series": [{"name":"Series 9","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

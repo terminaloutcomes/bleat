@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2343",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

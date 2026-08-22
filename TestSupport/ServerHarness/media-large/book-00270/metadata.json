@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 270",
+    "authors": ["Author One"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Drama"],
+    "series": [{"name":"Series 6","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 0",
+    "explicit": true
+  },
+  "tags": ["tag-0"]
+}

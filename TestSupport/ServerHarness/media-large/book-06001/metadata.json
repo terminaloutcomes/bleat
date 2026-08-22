@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6001",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Adventure","Horror"],
+    "series": [{"name":"Series 1","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

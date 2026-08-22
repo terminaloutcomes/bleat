@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9161",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

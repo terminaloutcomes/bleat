@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1364",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 8","sequence":"4"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

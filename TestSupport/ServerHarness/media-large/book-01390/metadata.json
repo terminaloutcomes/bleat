@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1390",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-4"]
+}

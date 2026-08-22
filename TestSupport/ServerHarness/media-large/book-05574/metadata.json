@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5574",
+    "authors": ["Philosopher"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Drama"],
+    "series": [{"name":"Series 6","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 0",
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

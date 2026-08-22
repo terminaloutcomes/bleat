@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9005",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

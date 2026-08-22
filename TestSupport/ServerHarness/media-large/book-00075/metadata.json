@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 75",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Drama"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

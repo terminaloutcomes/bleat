@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3130",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-7"]
+}

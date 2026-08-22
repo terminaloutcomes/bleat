@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3365",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

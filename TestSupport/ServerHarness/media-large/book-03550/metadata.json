@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3550",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-4"]
+}

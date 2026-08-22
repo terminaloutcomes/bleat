@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7495",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 7","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

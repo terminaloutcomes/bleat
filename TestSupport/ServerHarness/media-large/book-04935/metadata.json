@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4935",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

@@ -16,7 +16,7 @@ xcodebuild \
   -scheme BleatMac \
   ${BUILD_VERBOSE_FLAG} \
   -configuration Debug \
-  -destination 'platform=macOS,variant=Mac Catalyst' \
+  -destination 'platform=macOS' \
   -derivedDataPath .build/macos-signed \
   -allowProvisioningUpdates \
   DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \

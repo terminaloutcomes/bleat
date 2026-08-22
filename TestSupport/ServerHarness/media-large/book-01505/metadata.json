@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1505",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

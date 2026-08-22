@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5632",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 4","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2513",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

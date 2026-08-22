@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8247",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 1"],
+    "genres": ["History"],
+    "series": [{"name":"Series 3","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

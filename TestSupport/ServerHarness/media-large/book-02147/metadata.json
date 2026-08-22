@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2147",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fantasy","Mystery","Biography"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

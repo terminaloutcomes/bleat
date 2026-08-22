@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7571",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 11","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

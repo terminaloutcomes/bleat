@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4421",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7541",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

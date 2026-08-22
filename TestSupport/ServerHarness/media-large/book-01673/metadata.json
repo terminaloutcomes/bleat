@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1673",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,15 +1,17 @@
 import AuthenticationServices
 import BleatCore
 import SwiftUI
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 @MainActor
-final class BleatAppDelegate: NSObject, UIApplicationDelegate {
-    static var backgroundDownloadCompletion: (() -> Void)?
+final class AppBootstrap {
     let model: AppModel
-    lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
 
-    override init() {
+    init() {
         #if DEBUG
             let diagnosticLogStore = PersistentDiagnosticLogStore()
             let diagnostics: any DiagnosticRecording =
@@ -39,7 +41,6 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                 if UITestAppService.opensSettingsAtLaunch {
                     AppDeepLinkInbox.shared.openSettings()
                 }
-                super.init()
                 return
             }
         #endif
@@ -58,6 +59,7 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                     openIDBrowserProvider: {
                         SystemOpenIDBrowserSession(
                             anchorProvider: {
+                                #if os(iOS)
                                 UIApplication.shared.connectedScenes
                                     .compactMap {
                                         $0 as? UIWindowScene
@@ -65,6 +67,9 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                                     .flatMap(\.windows)
                                     .first(where: \.isKeyWindow)
                                     ?? UIWindow()
+                                #else
+                                NSApplication.shared.keyWindow ?? NSWindow()
+                                #endif
                             }
                         )
                     }
@@ -84,8 +89,16 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
                 remoteTelemetryTracer: remoteTelemetry.tracer
             )
         }
-        super.init()
     }
+}
+
+#if os(iOS)
+@MainActor
+final class BleatAppDelegate: NSObject, UIApplicationDelegate {
+    static var backgroundDownloadCompletion: (() -> Void)?
+    let bootstrap = AppBootstrap()
+    var model: AppModel { bootstrap.model }
+    lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
 
     func application(
         _ application: UIApplication,
@@ -99,24 +112,37 @@ final class BleatAppDelegate: NSObject, UIApplicationDelegate {
         Self.backgroundDownloadCompletion = completionHandler
     }
 }
+#endif
 
 @main
 struct BleatApp: App {
+    #if os(iOS)
     @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
     private var appDelegate
+    #else
+    @State private var bootstrap = AppBootstrap()
+    #endif
+
+    private var model: AppModel {
+        #if os(iOS)
+        appDelegate.model
+        #else
+        bootstrap.model
+        #endif
+    }
 
     var body: some Scene {
         WindowGroup {
-            RootView(model: appDelegate.model)
+            RootView(model: model)
         }
-        #if targetEnvironment(macCatalyst)
+        #if os(macOS)
             .commands {
                 CommandGroup(replacing: .appSettings) {
                     Button("Settings…") {
                         AppDeepLinkInbox.shared.openSettings()
                     }
                     .keyboardShortcut(",", modifiers: .command)
-                    .disabled(appDelegate.model.phase != .signedIn)
+                    .disabled(model.phase != .signedIn)
                 }
             }
         #endif

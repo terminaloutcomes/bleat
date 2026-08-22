@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7327",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Adventure","Horror"],
+    "series": [{"name":"Series 7","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

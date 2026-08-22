@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8029",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure","Horror"],
+    "series": [{"name":"Series 1","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5428",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 4","sequence":"8"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

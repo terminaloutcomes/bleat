@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6181",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Romance","Thriller"],
+    "series": [{"name":"Series 1","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7055",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

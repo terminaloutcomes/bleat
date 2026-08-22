@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8267",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 11","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

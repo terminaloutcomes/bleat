@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4190",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 2","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-5"]
+}

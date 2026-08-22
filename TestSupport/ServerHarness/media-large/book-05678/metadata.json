@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5678",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 2","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

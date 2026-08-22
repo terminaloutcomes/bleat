@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7175",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

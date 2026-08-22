@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4563",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Non-Fiction"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

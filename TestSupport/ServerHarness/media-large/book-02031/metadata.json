@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2031",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 3","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

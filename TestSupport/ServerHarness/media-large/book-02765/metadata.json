@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2765",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

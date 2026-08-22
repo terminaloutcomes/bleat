@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7895",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Biography","History","Romance"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

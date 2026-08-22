@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 225",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Biography"],
+    "series": [{"name":"Series 9","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7473",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Comedy"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

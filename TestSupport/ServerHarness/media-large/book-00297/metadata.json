@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 297",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Comedy"],
+    "series": [{"name":"Series 9","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

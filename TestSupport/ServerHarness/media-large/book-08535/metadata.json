@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8535",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

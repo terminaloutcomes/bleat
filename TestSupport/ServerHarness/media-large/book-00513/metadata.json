@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 513",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Romance"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

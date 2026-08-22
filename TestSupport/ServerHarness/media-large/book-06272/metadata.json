@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6272",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 8","sequence":"12"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9077",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

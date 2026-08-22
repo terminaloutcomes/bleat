@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1955",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 2"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

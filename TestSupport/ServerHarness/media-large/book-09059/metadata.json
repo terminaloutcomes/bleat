@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9059",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

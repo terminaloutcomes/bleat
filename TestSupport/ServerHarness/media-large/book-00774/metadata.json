@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 774",
+    "authors": ["Author One"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 6","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 0",
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

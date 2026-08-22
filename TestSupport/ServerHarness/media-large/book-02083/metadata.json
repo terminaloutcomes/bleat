@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2083",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 7","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

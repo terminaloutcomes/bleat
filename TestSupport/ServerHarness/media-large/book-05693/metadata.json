@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5693",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

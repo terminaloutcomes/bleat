@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5623",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 7","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

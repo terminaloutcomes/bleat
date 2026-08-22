@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8705",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

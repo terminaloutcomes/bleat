@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7902",
+    "authors": ["Author One"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Comedy"],
+    "series": [{"name":"Series 6","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 0",
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

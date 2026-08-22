@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 150",
+    "authors": ["Writer One"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 6","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 0",
+    "explicit": true
+  },
+  "tags": ["tag-6"]
+}

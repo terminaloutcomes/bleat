@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8113",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 1","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

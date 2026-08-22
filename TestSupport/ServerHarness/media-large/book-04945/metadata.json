@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4945",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["History","Romance"],
+    "series": [{"name":"Series 1","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

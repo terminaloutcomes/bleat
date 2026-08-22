@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5889",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Non-Fiction"],
+    "series": [{"name":"Series 9","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

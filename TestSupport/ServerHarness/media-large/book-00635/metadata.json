@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 635",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8437",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

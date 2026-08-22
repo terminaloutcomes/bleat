@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3401",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

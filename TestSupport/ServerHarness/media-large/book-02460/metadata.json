@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 2460",
+    "authors": ["Philosopher"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Mystery"],
+    "series": [],
+    "year": "1950",
+    "publisher":"Publisher 0",
+    "explicit": true
+  },
+  "tags": ["tag-3"]
+}

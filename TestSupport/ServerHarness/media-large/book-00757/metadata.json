@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 757",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

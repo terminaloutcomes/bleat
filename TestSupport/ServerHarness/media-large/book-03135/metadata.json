@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3135",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fantasy"],
+    "series": [{"name":"Series 3","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}

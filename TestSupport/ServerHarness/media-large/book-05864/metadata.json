@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5864",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 8","sequence":"4"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

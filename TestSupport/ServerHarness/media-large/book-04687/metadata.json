@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4687",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 7","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

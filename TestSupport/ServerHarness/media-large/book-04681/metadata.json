@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4681",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Science Fiction","Fantasy"],
+    "series": [{"name":"Series 1","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

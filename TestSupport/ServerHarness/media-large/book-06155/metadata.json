@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6155",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

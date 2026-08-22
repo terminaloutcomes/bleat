@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1208",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 8","sequence":"8"}],
+    "year": "2010",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

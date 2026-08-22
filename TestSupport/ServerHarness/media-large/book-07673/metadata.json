@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7673",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

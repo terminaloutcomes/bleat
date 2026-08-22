@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 909",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fiction"],
+    "series": [{"name":"Series 9","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

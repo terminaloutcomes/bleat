@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 25",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Fiction","Non-Fiction"],
+    "series": [{"name":"Series 1","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

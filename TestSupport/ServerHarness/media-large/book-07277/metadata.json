@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7277",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

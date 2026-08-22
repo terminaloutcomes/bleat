@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9236",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 8","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

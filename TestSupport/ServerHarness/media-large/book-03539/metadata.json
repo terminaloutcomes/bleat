@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3539",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

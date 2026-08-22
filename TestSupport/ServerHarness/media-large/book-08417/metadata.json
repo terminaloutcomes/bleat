@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8417",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Romance","Thriller","Adventure"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

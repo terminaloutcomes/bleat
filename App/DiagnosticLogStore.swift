@@ -3,7 +3,9 @@
     import Foundation
     import Observation
     import SwiftUI
-    import UIKit
+    #if os(iOS)
+        import UIKit
+    #endif
 
     enum DiagnosticLogStoreError: Error, Equatable, Sendable {
         case storageUnavailable
@@ -448,6 +450,7 @@
         }
     }
 
+    #if os(iOS)
     struct DiagnosticActivityView: UIViewControllerRepresentable {
         let fileURL: URL
         let onCompletion: @MainActor @Sendable () -> Void
@@ -473,4 +476,22 @@
             context: Context
         ) {}
     }
+    #else
+    struct DiagnosticActivityView: View {
+        let fileURL: URL
+        let onCompletion: @MainActor @Sendable () -> Void
+
+        var body: some View {
+            VStack(spacing: 16) {
+                ShareLink(item: fileURL) {
+                    Label("Share Recent Logs", systemImage: "square.and.arrow.up")
+                }
+                Button("Done") {
+                    onCompletion()
+                }
+            }
+            .padding()
+        }
+    }
+    #endif
 #endif

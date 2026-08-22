@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1381",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 1","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

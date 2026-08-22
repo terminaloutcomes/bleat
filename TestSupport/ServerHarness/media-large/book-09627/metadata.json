@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9627",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 3","sequence":"7"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

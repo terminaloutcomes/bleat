@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6299",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Thriller","Adventure","Horror"],
+    "series": [{"name":"Series 11","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

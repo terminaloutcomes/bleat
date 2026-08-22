@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6746",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 2","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

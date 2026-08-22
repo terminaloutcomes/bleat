@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 716",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 8","sequence":"16"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5668",
+    "authors": ["Traveler"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 4","sequence":"8"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

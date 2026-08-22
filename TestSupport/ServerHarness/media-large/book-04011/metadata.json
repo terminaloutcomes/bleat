@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4011",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Thriller"],
+    "series": [{"name":"Series 3","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

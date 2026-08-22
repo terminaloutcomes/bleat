@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 8201",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

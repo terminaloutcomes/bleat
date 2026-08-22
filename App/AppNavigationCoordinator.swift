@@ -437,7 +437,6 @@ final class AppNavigationCoordinator {
     }
 }
 
-#if DEBUG
 enum UITestDeepLinkReceipt {
     enum Outcome: String {
         case applied
@@ -492,4 +491,3 @@ enum UITestDeepLinkReceipt {
         }
     }
 }
-#endif

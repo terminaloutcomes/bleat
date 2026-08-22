@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5846",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 2","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

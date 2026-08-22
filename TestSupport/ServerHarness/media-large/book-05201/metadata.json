@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5201",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

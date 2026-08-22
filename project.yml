@@ -4,6 +4,7 @@ options:
   bundleIdPrefix: $(BUNDLE_ID_PREFIX)
   deploymentTarget:
     iOS: "26.0"
+    macOS: "26.0"
   createIntermediateGroups: true
 
 attributes:
@@ -17,7 +18,7 @@ settings:
   base:
     BUNDLE_ID_PREFIX: com.terminaloutcomes
     CODE_SIGN_STYLE: Automatic
-    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
 
@@ -28,56 +29,18 @@ targets:
     platform: auto
     supportedDestinations:
       - iOS
-      - macCatalyst
+      - macOS
     sources:
       - path: App
+        excludes:
+          - Info.plist
+          - Info-macOS.plist
       - path: Bleat.icon
     dependencies:
       - package: BleatPackage
         product: BleatCore
       - package: BleatPackage
         product: BleatTranscription
-    info:
-      path: App/Info.plist
-      properties:
-        CFBundleDisplayName: Bleat
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        CFBundleURLTypes:
-          - CFBundleTypeRole: Viewer
-            CFBundleURLName: "$(PRODUCT_BUNDLE_IDENTIFIER)"
-            CFBundleURLSchemes:
-              - bleat
-              - com.terminaloutcomes.bleat
-        BleatBuildDate: Unavailable
-        BleatAppAttestMode: "$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)"
-        BleatCloudKitMode: "$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)"
-        BleatDeveloperName: "$(BLEAT_DEVELOPER_NAME)"
-        BleatTelemetryAuthenticationBaseURL: "$(BLEAT_TELEMETRY_AUTH_BASE_URL)"
-        BleatTelemetryAttesterMode: "$(BLEAT_TELEMETRY_ATTESTER_MODE)"
-        BleatTelemetryOTLPEndpoint: "$(BLEAT_TELEMETRY_OTLP_ENDPOINT)"
-        NSLocalNetworkUsageDescription: Bleat connects to your Audiobookshelf server on the local network.
-        NSBonjourServices:
-          - _audiobookshelf._tcp
-        UILaunchScreen: {}
-        UIBackgroundModes:
-          - audio
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: true
-          UISceneConfigurations:
-            CPTemplateApplicationSceneSessionRoleApplication:
-              - UISceneClassName: CPTemplateApplicationScene
-                UISceneConfigurationName: Bleat CarPlay
-                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
     settings:
       base:
         BUILD_WITHOUT_PAID_DEVELOPER: NO
@@ -101,7 +64,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: Bleat
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).Bleat"
         PRODUCT_NAME: Bleat
-        "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
+        INFOPLIST_FILE: App/Info-macOS.plist
+        "INFOPLIST_FILE[sdk=iphoneos*]": App/Info.plist
+        "INFOPLIST_FILE[sdk=iphonesimulator*]": App/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
       configs:
@@ -127,7 +92,7 @@ targets:
     platform: auto
     supportedDestinations:
       - iOS
-      - macCatalyst
+      - macOS
     sources:
       - path: Tests/BleatAppTests
       - path: Tests/BleatTranscriptionTests/AudioChapterSliceExporterTests.swift
@@ -140,7 +105,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).BleatTests"
         GENERATE_INFOPLIST_FILE: true
         DEAD_CODE_STRIPPING: YES
-        "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "18.0"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat"
         BUNDLE_LOADER: "$(TEST_HOST)"
 

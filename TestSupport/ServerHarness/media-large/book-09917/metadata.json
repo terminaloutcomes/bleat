@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9917",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Comedy","Fiction","Non-Fiction"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

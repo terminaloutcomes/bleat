@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1817",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

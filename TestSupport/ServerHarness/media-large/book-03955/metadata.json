@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3955",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 7","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

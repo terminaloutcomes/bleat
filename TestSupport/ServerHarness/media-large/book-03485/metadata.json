@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3485",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

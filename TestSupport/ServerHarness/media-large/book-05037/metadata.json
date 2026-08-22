@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5037",
+    "authors": ["Dreamer"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Romance"],
+    "series": [{"name":"Series 9","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-6"]
+}

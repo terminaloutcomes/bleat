@@ -6,8 +6,7 @@ let package = Package(
     name: "BleatCoreApp",
     platforms: [
         .iOS(.v26),
-        .macCatalyst(.v18),
-        .macOS(.v15),
+        .macOS(.v26),
     ],
     products: [
         .library(

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5575",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Comedy","Fiction"],
+    "series": [{"name":"Series 7","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

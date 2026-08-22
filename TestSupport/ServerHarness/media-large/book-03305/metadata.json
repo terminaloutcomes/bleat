@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3305",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Mystery","Biography","History"],
+    "series": [{"name":"Series 5","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

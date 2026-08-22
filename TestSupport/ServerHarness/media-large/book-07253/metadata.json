@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7253",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 5","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

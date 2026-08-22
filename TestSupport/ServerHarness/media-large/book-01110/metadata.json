@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1110",
+    "authors": ["Philosopher"],
+    "narrators": ["Narrator 4"],
+    "genres": ["History"],
+    "series": [{"name":"Series 6","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 0",
+    "explicit": true
+  },
+  "tags": ["tag-3"]
+}

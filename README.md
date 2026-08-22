@@ -3,7 +3,7 @@
 Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
 and is being implemented in Swift 6 with strict concurrency checking. The same
-application target can also produce a Mac Catalyst 18 build for macOS 15 and
+application target can also produce a native macOS 26 build for macOS 26 and
 newer. Development-signed Catalyst builds support native login and
 account restoration through the macOS Keychain.
 
@@ -55,7 +55,7 @@ resuming.
 - An installed iOS Simulator runtime for simulator tests
 - Docker Desktop or another Docker Compose 2-compatible runtime for live tests
 - XcodeGen 2.46 or newer only when changing `project.yml`
-- Optionally, an Apple development team for signed Mac Catalyst runtime tests
+- Optionally, an Apple development team for signed native macOS runtime tests
 
 Confirm the active toolchain:
 
@@ -96,7 +96,7 @@ xcodebuild \
   build
 ```
 
-Compile an unsigned Mac Catalyst Release app:
+Compile an unsigned native macOS Release app:
 
 ```sh
 mise run macos:compile
@@ -146,7 +146,7 @@ mise run macos
 ```
 
 The signed app is written to
-`.build/macos-signed/Build/Products/Release-maccatalyst/Bleat.app`. The task
+`.build/macos-signed/Build/Products/Release/Bleat.app`. The task
 verifies its signature, development team, and application-identifier
 entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
 identifier is unavailable to the selected team. Keep the same team and bundle
@@ -336,8 +336,8 @@ the app suites, a locally generated scheme is shadowing the project scheme.
 Delete `.swiftpm/xcode/xcshareddata/xcschemes/Bleat.xcscheme` (a git-ignored
 artifact created when the package is opened directly in Xcode) and retry.
 
-Select the `BleatMac` scheme and **My Mac (Mac Catalyst)** to run the shared
-application target or its app-hosted unit tests on macOS 15 or newer. UI tests
+Select the `BleatMac` scheme and **My Mac** to run the shared application
+target or its app-hosted unit tests on macOS 26 or newer. UI tests
 remain iOS-only.
 
 The equivalent command-line simulator workflow is:
@@ -752,7 +752,7 @@ been validated uses the saved native username and password for direct identity
 validation without sending its existing bearer token. A successful validation
 is retained; a temporary failure affects only the current network lifecycle and
 never revokes an earlier validation. This applies to
-all supported iOS and Mac Catalyst network interfaces; it does not assume that
+all supported iOS and native macOS network interfaces; it does not assume that
 the current path is Wi-Fi. A changed local URL is verified directly as the same saved
 Audiobookshelf user. Changing only the primary URL does not require the local
 server to be reachable. If changed local details cannot be verified, the edit
@@ -777,22 +777,12 @@ bounded technical operation, outcome, timing, app-version, and operating-system 
 it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and device or installation identifiers. Turning the setting
 off does not affect local Diagnostics. The Diagnostics screen remains available
-while signed out and when application startup is unavailable. The
+while signed out and when application startup is unavailable. On iOS, the
 opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
-lifecycle log records away from the main
-actor. It durably retains failed span batches for at most two hours and 128 MiB in
-protected, backup-excluded Application Support storage. Withdrawal immediately
-stops new spans and logs and downstream attempts, invalidates the retained generation,
-and purges it asynchronously. When both telemetry endpoints are configured,
-one TLS gRPC channel sends each persisted OTLP batch with a bearer JWT resolved
-immediately before that RPC. An unauthenticated response invalidates only the
-rejected token and permits one refresh/retry; rotation does not rebuild the
-tracing or persistence pipeline. Missing or invalid configuration keeps the
-unavailable sink and retains eligible spans within the same limits. CloudKit
-logs use static bodies and a closed attribute allowlist containing only the
-typed operation, outcome, failure category, exact CloudKit code, retryability,
-partial codes, retry delay, and duration. Their SDK queue is memory-only and
-bounded to 2,048 records; it is not replayed after relaunch.
+lifecycle log records away from the main actor, retaining failed span batches
+under the bounded persistence policy before authenticated OTLP export. Remote
+OpenTelemetry export is out of scope on native macOS: that build does not create
+App Attest keys, request telemetry tokens, retain export batches, or send OTLP.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path
@@ -1046,25 +1036,11 @@ verifies deterministic fake P-256 evidence and issues ephemeral ES256 tokens
 for local Swift-to-PostgreSQL testing. Production App Attest verification and
 persistent signing-key rotation remain disabled until issues 65 and 66.
 
-The app reads the authentication service URL only from the
-`BLEAT_TELEMETRY_AUTH_BASE_URL` build setting. An empty value leaves telemetry
-authentication unavailable. Release builds require HTTPS; Debug builds may use
-HTTP only on loopback. Setting `BLEAT_TELEMETRY_ATTESTER_MODE=fake` selects the
-development attester in Debug builds only, independently of the App Attest
-build capability. The system App Attest implementation is unavailable unless
-the effective `BLEAT_APP_ATTEST_MODE` is exactly `enabled`. Consent remains
-fully lazy: enabling telemetry performs no authentication work until a caller
-requests a token.
-
-The app reads the OTLP/gRPC origin from `BLEAT_TELEMETRY_OTLP_ENDPOINT`. It must
-be an HTTPS origin with an optional port and no credentials, path, query, or
-fragment. Production uses system certificate validation and the platform-best
-Darwin transport. The exporter reuses its channel across batches, attaches one
-fresh `authorization: Bearer <JWT>` metadata value per RPC, retries an
-`unauthenticated` result once with a newly issued token, and treats every other
-export failure as best-effort retained telemetry. Background deadlines and
-consent withdrawal cancel active token waits and RPCs without affecting app
-operations.
+On iOS, the authentication service URL comes from
+`BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/gRPC origin comes from
+`BLEAT_TELEMETRY_OTLP_ENDPOINT`; Release requires HTTPS and Debug permits HTTP
+only on loopback. Native macOS ignores these telemetry settings because remote
+export is out of scope on that platform.
 
 Run the disposable PostgreSQL and API stack locally with:
 

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1759",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 7","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

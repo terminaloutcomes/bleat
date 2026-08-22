@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 320",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 8","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-5"]
+}

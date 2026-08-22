@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1543",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Horror","Drama"],
+    "series": [{"name":"Series 7","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

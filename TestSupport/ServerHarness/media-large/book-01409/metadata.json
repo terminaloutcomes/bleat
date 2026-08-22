@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1409",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 2"],
+    "genres": ["History","Romance","Thriller"],
+    "series": [{"name":"Series 5","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

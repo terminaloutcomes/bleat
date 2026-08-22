@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9380",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Thriller","Adventure","Horror"],
+    "series": [{"name":"Series 8","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3253",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 1","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

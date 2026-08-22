@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9328",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 4","sequence":"8"}],
+    "year": "2010",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

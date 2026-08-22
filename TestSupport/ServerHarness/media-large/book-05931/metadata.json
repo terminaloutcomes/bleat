@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5931",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 3","sequence":"11"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

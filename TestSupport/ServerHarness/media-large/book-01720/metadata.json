@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1720",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Biography","History"],
+    "series": [{"name":"Series 4","sequence":"0"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-1"]
+}

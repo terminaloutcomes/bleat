@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4415",
+    "authors": ["Co-Author Beta"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1946",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 2","sequence":"6"}],
+    "year": "1970",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

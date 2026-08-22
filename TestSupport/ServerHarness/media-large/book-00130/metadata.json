@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 130",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-4"]
+}

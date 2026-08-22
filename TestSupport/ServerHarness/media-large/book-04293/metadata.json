@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4293",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 9","sequence":"13"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7838",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Fiction","Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 2","sequence":"18"}],
+    "year": "2010",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9122",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 2","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 5390",
+    "authors": ["Historian"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Adventure","Horror","Drama"],
+    "series": [{"name":"Series 2","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 2",
+    "explicit": true
+  },
+  "tags": ["tag-8"]
+}

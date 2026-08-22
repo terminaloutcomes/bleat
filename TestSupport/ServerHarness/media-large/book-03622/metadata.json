@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3622",
+    "authors": ["Co-Author Alpha"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Adventure","Horror"],
+    "series": [{"name":"Series 10","sequence":"2"}],
+    "year": "1990",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

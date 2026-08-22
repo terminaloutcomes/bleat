@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9919",
+    "authors": ["Author Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Non-Fiction","Science Fiction"],
+    "series": [{"name":"Series 7","sequence":"19"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7537",
+    "authors": ["Novelist"],
+    "narrators": ["Narrator 5"],
+    "genres": ["Drama","Comedy"],
+    "series": [{"name":"Series 1","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-4"]
+}

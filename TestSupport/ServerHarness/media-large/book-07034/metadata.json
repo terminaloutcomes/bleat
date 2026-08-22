@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 7034",
+    "authors": ["Critic"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Science Fiction","Fantasy","Mystery"],
+    "series": [{"name":"Series 2","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-5"]
+}

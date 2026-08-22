@@ -6,7 +6,7 @@ import XCTest
 @testable import Bleat
 
 final class AppAttestTelemetryAttesterTests: XCTestCase {
-    #if !targetEnvironment(macCatalyst)
+    #if os(iOS)
         func testAdapterHandlesServiceWorkCompletedAwayFromMainActor() async throws {
             let service = OffMainAppAttestService()
             let attester = AppAttestTelemetryAttester(service: service)
@@ -53,8 +53,8 @@ final class AppAttestTelemetryAttesterTests: XCTestCase {
         }
     #endif
 
-    #if targetEnvironment(macCatalyst)
-        func testMacCatalystAlwaysDegradesAsUnsupported() {
+    #if os(macOS)
+        func testMacOSAlwaysDegradesAsUnsupported() {
             let attester = AppAttestTelemetryAttester(
                 service: OffMainAppAttestService()
             )

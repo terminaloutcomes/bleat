@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 405",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Fantasy"],
+    "series": [{"name":"Series 9","sequence":"5"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

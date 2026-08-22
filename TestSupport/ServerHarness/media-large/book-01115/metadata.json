@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1115",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 11","sequence":"15"}],
+    "year": "1950",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3941",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Fantasy","Mystery","Biography"],
+    "series": [{"name":"Series 5","sequence":"1"}],
+    "year": "1970",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

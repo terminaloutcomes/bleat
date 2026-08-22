@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 9709",
+    "authors": ["Writer Two"],
+    "narrators": ["Narrator 0"],
+    "genres": ["Comedy","Fiction"],
+    "series": [{"name":"Series 1","sequence":"9"}],
+    "year": "2020",
+    
+    "explicit": false
+  },
+  "tags": ["tag-7"]
+}

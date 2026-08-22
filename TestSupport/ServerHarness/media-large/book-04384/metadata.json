@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4384",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Mystery","Biography"],
+    "series": [{"name":"Series 4","sequence":"4"}],
+    "year": "2020",
+    "publisher":"Publisher 4",
+    "explicit": false
+  },
+  "tags": ["tag-1"]
+}

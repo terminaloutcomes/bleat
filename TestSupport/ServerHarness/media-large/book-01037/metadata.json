@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 1037",
+    "authors": ["Explorer"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Drama","Comedy","Fiction"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

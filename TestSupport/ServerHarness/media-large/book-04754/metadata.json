@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 4754",
+    "authors": ["Author Three"],
+    "narrators": ["Narrator 1"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 2","sequence":"14"}],
+    "year": "2020",
+    "publisher":"Publisher 2",
+    "explicit": false
+  },
+  "tags": ["tag-2"]
+}

@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3790",
+    "authors": ["Scientist"],
+    "narrators": ["Narrator 3"],
+    "genres": ["Thriller","Adventure"],
+    "series": [{"name":"Series 10","sequence":"10"}],
+    "year": "1950",
+    "publisher":"Publisher 4",
+    "explicit": true
+  },
+  "tags": ["tag-1"]
+}

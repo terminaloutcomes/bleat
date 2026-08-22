@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 3077",
+    "authors": ["Archivist"],
+    "narrators": ["Narrator 4"],
+    "genres": ["Horror","Drama","Comedy"],
+    "series": [{"name":"Series 5","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-8"]
+}

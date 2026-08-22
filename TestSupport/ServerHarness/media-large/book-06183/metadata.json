@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 6183",
+    "authors": ["Poet"],
+    "narrators": ["Narrator 2"],
+    "genres": ["Adventure"],
+    "series": [{"name":"Series 3","sequence":"3"}],
+    "year": "2010",
+    
+    "explicit": false
+  },
+  "tags": ["tag-0"]
+}

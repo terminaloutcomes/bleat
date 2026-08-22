@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "title": "Book Title 237",
+    "authors": ["Author Four"],
+    "narrators": ["Narrator 6"],
+    "genres": ["Mystery"],
+    "series": [{"name":"Series 9","sequence":"17"}],
+    "year": "1990",
+    
+    "explicit": false
+  },
+  "tags": ["tag-3"]
+}
