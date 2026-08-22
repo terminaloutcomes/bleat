@@ -4,6 +4,7 @@
 
     private enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
+        case openID = "--ui-testing-openid"
         case signedIn = "--ui-testing-signed-in"
         case refresh = "--ui-testing-refresh"
         case emptyLibraryRefreshFailure =
@@ -180,7 +181,9 @@
                 baseURL: account.server,
                 version: version,
                 language: "en-us",
-                authenticationMethods: account.authenticationMethods,
+                authenticationMethods: scenario == .openID
+                    ? [.local, .openID]
+                    : account.authenticationMethods,
                 authenticationFormData: nil
             )
         }
