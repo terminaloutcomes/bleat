@@ -201,8 +201,9 @@ already-issued tokens expire naturally within their bounded lifetime.
 
 The production authenticator-data parser is kept aligned with Apple's public
 [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide).
-Its published 2026 authenticator data is retained as a versioned regression
-fixture under `tests/fixtures/apple-app-attest/`. In particular, Apple encodes
+Its published 2026 authenticator data is retained unchanged as a versioned
+regression fixture under `tests/fixtures/apple-app-attest/`, alongside its
+provenance and update rules. In particular, Apple encodes
 `apple_validation_category_01` as a four-byte little-endian byte string, not as
 a CBOR integer; `apple_bundle_version_01` is a CBOR text string. The fixture test
 checks the RP ID hash, counter, production AAGUID, credential ID, COSE public-key
