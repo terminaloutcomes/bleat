@@ -7,7 +7,9 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bleat_api::{
-    config::{Arguments, Config, TelemetryExportConfig},
+    config::{
+        AppAttestEnvironment, Arguments, Config, DeploymentMode, LogFormat, TelemetryExportConfig,
+    },
     database::connect_and_migrate,
     http::RouterBuildError,
     installation::{
@@ -19,7 +21,6 @@ use bleat_api::{
         client_data_hash,
     },
 };
-use clap::Parser;
 use compact_jwt::{Jwk, JwsEs256Signer, JwsEs256Verifier, JwsVerifier, JwtUnverified};
 use http_body_util::BodyExt;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
@@ -27,22 +28,47 @@ use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 use tower::ServiceExt;
+use url::Url;
 use uuid::Uuid;
 
 mod support;
 
 use support::TestPostgres;
 
-fn test_config(postgres: &TestPostgres, extra_arguments: &[&str]) -> Config {
-    let mut arguments = vec!["bleat-api", "--database-url", postgres.database_url()];
-    arguments.extend(extra_arguments.iter().copied());
-    Config::from_arguments(
-        Arguments::try_parse_from(arguments).expect("test arguments should parse"),
-        TelemetryExportConfig::default(),
-    )
-    .expect("test configuration should validate")
+fn test_arguments(postgres: &TestPostgres) -> Arguments {
+    Arguments {
+        bind_address: "127.0.0.1:8080"
+            .parse()
+            .expect("test bind address should parse"),
+        public_issuer: Url::parse("http://127.0.0.1:8080").expect("test issuer should parse"),
+        deployment_mode: DeploymentMode::Development,
+        apple_team_id: None,
+        app_identifier: None,
+        app_attest_environment: AppAttestEnvironment::Development,
+        app_attest_bundle_versions: Vec::new(),
+        app_attest_validation_categories: Vec::new(),
+        database_url: postgres.database_url().to_owned(),
+        database_max_connections: 4,
+        database_connect_timeout_seconds: 5,
+        challenge_lifetime_seconds: 120,
+        challenge_cleanup_batch_size: 1_000,
+        challenge_issuance_per_minute: 600,
+        token_lifetime_seconds: 600,
+        jwt_signing_key_file: None,
+        jwt_public_key_set_file: None,
+        request_timeout_seconds: 10,
+        max_request_body_bytes: 65_536,
+        max_concurrent_requests: 64,
+        log_filter: "bleat_api=info".to_owned(),
+        log_format: LogFormat::Compact,
+    }
+}
+
+fn test_config(postgres: &TestPostgres) -> Config {
+    Config::from_arguments(test_arguments(postgres), TelemetryExportConfig::default())
+        .expect("test configuration should validate")
 }
 
 async fn database(postgres: &TestPostgres) -> DatabaseConnection {
@@ -51,9 +77,20 @@ async fn database(postgres: &TestPostgres) -> DatabaseConnection {
         .expect("test database should connect")
 }
 
-async fn test_router(postgres: &TestPostgres, extra_arguments: &[&str]) -> axum::Router {
-    let config = test_config(postgres, extra_arguments);
+async fn configured_test_router(
+    postgres: &TestPostgres,
+    configure: impl FnOnce(&mut Config),
+) -> axum::Router {
+    let mut config = test_config(postgres);
+    configure(&mut config);
+    config
+        .validate()
+        .expect("test configuration should validate");
     router(&config, database(postgres).await).expect("router should build")
+}
+
+async fn test_router(postgres: &TestPostgres) -> axum::Router {
+    configured_test_router(postgres, |_| {}).await
 }
 
 async fn production_router(postgres: &TestPostgres) -> axum::Router {
@@ -64,27 +101,18 @@ async fn production_router(postgres: &TestPostgres) -> axum::Router {
     let path = std::env::temp_dir().join(format!("bleat-production-jwt-{}.der", Uuid::new_v4()));
     std::fs::write(&path, key.as_slice()).expect("production test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
-    let config = test_config(
-        postgres,
-        &[
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example.test",
-            "--apple-team-id",
-            "TEAM123456",
-            "--app-identifier",
-            "com.example.Bleat",
-            "--app-attest-environment",
-            "production",
-            "--app-attest-bundle-versions",
-            "1",
-            "--app-attest-validation-categories",
-            "2,4",
-            "--jwt-signing-key-file",
-            path_argument.as_str(),
-        ],
-    );
+    let mut arguments = test_arguments(postgres);
+    arguments.deployment_mode = DeploymentMode::Production;
+    arguments.public_issuer =
+        Url::parse("https://telemetry.example.test").expect("test issuer should parse");
+    arguments.apple_team_id = Some("TEAM123456".to_owned());
+    arguments.app_identifier = Some("com.example.Bleat".to_owned());
+    arguments.app_attest_environment = AppAttestEnvironment::Production;
+    arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+    arguments.app_attest_validation_categories = vec![2, 4];
+    arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
+    let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
+        .expect("test configuration should validate");
     let result = router(&config, database(postgres).await).expect("production router should build");
     std::fs::remove_file(path).expect("production test key should be removed");
     result
@@ -96,27 +124,18 @@ async fn production_router_preserves_the_signing_configuration_failure() {
     let path = std::env::temp_dir().join(format!("bleat-invalid-jwt-{}.der", Uuid::new_v4()));
     std::fs::write(&path, b"not-a-signing-key").expect("invalid test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
-    let config = test_config(
-        &postgres,
-        &[
-            "--deployment-mode",
-            "production",
-            "--public-issuer",
-            "https://telemetry.example.test",
-            "--apple-team-id",
-            "TEAM123456",
-            "--app-identifier",
-            "com.example.Bleat",
-            "--app-attest-environment",
-            "production",
-            "--app-attest-bundle-versions",
-            "1",
-            "--app-attest-validation-categories",
-            "2,4",
-            "--jwt-signing-key-file",
-            path_argument.as_str(),
-        ],
-    );
+    let mut arguments = test_arguments(&postgres);
+    arguments.deployment_mode = DeploymentMode::Production;
+    arguments.public_issuer =
+        Url::parse("https://telemetry.example.test").expect("test issuer should parse");
+    arguments.apple_team_id = Some("TEAM123456".to_owned());
+    arguments.app_identifier = Some("com.example.Bleat".to_owned());
+    arguments.app_attest_environment = AppAttestEnvironment::Production;
+    arguments.app_attest_bundle_versions = vec!["1".to_owned()];
+    arguments.app_attest_validation_categories = vec![2, 4];
+    arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
+    let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
+        .expect("test configuration should validate");
     let error = router(&config, database(&postgres).await)
         .expect_err("invalid signing material should prevent router construction");
     std::fs::remove_file(path).expect("invalid test key should be removed");
@@ -262,7 +281,7 @@ async fn enroll_development(router: &axum::Router, signing_key: &SigningKey) -> 
 async fn health_and_readiness_are_typed_and_receive_request_ids() {
     let postgres = TestPostgres::start().await;
     for (path, expected_status) in [("/healthz", "ok"), ("/readyz", "ready")] {
-        let response = test_router(&postgres, &[])
+        let response = test_router(&postgres)
             .await
             .oneshot(
                 Request::get(path)
@@ -360,7 +379,7 @@ struct TestTokenClaims {
 #[tokio::test]
 async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
     let postgres = TestPostgres::start().await;
-    let router = test_router(&postgres, &[]).await;
+    let router = test_router(&postgres).await;
     let signing_key = SigningKey::from_slice(&[9_u8; 32]).expect("test key should be valid");
     let public_key = signing_key.verifying_key().to_encoded_point(false);
     let public_key = public_key.as_bytes();
@@ -508,7 +527,7 @@ async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
 #[tokio::test]
 async fn discovery_and_jwks_support_bounded_conditional_caching() {
     let postgres = TestPostgres::start().await;
-    let router = test_router(&postgres, &[]).await;
+    let router = test_router(&postgres).await;
     for path in [
         "/.well-known/openid-configuration",
         "/.well-known/jwks.json",
@@ -558,7 +577,7 @@ async fn discovery_and_jwks_support_bounded_conditional_caching() {
 #[tokio::test]
 async fn development_evidence_rejects_wrong_key_signature_and_replay() {
     let postgres = TestPostgres::start().await;
-    let router = test_router(&postgres, &[]).await;
+    let router = test_router(&postgres).await;
     let signing_key = development_key(11);
     let wrong_key = development_key(12);
     let (challenge_id, challenge) =
@@ -613,7 +632,7 @@ async fn development_evidence_rejects_wrong_key_signature_and_replay() {
 async fn development_assertions_reject_wrong_signature_replay_and_disabled_installation() {
     let postgres = TestPostgres::start().await;
     let database = database(&postgres).await;
-    let config = test_config(&postgres, &[]);
+    let config = test_config(&postgres);
     let router = router(&config, database.clone()).expect("router should build");
     let signing_key = development_key(13);
     let wrong_key = development_key(14);
@@ -678,7 +697,7 @@ async fn development_assertions_reject_wrong_signature_replay_and_disabled_insta
 #[tokio::test]
 async fn challenge_routes_issue_typed_opaque_challenges() {
     let postgres = TestPostgres::start().await;
-    let attestation = test_router(&postgres, &[])
+    let attestation = test_router(&postgres)
         .await
         .oneshot(
             Request::post("/v1/attestation/challenge")
@@ -714,7 +733,7 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
         })
         .await
         .expect("installation should persist");
-    let config = test_config(&postgres, &[]);
+    let config = test_config(&postgres);
     let token = router(&config, database)
         .expect("router should build")
         .oneshot(
@@ -734,7 +753,7 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
 #[tokio::test]
 async fn unknown_installations_and_excess_issuance_are_typed() {
     let postgres = TestPostgres::start().await;
-    let unknown = test_router(&postgres, &[])
+    let unknown = test_router(&postgres)
         .await
         .oneshot(
             Request::post("/v1/token/challenge")
@@ -753,7 +772,10 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
         "authentication_rejected"
     );
 
-    let router = test_router(&postgres, &["--challenge-issuance-per-minute", "1"]).await;
+    let router = configured_test_router(&postgres, |config| {
+        config.challenge_issuance_per_minute = 1;
+    })
+    .await;
     let request = || {
         Request::post("/v1/attestation/challenge")
             .header("content-type", "application/json")
@@ -784,7 +806,7 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
 async fn readiness_reports_database_failure_without_details() {
     let postgres = TestPostgres::start().await;
     let database = database(&postgres).await;
-    let config = test_config(&postgres, &[]);
+    let config = test_config(&postgres);
     let router = router(&config, database.clone()).expect("router should build");
     database.close().await.expect("test pool should close");
 
@@ -805,7 +827,7 @@ async fn readiness_reports_database_failure_without_details() {
 #[tokio::test]
 async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work() {
     let postgres = TestPostgres::start().await;
-    let malformed = test_router(&postgres, &[])
+    let malformed = test_router(&postgres)
         .await
         .oneshot(
             Request::post("/v1/token")
@@ -822,16 +844,18 @@ async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work()
     );
 
     let oversized_body = format!("\"{}\"", "x".repeat(2_048));
-    let oversized = test_router(&postgres, &["--max-request-body-bytes", "1024"])
-        .await
-        .oneshot(
-            Request::post("/v1/token")
-                .header("content-type", "application/json")
-                .body(Body::from(oversized_body))
-                .expect("valid request"),
-        )
-        .await
-        .expect("router should respond");
+    let oversized = configured_test_router(&postgres, |config| {
+        config.max_request_body_bytes = 1_024;
+    })
+    .await
+    .oneshot(
+        Request::post("/v1/token")
+            .header("content-type", "application/json")
+            .body(Body::from(oversized_body))
+            .expect("valid request"),
+    )
+    .await
+    .expect("router should respond");
     assert_eq!(oversized.status(), StatusCode::PAYLOAD_TOO_LARGE);
     assert_eq!(
         response_json(oversized).await["error"]["code"],
@@ -842,7 +866,7 @@ async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work()
 #[tokio::test]
 async fn unsupported_methods_do_not_invoke_post_handlers() {
     let postgres = TestPostgres::start().await;
-    let response = test_router(&postgres, &[])
+    let response = test_router(&postgres)
         .await
         .oneshot(
             Request::get("/v1/token")

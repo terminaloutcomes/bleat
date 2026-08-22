@@ -31,9 +31,11 @@ mise run api:validate
 
 This runs formatting, compilation, strict Clippy, PostgreSQL-backed tests, a
 Release build, and live HTTP checks against the disposable container stack.
-Each database-backed Rust test starts and removes its own isolated PostgreSQL
-17 container through Testcontainers, so Docker is the only database-test
-prerequisite. Measure the separate Rust coverage gate with:
+Rust tests construct configuration explicitly rather than inheriting caller
+application or OTLP settings. Each database-backed Rust test starts and removes
+its own isolated PostgreSQL 17 container through Testcontainers, so Docker is
+the only database-test prerequisite. Measure the separate Rust coverage gate
+with:
 
 ```sh
 mise run api:coverage

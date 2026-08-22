@@ -1,6 +1,14 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
+cargo test \
+  --locked \
+  --manifest-path bleat-api/Cargo.toml \
+  --all-features \
+  -- \
+  --nocapture \
+  --test-threads=4
+
 readonly project_name="bleat-api-test-$$"
 readonly compose_file="bleat-api/compose.yml"
 readonly port_base="$((20000 + RANDOM % 19990))"
@@ -33,14 +41,6 @@ cleanup() {
   esac
 }
 trap cleanup EXIT INT TERM
-
-cargo test \
-  --locked \
-  --manifest-path bleat-api/Cargo.toml \
-  --all-features \
-  -- \
-  --nocapture \
-  --test-threads=4
 
 export BLEAT_API_PUBLIC_ISSUER="http://host.docker.internal:${BLEAT_API_TEST_PORT}"
 

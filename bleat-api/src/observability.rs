@@ -202,10 +202,10 @@ mod tests {
     use std::{
         io::{self, Write},
         sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use axum::{body::Body, http::Request};
-    use clap::Parser;
     use opentelemetry::{
         Key, Value,
         trace::{SpanId, TraceId},
@@ -219,10 +219,13 @@ mod tests {
     use tower::ServiceExt;
     use tracing::instrument::WithSubscriber;
     use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt};
+    use url::Url;
 
     use super::*;
     use crate::{
-        config::{Arguments, Config, TelemetryExportConfig},
+        config::{
+            AppAttestEnvironment, Config, DatabaseConfig, DeploymentMode, TelemetryExportConfig,
+        },
         router,
     };
 
@@ -267,21 +270,36 @@ mod tests {
     }
 
     fn test_config(log_format: LogFormat, log_filter: &str) -> Config {
-        let arguments = Arguments::try_parse_from([
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-            "--log-format",
-            match log_format {
-                LogFormat::Compact => "compact",
-                LogFormat::Json => "json",
-            },
-            "--log-filter",
-            log_filter,
-        ])
-        .expect("test arguments should parse");
-        Config::from_arguments(arguments, TelemetryExportConfig::default())
-            .expect("test config should validate")
+        Config {
+            bind_address: "127.0.0.1:8080"
+                .parse()
+                .expect("test bind address should parse"),
+            public_issuer: Url::parse("http://127.0.0.1:8080").expect("test issuer should parse"),
+            deployment_mode: DeploymentMode::Development,
+            apple_team_id: None,
+            app_identifier: None,
+            app_attest_environment: AppAttestEnvironment::Development,
+            app_attest_bundle_versions: Vec::new(),
+            app_attest_validation_categories: Vec::new(),
+            database: DatabaseConfig::new(
+                "postgres://bleat:development@127.0.0.1:5432/bleat".to_owned(),
+                16,
+                Duration::from_secs(5),
+            )
+            .expect("test database configuration should validate"),
+            challenge_lifetime: Duration::from_secs(120),
+            challenge_cleanup_batch_size: 1_000,
+            challenge_issuance_per_minute: 600,
+            token_lifetime: Duration::from_secs(600),
+            jwt_signing_key_file: None,
+            jwt_public_key_set_file: None,
+            request_timeout: Duration::from_secs(10),
+            max_request_body_bytes: 65_536,
+            max_concurrent_requests: 64,
+            log_filter: log_filter.to_owned(),
+            log_format,
+            telemetry: TelemetryExportConfig::default(),
+        }
     }
 
     #[test]
@@ -332,48 +350,27 @@ mod tests {
         let app_identifier = "app-identifier-marker";
         let database_url =
             format!("postgres://bleat:{database_secret}@database.example:5432/bleat");
-        let arguments = Arguments::try_parse_from([
-            "bleat-api",
-            "--database-url",
-            &database_url,
-            "--bind-address",
-            "0.0.0.0:9000",
-            "--public-issuer",
-            "https://telemetry.example/issuer",
-            "--apple-team-id",
-            apple_team_id,
-            "--app-identifier",
-            app_identifier,
-            "--database-max-connections",
-            "24",
-            "--database-connect-timeout-seconds",
-            "7",
-            "--challenge-lifetime-seconds",
-            "180",
-            "--challenge-cleanup-batch-size",
-            "750",
-            "--challenge-issuance-per-minute",
-            "450",
-            "--token-lifetime-seconds",
-            "900",
-            "--request-timeout-seconds",
-            "12",
-            "--max-request-body-bytes",
-            "131072",
-            "--max-concurrent-requests",
-            "96",
-            "--log-format",
-            "json",
-        ])
-        .expect("test arguments should parse");
-        let config = Config::from_arguments(
-            arguments,
-            TelemetryExportConfig {
-                traces_enabled: true,
-                logs_enabled: false,
-            },
-        )
-        .expect("test config should validate");
+        let mut config = test_config(LogFormat::Json, "bleat_api=info");
+        config.bind_address = "0.0.0.0:9000"
+            .parse()
+            .expect("test bind address should parse");
+        config.public_issuer =
+            Url::parse("https://telemetry.example/issuer").expect("test issuer should parse");
+        config.apple_team_id = Some(apple_team_id.to_owned());
+        config.app_identifier = Some(app_identifier.to_owned());
+        config.database = DatabaseConfig::new(database_url.clone(), 24, Duration::from_secs(7))
+            .expect("test database configuration should validate");
+        config.challenge_lifetime = Duration::from_secs(180);
+        config.challenge_cleanup_batch_size = 750;
+        config.challenge_issuance_per_minute = 450;
+        config.token_lifetime = Duration::from_secs(900);
+        config.request_timeout = Duration::from_secs(12);
+        config.max_request_body_bytes = 131_072;
+        config.max_concurrent_requests = 96;
+        config.telemetry = TelemetryExportConfig {
+            traces_enabled: true,
+            logs_enabled: false,
+        };
         let local = Buffer::default();
         let subscriber = Registry::default().with(
             tracing_subscriber::fmt::layer()
@@ -435,14 +432,10 @@ mod tests {
             .with_resource(resource)
             .with_simple_exporter(log_exporter.clone())
             .build();
-        let arguments = Arguments::try_parse_from([
-            "bleat-api",
-            "--database-url",
-            "postgres://bleat:development@127.0.0.1:5432/bleat",
-        ])
-        .expect("test arguments should parse");
-        let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
-            .expect("test config should validate");
+        let config = test_config(
+            LogFormat::Compact,
+            "bleat_api=info,opentelemetry=warn,opentelemetry_sdk=warn,opentelemetry-otlp=warn",
+        );
         let local = Buffer::default();
         let subscriber = Registry::default()
             .with(
