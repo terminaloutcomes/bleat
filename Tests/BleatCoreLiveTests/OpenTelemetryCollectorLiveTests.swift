@@ -27,19 +27,19 @@
                 let outagePort = Int(outagePortText)
             else {
                 throw XCTSkip(
-                    "Run scripts/test-bleat-api.sh to provide the Collector fixture"
+                    "Run scripts/test-telemetry.sh to provide the Collector fixture"
                 )
             }
+            let store = CollectorEnrollmentStore()
             let provider = TelemetryTokenProvider(
                 attester: DevelopmentTelemetryAttester(keySeed: 12),
                 transport: try URLSessionTelemetryAuthenticationTransport(
                     baseURL: authenticationBaseURL,
                     allowsInsecureLoopback: true
                 ),
-                store: CollectorEnrollmentStore()
+                store: store
             )
             await provider.setEnabled(true)
-            let token = try await provider.currentToken()
 
             let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
             let channel = ClientConnection.insecure(group: group)
@@ -52,7 +52,46 @@
                     }
                 }
             )
-            defer { client.shutdown() }
+            let storageURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "OpenTelemetryCollectorLiveTests-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            defer { try? FileManager.default.removeItem(at: storageURL) }
+            let tracer = RemoteTelemetryTracer()
+            let pipeline = try RemoteTelemetryPipeline(
+                resource: RemoteTelemetryResource(
+                    applicationVersion: "1.2.3",
+                    applicationBuild: "68",
+                    platform: .iOS,
+                    operatingSystemMajorVersion: 26,
+                    operatingSystemMinorVersion: 0,
+                    operatingSystemPatchVersion: 0
+                ),
+                storageURL: storageURL,
+                tracerFacade: tracer,
+                downstreamExporter: AuthenticatedOtlpSpanExporter(
+                    tokenProvider: provider,
+                    client: client,
+                    timeout: 10
+                )
+            )
+            defer {
+                pipeline.deactivate()
+                pipeline.purge()
+                pipeline.shutdown()
+            }
+
+            tracer.beginSpan(
+                operation: .appLaunch,
+                source: .offline,
+                retryBucket: .one
+            ).end(.succeeded)
+            pipeline.flush(timeout: 10)
+
+            let enrollment = await store.enrollment()
+            XCTAssertNotNil(enrollment?.installationID)
+            let token = try await provider.currentToken()
 
             XCTAssertEqual(
                 client.export(

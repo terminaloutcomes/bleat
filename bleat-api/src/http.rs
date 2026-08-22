@@ -6,7 +6,7 @@ use axum::{
     extract::{DefaultBodyLimit, Extension, MatchedPath, State, rejection::JsonRejection},
     http::{
         HeaderMap, HeaderName, HeaderValue, Request, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH},
+        header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH, USER_AGENT},
     },
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -18,6 +18,7 @@ use opentelemetry::global;
 use opentelemetry_http::HeaderExtractor;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use tracing::{Instrument, field, info, info_span, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -487,14 +488,12 @@ fn cacheable_json(
     request_headers: &HeaderMap,
     request_id: RequestId,
 ) -> Result<Response, ApiError> {
-    let body =
-        serde_json::to_vec(value).map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
+    let body = json!(value).to_string();
     let etag = format!("\"{}\"", URL_SAFE_NO_PAD.encode(Sha256::digest(&body)));
-    let etag_header = HeaderValue::from_str(&etag)
-        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
     let not_modified = request_headers
         .get(IF_NONE_MATCH)
         .is_some_and(|candidate| candidate.as_bytes() == etag.as_bytes());
+
     let mut response = if not_modified {
         Response::new(Body::empty())
     } else {
@@ -505,6 +504,8 @@ fn cacheable_json(
     } else {
         StatusCode::OK
     };
+    let etag_header = HeaderValue::from_str(&etag)
+        .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
     response.headers_mut().insert(ETAG, etag_header);
     let cache_control = HeaderValue::from_str(&format!("public, max-age={JWKS_CACHE_SECONDS}"))
         .map_err(|_| ApiError::temporarily_unavailable(request_id.0))?;
@@ -616,6 +617,12 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         .get::<MatchedPath>()
         .map_or("unmatched", MatchedPath::as_str)
         .to_owned();
+    let url_scheme = request.uri().scheme_str().unwrap_or("http").to_owned();
+    let user_agent = request
+        .headers()
+        .get(USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
     let parent_context = global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderExtractor(request.headers()))
     });
@@ -623,9 +630,15 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         "http.request",
         http.request.method = %method,
         http.route = %route,
+        url.path = %route,
+        url.scheme = %url_scheme,
+        user_agent.original = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );
+    if let Some(user_agent) = user_agent.as_deref() {
+        span.record("user_agent.original", user_agent);
+    }
     if let Err(error) = span.set_parent(parent_context) {
         tracing::debug!(error = %error, "ignored invalid remote trace context");
     }

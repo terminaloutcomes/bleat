@@ -1,7 +1,7 @@
 import BleatCore
 import Foundation
 #if os(iOS)
-import UIKit
+    import UIKit
 #endif
 
 @MainActor
@@ -172,6 +172,27 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             )
         #endif
     }
+
+    #if DEBUG && os(iOS)
+        /// Internal composition seam for app-hosted lifecycle tests. Production
+        /// construction continues through the bundle-backed initializer above.
+        init(
+            resource: RemoteTelemetryResource?,
+            storageRootURL: URL?
+        ) {
+            privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
+                tracer: tracer,
+                logger: logger
+            )
+            tokenProvider = nil
+            worker = RemoteTelemetryRuntimeWorker(
+                tracer: tracer,
+                logger: logger,
+                resource: resource,
+                storageRootURL: storageRootURL
+            )
+        }
+    #endif
 
     func applyRemoteTelemetryConsent(
         _ enabled: Bool,

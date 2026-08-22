@@ -459,9 +459,10 @@ mod tests {
 
         let sensitive_body = "sensitive-attestation-marker";
         let sensitive_authorization = "Bearer sensitive-token-marker";
-        let request = Request::get("/readyz")
+        let request = Request::get("/readyz?probe=telemetry")
             .header("content-type", "application/json")
             .header("authorization", sensitive_authorization)
+            .header("user-agent", "BleatTelemetryTest/1.0")
             .header(
                 "traceparent",
                 "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
@@ -517,6 +518,18 @@ mod tests {
         assert_eq!(
             span_attribute(&spans[0].attributes, "http.route"),
             Some(&Value::String("/readyz".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "url.path"),
+            Some(&Value::String("/readyz".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "url.scheme"),
+            Some(&Value::String("http".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "user_agent.original"),
+            Some(&Value::String("BleatTelemetryTest/1.0".into()))
         );
         assert_eq!(
             span_attribute(&spans[0].attributes, "http.response.status_code"),

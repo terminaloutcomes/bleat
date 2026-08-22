@@ -12,7 +12,7 @@
                 let baseURL = URL(string: value)
             else {
                 throw XCTSkip(
-                    "Run scripts/test-bleat-api.sh to provide the telemetry auth URL"
+                    "Run scripts/test-telemetry.sh to provide the telemetry auth URL"
                 )
             }
             let store = LiveTelemetryEnrollmentStore()
@@ -54,15 +54,21 @@
             let discoveryURL = baseURL.appending(
                 path: ".well-known/openid-configuration"
             )
-            let (discoveryData, discoveryResponse) = try await URLSession.shared.data(
-                from: discoveryURL
-            )
-            XCTAssertEqual((discoveryResponse as? HTTPURLResponse)?.statusCode, 200)
+            let (discoveryData, discoveryResponse) = try await URLSession.shared
+                .data(
+                    from: discoveryURL
+                )
+            XCTAssertEqual(
+                (discoveryResponse as? HTTPURLResponse)?.statusCode, 200)
             let discovery = try XCTUnwrap(
-                JSONSerialization.jsonObject(with: discoveryData) as? [String: Any]
+                JSONSerialization.jsonObject(with: discoveryData)
+                    as? [String: Any]
             )
-            XCTAssertEqual(claims["sub"] as? String, installationID.uuidString.lowercased())
-            XCTAssertEqual(claims["iss"] as? String, discovery["issuer"] as? String)
+            XCTAssertEqual(
+                claims["sub"] as? String, installationID.uuidString.lowercased()
+            )
+            XCTAssertEqual(
+                claims["iss"] as? String, discovery["issuer"] as? String)
             XCTAssertEqual(claims["aud"] as? String, "bleat-telemetry")
             XCTAssertEqual(claims["scope"] as? String, "telemetry:write")
             XCTAssertEqual(
@@ -77,7 +83,8 @@
             XCTAssertLessThanOrEqual(expiresAt, now + 605)
 
             let jwksURL = baseURL.appending(path: ".well-known/jwks.json")
-            let (jwksData, response) = try await URLSession.shared.data(from: jwksURL)
+            let (jwksData, response) = try await URLSession.shared.data(
+                from: jwksURL)
             XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
             let jwks = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: jwksData) as? [String: Any]
@@ -108,7 +115,8 @@
             let signingInput = Data(
                 "\(components[0]).\(components[1])".utf8
             )
-            XCTAssertTrue(publicKey.isValidSignature(signature, for: signingInput))
+            XCTAssertTrue(
+                publicKey.isValidSignature(signature, for: signingInput))
         }
     }
 
@@ -122,9 +130,10 @@
         func delete() async throws { value = nil }
     }
 
-    private extension Data {
-        init?(base64URL value: String) {
-            var normalized = value
+    extension Data {
+        fileprivate init?(base64URL value: String) {
+            var normalized =
+                value
                 .replacingOccurrences(of: "-", with: "+")
                 .replacingOccurrences(of: "_", with: "/")
             normalized += String(

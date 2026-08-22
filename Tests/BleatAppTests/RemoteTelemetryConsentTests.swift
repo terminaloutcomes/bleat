@@ -1,3 +1,4 @@
+import BleatCore
 import Foundation
 import XCTest
 
@@ -270,6 +271,119 @@ final class RemoteTelemetryConsentTests: XCTestCase {
 
         XCTAssertEqual(controller.foregroundValues, [false, true])
     }
+
+    #if os(iOS)
+        func testRealRuntimeDefaultsOffAndWithdrawalPurgesItsGeneration()
+            async throws
+        {
+            let storageRoot = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "RemoteTelemetryConsentTests-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            defer { try? FileManager.default.removeItem(at: storageRoot) }
+            let controller = RemoteTelemetryController(
+                resource: try RemoteTelemetryResource(
+                    applicationVersion: "1.2.3",
+                    applicationBuild: "68",
+                    platform: .iOS,
+                    operatingSystemMajorVersion: 26,
+                    operatingSystemMinorVersion: 0,
+                    operatingSystemPatchVersion: 0
+                ),
+                storageRootURL: storageRoot
+            )
+
+            controller.tracer.beginSpan(operation: .appLaunch).end(.succeeded)
+            try await Task.sleep(for: .milliseconds(100))
+            XCTAssertFalse(hasPersistedBatch(in: storageRoot))
+
+            let firstGeneration = UUID()
+            controller.setRemoteTelemetryForeground(true)
+            controller.applyRemoteTelemetryConsent(
+                true,
+                storageGeneration: firstGeneration
+            )
+            try await Task.sleep(for: .milliseconds(100))
+            let withdrawnSpan = controller.tracer.beginSpan(
+                operation: .libraryRefresh
+            )
+            controller.tracer.beginSpan(
+                operation: .appLaunch,
+                source: .offline,
+                retryBucket: .one
+            ).end(.succeeded)
+            controller.setRemoteTelemetryForeground(false)
+            try await waitForPersistedBatch(in: storageRoot)
+
+            controller.applyRemoteTelemetryConsent(
+                false,
+                storageGeneration: firstGeneration
+            )
+            try await waitForNoPersistedBatch(in: storageRoot)
+            withdrawnSpan.end(.succeeded)
+
+            let currentGeneration = UUID()
+            controller.setRemoteTelemetryForeground(true)
+            controller.applyRemoteTelemetryConsent(
+                true,
+                storageGeneration: currentGeneration
+            )
+            try await Task.sleep(for: .milliseconds(100))
+            controller.tracer.beginSpan(operation: .playbackStart)
+                .end(.succeeded)
+            controller.setRemoteTelemetryForeground(false)
+            try await waitForPersistedBatch(in: storageRoot)
+
+            let generationDirectories = try FileManager.default
+                .contentsOfDirectory(
+                    at: storageRoot,
+                    includingPropertiesForKeys: nil
+                )
+                .map(\.lastPathComponent)
+                .filter { $0.hasPrefix("generation-") }
+            XCTAssertEqual(
+                generationDirectories,
+                ["generation-\(currentGeneration.uuidString.lowercased())"]
+            )
+
+            controller.applyRemoteTelemetryConsent(
+                false,
+                storageGeneration: currentGeneration
+            )
+            try await waitForNoPersistedBatch(in: storageRoot)
+        }
+
+        private func waitForPersistedBatch(in root: URL) async throws {
+            for _ in 0..<100 {
+                if hasPersistedBatch(in: root) { return }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTFail("telemetry runtime did not persist a batch")
+        }
+
+        private func waitForNoPersistedBatch(in root: URL) async throws {
+            for _ in 0..<100 {
+                if !hasPersistedBatch(in: root) { return }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTFail("telemetry runtime did not purge its batch")
+        }
+
+        private func hasPersistedBatch(in root: URL) -> Bool {
+            guard
+                let enumerator = FileManager.default.enumerator(
+                    at: root,
+                    includingPropertiesForKeys: [.isRegularFileKey]
+                )
+            else {
+                return false
+            }
+            return enumerator.compactMap { $0 as? URL }.contains {
+                $0.pathExtension == "json"
+            }
+        }
+    #endif
 }
 
 @MainActor

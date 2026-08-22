@@ -104,6 +104,10 @@ run = ["./scripts/test-live.sh"]
 description = "Run live app journeys on a disposable iOS Simulator"
 run = ["./scripts/test-app-live.sh"]
 
+[tasks."test:telemetry"]
+description = "Run the disposable authenticated telemetry end-to-end gate"
+run = ["./scripts/test-telemetry.sh"]
+
 [tasks.clean]
 description = "Remove repository build artifacts"
 run = ["./scripts/clean-build-artifacts.sh"]
@@ -124,6 +128,7 @@ run = ["./scripts/test-deep-links.sh"]
 description = "Run every automated test that does not require a physical device"
 run = [
   { task = "api:validate" },
+  { task = "test:telemetry" },
   { task = "site-check" },
   { task = "test:local" },
   { task = "test:live" },

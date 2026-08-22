@@ -114,6 +114,10 @@ The common endpoint derives `/v1/traces` and `/v1/logs`. Standard
 values override either signal independently. Standard OTLP header, timeout,
 sampling, batching, and resource environment variables are passed to the
 OpenTelemetry SDK. Header values may contain credentials and are never logged.
+HTTP server spans include the OpenTelemetry semantic `url.path` and
+`url.scheme` attributes, plus `user_agent.original` when the request includes a
+valid `User-Agent` header. The path uses the matched route shape so installation
+identifiers are not exported, and raw query strings are excluded.
 
 Remote exporter failures do not affect health, readiness, or request handling.
 The service uses Rustls with system trust and does not support gRPC export.

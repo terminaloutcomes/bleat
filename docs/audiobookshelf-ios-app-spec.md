@@ -1696,18 +1696,22 @@ installation prevents future issuance, while an already-issued token expires
 naturally within ten minutes.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
-configuration against the development token service. The validated baseline
-checks exact issuer and audience authentication, rejects missing or malformed
-credentials and messages larger than 1 MiB, bounds memory, batching, retry, and
-the in-memory exporter queue, forwards accepted traces only over a private
-internal route, and remains healthy when that exporter is unavailable. The
-captured trace is checked for authentication and installation data. The token's
-`telemetry:write` scope remains part of the single-purpose token. Stock
-Collector processors can inspect verified claims and silently drop telemetry,
-but the stock OIDC authenticator cannot hard-reject an OTLP RPC based on a
-custom claim. Hard scope rejection is not required while the issuer produces
-only this narrow telemetry token with exact issuer and audience semantics. No
-per-installation telemetry accounting is required.
+configuration against the development token service through
+`mise run test:telemetry`. The disposable gate drives the reviewed Swift
+pipeline and fake attester through enrollment, JWT issuance, authenticated OTLP
+export, and a private capture Collector. It checks exact issuer and audience
+authentication, rejects missing or malformed credentials and messages larger
+than 1 MiB, bounds memory, batching, retry, and the in-memory exporter queue,
+forwards accepted traces only over a private internal route, and remains healthy
+when that exporter is unavailable. Captured wire data must contain the exact
+reviewed resource and span fields and none of the prohibited values in this
+section. The token's `telemetry:write` scope remains part of the single-purpose
+token. Stock Collector processors can inspect verified claims and silently drop
+telemetry, but the stock OIDC authenticator cannot hard-reject an OTLP RPC based
+on a custom claim. Hard scope rejection is not required while the issuer
+produces only this narrow telemetry token with exact issuer and audience
+semantics. A separate gateway and per-installation telemetry accounting are not
+required.
 
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend
