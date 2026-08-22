@@ -266,6 +266,65 @@ mod tests {
         }
     }
 
+    fn test_config(log_format: LogFormat, log_filter: &str) -> Config {
+        let arguments = Arguments::try_parse_from([
+            "bleat-api",
+            "--database-url",
+            "postgres://bleat:development@127.0.0.1:5432/bleat",
+            "--log-format",
+            match log_format {
+                LogFormat::Compact => "compact",
+                LogFormat::Json => "json",
+            },
+            "--log-filter",
+            log_filter,
+        ])
+        .expect("test arguments should parse");
+        Config::from_arguments(arguments, TelemetryExportConfig::default())
+            .expect("test config should validate")
+    }
+
+    #[test]
+    fn exporter_filters_exclude_internal_targets_and_debug_spans() {
+        for target in [
+            "opentelemetry",
+            "opentelemetry_sdk",
+            "reqwest",
+            "hyper::client",
+            "rustls::client",
+        ] {
+            assert!(is_exporter_target(target));
+        }
+        assert!(!is_exporter_target("bleat_api::http"));
+
+        let info = tracing::info_span!("coverage_info_span");
+        assert!(export_trace_metadata(
+            info.metadata().expect("info span should have metadata")
+        ));
+        let debug = tracing::debug_span!("coverage_debug_span");
+        assert!(!export_trace_metadata(
+            debug.metadata().expect("debug span should have metadata")
+        ));
+    }
+
+    #[test]
+    fn subscriber_installation_is_typed_for_invalid_and_duplicate_configuration() {
+        let invalid = test_config(LogFormat::Compact, "[");
+        assert!(matches!(
+            Observability::install(&invalid),
+            Err(ObservabilityError::InvalidLogFilter(_))
+        ));
+
+        let json = test_config(LogFormat::Json, "bleat_api=info");
+        let installed = Observability::install(&json).expect("subscriber should install once");
+        let compact = test_config(LogFormat::Compact, "bleat_api=info");
+        assert!(matches!(
+            Observability::install(&compact),
+            Err(ObservabilityError::SubscriberAlreadyInstalled)
+        ));
+        installed.shutdown();
+    }
+
     #[test]
     fn startup_event_reports_settings_without_sensitive_values() {
         let database_secret = "database-secret-marker";

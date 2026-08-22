@@ -31,10 +31,12 @@ use std::str::FromStr;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-fn test_config(extra_arguments: &[&str]) -> Config {
-    let database_url = std::env::var("BLEAT_API_TEST_DATABASE_URL")
-        .expect("BLEAT_API_TEST_DATABASE_URL must name the disposable PostgreSQL database");
-    let mut arguments = vec!["bleat-api", "--database-url", database_url.as_str()];
+mod support;
+
+use support::TestPostgres;
+
+fn test_config(postgres: &TestPostgres, extra_arguments: &[&str]) -> Config {
+    let mut arguments = vec!["bleat-api", "--database-url", postgres.database_url()];
     arguments.extend(extra_arguments.iter().copied());
     Config::from_arguments(
         Arguments::try_parse_from(arguments).expect("test arguments should parse"),
@@ -43,22 +45,18 @@ fn test_config(extra_arguments: &[&str]) -> Config {
     .expect("test configuration should validate")
 }
 
-fn database_config() -> Config {
-    test_config(&[])
-}
-
-async fn database() -> DatabaseConnection {
-    connect_and_migrate(&database_config().database)
+async fn database(postgres: &TestPostgres) -> DatabaseConnection {
+    connect_and_migrate(&postgres.config())
         .await
         .expect("test database should connect")
 }
 
-async fn test_router(extra_arguments: &[&str]) -> axum::Router {
-    let config = test_config(extra_arguments);
-    router(&config, database().await).expect("router should build")
+async fn test_router(postgres: &TestPostgres, extra_arguments: &[&str]) -> axum::Router {
+    let config = test_config(postgres, extra_arguments);
+    router(&config, database(postgres).await).expect("router should build")
 }
 
-async fn production_router() -> axum::Router {
+async fn production_router(postgres: &TestPostgres) -> axum::Router {
     let signer = JwsEs256Signer::generate_es256().expect("production test signer should generate");
     let key = signer
         .private_key_to_der()
@@ -66,53 +64,60 @@ async fn production_router() -> axum::Router {
     let path = std::env::temp_dir().join(format!("bleat-production-jwt-{}.der", Uuid::new_v4()));
     std::fs::write(&path, key.as_slice()).expect("production test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
-    let config = test_config(&[
-        "--deployment-mode",
-        "production",
-        "--public-issuer",
-        "https://telemetry.example.test",
-        "--apple-team-id",
-        "TEAM123456",
-        "--app-identifier",
-        "com.example.Bleat",
-        "--app-attest-environment",
-        "production",
-        "--app-attest-bundle-versions",
-        "1",
-        "--app-attest-validation-categories",
-        "2,4",
-        "--jwt-signing-key-file",
-        path_argument.as_str(),
-    ]);
-    let result = router(&config, database().await).expect("production router should build");
+    let config = test_config(
+        postgres,
+        &[
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example.test",
+            "--apple-team-id",
+            "TEAM123456",
+            "--app-identifier",
+            "com.example.Bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+            "--app-attest-validation-categories",
+            "2,4",
+            "--jwt-signing-key-file",
+            path_argument.as_str(),
+        ],
+    );
+    let result = router(&config, database(postgres).await).expect("production router should build");
     std::fs::remove_file(path).expect("production test key should be removed");
     result
 }
 
 #[tokio::test]
 async fn production_router_preserves_the_signing_configuration_failure() {
+    let postgres = TestPostgres::start().await;
     let path = std::env::temp_dir().join(format!("bleat-invalid-jwt-{}.der", Uuid::new_v4()));
     std::fs::write(&path, b"not-a-signing-key").expect("invalid test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
-    let config = test_config(&[
-        "--deployment-mode",
-        "production",
-        "--public-issuer",
-        "https://telemetry.example.test",
-        "--apple-team-id",
-        "TEAM123456",
-        "--app-identifier",
-        "com.example.Bleat",
-        "--app-attest-environment",
-        "production",
-        "--app-attest-bundle-versions",
-        "1",
-        "--app-attest-validation-categories",
-        "2,4",
-        "--jwt-signing-key-file",
-        path_argument.as_str(),
-    ]);
-    let error = router(&config, database().await)
+    let config = test_config(
+        &postgres,
+        &[
+            "--deployment-mode",
+            "production",
+            "--public-issuer",
+            "https://telemetry.example.test",
+            "--apple-team-id",
+            "TEAM123456",
+            "--app-identifier",
+            "com.example.Bleat",
+            "--app-attest-environment",
+            "production",
+            "--app-attest-bundle-versions",
+            "1",
+            "--app-attest-validation-categories",
+            "2,4",
+            "--jwt-signing-key-file",
+            path_argument.as_str(),
+        ],
+    );
+    let error = router(&config, database(&postgres).await)
         .expect_err("invalid signing material should prevent router construction");
     std::fs::remove_file(path).expect("invalid test key should be removed");
 
@@ -255,8 +260,9 @@ async fn enroll_development(router: &axum::Router, signing_key: &SigningKey) -> 
 
 #[tokio::test]
 async fn health_and_readiness_are_typed_and_receive_request_ids() {
+    let postgres = TestPostgres::start().await;
     for (path, expected_status) in [("/healthz", "ok"), ("/readyz", "ready")] {
-        let response = test_router(&[])
+        let response = test_router(&postgres, &[])
             .await
             .oneshot(
                 Request::get(path)
@@ -280,7 +286,8 @@ async fn health_and_readiness_are_typed_and_receive_request_ids() {
 
 #[tokio::test]
 async fn production_verification_routes_reject_development_evidence() {
-    let production = production_router().await;
+    let postgres = TestPostgres::start().await;
+    let production = production_router(&postgres).await;
     for (path, body) in [
         (
             "/v1/attestation/enroll",
@@ -352,7 +359,8 @@ struct TestTokenClaims {
 
 #[tokio::test]
 async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
-    let router = test_router(&[]).await;
+    let postgres = TestPostgres::start().await;
+    let router = test_router(&postgres, &[]).await;
     let signing_key = SigningKey::from_slice(&[9_u8; 32]).expect("test key should be valid");
     let public_key = signing_key.verifying_key().to_encoded_point(false);
     let public_key = public_key.as_bytes();
@@ -499,7 +507,8 @@ async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
 
 #[tokio::test]
 async fn discovery_and_jwks_support_bounded_conditional_caching() {
-    let router = test_router(&[]).await;
+    let postgres = TestPostgres::start().await;
+    let router = test_router(&postgres, &[]).await;
     for path in [
         "/.well-known/openid-configuration",
         "/.well-known/jwks.json",
@@ -548,7 +557,8 @@ async fn discovery_and_jwks_support_bounded_conditional_caching() {
 
 #[tokio::test]
 async fn development_evidence_rejects_wrong_key_signature_and_replay() {
-    let router = test_router(&[]).await;
+    let postgres = TestPostgres::start().await;
+    let router = test_router(&postgres, &[]).await;
     let signing_key = development_key(11);
     let wrong_key = development_key(12);
     let (challenge_id, challenge) =
@@ -601,8 +611,9 @@ async fn development_evidence_rejects_wrong_key_signature_and_replay() {
 
 #[tokio::test]
 async fn development_assertions_reject_wrong_signature_replay_and_disabled_installation() {
-    let database = database().await;
-    let config = test_config(&[]);
+    let postgres = TestPostgres::start().await;
+    let database = database(&postgres).await;
+    let config = test_config(&postgres, &[]);
     let router = router(&config, database.clone()).expect("router should build");
     let signing_key = development_key(13);
     let wrong_key = development_key(14);
@@ -666,7 +677,8 @@ async fn development_assertions_reject_wrong_signature_replay_and_disabled_insta
 
 #[tokio::test]
 async fn challenge_routes_issue_typed_opaque_challenges() {
-    let attestation = test_router(&[])
+    let postgres = TestPostgres::start().await;
+    let attestation = test_router(&postgres, &[])
         .await
         .oneshot(
             Request::post("/v1/attestation/challenge")
@@ -692,7 +704,7 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
         43
     );
 
-    let database = database().await;
+    let database = database(&postgres).await;
     let installations = InstallationRepository::new(database.clone());
     let installation = installations
         .create_verified(NewInstallation {
@@ -702,7 +714,7 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
         })
         .await
         .expect("installation should persist");
-    let config = test_config(&[]);
+    let config = test_config(&postgres, &[]);
     let token = router(&config, database)
         .expect("router should build")
         .oneshot(
@@ -721,7 +733,8 @@ async fn challenge_routes_issue_typed_opaque_challenges() {
 
 #[tokio::test]
 async fn unknown_installations_and_excess_issuance_are_typed() {
-    let unknown = test_router(&[])
+    let postgres = TestPostgres::start().await;
+    let unknown = test_router(&postgres, &[])
         .await
         .oneshot(
             Request::post("/v1/token/challenge")
@@ -740,7 +753,7 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
         "authentication_rejected"
     );
 
-    let router = test_router(&["--challenge-issuance-per-minute", "1"]).await;
+    let router = test_router(&postgres, &["--challenge-issuance-per-minute", "1"]).await;
     let request = || {
         Request::post("/v1/attestation/challenge")
             .header("content-type", "application/json")
@@ -769,8 +782,9 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
 
 #[tokio::test]
 async fn readiness_reports_database_failure_without_details() {
-    let database = database().await;
-    let config = test_config(&[]);
+    let postgres = TestPostgres::start().await;
+    let database = database(&postgres).await;
+    let config = test_config(&postgres, &[]);
     let router = router(&config, database.clone()).expect("router should build");
     database.close().await.expect("test pool should close");
 
@@ -790,7 +804,8 @@ async fn readiness_reports_database_failure_without_details() {
 
 #[tokio::test]
 async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work() {
-    let malformed = test_router(&[])
+    let postgres = TestPostgres::start().await;
+    let malformed = test_router(&postgres, &[])
         .await
         .oneshot(
             Request::post("/v1/token")
@@ -807,7 +822,7 @@ async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work()
     );
 
     let oversized_body = format!("\"{}\"", "x".repeat(2_048));
-    let oversized = test_router(&["--max-request-body-bytes", "1024"])
+    let oversized = test_router(&postgres, &["--max-request-body-bytes", "1024"])
         .await
         .oneshot(
             Request::post("/v1/token")
@@ -826,7 +841,8 @@ async fn malformed_and_oversized_requests_are_rejected_before_placeholder_work()
 
 #[tokio::test]
 async fn unsupported_methods_do_not_invoke_post_handlers() {
-    let response = test_router(&[])
+    let postgres = TestPostgres::start().await;
+    let response = test_router(&postgres, &[])
         .await
         .oneshot(
             Request::get("/v1/token")

@@ -31,6 +31,18 @@ mise run api:validate
 
 This runs formatting, compilation, strict Clippy, PostgreSQL-backed tests, a
 Release build, and live HTTP checks against the disposable container stack.
+Each database-backed Rust test starts and removes its own isolated PostgreSQL
+17 container through Testcontainers, so Docker is the only database-test
+prerequisite. Measure the separate Rust coverage gate with:
+
+```sh
+mise run api:coverage
+```
+
+The coverage task writes its JSON report under `.build/coverage/bleat-api/`,
+requires at least 80% overall line coverage, and reports `src/app_attest.rs`
+coverage separately so gaps in the security boundary remain visible without
+turning its percentage into a substitute for behavior-focused tests.
 Stop the development stack and delete its database volume with:
 
 ```sh

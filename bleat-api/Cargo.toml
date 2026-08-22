@@ -45,4 +45,5 @@ http-body-util = "0.1.5"
 opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["testing", "trace", "logs"] }
 proptest = "1.11.0"
 rcgen = "0.14.9"
+testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 tower = { version = "0.5.3", features = ["util"] }

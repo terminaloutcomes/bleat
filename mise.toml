@@ -7,6 +7,7 @@ node = "24"
 pnpm = "11.17.0"
 rust = "1.97.0"
 zola = "0.22.1"
+"cargo:cargo-tarpaulin" = "0.32.8"
 
 [tasks."api:fmt"]
 description = "Fix bleat-api Rust formatting"
@@ -34,6 +35,10 @@ run = "./scripts/test-bleat-api.sh"
 description = "Build the bleat-api release binary"
 dir = "./bleat-api"
 run = "cargo build --release"
+
+[tasks."api:coverage"]
+description = "Measure self-contained bleat-api Rust test coverage"
+run = "./scripts/coverage-bleat-api.sh"
 
 [tasks."api:run"]
 description = "Run bleat-api and PostgreSQL locally"
