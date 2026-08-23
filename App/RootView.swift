@@ -2856,7 +2856,7 @@ private struct SearchView: View {
                         navigation.searchScope == .all
                             || navigation.searchScope == .book
                     {
-                        Section("Books") {
+                        Section {
                             ForEach(results.books, id: \.id) { book in
                                 if let account = model.account {
                                     BookSummaryRow(
@@ -2876,15 +2876,18 @@ private struct SearchView: View {
                                     )
                                 }
                             }
+                        } header: {
+                            searchResultSectionHeader("Books")
                         }
                     }
                     if !results.authors.isEmpty,
                         navigation.searchScope == .all
                             || navigation.searchScope == .author
                     {
-                        Section("Authors") {
+                        Section {
                             ForEach(results.authors, id: \.id) { author in
-                                Button(author.name) {
+                                Button {
+                                    isSearchFocused = false
                                     guard
                                         let libraryID = model.selectedLibrary?
                                             .id
@@ -2899,7 +2902,11 @@ private struct SearchView: View {
                                             model: model
                                         )
                                     }
+                                } label: {
+                                    Text(author.name)
+                                        .foregroundStyle(.primary)
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityLabel(
                                     "Show books by \(author.name)"
                                 )
@@ -2907,15 +2914,17 @@ private struct SearchView: View {
                                     "search.author.\(author.id.rawValue)"
                                 )
                             }
+                        } header: {
+                            searchResultSectionHeader("Authors")
                         }
                     }
                     if !results.series.isEmpty,
                         navigation.searchScope == .all
                             || navigation.searchScope == .series
                     {
-                        Section("Series") {
+                        Section {
                             ForEach(results.series, id: \.id) { series in
-                                Button(series.name) {
+                                Button {
                                     guard
                                         let libraryID = model.selectedLibrary?
                                             .id
@@ -2928,7 +2937,11 @@ private struct SearchView: View {
                                         libraryID: libraryID,
                                         from: .search
                                     )
+                                } label: {
+                                    Text(series.name)
+                                        .foregroundStyle(.primary)
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityLabel(
                                     "Open \(series.name) series"
                                 )
@@ -2936,12 +2949,21 @@ private struct SearchView: View {
                                     "search.series.\(series.id.rawValue)"
                                 )
                             }
+                        } header: {
+                            searchResultSectionHeader("Series")
                         }
                     }
                 }
                 .accessibilityIdentifier("search.results")
             }
         }
+    }
+
+    private func searchResultSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(Color.primary)
+            .textCase(nil)
     }
 }
 
