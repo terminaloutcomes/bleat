@@ -1,0 +1,11 @@
+[advisories]
+ignore = [
+  # rust_decimal lists rkyv as an optional lockfile dependency, but rkyv is not
+  # present in Bleat's enabled Cargo feature graph. The security gate verifies
+  # that this remains true before applying the lockfile-only exception.
+  "RUSTSEC-2026-0235",
+  # compact_jwt includes RSA support without a feature boundary. Bleat accepts,
+  # signs, publishes, and validates ES256 keys only, and the advisory has no
+  # fixed release. Existing JWT tests reject non-EC public keys.
+  "RUSTSEC-2023-0071",
+]

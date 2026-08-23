@@ -9,7 +9,7 @@ use base64::{
 };
 use ciborium::Value;
 use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
-use rustls_pki_types::{CertificateDer, SignatureVerificationAlgorithm, UnixTime};
+use rustls_pki_types::{CertificateDer, SignatureVerificationAlgorithm, UnixTime, pem::PemObject};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
@@ -696,8 +696,7 @@ impl ProductionAppAttestVerifier {
 fn parse_single_pem_certificate(
     pem: &[u8],
 ) -> Result<CertificateDer<'static>, AppAttestVerificationError> {
-    let mut reader = Cursor::new(pem);
-    let mut certificates = rustls_pemfile::certs(&mut reader);
+    let mut certificates = CertificateDer::pem_slice_iter(pem);
     let certificate = certificates.next().transpose().map_err(|_| {
         AppAttestVerificationError::new(AppAttestFailureCategory::InvalidTrustAnchor)
     })?;

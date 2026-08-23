@@ -2,11 +2,13 @@
 _.file = { path = ".envrc", redact = true }
 
 [tools]
+gitleaks = "8.30.1"
 git-lfs = "latest"
 node = "24"
 pnpm = "11.17.0"
 rust = "1.97.0"
 zola = "0.22.1"
+"cargo:cargo-audit" = "0.22.2"
 "cargo:cargo-tarpaulin" = "0.32.8"
 
 [tasks."api:fmt"]
@@ -119,6 +121,21 @@ run = ["./scripts/test-app-live.sh"]
 description = "Run the disposable authenticated telemetry end-to-end gate"
 run = ["./scripts/test-telemetry.sh"]
 
+[tasks."security:secrets"]
+description = "Validate secret-scanning rules and scan the current source tree"
+run = ["./scripts/test-secret-scanning.sh"]
+
+[tasks."security:dependencies"]
+description = "Audit the locked Rust dependencies for advisories and yanked crates"
+run = ["./scripts/audit-rust-dependencies.sh"]
+
+[tasks."security:validate"]
+description = "Run the repository-supported release security gate"
+run = [
+  { task = "security:secrets" },
+  { task = "security:dependencies" },
+]
+
 [tasks.clean]
 description = "Remove repository build artifacts"
 run = ["./scripts/clean-build-artifacts.sh"]
@@ -138,6 +155,7 @@ run = ["./scripts/test-deep-links.sh"]
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
 run = [
+  { task = "security:validate" },
   { task = "api:validate" },
   { task = "test:telemetry" },
   { task = "site-check" },
@@ -152,7 +170,10 @@ run = ["./scripts/build-macos.sh"]
 
 [tasks.archive]
 description = "Create and validate the Release archive"
-run = ["./scripts/archive-beta.sh"]
+run = [
+  { task = "security:validate" },
+  "./scripts/archive-beta.sh",
+]
 
 [tasks."devices:status"]
 description = "List signing identities and connected Apple devices"
@@ -249,9 +270,6 @@ BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
 export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
 exec ./scripts/deploy-device.sh
 """
-
-[tasks.trufflehog]
-run = """docker run --platform linux/arm64 --rm -i -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd --exclude-paths='/pwd/.trufflehog-ignore' --exclude-detectors=ProtocolsIO,URI,CloudflareApiToken --no-verification"""
 
 [tasks.clippy]
 run = { task = "api:clippy" }

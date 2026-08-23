@@ -7,7 +7,7 @@
     @testable import BleatCore
 
     final class TelemetryRecoveryLiveTests: XCTestCase {
-        func testAuthOutageRetainsThenRelaunchDrainsWithoutReenrollment()
+        func testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment()
             async throws
         {
             let environment = try RecoveryEnvironment.current()
@@ -53,6 +53,13 @@
             try environment.controller.stop(.api)
             defer { try? environment.controller.start(.api) }
 
+            do {
+                _ = try await originalProvider.currentToken()
+                XCTFail("API shutdown must stop telemetry token renewal")
+            } catch {
+                XCTAssertEqual(error, .temporarilyUnavailable)
+            }
+
             let normalRefresh = try completeNormalLibraryRefresh(
                 using: originalTracer,
                 cacheURL: storageURL.appendingPathComponent("library.cache")
@@ -63,7 +70,18 @@
                 .milliseconds(100)
             )
             originalPipeline.flush(timeout: 4)
-            XCTAssertFalse(try batchFiles(at: storageURL).isEmpty)
+            let retainedFiles = try batchFiles(at: storageURL)
+            XCTAssertFalse(retainedFiles.isEmpty)
+            let retainedBytes = try retainedFiles.reduce(into: 0) {
+                total,
+                fileURL in
+                total += try fileURL.resourceValues(forKeys: [.fileSizeKey])
+                    .fileSize ?? 0
+            }
+            XCTAssertLessThanOrEqual(
+                retainedBytes,
+                RemoteTelemetryCollectionPolicy.default.maximumBufferedBytes
+            )
             originalPipeline.deactivate()
             originalPipeline.shutdown()
 

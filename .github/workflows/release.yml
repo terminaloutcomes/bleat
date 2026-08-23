@@ -102,6 +102,14 @@ jobs:
             exit 1
           fi
 
+      - name: Set up release security toolchain
+        if: steps.version.outputs.changed == 'true'
+        uses: jdx/mise-action@v3
+
+      - name: Validate release security
+        if: steps.version.outputs.changed == 'true'
+        run: mise run security:validate
+
       - name: Validate Release archive
         if: steps.version.outputs.changed == 'true'
         env:
