@@ -110,6 +110,58 @@ Cloudflare, authentication, or network failure must not affect API request
 handling or application behavior. The iOS persistence and retry bounds remain
 defined in `docs/audiobookshelf-ios-app-spec.md`.
 
+## Initial rollout and monitoring
+
+Remote telemetry remains default-off and requires an explicit device-local
+opt-in. The initial trace sampler deliberately retains 100% of opted-in spans.
+That is not probabilistic sampling: the conservative boundary is the closed,
+low-volume operation and attribute allowlist, combined with the 1 MiB ingress
+limit, bounded client retention, finite Collector queue, and workload resource
+limits. Revisit the sampler before expanding either the signal allowlist or the
+eligible population.
+
+The deployment operator monitors these privacy-safe aggregate signals:
+
+- telemetry-authentication request, rejection, rate-limit, and 5xx rates;
+- Collector receiver rejection, exporter failure, retry, and queue-exhaustion
+  signals;
+- API and Collector restart count, CPU, and memory against their limits;
+- daily telemetry ingestion and retained-storage growth.
+
+Investigate when authentication or export errors exceed 5% for ten minutes,
+when any Collector queue is exhausted, or when daily ingestion exceeds twice
+the trailing seven-day median. During initial rollout, review these signals
+after each release and at least daily. A sustained threshold breach triggers
+the telemetry kill switch while the operator determines whether the cause is
+abuse, regression, backend failure, or unexpected cost growth.
+
+## Telemetry kill switch
+
+The server-side kill switch is the `bleat-api` deployment itself. Activate it
+by scaling only the `bleat-api` deployment in the `bleat` namespace to zero
+replicas. Keep PostgreSQL and the OpenTelemetry Collector running. This stops
+new enrollment and token issuance immediately without an application update or
+an additional control endpoint.
+
+Previously issued JWTs remain valid until their ten-minute expiry, so accepted
+device ingestion can continue for at most that window. If an incident requires
+immediate ingestion shutdown, separately disable the public device Collector
+route; that stronger response is not the normal kill switch.
+
+API unavailability is isolated from launch, Audiobookshelf login, browsing,
+downloads, playback, synchronization, and transcription. Telemetry token
+renewal backs off, completed spans remain within the two-hour and 128 MiB local
+bounds, and foreground export retries cap at one attempt per minute. The
+disposable recovery journey stops the API, proves an ordinary cached library
+refresh remains prompt, retains the failed telemetry batch, then restores the
+API and drains without reenrollment.
+
+Restore service by returning `bleat-api` to one replica. Wait for `/readyz` to
+report ready, confirm a new telemetry token can be issued, and confirm retained
+telemetry drains before declaring recovery complete. Reconcile any temporary
+deployment override with the declarative infrastructure configuration so a
+later deployment cannot unexpectedly reapply the emergency state.
+
 ## Production retention and access
 
 The production ClickHouse tables delete traces after seven days and logs after
