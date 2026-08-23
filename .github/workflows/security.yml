@@ -23,6 +23,8 @@ jobs:
 
       - name: Set up mise toolchain
         uses: jdx/mise-action@v3
+        with:
+          install_args: rust gitleaks cargo:cargo-audit
 
       - name: Validate secrets and locked dependencies
         run: mise run security:validate

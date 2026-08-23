@@ -5,6 +5,7 @@ set -euo pipefail
 repository_root="$(git rev-parse --show-toplevel)"
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/bleat-secret-scan.XXXXXX")"
 trap 'rm -rf "${fixture_root}"' EXIT
+cd "${repository_root}"
 
 safe_root="${fixture_root}/safe"
 unsafe_root="${fixture_root}/unsafe"
