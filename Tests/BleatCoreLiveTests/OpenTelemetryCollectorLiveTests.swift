@@ -113,6 +113,18 @@
                 ),
                 .unauthenticated
             )
+            let tamperedToken = try tokenWithTamperedSignature(token)
+            XCTAssertEqual(
+                client.export(
+                    spans: [span()],
+                    metadata: [
+                        ("authorization", "Bearer \(tamperedToken)")
+                    ],
+                    timeout: 10,
+                    isActive: { true }
+                ),
+                .unauthenticated
+            )
             XCTAssertEqual(
                 client.export(
                     spans: [oversizedSpan()],
@@ -222,6 +234,39 @@
             )
         }
 
+        private func tokenWithTamperedSignature(_ token: String) throws
+            -> String
+        {
+            let components = token.split(
+                separator: ".",
+                omittingEmptySubsequences: false
+            )
+            XCTAssertEqual(components.count, 3)
+            guard components.count == 3 else { return token }
+            var signature = try XCTUnwrap(
+                decodedBase64URL(String(components[2]))
+            )
+            XCTAssertFalse(signature.isEmpty)
+            guard let firstIndex = signature.indices.first else { return token }
+            signature[firstIndex] ^= 0x01
+            return [
+                String(components[0]),
+                String(components[1]),
+                signature.base64URLEncodedString(),
+            ].joined(separator: ".")
+        }
+
+        private func decodedBase64URL(_ value: String) -> Data? {
+            var normalized = value
+                .replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")
+            normalized += String(
+                repeating: "=",
+                count: (4 - normalized.count % 4) % 4
+            )
+            return Data(base64Encoded: normalized)
+        }
+
         private func cloudKitLog() -> ReadableLogRecord {
             ReadableLogRecord(
                 resource: Resource(
@@ -257,4 +302,5 @@
             value = nil
         }
     }
+
 #endif

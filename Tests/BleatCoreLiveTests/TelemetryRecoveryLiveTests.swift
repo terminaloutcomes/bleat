@@ -166,6 +166,66 @@
             XCTAssertTrue(drained)
         }
 
+        func testExistingPipelineRefreshesJWTAndDrainsQueuedSpan()
+            async throws
+        {
+            let environment = try RecoveryEnvironment.current()
+            let storageURL = temporaryStorageURL()
+            defer { try? FileManager.default.removeItem(at: storageURL) }
+            let store = RecoveryEnrollmentStore()
+            let transport = RecordingRecoveryAuthenticationTransport(
+                downstream: try URLSessionTelemetryAuthenticationTransport(
+                    baseURL: environment.authenticationBaseURL,
+                    allowsInsecureLoopback: true
+                )
+            )
+            let provider = TelemetryTokenProvider(
+                attester: DevelopmentTelemetryAttester(keySeed: 23),
+                transport: transport,
+                store: store,
+                refreshWindow: 1_000,
+                jitterProvider: { 0.5 }
+            )
+            await provider.setEnabled(true)
+            let tracer = RemoteTelemetryTracer()
+            let pipeline = try pipeline(
+                storageURL: storageURL,
+                tracer: tracer,
+                provider: provider,
+                environment: environment
+            )
+            defer {
+                pipeline.deactivate()
+                pipeline.purge()
+                pipeline.shutdown()
+            }
+
+            let firstToken = try await provider.currentToken()
+            let enrollmentBeforeRefresh = await store.enrollment()
+            let saveCountBeforeRefresh = await store.saveCount
+            try await Task.sleep(for: .milliseconds(1_100))
+
+            tracer.beginSpan(
+                operation: .libraryRefresh,
+                source: .offline,
+                retryBucket: .one
+            ).end(.succeeded)
+            pipeline.flush(timeout: 10)
+
+            let issuedTokens = await transport.issuedTokens()
+            let enrollmentAfterRefresh = await store.enrollment()
+            let saveCountAfterRefresh = await store.saveCount
+            XCTAssertEqual(issuedTokens.count, 2)
+            XCTAssertEqual(issuedTokens.first?.value, firstToken)
+            XCTAssertNotEqual(
+                issuedTokens.first?.value,
+                issuedTokens.last?.value
+            )
+            XCTAssertEqual(enrollmentAfterRefresh, enrollmentBeforeRefresh)
+            XCTAssertEqual(saveCountAfterRefresh, saveCountBeforeRefresh)
+            XCTAssertTrue(try batchFiles(at: storageURL).isEmpty)
+        }
+
         private func tokenProvider(
             environment: RecoveryEnvironment,
             attester: DevelopmentTelemetryAttester,
@@ -386,5 +446,62 @@
         func delete() {
             value = nil
         }
+    }
+
+    private actor RecordingRecoveryAuthenticationTransport:
+        TelemetryAuthenticationTransport
+    {
+        private let downstream: any TelemetryAuthenticationTransport
+        private var tokens: [TelemetryBearerToken] = []
+
+        init(downstream: any TelemetryAuthenticationTransport) {
+            self.downstream = downstream
+        }
+
+        func attestationChallenge() async throws(
+            TelemetryAuthenticationTransportError
+        ) -> TelemetryChallenge {
+            try await downstream.attestationChallenge()
+        }
+
+        func enroll(
+            challenge: TelemetryChallenge,
+            keyID: String,
+            attestationObject: Data
+        ) async throws(TelemetryAuthenticationTransportError) -> UUID {
+            try await downstream.enroll(
+                challenge: challenge,
+                keyID: keyID,
+                attestationObject: attestationObject
+            )
+        }
+
+        func tokenChallenge(
+            installationID: UUID
+        ) async throws(TelemetryAuthenticationTransportError)
+            -> TelemetryChallenge
+        {
+            try await downstream.tokenChallenge(
+                installationID: installationID
+            )
+        }
+
+        func token(
+            installationID: UUID,
+            challenge: TelemetryChallenge,
+            assertionObject: Data
+        ) async throws(TelemetryAuthenticationTransportError)
+            -> TelemetryBearerToken
+        {
+            let token = try await downstream.token(
+                installationID: installationID,
+                challenge: challenge,
+                assertionObject: assertionObject
+            )
+            tokens.append(token)
+            return token
+        }
+
+        func issuedTokens() -> [TelemetryBearerToken] { tokens }
     }
 #endif

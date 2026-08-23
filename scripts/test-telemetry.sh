@@ -105,11 +105,16 @@ docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-collector validate --config=/etc/otelcol/config.yaml
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-capture validate --config=/etc/otelcol/config.yaml
+readonly expected_collector_issuer="http://host.docker.internal:${BLEAT_API_TEST_PORT}"
 readonly collector_config="$(docker compose --project-name "${project_name}" \
   --file "${compose_file}" run --rm --no-deps telemetry-collector \
   print-config --config=/etc/otelcol/config.yaml --format=json)"
-jq -e '
-  .receivers["otlp/bleat"].protocols.grpc.max_recv_msg_size_mib == 1
+jq -e --arg expected_issuer "${expected_collector_issuer}" '
+  .extensions["oidc/bleat"].issuer_url == $expected_issuer
+  and .extensions["oidc/bleat"].audience == "bleat-telemetry"
+  and (.extensions["oidc/bleat"].ignore_issuer // false) == false
+  and (.extensions["oidc/bleat"].ignore_audience // false) == false
+  and .receivers["otlp/bleat"].protocols.grpc.max_recv_msg_size_mib == 1
   and .receivers["otlp/bleat"].protocols.http.max_request_body_size == 1048576
   and .processors.memory_limiter.limit_mib == 64
   and .processors.memory_limiter.spike_limit_mib == 16
