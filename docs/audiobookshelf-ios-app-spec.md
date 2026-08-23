@@ -1721,6 +1721,10 @@ produces only this narrow telemetry token with exact issuer and audience
 semantics. A separate gateway and per-installation telemetry accounting are not
 required.
 
+`docs/architecture-logging.md` defines the production deployment topology. One
+stock Collector process owns distinct OIDC-authenticated device and private API
+OTLP/HTTP receivers and exports both signal identities directly to ClickHouse.
+
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend
 JWTs, usernames, account or installation identifiers, server URLs or network

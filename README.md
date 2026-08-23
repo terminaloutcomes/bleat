@@ -1096,6 +1096,10 @@ hard-reject arbitrary custom claims at RPC authentication time. The issuer
 creates only this narrow token, and the baseline deliberately adds neither a
 separate gateway nor per-installation accounting.
 
+`docs/architecture-logging.md` is the source of truth for the production log
+and trace topology, including the separate authenticated device and internal API
+receivers hosted by one Collector process.
+
 Local structured logs remain active when optional OTLP/HTTP trace and log
 export is configured. See `bleat-api/README.md` for the complete configuration
 and route contract.
