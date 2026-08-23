@@ -52,6 +52,22 @@ Stop the development stack and delete its database volume with:
 mise run api:down
 ```
 
+### Build and publish a local container image
+
+To publish a locally built API image, set `BLEAT_API_LOCAL_TAG` to the complete
+registry image reference and run:
+
+```sh
+BLEAT_API_LOCAL_TAG=registry.example/namespace/bleat-api:latest \
+  mise run api:container:build-local
+```
+
+The task uses Docker Buildx to build `linux/arm64` and `linux/amd64` images and
+pushes their multi-platform manifest to that tag. It fails before invoking
+Docker when `BLEAT_API_LOCAL_TAG` is unset. Building and publishing the image
+does not update Kubernetes or trigger a deployment; apply the deployment
+configuration separately when that is intended.
+
 ## Service configuration
 
 Flags and matching environment variables configure the service:

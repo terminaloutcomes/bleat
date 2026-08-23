@@ -1,11 +1,15 @@
 FROM rust:1.97-bookworm AS build
 
+ARG ADD_BUILD_ARGS=" --quiet"
+
 WORKDIR /workspace
+
 COPY bleat-api/Cargo.toml bleat-api/Cargo.lock bleat-api/
 COPY bleat-api/src bleat-api/src
 COPY bleat-api/tests bleat-api/tests
 COPY bleat-api/trust bleat-api/trust
-RUN cargo build --locked --manifest-path bleat-api/Cargo.toml --release
+
+RUN cd bleat-api && cargo build --locked --release $ADD_BUILD_ARGS
 
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 
