@@ -37,9 +37,7 @@ let package = Package(
             exact: "2.4.1"
         ),
         .package(
-            url: "https://github.com/grpc/grpc-swift.git",
-            exact: "1.27.5"
-        ),
+            url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
     ],
     targets: [
         .target(
@@ -55,10 +53,10 @@ let package = Package(
                     package: "opentelemetry-swift-core"
                 ),
                 .product(
-                    name: "OpenTelemetryProtocolExporter",
+                    name: "OpenTelemetryProtocolExporterHTTP",
                     package: "opentelemetry-swift"
                 ),
-                .product(name: "GRPC", package: "grpc-swift"),
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ]
         ),
         .target(
@@ -86,10 +84,9 @@ let package = Package(
             dependencies: [
                 "BleatCore",
                 .product(
-                    name: "OpenTelemetryProtocolExporter",
+                    name: "OpenTelemetryProtocolExporterHTTP",
                     package: "opentelemetry-swift"
                 ),
-                .product(name: "GRPC", package: "grpc-swift"),
             ]
         ),
         .testTarget(

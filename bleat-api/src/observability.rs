@@ -5,7 +5,7 @@ use opentelemetry_sdk::{
     trace::SdkTracerProvider,
 };
 use thiserror::Error;
-use tracing::Level;
+use tracing::{Level, info, warn};
 use tracing_subscriber::{
     Layer as _, Registry,
     filter::{EnvFilter, filter_fn},
@@ -48,18 +48,18 @@ impl Observability {
         if let Some(provider) = self.tracer_provider
             && let Err(error) = provider.shutdown()
         {
-            tracing::warn!(error = %error, "failed to flush OpenTelemetry traces");
+            warn!(error = %error, "failed to flush OpenTelemetry traces");
         }
         if let Some(provider) = self.logger_provider
             && let Err(error) = provider.shutdown()
         {
-            tracing::warn!(error = %error, "failed to flush OpenTelemetry logs");
+            warn!(error = %error, "failed to flush OpenTelemetry logs");
         }
     }
 }
 
 pub fn log_startup_settings(config: &Config) {
-    tracing::info!(
+    info!(
         bind_address = %config.bind_address,
         public_issuer = %config.public_issuer,
         deployment_environment = %config.deployment_mode,
@@ -480,7 +480,7 @@ mod tests {
                 response.status(),
                 axum::http::StatusCode::SERVICE_UNAVAILABLE
             );
-            tracing::warn!(target: "opentelemetry_exporter", "exporter-local-only");
+            warn!(target: "opentelemetry_exporter", "exporter-local-only");
         }
         .with_subscriber(subscriber)
         .await;

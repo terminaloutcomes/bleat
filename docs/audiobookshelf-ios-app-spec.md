@@ -1624,14 +1624,18 @@ new spans and downstream attempts and invalidates the current storage
 generation before asynchronous shutdown and purge, so rapid re-enablement
 cannot export withdrawn data. The downstream exporter remains injectable;
 when authentication and OTLP origins are configured, production creates one
-TLS gRPC channel using the platform-best Darwin transport and system trust.
-Every export resolves the current memory-only token immediately before the RPC
-and attaches exactly one bearer authorization metadata value. A typed gRPC
-unauthenticated result compare-invalidates the rejected token and permits one
+ephemeral `URLSession` using the platform-best Darwin TLS transport and system
+trust. Every export resolves the current memory-only token immediately before
+the OTLP/HTTP protobuf request and attaches exactly one bearer authorization
+header. OTLP/HTTP is required for the production route because Cloudflare
+Tunnel [does not support gRPC through a public
+hostname](https://developers.cloudflare.com/network/grpc-connections/); HTTPS
+and platform TLS validation remain mandatory. A typed HTTP 401 unauthenticated
+result compare-invalidates the rejected token and permits one
 refresh/retry; permission rejection and transport failures do not retry inside
 the exporter and leave the persisted batch available to the existing bounded
 drain policy. Token renewal does not recreate the tracer provider, batch
-processor, persistence exporter, or gRPC channel. Missing or invalid transport
+processor, persistence exporter, or URL session. Missing or invalid transport
 configuration retains the unavailable sink.
 
 Telemetry authentication is fully lazy. Enabling consent creates no App Attest
@@ -1656,11 +1660,12 @@ backend base URL comes only from
 `BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
 unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
 The OTLP origin comes only from `BLEAT_TELEMETRY_OTLP_ENDPOINT` and must be an
-HTTPS origin without credentials, path, query, or fragment. Local integration
-tests may inject an ephemeral private CA into a test-only NIOSSL client; shipped
-configuration has no custom trust root or verification bypass. Background
-deadlines and withdrawal cancel active RPCs, while exporter shutdown closes the
-shared channel and its event-loop resources asynchronously.
+HTTPS origin without credentials, path, query, or fragment. Traces and logs use
+OTLP/HTTP protobuf at `/v1/traces` and `/v1/logs` through one ephemeral
+`URLSession`, retaining platform TLS validation without a custom trust root or
+verification bypass. Background deadlines and withdrawal cancel active
+requests, while exporter shutdown invalidates the shared session after both
+signal processors release it.
 
 The telemetry authentication backend persists installation identity and
 challenge state in PostgreSQL through typed ORM statements. Installations use
@@ -1688,18 +1693,21 @@ never enter that set, the container image, normal logs, or repository fixtures.
 Production mode uses a structurally separate verifier that validates Apple's
 certificate path and pinned App Attest root, attestation nonce, App ID hash,
 AAGUID environment, credential and certificate/COSE public key consistency,
-and configured bundle-version and validation-category policy. It verifies
-assertions with the stored key and environment before atomically advancing the
-monotonic counter; replay and concurrent counter conflicts are rejected. Only
-that authenticated installation principal can reach signing. Disabling an
-installation prevents future issuance, while an already-issued token expires
-naturally within ten minutes.
+and, when supplied by iOS 27 or later, configured bundle-version and
+validation-category policy. Earlier supported Apple operating systems omit
+these recently introduced authenticator-data extensions; their evidence still
+requires the complete certificate, nonce, application, credential, signature,
+and counter checks. It verifies assertions with the stored key and environment
+before atomically advancing the monotonic counter; replay and concurrent
+counter conflicts are rejected. Only that authenticated installation principal
+can reach signing. Disabling an installation prevents future issuance, while
+an already-issued token expires naturally within ten minutes.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service through
 `mise run test:telemetry`. The disposable gate drives the reviewed Swift
-pipeline and fake attester through enrollment, JWT issuance, authenticated OTLP
-export, and a private capture Collector. It checks exact issuer and audience
+pipeline and fake attester through enrollment, JWT issuance, authenticated
+OTLP/HTTP protobuf export, and a private capture Collector. It checks exact issuer and audience
 authentication, rejects missing or malformed credentials and messages larger
 than 1 MiB, bounds memory, batching, retry, and the in-memory exporter queue,
 forwards accepted traces only over a private internal route, and remains healthy
@@ -1712,6 +1720,10 @@ on a custom claim. Hard scope rejection is not required while the issuer
 produces only this narrow telemetry token with exact issuer and audience
 semantics. A separate gateway and per-installation telemetry accounting are not
 required.
+
+`docs/architecture-logging.md` defines the production deployment topology. One
+stock Collector process owns distinct OIDC-authenticated device and private API
+OTLP/HTTP receivers and exports both signal identities directly to ClickHouse.
 
 Remote telemetry must never contain credentials, tokens, cookies,
 authorization headers, playback session routes, App Attest evidence, backend

@@ -20,7 +20,7 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use tracing::{Instrument, field, info, info_span, warn};
+use tracing::{Instrument, debug, field, info, info_span, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
@@ -454,9 +454,35 @@ fn map_verification_error(
     error: AppAttestVerificationError,
     request_id: RequestId,
 ) -> ApiError {
+    let category = error.category().metric_name();
+    let stage = error.stage().metric_name();
+    let detail = error.detail().metric_name();
+    let observed_type = error.observed_type().map(|value| value.metric_name());
+    let span = tracing::Span::current();
+    span.record("app_attest.failure.category", category);
+    span.record("app_attest.failure.stage", stage);
+    span.record("app_attest.failure.detail", detail);
+    if let Some(observed_type) = observed_type {
+        span.record("app_attest.observed.cbor_type", observed_type);
+    }
+    if let Some(observed_length) = error.observed_length() {
+        span.record("app_attest.observed.length", observed_length);
+    }
+    if let Some(observed_count) = error.observed_count() {
+        span.record("app_attest.observed.count", observed_count);
+    }
+    if let Some(observed_flags) = error.observed_flags() {
+        span.record("app_attest.observed.flags", observed_flags);
+    }
     warn!(
         operation,
-        category = error.category().metric_name(),
+        category,
+        stage,
+        detail,
+        observed_type,
+        observed_length = error.observed_length(),
+        observed_count = error.observed_count(),
+        observed_flags = error.observed_flags(),
         request_id = %request_id.0,
         "installation authentication rejected"
     );
@@ -633,6 +659,13 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         url.path = %route,
         url.scheme = %url_scheme,
         user_agent.original = field::Empty,
+        app_attest.failure.category = field::Empty,
+        app_attest.failure.stage = field::Empty,
+        app_attest.failure.detail = field::Empty,
+        app_attest.observed.cbor_type = field::Empty,
+        app_attest.observed.length = field::Empty,
+        app_attest.observed.count = field::Empty,
+        app_attest.observed.flags = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );
@@ -640,7 +673,7 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         span.record("user_agent.original", user_agent);
     }
     if let Err(error) = span.set_parent(parent_context) {
-        tracing::debug!(error = %error, "ignored invalid remote trace context");
+        debug!(error = %error, "ignored invalid remote trace context");
     }
 
     let started = Instant::now();

@@ -1,7 +1,5 @@
 #if DEBUG
     import Foundation
-    @preconcurrency import GRPC
-    @preconcurrency import NIO
     @preconcurrency import OpenTelemetryApi
     @testable import OpenTelemetrySdk
     import XCTest
@@ -41,16 +39,11 @@
             )
             await provider.setEnabled(true)
 
-            let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            let channel = ClientConnection.insecure(group: group)
-                .connect(host: "127.0.0.1", port: port)
-            let client = GrpcRemoteTelemetryOtlpClient(
-                channel: channel,
-                closeTransport: {
-                    channel.close().whenComplete { _ in
-                        group.shutdownGracefully { _ in }
-                    }
-                }
+            let client = HttpRemoteTelemetryOtlpClient(
+                endpoint: try XCTUnwrap(
+                    URL(string: "http://127.0.0.1:\(port)/v1/traces")
+                ),
+                transport: URLSessionRemoteTelemetryHTTPTransport()
             )
             let storageURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
@@ -130,16 +123,11 @@
                 .failure
             )
 
-            let logGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            let logChannel = ClientConnection.insecure(group: logGroup)
-                .connect(host: "127.0.0.1", port: port)
-            let logClient = GrpcRemoteTelemetryOtlpLogClient(
-                channel: logChannel,
-                closeTransport: {
-                    logChannel.close().whenComplete { _ in
-                        logGroup.shutdownGracefully { _ in }
-                    }
-                }
+            let logClient = HttpRemoteTelemetryOtlpLogClient(
+                endpoint: try XCTUnwrap(
+                    URL(string: "http://127.0.0.1:\(port)/v1/logs")
+                ),
+                transport: URLSessionRemoteTelemetryHTTPTransport()
             )
             defer { logClient.shutdown() }
             XCTAssertEqual(
@@ -161,16 +149,14 @@
                 .unauthenticated
             )
 
-            let outageGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            let outageChannel = ClientConnection.insecure(group: outageGroup)
-                .connect(host: "127.0.0.1", port: outagePort)
-            let outageClient = GrpcRemoteTelemetryOtlpClient(
-                channel: outageChannel,
-                closeTransport: {
-                    outageChannel.close().whenComplete { _ in
-                        outageGroup.shutdownGracefully { _ in }
-                    }
-                }
+            let outageClient = HttpRemoteTelemetryOtlpClient(
+                endpoint: try XCTUnwrap(
+                    URL(
+                        string:
+                            "http://127.0.0.1:\(outagePort)/v1/traces"
+                    )
+                ),
+                transport: URLSessionRemoteTelemetryHTTPTransport()
             )
             defer { outageClient.shutdown() }
 
@@ -210,7 +196,9 @@
         }
 
         private func oversizedSpan() -> SpanData {
-            span(extraAttribute: String(repeating: "x", count: 2 * 1_024 * 1_024))
+            span(
+                extraAttribute: String(repeating: "x", count: 2 * 1_024 * 1_024)
+            )
         }
 
         private func cloudKitLog() -> ReadableLogRecord {

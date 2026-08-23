@@ -1,22 +1,4 @@
 services:
-  tls-fixture:
-    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
-    volumes:
-      - ./TelemetryTLSFixture.Caddyfile:/etc/caddy/Caddyfile:ro
-      - telemetry-tls-data:/data
-      - telemetry-tls-config:/config
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          test -s /data/caddy/pki/authorities/local/root.crt &&
-          test -s /data/caddy/pki/authorities/local/intermediate.crt &&
-          test -s /data/caddy/certificates/local/localhost/localhost.crt &&
-          test -s /data/caddy/certificates/local/localhost/localhost.key
-      interval: 1s
-      timeout: 2s
-      retries: 30
-
   postgres:
     image: postgres:17-bookworm
     environment:
@@ -73,7 +55,7 @@ services:
       telemetry-capture:
         condition: service_started
     ports:
-      - "127.0.0.1:${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT:-14317}:4317"
+      - "127.0.0.1:${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT:-14318}:4318"
       - "127.0.0.1:${BLEAT_TELEMETRY_COLLECTOR_HEALTH_TEST_PORT:-13133}:13133"
     networks:
       - default
@@ -93,16 +75,12 @@ services:
       api:
         condition: service_started
     ports:
-      - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT:-24317}:4317"
+      - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT:-24318}:4318"
       - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_HEALTH_TEST_PORT:-23133}:13133"
       - "127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_METRICS_TEST_PORT:-28888}:8888"
     networks:
       - default
       - telemetry-private
-
-volumes:
-  telemetry-tls-data:
-  telemetry-tls-config:
 
 networks:
   telemetry-private:

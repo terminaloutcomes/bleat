@@ -13,6 +13,11 @@ receivers:
         max_recv_msg_size_mib: 1
         auth:
           authenticator: oidc/bleat
+      http:
+        endpoint: 0.0.0.0:4318
+        max_request_body_size: 1048576
+        auth:
+          authenticator: oidc/bleat
 
 processors:
   memory_limiter:

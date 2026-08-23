@@ -34,7 +34,7 @@ run = "./scripts/test-bleat-api.sh"
 [tasks."api:build"]
 description = "Build the bleat-api release binary"
 dir = "./bleat-api"
-run = "cargo build --release"
+run = "cargo build --release --quiet"
 
 [tasks."api:coverage"]
 description = "Measure self-contained bleat-api Rust test coverage"
@@ -57,6 +57,17 @@ run = [
   "./scripts/test-bleat-api.sh",
   "cargo build --manifest-path bleat-api/Cargo.toml --release",
 ]
+
+[tasks."api:container:build-local"]
+description = "Build and push a local Docker image for bleat-api"
+run = """
+docker buildx build \
+  --platform linux/arm64,linux/amd64 \
+  --tag ${BLEAT_API_LOCAL_TAG:?Set BLEAT_API_LOCAL_TAG} \
+  --file bleat-api/Dockerfile \
+  --push \
+  .
+"""
 
 [tasks."site-css"]
 description = "Install website dependencies and generate the Tailwind stylesheet"

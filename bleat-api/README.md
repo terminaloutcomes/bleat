@@ -52,6 +52,22 @@ Stop the development stack and delete its database volume with:
 mise run api:down
 ```
 
+### Build and publish a local container image
+
+To publish a locally built API image, set `BLEAT_API_LOCAL_TAG` to the complete
+registry image reference and run:
+
+```sh
+BLEAT_API_LOCAL_TAG=registry.example/namespace/bleat-api:latest \
+  mise run api:container:build-local
+```
+
+The task uses Docker Buildx to build `linux/arm64` and `linux/amd64` images and
+pushes their multi-platform manifest to that tag. It fails before invoking
+Docker when `BLEAT_API_LOCAL_TAG` is unset. Building and publishing the image
+does not update Kubernetes or trigger a deployment; apply the deployment
+configuration separately when that is intended.
+
 ## Service configuration
 
 Flags and matching environment variables configure the service:
@@ -125,13 +141,13 @@ The service uses Rustls with system trust and does not support gRPC export.
 ## Telemetry Collector baseline
 
 `TelemetryCollector.yaml` is the stock OpenTelemetry Collector Contrib ingress
-configuration exercised by `scripts/test-bleat-api.sh`. The disposable stack
+configuration exercised by `scripts/test-telemetry.sh`. The disposable stack
 pins the Collector image by version and digest, validates both Collector
 configurations, and sends the accepted trace to the private capture service in
 `TelemetryCollectorCapture.yaml`.
 
 The ingress validates the token issuer and `aud=bleat-telemetry` through OIDC,
-accepts only authenticated OTLP/gRPC traffic, caps each received message at
+accepts authenticated OTLP/HTTP protobuf traffic, caps each received request at
 1 MiB, and applies bounded memory, batch, retry, and in-memory queue settings.
 The live test proves that a valid Bleat ES256 JWT reaches the private exporter,
 missing and malformed credentials are rejected, oversized payloads fail, the
@@ -140,7 +156,7 @@ remains healthy while the private exporter is unavailable.
 
 The JWT continues to carry `scope=telemetry:write`. Collector processors can
 inspect verified claims and silently drop telemetry, but the stock OIDC
-authenticator cannot hard-reject an OTLP RPC based on a custom claim. Hard
+authenticator cannot hard-reject an OTLP request based on a custom claim. Hard
 scope rejection is not required for this baseline because the issuer produces
 only this narrow telemetry token with exact issuer and audience semantics.
 
@@ -188,16 +204,37 @@ intentionally not durable.
 Production enrollment follows Apple's App Attest validation sequence. It
 strictly and boundedly parses the attestation CBOR and authenticator data,
 validates the certificate path, nonce, App ID hash, environment AAGUID,
-credential ID, certificate and encoded COSE public keys, bundle version, and
-validation category before persisting an installation. Assertions are checked
-against that stored public key and environment, the token-purpose challenge,
-the configured application policy, and an atomically advanced monotonic
-counter. Externally these failures share the small authentication error shape;
+credential ID, and certificate and encoded COSE public keys before persisting
+an installation. On iOS 27 and later, it also validates the appended bundle
+version and validation category against the configured application policy.
+Earlier Apple operating systems do not emit those extensions, so their absence
+does not bypass the certificate, nonce, application, credential, signature, or
+counter checks. Assertions are checked against that stored public key and
+environment, the token-purpose challenge, any supplied application-policy
+extensions, and an atomically advanced monotonic counter. Externally these
+failures share the small authentication error shape;
 internal categories contain no evidence, challenge, signature, key ID, or
 installation identifier. Production token requests use that authenticated
 principal to issue the same narrow ten-minute JWT from the mounted signing key.
 Disabling an installation prevents subsequent authentication and issuance;
 already-issued tokens expire naturally within their bounded lifetime.
+
+The production authenticator-data parser is kept aligned with Apple's public
+[Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide).
+Its published 2026 authenticator data is retained unchanged as a versioned
+regression fixture under `tests/fixtures/apple-app-attest/`, alongside its
+provenance and update rules. In particular, Apple encodes
+`apple_validation_category_01` as a four-byte little-endian byte string, not as
+a CBOR integer; `apple_bundle_version_01` is a CBOR text string. The fixture test
+checks the RP ID hash, counter, production AAGUID, credential ID, COSE public-key
+hash, validation category, and bundle version together. The complete synthetic
+production-verifier tests additionally cover certificate-chain, nonce, policy,
+and assertion-signature validation without depending on Apple or external
+configuration. Apple's
+[WWDC26 App Attest session](https://developer.apple.com/videos/play/wwdc2026/201/)
+documents that the extensions start in iOS 27. A separate synthetic regression
+covers the extension-free attestation and assertion shapes emitted by earlier
+supported systems.
 
 ## JWT signing-key rotation
 

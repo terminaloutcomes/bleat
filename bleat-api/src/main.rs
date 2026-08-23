@@ -18,6 +18,7 @@ use bleat_api::{
 };
 use clap::Parser;
 use tokio::net::TcpListener;
+use tracing::error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,9 +46,9 @@ async fn shutdown_signal() {
         let mut terminate = match signal(SignalKind::terminate()) {
             Ok(terminate) => terminate,
             Err(error) => {
-                tracing::error!(error = %error, "failed to install SIGTERM handler");
+                error!(error = %error, "failed to install SIGTERM handler");
                 if let Err(error) = tokio::signal::ctrl_c().await {
-                    tracing::error!(error = %error, "failed to install Ctrl-C handler");
+                    error!(error = %error, "failed to install Ctrl-C handler");
                 }
                 return;
             }
@@ -55,7 +56,7 @@ async fn shutdown_signal() {
         tokio::select! {
             result = tokio::signal::ctrl_c() => {
                 if let Err(error) = result {
-                    tracing::error!(error = %error, "failed to install Ctrl-C handler");
+                    error!(error = %error, "failed to install Ctrl-C handler");
                 }
             }
             _ = terminate.recv() => {}
@@ -64,6 +65,6 @@ async fn shutdown_signal() {
 
     #[cfg(not(unix))]
     if let Err(error) = tokio::signal::ctrl_c().await {
-        tracing::error!(error = %error, "failed to install Ctrl-C handler");
+        error!(error = %error, "failed to install Ctrl-C handler");
     }
 }

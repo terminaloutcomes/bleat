@@ -7,10 +7,6 @@ readonly port_base="$((20000 + RANDOM % 19990))"
 readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
 readonly database_password="test-${project_name}-${RANDOM}"
-readonly telemetry_tls_ca="$(mktemp /tmp/bleat-telemetry-ca.XXXXXX)"
-readonly telemetry_tls_cert="$(mktemp /tmp/bleat-telemetry-cert.XXXXXX)"
-readonly telemetry_tls_intermediate="$(mktemp /tmp/bleat-telemetry-intermediate.XXXXXX)"
-readonly telemetry_tls_key="$(mktemp /tmp/bleat-telemetry-key.XXXXXX)"
 test_succeeded=0
 
 export BLEAT_API_TEST_PORT="${port_base}"
@@ -52,11 +48,6 @@ cleanup() {
     print -u2 "Disposable telemetry containers remain after cleanup"
     exit_status=1
   fi
-  rm -f \
-    "${telemetry_tls_ca}" \
-    "${telemetry_tls_cert}" \
-    "${telemetry_tls_intermediate}" \
-    "${telemetry_tls_key}"
   case "${temporary_capture}" in
     /tmp/bleat-telemetry-capture.*) rm -rf "${temporary_capture}" ;;
   esac
@@ -77,10 +68,7 @@ for production_key_variable in \
 done
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
-  up --detach --build --wait api tls-fixture
-
-# Caddy writes the leaf and key independently after their storage paths appear.
-sleep 2
+  up --detach --build --wait api
 
 curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
 curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
@@ -102,26 +90,11 @@ for health_port in \
   curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null
 done
 
-docker compose --project-name "${project_name}" --file "${compose_file}" \
-  cp tls-fixture:/data/caddy/pki/authorities/local/root.crt "${telemetry_tls_ca}"
-docker compose --project-name "${project_name}" --file "${compose_file}" \
-  cp tls-fixture:/data/caddy/certificates/local/localhost/localhost.crt \
-  "${telemetry_tls_cert}"
-docker compose --project-name "${project_name}" --file "${compose_file}" \
-  cp tls-fixture:/data/caddy/pki/authorities/local/intermediate.crt \
-  "${telemetry_tls_intermediate}"
-docker compose --project-name "${project_name}" --file "${compose_file}" \
-  cp tls-fixture:/data/caddy/certificates/local/localhost/localhost.key \
-  "${telemetry_tls_key}"
-
 BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
   swift test --filter TelemetryAuthenticationLiveTests
 
 BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
-BLEAT_TELEMETRY_TLS_CA_CERT="${telemetry_tls_ca}" \
-BLEAT_TELEMETRY_TLS_CERT="${telemetry_tls_cert}" \
-BLEAT_TELEMETRY_TLS_INTERMEDIATE_CERT="${telemetry_tls_intermediate}" \
-BLEAT_TELEMETRY_TLS_KEY="${telemetry_tls_key}" \
+BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
   swift test --filter AuthenticatedOtlpSpanExporterLiveTests
 
 BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
