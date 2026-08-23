@@ -3,7 +3,7 @@ version = 1
 name = "local"
 
 [setup]
-script = """
+script = '''
 set -eu
 
 source_envrc="${CODEX_SOURCE_TREE_PATH:?CODEX_SOURCE_TREE_PATH is not set}/.envrc"
@@ -14,7 +14,47 @@ if [ ! -f "$source_envrc" ]; then
   exit 1
 fi
 
-install -m 600 "$source_envrc" "$worktree_envrc"
+install -m 600 -l s "$source_envrc" "$worktree_envrc"
 direnv allow "$worktree_envrc"
 direnv exec "$CODEX_WORKTREE_PATH" true
-"""
+
+# swift build cache in a tempdir to try and help clean up easier
+if [ "$CODEX_SOURCE_TREE_PATH" != "$CODEX_WORKTREE_PATH" ]; then
+  worktree_build="${CODEX_WORKTREE_PATH}/.build"
+
+  if [ ! -e "$worktree_build" ] && [ ! -L "$worktree_build" ]; then
+    temporary_build="$(mktemp -d "${TMPDIR:-/tmp}/bleat-build.XXXXXX")"
+    touch "${temporary_build}/.bleat-codex-build"
+    ln -s "$temporary_build" "$worktree_build"
+  fi
+fi'''
+
+[cleanup]
+script = '''
+set -eu
+
+worktree_build="${CODEX_WORKTREE_PATH:?CODEX_WORKTREE_PATH is not set}/.build"
+
+if [ -L "$worktree_build" ]; then
+  temporary_build="$(readlink "$worktree_build")"
+
+  if [ -f "${temporary_build}/.bleat-codex-build" ]; then
+    rm -rf -- "$temporary_build"
+    rm -f -- "$worktree_build"
+  else
+    echo "Refusing to remove unmarked build directory: ${temporary_build}" >&2
+    exit 1
+  fi
+fi
+
+./scripts/clean-build-artifacts.sh'''
+
+[[actions]]
+name = "Clean build artifacts"
+icon = "tool"
+command = "./scripts/clean-build-artifacts.sh"
+
+[[actions]]
+name = "Deploy to iPhone"
+icon = "tool"
+command = "mise iphone"
