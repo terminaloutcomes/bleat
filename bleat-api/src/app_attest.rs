@@ -48,17 +48,7 @@ const ATTESTATION_CREDENTIAL_ID_OFFSET: usize = 55;
 const APP_ATTEST_KEY_ID_BYTES: usize = 32;
 const COSE_P256_PUBLIC_KEY_BYTES: usize = 65;
 const MAX_BUNDLE_VERSION_BYTES: usize = 64;
-const USER_PRESENT_FLAG: u8 = 0x01;
-const USER_VERIFIED_FLAG: u8 = 0x04;
-const BACKUP_ELIGIBLE_FLAG: u8 = 0x08;
-const BACKUP_STATE_FLAG: u8 = 0x10;
-const ATTESTED_CREDENTIAL_DATA_FLAG: u8 = 0x40;
-const EXTENSION_DATA_FLAG: u8 = 0x80;
-const ASSERTION_ALLOWED_FLAGS: u8 = USER_PRESENT_FLAG
-    | USER_VERIFIED_FLAG
-    | BACKUP_ELIGIBLE_FLAG
-    | BACKUP_STATE_FLAG
-    | EXTENSION_DATA_FLAG;
+const APP_ATTEST_AUTHENTICATOR_FLAG: u8 = 0x40;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureCategory {
@@ -127,9 +117,7 @@ pub enum AppAttestVerificationStage {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureDetail {
     Unspecified,
-    AssertionFlagsUnknownBits,
-    AssertionFlagsInvalidBackupState,
-    AssertionFlagsExtensionMismatch,
+    AssertionFlagsUnexpectedValue,
     ExtensionsCbor,
     ExtensionsTrailingData,
     ExtensionsNotMap,
@@ -149,9 +137,7 @@ impl AppAttestFailureDetail {
     pub const fn metric_name(self) -> &'static str {
         match self {
             Self::Unspecified => "unspecified",
-            Self::AssertionFlagsUnknownBits => "assertion.flags.unknown_bits",
-            Self::AssertionFlagsInvalidBackupState => "assertion.flags.invalid_backup_state",
-            Self::AssertionFlagsExtensionMismatch => "assertion.flags.extension_mismatch",
+            Self::AssertionFlagsUnexpectedValue => "assertion.flags.unexpected_value",
             Self::ExtensionsCbor => "extensions.cbor",
             Self::ExtensionsTrailingData => "extensions.trailing_data",
             Self::ExtensionsNotMap => "extensions.not_map",
@@ -880,7 +866,7 @@ impl<'a> AttestationAuthenticatorData<'a> {
         // Apple sets only the attested-credential-data bit here, even though
         // its App Attest claims follow the COSE key. This matches Apple's
         // published attestation validation fixture.
-        if flags != ATTESTED_CREDENTIAL_DATA_FLAG {
+        if flags != APP_ATTEST_AUTHENTICATOR_FLAG {
             return Err(malformed().at(AppAttestVerificationStage::AttestationAuthenticatorFlags));
         }
         let rp_id_hash = encoded[0..32].try_into().map_err(|_| malformed())?;
@@ -932,25 +918,16 @@ impl AssertionAuthenticatorData {
             return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorLength));
         }
         let flags = encoded[32];
-        if flags & !ASSERTION_ALLOWED_FLAGS != 0 {
+        // App Attest uses 0x40 in its simplified assertion authenticator data,
+        // as observed from the supported production client. Do not apply
+        // WebAuthn assertion flag semantics to Apple's App Attest structure.
+        if flags != APP_ATTEST_AUTHENTICATOR_FLAG {
             return Err(malformed()
-                .with_detail(AppAttestFailureDetail::AssertionFlagsUnknownBits)
-                .with_observed_flags(flags)
-                .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
-        }
-        if flags & BACKUP_STATE_FLAG != 0 && flags & BACKUP_ELIGIBLE_FLAG == 0 {
-            return Err(malformed()
-                .with_detail(AppAttestFailureDetail::AssertionFlagsInvalidBackupState)
+                .with_detail(AppAttestFailureDetail::AssertionFlagsUnexpectedValue)
                 .with_observed_flags(flags)
                 .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
         }
         let has_extensions = encoded.len() > ASSERTION_AUTHENTICATOR_DATA_BYTES;
-        if (flags & EXTENSION_DATA_FLAG != 0) != has_extensions {
-            return Err(malformed()
-                .with_detail(AppAttestFailureDetail::AssertionFlagsExtensionMismatch)
-                .with_observed_flags(flags)
-                .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
-        }
         let claims = if !has_extensions {
             None
         } else {
@@ -1356,7 +1333,6 @@ mod tests {
             let mut authenticator_data =
                 assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, counter);
             authenticator_data.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
-            authenticator_data[32] = USER_PRESENT_FLAG;
             self.sign_assertion(client_data_hash, &authenticator_data)
         }
 
@@ -1380,7 +1356,7 @@ mod tests {
         data.extend_from_slice(&Sha256::digest(
             format!("{team_id}.{app_identifier}").as_bytes(),
         ));
-        data.push(ATTESTED_CREDENTIAL_DATA_FLAG);
+        data.push(APP_ATTEST_AUTHENTICATOR_FLAG);
         data.extend_from_slice(&0_u32.to_be_bytes());
         match environment {
             AppAttestEnvironment::Development => data.extend_from_slice(b"appattestdevelop"),
@@ -1401,7 +1377,7 @@ mod tests {
         data.extend_from_slice(&Sha256::digest(
             format!("{team_id}.{app_identifier}").as_bytes(),
         ));
-        data.push(EXTENSION_DATA_FLAG);
+        data.push(APP_ATTEST_AUTHENTICATOR_FLAG);
         data.extend_from_slice(&counter.to_be_bytes());
         data.extend_from_slice(&encode_cbor_bytes(&app_attest_claims()));
         data
@@ -1909,7 +1885,7 @@ mod tests {
     }
 
     #[test]
-    fn assertion_authenticator_flags_are_validated_by_meaning() {
+    fn assertion_authenticator_requires_apple_flag_shape() {
         let authenticator_data = |flags: u8, include_extensions: bool| {
             let mut data = vec![0; ASSERTION_AUTHENTICATOR_DATA_BYTES];
             data[32] = flags;
@@ -1919,40 +1895,16 @@ mod tests {
             data
         };
 
-        AssertionAuthenticatorData::parse(&authenticator_data(USER_PRESENT_FLAG, false))
-            .expect("user-present assertion without extensions should parse");
+        AssertionAuthenticatorData::parse(&authenticator_data(
+            APP_ATTEST_AUTHENTICATOR_FLAG,
+            false,
+        ))
+        .expect("Apple assertion without extensions should parse");
+        AssertionAuthenticatorData::parse(&authenticator_data(APP_ATTEST_AUTHENTICATOR_FLAG, true))
+            .expect("Apple assertion with extensions should parse");
 
-        for (flags, include_extensions, expected_detail) in [
-            (
-                0x02,
-                false,
-                AppAttestFailureDetail::AssertionFlagsUnknownBits,
-            ),
-            (
-                ATTESTED_CREDENTIAL_DATA_FLAG,
-                false,
-                AppAttestFailureDetail::AssertionFlagsUnknownBits,
-            ),
-            (
-                BACKUP_STATE_FLAG,
-                false,
-                AppAttestFailureDetail::AssertionFlagsInvalidBackupState,
-            ),
-            (
-                EXTENSION_DATA_FLAG,
-                false,
-                AppAttestFailureDetail::AssertionFlagsExtensionMismatch,
-            ),
-            (
-                USER_PRESENT_FLAG,
-                true,
-                AppAttestFailureDetail::AssertionFlagsExtensionMismatch,
-            ),
-        ] {
-            let error = match AssertionAuthenticatorData::parse(&authenticator_data(
-                flags,
-                include_extensions,
-            )) {
+        for flags in [0x00, 0x01, 0x80, 0xc0] {
+            let error = match AssertionAuthenticatorData::parse(&authenticator_data(flags, false)) {
                 Ok(_) => panic!("invalid assertion flag shape should fail"),
                 Err(error) => error,
             };
@@ -1960,7 +1912,10 @@ mod tests {
                 error.stage(),
                 AppAttestVerificationStage::AssertionAuthenticatorFlags
             );
-            assert_eq!(error.detail(), expected_detail);
+            assert_eq!(
+                error.detail(),
+                AppAttestFailureDetail::AssertionFlagsUnexpectedValue
+            );
             assert_eq!(error.observed_flags(), Some(flags));
         }
     }

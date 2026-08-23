@@ -17,12 +17,20 @@ guide's fields together:
   little-endian CBOR byte string; and
 - `apple_bundle_version_01` is decoded as CBOR text.
 
-Apple's WWDC26 App Attest session states that the appended extension structure
+Apple’s WWDC26 App Attest session states that the appended extension structure
 starts in iOS 27. The parser also accepts the extension-free authenticator data
 produced by earlier supported Apple operating systems; a separate synthetic
 production-verifier regression covers both enrollment and assertion evidence
 in that form. When extensions are present, they must match this fixture's exact
 structure and the configured application policy.
+
+The supported production client emits `0x40` in the flag byte of Apple's
+simplified assertion authenticator data. The assertion parser requires that
+exact Apple value and deliberately does not apply WebAuthn assertion flag
+semantics to it. Extension presence is determined from the remaining Apple
+authenticator-data bytes, whose CBOR shape is validated independently. This is
+a structural observation only; no device assertion, key, identifier, or other
+device-specific evidence is retained in the repository.
 
 Keep the raw bytes unchanged. If Apple publishes a materially different fixture,
 add a new dated file and a separate regression case before changing the parser.
