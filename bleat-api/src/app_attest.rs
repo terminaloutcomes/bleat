@@ -48,8 +48,17 @@ const ATTESTATION_CREDENTIAL_ID_OFFSET: usize = 55;
 const APP_ATTEST_KEY_ID_BYTES: usize = 32;
 const COSE_P256_PUBLIC_KEY_BYTES: usize = 65;
 const MAX_BUNDLE_VERSION_BYTES: usize = 64;
+const USER_PRESENT_FLAG: u8 = 0x01;
+const USER_VERIFIED_FLAG: u8 = 0x04;
+const BACKUP_ELIGIBLE_FLAG: u8 = 0x08;
+const BACKUP_STATE_FLAG: u8 = 0x10;
 const ATTESTED_CREDENTIAL_DATA_FLAG: u8 = 0x40;
 const EXTENSION_DATA_FLAG: u8 = 0x80;
+const ASSERTION_ALLOWED_FLAGS: u8 = USER_PRESENT_FLAG
+    | USER_VERIFIED_FLAG
+    | BACKUP_ELIGIBLE_FLAG
+    | BACKUP_STATE_FLAG
+    | EXTENSION_DATA_FLAG;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureCategory {
@@ -118,6 +127,9 @@ pub enum AppAttestVerificationStage {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureDetail {
     Unspecified,
+    AssertionFlagsUnknownBits,
+    AssertionFlagsInvalidBackupState,
+    AssertionFlagsExtensionMismatch,
     ExtensionsCbor,
     ExtensionsTrailingData,
     ExtensionsNotMap,
@@ -137,6 +149,9 @@ impl AppAttestFailureDetail {
     pub const fn metric_name(self) -> &'static str {
         match self {
             Self::Unspecified => "unspecified",
+            Self::AssertionFlagsUnknownBits => "assertion.flags.unknown_bits",
+            Self::AssertionFlagsInvalidBackupState => "assertion.flags.invalid_backup_state",
+            Self::AssertionFlagsExtensionMismatch => "assertion.flags.extension_mismatch",
             Self::ExtensionsCbor => "extensions.cbor",
             Self::ExtensionsTrailingData => "extensions.trailing_data",
             Self::ExtensionsNotMap => "extensions.not_map",
@@ -228,6 +243,7 @@ pub struct AppAttestVerificationError {
     observed_type: Option<CborValueKind>,
     observed_length: Option<usize>,
     observed_count: Option<usize>,
+    observed_flags: Option<u8>,
 }
 
 impl AppAttestVerificationError {
@@ -239,6 +255,7 @@ impl AppAttestVerificationError {
             observed_type: None,
             observed_length: None,
             observed_count: None,
+            observed_flags: None,
         }
     }
 
@@ -269,6 +286,11 @@ impl AppAttestVerificationError {
         self
     }
 
+    const fn with_observed_flags(mut self, observed_flags: u8) -> Self {
+        self.observed_flags = Some(observed_flags);
+        self
+    }
+
     pub const fn category(self) -> AppAttestFailureCategory {
         self.category
     }
@@ -291,6 +313,10 @@ impl AppAttestVerificationError {
 
     pub const fn observed_count(self) -> Option<usize> {
         self.observed_count
+    }
+
+    pub const fn observed_flags(self) -> Option<u8> {
+        self.observed_flags
     }
 }
 
@@ -905,10 +931,27 @@ impl AssertionAuthenticatorData {
         {
             return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorLength));
         }
-        if !matches!(encoded[32], 0 | EXTENSION_DATA_FLAG) {
-            return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
+        let flags = encoded[32];
+        if flags & !ASSERTION_ALLOWED_FLAGS != 0 {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::AssertionFlagsUnknownBits)
+                .with_observed_flags(flags)
+                .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
         }
-        let claims = if encoded.len() == ASSERTION_AUTHENTICATOR_DATA_BYTES {
+        if flags & BACKUP_STATE_FLAG != 0 && flags & BACKUP_ELIGIBLE_FLAG == 0 {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::AssertionFlagsInvalidBackupState)
+                .with_observed_flags(flags)
+                .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
+        }
+        let has_extensions = encoded.len() > ASSERTION_AUTHENTICATOR_DATA_BYTES;
+        if (flags & EXTENSION_DATA_FLAG != 0) != has_extensions {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::AssertionFlagsExtensionMismatch)
+                .with_observed_flags(flags)
+                .at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
+        }
+        let claims = if !has_extensions {
             None
         } else {
             Some(
@@ -1313,7 +1356,7 @@ mod tests {
             let mut authenticator_data =
                 assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, counter);
             authenticator_data.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
-            authenticator_data[32] = 0;
+            authenticator_data[32] = USER_PRESENT_FLAG;
             self.sign_assertion(client_data_hash, &authenticator_data)
         }
 
@@ -1863,6 +1906,63 @@ mod tests {
                 .counter,
             1
         );
+    }
+
+    #[test]
+    fn assertion_authenticator_flags_are_validated_by_meaning() {
+        let authenticator_data = |flags: u8, include_extensions: bool| {
+            let mut data = vec![0; ASSERTION_AUTHENTICATOR_DATA_BYTES];
+            data[32] = flags;
+            if include_extensions {
+                data.extend_from_slice(&encode_cbor_bytes(&app_attest_claims()));
+            }
+            data
+        };
+
+        AssertionAuthenticatorData::parse(&authenticator_data(USER_PRESENT_FLAG, false))
+            .expect("user-present assertion without extensions should parse");
+
+        for (flags, include_extensions, expected_detail) in [
+            (
+                0x02,
+                false,
+                AppAttestFailureDetail::AssertionFlagsUnknownBits,
+            ),
+            (
+                ATTESTED_CREDENTIAL_DATA_FLAG,
+                false,
+                AppAttestFailureDetail::AssertionFlagsUnknownBits,
+            ),
+            (
+                BACKUP_STATE_FLAG,
+                false,
+                AppAttestFailureDetail::AssertionFlagsInvalidBackupState,
+            ),
+            (
+                EXTENSION_DATA_FLAG,
+                false,
+                AppAttestFailureDetail::AssertionFlagsExtensionMismatch,
+            ),
+            (
+                USER_PRESENT_FLAG,
+                true,
+                AppAttestFailureDetail::AssertionFlagsExtensionMismatch,
+            ),
+        ] {
+            let error = match AssertionAuthenticatorData::parse(&authenticator_data(
+                flags,
+                include_extensions,
+            )) {
+                Ok(_) => panic!("invalid assertion flag shape should fail"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.stage(),
+                AppAttestVerificationStage::AssertionAuthenticatorFlags
+            );
+            assert_eq!(error.detail(), expected_detail);
+            assert_eq!(error.observed_flags(), Some(flags));
+        }
     }
 
     #[test]

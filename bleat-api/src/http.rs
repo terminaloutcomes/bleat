@@ -471,6 +471,9 @@ fn map_verification_error(
     if let Some(observed_count) = error.observed_count() {
         span.record("app_attest.observed.count", observed_count);
     }
+    if let Some(observed_flags) = error.observed_flags() {
+        span.record("app_attest.observed.flags", observed_flags);
+    }
     warn!(
         operation,
         category,
@@ -479,6 +482,7 @@ fn map_verification_error(
         observed_type,
         observed_length = error.observed_length(),
         observed_count = error.observed_count(),
+        observed_flags = error.observed_flags(),
         request_id = %request_id.0,
         "installation authentication rejected"
     );
@@ -661,6 +665,7 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         app_attest.observed.cbor_type = field::Empty,
         app_attest.observed.length = field::Empty,
         app_attest.observed.count = field::Empty,
+        app_attest.observed.flags = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );
