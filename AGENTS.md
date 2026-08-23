@@ -93,6 +93,10 @@ Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
 Model distinct errors, result states, and transitions with enums or dedicated
 structs. Make decisions by matching typed variants. Never branch on localized
 descriptions, serialized error messages, or other string contents.
+Compare structured data using decoded or parsed structural equality, not
+serialized bytes or text, unless exact serialized identity is deliberately part
+of a protocol, signature, hash, or storage contract. Document and test every
+intentional byte comparison.
 Preserve both the originating operation and typed failure cause through service,
 model, UI, and diagnostics boundaries. Do not collapse distinct failures into a
 generic unavailable/failed state: translate them only into a typed,

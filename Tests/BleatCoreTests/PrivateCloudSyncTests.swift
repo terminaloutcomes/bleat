@@ -587,7 +587,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
-    func testAmbiguousSentConfigurationConflictWaitsForUserDecision()
+    func testStructurallyEquivalentSentConfigurationConflictWaitsForDecision()
         async throws
     {
         let fixture = try makeSyncStoreFixture()
@@ -602,6 +602,17 @@ final class PrivateCloudSyncTests: XCTestCase {
         let clientRecord = try XCTUnwrap(
             records.first { $0.recordType == "Configuration" }
         )
+        let clientData = try XCTUnwrap(
+            clientRecord[PrivateCloudSyncStore.payloadKey] as? Data
+        )
+        let clientJSON = try JSONSerialization.jsonObject(with: clientData)
+        let structurallyEquivalentClientData = try JSONSerialization.data(
+            withJSONObject: clientJSON,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        XCTAssertNotEqual(clientData, structurallyEquivalentClientData)
+        clientRecord[PrivateCloudSyncStore.payloadKey] =
+            structurallyEquivalentClientData as CKRecordValue
         let serverRecord = CKRecord(
             recordType: clientRecord.recordType,
             recordID: clientRecord.recordID
@@ -848,6 +859,61 @@ final class PrivateCloudSyncTests: XCTestCase {
         } catch let error as PrivateCloudSyncError {
             XCTAssertEqual(error, .invalidRecord)
         }
+    }
+
+    func testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let conflictKey =
+            "bleat.cloudKit.pendingConfigurationConflict.v1"
+        fixture.defaults.set(Data([0x00, 0x01]), forKey: conflictKey)
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        do {
+            _ = try await restoredStore.prepareRecords(
+                zoneID: fixture.zoneID
+            )
+            XCTFail("Expected invalid persisted conflict to stop uploads")
+        } catch let error as PrivateCloudSyncError {
+            XCTAssertEqual(error, .invalidRecord)
+        }
+
+        await restoredStore.removeAllRecords()
+
+        XCTAssertNil(fixture.defaults.data(forKey: conflictKey))
+        let preparedAfterDeletion = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(
+            preparedAfterDeletion.contains {
+                $0.recordType == "Configuration"
+            }
+        )
+        let relaunchedStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+        let prepared = try await relaunchedStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(
+            prepared.contains { $0.recordType == "Configuration" }
+        )
     }
 
     private func makeSuite() -> String {

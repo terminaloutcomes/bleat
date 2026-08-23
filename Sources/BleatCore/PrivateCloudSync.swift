@@ -957,38 +957,44 @@ actor PrivateCloudSyncStore {
         else {
             throw PrivateCloudSyncError.invalidRecord
         }
-        let localData: Data
+        let client: CloudConfigurationSnapshot
+        let server: CloudConfigurationSnapshot
         do {
-            localData = try JSONEncoder().encode(
-                await configuration.snapshot()
+            client = try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: clientData
+            )
+            server = try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: serverData
             )
         } catch {
-            throw PrivateCloudSyncError.persistenceFailed
+            throw PrivateCloudSyncError.invalidRecord
         }
-        if clientData == serverData {
+        let local = await configuration.snapshot()
+        if client == server {
             records[serverRecord.recordID] = serverRecord
             return false
         }
-        if localData == serverData {
+        if local == server {
             records[serverRecord.recordID] = serverRecord
             return false
         }
-        if localData == clientData {
+        if local == client {
             let conflict = CloudConfigurationConflict(
-                local: try JSONDecoder().decode(
-                    CloudConfigurationSnapshot.self,
-                    from: localData
-                ),
-                iCloud: try JSONDecoder().decode(
-                    CloudConfigurationSnapshot.self,
-                    from: serverData
-                )
+                local: local,
+                iCloud: server
             )
             records[serverRecord.recordID] = serverRecord
             try setPendingConfigurationConflict(conflict)
             return false
         }
-        serverRecord[Self.payloadKey] = localData as CKRecordValue
+        do {
+            serverRecord[Self.payloadKey] =
+                try JSONEncoder().encode(local) as CKRecordValue
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
         records[serverRecord.recordID] = serverRecord
         return true
     }
@@ -1114,6 +1120,9 @@ actor PrivateCloudSyncStore {
     func removeAllRecords() {
         records.removeAll()
         defaults.removeObject(forKey: recordSystemFieldsKey)
+        if pendingConfigurationConflictIsInvalid {
+            clearPendingConfigurationConflict()
+        }
     }
 
     func ignoreAccountOnThisDevice(
