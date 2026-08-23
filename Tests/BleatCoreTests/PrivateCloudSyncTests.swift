@@ -587,7 +587,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
-    func testAmbiguousSentConfigurationConflictWaitsForUserDecision()
+    func testStructurallyEquivalentSentConfigurationConflictWaitsForDecision()
         async throws
     {
         let fixture = try makeSyncStoreFixture()
@@ -602,6 +602,17 @@ final class PrivateCloudSyncTests: XCTestCase {
         let clientRecord = try XCTUnwrap(
             records.first { $0.recordType == "Configuration" }
         )
+        let clientData = try XCTUnwrap(
+            clientRecord[PrivateCloudSyncStore.payloadKey] as? Data
+        )
+        let clientJSON = try JSONSerialization.jsonObject(with: clientData)
+        let structurallyEquivalentClientData = try JSONSerialization.data(
+            withJSONObject: clientJSON,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        XCTAssertNotEqual(clientData, structurallyEquivalentClientData)
+        clientRecord[PrivateCloudSyncStore.payloadKey] =
+            structurallyEquivalentClientData as CKRecordValue
         let serverRecord = CKRecord(
             recordType: clientRecord.recordType,
             recordID: clientRecord.recordID
