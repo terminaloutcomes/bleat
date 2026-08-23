@@ -108,6 +108,7 @@ pub enum AppAttestVerificationStage {
     AssertionSignature,
     AssertionAuthenticatorLength,
     AssertionAuthenticatorFlags,
+    AssertionEnvironment,
     AssertionExtensions,
     AssertionApplication,
     AssertionCounter,
@@ -212,6 +213,7 @@ impl AppAttestVerificationStage {
             Self::AssertionSignature => "assertion.signature",
             Self::AssertionAuthenticatorLength => "assertion.authenticator.length",
             Self::AssertionAuthenticatorFlags => "assertion.authenticator.flags",
+            Self::AssertionEnvironment => "assertion.environment",
             Self::AssertionExtensions => "assertion.extensions",
             Self::AssertionApplication => "assertion.application",
             Self::AssertionCounter => "assertion.counter",
@@ -612,7 +614,7 @@ impl ProductionAppAttestVerifier {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongEnvironment,
             )
-            .at(AppAttestVerificationStage::AttestationEnvironment));
+            .at(AppAttestVerificationStage::AssertionEnvironment));
         }
         let decoded = decode_evidence(evidence, MAX_DECODED_ASSERTION_BYTES)?;
         let parsed = ParsedAssertion::parse(&decoded)?;
@@ -2322,19 +2324,27 @@ mod tests {
                 .category(),
             AppAttestFailureCategory::AssertionReplay
         );
+        let wrong_environment = evidence
+            .verifier
+            .verify_assertion(
+                &evidence.public_key,
+                InstallationEnvironment::Development,
+                &assertion,
+                &client_data_hash,
+                1,
+            )
+            .expect_err("wrong environment should fail");
         assert_eq!(
-            evidence
-                .verifier
-                .verify_assertion(
-                    &evidence.public_key,
-                    InstallationEnvironment::Development,
-                    &assertion,
-                    &client_data_hash,
-                    1,
-                )
-                .expect_err("wrong environment should fail")
-                .category(),
+            wrong_environment.category(),
             AppAttestFailureCategory::WrongEnvironment
+        );
+        assert_eq!(
+            wrong_environment.stage(),
+            AppAttestVerificationStage::AssertionEnvironment
+        );
+        assert_eq!(
+            wrong_environment.stage().metric_name(),
+            "assertion.environment"
         );
         let other = SyntheticEvidence::new(&client_data_hash, AppAttestEnvironment::Production);
         assert_eq!(
