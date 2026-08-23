@@ -110,6 +110,37 @@ Cloudflare, authentication, or network failure must not affect API request
 handling or application behavior. The iOS persistence and retry bounds remain
 defined in `docs/audiobookshelf-ios-app-spec.md`.
 
+## Production retention and access
+
+The production ClickHouse tables delete traces after seven days and logs after
+90 days. Those table TTLs are the authoritative retention controls for both
+the iOS and API signals; the Collector does not retain a second durable copy.
+The iOS application may hold undelivered span batches locally for at most two
+hours and deletes them after successful delivery or consent withdrawal.
+
+Telemetry-authentication state is separate from the diagnostic signals.
+PostgreSQL retains the opaque installation UUID, App Attest key identifier and
+public key, environment, status, assertion counter, and timestamps. Challenge
+rows retain only a digest and lifecycle metadata. These authentication records
+currently have no automatic expiry and remain until an operator deletes them or
+the service is decommissioned. Withdrawing consent immediately stops new
+authentication and export and removes local telemetry state, but does not
+delete an existing server enrollment.
+
+Production signal queries are limited to the deployment operator through the
+credential-protected HyperDX service. Direct ClickHouse and PostgreSQL access
+is limited to cluster workloads and administrators holding the corresponding
+deployment credentials. Telemetry is not sold, used for advertising or
+tracking, or shared with a data broker. Access is for operating, securing, and
+improving Bleat, including investigating typed failures and performance.
+
+The authentication service's server spans retain the resolved client network
+address and bounded user-agent when present. They do not retain authorization
+headers, JWT claims, App Attest evidence, request bodies, account or media data,
+or copy the opaque installation subject into exported telemetry. Because a
+network address can still be associated with a device, the App Store privacy
+declaration treats the corresponding other diagnostic data as linked.
+
 ## Explicit non-designs
 
 Bleat telemetry does not use:

@@ -4364,7 +4364,7 @@ private struct RemoteTelemetryConsentSection: View {
             Text("Privacy")
         } footer: {
             Text(
-                "Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, and timing. Audiobook content, credentials, accounts, servers, searches, transcripts, and device identifiers are excluded. You can turn this off at any time without affecting local Diagnostics."
+                "Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, and timing. A random installation identifier is used only to authenticate uploads and is not included in diagnostics. Audiobook content, credentials, accounts, servers, searches, transcripts, and hardware or advertising identifiers are excluded. You can turn this off at any time without affecting local Diagnostics."
             )
             .accessibilityIdentifier("diagnostics.telemetry.explanation")
         }

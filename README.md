@@ -784,9 +784,11 @@ The Diagnostics **Privacy** section also records device-local, default-off
 consent for **Share diagnostic telemetry**. The reviewed schema permits only
 bounded technical operation, outcome, timing, app-version, and operating-system data;
 it excludes audiobook content, credentials, accounts, servers, searches,
-transcripts, paths, and device or installation identifiers. Turning the setting
-off does not affect local Diagnostics. The Diagnostics screen remains available
-while signed out and when application startup is unavailable. On iOS, the
+transcripts, paths, and hardware or advertising identifiers. A random
+installation identifier authenticates uploads but is not copied into diagnostic
+spans or logs. Turning the setting off does not affect local Diagnostics. The
+Diagnostics screen remains available while signed out and when application
+startup is unavailable. On iOS, the
 opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
 lifecycle log records away from the main actor, retaining failed span batches
 under the bounded persistence policy before authenticated OTLP export. Remote

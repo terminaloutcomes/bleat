@@ -97,3 +97,8 @@ if [[ "$(plutil -extract BleatTelemetryAuthenticationBaseURL raw "${bleat_app_in
     print -u2 "Archive telemetry configuration does not match the supplied environment"
     exit 1
 fi
+
+python3 "${bleat_script_dir}/inspect-release-archive.py" \
+    --archive "${bleat_archive_path}" \
+    --package-resolution \
+    "${bleat_repository_root}/Bleat.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"

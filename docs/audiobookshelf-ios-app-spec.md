@@ -1703,6 +1703,19 @@ counter conflicts are rejected. Only that authenticated installation principal
 can reach signing. Disabling an installation prevents future issuance, while
 an already-issued token expires naturally within ten minutes.
 
+Production ClickHouse tables retain traces for seven days and logs for 90
+days. The Collector has no separate durable store. Production query access is
+restricted to the deployment operator through authenticated HyperDX access,
+with direct database access limited to cluster workloads and deployment
+administrators. PostgreSQL authentication records currently have no automatic
+expiry and remain until operator deletion or service decommissioning;
+withdrawing application consent stops authentication and export and purges
+local telemetry, but does not delete the existing server enrollment. The
+service's server spans can retain a client network address and bounded
+user-agent for operational diagnostics, so App Store disclosure treats this
+other diagnostic data as linked even though client-originated spans and logs
+contain no installation identifier.
+
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service through
 `mise run test:telemetry`. The disposable gate drives the reviewed Swift
