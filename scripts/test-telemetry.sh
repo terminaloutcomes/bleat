@@ -129,6 +129,12 @@ BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT}" \
   swift test --filter OpenTelemetryCollectorLiveTests
 
+BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
+BLEAT_TELEMETRY_CONTROL_COMMAND="${PWD}/scripts/control-telemetry-test-service.sh" \
+BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \
+  swift test --filter TelemetryRecoveryLiveTests
+
 # Receiver success proves only queue admission. Require bounded retry exhaustion.
 outage_metrics=""
 for _ in {1..30}; do
