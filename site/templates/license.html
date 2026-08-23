@@ -1,0 +1,7 @@
+{% extends "page.html" %}
+
+{% block content%}
+{% set data = load_data(path="content/license.txt") %}
+
+{{ data | markdown | safe }}
+{% endblock content %}

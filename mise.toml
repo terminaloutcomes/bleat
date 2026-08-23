@@ -86,11 +86,14 @@ run = "zola --root site check"
 [tasks."site-build"]
 description = "Build the production website"
 depends = ["site-css"]
-run = "zola --root site build --output-dir site/public --force"
+run = [
+  "cp LICENSE.md site/content/license.txt",
+  "zola --root site build --output-dir site/public --force",
+]
 
 [tasks."site-serve"]
 description = "Serve the website locally"
-depends = ["site-css"]
+depends = ["site-css", "site-build"]
 run = "zola --root site serve"
 
 [tasks.simulator]
@@ -131,10 +134,7 @@ run = ["./scripts/audit-rust-dependencies.sh"]
 
 [tasks."security:validate"]
 description = "Run the repository-supported release security gate"
-run = [
-  { task = "security:secrets" },
-  { task = "security:dependencies" },
-]
+run = [{ task = "security:secrets" }, { task = "security:dependencies" }]
 
 [tasks.clean]
 description = "Remove repository build artifacts"
@@ -170,10 +170,7 @@ run = ["./scripts/build-macos.sh"]
 
 [tasks.archive]
 description = "Create and validate the Release archive"
-run = [
-  { task = "security:validate" },
-  "./scripts/archive-beta.sh",
-]
+run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
 [tasks."devices:status"]
 description = "List signing identities and connected Apple devices"
