@@ -1725,8 +1725,20 @@ required.
 stock Collector process owns distinct OIDC-authenticated device and private API
 OTLP/HTTP receivers and exports both signal identities directly to ClickHouse.
 
-Remote telemetry must never contain credentials, tokens, cookies,
-authorization headers, playback session routes, App Attest evidence, backend
+The backend's server-generated HTTP request spans follow the stable
+OpenTelemetry HTTP server conventions. They distinguish the immediate socket
+peer from an originating `client.address` resolved only through explicitly
+trusted proxy CIDRs and bounded Cloudflare, RFC 7239 `Forwarded`, or
+`X-Forwarded-For` parsing. Forwarding headers from untrusted peers, malformed or
+conflicting families, and excessive input fall back to the socket peer. These
+originating addresses are server-side observability data subject to the
+backend's access and retention controls; raw forwarding chains are not exported
+or normally logged. Temporary local forwarding diagnostics require explicit
+configuration and remain excluded from OTLP logs.
+
+Client-originated remote telemetry must never contain credentials, tokens,
+cookies, authorization headers, playback session routes, App Attest evidence,
+backend
 JWTs, usernames, account or installation identifiers, server URLs or network
 discovery data, IP addresses, audiobook/author/series/library names, filenames,
 filesystem paths, cover or media URLs, metadata, transcript/subtitle content,

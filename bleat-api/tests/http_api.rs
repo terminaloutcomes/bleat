@@ -61,6 +61,9 @@ fn test_arguments(postgres: &TestPostgres) -> Arguments {
         request_timeout_seconds: 10,
         max_request_body_bytes: 65_536,
         max_concurrent_requests: 64,
+        trusted_proxy_cidrs: Vec::new(),
+        trusted_forwarding_headers: Vec::new(),
+        forwarding_debug: false,
         log_filter: "bleat_api=info".to_owned(),
         log_format: LogFormat::Compact,
     }

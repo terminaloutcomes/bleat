@@ -1,9 +1,11 @@
-use std::{sync::Arc, time::Instant};
+use std::{net::SocketAddr, sync::Arc, time::Instant};
 
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, Extension, MatchedPath, State, rejection::JsonRejection},
+    extract::{
+        ConnectInfo, DefaultBodyLimit, Extension, MatchedPath, State, rejection::JsonRejection,
+    },
     http::{
         HeaderMap, HeaderName, HeaderValue, Request, StatusCode,
         header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH, USER_AGENT},
@@ -14,7 +16,7 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use opentelemetry::global;
+use opentelemetry::{global, trace::Status as OpenTelemetryStatus};
 use opentelemetry_http::HeaderExtractor;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -33,9 +35,10 @@ use crate::{
         ChallengeConsumeOutcome, ChallengePurpose, ChallengeRepository, ChallengeStoreError,
         ExpectedChallenge, IssuedChallenge,
     },
-    config::{Config, DeploymentMode},
+    config::{Config, DeploymentMode, TrustedProxyConfig},
     database,
     error::ApiError,
+    forwarding::resolve_client_address,
     installation::{
         CounterAdvanceOutcome, InstallationRepository, InstallationStoreError, NewInstallation,
     },
@@ -242,7 +245,10 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
             limits,
             config.max_request_body_bytes,
         ))
-        .layer(middleware::from_fn(instrument_request)))
+        .layer(middleware::from_fn_with_state(
+            config.trusted_proxies.clone(),
+            instrument_request,
+        )))
 }
 
 fn apply_limits(routes: Router, limits: RequestLimits, max_request_body_bytes: usize) -> Router {
@@ -633,7 +639,11 @@ async fn enforce_limits(
     }
 }
 
-async fn instrument_request(mut request: Request<Body>, next: Next) -> Response {
+async fn instrument_request(
+    State(trusted_proxies): State<TrustedProxyConfig>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Response {
     let request_id = Uuid::new_v4();
     request.extensions_mut().insert(RequestId(request_id));
 
@@ -641,9 +651,24 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
     let route = request
         .extensions()
         .get::<MatchedPath>()
-        .map_or("unmatched", MatchedPath::as_str)
-        .to_owned();
-    let url_scheme = request.uri().scheme_str().unwrap_or("http").to_owned();
+        .map(MatchedPath::as_str)
+        .map(str::to_owned);
+    let span_name = route
+        .as_ref()
+        .map_or_else(|| method.to_string(), |route| format!("{method} {route}"));
+    let url_path = route
+        .as_ref()
+        .map_or_else(|| "/*".to_owned(), |_| request.uri().path().to_owned());
+    let url_scheme = match request.uri().scheme_str() {
+        Some("https") => "https",
+        _ => "http",
+    };
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(address)| *address);
+    let client_address = peer
+        .map(|address| resolve_client_address(&trusted_proxies, address, request.headers()).client);
     let user_agent = request
         .headers()
         .get(USER_AGENT)
@@ -654,9 +679,11 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
     });
     let span = info_span!(
         "http.request",
+        otel.name = %span_name,
+        otel.kind = "server",
         http.request.method = %method,
-        http.route = %route,
-        url.path = %route,
+        http.route = field::Empty,
+        url.path = %url_path,
         url.scheme = %url_scheme,
         user_agent.original = field::Empty,
         app_attest.failure.category = field::Empty,
@@ -666,11 +693,24 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         app_attest.observed.length = field::Empty,
         app_attest.observed.count = field::Empty,
         app_attest.observed.flags = field::Empty,
+        client.address = field::Empty,
+        network.peer.address = field::Empty,
+        network.peer.port = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
     );
+    if let Some(route) = route.as_deref() {
+        span.record("http.route", route);
+    }
     if let Some(user_agent) = user_agent.as_deref() {
         span.record("user_agent.original", user_agent);
+    }
+    if let Some(peer) = peer {
+        span.record("network.peer.address", peer.ip().to_string());
+        span.record("network.peer.port", i64::from(peer.port()));
+    }
+    if let Some(client_address) = client_address {
+        span.record("client.address", client_address.to_string());
     }
     if let Err(error) = span.set_parent(parent_context) {
         debug!(error = %error, "ignored invalid remote trace context");
@@ -682,6 +722,10 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         "http.response.status_code",
         i64::from(response.status().as_u16()),
     );
+    if response.status().is_server_error() {
+        span.set_status(OpenTelemetryStatus::error(""));
+        span.set_attribute("error.type", response.status().as_u16().to_string());
+    }
     span.in_scope(|| {
         info!(
             event.name = "request.completed",
@@ -723,6 +767,10 @@ mod tests {
         StatusCode::NO_CONTENT
     }
 
+    async fn connection_peer(ConnectInfo(peer): ConnectInfo<SocketAddr>) -> String {
+        peer.to_string()
+    }
+
     fn limited_router(
         timeout: std::time::Duration,
         permits: usize,
@@ -739,7 +787,63 @@ mod tests {
                 },
                 1_024,
             ))
-            .layer(middleware::from_fn(instrument_request))
+            .layer(middleware::from_fn_with_state(
+                TrustedProxyConfig::new(Vec::new(), Vec::new(), false)
+                    .expect("empty trusted proxy configuration should validate"),
+                instrument_request,
+            ))
+    }
+
+    #[tokio::test]
+    async fn server_connection_metadata_contains_the_actual_socket_peer() {
+        use std::io::{Read, Write};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test listener should bind");
+        let server_address = listener
+            .local_addr()
+            .expect("test listener address should resolve");
+        let app = Router::new().route("/peer", get(connection_peer));
+        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(async {
+                let _ = shutdown_receiver.await;
+            })
+            .await
+        });
+
+        let (client_address, response) = tokio::task::spawn_blocking(move || {
+            let mut stream =
+                std::net::TcpStream::connect(server_address).expect("test client should connect");
+            let client_address = stream
+                .local_addr()
+                .expect("test client address should resolve");
+            stream
+                .write_all(b"GET /peer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                .expect("test request should write");
+            let mut response = String::new();
+            stream
+                .read_to_string(&mut response)
+                .expect("test response should read");
+            (client_address, response)
+        })
+        .await
+        .expect("blocking client task should finish");
+
+        shutdown_sender
+            .send(())
+            .expect("test server should still be running");
+        server
+            .await
+            .expect("test server task should finish")
+            .expect("test server should stop cleanly");
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.ends_with(&client_address.to_string()));
     }
 
     #[tokio::test]

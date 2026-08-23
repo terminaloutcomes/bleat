@@ -94,6 +94,9 @@ Flags and matching environment variables configure the service:
 | `--request-timeout-seconds` | `BLEAT_API_REQUEST_TIMEOUT_SECONDS` | `10` |
 | `--max-request-body-bytes` | `BLEAT_API_MAX_REQUEST_BODY_BYTES` | `65536` |
 | `--max-concurrent-requests` | `BLEAT_API_MAX_CONCURRENT_REQUESTS` | `64` |
+| `--trusted-proxy-cidrs` | `BLEAT_API_TRUSTED_PROXY_CIDRS` | unset |
+| `--trusted-forwarding-headers` | `BLEAT_API_TRUSTED_FORWARDING_HEADERS` | unset |
+| `--forwarding-debug` | `BLEAT_API_FORWARDING_DEBUG` | `false` |
 | `--log-filter` | `BLEAT_API_LOG_FILTER` | `bleat_api=info,opentelemetry=warn,opentelemetry_sdk=warn,opentelemetry-otlp=warn` |
 | `--log-format` | `BLEAT_API_LOG_FORMAT` | `compact` |
 
@@ -115,6 +118,26 @@ event records the effective non-secret service settings. It reports only
 whether Apple identifiers and signing configuration are present, and never
 includes the database URL, key paths, or OTLP connection details.
 
+Forwarding headers are ignored unless the immediate socket peer belongs to one
+of the comma-separated `trusted-proxy-cidrs`. Supplying CIDRs without
+`trusted-forwarding-headers` enables all supported families: `cloudflare`,
+`forwarded`, and `x-forwarded-for`. An explicit header list restricts resolution
+to that subset. A header list without CIDRs, duplicate entries, invalid
+networks, and IPv4 or IPv6 universal networks fail startup. `Forwarded` and
+`X-Forwarded-For` chains are resolved from the trusted end, and multiple present
+families must agree. Invalid, conflicting, oversized, or excessive chains fall
+back to the socket peer. Direct clients therefore cannot gain trust by adding a
+forwarding header.
+
+Set `BLEAT_API_FORWARDING_DEBUG=true` only while diagnosing ingress. It writes a
+bounded local event containing the socket peer, supported forwarding-header
+values, parsed hops, selected client address, and typed resolution decision.
+These events can contain originating IP addresses and attacker-controlled text.
+They are excluded from OTLP log export and never include authorization, cookies,
+trace context, request bodies, query strings, or unrelated headers. Disable the
+mode after diagnosis and protect the local logs with the deployment's normal
+access and retention controls.
+
 ## OpenTelemetry
 
 Local logs are always written to stderr. Set an OTLP endpoint to additionally
@@ -132,8 +155,17 @@ sampling, batching, and resource environment variables are passed to the
 OpenTelemetry SDK. Header values may contain credentials and are never logged.
 HTTP server spans include the OpenTelemetry semantic `url.path` and
 `url.scheme` attributes, plus `user_agent.original` when the request includes a
-valid `User-Agent` header. The path uses the matched route shape so installation
-identifiers are not exported, and raw query strings are excluded.
+valid `User-Agent` header. They use `Server` kind and low-cardinality
+`METHOD route` names, leave 1xx through 4xx status unset, and classify 5xx
+responses as errors with the numeric HTTP status retained separately. Matched
+routes record the query-free request path; unmatched paths are scrubbed to
+`/*` and omit `http.route`. `network.peer.*` records the immediate socket while
+`client.address` records the trusted resolved origin or the socket peer.
+
+Originating addresses in these server-generated request spans are server-side
+observability data. They are not part of Bleat's client-originated telemetry
+schema and must remain under the observability backend's access and retention
+controls.
 
 Remote exporter failures do not affect health, readiness, or request handling.
 The service uses Rustls with system trust and does not support gRPC export.

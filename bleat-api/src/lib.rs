@@ -16,6 +16,7 @@ pub mod config;
 pub mod database;
 pub mod entity;
 pub mod error;
+mod forwarding;
 pub mod http;
 pub mod installation;
 pub mod observability;

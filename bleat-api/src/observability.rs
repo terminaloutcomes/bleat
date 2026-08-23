@@ -77,6 +77,9 @@ pub fn log_startup_settings(config: &Config) {
         request_timeout_seconds = config.request_timeout.as_secs(),
         max_request_body_bytes = config.max_request_body_bytes,
         max_concurrent_requests = config.max_concurrent_requests,
+        trusted_proxy_cidr_count = config.trusted_proxies.cidrs().len(),
+        trusted_forwarding_headers = ?config.trusted_proxies.forwarding_headers(),
+        forwarding_debug = config.trusted_proxies.debug,
         log_filter = %config.log_filter,
         log_format = %config.log_format,
         otlp_traces_enabled = config.telemetry.traces_enabled,
@@ -181,7 +184,8 @@ fn install_subscriber(
 }
 
 fn is_exporter_target(target: &str) -> bool {
-    target.starts_with("opentelemetry")
+    target == crate::forwarding::FORWARDING_DEBUG_TARGET
+        || target.starts_with("opentelemetry")
         || target.starts_with("reqwest")
         || target.starts_with("hyper")
         || target.starts_with("rustls")
@@ -205,10 +209,14 @@ mod tests {
         time::Duration,
     };
 
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::Body,
+        extract::ConnectInfo,
+        http::{Method, Request, StatusCode},
+    };
     use opentelemetry::{
         Key, Value,
-        trace::{SpanId, TraceId},
+        trace::{SpanId, SpanKind, Status, TraceId},
     };
     use opentelemetry_sdk::{
         Resource,
@@ -224,7 +232,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            AppAttestEnvironment, Config, DatabaseConfig, DeploymentMode, TelemetryExportConfig,
+            AppAttestEnvironment, Config, DatabaseConfig, DeploymentMode, ForwardingHeader,
+            TelemetryExportConfig, TrustedProxyConfig,
         },
         router,
     };
@@ -296,6 +305,8 @@ mod tests {
             request_timeout: Duration::from_secs(10),
             max_request_body_bytes: 65_536,
             max_concurrent_requests: 64,
+            trusted_proxies: crate::config::TrustedProxyConfig::new(Vec::new(), Vec::new(), false)
+                .expect("empty trusted proxy configuration should validate"),
             log_filter: log_filter.to_owned(),
             log_format,
             telemetry: TelemetryExportConfig::default(),
@@ -310,6 +321,7 @@ mod tests {
             "reqwest",
             "hyper::client",
             "rustls::client",
+            crate::forwarding::FORWARDING_DEBUG_TARGET,
         ] {
             assert!(is_exporter_target(target));
         }
@@ -432,10 +444,16 @@ mod tests {
             .with_resource(resource)
             .with_simple_exporter(log_exporter.clone())
             .build();
-        let config = test_config(
+        let mut config = test_config(
             LogFormat::Compact,
             "bleat_api=info,opentelemetry=warn,opentelemetry_sdk=warn,opentelemetry-otlp=warn",
         );
+        config.trusted_proxies = TrustedProxyConfig::new(
+            vec!["10.0.0.0/8".to_owned()],
+            vec![ForwardingHeader::XForwardedFor],
+            true,
+        )
+        .expect("test forwarding configuration should validate");
         let local = Buffer::default();
         let subscriber = Registry::default()
             .with(
@@ -459,9 +477,11 @@ mod tests {
 
         let sensitive_body = "sensitive-attestation-marker";
         let sensitive_authorization = "Bearer sensitive-token-marker";
-        let request = Request::get("/readyz?probe=telemetry")
+        let sensitive_forwarding = "203.0.113.44, 10.1.0.1";
+        let mut request = Request::get("/readyz?probe=telemetry")
             .header("content-type", "application/json")
             .header("authorization", sensitive_authorization)
+            .header("x-forwarded-for", sensitive_forwarding)
             .header("user-agent", "BleatTelemetryTest/1.0")
             .header(
                 "traceparent",
@@ -469,6 +489,11 @@ mod tests {
             )
             .body(Body::from(sensitive_body))
             .expect("valid request");
+        request.extensions_mut().insert(ConnectInfo(
+            "10.0.0.9:43123"
+                .parse::<std::net::SocketAddr>()
+                .expect("test peer address should parse"),
+        ));
 
         async {
             let response = router(&config, sea_orm::DatabaseConnection::default())
@@ -495,6 +520,8 @@ mod tests {
         let local_output = local.contents();
         assert!(local_output.contains("request completed"));
         assert!(local_output.contains("exporter-local-only"));
+        assert!(local_output.contains("forwarding diagnostics"));
+        assert!(local_output.contains(sensitive_forwarding));
         assert!(!local_output.contains(sensitive_body));
         assert!(!local_output.contains(sensitive_authorization));
 
@@ -502,7 +529,9 @@ mod tests {
             .get_finished_spans()
             .expect("test spans should be readable");
         assert_eq!(spans.len(), 1);
-        assert_eq!(spans[0].name, "http.request");
+        assert_eq!(spans[0].name, "GET /readyz");
+        assert_eq!(spans[0].span_kind, SpanKind::Server);
+        assert_eq!(spans[0].status, Status::error(""));
         assert_eq!(
             spans[0].span_context.trace_id(),
             TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736").expect("trace ID should parse")
@@ -535,6 +564,22 @@ mod tests {
             span_attribute(&spans[0].attributes, "http.response.status_code"),
             Some(&Value::I64(503))
         );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "error.type"),
+            Some(&Value::String("503".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "network.peer.address"),
+            Some(&Value::String("10.0.0.9".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "network.peer.port"),
+            Some(&Value::I64(43_123))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "client.address"),
+            Some(&Value::String("203.0.113.44".into()))
+        );
         assert!(spans[0].events.is_empty());
         assert!(!format!("{spans:?}").contains(sensitive_body));
         assert!(!format!("{spans:?}").contains(sensitive_authorization));
@@ -555,6 +600,7 @@ mod tests {
         );
         let logs_debug = format!("{logs:?}");
         assert!(!logs_debug.contains("exporter-local-only"));
+        assert!(!logs_debug.contains(sensitive_forwarding));
         assert!(!logs_debug.contains(sensitive_body));
         assert!(!logs_debug.contains(sensitive_authorization));
 
@@ -566,6 +612,216 @@ mod tests {
             .expect("test logger should shut down");
         assert!(span_exporter.is_shutdown_called());
         assert!(log_exporter.is_shutdown_called());
+    }
+
+    #[tokio::test]
+    async fn exported_http_server_spans_classify_routes_statuses_and_proxy_addresses() {
+        let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let span_exporter = InMemorySpanExporter::default();
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_sampler(Sampler::AlwaysOn)
+            .with_simple_exporter(span_exporter.clone())
+            .build();
+        let subscriber = Registry::default().with(
+            tracing_opentelemetry::layer()
+                .with_tracer(tracer_provider.tracer("bleat-api"))
+                .with_filter(filter_fn(export_trace_metadata)),
+        );
+        let direct_peer = "198.51.100.20:41000"
+            .parse::<std::net::SocketAddr>()
+            .expect("direct peer should parse");
+        let trusted_peer = "10.0.0.9:42000"
+            .parse::<std::net::SocketAddr>()
+            .expect("trusted peer should parse");
+
+        let mut requests = Vec::new();
+        let mut direct_success = request_with_peer(Method::GET, "/healthz", direct_peer);
+        direct_success.headers_mut().insert(
+            "x-forwarded-for",
+            "203.0.113.200"
+                .parse()
+                .expect("spoofed forwarding header should parse"),
+        );
+        requests.push((
+            test_config(LogFormat::Compact, "bleat_api=info"),
+            direct_success,
+        ));
+        requests.push((
+            test_config(LogFormat::Compact, "bleat_api=info"),
+            request_with_peer(Method::POST, "/healthz", direct_peer),
+        ));
+        requests.push((
+            test_config(LogFormat::Compact, "bleat_api=info"),
+            request_with_peer(Method::GET, "/readyz", direct_peer),
+        ));
+        requests.push((
+            test_config(LogFormat::Compact, "bleat_api=info"),
+            request_with_peer(
+                Method::GET,
+                "/sensitive-unmatched-value?token=query-marker",
+                direct_peer,
+            ),
+        ));
+
+        let mut cloudflare = test_config(LogFormat::Compact, "bleat_api=info");
+        cloudflare.trusted_proxies = TrustedProxyConfig::new(
+            vec!["10.0.0.0/8".to_owned()],
+            vec![ForwardingHeader::Cloudflare],
+            false,
+        )
+        .expect("Cloudflare test configuration should validate");
+        let mut cloudflare_request = request_with_peer(Method::GET, "/healthz", trusted_peer);
+        cloudflare_request.headers_mut().insert(
+            "cf-connecting-ip",
+            "240.0.0.7"
+                .parse()
+                .expect("pseudo IPv4 header should parse"),
+        );
+        cloudflare_request.headers_mut().insert(
+            "cf-connecting-ipv6",
+            "2001:db8::7"
+                .parse()
+                .expect("visitor IPv6 header should parse"),
+        );
+        requests.push((cloudflare, cloudflare_request));
+
+        let mut xff = test_config(LogFormat::Compact, "bleat_api=info");
+        xff.trusted_proxies = TrustedProxyConfig::new(
+            vec!["10.0.0.0/8".to_owned()],
+            vec![ForwardingHeader::XForwardedFor],
+            false,
+        )
+        .expect("X-Forwarded-For test configuration should validate");
+        let mut xff_request = request_with_peer(Method::GET, "/healthz", trusted_peer);
+        xff_request.headers_mut().insert(
+            "x-forwarded-for",
+            "203.0.113.9, 10.1.1.1"
+                .parse()
+                .expect("forwarded chain should parse"),
+        );
+        requests.push((xff, xff_request));
+
+        let mut forwarded = test_config(LogFormat::Compact, "bleat_api=info");
+        forwarded.trusted_proxies = TrustedProxyConfig::new(
+            vec!["10.0.0.0/8".to_owned()],
+            vec![ForwardingHeader::Forwarded],
+            false,
+        )
+        .expect("Forwarded test configuration should validate");
+        let mut forwarded_request = request_with_peer(Method::GET, "/healthz", trusted_peer);
+        forwarded_request.headers_mut().insert(
+            "forwarded",
+            "for=203.0.113.10;proto=https, for=10.1.1.2"
+                .parse()
+                .expect("RFC 7239 chain should parse"),
+        );
+        requests.push((forwarded, forwarded_request));
+
+        let mut conflict = test_config(LogFormat::Compact, "bleat_api=info");
+        conflict.trusted_proxies =
+            TrustedProxyConfig::new(vec!["10.0.0.0/8".to_owned()], Vec::new(), false)
+                .expect("implicit all-family configuration should validate");
+        let mut conflict_request = request_with_peer(Method::GET, "/healthz", trusted_peer);
+        conflict_request.headers_mut().insert(
+            "cf-connecting-ip",
+            "203.0.113.11"
+                .parse()
+                .expect("Cloudflare conflict header should parse"),
+        );
+        conflict_request.headers_mut().insert(
+            "x-forwarded-for",
+            "203.0.113.12"
+                .parse()
+                .expect("X-Forwarded-For conflict header should parse"),
+        );
+        requests.push((conflict, conflict_request));
+
+        let statuses = async {
+            let mut statuses = Vec::new();
+            for (config, request) in requests {
+                let response = router(&config, sea_orm::DatabaseConnection::default())
+                    .expect("router should build")
+                    .oneshot(request)
+                    .await
+                    .expect("router should respond");
+                statuses.push(response.status());
+            }
+            statuses
+        }
+        .with_subscriber(subscriber)
+        .await;
+        assert_eq!(
+            statuses,
+            [
+                StatusCode::OK,
+                StatusCode::METHOD_NOT_ALLOWED,
+                StatusCode::SERVICE_UNAVAILABLE,
+                StatusCode::NOT_FOUND,
+                StatusCode::OK,
+                StatusCode::OK,
+                StatusCode::OK,
+                StatusCode::OK,
+            ]
+        );
+
+        tracer_provider
+            .force_flush()
+            .expect("test spans should flush");
+        let spans = span_exporter
+            .get_finished_spans()
+            .expect("test spans should be readable");
+        assert_eq!(spans.len(), 8);
+        assert_eq!(spans[0].name, "GET /healthz");
+        assert_eq!(spans[1].name, "POST /healthz");
+        assert_eq!(spans[2].name, "GET /readyz");
+        assert_eq!(spans[3].name, "GET");
+        assert!(spans.iter().all(|span| span.span_kind == SpanKind::Server));
+        assert_eq!(spans[0].status, Status::Unset);
+        assert_eq!(spans[1].status, Status::Unset);
+        assert_eq!(spans[2].status, Status::error(""));
+        assert_eq!(spans[3].status, Status::Unset);
+        assert_eq!(
+            span_attribute(&spans[2].attributes, "error.type"),
+            Some(&Value::String("503".into()))
+        );
+        assert!(span_attribute(&spans[1].attributes, "error.type").is_none());
+        assert!(span_attribute(&spans[3].attributes, "http.route").is_none());
+        assert_eq!(
+            span_attribute(&spans[3].attributes, "url.path"),
+            Some(&Value::String("/*".into()))
+        );
+        assert!(!format!("{:?}", spans[3]).contains("sensitive-unmatched-value"));
+        assert!(!format!("{:?}", spans[3]).contains("query-marker"));
+        for (index, expected) in [
+            (0, "198.51.100.20"),
+            (4, "2001:db8::7"),
+            (5, "203.0.113.9"),
+            (6, "203.0.113.10"),
+            (7, "10.0.0.9"),
+        ] {
+            assert_eq!(
+                span_attribute(&spans[index].attributes, "client.address"),
+                Some(&Value::String(expected.into()))
+            );
+        }
+        for span in &spans {
+            assert!(span_attribute(&span.attributes, "http.request.method").is_some());
+            assert!(span_attribute(&span.attributes, "http.response.status_code").is_some());
+        }
+        tracer_provider
+            .shutdown()
+            .expect("test tracer should shut down");
+    }
+
+    fn request_with_peer(method: Method, uri: &str, peer: std::net::SocketAddr) -> Request<Body> {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .body(Body::empty())
+            .expect("test request should build");
+        request.extensions_mut().insert(ConnectInfo(peer));
+        request
     }
 
     fn span_attribute<'attributes>(
