@@ -1114,6 +1114,9 @@ actor PrivateCloudSyncStore {
     func removeAllRecords() {
         records.removeAll()
         defaults.removeObject(forKey: recordSystemFieldsKey)
+        if pendingConfigurationConflictIsInvalid {
+            clearPendingConfigurationConflict()
+        }
     }
 
     func ignoreAccountOnThisDevice(
