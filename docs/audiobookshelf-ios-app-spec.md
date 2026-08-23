@@ -1627,8 +1627,11 @@ when authentication and OTLP origins are configured, production creates one
 ephemeral `URLSession` using the platform-best Darwin TLS transport and system
 trust. Every export resolves the current memory-only token immediately before
 the OTLP/HTTP protobuf request and attaches exactly one bearer authorization
-header. A typed HTTP 401
-unauthenticated result compare-invalidates the rejected token and permits one
+header. OTLP/HTTP is required for the production route because Cloudflare
+Tunnel [does not support gRPC through a public
+hostname](https://developers.cloudflare.com/network/grpc-connections/); HTTPS
+and platform TLS validation remain mandatory. A typed HTTP 401 unauthenticated
+result compare-invalidates the rejected token and permits one
 refresh/retry; permission rejection and transport failures do not retry inside
 the exporter and leave the persisted batch available to the existing bounded
 drain policy. Token renewal does not recreate the tracer provider, batch

@@ -1054,8 +1054,12 @@ private deployment material in the repository or container image.
 On iOS, the authentication service URL comes from
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/HTTP origin comes from
 `BLEAT_TELEMETRY_OTLP_ENDPOINT`; Release requires HTTPS and Debug permits HTTP
-only on loopback. Native macOS ignores these telemetry settings because remote
-export is out of scope on that platform.
+only on loopback. OTLP/HTTP protobuf is intentional: the production public
+hostname is carried by Cloudflare Tunnel, whose
+[public-hostname mode does not support gRPC](https://developers.cloudflare.com/network/grpc-connections/).
+This changes the OTLP transport framing, not the HTTPS requirement. Native
+macOS ignores these telemetry settings because remote export is out of scope on
+that platform.
 
 Run the disposable PostgreSQL and API stack locally with:
 
