@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
     str::FromStr,
@@ -51,6 +52,87 @@ impl std::fmt::Display for AppAttestEnvironment {
 pub enum LogFormat {
     Compact,
     Json,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+pub enum ForwardingHeader {
+    Cloudflare,
+    Forwarded,
+    XForwardedFor,
+}
+
+impl ForwardingHeader {
+    pub const ALL: [Self; 3] = [Self::Cloudflare, Self::Forwarded, Self::XForwardedFor];
+}
+
+impl std::fmt::Display for ForwardingHeader {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cloudflare => formatter.write_str("cloudflare"),
+            Self::Forwarded => formatter.write_str("forwarded"),
+            Self::XForwardedFor => formatter.write_str("x-forwarded-for"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustedProxyConfig {
+    cidrs: Vec<ipnet::IpNet>,
+    forwarding_headers: Vec<ForwardingHeader>,
+    pub debug: bool,
+}
+
+impl TrustedProxyConfig {
+    pub(crate) fn new(
+        cidr_values: Vec<String>,
+        mut forwarding_headers: Vec<ForwardingHeader>,
+        debug: bool,
+    ) -> Result<Self, ConfigError> {
+        if cidr_values.is_empty() && !forwarding_headers.is_empty() {
+            return Err(ConfigError::ForwardingHeadersRequireTrustedProxies);
+        }
+        if !cidr_values.is_empty() && forwarding_headers.is_empty() {
+            forwarding_headers.extend(ForwardingHeader::ALL);
+        }
+
+        let mut cidrs = Vec::with_capacity(cidr_values.len());
+        let mut unique_cidrs = HashSet::with_capacity(cidr_values.len());
+        for value in cidr_values {
+            let cidr = value
+                .trim()
+                .parse::<ipnet::IpNet>()
+                .map_err(|_| ConfigError::InvalidTrustedProxyCidr)?;
+            if cidr.prefix_len() == 0 {
+                return Err(ConfigError::UniversalTrustedProxyCidr);
+            }
+            if !unique_cidrs.insert(cidr) {
+                return Err(ConfigError::DuplicateTrustedProxyCidr);
+            }
+            cidrs.push(cidr);
+        }
+
+        let mut unique_headers = HashSet::with_capacity(forwarding_headers.len());
+        if forwarding_headers
+            .iter()
+            .any(|header| !unique_headers.insert(*header))
+        {
+            return Err(ConfigError::DuplicateForwardingHeader);
+        }
+
+        Ok(Self {
+            cidrs,
+            forwarding_headers,
+            debug,
+        })
+    }
+
+    pub fn cidrs(&self) -> &[ipnet::IpNet] {
+        &self.cidrs
+    }
+
+    pub fn forwarding_headers(&self) -> &[ForwardingHeader] {
+        &self.forwarding_headers
+    }
 }
 
 impl std::fmt::Display for LogFormat {
@@ -161,6 +243,20 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_MAX_CONCURRENT_REQUESTS", default_value_t = 64)]
     pub max_concurrent_requests: usize,
 
+    #[arg(long, env = "BLEAT_API_TRUSTED_PROXY_CIDRS", value_delimiter = ',')]
+    pub trusted_proxy_cidrs: Vec<String>,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_TRUSTED_FORWARDING_HEADERS",
+        value_enum,
+        value_delimiter = ','
+    )]
+    pub trusted_forwarding_headers: Vec<ForwardingHeader>,
+
+    #[arg(long, env = "BLEAT_API_FORWARDING_DEBUG", default_value_t = false)]
+    pub forwarding_debug: bool,
+
     #[arg(long, env = "BLEAT_API_LOG_FILTER", default_value = DEFAULT_LOG_FILTER)]
     pub log_filter: String,
 
@@ -188,6 +284,7 @@ pub struct Config {
     pub request_timeout: Duration,
     pub max_request_body_bytes: usize,
     pub max_concurrent_requests: usize,
+    pub trusted_proxies: TrustedProxyConfig,
     pub log_filter: String,
     pub log_format: LogFormat,
     pub telemetry: TelemetryExportConfig,
@@ -272,6 +369,11 @@ impl Config {
             arguments.database_max_connections,
             Duration::from_secs(arguments.database_connect_timeout_seconds),
         )?;
+        let trusted_proxies = TrustedProxyConfig::new(
+            arguments.trusted_proxy_cidrs,
+            arguments.trusted_forwarding_headers,
+            arguments.forwarding_debug,
+        )?;
         let config = Self {
             bind_address: arguments.bind_address,
             public_issuer: arguments.public_issuer,
@@ -295,6 +397,7 @@ impl Config {
             request_timeout: Duration::from_secs(arguments.request_timeout_seconds),
             max_request_body_bytes: arguments.max_request_body_bytes,
             max_concurrent_requests: arguments.max_concurrent_requests,
+            trusted_proxies,
             log_filter: arguments.log_filter,
             log_format: arguments.log_format,
             telemetry,
@@ -452,6 +555,16 @@ pub enum ConfigError {
     ProductionSigningConfigurationOnly,
     #[error("App Attest validation categories must use an Apple application category")]
     InvalidAppAttestValidationCategory,
+    #[error("trusted forwarding headers require at least one trusted proxy CIDR")]
+    ForwardingHeadersRequireTrustedProxies,
+    #[error("trusted proxy CIDRs must be valid IPv4 or IPv6 networks")]
+    InvalidTrustedProxyCidr,
+    #[error("trusted proxy CIDRs must not trust the entire IPv4 or IPv6 address space")]
+    UniversalTrustedProxyCidr,
+    #[error("trusted proxy CIDRs must not contain duplicates")]
+    DuplicateTrustedProxyCidr,
+    #[error("trusted forwarding headers must not contain duplicates")]
+    DuplicateForwardingHeader,
     #[error("{0} must be an absolute HTTP or HTTPS URL without a query or fragment")]
     InvalidOtlpEndpoint(&'static str),
     #[error("{0} must be http/protobuf when configured")]
@@ -569,6 +682,9 @@ mod tests {
             request_timeout_seconds: 10,
             max_request_body_bytes: 65_536,
             max_concurrent_requests: 64,
+            trusted_proxy_cidrs: Vec::new(),
+            trusted_forwarding_headers: Vec::new(),
+            forwarding_debug: false,
             log_filter: DEFAULT_LOG_FILTER.to_owned(),
             log_format: LogFormat::Compact,
         }
@@ -605,8 +721,79 @@ mod tests {
         assert!(config.jwt_signing_key_file.is_none());
         assert!(config.jwt_public_key_set_file.is_none());
         assert_eq!(config.jwt_algorithm(), compact_jwt::JwaAlg::ES256);
+        assert!(config.trusted_proxies.cidrs().is_empty());
+        assert!(config.trusted_proxies.forwarding_headers().is_empty());
+        assert!(!config.trusted_proxies.debug);
         assert!(!config.telemetry.traces_enabled);
         assert!(!config.telemetry.logs_enabled);
+    }
+
+    #[test]
+    fn trusted_proxy_configuration_is_explicit_and_fails_closed() {
+        let implicit_all = config(|arguments| {
+            arguments.trusted_proxy_cidrs = vec!["10.0.0.0/8".to_owned()];
+            arguments.forwarding_debug = true;
+        })
+        .expect("trusted CIDRs should enable every supported forwarding family");
+        assert_eq!(implicit_all.trusted_proxies.cidrs().len(), 1);
+        assert_eq!(
+            implicit_all.trusted_proxies.forwarding_headers(),
+            &ForwardingHeader::ALL
+        );
+        assert!(implicit_all.trusted_proxies.debug);
+
+        let explicit_subset = config(|arguments| {
+            arguments.trusted_proxy_cidrs = vec!["10.0.0.0/8".to_owned()];
+            arguments.trusted_forwarding_headers = vec![ForwardingHeader::Cloudflare];
+        })
+        .expect("an explicit forwarding family should validate");
+        assert_eq!(
+            explicit_subset.trusted_proxies.forwarding_headers(),
+            &[ForwardingHeader::Cloudflare]
+        );
+
+        assert_eq!(
+            config(|arguments| {
+                arguments.trusted_forwarding_headers = vec![ForwardingHeader::Forwarded];
+            })
+            .expect_err("forwarding headers without trusted peers must fail"),
+            ConfigError::ForwardingHeadersRequireTrustedProxies
+        );
+        assert_eq!(
+            config(|arguments| {
+                arguments.trusted_proxy_cidrs = vec!["not-a-network".to_owned()];
+            })
+            .expect_err("invalid networks must fail"),
+            ConfigError::InvalidTrustedProxyCidr
+        );
+        for universal in ["0.0.0.0/0", "::/0"] {
+            assert_eq!(
+                config(|arguments| {
+                    arguments.trusted_proxy_cidrs = vec![universal.to_owned()];
+                })
+                .expect_err("universal trust must fail"),
+                ConfigError::UniversalTrustedProxyCidr
+            );
+        }
+        assert_eq!(
+            config(|arguments| {
+                arguments.trusted_proxy_cidrs =
+                    vec!["10.0.0.0/8".to_owned(), "10.0.0.0/8".to_owned()];
+            })
+            .expect_err("duplicate networks must fail"),
+            ConfigError::DuplicateTrustedProxyCidr
+        );
+        assert_eq!(
+            config(|arguments| {
+                arguments.trusted_proxy_cidrs = vec!["10.0.0.0/8".to_owned()];
+                arguments.trusted_forwarding_headers = vec![
+                    ForwardingHeader::XForwardedFor,
+                    ForwardingHeader::XForwardedFor,
+                ];
+            })
+            .expect_err("duplicate forwarding families must fail"),
+            ConfigError::DuplicateForwardingHeader
+        );
     }
 
     #[test]

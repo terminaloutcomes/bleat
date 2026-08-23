@@ -645,6 +645,7 @@ dependencies = [
  "compact_jwt",
  "getrandom 0.4.3",
  "http-body-util",
+ "ipnet",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-http",
