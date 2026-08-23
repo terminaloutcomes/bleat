@@ -18,7 +18,7 @@ public enum DownloadPlanRequestError: Error, Equatable, Sendable {
     case invalidPlan(DownloadPlanError)
 }
 
-extension AuthCoordinator: DownloadRequestAuthorizing {
+extension AuthCoordinator {
     public func downloadPlan(
         accountID: AccountID,
         server: NormalizedServerURL,

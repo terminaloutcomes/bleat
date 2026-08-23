@@ -96,20 +96,23 @@ public enum DownloadRangeError: Error, Equatable, Sendable {
 }
 
 public struct DownloadChunkTaskDescription: Codable, Equatable, Sendable {
-    public static let prefix = "bleat-download-chunk-v1:"
+    public static let prefix = "bleat-download-chunk-v2:"
 
     public let identity: DownloadTaskIdentity
     public let range: DownloadByteRange
     public let validator: DownloadValidator?
+    public let transferID: UUID
 
     public init(
         identity: DownloadTaskIdentity,
         range: DownloadByteRange,
-        validator: DownloadValidator?
+        validator: DownloadValidator?,
+        transferID: UUID = UUID()
     ) {
         self.identity = identity
         self.range = range
         self.validator = validator
+        self.transferID = transferID
     }
 
     public func encode() throws -> String {
@@ -124,7 +127,27 @@ public struct DownloadChunkTaskDescription: Codable, Equatable, Sendable {
         else {
             throw DownloadRangeError.invalidRange
         }
-        return try JSONDecoder().decode(Self.self, from: data)
+        let decoded = try JSONDecoder().decode(Self.self, from: data)
+        guard decoded.identity.isValid,
+            decoded.range.start >= 0,
+            decoded.range.endInclusive >= decoded.range.start,
+            decoded.range.endInclusive < decoded.identity.expectedByteLength,
+            Self.isValid(decoded.validator)
+        else {
+            throw DownloadRangeError.invalidRange
+        }
+        return decoded
+    }
+
+    private static func isValid(_ validator: DownloadValidator?) -> Bool {
+        switch validator {
+        case nil:
+            true
+        case .strongETag(let value):
+            !value.isEmpty && !value.hasPrefix("W/")
+        case .lastModified(let value):
+            !value.isEmpty
+        }
     }
 }
 

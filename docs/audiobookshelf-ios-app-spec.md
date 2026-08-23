@@ -1097,8 +1097,8 @@ Partial books remain inspectable and retryable. Completed files are never silent
 - Never apply automatic cleanup to an explicit full-book download.
 - Completed automatic files outside the current window continue to count
   toward actual storage while being excluded from window progress.
-- Automatic records written before window targets were persisted are
-  regenerable and are removed before background-task restoration.
+- Incomplete download records without current ranged-transfer metadata are
+  invalid and are deleted. Byte-valid finalized books remain available.
 - Never evict the currently playing track.
 - If iOS removes or corrupts a local file, mark the download partial and offer repair instead of crashing.
 
@@ -1426,8 +1426,8 @@ Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, a
 | `ProgressCoordinator` actor | Durable checkpoints, session accounting, conflict resolution |
 | `StatisticsRepository` actor | Local slice recording, remote-session import, deduplication, metric aggregation, coverage labels, and export/import |
 | `PlaybackRouteAdapter` | Builds version-verified public-session or HLS media URLs from a playback session |
-| `DownloadCoordinator` actor | Queue and manifest state |
-| `BackgroundDownloadDelegate` | URLSession background callbacks forwarded into the coordinator |
+| `DownloadModel` | Main-actor download intent and transfer reconciliation |
+| `DownloadStorage` actor | Validated manifests, ranged partial bytes, and finalized media |
 | `NowPlayingCoordinator` | MediaPlayer metadata and remote commands |
 | `CarPlayCoordinator` | Active-account CarPlay templates, generation-safe browsing, selection, artwork, and Now Playing presentation |
 
@@ -1824,7 +1824,8 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 - Playback must survive SwiftUI view reconstruction and account-tab changes.
 - An app crash/relaunch loses no more than five seconds of local position.
 - A failed token refresh affects one account, not global app state.
-- Download task restoration is deterministic after relaunch.
+- Valid ranged download tasks are restored deterministically after relaunch;
+  invalid or obsolete background tasks are cancelled.
 - Repeated play taps cannot create multiple simultaneous server sessions.
 
 The following targets apply to the deferred post-MVP statistics work tracked in

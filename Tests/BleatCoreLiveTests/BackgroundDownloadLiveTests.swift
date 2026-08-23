@@ -58,24 +58,28 @@ final class BackgroundDownloadLiveTests: XCTestCase {
                 server: server,
                 itemID: itemID
             )
-            let registry = LiveDownloadTaskRegistry()
-            let scheduler = LiveDownloadScheduler(registry: registry)
-            let coordinator = DownloadCoordinator(
-                scheduler: scheduler,
-                authorizer: authCoordinator
-            )
             let downloadID = DownloadID(
                 rawValue: "\(accountID.rawValue)-\(itemOffset)"
             )
-            let scheduled = try await coordinator.schedule(
-                plan: plan,
-                accountID: accountID,
-                server: server,
-                downloadID: downloadID
-            )
-            let requests = await registry.requests()
+            var identities: [DownloadTaskIdentity] = []
+            var requests: [URLRequest] = []
+            for track in plan.tracks {
+                let identity = try DownloadTaskIdentity(
+                    downloadID: downloadID,
+                    accountID: accountID,
+                    itemID: itemID,
+                    track: track
+                )
+                identities.append(identity)
+                requests.append(
+                    try await authCoordinator.makeAuthorizedDownloadRequest(
+                        identity: identity,
+                        server: server
+                    )
+                )
+            }
 
-            XCTAssertEqual(scheduled.count, plan.tracks.count)
+            XCTAssertEqual(identities.count, plan.tracks.count)
             XCTAssertEqual(requests.count, plan.tracks.count)
             var manifest = try DownloadManifest(
                 downloadID: downloadID,
@@ -132,17 +136,13 @@ final class BackgroundDownloadLiveTests: XCTestCase {
             )
             XCTAssertEqual(unauthorized.statusCode, 401)
 
-            let replacement =
-                try await coordinator
-                .replaceUnauthorizedTask(
-                    identity: scheduled[0].identity,
+            let replacementRequest =
+                try await authCoordinator
+                .makeReplacementDownloadRequest(
+                    identity: identities[0],
                     server: server,
                     rejectedRequest: rejectedRequest
                 )
-            let requestsAfterReplacement = await registry.requests()
-            let replacementRequest = try XCTUnwrap(
-                requestsAfterReplacement.last
-            )
             XCTAssertNotEqual(
                 replacementRequest.value(
                     forHTTPHeaderField: "Authorization"
@@ -152,7 +152,6 @@ final class BackgroundDownloadLiveTests: XCTestCase {
                 )
             )
             XCTAssertNil(replacementRequest.url?.query)
-            XCTAssertEqual(replacement.identity, scheduled[0].identity)
             let replacementResponse = try await transport.send(
                 TracedHTTPRequest(
                     request: replacementRequest,
@@ -165,21 +164,6 @@ final class BackgroundDownloadLiveTests: XCTestCase {
                 plan.tracks[0].expectedByteLength
             )
 
-            let relaunchedCoordinator = DownloadCoordinator(
-                scheduler: LiveDownloadScheduler(registry: registry),
-                authorizer: authCoordinator
-            )
-            let restored = await relaunchedCoordinator.restoreTasks()
-            XCTAssertEqual(restored.count, scheduled.count + 1)
-            XCTAssertTrue(
-                restored.allSatisfy {
-                    guard case .restored(let identity) = $0.state else {
-                        return false
-                    }
-                    return identity.accountID == accountID
-                        && identity.itemID == itemID
-                        && identity.downloadID == downloadID
-                })
         }
     }
 
@@ -230,54 +214,6 @@ final class BackgroundDownloadLiveTests: XCTestCase {
         return items.results.map(\.id)
     }
 
-}
-
-private actor LiveDownloadTaskRegistry {
-    private var snapshots: [BackgroundDownloadTaskSnapshot] = []
-    private var recordedRequests: [URLRequest] = []
-    private var nextIdentifier = 1
-
-    func schedule(
-        request: URLRequest,
-        taskDescription: String
-    ) -> Int {
-        let identifier = nextIdentifier
-        nextIdentifier += 1
-        recordedRequests.append(request)
-        snapshots.append(
-            .init(
-                taskIdentifier: identifier,
-                taskDescription: taskDescription,
-                originalRequest: request
-            ))
-        return identifier
-    }
-
-    func taskSnapshots() -> [BackgroundDownloadTaskSnapshot] {
-        snapshots
-    }
-
-    func requests() -> [URLRequest] {
-        recordedRequests
-    }
-}
-
-private struct LiveDownloadScheduler: BackgroundDownloadScheduling {
-    let registry: LiveDownloadTaskRegistry
-
-    func schedule(
-        request: URLRequest,
-        taskDescription: String
-    ) async -> Int {
-        await registry.schedule(
-            request: request,
-            taskDescription: taskDescription
-        )
-    }
-
-    func taskSnapshots() async -> [BackgroundDownloadTaskSnapshot] {
-        await registry.taskSnapshots()
-    }
 }
 
 private struct DownloadLiveLibrariesResponse: Decodable {

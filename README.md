@@ -945,9 +945,9 @@ swift test --filter MetadataEditingTests
 ```
 
 The background-download foundation covers expanded-item plan decoding, safe
-file identities, stable task restoration, bearer-only per-file requests, 401
-replacement, opaque account/book storage paths, protected atomic records,
-byte-exact final placement, relaunch recovery, and scoped deletion:
+ranged task identities, bearer-only per-file requests, 401 replacement,
+opaque account/book storage paths, protected atomic records, byte-exact final
+placement, relaunch reconciliation, invalid-state cleanup, and scoped deletion:
 
 ```sh
 swift test --filter BackgroundDownloadTests

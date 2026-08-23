@@ -290,7 +290,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].state = .complete
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = placement
-        state = .partial
+        updateIncompleteState()
     }
 
     public mutating func markFailed(

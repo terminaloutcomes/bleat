@@ -56,20 +56,29 @@ public struct DownloadStorageRequirement: Equatable, Sendable {
             }
             expected = sum
         }
+        try self.init(expectedBytes: expected)
+    }
+
+    public init(
+        expectedBytes: Int64
+    ) throws(DownloadStorageError) {
+        guard expectedBytes >= 0 else {
+            throw .requirementOverflow
+        }
         let safetyMargin =
-            expected == 0
+            expectedBytes == 0
             ? 0
             : max(
                 Self.minimumSafetyMarginBytes,
-                expected / 10
+                expectedBytes / 10
             )
-        let (required, overflow) = expected.addingReportingOverflow(
+        let (required, overflow) = expectedBytes.addingReportingOverflow(
             safetyMargin
         )
         guard !overflow else {
             throw .requirementOverflow
         }
-        expectedBytes = expected
+        self.expectedBytes = expectedBytes
         safetyMarginBytes = safetyMargin
         requiredBytes = required
     }
@@ -285,62 +294,6 @@ public struct DownloadStorageLayout: Sendable {
         }
     }
 
-    public func placeDownloadedFile(
-        from temporaryURL: URL,
-        identity: DownloadTaskIdentity
-    ) throws(DownloadStorageError) -> Int64 {
-        let fileManager = FileManager.default
-        guard temporaryURL.isFileURL,
-            fileManager.fileExists(atPath: temporaryURL.path)
-        else {
-            throw .invalidTemporaryFile
-        }
-        let observed = Self.fileSize(at: temporaryURL)
-        guard observed == identity.expectedByteLength else {
-            throw .byteLengthMismatch(
-                expected: identity.expectedByteLength,
-                observed: observed
-            )
-        }
-        let directory = bookDirectory(
-            accountID: identity.accountID,
-            itemID: identity.itemID
-        )
-        let destination = destinationURL(for: identity)
-        let partial = directory.appendingPathComponent(
-            identity.destinationEntry + ".partial",
-            isDirectory: false
-        )
-        do {
-            try fileManager.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-            try Self.excludeFromBackup(directory)
-            if fileManager.fileExists(atPath: partial.path) {
-                try fileManager.removeItem(at: partial)
-            }
-            try fileManager.moveItem(at: temporaryURL, to: partial)
-            if fileManager.fileExists(atPath: destination.path) {
-                try fileManager.removeItem(at: destination)
-            }
-            try fileManager.moveItem(at: partial, to: destination)
-            #if os(iOS)
-                try fileManager.setAttributes(
-                    [
-                        .protectionKey:
-                            FileProtectionType
-                            .completeUntilFirstUserAuthentication
-                    ],
-                    ofItemAtPath: destination.path
-                )
-            #endif
-        } catch {
-            throw .persistenceFailed
-        }
-        return observed
-    }
-
     fileprivate func availableCapacity()
         throws(DownloadStorageError) -> Int64
     {
@@ -418,6 +371,53 @@ public actor DownloadStorage {
         tracks: [DownloadTrackPlan]
     ) throws(DownloadStorageError) -> DownloadStorageRequirement {
         let requirement = try DownloadStorageRequirement(tracks: tracks)
+        return try preflight(requirement)
+    }
+
+    public func preflightRemaining(
+        record: DownloadedBookRecord,
+        tracks: [DownloadTrackPlan]
+    ) throws(DownloadStorageError) -> DownloadStorageRequirement {
+        var remainingBytes: Int64 = 0
+        for track in tracks {
+            guard
+                let entry = record.manifest.entries.first(where: {
+                    $0.trackIndex == track.index
+                        && $0.expectedByteLength == track.expectedByteLength
+                        && $0.destinationEntry == track.destinationEntry
+                })
+            else {
+                throw .trackNotFound
+            }
+            let identity: DownloadTaskIdentity
+            do {
+                identity = try DownloadTaskIdentity(
+                    downloadID: record.manifest.downloadID,
+                    accountID: record.manifest.accountID,
+                    itemID: record.manifest.itemID,
+                    track: track
+                )
+            } catch {
+                throw .invalidStoredRecord
+            }
+            let committed = try layout.partialByteLength(for: identity)
+            let remaining = max(entry.expectedByteLength - committed, 0)
+            let (sum, overflow) = remainingBytes.addingReportingOverflow(
+                remaining
+            )
+            guard !overflow else {
+                throw .requirementOverflow
+            }
+            remainingBytes = sum
+        }
+        return try preflight(
+            DownloadStorageRequirement(expectedBytes: remainingBytes)
+        )
+    }
+
+    private func preflight(
+        _ requirement: DownloadStorageRequirement
+    ) throws(DownloadStorageError) -> DownloadStorageRequirement {
         try requirement.validate(
             availableBytes: layout.availableCapacity()
         )
@@ -777,21 +777,42 @@ public actor DownloadStorage {
         var records: [DownloadedBookRecord] = []
         for case let url as URL in enumerator
         where url.lastPathComponent == "record.json" {
+            let record: DownloadedBookRecord
             do {
                 let data = try Data(contentsOf: url)
-                let record = try decoder.decode(
+                record = try decoder.decode(
                     DownloadedBookRecord.self,
                     from: data
                 )
-                records.append(try reconcileCompletedFiles(in: record))
             } catch {
-                throw .invalidStoredRecord
+                try removeInvalidRecord(at: url, fileManager: fileManager)
+                continue
+            }
+            do {
+                records.append(try reconcileCompletedFiles(in: record))
+            } catch DownloadStorageError.invalidStoredRecord {
+                try removeInvalidRecord(at: url, fileManager: fileManager)
+            } catch let error {
+                throw error
             }
         }
         return records.sorted {
             $0.detail.title.localizedStandardCompare(
                 $1.detail.title
             ) == .orderedAscending
+        }
+    }
+
+    private func removeInvalidRecord(
+        at recordURL: URL,
+        fileManager: FileManager
+    ) throws(DownloadStorageError) {
+        do {
+            try fileManager.removeItem(
+                at: recordURL.deletingLastPathComponent()
+            )
+        } catch {
+            throw .persistenceFailed
         }
     }
 
@@ -888,49 +909,103 @@ public actor DownloadStorage {
         var record = storedRecord
         var changed = false
         for entry in record.manifest.entries {
-            if entry.state != .complete {
-                guard
-                    let identity = try? identity(
-                        for: entry,
-                        in: record
-                    )
-                else {
-                    throw .invalidStoredRecord
-                }
-                let partialLength = try layout.partialByteLength(for: identity)
-                if partialLength != (entry.observedByteLength ?? 0) {
+            let directory = layout.bookDirectory(
+                accountID: record.manifest.accountID,
+                itemID: record.manifest.itemID
+            )
+            let destination = directory.appendingPathComponent(
+                entry.destinationEntry,
+                isDirectory: false
+            )
+            let finalizedLength = Self.fileSize(at: destination)
+            if finalizedLength == entry.expectedByteLength {
+                if entry.state != .complete
+                    || entry.placement != .finalized
+                    || entry.observedByteLength != entry.expectedByteLength
+                {
                     do {
-                        try record.manifest.reconcileStoredBytes(
+                        try record.manifest.markComplete(
                             trackIndex: entry.trackIndex,
-                            observedByteLength: partialLength
+                            observedByteLength: finalizedLength,
+                            placement: .finalized
                         )
                     } catch {
                         throw .invalidStoredRecord
                     }
                     changed = true
                 }
-                continue
-            }
-            let url =
-                layout
-                .bookDirectory(
-                    accountID: record.manifest.accountID,
-                    itemID: record.manifest.itemID
-                )
-                .appendingPathComponent(
-                    entry.destinationEntry,
+                let partial = directory.appendingPathComponent(
+                    entry.destinationEntry + ".partial",
                     isDirectory: false
                 )
-            let observed = Self.fileSize(at: url)
-            guard observed != entry.expectedByteLength else {
+                if FileManager.default.fileExists(atPath: partial.path) {
+                    do {
+                        try FileManager.default.removeItem(at: partial)
+                    } catch {
+                        throw .persistenceFailed
+                    }
+                }
                 continue
             }
+
+            if finalizedLength >= 0 {
+                do {
+                    try FileManager.default.removeItem(at: destination)
+                } catch {
+                    throw .persistenceFailed
+                }
+            }
+
+            guard let identity = try? identity(for: entry, in: record),
+                entry.inode != nil
+            else {
+                throw .invalidStoredRecord
+            }
+            let partialLength: Int64
             do {
-                try record.manifest.markPartial(
-                    trackIndex: entry.trackIndex,
-                    observedByteLength: max(observed, 0),
-                    placement: .temporary
-                )
+                partialLength = try layout.partialByteLength(for: identity)
+            } catch .partialFileTooLarge {
+                try discardPartial(identity)
+                do {
+                    try record.manifest.markFailed(
+                        trackIndex: entry.trackIndex,
+                        observedByteLength: 0
+                    )
+                } catch {
+                    throw .invalidStoredRecord
+                }
+                changed = true
+                continue
+            } catch {
+                throw error
+            }
+            if entry.state == .complete
+                || partialLength != (entry.observedByteLength ?? 0)
+            {
+                do {
+                    if entry.state == .complete {
+                        try record.manifest.markPartial(
+                            trackIndex: entry.trackIndex,
+                            observedByteLength: partialLength,
+                            placement: .temporary
+                        )
+                    } else {
+                        try record.manifest.reconcileStoredBytes(
+                            trackIndex: entry.trackIndex,
+                            observedByteLength: partialLength
+                        )
+                    }
+                } catch {
+                    throw .invalidStoredRecord
+                }
+                changed = true
+            }
+        }
+        if record.manifest.entries.allSatisfy({ $0.state == .complete }),
+            record.manifest.state != .complete
+        {
+            do {
+                try record.manifest.finish()
             } catch {
                 throw .invalidStoredRecord
             }
