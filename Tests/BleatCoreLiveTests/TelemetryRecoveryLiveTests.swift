@@ -53,10 +53,15 @@
             try environment.controller.stop(.api)
             defer { try? environment.controller.start(.api) }
 
-            let normalOutcome = completeNormalLibraryRefresh(
-                using: originalTracer
+            let normalRefresh = try completeNormalLibraryRefresh(
+                using: originalTracer,
+                cacheURL: storageURL.appendingPathComponent("library.cache")
             )
-            XCTAssertEqual(normalOutcome, .succeeded)
+            XCTAssertEqual(normalRefresh.cachedItemIdentifiers, ["offline-book"])
+            XCTAssertLessThan(
+                normalRefresh.telemetryDuration,
+                .milliseconds(100)
+            )
             originalPipeline.flush(timeout: 4)
             XCTAssertFalse(try batchFiles(at: storageURL).isEmpty)
             originalPipeline.deactivate()
@@ -141,8 +146,15 @@
             try environment.controller.stop(.collector)
             defer { try? environment.controller.start(.collector) }
 
-            let normalOutcome = completeNormalLibraryRefresh(using: tracer)
-            XCTAssertEqual(normalOutcome, .succeeded)
+            let normalRefresh = try completeNormalLibraryRefresh(
+                using: tracer,
+                cacheURL: storageURL.appendingPathComponent("library.cache")
+            )
+            XCTAssertEqual(normalRefresh.cachedItemIdentifiers, ["offline-book"])
+            XCTAssertLessThan(
+                normalRefresh.telemetryDuration,
+                .milliseconds(100)
+            )
             pipeline.flush(timeout: 4)
             XCTAssertFalse(try batchFiles(at: storageURL).isEmpty)
 
@@ -198,16 +210,32 @@
         }
 
         private func completeNormalLibraryRefresh(
-            using tracer: RemoteTelemetryTracer
-        ) -> RemoteTelemetryOutcome {
+            using tracer: RemoteTelemetryTracer,
+            cacheURL: URL
+        ) throws -> (
+            cachedItemIdentifiers: [String],
+            telemetryDuration: Duration
+        ) {
+            let cachedItemIdentifiers = ["offline-book"]
+            let encodedLibrary = try JSONEncoder().encode(cachedItemIdentifiers)
+            try encodedLibrary.write(to: cacheURL, options: .atomic)
+
+            let started = ContinuousClock.now
             let span = tracer.beginSpan(
                 operation: .libraryRefresh,
                 source: .offline,
                 retryBucket: .one
             )
-            let outcome = RemoteTelemetryOutcome.succeeded
-            span.end(outcome)
-            return outcome
+            span.end(.succeeded)
+            let telemetryDuration = started.duration(to: .now)
+
+            return (
+                try JSONDecoder().decode(
+                    [String].self,
+                    from: Data(contentsOf: cacheURL)
+                ),
+                telemetryDuration
+            )
         }
 
         private func verificationSpan() -> SpanData {

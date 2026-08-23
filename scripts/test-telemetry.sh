@@ -8,7 +8,6 @@ readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
 readonly database_password="test-${project_name}-${RANDOM}"
 readonly captured_data_prohibited_pattern='authorization|bearer|telemetry:write|installation|reader@example\.com|books\.example|secret audiobook|refresh-token|private/var|transcript words|search phrase|session/opaque'
-readonly retained_secret_pattern='postgres(ql)?://[^:[:space:]]+:[^@[:space:]]+@|authorization: bearer [A-Za-z0-9._-]{8,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
 test_succeeded=0
 
 export BLEAT_API_TEST_PORT="${port_base}"
@@ -26,13 +25,13 @@ cleanup() {
   trap - EXIT INT TERM
   if [[ "${test_succeeded}" != "1" ]]; then
     mkdir -p "${artifact_root}"
-    docker compose --project-name "${project_name}" --file "${compose_file}" \
+    if ! docker compose --project-name "${project_name}" --file "${compose_file}" \
       logs --no-color 2>&1 \
-      | sed -E \
-        -e 's#(postgres(ql)?://[^:[:space:]]+:)[^@[:space:]]+#\1[REDACTED]#g' \
-        -e 's#(authorization: bearer )[A-Za-z0-9._-]+#\1[REDACTED]#Ig' \
-        -e 's#eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+#[REDACTED_JWT]#g' \
-        >"${artifact_root}/containers.log" || true
+      | python3 scripts/telemetry_artifacts.py redact \
+        >"${artifact_root}/containers.log"; then
+      print -u2 "Telemetry failure artifact redaction failed"
+      exit_status=1
+    fi
     if [[ -d "${temporary_capture}" ]]; then
       for capture in "${temporary_capture}"/*.json(N); do
         jq --compact-output \
@@ -42,7 +41,7 @@ cleanup() {
       done
     fi
     if [[ -d "${artifact_root}" ]] \
-      && rg --quiet -i "${retained_secret_pattern}" "${artifact_root}"; then
+      && ! python3 scripts/telemetry_artifacts.py check "${artifact_root}"; then
       print -u2 "Unsafe telemetry failure artifacts were removed"
       rm -rf "${artifact_root}"
       exit_status=1
@@ -84,6 +83,8 @@ for production_key_variable in \
     exit 1
   fi
 done
+
+python3 -m unittest Tests/ScriptTests/test_telemetry_artifacts.py
 
 for test_suite in \
   TelemetryAuthenticationTests \
