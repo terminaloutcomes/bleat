@@ -170,6 +170,23 @@ pub enum CborValueKind {
     Other,
 }
 
+impl From<&Value> for CborValueKind {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Integer(_) => CborValueKind::Integer,
+            Value::Bytes(_) => CborValueKind::Bytes,
+            Value::Float(_) => CborValueKind::Float,
+            Value::Text(_) => CborValueKind::Text,
+            Value::Bool(_) => CborValueKind::Bool,
+            Value::Null => CborValueKind::Null,
+            Value::Tag(_, _) => CborValueKind::Tag,
+            Value::Array(_) => CborValueKind::Array,
+            Value::Map(_) => CborValueKind::Map,
+            _ => CborValueKind::Other,
+        }
+    }
+}
+
 impl CborValueKind {
     pub const fn metric_name(self) -> &'static str {
         match self {
@@ -1049,7 +1066,7 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
     let Value::Map(entries) = value else {
         return Err(malformed()
             .with_detail(AppAttestFailureDetail::ExtensionsNotMap)
-            .with_observed_type(cbor_value_kind(&value)));
+            .with_observed_type(CborValueKind::from(&value)));
     };
     if entries.len() != 2 {
         return Err(malformed()
@@ -1061,7 +1078,7 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
         let Value::Text(key) = key else {
             return Err(malformed()
                 .with_detail(AppAttestFailureDetail::ExtensionsKeyType)
-                .with_observed_type(cbor_value_kind(&key)));
+                .with_observed_type(CborValueKind::from(&key)));
         };
         if !["apple_validation_category_01", "apple_bundle_version_01"].contains(&key.as_str()) {
             return Err(malformed().with_detail(AppAttestFailureDetail::ExtensionsUnknownKey));
@@ -1083,7 +1100,7 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
         Some(value) => {
             return Err(malformed()
                 .with_detail(AppAttestFailureDetail::ValidationCategoryType)
-                .with_observed_type(cbor_value_kind(&value)));
+                .with_observed_type(CborValueKind::from(&value)));
         }
         None => {
             return Err(malformed().with_detail(AppAttestFailureDetail::ValidationCategoryMissing));
@@ -1094,7 +1111,7 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
         Some(value) => {
             return Err(malformed()
                 .with_detail(AppAttestFailureDetail::BundleVersionType)
-                .with_observed_type(cbor_value_kind(&value)));
+                .with_observed_type(CborValueKind::from(&value)));
         }
         None => {
             return Err(malformed().with_detail(AppAttestFailureDetail::BundleVersionMissing));
@@ -1110,21 +1127,6 @@ fn parse_claims(encoded: &[u8]) -> Result<AppAttestClaims, AppAttestVerification
         validation_category,
         bundle_version,
     })
-}
-
-fn cbor_value_kind(value: &Value) -> CborValueKind {
-    match value {
-        Value::Integer(_) => CborValueKind::Integer,
-        Value::Bytes(_) => CborValueKind::Bytes,
-        Value::Float(_) => CborValueKind::Float,
-        Value::Text(_) => CborValueKind::Text,
-        Value::Bool(_) => CborValueKind::Bool,
-        Value::Null => CborValueKind::Null,
-        Value::Tag(_, _) => CborValueKind::Tag,
-        Value::Array(_) => CborValueKind::Array,
-        Value::Map(_) => CborValueKind::Map,
-        _ => CborValueKind::Other,
-    }
 }
 
 fn verify_certificate_chain(
