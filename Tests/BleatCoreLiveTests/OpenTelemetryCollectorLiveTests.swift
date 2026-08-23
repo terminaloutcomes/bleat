@@ -122,6 +122,15 @@
                 ),
                 .failure
             )
+            XCTAssertEqual(
+                client.export(
+                    spans: [oversizedSpan()],
+                    metadata: [],
+                    timeout: 10,
+                    isActive: { true }
+                ),
+                .unauthenticated
+            )
 
             let logClient = HttpRemoteTelemetryOtlpLogClient(
                 endpoint: try XCTUnwrap(
@@ -169,6 +178,18 @@
                 ),
                 .success
             )
+            let maximumBatch = Array(repeating: span(), count: 128)
+            for _ in 0..<32 {
+                XCTAssertEqual(
+                    outageClient.export(
+                        spans: maximumBatch,
+                        metadata: [("authorization", "Bearer \(token)")],
+                        timeout: 10,
+                        isActive: { true }
+                    ),
+                    .success
+                )
+            }
         }
 
         private func span(extraAttribute: String? = nil) -> SpanData {

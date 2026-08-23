@@ -133,8 +133,10 @@ device receiver. It first runs the focused Swift telemetry and complete Rust
 authentication-service suites, then validates the Collector configurations and
 proves real JWT authentication, OTLP/HTTP delivery, rejection, request-size,
 outage recovery, relaunch without token persistence, and wire privacy behavior
-against generated test credentials. The criterion-to-test mapping is maintained
-in `docs/requirements-traceability.md`.
+against generated test credentials. It also resolves and asserts the exact
+Collector limits, exhausts the bounded exporter queue, and proves the capture
+sink remains isolated on its internal network. The criterion-to-test mapping is
+maintained in `docs/requirements-traceability.md`.
 
 Production verification must independently prove both receiver paths:
 

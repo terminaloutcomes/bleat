@@ -104,6 +104,22 @@ docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-collector validate --config=/etc/otelcol/config.yaml
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-capture validate --config=/etc/otelcol/config.yaml
+readonly collector_config="$(docker compose --project-name "${project_name}" \
+  --file "${compose_file}" run --rm --no-deps telemetry-collector \
+  print-config --config=/etc/otelcol/config.yaml --format=json)"
+jq -e '
+  .receivers["otlp/bleat"].protocols.grpc.max_recv_msg_size_mib == 1
+  and .receivers["otlp/bleat"].protocols.http.max_request_body_size == 1048576
+  and .processors.memory_limiter.limit_mib == 64
+  and .processors.memory_limiter.spike_limit_mib == 16
+  and .processors.batch.send_batch_size == 64
+  and .processors.batch.send_batch_max_size == 128
+  and .exporters["otlp/private"].sending_queue.queue_size == 8
+  and .exporters["otlp/private"].sending_queue.num_consumers == 1
+  and .exporters["otlp/private"].retry_on_failure.initial_interval == 1000000000
+  and .exporters["otlp/private"].retry_on_failure.max_interval == 2000000000
+  and .exporters["otlp/private"].retry_on_failure.max_elapsed_time == 10000000000
+' <<<"${collector_config}" >/dev/null
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   up --detach telemetry-capture telemetry-collector telemetry-collector-outage
 
@@ -116,6 +132,24 @@ for health_port in \
   done
   curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null
 done
+
+readonly capture_container="$(docker compose --project-name "${project_name}" \
+  --file "${compose_file}" ps --quiet telemetry-capture)"
+test -n "${capture_container}"
+docker inspect --format '{{json .HostConfig.PortBindings}}' \
+  "${capture_container}" \
+  | jq -e '. == null or . == {}' >/dev/null
+docker inspect --format '{{json .NetworkSettings.Networks}}' \
+  "${capture_container}" \
+  | jq -e --arg private_network "${project_name}_telemetry-private" \
+    'keys == [$private_network]' >/dev/null
+docker network inspect "${project_name}_telemetry-private" \
+  | jq -e '.[0].Internal == true' >/dev/null
+if docker compose --project-name "${project_name}" --file "${compose_file}" \
+  exec --no-TTY postgres getent hosts telemetry-capture >/dev/null 2>&1; then
+  print -u2 "Private telemetry capture is reachable from the public network"
+  exit 1
+fi
 
 BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
   swift test --filter TelemetryAuthenticationLiveTests
@@ -135,22 +169,26 @@ BLEAT_TELEMETRY_CONTROL_COMMAND="${PWD}/scripts/control-telemetry-test-service.s
 BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \
   swift test --filter TelemetryRecoveryLiveTests
 
-# Receiver success proves only queue admission. Require bounded retry exhaustion.
+# Receiver success proves only admission. Require bounded retry and queue exhaustion.
 outage_metrics=""
 for _ in {1..30}; do
   outage_metrics="$(curl --silent --fail \
     "http://127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_METRICS_TEST_PORT}/metrics")"
   if awk '
-    /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { found = 1 }
-    END { exit !found }
+    /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { send_failed = 1 }
+    /^otelcol_exporter_enqueue_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { enqueue_failed = 1 }
+    /^otelcol_exporter_queue_capacity([{ ]|$)/ && $NF + 0 == 8 { capacity = 1 }
+    END { exit !(send_failed && enqueue_failed && capacity) }
   ' <<<"${outage_metrics}"; then
     break
   fi
   sleep 1
 done
 awk '
-  /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { found = 1 }
-  END { exit !found }
+  /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { send_failed = 1 }
+  /^otelcol_exporter_enqueue_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { enqueue_failed = 1 }
+  /^otelcol_exporter_queue_capacity([{ ]|$)/ && $NF + 0 == 8 { capacity = 1 }
+  END { exit !(send_failed && enqueue_failed && capacity) }
 ' <<<"${outage_metrics}"
 
 for _ in {1..30}; do

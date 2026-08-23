@@ -1088,8 +1088,9 @@ reviewed Swift telemetry pipeline through enrollment, JWT issuance,
 authenticated OTLP/HTTP protobuf export, and sink capture; validates
 issuer/audience authentication, missing or malformed credentials, the 1 MiB
 request limit, bounded exporter outage, authentication-service and Collector
-restart recovery, and the exact privacy allowlist; then verifies removal of its
-containers, volumes, and unredacted temporary capture.
+restart recovery, exact Collector resource bounds, private capture isolation,
+and the exact privacy allowlist; then verifies removal of its containers,
+volumes, and unredacted temporary capture.
 Privacy-safe artifacts from a failed run are retained beneath
 `TestSupport/ServerHarness/artifacts/telemetry/`.
 
