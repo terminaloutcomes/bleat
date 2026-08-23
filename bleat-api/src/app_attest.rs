@@ -49,6 +49,9 @@ const APP_ATTEST_KEY_ID_BYTES: usize = 32;
 const COSE_P256_PUBLIC_KEY_BYTES: usize = 65;
 const MAX_BUNDLE_VERSION_BYTES: usize = 64;
 const APP_ATTEST_AUTHENTICATOR_FLAG: u8 = 0x40;
+const X509_CERTIFICATE_CHAIN_FIELD: &str = "x5c";
+const APP_ATTEST_RECEIPT_FIELD: &str = "receipt";
+const APP_ATTEST_STATEMENT_FIELD: &str = "attStmt";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureCategory {
@@ -739,7 +742,7 @@ struct ParsedAttestation {
 
 impl ParsedAttestation {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
-        let mut fields = decode_cbor_map(encoded, &["fmt", "attStmt", "authData"])
+        let mut fields = decode_cbor_map(encoded, &["fmt", APP_ATTEST_STATEMENT_FIELD, "authData"])
             .map_err(|error| error.with_stage(AppAttestVerificationStage::AttestationEnvelope))?;
         let format = take_text(&mut fields, "fmt")
             .map_err(|error| error.with_stage(AppAttestVerificationStage::AttestationFormat))?;
@@ -757,12 +760,15 @@ impl ParsedAttestation {
             )
             .with_stage(AppAttestVerificationStage::AttestationAuthenticatorLength));
         }
-        let statement = fields.remove("attStmt").ok_or_else(|| {
+        let statement = fields.remove(APP_ATTEST_STATEMENT_FIELD).ok_or_else(|| {
             malformed().with_stage(AppAttestVerificationStage::AttestationStatement)
         })?;
-        let mut statement = value_map(statement, &["x5c", "receipt"])
-            .map_err(|error| error.with_stage(AppAttestVerificationStage::AttestationStatement))?;
-        let receipt = take_bytes(&mut statement, "receipt")
+        let mut statement = value_map(
+            statement,
+            &[X509_CERTIFICATE_CHAIN_FIELD, APP_ATTEST_RECEIPT_FIELD],
+        )
+        .map_err(|error| error.with_stage(AppAttestVerificationStage::AttestationStatement))?;
+        let receipt = take_bytes(&mut statement, APP_ATTEST_RECEIPT_FIELD)
             .map_err(|error| error.with_stage(AppAttestVerificationStage::AttestationReceipt))?;
         if receipt.is_empty() || receipt.len() > MAX_RECEIPT_BYTES {
             return Err(AppAttestVerificationError::new(
@@ -771,7 +777,7 @@ impl ParsedAttestation {
             .with_stage(AppAttestVerificationStage::AttestationReceipt));
         }
         let certificates =
-            match statement.remove("x5c") {
+            match statement.remove(X509_CERTIFICATE_CHAIN_FIELD) {
                 Some(Value::Array(values)) if values.len() == 2 => values
                     .into_iter()
                     .map(|value| match value {
@@ -1453,17 +1459,17 @@ mod tests {
                 Value::Text("apple-appattest".to_owned()),
             ),
             (
-                Value::Text("attStmt".to_owned()),
+                Value::Text(APP_ATTEST_STATEMENT_FIELD.to_owned()),
                 Value::Map(vec![
                     (
-                        Value::Text("x5c".to_owned()),
+                        Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                         Value::Array(vec![
                             Value::Bytes(leaf.to_vec()),
                             Value::Bytes(intermediate.to_vec()),
                         ]),
                     ),
                     (
-                        Value::Text("receipt".to_owned()),
+                        Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
                         Value::Bytes(vec![1, 2, 3]),
                     ),
                 ]),
@@ -1730,16 +1736,22 @@ mod tests {
         let valid_statement = || {
             Value::Map(vec![
                 (
-                    Value::Text("x5c".to_owned()),
+                    Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                     Value::Array(vec![Value::Bytes(vec![1]), Value::Bytes(vec![2])]),
                 ),
-                (Value::Text("receipt".to_owned()), Value::Bytes(vec![1])),
+                (
+                    Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
+                    Value::Bytes(vec![1]),
+                ),
             ])
         };
         let attestation = |format: Value, statement: Value, authenticator_data: Vec<u8>| {
             encode_cbor_bytes(&Value::Map(vec![
                 (Value::Text("fmt".to_owned()), format),
-                (Value::Text("attStmt".to_owned()), statement),
+                (
+                    Value::Text(APP_ATTEST_STATEMENT_FIELD.to_owned()),
+                    statement,
+                ),
                 (
                     Value::Text("authData".to_owned()),
                     Value::Bytes(authenticator_data),
@@ -1753,10 +1765,13 @@ mod tests {
                 Value::Text("apple-appattest".to_owned()),
                 Value::Map(vec![
                     (
-                        Value::Text("x5c".to_owned()),
+                        Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                         Value::Array(vec![Value::Bytes(vec![1]), Value::Bytes(vec![2])]),
                     ),
-                    (Value::Text("receipt".to_owned()), Value::Bytes(Vec::new())),
+                    (
+                        Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
+                        Value::Bytes(Vec::new()),
+                    ),
                 ]),
                 vec![1],
             ),
@@ -1764,13 +1779,16 @@ mod tests {
                 Value::Text("apple-appattest".to_owned()),
                 Value::Map(vec![
                     (
-                        Value::Text("x5c".to_owned()),
+                        Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                         Value::Array(vec![
                             Value::Text("not-bytes".to_owned()),
                             Value::Bytes(vec![2]),
                         ]),
                     ),
-                    (Value::Text("receipt".to_owned()), Value::Bytes(vec![1])),
+                    (
+                        Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
+                        Value::Bytes(vec![1]),
+                    ),
                 ]),
                 vec![1],
             ),
@@ -1795,13 +1813,16 @@ mod tests {
             Value::Text("apple-appattest".to_owned()),
             Value::Map(vec![
                 (
-                    Value::Text("x5c".to_owned()),
+                    Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                     Value::Array(vec![
                         Value::Bytes(vec![0; MAX_CERTIFICATE_BYTES + 1]),
                         Value::Bytes(vec![2]),
                     ]),
                 ),
-                (Value::Text("receipt".to_owned()), Value::Bytes(vec![1])),
+                (
+                    Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
+                    Value::Bytes(vec![1]),
+                ),
             ]),
             vec![1],
         );
@@ -2473,17 +2494,20 @@ mod tests {
                 Value::Text("apple-appattest".to_owned()),
             ),
             (
-                Value::Text("attStmt".to_owned()),
+                Value::Text(APP_ATTEST_STATEMENT_FIELD.to_owned()),
                 Value::Map(vec![
                     (
-                        Value::Text("x5c".to_owned()),
+                        Value::Text(X509_CERTIFICATE_CHAIN_FIELD.to_owned()),
                         Value::Array(vec![
                             Value::Bytes(vec![1]),
                             Value::Bytes(vec![2]),
                             Value::Bytes(vec![3]),
                         ]),
                     ),
-                    (Value::Text("receipt".to_owned()), Value::Bytes(vec![1])),
+                    (
+                        Value::Text(APP_ATTEST_RECEIPT_FIELD.to_owned()),
+                        Value::Bytes(vec![1]),
+                    ),
                 ]),
             ),
             (Value::Text("authData".to_owned()), Value::Bytes(vec![1])),
