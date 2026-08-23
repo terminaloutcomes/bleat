@@ -6,7 +6,8 @@ extracted without modification from the public attestation object in Apple's
 It is test data published by Apple, not evidence captured from a Bleat device.
 
 The fixture is the compatibility contract for the production authenticator-data
-parser. Its regression test checks the guide's fields together:
+parser's iOS 27-and-later extension shape. Its regression test checks the
+guide's fields together:
 
 - SHA-256 of `1234567890.com.example.myapp` matches the RP ID hash;
 - the counter is zero and the AAGUID selects production;
@@ -15,6 +16,13 @@ parser. Its regression test checks the guide's fields together:
 - `apple_validation_category_01` is decoded from Apple's four-byte
   little-endian CBOR byte string; and
 - `apple_bundle_version_01` is decoded as CBOR text.
+
+Apple's WWDC26 App Attest session states that the appended extension structure
+starts in iOS 27. The parser also accepts the extension-free authenticator data
+produced by earlier supported Apple operating systems; a separate synthetic
+production-verifier regression covers both enrollment and assertion evidence
+in that form. When extensions are present, they must match this fixture's exact
+structure and the configured application policy.
 
 Keep the raw bytes unchanged. If Apple publishes a materially different fixture,
 add a new dated file and a separate regression case before changing the parser.

@@ -188,11 +188,15 @@ intentionally not durable.
 Production enrollment follows Apple's App Attest validation sequence. It
 strictly and boundedly parses the attestation CBOR and authenticator data,
 validates the certificate path, nonce, App ID hash, environment AAGUID,
-credential ID, certificate and encoded COSE public keys, bundle version, and
-validation category before persisting an installation. Assertions are checked
-against that stored public key and environment, the token-purpose challenge,
-the configured application policy, and an atomically advanced monotonic
-counter. Externally these failures share the small authentication error shape;
+credential ID, and certificate and encoded COSE public keys before persisting
+an installation. On iOS 27 and later, it also validates the appended bundle
+version and validation category against the configured application policy.
+Earlier Apple operating systems do not emit those extensions, so their absence
+does not bypass the certificate, nonce, application, credential, signature, or
+counter checks. Assertions are checked against that stored public key and
+environment, the token-purpose challenge, any supplied application-policy
+extensions, and an atomically advanced monotonic counter. Externally these
+failures share the small authentication error shape;
 internal categories contain no evidence, challenge, signature, key ID, or
 installation identifier. Production token requests use that authenticated
 principal to issue the same narrow ten-minute JWT from the mounted signing key.
@@ -210,7 +214,11 @@ checks the RP ID hash, counter, production AAGUID, credential ID, COSE public-ke
 hash, validation category, and bundle version together. The complete synthetic
 production-verifier tests additionally cover certificate-chain, nonce, policy,
 and assertion-signature validation without depending on Apple or external
-configuration.
+configuration. Apple's
+[WWDC26 App Attest session](https://developer.apple.com/videos/play/wwdc2026/201/)
+documents that the extensions start in iOS 27. A separate synthetic regression
+covers the extension-free attestation and assertion shapes emitted by earlier
+supported systems.
 
 ## JWT signing-key rotation
 

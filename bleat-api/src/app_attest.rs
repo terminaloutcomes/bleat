@@ -346,7 +346,10 @@ impl AppAttestPolicy {
         })
     }
 
-    fn accepts(&self, claims: &AppAttestClaims) -> bool {
+    fn accepts(&self, claims: Option<&AppAttestClaims>) -> bool {
+        let Some(claims) = claims else {
+            return true;
+        };
         self.bundle_versions.contains(&claims.bundle_version)
             && self
                 .validation_categories
@@ -521,7 +524,7 @@ impl ProductionAppAttestVerifier {
             )
             .at(AppAttestVerificationStage::AttestationEnvironment));
         }
-        if !self.policy.accepts(&authenticator.claims) {
+        if !self.policy.accepts(authenticator.claims.as_ref()) {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
             )
@@ -615,7 +618,7 @@ impl ProductionAppAttestVerifier {
                     .at(AppAttestVerificationStage::AssertionCounter),
             );
         }
-        if !self.policy.accepts(&authenticator.claims) {
+        if !self.policy.accepts(authenticator.claims.as_ref()) {
             return Err(AppAttestVerificationError::new(
                 AppAttestFailureCategory::WrongApplication,
             )
@@ -838,7 +841,7 @@ struct AttestationAuthenticatorData<'a> {
     environment: InstallationEnvironment,
     credential_id: &'a [u8],
     encoded_public_key: [u8; COSE_P256_PUBLIC_KEY_BYTES],
-    claims: AppAttestClaims,
+    claims: Option<AppAttestClaims>,
 }
 
 impl<'a> AttestationAuthenticatorData<'a> {
@@ -892,24 +895,31 @@ impl<'a> AttestationAuthenticatorData<'a> {
 struct AssertionAuthenticatorData {
     rp_id_hash: [u8; 32],
     counter: u32,
-    claims: AppAttestClaims,
+    claims: Option<AppAttestClaims>,
 }
 
 impl AssertionAuthenticatorData {
     fn parse(encoded: &[u8]) -> Result<Self, AppAttestVerificationError> {
-        if encoded.len() <= ASSERTION_AUTHENTICATOR_DATA_BYTES
+        if encoded.len() < ASSERTION_AUTHENTICATOR_DATA_BYTES
             || encoded.len() > MAX_AUTHENTICATOR_DATA_BYTES
         {
             return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorLength));
         }
-        if encoded[32] != EXTENSION_DATA_FLAG {
+        if !matches!(encoded[32], 0 | EXTENSION_DATA_FLAG) {
             return Err(malformed().at(AppAttestVerificationStage::AssertionAuthenticatorFlags));
         }
+        let claims = if encoded.len() == ASSERTION_AUTHENTICATOR_DATA_BYTES {
+            None
+        } else {
+            Some(
+                parse_claims(&encoded[ASSERTION_AUTHENTICATOR_DATA_BYTES..])
+                    .map_err(|error| error.at(AppAttestVerificationStage::AssertionExtensions))?,
+            )
+        };
         Ok(Self {
             rp_id_hash: encoded[0..32].try_into().map_err(|_| malformed())?,
             counter: u32::from_be_bytes(encoded[33..37].try_into().map_err(|_| malformed())?),
-            claims: parse_claims(&encoded[ASSERTION_AUTHENTICATOR_DATA_BYTES..])
-                .map_err(|error| error.at(AppAttestVerificationStage::AssertionExtensions))?,
+            claims,
         })
     }
 }
@@ -921,19 +931,23 @@ struct AppAttestClaims {
 
 fn parse_attestation_tail(
     encoded: &[u8],
-) -> Result<([u8; COSE_P256_PUBLIC_KEY_BYTES], AppAttestClaims), AppAttestVerificationError> {
+) -> Result<([u8; COSE_P256_PUBLIC_KEY_BYTES], Option<AppAttestClaims>), AppAttestVerificationError>
+{
     let mut cursor = Cursor::new(encoded);
     let cose_key: Value = ciborium::from_reader(&mut cursor)
         .map_err(|_| malformed().at(AppAttestVerificationStage::AttestationCoseKey))?;
     let consumed = usize::try_from(cursor.position())
         .map_err(|_| malformed().at(AppAttestVerificationStage::AttestationCoseKey))?;
-    if consumed >= encoded.len() {
-        return Err(malformed().at(AppAttestVerificationStage::AttestationExtensions));
-    }
     let public_key = parse_cose_public_key(cose_key)
         .map_err(|error| error.at(AppAttestVerificationStage::AttestationCoseKey))?;
-    let claims = parse_claims(&encoded[consumed..])
-        .map_err(|error| error.at(AppAttestVerificationStage::AttestationExtensions))?;
+    let claims = if consumed == encoded.len() {
+        None
+    } else {
+        Some(
+            parse_claims(&encoded[consumed..])
+                .map_err(|error| error.at(AppAttestVerificationStage::AttestationExtensions))?,
+        )
+    };
     Ok((public_key, claims))
 }
 
@@ -1189,6 +1203,21 @@ mod tests {
 
     impl SyntheticEvidence {
         fn new(client_data_hash: &[u8; 32], environment: AppAttestEnvironment) -> Self {
+            Self::with_extension_support(client_data_hash, environment, true)
+        }
+
+        fn without_extensions(
+            client_data_hash: &[u8; 32],
+            environment: AppAttestEnvironment,
+        ) -> Self {
+            Self::with_extension_support(client_data_hash, environment, false)
+        }
+
+        fn with_extension_support(
+            client_data_hash: &[u8; 32],
+            environment: AppAttestEnvironment,
+            include_extensions: bool,
+        ) -> Self {
             let root_key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)
                 .expect("test root key should generate");
             let mut root_params = CertificateParams::default();
@@ -1219,14 +1248,18 @@ mod tests {
             let public_key = leaf_key.public_key_raw().to_vec();
             let key_id_bytes: [u8; 32] = Sha256::digest(&public_key).into();
             let key_id = STANDARD.encode(key_id_bytes);
-            let authenticator_data = attestation_authenticator_data(
+            let mut authenticator_data = attestation_authenticator_data(
                 TEAM_ID,
                 APP_IDENTIFIER,
                 environment,
                 &key_id_bytes,
                 &public_key,
             );
-            let mut nonce_input = authenticator_data.clone();
+            if !include_extensions {
+                let extension_length = encode_cbor_bytes(&app_attest_claims()).len();
+                authenticator_data.truncate(authenticator_data.len() - extension_length);
+            }
+            let mut nonce_input = authenticator_data.to_vec();
             nonce_input.extend_from_slice(client_data_hash);
             let nonce: [u8; 32] = Sha256::digest(nonce_input).into();
 
@@ -1269,11 +1302,27 @@ mod tests {
 
         fn assertion(&self, client_data_hash: &[u8; 32], counter: u32) -> String {
             let authenticator_data = assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, counter);
-            let mut nonce_input = authenticator_data.clone();
+            self.sign_assertion(client_data_hash, &authenticator_data)
+        }
+
+        fn assertion_without_extensions(
+            &self,
+            client_data_hash: &[u8; 32],
+            counter: u32,
+        ) -> String {
+            let mut authenticator_data =
+                assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, counter);
+            authenticator_data.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
+            authenticator_data[32] = 0;
+            self.sign_assertion(client_data_hash, &authenticator_data)
+        }
+
+        fn sign_assertion(&self, client_data_hash: &[u8; 32], authenticator_data: &[u8]) -> String {
+            let mut nonce_input = authenticator_data.to_vec();
             nonce_input.extend_from_slice(client_data_hash);
             let nonce = Sha256::digest(nonce_input);
             let signature: Signature = self.signing_key.sign(&nonce);
-            encode_assertion(signature.to_der().as_bytes(), &authenticator_data)
+            encode_assertion(signature.to_der().as_bytes(), authenticator_data)
         }
     }
 
@@ -1746,8 +1795,9 @@ mod tests {
         let parsed = AttestationAuthenticatorData::parse(&encoded)
             .expect("Apple-documented authenticator flags should parse");
         assert_eq!(parsed.credential_id, key_id);
-        assert_eq!(parsed.claims.validation_category, VALIDATION_CATEGORY);
-        assert_eq!(parsed.claims.bundle_version, BUNDLE_VERSION);
+        let claims = parsed.claims.expect("generated claims should parse");
+        assert_eq!(claims.validation_category, VALIDATION_CATEGORY);
+        assert_eq!(claims.bundle_version, BUNDLE_VERSION);
     }
 
     #[test]
@@ -1779,8 +1829,40 @@ mod tests {
             Sha256::digest(parsed.encoded_public_key).as_slice(),
             parsed.credential_id
         );
-        assert_eq!(parsed.claims.validation_category, 1);
-        assert_eq!(parsed.claims.bundle_version, "1");
+        let claims = parsed.claims.expect("Apple fixture claims should parse");
+        assert_eq!(claims.validation_category, 1);
+        assert_eq!(claims.bundle_version, "1");
+    }
+
+    #[test]
+    fn production_verifier_accepts_pre_ios_27_evidence_without_extensions() {
+        let client_data_hash = [43; 32];
+        let evidence = SyntheticEvidence::without_extensions(
+            &client_data_hash,
+            AppAttestEnvironment::Production,
+        );
+
+        let verified = evidence
+            .verifier
+            .verify_attestation(&evidence.key_id, &evidence.attestation, &client_data_hash)
+            .expect("pre-iOS 27 attestation should verify without extensions");
+        assert_eq!(verified.public_key, evidence.public_key);
+
+        let assertion = evidence.assertion_without_extensions(&client_data_hash, 1);
+        assert_eq!(
+            evidence
+                .verifier
+                .verify_assertion(
+                    &verified.public_key,
+                    InstallationEnvironment::Production,
+                    &assertion,
+                    &client_data_hash,
+                    0,
+                )
+                .expect("pre-iOS 27 assertion should verify without extensions")
+                .counter,
+            1
+        );
     }
 
     #[test]

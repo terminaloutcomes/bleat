@@ -1688,12 +1688,15 @@ never enter that set, the container image, normal logs, or repository fixtures.
 Production mode uses a structurally separate verifier that validates Apple's
 certificate path and pinned App Attest root, attestation nonce, App ID hash,
 AAGUID environment, credential and certificate/COSE public key consistency,
-and configured bundle-version and validation-category policy. It verifies
-assertions with the stored key and environment before atomically advancing the
-monotonic counter; replay and concurrent counter conflicts are rejected. Only
-that authenticated installation principal can reach signing. Disabling an
-installation prevents future issuance, while an already-issued token expires
-naturally within ten minutes.
+and, when supplied by iOS 27 or later, configured bundle-version and
+validation-category policy. Earlier supported Apple operating systems omit
+these recently introduced authenticator-data extensions; their evidence still
+requires the complete certificate, nonce, application, credential, signature,
+and counter checks. It verifies assertions with the stored key and environment
+before atomically advancing the monotonic counter; replay and concurrent
+counter conflicts are rejected. Only that authenticated installation principal
+can reach signing. Disabling an installation prevents future issuance, while
+an already-issued token expires naturally within ten minutes.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service through
