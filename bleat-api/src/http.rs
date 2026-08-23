@@ -20,7 +20,7 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use tracing::{Instrument, field, info, info_span, warn};
+use tracing::{Instrument, debug, field, info, info_span, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
@@ -673,7 +673,7 @@ async fn instrument_request(mut request: Request<Body>, next: Next) -> Response 
         span.record("user_agent.original", user_agent);
     }
     if let Err(error) = span.set_parent(parent_context) {
-        tracing::debug!(error = %error, "ignored invalid remote trace context");
+        debug!(error = %error, "ignored invalid remote trace context");
     }
 
     let started = Instant::now();
