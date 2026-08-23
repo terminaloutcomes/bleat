@@ -720,8 +720,11 @@ invalid server responses, local-storage failures, offline cache misses, and
 temporary server failures. Retryable failures include a **Try Again** action;
 diagnostics retain only the corresponding non-sensitive failure code. Existing
 downloads show status, stored and expected bytes, and the relevant Pause,
-Resume, Retry, Repair, Download Full Book, or Remove action there as well as in
-Downloads.
+Continue, Cancel, Retry, Repair, Download Full Book, or Remove action there as
+well as in Downloads. Pause retains completed 16 MiB range chunks in durable
+partial files, and Continue starts at that on-disk byte offset after either a
+short pause or an app relaunch. Cancel discards unfinished partial bytes while
+retaining already completed tracks.
 Automatic cache failures retry only the active window and never appear as a
 full-book repair. Explicit full-book downloads play directly from local files
 without opening a server playback session. Automatic cached windows can also
@@ -942,9 +945,9 @@ swift test --filter MetadataEditingTests
 ```
 
 The background-download foundation covers expanded-item plan decoding, safe
-file identities, stable task restoration, bearer-only per-file requests, 401
-replacement, opaque account/book storage paths, protected atomic records,
-byte-exact final placement, relaunch recovery, and scoped deletion:
+ranged task identities, bearer-only per-file requests, 401 replacement,
+opaque account/book storage paths, protected atomic records, byte-exact final
+placement, relaunch reconciliation, invalid-state cleanup, and scoped deletion:
 
 ```sh
 swift test --filter BackgroundDownloadTests

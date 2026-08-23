@@ -4,6 +4,104 @@ import XCTest
 @testable import BleatCore
 
 final class BackgroundDownloadTests: XCTestCase {
+    func testRangeChunksBuildBoundedHeadersAndValidateResponses() throws {
+        let first = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 0,
+                expectedByteLength: 20,
+                chunkByteLength: 16
+            )
+        )
+        let final = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 16,
+                expectedByteLength: 20,
+                chunkByteLength: 16
+            )
+        )
+        let validator = DownloadValidator.strongETag("\"version-1\"")
+        let request = DownloadRangeRequest.applying(
+            range: final,
+            validator: validator,
+            to: URLRequest(url: URL(string: "https://example.com/file")!)
+        )
+
+        XCTAssertEqual(first, try DownloadByteRange(start: 0, endInclusive: 15))
+        XCTAssertEqual(
+            final, try DownloadByteRange(start: 16, endInclusive: 19))
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Range"), "bytes=16-19")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "If-Range"), "\"version-1\"")
+        XCTAssertNoThrow(
+            try DownloadRangeResponseValidator.validate(
+                statusCode: 206,
+                contentRangeHeader: "bytes 16-19/20",
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        )
+        XCTAssertThrowsError(
+            try DownloadRangeResponseValidator.validate(
+                statusCode: 200,
+                contentRangeHeader: nil,
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        ) { error in
+            XCTAssertEqual(error as? DownloadRangeError, .unexpectedStatus(200))
+        }
+    }
+
+    func testChunkDescriptionRoundTripsWithoutCredentials() throws {
+        let descriptor = DownloadChunkTaskDescription(
+            identity: try Self.identity(),
+            range: try DownloadByteRange(start: 0, endInclusive: 10),
+            validator: .lastModified("Sat, 23 Aug 2026 12:00:00 GMT")
+        )
+        let encoded = try descriptor.encode()
+
+        XCTAssertEqual(
+            try DownloadChunkTaskDescription.decode(encoded), descriptor)
+        XCTAssertEqual(
+            try DownloadTaskIdentity.decodeTaskDescription(encoded),
+            descriptor.identity
+        )
+        XCTAssertFalse(encoded.contains("access-token"))
+        XCTAssertFalse(encoded.contains("example.com"))
+    }
+
+    func testChunkDescriptionRejectsSemanticallyInvalidIdentity() throws {
+        let descriptor = DownloadChunkTaskDescription(
+            identity: try Self.identity(),
+            range: try DownloadByteRange(start: 0, endInclusive: 15),
+            validator: nil
+        )
+        let encoded = try descriptor.encode()
+        let payload = String(
+            encoded.dropFirst(DownloadChunkTaskDescription.prefix.count)
+        )
+        let data = try XCTUnwrap(Data(base64Encoded: payload))
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        var identity = try XCTUnwrap(
+            object["identity"] as? [String: Any]
+        )
+        identity["destinationEntry"] = "../escape.mp3"
+        object["identity"] = identity
+        let malformed =
+            DownloadChunkTaskDescription.prefix
+            + (try JSONSerialization.data(withJSONObject: object))
+            .base64EncodedString()
+
+        XCTAssertThrowsError(
+            try DownloadChunkTaskDescription.decode(malformed)
+        ) { error in
+            XCTAssertEqual(error as? DownloadRangeError, .invalidRange)
+        }
+    }
+
     func testExpandedItemBuildsSafeOrderedPerFilePlan() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Self.expandedItemJSON()
@@ -71,106 +169,6 @@ final class BackgroundDownloadTests: XCTestCase {
         }
     }
 
-    func testTaskDescriptionRoundTripsWithoutSecretsOrServerURL() throws {
-        let identity = try Self.identity()
-        let description = try identity.taskDescription()
-        let restored = try DownloadTaskIdentity.decodeTaskDescription(
-            description
-        )
-
-        XCTAssertEqual(restored, identity)
-        XCTAssertTrue(
-            description.hasPrefix(
-                DownloadTaskIdentity.taskDescriptionPrefix
-            )
-        )
-        XCTAssertFalse(description.contains("access-token"))
-        XCTAssertFalse(description.contains("example.com"))
-    }
-
-    func testCoordinatorRestoresMappingsAcrossInstances() async throws {
-        let registry = DownloadTaskRegistry()
-        let schedulerBeforeTermination = TestDownloadScheduler(
-            registry: registry
-        )
-        let authorizer = StaticDownloadAuthorizer()
-        let firstCoordinator = DownloadCoordinator(
-            scheduler: schedulerBeforeTermination,
-            authorizer: authorizer
-        )
-        let plan = try DownloadPlan.decodeExpandedItem(
-            from: Self.expandedItemJSON()
-        )
-        let accountID = AccountID(rawValue: "account")
-        let downloadID = DownloadID(rawValue: "download")
-        let server = try NormalizedServerURL(
-            "https://example.com/audiobookshelf"
-        )
-
-        let scheduled = try await firstCoordinator.schedule(
-            plan: plan,
-            accountID: accountID,
-            server: server,
-            downloadID: downloadID
-        )
-
-        let schedulerAfterRelaunch = TestDownloadScheduler(
-            registry: registry
-        )
-        let relaunchedCoordinator = DownloadCoordinator(
-            scheduler: schedulerAfterRelaunch,
-            authorizer: authorizer
-        )
-        let restored = await relaunchedCoordinator.restoreTasks()
-
-        XCTAssertEqual(scheduled.count, 3)
-        XCTAssertEqual(
-            restored,
-            scheduled.map {
-                RestoredDownloadTask(
-                    taskIdentifier: $0.systemTaskIdentifier,
-                    state: .restored($0.identity)
-                )
-            }
-        )
-        let requests = await registry.requests()
-        XCTAssertTrue(
-            requests.allSatisfy {
-                $0.value(forHTTPHeaderField: "Authorization")
-                    == "Bearer static-access"
-            })
-        XCTAssertTrue(requests.allSatisfy { $0.url?.query == nil })
-    }
-
-    func testRestorationReportsMissingAndInvalidDescriptions() async {
-        let registry = DownloadTaskRegistry(snapshots: [
-            .init(
-                taskIdentifier: 4,
-                taskDescription: nil,
-                originalRequest: nil
-            ),
-            .init(
-                taskIdentifier: 5,
-                taskDescription: "not-a-bleat-task",
-                originalRequest: nil
-            ),
-        ])
-        let coordinator = DownloadCoordinator(
-            scheduler: TestDownloadScheduler(registry: registry),
-            authorizer: StaticDownloadAuthorizer()
-        )
-
-        let restored = await coordinator.restoreTasks()
-
-        XCTAssertEqual(
-            restored,
-            [
-                .init(taskIdentifier: 4, state: .missingDescription),
-                .init(taskIdentifier: 5, state: .invalidDescription),
-            ]
-        )
-    }
-
     func testDownloadRequestUsesExactRouteAndBearerHeader() async throws {
         let accountID = AccountID(rawValue: "account")
         let tokens = try AuthenticationTokens(
@@ -222,31 +220,33 @@ final class BackgroundDownloadTests: XCTestCase {
             transport: transport,
             credentialStore: store
         )
-        let registry = DownloadTaskRegistry()
-        let coordinator = DownloadCoordinator(
-            scheduler: TestDownloadScheduler(registry: registry),
-            authorizer: authCoordinator
-        )
         let server = try NormalizedServerURL(
             "https://example.com/audiobookshelf"
         )
         let identity = try Self.identity(accountID: accountID)
-        let rejectedRequest =
+        var rejectedRequest =
             try await authCoordinator
             .makeAuthorizedDownloadRequest(
                 identity: identity,
                 server: server
             )
-
-        let replacement = try await coordinator.replaceUnauthorizedTask(
-            identity: identity,
-            server: server,
-            rejectedRequest: rejectedRequest
+        rejectedRequest.setValue(
+            "bytes=16-31",
+            forHTTPHeaderField: "Range"
         )
-        let requests = await registry.requests()
-        let replacementRequest = try XCTUnwrap(requests.last)
+        rejectedRequest.setValue(
+            "\"version-1\"",
+            forHTTPHeaderField: "If-Range"
+        )
 
-        XCTAssertEqual(replacement.identity, identity)
+        let replacementRequest =
+            try await authCoordinator
+            .makeReplacementDownloadRequest(
+                identity: identity,
+                server: server,
+                rejectedRequest: rejectedRequest
+            )
+
         XCTAssertEqual(
             replacementRequest.value(
                 forHTTPHeaderField: "Authorization"
@@ -258,6 +258,14 @@ final class BackgroundDownloadTests: XCTestCase {
                 forHTTPHeaderField: "Authorization"
             ),
             rejectedRequest.value(forHTTPHeaderField: "Authorization")
+        )
+        XCTAssertEqual(
+            replacementRequest.value(forHTTPHeaderField: "Range"),
+            "bytes=16-31"
+        )
+        XCTAssertEqual(
+            replacementRequest.value(forHTTPHeaderField: "If-Range"),
+            "\"version-1\""
         )
         XCTAssertNil(replacementRequest.url?.query)
         let refreshCount = await transport.refreshCount()
@@ -403,8 +411,7 @@ final class BackgroundDownloadTests: XCTestCase {
             "app.bleat.background-downloads.v1"
         )
         XCTAssertEqual(
-            SystemBackgroundDownloadScheduler
-                .defaultMaximumConnectionsPerHost,
+            bleatBackgroundDownloadMaximumConnectionsPerHost,
             3
         )
     }
@@ -474,87 +481,6 @@ final class BackgroundDownloadTests: XCTestCase {
           }
         }
         """
-    }
-}
-
-private actor DownloadTaskRegistry {
-    private var storedSnapshots: [BackgroundDownloadTaskSnapshot]
-    private var recordedRequests: [URLRequest] = []
-    private var nextIdentifier = 1
-
-    init(snapshots: [BackgroundDownloadTaskSnapshot] = []) {
-        storedSnapshots = snapshots
-    }
-
-    func schedule(
-        request: URLRequest,
-        taskDescription: String
-    ) -> Int {
-        let identifier = nextIdentifier
-        nextIdentifier += 1
-        recordedRequests.append(request)
-        storedSnapshots.append(
-            .init(
-                taskIdentifier: identifier,
-                taskDescription: taskDescription,
-                originalRequest: request
-            ))
-        return identifier
-    }
-
-    func snapshots() -> [BackgroundDownloadTaskSnapshot] {
-        storedSnapshots
-    }
-
-    func requests() -> [URLRequest] {
-        recordedRequests
-    }
-}
-
-private struct TestDownloadScheduler: BackgroundDownloadScheduling {
-    let registry: DownloadTaskRegistry
-
-    func schedule(
-        request: URLRequest,
-        taskDescription: String
-    ) async -> Int {
-        await registry.schedule(
-            request: request,
-            taskDescription: taskDescription
-        )
-    }
-
-    func taskSnapshots() async -> [BackgroundDownloadTaskSnapshot] {
-        await registry.snapshots()
-    }
-}
-
-private struct StaticDownloadAuthorizer: DownloadRequestAuthorizing {
-    func makeAuthorizedDownloadRequest(
-        identity: DownloadTaskIdentity,
-        server: NormalizedServerURL
-    ) throws -> URLRequest {
-        let url = try AudiobookshelfRouteBuilder(server: server).url(
-            for: .downloadFile(
-                itemID: identity.itemID,
-                inode: identity.inode
-            )
-        )
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue(
-            "Bearer static-access",
-            forHTTPHeaderField: "Authorization"
-        )
-        return request
-    }
-
-    func makeReplacementDownloadRequest(
-        identity: DownloadTaskIdentity,
-        server: NormalizedServerURL,
-        rejectedRequest _: URLRequest
-    ) throws -> URLRequest {
-        try makeAuthorizedDownloadRequest(identity: identity, server: server)
     }
 }
 

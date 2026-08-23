@@ -987,7 +987,9 @@ private struct AccountEditorView: View {
                 }
             } message: {
                 if let localValidationFailure {
-                    Text("\(localValidationFailure.message) The primary details can still be saved. The local address will be kept but disabled until it can be verified.")
+                    Text(
+                        "\(localValidationFailure.message) The primary details can still be saved. The local address will be kept but disabled until it can be verified."
+                    )
                 }
             }
             .confirmationDialog(
@@ -4085,17 +4087,21 @@ private struct BookDetailView: View {
         } else if model.downloads.pausedDownloadIDs.contains(
             record.manifest.downloadID
         ) {
-            Button("Resume", systemImage: "play.fill") {
+            Button("Continue", systemImage: "play.fill") {
                 Task {
-                    await model.downloads.resume(record)
+                    await model.downloads.continueDownload(record)
                 }
-            }.tint(colourScheme.color)
+            }
+            .tint(colourScheme.color)
+            .accessibilityIdentifier("book.detail.download.continue")
         } else {
             Button("Pause", systemImage: "pause.fill") {
                 Task {
                     await model.downloads.pause(record)
                 }
-            }.tint(colourScheme.color)
+            }
+            .tint(colourScheme.color)
+            .accessibilityIdentifier("book.detail.download.pause")
         }
     }
 
@@ -4118,6 +4124,7 @@ private struct BookDetailView: View {
         return [
             DownloadManifestState.queued,
             .downloading,
+            .paused,
         ].contains(record.manifest.state)
     }
 
@@ -4167,6 +4174,8 @@ private struct BookDetailView: View {
             return "Queued"
         case .downloading:
             return "Downloading"
+        case .paused:
+            return "Paused"
         case .partial:
             return "Repair needed"
         case .complete:
@@ -4208,6 +4217,8 @@ private struct BookDetailView: View {
             return "clock"
         case .downloading:
             return "arrow.down.circle"
+        case .paused:
+            return "pause.circle"
         case .partial, .failed:
             return "exclamationmark.circle"
         case .complete:
@@ -5123,23 +5134,29 @@ private struct DownloadStorageView: View {
             if model.downloads.pausedDownloadIDs.contains(
                 record.manifest.downloadID
             ) {
-                Button("Resume") {
+                Button("Continue") {
                     Task {
-                        await model.downloads.resume(record)
+                        await model.downloads.continueDownload(record)
                     }
-                }.tint(colourScheme.color)
+                }
+                .tint(colourScheme.color)
+                .accessibilityIdentifier("downloads.continue")
             } else {
                 Button("Pause") {
                     Task {
                         await model.downloads.pause(record)
                     }
-                }.tint(colourScheme.color)
+                }
+                .tint(colourScheme.color)
+                .accessibilityIdentifier("downloads.pause")
             }
+            Spacer()
             Button("Cancel", role: .destructive) {
                 Task {
                     await model.downloads.cancel(record)
                 }
             }
+            .accessibilityIdentifier("downloads.cancel")
         }
     }
 
@@ -5166,6 +5183,8 @@ private struct DownloadStorageView: View {
             return "Queued"
         case .downloading:
             return "Downloading"
+        case .paused:
+            return "Paused"
         case .partial:
             return "Repair needed"
         case .complete:

@@ -3,7 +3,194 @@ import XCTest
 
 @testable import BleatCore
 
+extension DownloadStorageLayout {
+    fileprivate func placeCompleteTestFile(
+        from temporaryURL: URL,
+        identity: DownloadTaskIdentity
+    ) throws -> Int64 {
+        _ = try appendChunk(
+            from: temporaryURL,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: identity.expectedByteLength
+        )
+        return try finalizePartial(identity)
+    }
+}
+
 final class DownloadStorageTests: XCTestCase {
+    func testFinalizedLateTrackKeepsRemainingTracksPaused() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let secondTrack = DownloadTrackPlan(
+            index: 1,
+            inode: "102",
+            expectedByteLength: 4,
+            mimeType: "audio/mpeg",
+            safeExtension: .mp3,
+            destinationEntry: "00001.mp3"
+        )
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: fixture.plan.tracks + [secondTrack]
+        )
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail
+        )
+        let firstIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+        let secondIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: secondTrack
+        )
+        _ = try await fixture.storage.markPaused(
+            firstIdentity,
+            observedByteLength: 0
+        )
+        _ = try await fixture.storage.markPaused(
+            secondIdentity,
+            observedByteLength: 0
+        )
+        let chunk = fixture.rootURL.appendingPathComponent("late.chunk")
+        try Data([1, 2, 3, 4]).write(to: chunk)
+        _ = try fixture.layout.appendChunk(
+            from: chunk,
+            identity: firstIdentity,
+            expectedOffset: 0,
+            expectedChunkLength: 4
+        )
+        _ = try fixture.layout.finalizePartial(firstIdentity)
+
+        let updated = try await fixture.storage.recordCommittedChunk(
+            firstIdentity,
+            committedByteLength: 4,
+            validator: nil,
+            finalized: true
+        )
+
+        XCTAssertEqual(updated.manifest.state, .paused)
+        XCTAssertEqual(
+            updated.manifest.entries.first(where: { $0.trackIndex == 1 })?
+                .state,
+            .paused
+        )
+    }
+
+    func testDurableChunksSurviveRecreationAndFinalizeAtExactLength()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let first = fixture.rootURL.appendingPathComponent("first.chunk")
+        try Data([1, 2]).write(to: first)
+
+        let committed = try fixture.layout.appendChunk(
+            from: first,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+        _ = try await fixture.storage.markPaused(
+            identity,
+            observedByteLength: committed
+        )
+
+        let relaunched = DownloadStorage(layout: fixture.layout)
+        let relaunchedRecords = try await relaunched.records()
+        let paused = try XCTUnwrap(relaunchedRecords.first)
+        let relaunchedPartialLength = try await relaunched.partialByteLength(
+            identity
+        )
+        XCTAssertEqual(paused.manifest.state, .paused)
+        XCTAssertEqual(paused.manifest.storedByteLength, 2)
+        XCTAssertEqual(relaunchedPartialLength, 2)
+
+        let second = fixture.rootURL.appendingPathComponent("second.chunk")
+        try Data([3, 4]).write(to: second)
+        XCTAssertEqual(
+            try fixture.layout.appendChunk(
+                from: second,
+                identity: identity,
+                expectedOffset: 2,
+                expectedChunkLength: 2
+            ),
+            4
+        )
+        XCTAssertEqual(try fixture.layout.finalizePartial(identity), 4)
+        XCTAssertEqual(
+            try Data(contentsOf: fixture.layout.destinationURL(for: identity)),
+            Data([1, 2, 3, 4])
+        )
+    }
+
+    func testChunkAppendRejectsWrongOffsetAndOversizedResult() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let chunk = fixture.rootURL.appendingPathComponent("chunk")
+        try Data([1, 2, 3]).write(to: chunk)
+
+        XCTAssertThrowsError(
+            try fixture.layout.appendChunk(
+                from: chunk,
+                identity: identity,
+                expectedOffset: 1,
+                expectedChunkLength: 3
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadStorageError,
+                .invalidPartialOffset(expected: 1, observed: 0)
+            )
+        }
+        _ = try fixture.layout.appendChunk(
+            from: chunk,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 3
+        )
+        XCTAssertThrowsError(
+            try fixture.layout.appendChunk(
+                from: chunk,
+                identity: identity,
+                expectedOffset: 3,
+                expectedChunkLength: 3
+            )
+        )
+    }
+
     func testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure()
         throws
     {
@@ -108,7 +295,7 @@ final class DownloadStorageTests: XCTestCase {
         )
         try Data([1, 2, 3, 4]).write(to: temporaryURL)
 
-        let observed = try fixture.layout.placeDownloadedFile(
+        let observed = try fixture.layout.placeCompleteTestFile(
             from: temporaryURL,
             identity: identity
         )
@@ -154,7 +341,7 @@ final class DownloadStorageTests: XCTestCase {
         try Data([1, 2]).write(to: temporaryURL)
 
         XCTAssertThrowsError(
-            try fixture.layout.placeDownloadedFile(
+            try fixture.layout.placeCompleteTestFile(
                 from: temporaryURL,
                 identity: identity
             )
@@ -194,7 +381,7 @@ final class DownloadStorageTests: XCTestCase {
             "temporary"
         )
         try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeDownloadedFile(
+        let observed = try fixture.layout.placeCompleteTestFile(
             from: temporaryURL,
             identity: identity
         )
@@ -245,7 +432,7 @@ final class DownloadStorageTests: XCTestCase {
             "temporary"
         )
         try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeDownloadedFile(
+        let observed = try fixture.layout.placeCompleteTestFile(
             from: temporaryURL,
             identity: identity
         )
@@ -262,7 +449,248 @@ final class DownloadStorageTests: XCTestCase {
         let repaired = try XCTUnwrap(records.first)
         XCTAssertEqual(repaired.manifest.state, .partial)
         XCTAssertEqual(repaired.manifest.entries[0].state, .partial)
-        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 2)
+        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: fixture.layout.destinationURL(for: identity).path
+            )
+        )
+    }
+
+    func testFinalizedFileCompletesManifestAfterInterruptedPersistence()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent("chunk")
+        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        _ = try fixture.layout.placeCompleteTestFile(
+            from: temporaryURL,
+            identity: identity
+        )
+
+        let records = try await fixture.storage.records()
+        let record = try XCTUnwrap(records.first)
+
+        XCTAssertEqual(record.manifest.state, .complete)
+        XCTAssertEqual(record.manifest.entries[0].state, .complete)
+        XCTAssertEqual(record.manifest.entries[0].placement, .finalized)
+    }
+
+    func testRemainingPreflightCountsOnlyMissingPartialBytes()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent("partial")
+        try Data([1, 2]).write(to: temporaryURL)
+        _ = try fixture.layout.appendChunk(
+            from: temporaryURL,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+
+        let requirement = try await fixture.storage.preflightRemaining(
+            record: record,
+            tracks: fixture.plan.tracks
+        )
+
+        XCTAssertEqual(requirement.expectedBytes, 2)
+    }
+
+    func testOversizedPartialFailsOnlyItsOwnRecord() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let partial = fixture.layout.partialURL(for: identity)
+        try FileManager.default.createDirectory(
+            at: partial.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data([1, 2, 3, 4, 5]).write(to: partial)
+
+        let otherItemID = LibraryItemID(rawValue: "other-item")
+        let otherPlan = DownloadPlan(
+            itemID: otherItemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "other-inode",
+                    expectedByteLength: 1,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let otherDetail = LibraryBookDetail(
+            id: otherItemID,
+            libraryID: fixture.detail.libraryID,
+            bookID: BookID(rawValue: "other-book"),
+            title: "Other Book",
+            subtitle: nil,
+            authors: [],
+            narrators: [],
+            series: [],
+            genres: [],
+            tags: [],
+            publishedYear: nil,
+            publishedDate: nil,
+            publisher: nil,
+            descriptionPlain: nil,
+            isbn: nil,
+            asin: nil,
+            language: nil,
+            duration: 1,
+            trackCount: 1,
+            audioFileCount: 1,
+            chapters: [],
+            addedAtMilliseconds: 1,
+            updatedAtMilliseconds: 1,
+            isExplicit: false,
+            isAbridged: false,
+            progress: nil
+        )
+        _ = try await fixture.storage.create(
+            downloadID: DownloadID(rawValue: "other-download"),
+            accountID: fixture.accountID,
+            plan: otherPlan,
+            detail: otherDetail
+        )
+
+        let records = try await fixture.storage.records()
+
+        XCTAssertEqual(records.count, 2)
+        let repaired = try XCTUnwrap(
+            records.first { $0.manifest.downloadID == fixture.downloadID }
+        )
+        XCTAssertEqual(repaired.manifest.entries[0].state, .failed)
+        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+    }
+
+    func testMalformedRecordIsDeletedWithoutHidingHealthyRecords()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let invalidDirectory = fixture.rootURL
+            .appendingPathComponent("invalid-account", isDirectory: true)
+            .appendingPathComponent("invalid-book", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: invalidDirectory,
+            withIntermediateDirectories: true
+        )
+        try Data("not-json".utf8).write(
+            to: invalidDirectory.appendingPathComponent("record.json")
+        )
+
+        let records = try await fixture.storage.records()
+
+        XCTAssertEqual(records.map(\.manifest.downloadID), [fixture.downloadID])
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: invalidDirectory.path)
+        )
+    }
+
+    func testCompletedLegacyRecordWithoutInodeIsPreserved()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent("legacy")
+        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        let observed = try fixture.layout.placeCompleteTestFile(
+            from: temporaryURL,
+            identity: identity
+        )
+        _ = try await fixture.storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+
+        let recordURL = fixture.layout.recordURL(
+            accountID: fixture.accountID,
+            itemID: fixture.itemID
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(contentsOf: recordURL)
+            ) as? [String: Any]
+        )
+        var manifest = try XCTUnwrap(object["manifest"] as? [String: Any])
+        var entries = try XCTUnwrap(
+            manifest["entries"] as? [[String: Any]]
+        )
+        entries[0].removeValue(forKey: "inode")
+        manifest["entries"] = entries
+        object["manifest"] = manifest
+        try JSONSerialization.data(withJSONObject: object).write(
+            to: recordURL,
+            options: .atomic
+        )
+
+        let records = try await fixture.storage.records()
+        let record = try XCTUnwrap(records.first)
+
+        XCTAssertEqual(record.manifest.state, .complete)
+        XCTAssertNil(record.manifest.entries[0].inode)
+        let urls = try await fixture.storage.localTrackURLs(for: record)
+        XCTAssertEqual(urls.count, 1)
     }
 
     func testAutomaticCacheMetadataAndTrackRemovalPersist()
@@ -329,7 +757,7 @@ final class DownloadStorageTests: XCTestCase {
                 "temporary-\(track.index)"
             )
             try data.write(to: temporaryURL)
-            let observed = try fixture.layout.placeDownloadedFile(
+            let observed = try fixture.layout.placeCompleteTestFile(
                 from: temporaryURL,
                 identity: identity
             )
@@ -551,7 +979,7 @@ final class DownloadStorageTests: XCTestCase {
                 "corruption-\(track.index)"
             )
             try data.write(to: temporaryURL)
-            let observed = try fixture.layout.placeDownloadedFile(
+            let observed = try fixture.layout.placeCompleteTestFile(
                 from: temporaryURL,
                 identity: identity
             )
@@ -669,11 +1097,11 @@ final class DownloadStorageTests: XCTestCase {
         try Data([1, 2, 3, 4]).write(to: tempURL0)
         try Data([5, 6]).write(to: tempURL1)
 
-        let observed0 = try fixture.layout.placeDownloadedFile(
+        let observed0 = try fixture.layout.placeCompleteTestFile(
             from: tempURL0,
             identity: identity0
         )
-        let observed1 = try fixture.layout.placeDownloadedFile(
+        let observed1 = try fixture.layout.placeCompleteTestFile(
             from: tempURL1,
             identity: identity1
         )

@@ -18,7 +18,7 @@ public enum DownloadPlanRequestError: Error, Equatable, Sendable {
     case invalidPlan(DownloadPlanError)
 }
 
-extension AuthCoordinator: DownloadRequestAuthorizing {
+extension AuthCoordinator {
     public func downloadPlan(
         accountID: AccountID,
         server: NormalizedServerURL,
@@ -133,11 +133,20 @@ extension AuthCoordinator: DownloadRequestAuthorizing {
         } catch let error as AuthenticatedRequestError {
             throw DownloadAuthorizationError.authenticatedRequest(error)
         }
-        return try authorizeDownloadRequest(
+        var replacement = try authorizeDownloadRequest(
             identity: identity,
             server: server,
             accessToken: tokens.accessToken
         )
+        replacement.setValue(
+            rejectedRequest.value(forHTTPHeaderField: "Range"),
+            forHTTPHeaderField: "Range"
+        )
+        replacement.setValue(
+            rejectedRequest.value(forHTTPHeaderField: "If-Range"),
+            forHTTPHeaderField: "If-Range"
+        )
+        return replacement
     }
 
     private func validateDownloadAccount(

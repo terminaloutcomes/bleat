@@ -1,5 +1,10 @@
 import Foundation
 
+public let bleatBackgroundDownloadSessionIdentifier =
+    "app.bleat.background-downloads.v1"
+
+public let bleatBackgroundDownloadMaximumConnectionsPerHost = 3
+
 public enum SafeAudioExtension: String, Codable, CaseIterable, Sendable {
     case aac
     case flac
@@ -203,13 +208,10 @@ public enum DownloadTaskIdentityError: Error, Equatable, Sendable {
     case invalidInode
     case invalidExpectedByteLength
     case invalidDestinationEntry
-    case encodingFailed
     case invalidTaskDescription
 }
 
 public struct DownloadTaskIdentity: Codable, Equatable, Sendable {
-    public static let taskDescriptionPrefix = "bleat-download-v1:"
-
     public let downloadID: DownloadID
     public let accountID: AccountID
     public let itemID: LibraryItemID
@@ -255,37 +257,20 @@ public struct DownloadTaskIdentity: Codable, Equatable, Sendable {
         destinationEntry = track.destinationEntry
     }
 
-    public func taskDescription() throws(DownloadTaskIdentityError) -> String {
-        let data: Data
-        do {
-            data = try JSONEncoder().encode(self)
-        } catch {
-            throw .encodingFailed
-        }
-        return Self.taskDescriptionPrefix + data.base64EncodedString()
-    }
-
     public static func decodeTaskDescription(
         _ description: String
     ) throws(DownloadTaskIdentityError) -> DownloadTaskIdentity {
-        guard description.hasPrefix(taskDescriptionPrefix),
-            let data = Data(
-                base64Encoded: String(
-                    description.dropFirst(taskDescriptionPrefix.count)
-                )
-            ),
-            let decoded = try? JSONDecoder().decode(
-                DownloadTaskIdentity.self,
-                from: data
-            ),
-            decoded.isValid
+        guard
+            let descriptor = try? DownloadChunkTaskDescription.decode(
+                description
+            )
         else {
             throw .invalidTaskDescription
         }
-        return decoded
+        return descriptor.identity
     }
 
-    private var isValid: Bool {
+    var isValid: Bool {
         !downloadID.rawValue.isEmpty
             && !accountID.rawValue.isEmpty
             && !itemID.rawValue.isEmpty

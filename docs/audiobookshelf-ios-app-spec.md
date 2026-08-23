@@ -1000,7 +1000,11 @@ Resume rewind is configurable: off, 5, 10, 15, or 30 seconds after a pause longe
 
 ### 10.1 Background download manager
 
-Use `URLSessionConfiguration.background(withIdentifier:)` and download tasks. Maintain one stable session identifier and persist task metadata so the app can reconnect to system-owned tasks after relaunch.
+Use `URLSessionConfiguration.background(withIdentifier:)` and bounded download
+tasks. Maintain one stable session identifier, but make Bleat-owned partial
+files the durable checkpoint. Transfer each track in 16 MiB HTTP range chunks,
+persist every validated completed chunk, and calculate continuation from the
+actual partial-file length after relaunch.
 
 Build the download plan from `GET /api/items/<id>?expanded=1&include=progress`. For every included `media.audioFiles[]` entry, use its `ino`, `metadata.filename`, `metadata.size`, and MIME information. Download each file with:
 
@@ -1037,7 +1041,16 @@ Requirements:
   full book, retaining verified files and preflighting only the remainder;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
-- pause/cancel/retry;
+- user Pause persists a paused manifest state, cancels only the current chunk,
+  and retains committed partial bytes; Continue resumes from the durable byte
+  offset, while Cancel discards unfinished partial bytes and retains completed
+  tracks;
+- validate `206 Partial Content`, the complete `Content-Range`, and the expected
+  total before appending; retain a strong `ETag` or `Last-Modified` validator
+  and send it as `If-Range` on later chunks;
+- never append a `200 OK` response to a ranged transfer;
+- keep playback-driven suspension separate from persisted user Pause;
+- retry;
 - stalled/failure detection with bounded exponential retry;
 - 401 refresh and rescheduling with a newly constructed `URLRequest`, because an existing background task's authorization header cannot be rotated in place;
 - background completion-handler support;
@@ -1084,8 +1097,8 @@ Partial books remain inspectable and retryable. Completed files are never silent
 - Never apply automatic cleanup to an explicit full-book download.
 - Completed automatic files outside the current window continue to count
   toward actual storage while being excluded from window progress.
-- Automatic records written before window targets were persisted are
-  regenerable and are removed before background-task restoration.
+- Incomplete download records without current ranged-transfer metadata are
+  invalid and are deleted. Byte-valid finalized books remain available.
 - Never evict the currently playing track.
 - If iOS removes or corrupts a local file, mark the download partial and offer repair instead of crashing.
 
@@ -1413,8 +1426,8 @@ Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, a
 | `ProgressCoordinator` actor | Durable checkpoints, session accounting, conflict resolution |
 | `StatisticsRepository` actor | Local slice recording, remote-session import, deduplication, metric aggregation, coverage labels, and export/import |
 | `PlaybackRouteAdapter` | Builds version-verified public-session or HLS media URLs from a playback session |
-| `DownloadCoordinator` actor | Queue and manifest state |
-| `BackgroundDownloadDelegate` | URLSession background callbacks forwarded into the coordinator |
+| `DownloadModel` | Main-actor download intent and transfer reconciliation |
+| `DownloadStorage` actor | Validated manifests, ranged partial bytes, and finalized media |
 | `NowPlayingCoordinator` | MediaPlayer metadata and remote commands |
 | `CarPlayCoordinator` | Active-account CarPlay templates, generation-safe browsing, selection, artwork, and Now Playing presentation |
 
@@ -1811,7 +1824,8 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 - Playback must survive SwiftUI view reconstruction and account-tab changes.
 - An app crash/relaunch loses no more than five seconds of local position.
 - A failed token refresh affects one account, not global app state.
-- Download task restoration is deterministic after relaunch.
+- Valid ranged download tasks are restored deterministically after relaunch;
+  invalid or obsolete background tasks are cancelled.
 - Repeated play taps cannot create multiple simultaneous server sessions.
 
 The following targets apply to the deferred post-MVP statistics work tracked in

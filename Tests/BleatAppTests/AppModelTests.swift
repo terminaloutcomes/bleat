@@ -8,6 +8,21 @@ import XCTest
 
 @testable import Bleat
 
+extension DownloadStorageLayout {
+    fileprivate func placeCompleteTestFile(
+        from temporaryURL: URL,
+        identity: DownloadTaskIdentity
+    ) throws -> Int64 {
+        _ = try appendChunk(
+            from: temporaryURL,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: identity.expectedByteLength
+        )
+        return try finalizePartial(identity)
+    }
+}
+
 #if os(iOS)
     import UIKit
 #endif
@@ -18,6 +33,98 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testTransferReconciliationStopsLatePauseAndCancelCallbacks() {
+        let active = DownloadTransferContext(
+            isPaused: false,
+            isCancelled: false,
+            isDeleting: false,
+            isSuperseded: false,
+            isAutomatic: false
+        )
+        let paused = DownloadTransferContext(
+            isPaused: true,
+            isCancelled: false,
+            isDeleting: false,
+            isSuperseded: false,
+            isAutomatic: false
+        )
+        let cancelled = DownloadTransferContext(
+            isPaused: false,
+            isCancelled: true,
+            isDeleting: false,
+            isSuperseded: false,
+            isAutomatic: false
+        )
+        let superseded = DownloadTransferContext(
+            isPaused: false,
+            isCancelled: false,
+            isDeleting: false,
+            isSuperseded: true,
+            isAutomatic: true
+        )
+
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .retryableFailure,
+                context: active
+            ),
+            .retry
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .terminalFailure,
+                context: active
+            ),
+            .fail
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .retryableFailure,
+                context: paused
+            ),
+            .stop
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .chunkStored(finalized: false),
+                context: cancelled
+            ),
+            .stop
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .chunkStored(finalized: true),
+                context: superseded
+            ),
+            .stop
+        )
+    }
+
+    func testTransferReconciliationAdvancesFinalizedAutomaticDownload() {
+        let automatic = DownloadTransferContext(
+            isPaused: false,
+            isCancelled: false,
+            isDeleting: false,
+            isSuperseded: false,
+            isAutomatic: true
+        )
+
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .chunkStored(finalized: true),
+                context: automatic
+            ),
+            .advanceAutomaticDownload
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .chunkStored(finalized: false),
+                context: automatic
+            ),
+            .continueChunk
+        )
+    }
+
     #if os(iOS)
         func testPlatformImagePixelSizeIncludesUIImageScale() throws {
         let format = UIGraphicsImageRendererFormat()
@@ -1304,7 +1411,7 @@ final class AppModelTests: XCTestCase {
             at: audioFixture.audioURL,
             to: staged
         )
-        let observed = try layout.placeDownloadedFile(
+        let observed = try layout.placeCompleteTestFile(
             from: staged,
             identity: identity
         )
@@ -10671,7 +10778,7 @@ final class AppModelTests: XCTestCase {
         )
         let staged = root.appendingPathComponent("staged.wav")
         try FileManager.default.copyItem(at: source, to: staged)
-        let observed = try layout.placeDownloadedFile(
+        let observed = try layout.placeCompleteTestFile(
             from: staged,
             identity: identity
         )
