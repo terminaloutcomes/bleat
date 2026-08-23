@@ -1080,14 +1080,15 @@ Run the disposable fake-attester-to-private-sink integration gate separately:
 mise run test:telemetry
 ```
 
-That command creates isolated PostgreSQL, API, authenticated stock Collector,
-outage Collector, and private capture containers with generated test
-credentials and random loopback ports. It drives the reviewed Swift telemetry
-pipeline through enrollment, JWT issuance, authenticated OTLP/HTTP protobuf
-export, and sink
-capture; validates issuer/audience authentication, missing or malformed
-credentials, the 1 MiB request limit, bounded exporter outage, and the exact
-privacy allowlist; then removes its containers, volumes, and temporary capture.
+That command first runs the focused Swift telemetry suites and the complete
+Rust authentication-service suite. It then creates isolated PostgreSQL, API,
+authenticated stock Collector, outage Collector, and private capture containers
+with generated test credentials and random loopback ports. It drives the
+reviewed Swift telemetry pipeline through enrollment, JWT issuance,
+authenticated OTLP/HTTP protobuf export, and sink capture; validates
+issuer/audience authentication, missing or malformed credentials, the 1 MiB
+request limit, bounded exporter outage, and the exact privacy allowlist; then
+verifies removal of its containers, volumes, and unredacted temporary capture.
 Privacy-safe artifacts from a failed run are retained beneath
 `TestSupport/ServerHarness/artifacts/telemetry/`.
 

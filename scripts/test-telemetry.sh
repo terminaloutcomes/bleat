@@ -7,6 +7,8 @@ readonly port_base="$((20000 + RANDOM % 19990))"
 readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
 readonly database_password="test-${project_name}-${RANDOM}"
+readonly captured_data_prohibited_pattern='authorization|bearer|telemetry:write|installation|reader@example\.com|books\.example|secret audiobook|refresh-token|private/var|transcript words|search phrase|session/opaque'
+readonly retained_secret_pattern='postgres(ql)?://[^:[:space:]]+:[^@[:space:]]+@|authorization: bearer [A-Za-z0-9._-]{8,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
 test_succeeded=0
 
 export BLEAT_API_TEST_PORT="${port_base}"
@@ -39,7 +41,14 @@ cleanup() {
           >"${artifact_root}/${capture:t:r}.structure.json" || true
       done
     fi
-    print -u2 "Telemetry failure artifacts retained in ${artifact_root}"
+    if [[ -d "${artifact_root}" ]] \
+      && rg --quiet -i "${retained_secret_pattern}" "${artifact_root}"; then
+      print -u2 "Unsafe telemetry failure artifacts were removed"
+      rm -rf "${artifact_root}"
+      exit_status=1
+    else
+      print -u2 "Telemetry failure artifacts retained in ${artifact_root}"
+    fi
   fi
   docker compose --project-name "${project_name}" --file "${compose_file}" \
     down --volumes --remove-orphans >/dev/null 2>&1 || exit_status=1
@@ -48,9 +57,18 @@ cleanup() {
     print -u2 "Disposable telemetry containers remain after cleanup"
     exit_status=1
   fi
+  if [[ -n "$(docker volume ls --quiet \
+    --filter "label=com.docker.compose.project=${project_name}")" ]]; then
+    print -u2 "Disposable telemetry volumes remain after cleanup"
+    exit_status=1
+  fi
   case "${temporary_capture}" in
     /tmp/bleat-telemetry-capture.*) rm -rf "${temporary_capture}" ;;
   esac
+  if [[ -e "${temporary_capture}" ]]; then
+    print -u2 "Unredacted telemetry capture remains after cleanup"
+    exit_status=1
+  fi
   return "${exit_status}"
 }
 trap cleanup EXIT
@@ -66,6 +84,15 @@ for production_key_variable in \
     exit 1
   fi
 done
+
+for test_suite in \
+  TelemetryAuthenticationTests \
+  AuthenticatedOtlpSpanExporterTests \
+  RemoteTelemetryTests; do
+  swift test --filter "${test_suite}"
+done
+
+./scripts/test-bleat-api.sh
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   up --detach --build --wait api
@@ -144,8 +171,7 @@ jq --slurp -e '
   [.. | objects | select(.eventName? == "bleat.cloudkit.sync.failed")] | length >= 1
 ' "${captured_logs}" >/dev/null
 
-readonly prohibited_pattern='authorization|bearer|telemetry:write|installation|reader@example\.com|books\.example|secret audiobook|refresh-token|private/var|transcript words|search phrase|session/opaque'
-if rg -i "${prohibited_pattern}" "${captured_traces}" "${captured_logs}"; then
+if rg --quiet -i "${captured_data_prohibited_pattern}" "${captured_traces}" "${captured_logs}"; then
   print -u2 "captured telemetry contains prohibited data"
   exit 1
 fi
@@ -158,5 +184,5 @@ if [[ -z "${runtime_user}" || "${runtime_user}" == "0" || "${runtime_user}" == "
   exit 1
 fi
 
-test_succeeded=1
 rm -rf "${artifact_root}"
+test_succeeded=1

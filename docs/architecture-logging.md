@@ -129,9 +129,11 @@ is a test sink, not an additional production authentication layer.
 ## Verification
 
 `mise run test:telemetry` is the repository contract for the authenticated
-device receiver. It validates the Collector configurations and proves real JWT
-authentication, OTLP/HTTP delivery, rejection, request-size, outage, and wire
-privacy behavior against generated test credentials.
+device receiver. It first runs the focused Swift telemetry and complete Rust
+authentication-service suites, then validates the Collector configurations and
+proves real JWT authentication, OTLP/HTTP delivery, rejection, request-size,
+outage, and wire privacy behavior against generated test credentials. The
+criterion-to-test mapping is maintained in `docs/requirements-traceability.md`.
 
 Production verification must independently prove both receiver paths:
 
