@@ -690,12 +690,15 @@ final class BleatUITests: XCTestCase {
         let author = app.buttons["search.author.author-1"]
         XCTAssertTrue(author.waitForExistence(timeout: 3))
         author.tap()
+        XCTAssertTrue(searchField.waitForNonExistence(timeout: 3))
         let clear = app.buttons["library.activeFilter.clear"]
         XCTAssertTrue(clear.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Author: Test Author"].exists)
         clear.tap()
 
         tabButton("Search", in: app).tap()
+        XCTAssertTrue(searchField.waitForExistence(timeout: 3))
+        XCTAssertEqual(searchField.value as? String, "Test")
         let series = app.buttons["search.series.series-1"]
         if !series.waitForExistence(timeout: 1) {
             app.swipeUp()
