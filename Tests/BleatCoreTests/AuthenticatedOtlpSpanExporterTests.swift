@@ -227,48 +227,114 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         XCTAssertEqual(requestCount, 2)
     }
 
-    func testGrpcCancellationBarrierPreventsPausedStaleCallCreation() throws {
-        let reachedCallBoundary = DispatchSemaphore(value: 0)
-        let resumeCallAttempt = DispatchSemaphore(value: 0)
-        let createdCallCount = LockedCounter()
-        let result = LockedOtlpExportResult()
-        let finished = expectation(description: "gRPC export returned")
-        let span = span()
-        let configuration = try AuthenticatedOtlpSpanExporterConfiguration(
-            endpoint: XCTUnwrap(URL(string: "https://localhost:4317"))
+    func testHTTPClientsUseStandardSignalPathsAndProtobufBodies() throws {
+        let spanTransport = RecordingHTTPTransport(result: .success)
+        let spanClient = HttpRemoteTelemetryOtlpClient(
+            endpoint: try XCTUnwrap(
+                URL(string: "https://telemetry.example/v1/traces")
+            ),
+            transport: spanTransport
         )
-        let client = GrpcRemoteTelemetryOtlpClient(
-            configuration: configuration,
-            willAttemptCallCreation: {
-                reachedCallBoundary.signal()
-                resumeCallAttempt.wait()
-            },
-            didCreateCall: {
-                createdCallCount.increment()
-            }
-        )
-
-        DispatchQueue.global().async {
-            result.value = client.export(
-                spans: [span],
-                metadata: [("authorization", "Bearer test")],
-                timeout: 30,
-                isActive: { true }
-            )
-            finished.fulfill()
-        }
         XCTAssertEqual(
-            reachedCallBoundary.wait(timeout: .now() + 2),
+            spanClient.export(
+                spans: [span()],
+                metadata: [("authorization", "Bearer span-token")],
+                timeout: 2,
+                isActive: { true }
+            ),
             .success
         )
+        let spanRequest = try XCTUnwrap(spanTransport.requests.first)
+        XCTAssertEqual(spanRequest.url?.path, "/v1/traces")
+        XCTAssertEqual(spanRequest.httpMethod, "POST")
+        XCTAssertEqual(
+            spanRequest.value(forHTTPHeaderField: "Content-Type"),
+            "application/x-protobuf"
+        )
+        XCTAssertEqual(
+            spanRequest.value(forHTTPHeaderField: "Authorization"),
+            "Bearer span-token"
+        )
+        XCTAssertFalse(try XCTUnwrap(spanRequest.httpBody).isEmpty)
 
-        client.cancelActiveExports()
-        resumeCallAttempt.signal()
-        wait(for: [finished], timeout: 2)
+        let logTransport = RecordingHTTPTransport(result: .success)
+        let logClient = HttpRemoteTelemetryOtlpLogClient(
+            endpoint: try XCTUnwrap(
+                URL(string: "https://telemetry.example/v1/logs")
+            ),
+            transport: logTransport
+        )
+        XCTAssertEqual(
+            logClient.export(
+                logs: [logRecord()],
+                metadata: [("authorization", "Bearer log-token")],
+                timeout: 2,
+                isActive: { true }
+            ),
+            .success
+        )
+        let logRequest = try XCTUnwrap(logTransport.requests.first)
+        XCTAssertEqual(logRequest.url?.path, "/v1/logs")
+        XCTAssertEqual(
+            logRequest.value(forHTTPHeaderField: "Content-Type"),
+            "application/x-protobuf"
+        )
+        XCTAssertEqual(
+            logRequest.value(forHTTPHeaderField: "Authorization"),
+            "Bearer log-token"
+        )
+        XCTAssertFalse(try XCTUnwrap(logRequest.httpBody).isEmpty)
+    }
 
-        XCTAssertEqual(result.value, .cancelled)
-        XCTAssertEqual(createdCallCount.value, 0)
-        client.shutdown()
+    func testHTTPResponseStatusPreservesAuthenticationAndTransportFailures()
+        throws
+    {
+        let url = try XCTUnwrap(URL(string: "https://telemetry.example"))
+        func response(_ status: Int) throws -> HTTPURLResponse {
+            try XCTUnwrap(
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: status,
+                    httpVersion: "HTTP/2",
+                    headerFields: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: try response(200), error: nil),
+            .success
+        )
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: try response(401), error: nil),
+            .unauthenticated
+        )
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: try response(403), error: nil),
+            .rejected
+        )
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: try response(429), error: nil),
+            .failure
+        )
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: nil,
+                error: URLError(.cancelled)
+            ),
+            .cancelled
+        )
+        XCTAssertEqual(
+            RemoteTelemetryHTTPResponse.result(
+                response: nil,
+                error: URLError(.cannotConnectToHost)
+            ),
+            .failure
+        )
     }
 
     func testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry()
@@ -540,6 +606,33 @@ private final class RecordingOtlpClient:
     }
 }
 
+private final class RecordingHTTPTransport:
+    RemoteTelemetryHTTPTransport, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private let result: RemoteTelemetryOtlpExportResult
+    private var recordedRequests: [URLRequest] = []
+
+    init(result: RemoteTelemetryOtlpExportResult) {
+        self.result = result
+    }
+
+    var requests: [URLRequest] { lock.withLock { recordedRequests } }
+
+    func send(
+        _ request: URLRequest,
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) -> RemoteTelemetryOtlpExportResult {
+        guard isActive() else { return .cancelled }
+        lock.withLock { recordedRequests.append(request) }
+        return result
+    }
+
+    func cancelActiveRequests() {}
+    func shutdown() {}
+}
+
 private final class RecordingOtlpLogClient:
     RemoteTelemetryOtlpLogClient, @unchecked Sendable
 {
@@ -660,26 +753,5 @@ private final class LockedExportResult: @unchecked Sendable {
     var value: SpanExporterResultCode? {
         get { lock.withLock { storedValue } }
         set { lock.withLock { storedValue = newValue } }
-    }
-}
-
-private final class LockedOtlpExportResult: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValue: RemoteTelemetryOtlpExportResult?
-
-    var value: RemoteTelemetryOtlpExportResult? {
-        get { lock.withLock { storedValue } }
-        set { lock.withLock { storedValue = newValue } }
-    }
-}
-
-private final class LockedCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
-
-    var value: Int { lock.withLock { count } }
-
-    func increment() {
-        lock.withLock { count += 1 }
     }
 }

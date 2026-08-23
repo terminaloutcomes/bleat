@@ -1052,7 +1052,7 @@ OIDC discovery, and JWKS support bounded signing-key rotation without embedding
 private deployment material in the repository or container image.
 
 On iOS, the authentication service URL comes from
-`BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/gRPC origin comes from
+`BLEAT_TELEMETRY_AUTH_BASE_URL` and the OTLP/HTTP origin comes from
 `BLEAT_TELEMETRY_OTLP_ENDPOINT`; Release requires HTTPS and Debug permits HTTP
 only on loopback. Native macOS ignores these telemetry settings because remote
 export is out of scope on that platform.
@@ -1076,10 +1076,11 @@ Run the disposable fake-attester-to-private-sink integration gate separately:
 mise run test:telemetry
 ```
 
-That command creates isolated PostgreSQL, API, TLS-fixture, authenticated stock
-Collector, outage Collector, and private capture containers with generated test
+That command creates isolated PostgreSQL, API, authenticated stock Collector,
+outage Collector, and private capture containers with generated test
 credentials and random loopback ports. It drives the reviewed Swift telemetry
-pipeline through enrollment, JWT issuance, authenticated OTLP export, and sink
+pipeline through enrollment, JWT issuance, authenticated OTLP/HTTP protobuf
+export, and sink
 capture; validates issuer/audience authentication, missing or malformed
 credentials, the 1 MiB request limit, bounded exporter outage, and the exact
 privacy allowlist; then removes its containers, volumes, and temporary capture.

@@ -7,10 +7,9 @@
 // when it is initialized.
 
 import Foundation
-@preconcurrency import GRPC
 @preconcurrency import OpenTelemetryProtocolExporterCommon
-@preconcurrency import OpenTelemetryProtocolExporterGrpc
 @preconcurrency import OpenTelemetrySdk
+import SwiftProtobuf
 
 public enum AuthenticatedOtlpSpanExporterConfigurationError:
     Error, Equatable, Sendable
@@ -24,9 +23,6 @@ public struct AuthenticatedOtlpSpanExporterConfiguration:
 {
     public let endpoint: URL
     public let timeout: TimeInterval
-
-    let host: String
-    let port: Int
 
     public init(
         endpoint: URL,
@@ -50,13 +46,15 @@ public struct AuthenticatedOtlpSpanExporterConfiguration:
         }
         self.endpoint = endpoint
         self.timeout = timeout
-        self.host = host
-        self.port = resolvedPort
+    }
+
+    func signalEndpoint(_ signal: String) -> URL {
+        endpoint.appendingPathComponent("v1").appendingPathComponent(signal)
     }
 }
 
-/// Signal exporters sharing one TLS/gRPC channel and token provider. The
-/// channel closes only after both SDK processors have shut down.
+/// Signal exporters sharing one ephemeral URL session and token provider. The
+/// session closes only after both SDK processors have shut down.
 public struct AuthenticatedOtlpExporters: Sendable {
     public let spans: any RemoteTelemetryDownstreamSpanExporter
     public let logs: any RemoteTelemetryDownstreamLogExporter
@@ -65,31 +63,31 @@ public struct AuthenticatedOtlpExporters: Sendable {
         configuration: AuthenticatedOtlpSpanExporterConfiguration,
         tokenProvider: any TelemetryTokenProviding
     ) {
-        let group = PlatformSupport.makeEventLoopGroup(
-            loopCount: 1,
-            networkPreference: .best
-        )
-        let channel = ClientConnection.usingPlatformAppropriateTLS(
-            for: group
-        ).connect(host: configuration.host, port: configuration.port)
+        let sessionConfiguration = URLSessionConfiguration.ephemeral
+        sessionConfiguration.urlCache = nil
+        let session = URLSession(configuration: sessionConfiguration)
         let closer = SharedOtlpTransportCloser {
-            channel.close().whenComplete { _ in
-                group.shutdownGracefully { _ in }
-            }
+            session.invalidateAndCancel()
         }
         spans = AuthenticatedOtlpSpanExporter(
             tokenProvider: tokenProvider,
-            client: GrpcRemoteTelemetryOtlpClient(
-                channel: channel,
-                closeTransport: { closer.release() }
+            client: HttpRemoteTelemetryOtlpClient(
+                endpoint: configuration.signalEndpoint("traces"),
+                transport: URLSessionRemoteTelemetryHTTPTransport(
+                    session: session,
+                    closeTransport: { closer.release() }
+                )
             ),
             timeout: configuration.timeout
         )
         logs = AuthenticatedOtlpLogExporter(
             tokenProvider: tokenProvider,
-            client: GrpcRemoteTelemetryOtlpLogClient(
-                channel: channel,
-                closeTransport: { closer.release() }
+            client: HttpRemoteTelemetryOtlpLogClient(
+                endpoint: configuration.signalEndpoint("logs"),
+                transport: URLSessionRemoteTelemetryHTTPTransport(
+                    session: session,
+                    closeTransport: { closer.release() }
+                )
             ),
             timeout: configuration.timeout
         )
@@ -155,7 +153,7 @@ public final class AuthenticatedOtlpSpanExporter:
     ) {
         self.init(
             tokenProvider: tokenProvider,
-            client: GrpcRemoteTelemetryOtlpClient(
+            client: HttpRemoteTelemetryOtlpClient(
                 configuration: configuration
             ),
             timeout: configuration.timeout
@@ -369,63 +367,23 @@ public final class AuthenticatedOtlpSpanExporter:
     }
 }
 
-final class GrpcRemoteTelemetryOtlpClient:
+final class HttpRemoteTelemetryOtlpClient:
     RemoteTelemetryOtlpClient, @unchecked Sendable
 {
-    private typealias TraceCall = UnaryCall<
-        Opentelemetry_Proto_Collector_Trace_V1_ExportTraceServiceRequest,
-        Opentelemetry_Proto_Collector_Trace_V1_ExportTraceServiceResponse
-    >
+    private let endpoint: URL
+    private let transport: any RemoteTelemetryHTTPTransport
 
-    private let channel: ClientConnection
-    private let traceClient:
-        Opentelemetry_Proto_Collector_Trace_V1_TraceServiceNIOClient
-    private let closeTransport: @Sendable () -> Void
-    private let willAttemptCallCreation: @Sendable () -> Void
-    private let didCreateCall: @Sendable () -> Void
-    private let lock = NSLock()
-    private var activeCalls: [UInt64: TraceCall] = [:]
-    private var nextCallID: UInt64 = 0
-    private var cancellationGeneration: UInt64 = 0
-    private var isShutdown = false
-
-    init(
-        configuration: AuthenticatedOtlpSpanExporterConfiguration,
-        willAttemptCallCreation: @escaping @Sendable () -> Void = {},
-        didCreateCall: @escaping @Sendable () -> Void = {}
-    ) {
-        let group = PlatformSupport.makeEventLoopGroup(
-            loopCount: 1,
-            networkPreference: .best
-        )
-        let channel = ClientConnection.usingPlatformAppropriateTLS(
-            for: group
-        ).connect(
-            host: configuration.host,
-            port: configuration.port
-        )
-        self.channel = channel
-        traceClient = .init(channel: channel)
-        closeTransport = {
-            channel.close().whenComplete { _ in
-                group.shutdownGracefully { _ in }
-            }
-        }
-        self.willAttemptCallCreation = willAttemptCallCreation
-        self.didCreateCall = didCreateCall
+    init(configuration: AuthenticatedOtlpSpanExporterConfiguration) {
+        endpoint = configuration.signalEndpoint("traces")
+        transport = URLSessionRemoteTelemetryHTTPTransport()
     }
 
     init(
-        channel: ClientConnection,
-        closeTransport: @escaping @Sendable () -> Void,
-        willAttemptCallCreation: @escaping @Sendable () -> Void = {},
-        didCreateCall: @escaping @Sendable () -> Void = {}
+        endpoint: URL,
+        transport: any RemoteTelemetryHTTPTransport
     ) {
-        self.channel = channel
-        traceClient = .init(channel: channel)
-        self.closeTransport = closeTransport
-        self.willAttemptCallCreation = willAttemptCallCreation
-        self.didCreateCall = didCreateCall
+        self.endpoint = endpoint
+        self.transport = transport
     }
 
     func export(
@@ -434,11 +392,6 @@ final class GrpcRemoteTelemetryOtlpClient:
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult {
-        guard timeout > 0, isActive() else { return .cancelled }
-        let generation: UInt64? = lock.withLock {
-            isShutdown ? nil : cancellationGeneration
-        }
-        guard let generation else { return .cancelled }
         let request =
             Opentelemetry_Proto_Collector_Trace_V1_ExportTraceServiceRequest
             .with {
@@ -446,62 +399,126 @@ final class GrpcRemoteTelemetryOtlpClient:
                     spanDataList: spans
                 )
             }
-        var options = CallOptions()
-        for (name, value) in metadata {
-            options.customMetadata.add(name: name, value: value)
-        }
-        let nanoseconds = min(
-            timeout * 1_000_000_000,
-            Double(Int64.max)
+        var urlRequest = URLRequest(url: endpoint)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue(
+            "application/x-protobuf",
+            forHTTPHeaderField: "Content-Type"
         )
-        options.timeLimit = .timeout(.nanoseconds(Int64(nanoseconds)))
-        willAttemptCallCreation()
-        let registeredCall: (TraceCall, UInt64)? = lock.withLock {
-            guard
-                !isShutdown,
-                cancellationGeneration == generation,
-                isActive()
-            else { return nil }
-            nextCallID &+= 1
-            let call = traceClient.export(request, callOptions: options)
-            didCreateCall()
-            activeCalls[nextCallID] = call
-            return (call, nextCallID)
+        for (name, value) in metadata {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
         }
-        guard let (call, callID) = registeredCall else { return .cancelled }
-        defer {
-            lock.withLock {
-                activeCalls[callID] = nil
-            }
-        }
-
         do {
-            let status = try call.status.wait()
-            switch status.code {
-            case .ok:
-                return .success
-            case .unauthenticated:
-                return .unauthenticated
-            case .permissionDenied:
-                return .rejected
-            case .cancelled, .deadlineExceeded:
-                return .cancelled
-            default:
-                return .failure
-            }
+            urlRequest.httpBody = try request.serializedData()
         } catch {
             return .failure
         }
+        return transport.send(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
     }
 
-    func cancelActiveExports() {
-        let calls = lock.withLock {
+    func cancelActiveExports() { transport.cancelActiveRequests() }
+
+    func shutdown() { transport.shutdown() }
+}
+
+protocol RemoteTelemetryHTTPTransport: Sendable {
+    func send(
+        _ request: URLRequest,
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) -> RemoteTelemetryOtlpExportResult
+    func cancelActiveRequests()
+    func shutdown()
+}
+
+final class URLSessionRemoteTelemetryHTTPTransport:
+    RemoteTelemetryHTTPTransport, @unchecked Sendable
+{
+    private let session: URLSession
+    private let closeTransport: @Sendable () -> Void
+    private let lock = NSLock()
+    private var activeTasks: [UInt64: URLSessionDataTask] = [:]
+    private var nextTaskID: UInt64 = 0
+    private var cancellationGeneration: UInt64 = 0
+    private var isShutdown = false
+
+    convenience init() {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        let session = URLSession(configuration: configuration)
+        self.init(
+            session: session,
+            closeTransport: { session.invalidateAndCancel() }
+        )
+    }
+
+    init(
+        session: URLSession,
+        closeTransport: @escaping @Sendable () -> Void
+    ) {
+        self.session = session
+        self.closeTransport = closeTransport
+    }
+
+    func send(
+        _ request: URLRequest,
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) -> RemoteTelemetryOtlpExportResult {
+        guard timeout > 0, isActive() else { return .cancelled }
+        let generation: UInt64? = lock.withLock {
+            isShutdown ? nil : cancellationGeneration
+        }
+        guard let generation else { return .cancelled }
+
+        var timedRequest = request
+        timedRequest.timeoutInterval = timeout
+        let completion = HTTPRequestCompletion()
+        let task = session.dataTask(with: timedRequest) {
+            _, response, error in
+            completion.complete(response: response, error: error)
+        }
+        let taskID: UInt64? = lock.withLock {
+            guard !isShutdown,
+                cancellationGeneration == generation,
+                isActive()
+            else { return nil }
+            nextTaskID &+= 1
+            activeTasks[nextTaskID] = task
+            return nextTaskID
+        }
+        guard let taskID else {
+            task.cancel()
+            return .cancelled
+        }
+        task.resume()
+        let result = completion.wait(timeout: timeout)
+        lock.withLock { activeTasks[taskID] = nil }
+        guard
+            lock.withLock({
+                !isShutdown && cancellationGeneration == generation
+            }), isActive()
+        else {
+            task.cancel()
+            return .cancelled
+        }
+        guard let result else {
+            task.cancel()
+            return .cancelled
+        }
+        return result
+    }
+
+    func cancelActiveRequests() {
+        let tasks = lock.withLock {
             cancellationGeneration &+= 1
-            return Array(activeCalls.values)
+            return Array(activeTasks.values)
         }
-        for call in calls {
-            call.cancel(promise: nil)
-        }
+        for task in tasks { task.cancel() }
     }
 
     func shutdown() {
@@ -511,8 +528,54 @@ final class GrpcRemoteTelemetryOtlpClient:
             return true
         }
         guard shouldClose else { return }
-        cancelActiveExports()
+        cancelActiveRequests()
         closeTransport()
+    }
+}
+
+private final class HTTPRequestCompletion: @unchecked Sendable {
+    private let semaphore = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var result: RemoteTelemetryOtlpExportResult?
+
+    func complete(response: URLResponse?, error: Error?) {
+        let mapped = RemoteTelemetryHTTPResponse.result(
+            response: response,
+            error: error
+        )
+        lock.withLock { result = mapped }
+        semaphore.signal()
+    }
+
+    func wait(timeout: TimeInterval) -> RemoteTelemetryOtlpExportResult? {
+        guard semaphore.wait(timeout: .now() + timeout) == .success else {
+            return nil
+        }
+        return lock.withLock { result }
+    }
+}
+
+enum RemoteTelemetryHTTPResponse {
+    static func result(
+        response: URLResponse?,
+        error: Error?
+    ) -> RemoteTelemetryOtlpExportResult {
+        if let urlError = error as? URLError,
+            urlError.code == .cancelled || urlError.code == .timedOut
+        {
+            return .cancelled
+        } else if error != nil {
+            return .failure
+        } else if let response = response as? HTTPURLResponse {
+            switch response.statusCode {
+            case 200..<300: return .success
+            case 401: return .unauthenticated
+            case 403: return .rejected
+            default: return .failure
+            }
+        } else {
+            return .failure
+        }
     }
 }
 
@@ -548,7 +611,7 @@ public final class AuthenticatedOtlpLogExporter:
     ) {
         self.init(
             tokenProvider: tokenProvider,
-            client: GrpcRemoteTelemetryOtlpLogClient(
+            client: HttpRemoteTelemetryOtlpLogClient(
                 configuration: configuration
             ),
             timeout: configuration.timeout
@@ -745,45 +808,23 @@ public final class AuthenticatedOtlpLogExporter:
     }
 }
 
-final class GrpcRemoteTelemetryOtlpLogClient:
+final class HttpRemoteTelemetryOtlpLogClient:
     RemoteTelemetryOtlpLogClient, @unchecked Sendable
 {
-    private typealias LogCall = UnaryCall<
-        Opentelemetry_Proto_Collector_Logs_V1_ExportLogsServiceRequest,
-        Opentelemetry_Proto_Collector_Logs_V1_ExportLogsServiceResponse
-    >
-
-    private let logClient:
-        Opentelemetry_Proto_Collector_Logs_V1_LogsServiceNIOClient
-    private let closeTransport: @Sendable () -> Void
-    private let lock = NSLock()
-    private var activeCalls: [UInt64: LogCall] = [:]
-    private var nextCallID: UInt64 = 0
-    private var cancellationGeneration: UInt64 = 0
-    private var isShutdown = false
+    private let endpoint: URL
+    private let transport: any RemoteTelemetryHTTPTransport
 
     init(configuration: AuthenticatedOtlpSpanExporterConfiguration) {
-        let group = PlatformSupport.makeEventLoopGroup(
-            loopCount: 1,
-            networkPreference: .best
-        )
-        let channel = ClientConnection.usingPlatformAppropriateTLS(
-            for: group
-        ).connect(host: configuration.host, port: configuration.port)
-        logClient = .init(channel: channel)
-        closeTransport = {
-            channel.close().whenComplete { _ in
-                group.shutdownGracefully { _ in }
-            }
-        }
+        endpoint = configuration.signalEndpoint("logs")
+        transport = URLSessionRemoteTelemetryHTTPTransport()
     }
 
     init(
-        channel: ClientConnection,
-        closeTransport: @escaping @Sendable () -> Void
+        endpoint: URL,
+        transport: any RemoteTelemetryHTTPTransport
     ) {
-        logClient = .init(channel: channel)
-        self.closeTransport = closeTransport
+        self.endpoint = endpoint
+        self.transport = transport
     }
 
     func export(
@@ -792,70 +833,37 @@ final class GrpcRemoteTelemetryOtlpLogClient:
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult {
-        guard timeout > 0, isActive() else { return .cancelled }
-        let generation: UInt64? = lock.withLock {
-            isShutdown ? nil : cancellationGeneration
-        }
-        guard let generation else { return .cancelled }
         let request =
             Opentelemetry_Proto_Collector_Logs_V1_ExportLogsServiceRequest
             .with {
-                $0.resourceLogs = LogRecordAdapter
+                $0.resourceLogs =
+                    LogRecordAdapter
                     .toProtoResourceRecordLog(logRecordList: logs)
             }
-        var options = CallOptions()
-        for (name, value) in metadata {
-            options.customMetadata.add(name: name, value: value)
-        }
-        let nanoseconds = min(
-            timeout * 1_000_000_000,
-            Double(Int64.max)
+        var urlRequest = URLRequest(url: endpoint)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue(
+            "application/x-protobuf",
+            forHTTPHeaderField: "Content-Type"
         )
-        options.timeLimit = .timeout(.nanoseconds(Int64(nanoseconds)))
-        let registeredCall: (LogCall, UInt64)? = lock.withLock {
-            guard !isShutdown,
-                cancellationGeneration == generation,
-                isActive()
-            else { return nil }
-            nextCallID &+= 1
-            let call = logClient.export(request, callOptions: options)
-            activeCalls[nextCallID] = call
-            return (call, nextCallID)
+        for (name, value) in metadata {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
         }
-        guard let (call, callID) = registeredCall else { return .cancelled }
-        defer { lock.withLock { activeCalls[callID] = nil } }
         do {
-            let status = try call.status.wait()
-            switch status.code {
-            case .ok: return .success
-            case .unauthenticated: return .unauthenticated
-            case .permissionDenied: return .rejected
-            case .cancelled, .deadlineExceeded: return .cancelled
-            default: return .failure
-            }
+            urlRequest.httpBody = try request.serializedData()
         } catch {
             return .failure
         }
+        return transport.send(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
     }
 
-    func cancelActiveExports() {
-        let calls = lock.withLock {
-            cancellationGeneration &+= 1
-            return Array(activeCalls.values)
-        }
-        for call in calls { call.cancel(promise: nil) }
-    }
+    func cancelActiveExports() { transport.cancelActiveRequests() }
 
-    func shutdown() {
-        let shouldClose = lock.withLock {
-            guard !isShutdown else { return false }
-            isShutdown = true
-            return true
-        }
-        guard shouldClose else { return }
-        cancelActiveExports()
-        closeTransport()
-    }
+    func shutdown() { transport.shutdown() }
 }
 
 private enum BlockingTokenResult: Equatable, Sendable {
