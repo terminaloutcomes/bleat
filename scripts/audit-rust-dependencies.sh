@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -11,8 +11,9 @@ if cargo tree \
   --invert rkyv 2>/dev/null \
   | rg -q '^rkyv '
 then
-  print -u2 \
-    "RUSTSEC-2026-0235 may only be ignored while rkyv is absent from the enabled feature graph"
+  printf '%s\n' \
+    "RUSTSEC-2026-0235 may only be ignored while rkyv is absent from the enabled feature graph" \
+    >&2
   exit 1
 fi
 

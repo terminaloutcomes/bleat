@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ if gitleaks dir \
   --report-path "${report_path}" \
   "${unsafe_root}"
 then
-  print -u2 "Secret-scanning fixtures unexpectedly passed"
+  printf '%s\n' "Secret-scanning fixtures unexpectedly passed" >&2
   exit 1
 fi
 
@@ -57,7 +57,9 @@ do
     'any(.[]; .RuleID == $rule_id)' \
     "${report_path}" >/dev/null \
     || {
-      print -u2 "Expected secret-scanning rule did not fire: ${rule_id}"
+      printf '%s\n' \
+        "Expected secret-scanning rule did not fire: ${rule_id}" \
+        >&2
       exit 1
     }
 done
@@ -68,7 +70,7 @@ git -C "${repository_root}" ls-files \
   --exclude-standard \
   | while IFS= read -r source_path; do
       [[ -e "${repository_root}/${source_path}" ]] || continue
-      print -r -- "${source_path}"
+      printf '%s\n' "${source_path}"
     done \
   | tar --files-from=- --create \
   | tar --directory "${source_root}" --extract
@@ -79,4 +81,4 @@ gitleaks dir \
   --redact \
   "${source_root}"
 
-print "Secret-scanning fixtures and current-source scan passed"
+printf '%s\n' "Secret-scanning fixtures and current-source scan passed"
