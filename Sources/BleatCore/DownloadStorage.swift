@@ -22,6 +22,8 @@ public enum DownloadStorageError: Error, Equatable, Sendable {
     case trackNotFound
     case invalidAutomaticWindow
     case invalidTemporaryFile
+    case invalidPartialOffset(expected: Int64, observed: Int64)
+    case partialFileTooLarge(expected: Int64, observed: Int64)
     case byteLengthMismatch(expected: Int64, observed: Int64)
     case requirementOverflow
     case capacityUnavailable
@@ -130,6 +132,157 @@ public struct DownloadStorageLayout: Sendable {
             identity.destinationEntry,
             isDirectory: false
         )
+    }
+
+    public func partialURL(
+        for identity: DownloadTaskIdentity
+    ) -> URL {
+        bookDirectory(
+            accountID: identity.accountID,
+            itemID: identity.itemID
+        ).appendingPathComponent(
+            identity.destinationEntry + ".partial",
+            isDirectory: false
+        )
+    }
+
+    public func partialByteLength(
+        for identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> Int64 {
+        let partial = partialURL(for: identity)
+        guard FileManager.default.fileExists(atPath: partial.path) else {
+            return 0
+        }
+        let observed = Self.fileSize(at: partial)
+        guard observed >= 0 else {
+            throw .persistenceFailed
+        }
+        guard observed <= identity.expectedByteLength else {
+            throw .partialFileTooLarge(
+                expected: identity.expectedByteLength,
+                observed: observed
+            )
+        }
+        return observed
+    }
+
+    public func appendChunk(
+        from temporaryURL: URL,
+        identity: DownloadTaskIdentity,
+        expectedOffset: Int64,
+        expectedChunkLength: Int64
+    ) throws(DownloadStorageError) -> Int64 {
+        let fileManager = FileManager.default
+        guard temporaryURL.isFileURL,
+            fileManager.fileExists(atPath: temporaryURL.path)
+        else {
+            throw .invalidTemporaryFile
+        }
+        let chunkLength = Self.fileSize(at: temporaryURL)
+        guard chunkLength == expectedChunkLength else {
+            throw .byteLengthMismatch(
+                expected: expectedChunkLength,
+                observed: chunkLength
+            )
+        }
+        let existing = try partialByteLength(for: identity)
+        guard existing == expectedOffset else {
+            throw .invalidPartialOffset(
+                expected: expectedOffset,
+                observed: existing
+            )
+        }
+        let (resultingLength, overflow) = existing.addingReportingOverflow(
+            chunkLength
+        )
+        guard !overflow, resultingLength <= identity.expectedByteLength else {
+            throw .partialFileTooLarge(
+                expected: identity.expectedByteLength,
+                observed: overflow ? Int64.max : resultingLength
+            )
+        }
+        let directory = bookDirectory(
+            accountID: identity.accountID,
+            itemID: identity.itemID
+        )
+        let partial = partialURL(for: identity)
+        do {
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            try Self.excludeFromBackup(directory)
+            if !fileManager.fileExists(atPath: partial.path) {
+                guard
+                    fileManager.createFile(atPath: partial.path, contents: nil)
+                else {
+                    throw DownloadStorageError.persistenceFailed
+                }
+            }
+            let source = try FileHandle(forReadingFrom: temporaryURL)
+            let destination = try FileHandle(forWritingTo: partial)
+            do {
+                try destination.seekToEnd()
+                while let data = try source.read(upToCount: 1_048_576),
+                    !data.isEmpty
+                {
+                    try destination.write(contentsOf: data)
+                }
+                try destination.synchronize()
+                try source.close()
+                try destination.close()
+            } catch {
+                try? source.close()
+                try? destination.close()
+                throw error
+            }
+            let observed = Self.fileSize(at: partial)
+            guard observed == resultingLength else {
+                throw DownloadStorageError.byteLengthMismatch(
+                    expected: resultingLength,
+                    observed: observed
+                )
+            }
+            return observed
+        } catch let error as DownloadStorageError {
+            throw error
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    public func finalizePartial(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> Int64 {
+        let fileManager = FileManager.default
+        let partial = partialURL(for: identity)
+        let observed = try partialByteLength(for: identity)
+        guard observed == identity.expectedByteLength else {
+            throw .byteLengthMismatch(
+                expected: identity.expectedByteLength,
+                observed: observed
+            )
+        }
+        let destination = destinationURL(for: identity)
+        do {
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.moveItem(at: partial, to: destination)
+            #if os(iOS)
+                try fileManager.setAttributes(
+                    [
+                        .protectionKey:
+                            FileProtectionType
+                            .completeUntilFirstUserAuthentication
+                    ],
+                    ofItemAtPath: destination.path
+                )
+            #endif
+            return observed
+        } catch {
+            throw .persistenceFailed
+        }
     }
 
     public func placeDownloadedFile(
@@ -403,6 +556,42 @@ public actor DownloadStorage {
         return record
     }
 
+    public func markDownloading(
+        _ identity: DownloadTaskIdentity,
+        observedByteLength: Int64,
+        validator: DownloadValidator?
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(identity)
+        do {
+            try record.manifest.markDownloading(
+                trackIndex: identity.trackIndex,
+                observedByteLength: observedByteLength,
+                validator: validator
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func markPaused(
+        _ identity: DownloadTaskIdentity,
+        observedByteLength: Int64
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(identity)
+        do {
+            try record.manifest.markPaused(
+                trackIndex: identity.trackIndex,
+                observedByteLength: observedByteLength
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
     public func markComplete(
         _ identity: DownloadTaskIdentity,
         observedByteLength: Int64
@@ -503,6 +692,70 @@ public actor DownloadStorage {
         } catch {
             throw .persistenceFailed
         }
+    }
+
+    public func partialByteLength(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> Int64 {
+        try layout.partialByteLength(for: identity)
+    }
+
+    public func discardPartial(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) {
+        let partial = layout.partialURL(for: identity)
+        do {
+            if FileManager.default.fileExists(atPath: partial.path) {
+                try FileManager.default.removeItem(at: partial)
+            }
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    public func commitChunk(
+        _ identity: DownloadTaskIdentity,
+        temporaryURL: URL,
+        range: DownloadByteRange,
+        validator: DownloadValidator?
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        let committed = try layout.appendChunk(
+            from: temporaryURL,
+            identity: identity,
+            expectedOffset: range.start,
+            expectedChunkLength: range.length
+        )
+        if committed == identity.expectedByteLength {
+            _ = try layout.finalizePartial(identity)
+            return try markComplete(
+                identity,
+                observedByteLength: committed
+            )
+        }
+        return try markDownloading(
+            identity,
+            observedByteLength: committed,
+            validator: validator
+        )
+    }
+
+    public func recordCommittedChunk(
+        _ identity: DownloadTaskIdentity,
+        committedByteLength: Int64,
+        validator: DownloadValidator?,
+        finalized: Bool
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        if finalized {
+            return try markComplete(
+                identity,
+                observedByteLength: committedByteLength
+            )
+        }
+        return try markDownloading(
+            identity,
+            observedByteLength: committedByteLength,
+            validator: validator
+        )
     }
 
     public func records() throws(DownloadStorageError)
@@ -634,7 +887,30 @@ public actor DownloadStorage {
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
         var record = storedRecord
         var changed = false
-        for entry in record.manifest.entries where entry.state == .complete {
+        for entry in record.manifest.entries {
+            if entry.state != .complete {
+                guard
+                    let identity = try? identity(
+                        for: entry,
+                        in: record
+                    )
+                else {
+                    throw .invalidStoredRecord
+                }
+                let partialLength = try layout.partialByteLength(for: identity)
+                if partialLength != (entry.observedByteLength ?? 0) {
+                    do {
+                        try record.manifest.reconcileStoredBytes(
+                            trackIndex: entry.trackIndex,
+                            observedByteLength: partialLength
+                        )
+                    } catch {
+                        throw .invalidStoredRecord
+                    }
+                    changed = true
+                }
+                continue
+            }
             let url =
                 layout
                 .bookDirectory(
@@ -664,6 +940,30 @@ public actor DownloadStorage {
             try persist(record)
         }
         return record
+    }
+
+    private func identity(
+        for entry: DownloadManifestEntry,
+        in record: DownloadedBookRecord
+    ) throws -> DownloadTaskIdentity {
+        let track = DownloadTrackPlan(
+            index: entry.trackIndex,
+            inode: entry.inode ?? "stored",
+            expectedByteLength: entry.expectedByteLength,
+            mimeType: "stored",
+            safeExtension: Self.safeExtension(
+                destinationEntry: entry.destinationEntry
+            ) ?? .mp3,
+            destinationEntry: entry.destinationEntry,
+            startOffset: entry.startOffset,
+            duration: entry.duration
+        )
+        return try DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID,
+            accountID: record.manifest.accountID,
+            itemID: record.manifest.itemID,
+            track: track
+        )
     }
 
     public func remove(

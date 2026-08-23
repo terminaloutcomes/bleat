@@ -4,6 +4,112 @@ import XCTest
 @testable import BleatCore
 
 final class DownloadStorageTests: XCTestCase {
+    func testDurableChunksSurviveRecreationAndFinalizeAtExactLength()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let first = fixture.rootURL.appendingPathComponent("first.chunk")
+        try Data([1, 2]).write(to: first)
+
+        let committed = try fixture.layout.appendChunk(
+            from: first,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+        _ = try await fixture.storage.markPaused(
+            identity,
+            observedByteLength: committed
+        )
+
+        let relaunched = DownloadStorage(layout: fixture.layout)
+        let relaunchedRecords = try await relaunched.records()
+        let paused = try XCTUnwrap(relaunchedRecords.first)
+        let relaunchedPartialLength = try await relaunched.partialByteLength(
+            identity
+        )
+        XCTAssertEqual(paused.manifest.state, .paused)
+        XCTAssertEqual(paused.manifest.storedByteLength, 2)
+        XCTAssertEqual(relaunchedPartialLength, 2)
+
+        let second = fixture.rootURL.appendingPathComponent("second.chunk")
+        try Data([3, 4]).write(to: second)
+        XCTAssertEqual(
+            try fixture.layout.appendChunk(
+                from: second,
+                identity: identity,
+                expectedOffset: 2,
+                expectedChunkLength: 2
+            ),
+            4
+        )
+        XCTAssertEqual(try fixture.layout.finalizePartial(identity), 4)
+        XCTAssertEqual(
+            try Data(contentsOf: fixture.layout.destinationURL(for: identity)),
+            Data([1, 2, 3, 4])
+        )
+    }
+
+    func testChunkAppendRejectsWrongOffsetAndOversizedResult() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let chunk = fixture.rootURL.appendingPathComponent("chunk")
+        try Data([1, 2, 3]).write(to: chunk)
+
+        XCTAssertThrowsError(
+            try fixture.layout.appendChunk(
+                from: chunk,
+                identity: identity,
+                expectedOffset: 1,
+                expectedChunkLength: 3
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadStorageError,
+                .invalidPartialOffset(expected: 1, observed: 0)
+            )
+        }
+        _ = try fixture.layout.appendChunk(
+            from: chunk,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 3
+        )
+        XCTAssertThrowsError(
+            try fixture.layout.appendChunk(
+                from: chunk,
+                identity: identity,
+                expectedOffset: 3,
+                expectedChunkLength: 3
+            )
+        )
+    }
+
     func testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure()
         throws
     {

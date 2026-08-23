@@ -1000,7 +1000,11 @@ Resume rewind is configurable: off, 5, 10, 15, or 30 seconds after a pause longe
 
 ### 10.1 Background download manager
 
-Use `URLSessionConfiguration.background(withIdentifier:)` and download tasks. Maintain one stable session identifier and persist task metadata so the app can reconnect to system-owned tasks after relaunch.
+Use `URLSessionConfiguration.background(withIdentifier:)` and bounded download
+tasks. Maintain one stable session identifier, but make Bleat-owned partial
+files the durable checkpoint. Transfer each track in 16 MiB HTTP range chunks,
+persist every validated completed chunk, and calculate continuation from the
+actual partial-file length after relaunch.
 
 Build the download plan from `GET /api/items/<id>?expanded=1&include=progress`. For every included `media.audioFiles[]` entry, use its `ino`, `metadata.filename`, `metadata.size`, and MIME information. Download each file with:
 
@@ -1037,7 +1041,16 @@ Requirements:
   full book, retaining verified files and preflighting only the remainder;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
-- pause/cancel/retry;
+- user Pause persists a paused manifest state, cancels only the current chunk,
+  and retains committed partial bytes; Continue resumes from the durable byte
+  offset, while Cancel discards unfinished partial bytes and retains completed
+  tracks;
+- validate `206 Partial Content`, the complete `Content-Range`, and the expected
+  total before appending; retain a strong `ETag` or `Last-Modified` validator
+  and send it as `If-Range` on later chunks;
+- never append a `200 OK` response to a ranged transfer;
+- keep playback-driven suspension separate from persisted user Pause;
+- retry;
 - stalled/failure detection with bounded exponential retry;
 - 401 refresh and rescheduling with a newly constructed `URLRequest`, because an existing background task's authorization header cannot be rotated in place;
 - background completion-handler support;

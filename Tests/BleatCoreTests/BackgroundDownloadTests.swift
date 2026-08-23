@@ -4,6 +4,73 @@ import XCTest
 @testable import BleatCore
 
 final class BackgroundDownloadTests: XCTestCase {
+    func testRangeChunksBuildBoundedHeadersAndValidateResponses() throws {
+        let first = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 0,
+                expectedByteLength: 20,
+                chunkByteLength: 16
+            )
+        )
+        let final = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 16,
+                expectedByteLength: 20,
+                chunkByteLength: 16
+            )
+        )
+        let validator = DownloadValidator.strongETag("\"version-1\"")
+        let request = DownloadRangeRequest.applying(
+            range: final,
+            validator: validator,
+            to: URLRequest(url: URL(string: "https://example.com/file")!)
+        )
+
+        XCTAssertEqual(first, try DownloadByteRange(start: 0, endInclusive: 15))
+        XCTAssertEqual(
+            final, try DownloadByteRange(start: 16, endInclusive: 19))
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Range"), "bytes=16-19")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "If-Range"), "\"version-1\"")
+        XCTAssertNoThrow(
+            try DownloadRangeResponseValidator.validate(
+                statusCode: 206,
+                contentRangeHeader: "bytes 16-19/20",
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        )
+        XCTAssertThrowsError(
+            try DownloadRangeResponseValidator.validate(
+                statusCode: 200,
+                contentRangeHeader: nil,
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        ) { error in
+            XCTAssertEqual(error as? DownloadRangeError, .unexpectedStatus(200))
+        }
+    }
+
+    func testChunkDescriptionRoundTripsWithoutCredentials() throws {
+        let descriptor = DownloadChunkTaskDescription(
+            identity: try Self.identity(),
+            range: try DownloadByteRange(start: 16, endInclusive: 31),
+            validator: .lastModified("Sat, 23 Aug 2026 12:00:00 GMT")
+        )
+        let encoded = try descriptor.encode()
+
+        XCTAssertEqual(
+            try DownloadChunkTaskDescription.decode(encoded), descriptor)
+        XCTAssertEqual(
+            try DownloadTaskIdentity.decodeTaskDescription(encoded),
+            descriptor.identity
+        )
+        XCTAssertFalse(encoded.contains("access-token"))
+        XCTAssertFalse(encoded.contains("example.com"))
+    }
+
     func testExpandedItemBuildsSafeOrderedPerFilePlan() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Self.expandedItemJSON()
@@ -231,12 +298,20 @@ final class BackgroundDownloadTests: XCTestCase {
             "https://example.com/audiobookshelf"
         )
         let identity = try Self.identity(accountID: accountID)
-        let rejectedRequest =
+        var rejectedRequest =
             try await authCoordinator
             .makeAuthorizedDownloadRequest(
                 identity: identity,
                 server: server
             )
+        rejectedRequest.setValue(
+            "bytes=16-31",
+            forHTTPHeaderField: "Range"
+        )
+        rejectedRequest.setValue(
+            "\"version-1\"",
+            forHTTPHeaderField: "If-Range"
+        )
 
         let replacement = try await coordinator.replaceUnauthorizedTask(
             identity: identity,
@@ -258,6 +333,14 @@ final class BackgroundDownloadTests: XCTestCase {
                 forHTTPHeaderField: "Authorization"
             ),
             rejectedRequest.value(forHTTPHeaderField: "Authorization")
+        )
+        XCTAssertEqual(
+            replacementRequest.value(forHTTPHeaderField: "Range"),
+            "bytes=16-31"
+        )
+        XCTAssertEqual(
+            replacementRequest.value(forHTTPHeaderField: "If-Range"),
+            "\"version-1\""
         )
         XCTAssertNil(replacementRequest.url?.query)
         let refreshCount = await transport.refreshCount()

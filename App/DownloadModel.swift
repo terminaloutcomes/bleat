@@ -350,6 +350,7 @@ enum DownloadRepairPlanner {
 @Observable
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
+    static let rangeChunkByteLength: Int64 = 16 * 1_024 * 1_024
 
     static var supportsNetworkPolicySelection: Bool {
         #if os(macOS)
@@ -372,6 +373,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
     private var deletingDownloadIDs: Set<DownloadID> = []
+    private var cancelledDownloadIDs: Set<DownloadID> = []
     private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
     private var pendingAutomaticUpdates:
         [AutomaticDownloadKey: AutomaticDownloadActivity] = [:]
@@ -475,6 +477,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         _ = session
         await refresh()
+        pausedDownloadIDs = Set(
+            records.compactMap {
+                $0.manifest.state == .paused
+                    ? $0.manifest.downloadID : nil
+            }
+        )
         await discardLegacyAutomaticCaches()
         let tasks = await session.allTasks
         for task in tasks {
@@ -489,6 +497,63 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             beginTransferSpan(identity, purpose: purpose)
         }
+        let activeTaskKeys = Set(
+            tasks.compactMap { task -> AutomaticDownloadTaskKey? in
+                guard let description = task.taskDescription,
+                    let identity =
+                        try? DownloadTaskIdentity
+                        .decodeTaskDescription(description)
+                else {
+                    return nil
+                }
+                return AutomaticDownloadTaskKey(identity)
+            }
+        )
+        if let storage {
+            for record in records
+            where record.manifest.state == .downloading
+                || record.manifest.state == .queued
+            {
+                guard let account = accounts[record.manifest.accountID],
+                    let plan = try? await service.downloadPlan(
+                        for: account,
+                        itemID: record.manifest.itemID
+                    )
+                else {
+                    continue
+                }
+                let missingTracks = plan.tracks.filter { track in
+                    guard
+                        let entry = record.manifest.entries.first(where: {
+                            $0.trackIndex == track.index
+                        }), entry.state != .complete,
+                        let identity = try? DownloadTaskIdentity(
+                            downloadID: record.manifest.downloadID,
+                            accountID: record.manifest.accountID,
+                            itemID: record.manifest.itemID,
+                            track: track
+                        )
+                    else {
+                        return false
+                    }
+                    return !activeTaskKeys.contains(
+                        AutomaticDownloadTaskKey(identity)
+                    )
+                }
+                if !missingTracks.isEmpty {
+                    try? await schedule(
+                        plan: plan,
+                        detail: record.detail,
+                        account: account,
+                        storage: storage,
+                        purpose: record.manifest.purpose,
+                        tracks: missingTracks,
+                        downloadID: record.manifest.downloadID
+                    )
+                }
+            }
+            await refresh()
+        }
         for task in tasks where task.state == .suspended {
             guard let description = task.taskDescription,
                 let identity =
@@ -498,6 +563,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 continue
             }
             if record(downloadID: identity.downloadID)?
+                .manifest.state == .paused
+            {
+                task.cancel()
+            } else if record(downloadID: identity.downloadID)?
                 .manifest.purpose == .automaticCache
             {
                 task.resume()
@@ -1152,40 +1221,76 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 itemID: detail.id,
                 track: track
             )
-            supersededAutomaticTasks.remove(
-                AutomaticDownloadTaskKey(identity)
+            try await scheduleChunk(
+                identity: identity,
+                account: account,
+                purpose: purpose,
+                storage: storage
             )
-            var authorizedRequest =
-                try await service.authorizedDownloadRequest(
-                    for: account,
-                    identity: identity
-                )
-            if purpose == .automaticCache {
-                authorizedRequest.networkServiceType = .background
-            }
-            let task = session.downloadTask(
-                with: networkPolicy.applying(to: authorizedRequest)
+        }
+    }
+
+    private func scheduleChunk(
+        identity: DownloadTaskIdentity,
+        account: ServerAccount,
+        purpose: DownloadPurpose,
+        storage: DownloadStorage
+    ) async throws {
+        cancelledDownloadIDs.remove(identity.downloadID)
+        let committed = try await storage.partialByteLength(identity)
+        guard
+            let range = try DownloadByteRange.next(
+                committedByteLength: committed,
+                expectedByteLength: identity.expectedByteLength,
+                chunkByteLength: Self.rangeChunkByteLength
             )
-            task.taskDescription = try identity.taskDescription()
-            task.priority =
-                purpose == .automaticCache
-                ? URLSessionTask.lowPriority
-                : URLSessionTask.defaultPriority
-            beginTransferSpan(identity, purpose: purpose)
-            let key = AutomaticDownloadKey(
-                accountID: account.id,
-                itemID: detail.id
-            )
-            if purpose == .automaticCache,
-                playbackBlockedAutomaticDownloads.contains(key)
-            {
-                playbackSuspendedDownloadIDs.insert(
-                    resolvedDownloadID
-                )
-            } else {
-                task.resume()
-            }
-            _ = try await storage.markDownloading(identity)
+        else {
+            return
+        }
+        let validator = record(downloadID: identity.downloadID)?
+            .manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.validator
+        var request = try await service.authorizedDownloadRequest(
+            for: account,
+            identity: identity
+        )
+        request = DownloadRangeRequest.applying(
+            range: range,
+            validator: validator,
+            to: request
+        )
+        if purpose == .automaticCache {
+            request.networkServiceType = .background
+        }
+        let task = session.downloadTask(
+            with: networkPolicy.applying(to: request)
+        )
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: validator
+        ).encode()
+        task.priority =
+            purpose == .automaticCache
+            ? URLSessionTask.lowPriority : URLSessionTask.defaultPriority
+        supersededAutomaticTasks.remove(AutomaticDownloadTaskKey(identity))
+        beginTransferSpan(identity, purpose: purpose)
+        _ = try await storage.markDownloading(
+            identity,
+            observedByteLength: committed,
+            validator: validator
+        )
+        let key = AutomaticDownloadKey(
+            accountID: identity.accountID,
+            itemID: identity.itemID
+        )
+        if purpose == .automaticCache,
+            playbackBlockedAutomaticDownloads.contains(key)
+        {
+            playbackSuspendedDownloadIDs.insert(identity.downloadID)
+        } else {
+            task.resume()
         }
     }
 
@@ -1243,6 +1348,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await diagnostics.record(
             .started(.cancelDownload, category: .download)
         )
+        cancelledDownloadIDs.insert(record.manifest.downloadID)
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -1255,12 +1361,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
-            if let storage {
+        }
+        if let storage {
+            for entry in record.manifest.entries where entry.state != .complete
+            {
+                guard let identity = Self.identity(for: entry, record: record)
+                else { continue }
+                try? await storage.discardPartial(identity)
+                _ = try? await storage.markQueued(identity)
                 _ = try? await storage.markFailed(identity)
             }
         }
         failure = nil
-        progress[record.manifest.downloadID] = nil
         transferredBytesByTrack[record.manifest.downloadID] = nil
         pausedDownloadIDs.remove(record.manifest.downloadID)
         playbackSuspendedDownloadIDs.remove(
@@ -1276,20 +1388,56 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await diagnostics.record(
             .started(.pauseDownload, category: .download)
         )
-        await setSuspended(true, record: record)
+        guard let storage else {
+            failure = .storageUnavailable
+            return
+        }
+        pausedDownloadIDs.insert(record.manifest.downloadID)
+        let tasks = await session.allTasks
+        for entry in record.manifest.entries where entry.state != .complete {
+            guard let identity = Self.identity(for: entry, record: record)
+            else { continue }
+            let committed =
+                (try? await storage.partialByteLength(identity)) ?? 0
+            _ = try? await storage.markPaused(
+                identity,
+                observedByteLength: committed
+            )
+        }
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID
+            else { continue }
+            task.cancel()
+            finishTransferSpan(identity, outcome: .cancelled)
+            clearTransferredBytes(for: identity)
+        }
+        await refresh()
         await diagnostics.record(
             .completed(.pauseDownload, category: .download)
         )
     }
 
-    func resume(_ record: DownloadedBookRecord) async {
+    func continueDownload(_ record: DownloadedBookRecord) async {
         await diagnostics.record(
             .started(.resumeDownload, category: .download)
         )
-        await setSuspended(false, record: record)
+        guard let account = accounts[record.manifest.accountID] else {
+            failure = .permissionDenied
+            return
+        }
+        pausedDownloadIDs.remove(record.manifest.downloadID)
+        await repair(record, account: account)
         await diagnostics.record(
             .completed(.resumeDownload, category: .download)
         )
+    }
+
+    func resume(_ record: DownloadedBookRecord) async {
+        await continueDownload(record)
     }
 
     func repair(
@@ -1400,42 +1548,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
         default:
             .preparationFailed
-        }
-    }
-
-    private func setSuspended(
-        _ suspended: Bool,
-        record: DownloadedBookRecord
-    ) async {
-        let tasks = await session.allTasks
-        var matched = false
-        for task in tasks {
-            guard let description = task.taskDescription,
-                let identity =
-                    try? DownloadTaskIdentity
-                    .decodeTaskDescription(description),
-                identity.downloadID == record.manifest.downloadID
-            else {
-                continue
-            }
-            matched = true
-            if suspended {
-                task.suspend()
-            } else if !automaticDownloadIsBlocked(record) {
-                task.resume()
-            } else {
-                playbackSuspendedDownloadIDs.insert(
-                    record.manifest.downloadID
-                )
-            }
-        }
-        guard matched else {
-            return
-        }
-        if suspended {
-            pausedDownloadIDs.insert(record.manifest.downloadID)
-        } else {
-            pausedDownloadIDs.remove(record.manifest.downloadID)
         }
     }
 
@@ -1909,6 +2021,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         do {
             records = try await storage.records()
+            pausedDownloadIDs = Set(
+                records.compactMap {
+                    $0.manifest.state == .paused
+                        ? $0.manifest.downloadID : nil
+                }
+            )
             let currentIDs = Set(records.map(\.manifest.downloadID))
             for downloadID in Array(progress.keys)
             where !currentIDs.contains(downloadID) {
@@ -1971,6 +2089,66 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    private func acceptChunkPlacement(
+        identity: DownloadTaskIdentity,
+        committedByteLength: Int64,
+        validator: DownloadValidator?,
+        finalized: Bool
+    ) async {
+        guard let storage else {
+            failure = .storageUnavailable
+            return
+        }
+        if cancelledDownloadIDs.contains(identity.downloadID) {
+            try? await storage.discardPartial(identity)
+            _ = try? await storage.markQueued(identity)
+            _ = try? await storage.markFailed(identity)
+            clearTransferredBytes(for: identity)
+            await refresh()
+            return
+        }
+        do {
+            let wasPaused = pausedDownloadIDs.contains(identity.downloadID)
+            _ = try await storage.recordCommittedChunk(
+                identity,
+                committedByteLength: committedByteLength,
+                validator: validator,
+                finalized: finalized
+            )
+            clearTransferredBytes(for: identity)
+            await refresh()
+            if wasPaused && !finalized {
+                _ = try await storage.markPaused(
+                    identity,
+                    observedByteLength: committedByteLength
+                )
+                await refresh()
+                return
+            }
+            if finalized {
+                finishTransferSpan(identity, outcome: .succeeded)
+                return
+            }
+            guard let account = accounts[identity.accountID],
+                let record = record(downloadID: identity.downloadID)
+            else {
+                throw DownloadModelFailure.permissionDenied
+            }
+            try await scheduleChunk(
+                identity: identity,
+                account: account,
+                purpose: record.manifest.purpose,
+                storage: storage
+            )
+            await refresh()
+        } catch {
+            finishTransferSpan(identity, outcome: .failed(.localStorage))
+            _ = try? await storage.markFailed(identity)
+            failure = .transferFailed
+            await refresh()
+        }
+    }
+
     private func rejectPlacement(
         identity: DownloadTaskIdentity
     ) async {
@@ -1999,6 +2177,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 try? DownloadTaskIdentity
                 .decodeTaskDescription(description)
         else {
+            return
+        }
+        if record(downloadID: identity.downloadID)?.manifest.state == .paused {
+            clearTransferredBytes(for: identity)
             return
         }
         if supersededAutomaticTasks.remove(
@@ -2034,6 +2216,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 clearTransferredBytes(for: identity)
                 await refresh()
             }
+            return
+        }
+        if (try? DownloadChunkTaskDescription.decode(description)) != nil,
+            response.statusCode == 200
+        {
+            finishTransferSpan(identity, outcome: .failed(.serverRejected))
+            if let storage {
+                _ = try? await storage.markFailed(identity)
+            }
+            clearTransferredBytes(for: identity)
+            failure = .transferFailed
+            await refresh()
             return
         }
         if (200..<300).contains(response.statusCode), error == nil {
@@ -2220,33 +2414,118 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         return overflow ? Int64.max : sum
     }
 
+    private static func identity(
+        for entry: DownloadManifestEntry,
+        record: DownloadedBookRecord
+    ) -> DownloadTaskIdentity? {
+        guard let inode = entry.inode,
+            let safeExtension = SafeAudioExtension(
+                rawValue: URL(fileURLWithPath: entry.destinationEntry)
+                    .pathExtension
+            )
+        else {
+            return nil
+        }
+        return try? DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID,
+            accountID: record.manifest.accountID,
+            itemID: record.manifest.itemID,
+            track: DownloadTrackPlan(
+                index: entry.trackIndex,
+                inode: inode,
+                expectedByteLength: entry.expectedByteLength,
+                mimeType: "stored",
+                safeExtension: safeExtension,
+                destinationEntry: entry.destinationEntry,
+                startOffset: entry.startOffset,
+                duration: entry.duration
+            )
+        )
+    }
+
     nonisolated func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
         guard let response = downloadTask.response as? HTTPURLResponse,
-            (200..<300).contains(response.statusCode),
             let description = downloadTask.taskDescription,
-            let identity =
-                try? DownloadTaskIdentity
-                .decodeTaskDescription(description),
             let layout
         else {
             return
         }
-        let result = Result {
-            try layout.placeDownloadedFile(
-                from: location,
-                identity: identity
+        guard
+            let descriptor = try? DownloadChunkTaskDescription.decode(
+                description
             )
+        else {
+            guard (200..<300).contains(response.statusCode),
+                let identity =
+                    try? DownloadTaskIdentity
+                    .decodeTaskDescription(description)
+            else {
+                return
+            }
+            let legacyResult = Result {
+                try layout.placeDownloadedFile(
+                    from: location,
+                    identity: identity
+                )
+            }
+            Task { @MainActor [weak self] in
+                switch legacyResult {
+                case .success(let observed):
+                    await self?.acceptPlacement(
+                        identity: identity,
+                        observedByteLength: observed
+                    )
+                case .failure:
+                    await self?.rejectPlacement(identity: identity)
+                }
+            }
+            return
+        }
+        guard response.statusCode == 206 else {
+            return
+        }
+        let identity = descriptor.identity
+        let result = Result {
+            try DownloadRangeResponseValidator.validate(
+                statusCode: response.statusCode,
+                contentRangeHeader: response.value(
+                    forHTTPHeaderField: "Content-Range"
+                ),
+                requestedRange: descriptor.range,
+                expectedTotalByteLength: identity.expectedByteLength
+            )
+            let validator =
+                descriptor.validator
+                ?? DownloadRangeResponseValidator.validator(
+                    etag: response.value(forHTTPHeaderField: "ETag"),
+                    lastModified: response.value(
+                        forHTTPHeaderField: "Last-Modified"
+                    )
+                )
+            let committed = try layout.appendChunk(
+                from: location,
+                identity: identity,
+                expectedOffset: descriptor.range.start,
+                expectedChunkLength: descriptor.range.length
+            )
+            let finalized = committed == identity.expectedByteLength
+            if finalized {
+                _ = try layout.finalizePartial(identity)
+            }
+            return (committed, validator, finalized)
         }
         Task { @MainActor [weak self] in
             switch result {
-            case .success(let observed):
-                await self?.acceptPlacement(
+            case .success(let placement):
+                await self?.acceptChunkPlacement(
                     identity: identity,
-                    observedByteLength: observed
+                    committedByteLength: placement.0,
+                    validator: placement.1,
+                    finalized: placement.2
                 )
             case .failure:
                 await self?.rejectPlacement(identity: identity)
@@ -2282,6 +2561,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             guard
                 self?.deletingDownloadIDs.contains(
                     identity.downloadID
+                ) == false,
+                self?.cancelledDownloadIDs.contains(
+                    identity.downloadID
                 ) == false
             else {
                 return
@@ -2297,12 +2579,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         forBackgroundURLSession session: URLSession
     ) {
         #if os(iOS)
-        Task { @MainActor in
-            let completion =
-                BleatAppDelegate.backgroundDownloadCompletion
-            BleatAppDelegate.backgroundDownloadCompletion = nil
-            completion?()
-        }
+            Task { @MainActor in
+                let completion =
+                    BleatAppDelegate.backgroundDownloadCompletion
+                BleatAppDelegate.backgroundDownloadCompletion = nil
+                completion?()
+            }
         #endif
     }
 }

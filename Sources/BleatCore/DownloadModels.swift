@@ -268,6 +268,12 @@ public struct DownloadTaskIdentity: Codable, Equatable, Sendable {
     public static func decodeTaskDescription(
         _ description: String
     ) throws(DownloadTaskIdentityError) -> DownloadTaskIdentity {
+        if description.hasPrefix(DownloadChunkTaskDescription.prefix),
+            let descriptor = try? DownloadChunkTaskDescription.decode(
+                description)
+        {
+            return descriptor.identity
+        }
         guard description.hasPrefix(taskDescriptionPrefix),
             let data = Data(
                 base64Encoded: String(

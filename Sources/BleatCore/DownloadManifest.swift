@@ -3,6 +3,7 @@ import Foundation
 public enum DownloadManifestState: String, Codable, Sendable {
     case queued
     case downloading
+    case paused
     case partial
     case complete
     case failed
@@ -12,6 +13,7 @@ public enum DownloadManifestState: String, Codable, Sendable {
 public enum DownloadTrackState: String, Codable, Sendable {
     case queued
     case downloading
+    case paused
     case partial
     case complete
     case failed
@@ -46,11 +48,13 @@ public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public let trackIndex: Int
     public let expectedByteLength: Int64
     public let destinationEntry: String
+    public let inode: String?
     public let startOffset: Double?
     public let duration: Double?
     public internal(set) var state: DownloadTrackState
     public internal(set) var observedByteLength: Int64?
     public internal(set) var placement: DownloadFilePlacement?
+    public internal(set) var validator: DownloadValidator? = nil
 }
 
 public enum DownloadManifestError: Error, Equatable, Sendable {
@@ -117,14 +121,13 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         }
         return Self.saturatingSum(
             entries.compactMap { entry in
-                guard targets.contains(entry.trackIndex),
-                    entry.state == .complete,
-                    entry.placement == .finalized,
-                    entry.observedByteLength == entry.expectedByteLength
-                else {
+                guard targets.contains(entry.trackIndex) else {
                     return nil
                 }
-                return entry.expectedByteLength
+                return min(
+                    max(entry.observedByteLength ?? 0, 0),
+                    entry.expectedByteLength
+                )
             }
         )
     }
@@ -193,19 +196,47 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
                 trackIndex: $0.index,
                 expectedByteLength: $0.expectedByteLength,
                 destinationEntry: $0.destinationEntry,
+                inode: $0.inode,
                 startOffset: $0.startOffset,
                 duration: $0.duration,
-                state: .queued
+                state: .queued,
+                validator: nil
             )
         }
     }
 
     public mutating func markDownloading(
-        trackIndex: Int
+        trackIndex: Int,
+        observedByteLength: Int64? = nil,
+        validator: DownloadValidator? = nil
     ) throws(DownloadManifestError) {
         let index = try entryIndex(for: trackIndex)
         entries[index].state = .downloading
+        if let observedByteLength {
+            guard observedByteLength >= 0 else {
+                throw .invalidObservedByteLength
+            }
+            entries[index].observedByteLength = observedByteLength
+            entries[index].placement = .temporary
+        }
+        entries[index].validator = validator ?? entries[index].validator
         state = .downloading
+    }
+
+    public mutating func markPaused(
+        trackIndex: Int,
+        observedByteLength: Int64,
+        validator: DownloadValidator? = nil
+    ) throws(DownloadManifestError) {
+        guard observedByteLength >= 0 else {
+            throw .invalidObservedByteLength
+        }
+        let index = try entryIndex(for: trackIndex)
+        entries[index].state = .paused
+        entries[index].observedByteLength = observedByteLength
+        entries[index].placement = observedByteLength > 0 ? .temporary : nil
+        entries[index].validator = validator ?? entries[index].validator
+        state = .paused
     }
 
     public mutating func markPartial(
@@ -221,6 +252,19 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = placement
         state = .partial
+    }
+
+    public mutating func reconcileStoredBytes(
+        trackIndex: Int,
+        observedByteLength: Int64
+    ) throws(DownloadManifestError) {
+        guard observedByteLength >= 0 else {
+            throw .invalidObservedByteLength
+        }
+        let index = try entryIndex(for: trackIndex)
+        entries[index].observedByteLength = observedByteLength
+        entries[index].placement = observedByteLength > 0 ? .temporary : nil
+        updateIncompleteState()
     }
 
     public mutating func markComplete(
@@ -250,10 +294,18 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     }
 
     public mutating func markFailed(
-        trackIndex: Int
+        trackIndex: Int,
+        observedByteLength: Int64? = nil
     ) throws(DownloadManifestError) {
         let index = try entryIndex(for: trackIndex)
         entries[index].state = .failed
+        if let observedByteLength {
+            guard observedByteLength >= 0 else {
+                throw .invalidObservedByteLength
+            }
+            entries[index].observedByteLength = observedByteLength
+            entries[index].placement = observedByteLength > 0 ? .temporary : nil
+        }
         state = .failed
     }
 
@@ -264,6 +316,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].state = .queued
         entries[index].observedByteLength = nil
         entries[index].placement = nil
+        entries[index].validator = nil
         updateIncompleteState()
     }
 
@@ -477,6 +530,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             state = .queued
         } else if entries.contains(where: { $0.state == .downloading }) {
             state = .downloading
+        } else if entries.contains(where: { $0.state == .paused }) {
+            state = .paused
         } else if entries.contains(where: { $0.state == .failed }) {
             state = .failed
         } else {
