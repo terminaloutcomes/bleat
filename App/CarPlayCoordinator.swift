@@ -1,4 +1,4 @@
-#if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+#if canImport(CarPlay) && !os(macOS)
     import BleatCore
     import CarPlay
     import Foundation

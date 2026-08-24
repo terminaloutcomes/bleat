@@ -8,6 +8,8 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
         max_recv_msg_size_mib: 1
+      http:
+        endpoint: 0.0.0.0:4318
 
 exporters:
   file/traces:

@@ -1605,7 +1605,10 @@ version and build, typed Apple platform, and numeric operating-system version.
 The hardware model is excluded. The reviewed span
 names are app launch, account connection, library refresh, playback preparation,
 playback start, download transfer, playback progress synchronization, and
-transcription, plus private CloudKit synchronization. Span attributes are limited to a subsystem derived from the span
+transcription, plus private CloudKit synchronization. Telemetry authentication
+is one parent span, with challenge, enrolment, and token HTTP client spans as
+children. Each client span propagates W3C trace context so the matching
+`bleat-api` server span is part of the same trace. Span attributes are limited to a subsystem derived from the span
 name, typed success/cancellation/failure outcome, privacy-safe failure category,
 optional downloaded/streamed/offline/remote/cache source, and a retry bucket of
 none, one, two, or three-or-more. Duration comes from span timing and is not an
@@ -1661,8 +1664,7 @@ bounded jittered backoff observed only by later token requests. Disabling
 consent cancels the active operation and clears the memory-only token while
 retaining enrollment for later re-enablement.
 
-The client gates App Attest on `DCAppAttestService.isSupported`, treats Mac
-Catalyst as unsupported, and retains only the App Attest key identifier plus an
+The client gates App Attest on `DCAppAttestService.isSupported`, treats macOS as unsupported, and retains only the App Attest key identifier plus an
 opaque backend installation identifier in one non-synchronizing, device-only
 Keychain record. Invalidated keys clear that record and restart enrollment.
 When App Attest is enabled, Debug iOS builds use its development entitlement

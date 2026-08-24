@@ -1345,7 +1345,7 @@ private struct SignedInView: View {
             #if os(macOS)
                 VStack(spacing: 0) {
                     TopTabBar(selection: $navigation.selectedTab)
-                    catalystTabs(containerHeight: geometry.size.height)
+                    macTabs(containerHeight: geometry.size.height)
                 }
             #else
                 mobileTabs(containerHeight: geometry.size.height)
@@ -1407,7 +1407,7 @@ private struct SignedInView: View {
     }
 
     #if os(macOS)
-        private func catalystTabs(containerHeight: CGFloat) -> some View {
+        private func macTabs(containerHeight: CGFloat) -> some View {
             TabView(selection: $navigation.selectedTab) {
                 Tab("Home", systemImage: "house", value: .home) {
                     tabContent(containerHeight: containerHeight) {

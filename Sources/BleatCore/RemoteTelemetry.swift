@@ -9,6 +9,11 @@ public protocol RemoteTelemetryTracing: Sendable {
         source: RemoteTelemetrySource?,
         retryBucket: RemoteTelemetryRetryBucket
     ) -> RemoteTelemetrySpan
+
+    func beginChildSpan(
+        operation: RemoteTelemetryOperation,
+        parent: RemoteTelemetrySpan
+    ) -> RemoteTelemetrySpan
 }
 
 extension RemoteTelemetryTracing {
@@ -23,11 +28,20 @@ extension RemoteTelemetryTracing {
             retryBucket: retryBucket
         )
     }
+
+    public func beginChildSpan(
+        operation: RemoteTelemetryOperation,
+        parent: RemoteTelemetrySpan
+    ) -> RemoteTelemetrySpan {
+        beginSpan(operation: operation)
+    }
 }
 
 /// A single reviewed operation. Ending is idempotent so cancellation and
 /// replacement paths may safely race without producing duplicate spans.
 public final class RemoteTelemetrySpan: @unchecked Sendable {
+    @TaskLocal static var current: RemoteTelemetrySpan?
+
     private let lock = NSLock()
     private var endAction: (@Sendable (RemoteTelemetryOutcome) -> Void)?
     private let contextProvider: @Sendable () -> SpanContext?
@@ -58,7 +72,28 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
 
     var spanContext: SpanContext? { contextProvider() }
 
+    var propagationHeaders: [String: String] {
+        guard let spanContext else { return [:] }
+        var headers: [String: String] = [:]
+        W3CTraceContextPropagator().inject(
+            spanContext: spanContext,
+            carrier: &headers,
+            setter: RemoteTelemetryHeaderSetter()
+        )
+        return headers
+    }
+
     static let inactive = RemoteTelemetrySpan { _ in }
+}
+
+private struct RemoteTelemetryHeaderSetter: Setter {
+    func set(
+        carrier: inout [String: String],
+        key: String,
+        value: String
+    ) {
+        carrier[key] = value
+    }
 }
 
 public struct InactiveRemoteTelemetryTracer: RemoteTelemetryTracing {
@@ -87,6 +122,10 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
     case playbackProgressSync = "bleat.playback.progress_sync"
     case transcription = "bleat.transcription.run"
     case privateCloudSync = "bleat.cloudkit.sync"
+    case telemetryAuthentication = "bleat.telemetry.authentication"
+    case telemetryChallenge = "bleat.telemetry.challenge"
+    case telemetryEnrolment = "bleat.telemetry.enrolment"
+    case telemetryToken = "bleat.telemetry.token"
 
     var subsystem: RemoteTelemetrySubsystem {
         switch self {
@@ -104,6 +143,18 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
             .synchronization
         case .transcription:
             .transcription
+        case .telemetryAuthentication, .telemetryChallenge,
+            .telemetryEnrolment, .telemetryToken:
+            .authentication
+        }
+    }
+
+    var spanKind: SpanKind {
+        switch self {
+        case .telemetryChallenge, .telemetryEnrolment, .telemetryToken:
+            .client
+        default:
+            .internal
         }
     }
 }

@@ -134,6 +134,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private let attester: any TelemetryAttester
     private let transport: any TelemetryAuthenticationTransport
     private let store: any TelemetryEnrollmentStoring
+    private let tracer: any RemoteTelemetryTracing
     private let dateProvider: DateProvider
     private let jitterProvider: JitterProvider
     private let refreshWindow: TimeInterval
@@ -157,6 +158,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         attester: any TelemetryAttester,
         transport: any TelemetryAuthenticationTransport,
         store: any TelemetryEnrollmentStoring,
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer(),
         refreshWindow: TimeInterval = 120,
         dateProvider: @escaping DateProvider = Date.init,
         jitterProvider: @escaping JitterProvider = {
@@ -166,6 +168,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         self.attester = attester
         self.transport = transport
         self.store = store
+        self.tracer = tracer
         self.refreshWindow = refreshWindow
         self.dateProvider = dateProvider
         self.jitterProvider = jitterProvider
@@ -243,19 +246,27 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
 
         let id = UUID()
         refreshID = id
-        refreshTask = Task { [attester, transport, store] in
-            let result: RefreshResult
-            do {
-                result = .success(
-                    try await Self.refresh(
-                        attester: attester,
-                        transport: transport,
-                        store: store
-                    )
-                )
-            } catch {
-                result = .failure(Self.map(error))
-            }
+        refreshTask = Task { [attester, transport, store, tracer] in
+            let span = tracer.beginSpan(
+                operation: .telemetryAuthentication
+            )
+            let result: RefreshResult = await RemoteTelemetrySpan.$current
+                .withValue(span) {
+                    do {
+                        return .success(
+                            try await Self.refresh(
+                                attester: attester,
+                                transport: transport,
+                                store: store,
+                                tracer: tracer,
+                                parentSpan: span
+                            )
+                        )
+                    } catch {
+                        return .failure(Self.map(error))
+                    }
+                }
+            span.end(Self.telemetryOutcome(for: result))
             self.completeRefresh(id: id, result: result)
         }
     }
@@ -313,7 +324,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private static func refresh(
         attester: any TelemetryAttester,
         transport: any TelemetryAuthenticationTransport,
-        store: any TelemetryEnrollmentStoring
+        store: any TelemetryEnrollmentStoring,
+        tracer: any RemoteTelemetryTracing,
+        parentSpan: RemoteTelemetrySpan
     ) async throws -> TelemetryBearerToken {
         var enrollment: TelemetryEnrollment
         do {
@@ -323,7 +336,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
                 enrollment = try await enroll(
                     attester: attester,
                     transport: transport,
-                    store: store
+                    store: store,
+                    tracer: tracer,
+                    parentSpan: parentSpan
                 )
             }
         } catch {
@@ -336,7 +351,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
                 enrollment = try await enroll(
                     attester: attester,
                     transport: transport,
-                    store: store
+                    store: store,
+                    tracer: tracer,
+                    parentSpan: parentSpan
                 )
             } catch {
                 throw map(error)
@@ -350,7 +367,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             return try await issueToken(
                 enrollment: enrollment,
                 attester: attester,
-                transport: transport
+                transport: transport,
+                tracer: tracer,
+                parentSpan: parentSpan
             )
         } catch let error
             where error as? TelemetryAttesterError == .keyInvalidated
@@ -360,12 +379,16 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
                 let replacement = try await enroll(
                     attester: attester,
                     transport: transport,
-                    store: store
+                    store: store,
+                    tracer: tracer,
+                    parentSpan: parentSpan
                 )
                 return try await issueToken(
                     enrollment: replacement,
                     attester: attester,
-                    transport: transport
+                    transport: transport,
+                    tracer: tracer,
+                    parentSpan: parentSpan
                 )
             } catch {
                 throw map(error)
@@ -378,7 +401,9 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private static func enroll(
         attester: any TelemetryAttester,
         transport: any TelemetryAuthenticationTransport,
-        store: any TelemetryEnrollmentStoring
+        store: any TelemetryEnrollmentStoring,
+        tracer: any RemoteTelemetryTracing,
+        parentSpan: RemoteTelemetrySpan
     ) async throws -> TelemetryEnrollment {
         guard attester.isSupported else {
             throw TelemetryTokenProviderError.unsupported
@@ -386,7 +411,13 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         let keyID = try await attester.generateKey()
         let pending = TelemetryEnrollment(keyID: keyID, installationID: nil)
         try await store.save(pending)
-        let challenge = try await transport.attestationChallenge()
+        let challenge = try await tracedRequest(
+            operation: .telemetryChallenge,
+            tracer: tracer,
+            parentSpan: parentSpan
+        ) {
+            try await transport.attestationChallenge()
+        }
         let hash = TelemetryClientData.hash(
             purpose: .attestationEnroll,
             challenge: challenge,
@@ -396,11 +427,17 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             keyID: keyID,
             clientDataHash: hash
         )
-        let installationID = try await transport.enroll(
-            challenge: challenge,
-            keyID: keyID,
-            attestationObject: attestation
-        )
+        let installationID = try await tracedRequest(
+            operation: .telemetryEnrolment,
+            tracer: tracer,
+            parentSpan: parentSpan
+        ) {
+            try await transport.enroll(
+                challenge: challenge,
+                keyID: keyID,
+                attestationObject: attestation
+            )
+        }
         let enrollment = TelemetryEnrollment(
             keyID: keyID,
             installationID: installationID
@@ -412,14 +449,22 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private static func issueToken(
         enrollment: TelemetryEnrollment,
         attester: any TelemetryAttester,
-        transport: any TelemetryAuthenticationTransport
+        transport: any TelemetryAuthenticationTransport,
+        tracer: any RemoteTelemetryTracing,
+        parentSpan: RemoteTelemetrySpan
     ) async throws -> TelemetryBearerToken {
         guard let installationID = enrollment.installationID else {
             throw TelemetryTokenProviderError.authenticationRejected
         }
-        let challenge = try await transport.tokenChallenge(
-            installationID: installationID
-        )
+        let challenge = try await tracedRequest(
+            operation: .telemetryChallenge,
+            tracer: tracer,
+            parentSpan: parentSpan
+        ) {
+            try await transport.tokenChallenge(
+                installationID: installationID
+            )
+        }
         let hash = TelemetryClientData.hash(
             purpose: .tokenIssue,
             challenge: challenge,
@@ -429,11 +474,97 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             keyID: enrollment.keyID,
             clientDataHash: hash
         )
-        return try await transport.token(
-            installationID: installationID,
-            challenge: challenge,
-            assertionObject: assertion
+        return try await tracedRequest(
+            operation: .telemetryToken,
+            tracer: tracer,
+            parentSpan: parentSpan
+        ) {
+            try await transport.token(
+                installationID: installationID,
+                challenge: challenge,
+                assertionObject: assertion
+            )
+        }
+    }
+
+    private static func tracedRequest<Value: Sendable>(
+        operation: RemoteTelemetryOperation,
+        tracer: any RemoteTelemetryTracing,
+        parentSpan: RemoteTelemetrySpan,
+        request: @Sendable () async throws -> Value
+    ) async throws -> Value {
+        let span = tracer.beginChildSpan(
+            operation: operation,
+            parent: parentSpan
         )
+        return try await RemoteTelemetrySpan.$current.withValue(span) {
+            do {
+                let value = try await request()
+                span.end(.succeeded)
+                return value
+            } catch {
+                span.end(telemetryOutcome(for: error))
+                throw error
+            }
+        }
+    }
+
+    private static func telemetryOutcome(
+        for result: RefreshResult
+    ) -> RemoteTelemetryOutcome {
+        switch result {
+        case .success:
+            .succeeded
+        case .failure(let failure):
+            telemetryOutcome(for: failure)
+        }
+    }
+
+    private static func telemetryOutcome(
+        for error: any Error
+    ) -> RemoteTelemetryOutcome {
+        if error is CancellationError {
+            return .cancelled
+        }
+        if let failure = error as? TelemetryAuthenticationTransportError {
+            switch failure {
+            case .cancelled:
+                return .cancelled
+            case .rateLimited:
+                return .failed(.rateLimited)
+            case .authenticationRejected:
+                return .failed(.authentication)
+            case .malformedResponse:
+                return .failed(.invalidResponse)
+            case .invalidConfiguration:
+                return .failed(.unknown)
+            case .temporarilyUnavailable:
+                return .failed(.transport)
+            }
+        }
+        if let failure = error as? TelemetryTokenProviderError {
+            switch failure {
+            case .cancelled, .disabled:
+                return .cancelled
+            case .authenticationRejected:
+                return .failed(.authentication)
+            case .unsupported:
+                return .failed(.unsupported)
+            case .backingOff, .temporarilyUnavailable:
+                return .failed(.transport)
+            }
+        }
+        if let failure = error as? TelemetryAttesterError {
+            switch failure {
+            case .unsupported:
+                return .failed(.unsupported)
+            case .keyInvalidated, .rejected:
+                return .failed(.authentication)
+            case .temporarilyUnavailable:
+                return .failed(.transport)
+            }
+        }
+        return .failed(.unknown)
     }
 
     private static func map(_ error: any Error) -> TelemetryTokenProviderError {
