@@ -8,8 +8,10 @@
   <section class="mx-auto w-full max-w-4xl px-6 pb-24 pt-12 sm:px-8 sm:pb-32 sm:pt-20 lg:px-10">
     <div class="rounded-3xl border border-white/10 bg-ink/55 p-7 shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-10 lg:p-12">
       <h1 class="text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">{{ section.title }}</h1>
-      <div class="mt-7 space-y-5 text-base leading-7 text-muted-lilac sm:text-lg sm:leading-8 [&_a]:text-lilac [&_a]:underline [&_a]:decoration-lilac/50 [&_a]:underline-offset-4 [&_a:hover]:text-white [&_ol]:list-decimal [&_ol]:space-y-3 [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-6">
+      <div class="page-content">
+        {% block content %}
         {{ section.content | safe }}
+        {% endblock content %}
       </div>
     </div>
   </section>
