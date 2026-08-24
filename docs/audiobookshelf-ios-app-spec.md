@@ -1664,8 +1664,7 @@ bounded jittered backoff observed only by later token requests. Disabling
 consent cancels the active operation and clears the memory-only token while
 retaining enrollment for later re-enablement.
 
-The client gates App Attest on `DCAppAttestService.isSupported`, treats Mac
-Catalyst as unsupported, and retains only the App Attest key identifier plus an
+The client gates App Attest on `DCAppAttestService.isSupported`, treats macOS as unsupported, and retains only the App Attest key identifier plus an
 opaque backend installation identifier in one non-synchronizing, device-only
 Keychain record. Invalidated keys clear that record and restart enrollment.
 When App Attest is enabled, Debug iOS builds use its development entitlement

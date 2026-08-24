@@ -127,19 +127,19 @@ final class AppModelTests: XCTestCase {
 
     #if os(iOS)
         func testPlatformImagePixelSizeIncludesUIImageScale() throws {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let rendered = UIGraphicsImageRenderer(
-            size: CGSize(width: 2, height: 3),
-            format: format
-        ).image { _ in }
-        let cgImage = try XCTUnwrap(rendered.cgImage)
-        let image = UIImage(cgImage: cgImage, scale: 3, orientation: .up)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let rendered = UIGraphicsImageRenderer(
+                size: CGSize(width: 2, height: 3),
+                format: format
+            ).image { _ in }
+            let cgImage = try XCTUnwrap(rendered.cgImage)
+            let image = UIImage(cgImage: cgImage, scale: 3, orientation: .up)
 
-        XCTAssertEqual(
-            PlatformImageSupport.pixelSize(of: image),
-            CGSize(width: 2, height: 3)
-        )
+            XCTAssertEqual(
+                PlatformImageSupport.pixelSize(of: image),
+                CGSize(width: 2, height: 3)
+            )
         }
     #endif
 
@@ -1122,94 +1122,95 @@ final class AppModelTests: XCTestCase {
 
     #if os(iOS)
         func testVisibleAndActiveTranscriptCachesSurviveMemoryWarning()
-        async throws
-    {
-        let account = try fixtureAccount()
-        let chapter = PlaybackChapter(
-            id: 1,
-            start: 0,
-            end: 20,
-            title: "Chapter One"
-        )
-        let details = (1...3).map { index in
-            fixtureBookDetail(
-                item: fixtureBook(
-                    id: "memory-warning-\(index)",
-                    title: "Book \(index)",
-                    libraryID: fixtureLibrary().id
-                ),
-                chapters: [chapter]
+            async throws
+        {
+            let account = try fixtureAccount()
+            let chapter = PlaybackChapter(
+                id: 1,
+                start: 0,
+                end: 20,
+                title: "Chapter One"
             )
-        }
-        let transcriberGate = AsyncGate()
-        let service = TestAppService(
-            activeAccount: .success(account),
-            transcriptLoad: .success([
-                fixtureTranscript(chapter: chapter, text: "cached")
-            ])
-        )
-        let coordinator = makeTranscriptionModel(
-            transcriberGate: transcriberGate
-        )
-        let appModel = AppModel(
-            service: service,
-            transcription: coordinator
-        )
-        for detail in details {
-            await coordinator.loadCachedTranscripts(
-                detail: detail,
+            let details = (1...3).map { index in
+                fixtureBookDetail(
+                    item: fixtureBook(
+                        id: "memory-warning-\(index)",
+                        title: "Book \(index)",
+                        libraryID: fixtureLibrary().id
+                    ),
+                    chapters: [chapter]
+                )
+            }
+            let transcriberGate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                transcriptLoad: .success([
+                    fixtureTranscript(chapter: chapter, text: "cached")
+                ])
+            )
+            let coordinator = makeTranscriptionModel(
+                transcriberGate: transcriberGate
+            )
+            let appModel = AppModel(
+                service: service,
+                transcription: coordinator
+            )
+            for detail in details {
+                await coordinator.loadCachedTranscripts(
+                    detail: detail,
+                    account: account,
+                    appModel: appModel
+                )
+            }
+            let visibleBookKey = ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: details[1].id
+            )
+            let activeBookKey = ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: details[2].id
+            )
+            coordinator.retainTranscriptCache(for: visibleBookKey)
+            coordinator.start(
+                chapters: [chapter],
+                detail: details[2],
                 account: account,
+                downloads: appModel.downloads,
                 appModel: appModel
             )
-        }
-        let visibleBookKey = ChapterTranscriptionBookKey(
-            accountID: account.id,
-            itemID: details[1].id
-        )
-        let activeBookKey = ChapterTranscriptionBookKey(
-            accountID: account.id,
-            itemID: details[2].id
-        )
-        coordinator.retainTranscriptCache(for: visibleBookKey)
-        coordinator.start(
-            chapters: [chapter],
-            detail: details[2],
-            account: account,
-            downloads: appModel.downloads,
-            appModel: appModel
-        )
-        await transcriberGate.waitUntilEntered()
-        await Task.yield()
-
-        NotificationCenter.default.post(
-            name: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil
-        )
-        for _ in 0..<20 {
+            await transcriberGate.waitUntilEntered()
             await Task.yield()
-        }
 
-        let inactiveBookKey = ChapterTranscriptionBookKey(
-            accountID: account.id,
-            itemID: details[0].id
-        )
-        XCTAssertFalse(
-            coordinator.isCached(chapterID: chapter.id, for: inactiveBookKey)
-        )
-        XCTAssertTrue(
-            coordinator.isCached(chapterID: chapter.id, for: visibleBookKey)
-        )
-        XCTAssertTrue(
-            coordinator.isCached(chapterID: chapter.id, for: activeBookKey)
-        )
+            NotificationCenter.default.post(
+                name: UIApplication.didReceiveMemoryWarningNotification,
+                object: nil
+            )
+            for _ in 0..<20 {
+                await Task.yield()
+            }
 
-        coordinator.releaseTranscriptCache(for: visibleBookKey)
-        coordinator.cancel()
-        await transcriberGate.release()
-        _ = await waitForTranscriptionTerminalState(
-            in: coordinator,
-            bookKey: activeBookKey
-        )
+            let inactiveBookKey = ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: details[0].id
+            )
+            XCTAssertFalse(
+                coordinator.isCached(
+                    chapterID: chapter.id, for: inactiveBookKey)
+            )
+            XCTAssertTrue(
+                coordinator.isCached(chapterID: chapter.id, for: visibleBookKey)
+            )
+            XCTAssertTrue(
+                coordinator.isCached(chapterID: chapter.id, for: activeBookKey)
+            )
+
+            coordinator.releaseTranscriptCache(for: visibleBookKey)
+            coordinator.cancel()
+            await transcriberGate.release()
+            _ = await waitForTranscriptionTerminalState(
+                in: coordinator,
+                bookKey: activeBookKey
+            )
         }
     #endif
 
@@ -1759,150 +1760,150 @@ final class AppModelTests: XCTestCase {
 
     #if os(iOS)
         func testBookCoverLoaderDeduplicatesAndCachesAccountScopedImages()
-        async throws
-    {
-        let imageData = try XCTUnwrap(
-            UIGraphicsImageRenderer(
-                size: CGSize(width: 2, height: 2)
-            ).image { context in
-                UIColor.systemPurple.setFill()
-                context.fill(
-                    CGRect(x: 0, y: 0, width: 2, height: 2)
-                )
-            }.pngData()
-        )
-        let fetcher = TestBookCoverFetcher(data: imageData)
-        let loader = BookCoverImageLoader(
-            diskCapacity: 0,
-            fetch: { request in
-                try await fetcher.fetch(request)
-            }
-        )
-        let accountID = AccountID(rawValue: "cover-account")
-        let url = try XCTUnwrap(
-            URL(string: "https://books.example/cover?ts=1")
-        )
+            async throws
+        {
+            let imageData = try XCTUnwrap(
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemPurple.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
+                    )
+                }.pngData()
+            )
+            let fetcher = TestBookCoverFetcher(data: imageData)
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    try await fetcher.fetch(request)
+                }
+            )
+            let accountID = AccountID(rawValue: "cover-account")
+            let url = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=1")
+            )
 
-        async let first = loader.image(for: url, accountID: accountID)
-        async let second = loader.image(for: url, accountID: accountID)
-        let (firstImage, secondImage) = await (first, second)
-        let third = await loader.image(for: url, accountID: accountID)
-        let firstAccountRequestCount = await fetcher.requestCount
+            async let first = loader.image(for: url, accountID: accountID)
+            async let second = loader.image(for: url, accountID: accountID)
+            let (firstImage, secondImage) = await (first, second)
+            let third = await loader.image(for: url, accountID: accountID)
+            let firstAccountRequestCount = await fetcher.requestCount
 
-        XCTAssertNotNil(firstImage)
-        XCTAssertNotNil(secondImage)
-        XCTAssertNotNil(third)
-        XCTAssertEqual(firstAccountRequestCount, 1)
+            XCTAssertNotNil(firstImage)
+            XCTAssertNotNil(secondImage)
+            XCTAssertNotNil(third)
+            XCTAssertEqual(firstAccountRequestCount, 1)
 
-        _ = await loader.image(
-            for: url,
-            accountID: AccountID(rawValue: "other-account")
-        )
-        let secondAccountRequestCount = await fetcher.requestCount
-        XCTAssertEqual(secondAccountRequestCount, 2)
+            _ = await loader.image(
+                for: url,
+                accountID: AccountID(rawValue: "other-account")
+            )
+            let secondAccountRequestCount = await fetcher.requestCount
+            XCTAssertEqual(secondAccountRequestCount, 2)
         }
 
         func testBookCoverLoaderReusesBoundedDiskCacheAfterMemoryEviction()
-        async throws
-    {
-        let imageData = try XCTUnwrap(
-            UIGraphicsImageRenderer(
-                size: CGSize(width: 2, height: 2)
-            ).image { context in
-                UIColor.systemOrange.setFill()
-                context.fill(
-                    CGRect(x: 0, y: 0, width: 2, height: 2)
-                )
-            }.pngData()
-        )
-        let fetcher = TestBookCoverFetcher(data: imageData)
-        let cacheRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "BookCoverLoaderTests-\(UUID().uuidString)",
-                isDirectory: true
+            async throws
+        {
+            let imageData = try XCTUnwrap(
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemOrange.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
+                    )
+                }.pngData()
             )
-        defer {
-            try? FileManager.default.removeItem(at: cacheRoot)
-        }
-        let accountID = AccountID(rawValue: "persistent-cover-account")
-        let url = try XCTUnwrap(
-            URL(string: "https://books.example/cover?ts=2")
-        )
-        let loader = BookCoverImageLoader(
-            diskCapacity: 1 * 1_024 * 1_024,
-            cacheRoot: cacheRoot,
-            fetch: { request in
-                try await fetcher.fetch(request)
+            let fetcher = TestBookCoverFetcher(data: imageData)
+            let cacheRoot = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BookCoverLoaderTests-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            defer {
+                try? FileManager.default.removeItem(at: cacheRoot)
             }
-        )
+            let accountID = AccountID(rawValue: "persistent-cover-account")
+            let url = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=2")
+            )
+            let loader = BookCoverImageLoader(
+                diskCapacity: 1 * 1_024 * 1_024,
+                cacheRoot: cacheRoot,
+                fetch: { request in
+                    try await fetcher.fetch(request)
+                }
+            )
 
-        let first = await loader.image(
-            for: url,
-            accountID: accountID
-        )
-        await loader.clearMemoryCache()
-        let second = await loader.image(
-            for: url,
-            accountID: accountID
-        )
-        let requestCount = await fetcher.requestCount
+            let first = await loader.image(
+                for: url,
+                accountID: accountID
+            )
+            await loader.clearMemoryCache()
+            let second = await loader.image(
+                for: url,
+                accountID: accountID
+            )
+            let requestCount = await fetcher.requestCount
 
-        XCTAssertNotNil(first)
-        XCTAssertNotNil(second)
-        XCTAssertEqual(requestCount, 1)
+            XCTAssertNotNil(first)
+            XCTAssertNotNil(second)
+            XCTAssertEqual(requestCount, 1)
         }
 
         func testBookCoverLoaderRoutesThroughCentralEndpointAndFallsBack()
-        async throws
-    {
-        let imageData = try XCTUnwrap(
-            UIGraphicsImageRenderer(
-                size: CGSize(width: 2, height: 2)
-            ).image { context in
-                UIColor.systemBlue.setFill()
-                context.fill(
-                    CGRect(x: 0, y: 0, width: 2, height: 2)
-                )
-            }.pngData()
-        )
-        let fetcher = TestBookCoverFetcher(
-            data: imageData,
-            failingRequestCount: 1
-        )
-        let router = ServerEndpointRouter()
-        let primary = try NormalizedServerURL("https://books.example")
-        let local = try NormalizedServerURL("https://books.home")
-        await router.configure(primary: primary, local: local)
-        let loader = BookCoverImageLoader(
-            diskCapacity: 0,
-            fetch: { request in
-                try await fetcher.fetch(request)
-            }
-        )
-        await loader.setEndpointRouter(router)
-        let url = try XCTUnwrap(
-            URL(string: "https://books.example/api/items/item/cover")
-        )
-
-        let image = await loader.image(
-            for: url,
-            accountID: AccountID(rawValue: "cover-routing-account")
-        )
-
-        XCTAssertNotNil(image)
-        let requestHosts = await fetcher.requestHosts
-        XCTAssertEqual(
-            requestHosts,
-            ["books.home", "books.example"]
-        )
-        let snapshot = await router.activitySnapshot(for: primary)
-        XCTAssertEqual(
-            snapshot.lastConnection,
-            ServerConnectionActivity(
-                usage: .primary,
-                purpose: .cover
+            async throws
+        {
+            let imageData = try XCTUnwrap(
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemBlue.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
+                    )
+                }.pngData()
             )
-        )
+            let fetcher = TestBookCoverFetcher(
+                data: imageData,
+                failingRequestCount: 1
+            )
+            let router = ServerEndpointRouter()
+            let primary = try NormalizedServerURL("https://books.example")
+            let local = try NormalizedServerURL("https://books.home")
+            await router.configure(primary: primary, local: local)
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    try await fetcher.fetch(request)
+                }
+            )
+            await loader.setEndpointRouter(router)
+            let url = try XCTUnwrap(
+                URL(string: "https://books.example/api/items/item/cover")
+            )
+
+            let image = await loader.image(
+                for: url,
+                accountID: AccountID(rawValue: "cover-routing-account")
+            )
+
+            XCTAssertNotNil(image)
+            let requestHosts = await fetcher.requestHosts
+            XCTAssertEqual(
+                requestHosts,
+                ["books.home", "books.example"]
+            )
+            let snapshot = await router.activitySnapshot(for: primary)
+            XCTAssertEqual(
+                snapshot.lastConnection,
+                ServerConnectionActivity(
+                    usage: .primary,
+                    purpose: .cover
+                )
+            )
         }
     #endif
 
@@ -2797,7 +2798,8 @@ final class AppModelTests: XCTestCase {
         return (plan, storage)
     }
 
-    func testOfflineRelaunchRecoveryResumesInterruptedDownloadFromDurableOffset()
+    func
+        testOfflineRelaunchRecoveryResumesInterruptedDownloadFromDurableOffset()
         async throws
     {
         let root = FileManager.default.temporaryDirectory
@@ -2841,7 +2843,8 @@ final class AppModelTests: XCTestCase {
 
         await model.start(account: account)
 
-        let stalledDescriptors = await model
+        let stalledDescriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(stalledDescriptors.isEmpty)
         XCTAssertEqual(
@@ -2856,7 +2859,8 @@ final class AppModelTests: XCTestCase {
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [account])
 
-        let descriptors = await model
+        let descriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
         XCTAssertEqual(descriptors[0].range.start, 0)
@@ -2914,14 +2918,16 @@ final class AppModelTests: XCTestCase {
 
         await model.start(account: account)
 
-        let pausedDescriptors = await model
+        let pausedDescriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(pausedDescriptors.isEmpty)
 
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [account])
 
-        let resumedDescriptors = await model
+        let resumedDescriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(resumedDescriptors.isEmpty)
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
@@ -3073,12 +3079,14 @@ final class AppModelTests: XCTestCase {
         await model.recoverAfterNetworkChange(for: [account])
         await model.recoverAfterNetworkChange(for: [account])
 
-        let descriptors = await model
+        let descriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
         let planRequests = await service.downloadPlanRequests()
         XCTAssertEqual(planRequests.count, 2)
-        let transferRequests = await service
+        let transferRequests =
+            await service
             .authorizedDownloadRequestIdentities()
         XCTAssertEqual(transferRequests.map(\.trackIndex), [0, 1])
         await model.removeAll()
@@ -3138,7 +3146,8 @@ final class AppModelTests: XCTestCase {
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [firstAccount])
 
-        var descriptors = await model
+        var descriptors =
+            await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(
             descriptors.map { $0.identity.accountID.rawValue },
@@ -5151,14 +5160,14 @@ final class AppModelTests: XCTestCase {
         let service = TestAppService(activeAccount: .success(account))
         let model = AppModel(service: service)
         await model.start()
-        for _ in 0 ..< 100 {
+        for _ in 0..<100 {
             if await service.networkPathObserverCount() > 0 {
                 break
             }
             await Task.yield()
         }
         await service.emitNetworkPathUpdate()
-        for _ in 0 ..< 100 where !(await service.hasLiveUpdatesSubscriber()) {
+        for _ in 0..<100 where !(await service.hasLiveUpdatesSubscriber()) {
             await Task.yield()
         }
         let hasSubscriber = await service.hasLiveUpdatesSubscriber()
@@ -5194,7 +5203,7 @@ final class AppModelTests: XCTestCase {
                 )
             )
         )
-        for _ in 0 ..< 100 where !model.isBookFinished(itemID) {
+        for _ in 0..<100 where !model.isBookFinished(itemID) {
             await Task.yield()
         }
 
@@ -10126,83 +10135,84 @@ final class AppModelTests: XCTestCase {
 
     #if os(iOS)
         nonisolated func testNowPlayingArtworkCanRenderOffMainActor() async {
-        let image = await MainActor.run {
-            UIGraphicsImageRenderer(
-                size: CGSize(width: 2, height: 2)
-            ).image { context in
-                UIColor.systemBlue.setFill()
-                context.fill(
-                    CGRect(x: 0, y: 0, width: 2, height: 2)
-                )
-            }
-        }
-        let artwork = TestSendableArtwork(
-            NowPlayingArtwork.make(from: image)
-        )
-
-        let renderedImage = await withCheckedContinuation { continuation in
-            DispatchQueue(
-                label: "NowPlayingArtworkTests.background"
-            ).async {
-                continuation.resume(
-                    returning: artwork.value.image(
-                        at: CGSize(width: 1, height: 1)
+            let image = await MainActor.run {
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemBlue.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
                     )
-                )
+                }
             }
-        }
-
-        XCTAssertNotNil(renderedImage)
-        }
-
-        func testNowPlayingRetriesCoverWhenAccountIdentityArrives() async throws {
-        let imageData = try XCTUnwrap(
-            UIGraphicsImageRenderer(
-                size: CGSize(width: 2, height: 2)
-            ).image { context in
-                UIColor.systemTeal.setFill()
-                context.fill(
-                    CGRect(x: 0, y: 0, width: 2, height: 2)
-                )
-            }.pngData()
-        )
-        let fetcher = TestBookCoverFetcher(
-            data: imageData,
-            failingRequestCount: 1
-        )
-        let loader = BookCoverImageLoader(
-            diskCapacity: 0,
-            fetch: { request in
-                try await fetcher.fetch(request)
-            }
-        )
-        let infoPublisher = TestNowPlayingInfoPublisher()
-        let coordinator = NowPlayingCoordinator(
-            infoCenter: infoPublisher,
-            coverLoader: loader,
-            registersRemoteCommands: false
-        )
-        let url = try XCTUnwrap(
-            URL(string: "https://books.example/cover?ts=3")
-        )
-
-        coordinator.publish(
-            nowPlayingSnapshot(accountID: nil, coverURL: url)
-        )
-        await waitForCoverRequests(fetcher, count: 1)
-        coordinator.publish(
-            nowPlayingSnapshot(
-                accountID: AccountID(rawValue: "cover-account"),
-                coverURL: url
+            let artwork = TestSendableArtwork(
+                NowPlayingArtwork.make(from: image)
             )
-        )
-        await waitForCoverRequests(fetcher, count: 2)
 
-        let requestCount = await fetcher.requestCount
-        let artwork = await waitForNowPlayingArtwork(in: infoPublisher)
-        XCTAssertEqual(requestCount, 2)
-        XCTAssertNotNil(artwork)
-        coordinator.clear()
+            let renderedImage = await withCheckedContinuation { continuation in
+                DispatchQueue(
+                    label: "NowPlayingArtworkTests.background"
+                ).async {
+                    continuation.resume(
+                        returning: artwork.value.image(
+                            at: CGSize(width: 1, height: 1)
+                        )
+                    )
+                }
+            }
+
+            XCTAssertNotNil(renderedImage)
+        }
+
+        func testNowPlayingRetriesCoverWhenAccountIdentityArrives() async throws
+        {
+            let imageData = try XCTUnwrap(
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemTeal.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
+                    )
+                }.pngData()
+            )
+            let fetcher = TestBookCoverFetcher(
+                data: imageData,
+                failingRequestCount: 1
+            )
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    try await fetcher.fetch(request)
+                }
+            )
+            let infoPublisher = TestNowPlayingInfoPublisher()
+            let coordinator = NowPlayingCoordinator(
+                infoCenter: infoPublisher,
+                coverLoader: loader,
+                registersRemoteCommands: false
+            )
+            let url = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=3")
+            )
+
+            coordinator.publish(
+                nowPlayingSnapshot(accountID: nil, coverURL: url)
+            )
+            await waitForCoverRequests(fetcher, count: 1)
+            coordinator.publish(
+                nowPlayingSnapshot(
+                    accountID: AccountID(rawValue: "cover-account"),
+                    coverURL: url
+                )
+            )
+            await waitForCoverRequests(fetcher, count: 2)
+
+            let requestCount = await fetcher.requestCount
+            let artwork = await waitForNowPlayingArtwork(in: infoPublisher)
+            XCTAssertEqual(requestCount, 2)
+            XCTAssertNotNil(artwork)
+            coordinator.clear()
         }
     #endif
 
@@ -10284,7 +10294,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    #if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+    #if canImport(CarPlay) && !os(macOS)
         func testCarPlayLoadingEmptyAndTypedFailureRoots() async throws {
             let loadingModel = AppModel(
                 service: TestAppService(activeAccount: .success(nil))
@@ -11552,7 +11562,7 @@ private struct PlaybackRecoveryFixture {
     }
 }
 
-#if canImport(CarPlay) && !targetEnvironment(macCatalyst)
+#if canImport(CarPlay) && !os(macOS)
     @MainActor
     private final class TestCarPlayPresenter: CarPlayPresenting {
         private(set) var root: CPTemplate?
@@ -11780,8 +11790,7 @@ private actor TestAppService: AppServicing {
     private let privateCloudSyncAvailable: Bool
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
-    private var privateCloudConfigurationConflict:
-        CloudConfigurationConflict?
+    private var privateCloudConfigurationConflict: CloudConfigurationConflict?
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
@@ -12023,7 +12032,8 @@ private actor TestAppService: AppServicing {
         self.transcriptionTaskStateSaveResults =
             transcriptionTaskStateSaveResults
         self.privateCloudSyncAvailable = privateCloudSyncAvailable
-        self.privateCloudSyncResult = privateCloudSyncResult
+        self.privateCloudSyncResult =
+            privateCloudSyncResult
             ?? .success(privateCloudSyncChanges)
         self.privateCloudConfigurationConflict =
             privateCloudConfigurationConflict

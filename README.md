@@ -4,7 +4,7 @@ Bleat is a native iPhone and iPad client for
 [Audiobookshelf](https://www.audiobookshelf.org/). It targets iOS 26 and newer
 and is being implemented in Swift 6 with strict concurrency checking. The same
 application target can also produce a native macOS 26 build for macOS 26 and
-newer. Development-signed Catalyst builds support native login and
+newer. Development-signed macOS builds support native login and
 account restoration through the macOS Keychain.
 
 The repository now contains a runnable SwiftUI application and the tested
@@ -138,7 +138,7 @@ xcodebuild \
   build
 ```
 
-Build and launch a development-signed Catalyst app:
+Build and launch a development-signed macOS app:
 
 ```sh
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
@@ -152,7 +152,7 @@ entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
 identifier is unavailable to the selected team. Keep the same team and bundle
 identifier to retain access to existing Keychain credentials.
 
-Signed Catalyst launch, native login, and account restoration are supported.
+Signed macOS launch, native login, and account restoration are supported.
 The signed login/relaunch evidence is tracked in
 [GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
 post-1.0 work and does not block the 1.0 release. Notarization, distribution,
@@ -247,7 +247,7 @@ To run only host validation, without starting a simulator:
 BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
 ```
 
-Run the app-hosted tests in a development-signed Catalyst process:
+Run the app-hosted tests in a development-signed macOS process:
 
 ```sh
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
@@ -365,7 +365,7 @@ mise run simulator
 
 The iOS target includes a `CPTemplateApplicationScene`, but the managed CarPlay
 Audio App entitlement is intentionally omitted until Apple approves the
-capability. The Catalyst target also uses a CarPlay-free entitlement file.
+capability. The macOS target also uses a CarPlay-free entitlement file.
 After approval, the entitlement and matching provisioning profile must be
 enabled before a signed physical-device build or distribution can use CarPlay.
 Follow Apple's
