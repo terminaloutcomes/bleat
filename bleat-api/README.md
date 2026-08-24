@@ -62,11 +62,13 @@ BLEAT_API_LOCAL_TAG=registry.example/namespace/bleat-api:latest \
   mise run api:container:build-local
 ```
 
-The task uses Docker Buildx to build `linux/arm64` and `linux/amd64` images and
-pushes their multi-platform manifest to that tag. It fails before invoking
-Docker when `BLEAT_API_LOCAL_TAG` is unset. Building and publishing the image
-does not update Kubernetes or trigger a deployment; apply the deployment
-configuration separately when that is intended.
+The task uses Docker Buildx to build `linux/arm64` and `linux/amd64` images. It
+stamps the image name and current Git commit into its OpenTelemetry resource
+metadata, then pushes the same multi-platform manifest to both the configured
+tag and an immutable full-commit tag. It fails before invoking Docker when
+`BLEAT_API_LOCAL_TAG` is unset or does not contain an explicit tag. Building and
+publishing the image does not update Kubernetes or trigger a deployment; apply
+the deployment configuration separately when that is intended.
 
 ## Service configuration
 

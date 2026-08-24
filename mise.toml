@@ -71,9 +71,23 @@ run = "./scripts/bleat-logs.py health"
 [tasks."api:container:build-local"]
 description = "Build and push a local Docker image for bleat-api"
 run = """
+bleat_api_image_ref=${BLEAT_API_LOCAL_TAG:?Set BLEAT_API_LOCAL_TAG}
+bleat_api_image_name=${bleat_api_image_ref%:*}
+bleat_api_image_tag=${bleat_api_image_ref##*:}
+case ${bleat_api_image_tag} in
+  */*)
+    echo "BLEAT_API_LOCAL_TAG must include an explicit tag" >&2
+    exit 64
+    ;;
+esac
+bleat_api_image_version=$(git rev-parse --verify HEAD)
+
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
-  --tag ${BLEAT_API_LOCAL_TAG:?Set BLEAT_API_LOCAL_TAG} \
+  --build-arg BLEAT_API_IMAGE_NAME=${bleat_api_image_name} \
+  --build-arg BLEAT_API_IMAGE_VERSION=${bleat_api_image_version} \
+  --tag ${bleat_api_image_ref} \
+  --tag ${bleat_api_image_name}:${bleat_api_image_version} \
   --file bleat-api/Dockerfile \
   --push \
   .
