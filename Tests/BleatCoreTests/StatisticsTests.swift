@@ -163,6 +163,7 @@ final class StatisticsTests: XCTestCase {
             ListeningSliceRecord.self,
             CompletionMilestoneRecord.self,
             RemoteListeningSessionRecord.self,
+            PrivateCloudStatisticsDeletionRecord.self,
             StatisticsSessionAccountingRecord.self,
         ])
         let container = try ModelContainer(

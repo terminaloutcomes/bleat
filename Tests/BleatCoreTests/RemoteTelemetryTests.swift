@@ -150,7 +150,8 @@ final class RemoteTelemetryTests: XCTestCase {
                 correlationID: correlationID,
                 operation: .synchronize,
                 phase: .failed(failure),
-                durationMilliseconds: 42
+                durationMilliseconds: 42,
+                recordCount: 17
             )
         )
         pipeline.flush(timeout: 2)
@@ -181,6 +182,10 @@ final class RemoteTelemetryTests: XCTestCase {
         XCTAssertEqual(failed.attributes["bleat.retryable"], .bool(true))
         XCTAssertEqual(failed.attributes["bleat.retry_after_ms"], .int(1_250))
         XCTAssertEqual(failed.attributes["bleat.duration_ms"], .int(42))
+        XCTAssertEqual(
+            failed.attributes["bleat.cloudkit.record_count"],
+            .int(17)
+        )
         XCTAssertNil(failed.attributes["error.description"])
         pipeline.deactivate()
         pipeline.purge()

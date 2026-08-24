@@ -424,7 +424,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public static func privateCloudCompleted(
         operation: PrivateCloudSyncOperation,
         correlationID: UUID,
-        durationMilliseconds: Int
+        durationMilliseconds: Int,
+        recordCount: Int? = nil
     ) -> DiagnosticEvent {
         DiagnosticEvent(
             category: .sync,
@@ -433,6 +434,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
             operation: .privateCloudSync,
             correlationID: correlationID,
             durationMilliseconds: durationMilliseconds,
+            count: recordCount,
             privateCloud: PrivateCloudDiagnosticDetail(operation: operation)
         )
     }

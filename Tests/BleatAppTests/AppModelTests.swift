@@ -4928,6 +4928,42 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
     }
 
+    func testCloudSyncCanRestartWhileStatisticsSummaryReloadContinues()
+        async
+    {
+        let privateCloudGate = AsyncGate()
+        let statisticsSummaryGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncGate: privateCloudGate,
+            statisticsSummaryGate: statisticsSummaryGate
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await privateCloudGate.waitUntilEntered()
+        await privateCloudGate.release()
+        await statisticsSummaryGate.waitUntilEntered()
+
+        XCTAssertEqual(model.privateCloudState, .idle)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+
+        await privateCloudGate.reset()
+        let secondSync = Task { @MainActor in
+            await model.synchronizePrivateCloud()
+        }
+        await privateCloudGate.waitUntilEntered()
+
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        XCTAssertTrue(model.canCancelPrivateCloudSynchronization)
+
+        await statisticsSummaryGate.release()
+        await privateCloudGate.release()
+        await secondSync.value
+
+        XCTAssertEqual(model.privateCloudState, .idle)
+    }
+
     func testCloudKitFailureIsNotPresentedAsAudiobookshelfOutage() async {
         let failure = PrivateCloudSyncFailure(
             operation: .synchronize,
@@ -11794,6 +11830,7 @@ private actor TestAppService: AppServicing {
     private let playbackGate: AsyncGate?
     private let playbackCloseGate: AsyncGate?
     private let statisticsFinishGate: AsyncGate?
+    private let statisticsSummaryGate: AsyncGate?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
     private let refreshPageGate: AsyncGate?
@@ -11980,6 +12017,7 @@ private actor TestAppService: AppServicing {
         playbackGate: AsyncGate? = nil,
         playbackCloseGate: AsyncGate? = nil,
         statisticsFinishGate: AsyncGate? = nil,
+        statisticsSummaryGate: AsyncGate? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
         refreshPageGate: AsyncGate? = nil,
@@ -12039,6 +12077,7 @@ private actor TestAppService: AppServicing {
         self.playbackGate = playbackGate
         self.playbackCloseGate = playbackCloseGate
         self.statisticsFinishGate = statisticsFinishGate
+        self.statisticsSummaryGate = statisticsSummaryGate
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
         self.refreshPageGate = refreshPageGate
@@ -12527,6 +12566,15 @@ private actor TestAppService: AppServicing {
         if let statisticsFinishGate {
             await statisticsFinishGate.enterAndWait()
         }
+    }
+
+    func statisticsSummary(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsSummary {
+        if let statisticsSummaryGate {
+            await statisticsSummaryGate.enterAndWait()
+        }
+        return .empty
     }
 
     func syncPlayback(
