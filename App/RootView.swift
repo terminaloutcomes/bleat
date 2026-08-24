@@ -56,6 +56,15 @@ enum BookDetailPlaybackAction: Equatable {
     }
 }
 
+enum AppLifecycleCloudSyncPolicy {
+    static func shouldSynchronize(
+        wasActive: Bool,
+        isActive: Bool
+    ) -> Bool {
+        wasActive && !isActive
+    }
+}
+
 struct RootView: View {
     @Bindable var model: AppModel
     @State private var navigation = AppNavigationCoordinator()
@@ -205,10 +214,13 @@ struct RootView: View {
                     }
             }
         }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase) { previousPhase, phase in
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
-            if phase != .active {
+            if AppLifecycleCloudSyncPolicy.shouldSynchronize(
+                wasActive: previousPhase == .active,
+                isActive: phase == .active
+            ) {
                 Task {
                     await model.synchronizePrivateCloud()
                 }

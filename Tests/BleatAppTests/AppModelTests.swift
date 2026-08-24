@@ -4868,6 +4868,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(synchronizationFinished)
     }
 
+    func testCloudSyncRunsOnceWhenSceneLeavesForeground() {
+        XCTAssertTrue(
+            AppLifecycleCloudSyncPolicy.shouldSynchronize(
+                wasActive: true,
+                isActive: false
+            )
+        )
+        XCTAssertFalse(
+            AppLifecycleCloudSyncPolicy.shouldSynchronize(
+                wasActive: false,
+                isActive: false
+            )
+        )
+        XCTAssertFalse(
+            AppLifecycleCloudSyncPolicy.shouldSynchronize(
+                wasActive: false,
+                isActive: true
+            )
+        )
+    }
+
     func testCloudSyncCanBeCancelledAndRetriedWithoutOverlap() async {
         let privateCloudGate = AsyncGate()
         let service = TestAppService(
