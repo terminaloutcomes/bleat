@@ -87,5 +87,5 @@ Compare its issuer, client credentials, endpoints, signing algorithm, scopes, an
 
 - [Audiobookshelf OIDC authentication](https://audiobookshelf.org/docs/documentation/server-management/oidc-authentication)
 - [Kanidm OAuth2 and OIDC integration](https://kanidm.github.io/kanidm/master/integrations/oauth2.html)
-- [Keycloak client configuration](https://www.keycloak.org/docs/latest/server_admin/#_clients)
+- [Keycloak client configuration](https://www.keycloak.org/docs/latest/server_admin/)
 - [authentik OAuth2 and OIDC provider](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)
