@@ -15,8 +15,11 @@ if [ ! -f "$source_envrc" ]; then
 fi
 
 install -m 600 -l s "$source_envrc" "$worktree_envrc"
-direnv allow "$worktree_envrc"
-direnv exec "$CODEX_WORKTREE_PATH" true
+
+if [ -z "$(mise exec -- echo "$BLEAT_BUNDLE_ID")" ]; then
+   echo "Mise .envrc loading failed"
+   exit 1
+fi
 
 # swift build cache in a tempdir to try and help clean up easier
 if [ "$CODEX_SOURCE_TREE_PATH" != "$CODEX_WORKTREE_PATH" ]; then
