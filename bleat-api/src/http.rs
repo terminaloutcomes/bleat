@@ -16,7 +16,7 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use opentelemetry::{global, trace::Status as OpenTelemetryStatus};
+use opentelemetry::{baggage::BaggageExt, global, trace::Status as OpenTelemetryStatus};
 use opentelemetry_http::HeaderExtractor;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -677,6 +677,10 @@ async fn instrument_request(
     let parent_context = global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderExtractor(request.headers()))
     });
+    let installation_id = parent_context
+        .baggage()
+        .get("service.instance.id")
+        .and_then(|value| Uuid::parse_str(value.as_str()).ok());
     let span = info_span!(
         "http.request",
         otel.name = %span_name,
@@ -698,12 +702,16 @@ async fn instrument_request(
         network.peer.port = field::Empty,
         http.response.status_code = field::Empty,
         request.id = %request_id,
+        service.instance.id = field::Empty,
     );
     if let Some(route) = route.as_deref() {
         span.record("http.route", route);
     }
     if let Some(user_agent) = user_agent.as_deref() {
         span.record("user_agent.original", user_agent);
+    }
+    if let Some(installation_id) = installation_id {
+        span.record("service.instance.id", installation_id.to_string());
     }
     if let Some(peer) = peer {
         span.record("network.peer.address", peer.ip().to_string());

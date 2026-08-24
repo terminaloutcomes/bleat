@@ -103,10 +103,16 @@ final class InstallationIdentifierStore {
     private let defaults: UserDefaults
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
-    var identifier: String {
-        if let value = defaults.string(forKey: Self.key), UUID(uuidString: value) != nil { return value }
-        let value = UUID().uuidString.lowercased()
-        defaults.set(value, forKey: Self.key)
-        return value
+    var identifier: String { uuid.uuidString.lowercased() }
+
+    var uuid: UUID {
+        if let value = defaults.string(forKey: Self.key),
+            let identifier = UUID(uuidString: value)
+        {
+            return identifier
+        }
+        let identifier = UUID()
+        defaults.set(identifier.uuidString.lowercased(), forKey: Self.key)
+        return identifier
     }
 }

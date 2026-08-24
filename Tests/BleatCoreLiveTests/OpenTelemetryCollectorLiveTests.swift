@@ -58,7 +58,8 @@
                     platform: .iOS,
                     operatingSystemMajorVersion: 26,
                     operatingSystemMinorVersion: 0,
-                    operatingSystemPatchVersion: 0
+                    operatingSystemPatchVersion: 0,
+                    installationID: UUID()
                 ),
                 storageURL: storageURL,
                 tracerFacade: tracer,

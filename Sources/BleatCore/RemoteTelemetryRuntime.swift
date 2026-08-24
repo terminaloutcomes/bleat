@@ -37,7 +37,7 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
 {
     private enum State {
         case disabled
-        case initializing([PrivateCloudSyncEvent])
+        case initializing([BufferedRemoteTelemetryLog])
         case active(any OpenTelemetryApi.Logger)
     }
 
@@ -57,13 +57,13 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
     func activate(_ logger: any OpenTelemetryApi.Logger) {
         let buffered = lock.withLock {
             guard case .initializing(let buffered) = state else {
-                return [PrivateCloudSyncEvent]()
+                return [BufferedRemoteTelemetryLog]()
             }
             state = .active(logger)
             return buffered
         }
         for event in buffered {
-            Self.emit(event, using: logger)
+            Self.emit(event.event, span: event.span, using: logger)
         }
     }
 
@@ -71,7 +71,10 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         lock.withLock { state = .disabled }
     }
 
-    public func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent) {
+    public func recordPrivateCloudEvent(
+        _ event: PrivateCloudSyncEvent,
+        span: RemoteTelemetrySpan?
+    ) {
         let logger: (any OpenTelemetryApi.Logger)? = lock.withLock {
             switch state {
             case .disabled:
@@ -80,19 +83,22 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
                 return logger
             case .initializing(var buffered):
                 if buffered.count < maximumInitializingLogs {
-                    buffered.append(event)
+                    buffered.append(
+                        BufferedRemoteTelemetryLog(event: event, span: span)
+                    )
                     state = .initializing(buffered)
                 }
                 return nil
             }
         }
         if let logger {
-            Self.emit(event, using: logger)
+            Self.emit(event, span: span, using: logger)
         }
     }
 
     private static func emit(
         _ event: PrivateCloudSyncEvent,
+        span: RemoteTelemetrySpan?,
         using logger: any OpenTelemetryApi.Logger
     ) {
         var attributes: [String: AttributeValue] = [
@@ -144,14 +150,22 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         if let duration = event.durationMilliseconds {
             attributes["bleat.duration_ms"] = .int(duration)
         }
-        logger.logRecordBuilder()
+        let builder = logger.logRecordBuilder()
             .setTimestamp(event.timestamp)
             .setSeverity(severity)
             .setEventName(eventName)
             .setBody(.string("CloudKit synchronization lifecycle"))
             .setAttributes(attributes)
-            .emit()
+        if let context = span?.spanContext {
+            _ = builder.setSpanContext(context)
+        }
+        builder.emit()
     }
+}
+
+private struct BufferedRemoteTelemetryLog: Sendable {
+    let event: PrivateCloudSyncEvent
+    let span: RemoteTelemetrySpan?
 }
 
 /// A stable application-facing tracer whose active OpenTelemetry tracer may be
@@ -237,9 +251,10 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
                 )
                 buffered.append(pending)
                 state = .initializing(buffered)
-                return RemoteTelemetrySpan { outcome in
-                    pending.end(outcome)
-                }
+                return RemoteTelemetrySpan(
+                    endAction: { outcome in pending.end(outcome) },
+                    contextProvider: { pending.spanContext }
+                )
             }
         }
     }
@@ -255,15 +270,18 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
             .setStartTime(time: startedAt)
             .startSpan()
         let box = OpenTelemetrySpanBox(span: span)
-        return RemoteTelemetrySpan { outcome in
-            let descriptor = RemoteTelemetrySpanDescriptor(
-                operation: operation,
-                outcome: outcome,
-                source: source,
-                retryBucket: retryBucket
-            )
-            box.end(descriptor.encodedSpan, at: Date())
-        }
+        return RemoteTelemetrySpan(
+            endAction: { outcome in
+                let descriptor = RemoteTelemetrySpanDescriptor(
+                    operation: operation,
+                    outcome: outcome,
+                    source: source,
+                    retryBucket: retryBucket
+                )
+                box.end(descriptor.encodedSpan, at: Date())
+            },
+            contextProvider: { box.spanContext }
+        )
     }
 }
 
@@ -328,6 +346,10 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
         }
     }
 
+    var spanContext: SpanContext? {
+        lock.withLock { materialized?.spanContext }
+    }
+
     private func finish(
         _ box: OpenTelemetrySpanBox,
         completion: Completion
@@ -350,6 +372,8 @@ private final class OpenTelemetrySpanBox: @unchecked Sendable {
     init(span: any Span) {
         self.span = span
     }
+
+    var spanContext: SpanContext { span.context }
 
     func end(_ encoded: RemoteTelemetryEncodedSpan, at endTime: Date) {
         for (key, value) in encoded.attributes {

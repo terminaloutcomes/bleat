@@ -137,7 +137,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 platform: platform,
                 operatingSystemMajorVersion: systemVersion.majorVersion,
                 operatingSystemMinorVersion: systemVersion.minorVersion,
-                operatingSystemPatchVersion: systemVersion.patchVersion
+                operatingSystemPatchVersion: systemVersion.patchVersion,
+                installationID: InstallationIdentifierStore().uuid
             )
             let storageRootURL = FileManager.default.urls(
                 for: .applicationSupportDirectory,
@@ -240,7 +241,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         guard
             let transport = try? URLSessionTelemetryAuthenticationTransport(
                 baseURL: baseURL,
-                allowsInsecureLoopback: allowsInsecureLoopback
+                allowsInsecureLoopback: allowsInsecureLoopback,
+                installationID: InstallationIdentifierStore().uuid
             )
         else {
             return nil

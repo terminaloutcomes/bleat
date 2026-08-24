@@ -76,7 +76,10 @@ standard time claims through `bleat-api` discovery and JWKS. Stock Collector
 authentication cannot hard-reject an arbitrary custom scope claim. That is not
 an additional authorization boundary while `bleat-api` issues only the narrow
 telemetry token for this issuer and audience. The bearer token, its claims, and
-the opaque installation subject are not copied into exported telemetry.
+the App Attest evidence are not copied into exported telemetry. Bleat's separate
+random app-installation identifier is included as `service.instance.id` and is
+propagated to `bleat-api` with W3C baggage so both services can be queried by the
+same opaque correlation key.
 
 ## Transport and trust
 
@@ -201,7 +204,7 @@ Bleat telemetry does not use:
 - JWT translation into a HyperDX ingestion key;
 - the ClickStack-managed ingestion Collector;
 - per-installation quotas or accounting;
-- authentication headers, JWT claims, installation identifiers, account data,
+- authentication headers, JWT claims, account data,
   server addresses, media values, URLs, or paths as exported log/span fields;
 - remote OpenTelemetry export from native macOS.
 
