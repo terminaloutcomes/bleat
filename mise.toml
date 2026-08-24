@@ -63,6 +63,10 @@ run = "docker compose --file bleat-api/compose.yml up --build api"
 description = "Stop the local bleat-api and PostgreSQL"
 run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orphans"
 
+[tasks."bleat-logs"]
+description = "Check the ClickStack bleat logs API"
+run = "./scripts/bleat-logs.py health"
+
 
 [tasks."api:container:build-local"]
 description = "Build and push a local Docker image for bleat-api"

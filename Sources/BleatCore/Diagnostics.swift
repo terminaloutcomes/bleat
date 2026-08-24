@@ -56,6 +56,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case pause
     case seek
     case restoreDownloads = "restore_downloads"
+    case resumeInterruptedDownloads = "resume_interrupted_downloads"
     case planDownload = "plan_download"
     case startDownload = "start_download"
     case pauseDownload = "pause_download"

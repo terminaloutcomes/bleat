@@ -262,6 +262,23 @@ Audiobookshelf instance:
 mise run test:app-live
 ```
 
+## Clickstack logs helper
+
+Use this repository's helper to call the local Clickstack/HyperDX backend:
+
+```sh
+./scripts/bleat-logs.py health
+./scripts/bleat-logs.py request GET /api/health
+./scripts/bleat-logs.py search 'query text' 25
+```
+
+The script uses `BLEAT_LOGS_BASE_URL` and `BLEAT_LOGS_TOKEN`.
+
+```sh
+BLEAT_LOGS_BASE_URL=https://bleat-logs.terminaloutcomes.com ./scripts/bleat-logs.py health
+BLEAT_LOGS_BASE_URL=https://bleat-logs.housenet.yaleman.org ./scripts/bleat-logs.py search 'query text'
+```
+
 ### Release screenshots
 
 Generate the publication-ready release screenshots from a fresh live Barnyard
@@ -678,7 +695,10 @@ Accounts with Audiobookshelf's download permission see **Download** on book
 detail. Bleat schedules every original audio file through a stable background
 URL session with bearer headers, limits each host to three concurrent transfers,
 persists an offline metadata snapshot and byte-exact manifest, and restores
-system-owned tasks after relaunch. The Downloads tab shows durable state and
+system-owned tasks after relaunch. An interrupted non-paused transfer that could
+not be restored because Bleat launched offline resumes automatically from its
+durable partial bytes when connectivity returns; user-paused downloads stay
+paused. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;
