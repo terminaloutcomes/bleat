@@ -348,5 +348,17 @@ version without the `v` prefix. A same-repository pull request also publishes
 the image under the full PR merge commit SHA selected and attested by GitHub
 Actions. Fork pull requests build and validate the image but cannot publish it.
 
+The resolved published tag is compiled into the binary and exported on every
+OpenTelemetry signal as both `service.version` and the sole
+`container.image.tags` value. The resource also includes
+`container.image.name=ghcr.io/terminaloutcomes/bleat-api`. At runtime,
+`service.instance.id` identifies the running replica. Docker's hexadecimal
+`HOSTNAME` is additionally exported as `container.id`; orchestrators may supply
+an authoritative `BLEAT_API_CONTAINER_ID` when the container runtime identifier
+is not available as the hostname. `BLEAT_API_SERVICE_INSTANCE_ID` can supply a
+stable orchestrator identity such as a pod UID without mislabelling it as a
+container ID. Invalid, empty, control-character, and oversized values are
+omitted.
+
 Published images include signed provenance and an SBOM. The reusable workflow
 is pinned to an immutable commit from Docker's `v1` release line.

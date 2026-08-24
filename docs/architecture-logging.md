@@ -10,8 +10,10 @@ document defines the deployment topology and component boundaries.
 Bleat has two telemetry producers:
 
 - `bleat-api` emits structured logs and server spans with
-  `service.name=bleat-api`. Local stderr logging remains active if remote
-  export fails or is not configured.
+  `service.name=bleat-api`, a per-replica `service.instance.id`, and container
+  image identity. Docker runtimes also emit their hexadecimal `container.id`;
+  an orchestrator can provide its authoritative runtime ID explicitly. Local
+  stderr logging remains active if remote export fails or is not configured.
 - The opted-in iOS application emits its reviewed spans and CloudKit lifecycle
   logs with `service.name=bleat`. Native macOS does not create remote telemetry
   state or send OTLP.

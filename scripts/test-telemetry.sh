@@ -222,6 +222,25 @@ jq --slurp -e '
   and ([.. | objects | select(.key? == "bleat.retry.bucket" and .value.stringValue? == "one")] | length) >= 1
 ' "${captured_traces}" >/dev/null
 jq --slurp -e '
+  def attribute($attributes; $key):
+    first($attributes[] | select(.key == $key) | .value);
+  [.. | objects
+    | select(.resource.attributes? != null)
+    | .resource.attributes
+    | select(attribute(.; "service.name").stringValue == "bleat-api")]
+  | length >= 1
+    and all(.[];
+      . as $attributes
+      | (attribute($attributes; "service.instance.id").stringValue) as $instance
+      | (attribute($attributes; "container.id").stringValue) as $container
+      | $instance == $container
+        and ($container | test("^[0-9A-Fa-f]{12,64}$"))
+        and attribute($attributes; "service.version").stringValue == "development"
+        and attribute($attributes; "container.image.name").stringValue == "bleat-api"
+        and attribute($attributes; "container.image.tags").arrayValue.values[0].stringValue == "development"
+    )
+' "${captured_traces}" >/dev/null
+jq --slurp -e '
   ([.. | objects
     | select(.name? == "bleat.telemetry.authentication")
     | {traceId, spanId}]) as $auth
