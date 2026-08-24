@@ -94,7 +94,8 @@ run = [
 [tasks."site-serve"]
 description = "Serve the website locally"
 depends = ["site-css", "site-build"]
-run = "zola --root site serve"
+dir = "./site"
+run = "zola serve"
 
 [tasks.simulator]
 description = "Build and launch Bleat on the default iPhone simulator"
