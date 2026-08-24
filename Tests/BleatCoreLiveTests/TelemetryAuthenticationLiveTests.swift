@@ -7,16 +7,12 @@
 
     final class TelemetryAuthenticationLiveTests: XCTestCase {
         func testSwiftDevelopmentAttesterObtainsVerifiableJWT() async throws {
-            let environment = ProcessInfo.processInfo.environment
-            guard let value = environment["BLEAT_TELEMETRY_AUTH_BASE_URL"],
-                let baseURL = URL(string: value)
-            else {
-                throw XCTSkip(
-                    "Run scripts/test-telemetry.sh to provide the telemetry auth URL"
-                )
-            }
+            let baseURL = try requireTelemetryAuthenticationTestBaseURL()
             let store = LiveTelemetryEnrollmentStore()
             let provider = TelemetryTokenProvider(
+                // Fake evidence is valid only against the disposable
+                // development API. Production App Attest requires the signed
+                // physical-device journey.
                 attester: DevelopmentTelemetryAttester(),
                 transport: try URLSessionTelemetryAuthenticationTransport(
                     baseURL: baseURL,

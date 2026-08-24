@@ -435,6 +435,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var accounts: [AccountID: ServerAccount] = [:]
     private var deletingDownloadIDs: Set<DownloadID> = []
     private var cancelledDownloadIDs: Set<DownloadID> = []
+    private var pendingRecoveryDownloadIDs: Set<DownloadID> = []
+    private var isRecoveringInterruptedTransfers = false
     private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
     private var pendingAutomaticUpdates:
         [AutomaticDownloadKey: AutomaticDownloadActivity] = [:]
@@ -570,49 +572,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
         )
         if let storage {
-            for record in records
-            where record.manifest.state == .downloading
-                || record.manifest.state == .queued
-            {
-                guard let account = accounts[record.manifest.accountID],
-                    let plan = try? await service.downloadPlan(
-                        for: account,
-                        itemID: record.manifest.itemID
-                    )
-                else {
-                    continue
-                }
-                let missingTracks = plan.tracks.filter { track in
-                    guard
-                        let entry = record.manifest.entries.first(where: {
-                            $0.trackIndex == track.index
-                        }), entry.state != .complete,
-                        let identity = try? DownloadTaskIdentity(
-                            downloadID: record.manifest.downloadID,
-                            accountID: record.manifest.accountID,
-                            itemID: record.manifest.itemID,
-                            track: track
-                        )
-                    else {
-                        return false
-                    }
-                    return !activeTaskKeys.contains(
-                        AutomaticDownloadTaskKey(identity)
-                    )
-                }
-                if !missingTracks.isEmpty {
-                    try? await schedule(
-                        plan: plan,
-                        detail: record.detail,
-                        account: account,
-                        storage: storage,
-                        purpose: record.manifest.purpose,
-                        tracks: missingTracks,
-                        downloadID: record.manifest.downloadID
-                    )
-                }
-            }
-            await refresh()
+            await reconcileTransfers(
+                scope: .allRecords,
+                activeTaskKeys: activeTaskKeys,
+                storage: storage
+            )
         }
         for (task, _) in currentTasks where task.state == .suspended {
             task.resume()
@@ -626,6 +590,285 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 count: records.count
             )
         )
+    }
+
+    /// Resumes interrupted, non-paused transfers after connectivity returns.
+    ///
+    /// Only downloads whose startup plan lookup failed transiently are
+    /// retried, so repeated network-path events cannot reschedule transfers
+    /// that already have surviving tasks or that the user paused.
+    func recoverAfterNetworkChange(
+        for accountUpdates: [ServerAccount]
+    ) async {
+        for account in accountUpdates {
+            self.accounts[account.id] = account
+        }
+        guard !isRecoveringInterruptedTransfers else {
+            return
+        }
+        guard let storage else {
+            pendingRecoveryDownloadIDs = []
+            return
+        }
+        for downloadID in Array(pendingRecoveryDownloadIDs) {
+            let stillRecoverable: Bool
+            if let record = record(downloadID: downloadID),
+                record.manifest.state == .downloading
+                    || record.manifest.state == .queued,
+                !pausedDownloadIDs.contains(downloadID),
+                accounts[record.manifest.accountID] != nil {
+                stillRecoverable = true
+            } else {
+                stillRecoverable = false
+            }
+            if !stillRecoverable {
+                pendingRecoveryDownloadIDs.remove(downloadID)
+            }
+        }
+        guard !pendingRecoveryDownloadIDs.isEmpty else {
+            return
+        }
+        isRecoveringInterruptedTransfers = true
+        defer { isRecoveringInterruptedTransfers = false }
+        await diagnostics.record(
+            .started(.resumeInterruptedDownloads, category: .download)
+        )
+        let resumedCount = await reconcileTransfers(
+            scope: .interruptedOnly(
+                accountIDs: Set(accountUpdates.map(\.id))
+            ),
+            activeTaskKeys: await activeTransferTaskKeys(),
+            storage: storage
+        )
+        await diagnostics.record(
+            .completed(
+                .resumeInterruptedDownloads,
+                category: .download,
+                count: resumedCount
+            )
+        )
+    }
+
+    private enum TransferReconciliationScope {
+        case allRecords
+        case interruptedOnly(accountIDs: Set<AccountID>)
+    }
+
+    /// Schedules missing transfer tasks for persisted non-paused incomplete
+    /// downloads. Plan lookups that fail transiently (for example while the
+    /// device is offline at launch) defer the download into
+    /// `pendingRecoveryDownloadIDs` instead of leaving it permanently stalled;
+    /// `recoverAfterNetworkChange(for:)` retries exactly those records later.
+    @discardableResult
+    private func reconcileTransfers(
+        scope: TransferReconciliationScope,
+        activeTaskKeys: Set<AutomaticDownloadTaskKey>,
+        storage: DownloadStorage
+    ) async -> Int {
+        var scheduledDownloadCount = 0
+        for record in records
+        where record.manifest.state == .downloading
+            || record.manifest.state == .queued
+        {
+            let downloadID = record.manifest.downloadID
+            if case .interruptedOnly(let accountIDs) = scope {
+                guard pendingRecoveryDownloadIDs.contains(downloadID),
+                    accountIDs.contains(record.manifest.accountID)
+                else {
+                    continue
+                }
+            }
+            guard !pausedDownloadIDs.contains(downloadID),
+                let account = accounts[record.manifest.accountID]
+            else {
+                continue
+            }
+            do {
+                let plan = try await service.downloadPlan(
+                    for: account,
+                    itemID: record.manifest.itemID
+                )
+                let missingTracks = plan.tracks.filter { track in
+                    guard
+                        let entry = record.manifest.entries.first(where: {
+                            $0.trackIndex == track.index
+                        }), entry.state != .complete,
+                        let identity = try? DownloadTaskIdentity(
+                            downloadID: downloadID,
+                            accountID: record.manifest.accountID,
+                            itemID: record.manifest.itemID,
+                            track: track
+                        )
+                    else {
+                        return false
+                    }
+                    return !activeTaskKeys.contains(
+                        AutomaticDownloadTaskKey(identity)
+                    )
+                }
+                if !missingTracks.isEmpty {
+                    try await schedule(
+                        plan: plan,
+                        detail: record.detail,
+                        account: account,
+                        storage: storage,
+                        purpose: record.manifest.purpose,
+                        tracks: missingTracks,
+                        downloadID: downloadID
+                    )
+                    scheduledDownloadCount += 1
+                }
+                pendingRecoveryDownloadIDs.remove(downloadID)
+            } catch {
+                if Self.isTransientRecoveryFailure(error) {
+                    pendingRecoveryDownloadIDs.insert(downloadID)
+                } else {
+                    pendingRecoveryDownloadIDs.remove(downloadID)
+                }
+                await diagnostics.record(
+                    .failed(
+                        .resumeInterruptedDownloads,
+                        category: .download,
+                        failureCode: Self.reconciliationFailureCode(
+                            for: error
+                        )
+                    )
+                )
+            }
+        }
+        await refresh()
+        return scheduledDownloadCount
+    }
+
+    private func activeTransferTaskKeys() async
+        -> Set<AutomaticDownloadTaskKey> {
+        var keys: Set<AutomaticDownloadTaskKey> = []
+        for task in await session.allTasks {
+            guard let description = task.taskDescription,
+                let descriptor = try? DownloadChunkTaskDescription.decode(
+                    description
+                ),
+                await taskDescriptorIsCurrent(descriptor, storage: storage)
+            else {
+                task.cancel()
+                continue
+            }
+            keys.insert(AutomaticDownloadTaskKey(descriptor.identity))
+        }
+        return keys
+    }
+
+    func scheduledTransferDescriptorsForTesting() async
+        -> [DownloadChunkTaskDescription] {
+        var descriptors: [(key: String, descriptor: DownloadChunkTaskDescription)] =
+            []
+        for task in await session.allTasks
+        where task.state == .running || task.state == .suspended {
+            guard let description = task.taskDescription,
+                let descriptor = try? DownloadChunkTaskDescription.decode(
+                    description
+                )
+            else {
+                continue
+            }
+            let identity = descriptor.identity
+            descriptors.append(
+                (
+                    "\(identity.accountID.rawValue)|\(identity.itemID.rawValue)|\(identity.trackIndex)",
+                    descriptor
+                )
+            )
+        }
+        return descriptors.sorted { $0.key < $1.key }.map(\.descriptor)
+    }
+
+    var pendingRecoveryDownloadIDsForTesting: Set<DownloadID> {
+        pendingRecoveryDownloadIDs
+    }
+
+    private static func reconciliationFailureCode(
+        for error: Error
+    ) -> DiagnosticFailureCode {
+        guard case .downloadPlan(let planError) = error as? AppServiceError
+        else {
+            return .mediaUnavailable
+        }
+        switch planError {
+        case .invalidItemID:
+            return .invalidInput
+        case .routeConstruction:
+            return .requestRejected
+        case .authenticatedRequest(let requestError):
+            switch requestError {
+            case .invalidAccountID, .accountOperationInProgress,
+                .authenticationEndpoint, .requestDoesNotMatchRoute,
+                .authorizationFailed:
+                return .requestRejected
+            case .credentialsReadFailed, .missingCredentials,
+                .missingAccessToken, .missingRefreshToken,
+                .credentialPersistenceFailed, .savedLoginCredentialsReadFailed,
+                .refreshRejected, .unexpectedRefreshStatus,
+                .malformedRefreshResponse, .automaticReauthenticationFailed,
+                .retriedRequestUnauthorized:
+                return .authenticationRequired
+            case .requestCancelled, .refreshCancelled:
+                return .requestCancelled
+            case .automaticReauthenticationTransportFailed,
+                .refreshRequestConstructionFailed, .refreshTransportFailed,
+                .requestTransportFailed:
+                return .serverUnavailable
+            }
+        case .unexpectedStatus(let status):
+            switch status {
+            case 401, 403:
+                return .permissionDenied
+            case 404:
+                return .itemNotFound
+            case 500...599:
+                return .serverUnavailable
+            default:
+                return .invalidServerResponse
+            }
+        case .invalidPlan:
+            return .invalidServerResponse
+        }
+    }
+
+    private static func isTransientRecoveryFailure(_ error: Error) -> Bool {
+        guard case .downloadPlan(let planError) = error as? AppServiceError
+        else {
+            return false
+        }
+        switch planError {
+        case .authenticatedRequest(
+            .automaticReauthenticationTransportFailed
+        ), .authenticatedRequest(.refreshRequestConstructionFailed),
+            .authenticatedRequest(.refreshTransportFailed),
+            .authenticatedRequest(.requestTransportFailed),
+            .unexpectedStatus(500...599):
+            return true
+        case .invalidItemID, .routeConstruction,
+            .authenticatedRequest(.invalidAccountID),
+            .authenticatedRequest(.accountOperationInProgress),
+            .authenticatedRequest(.authenticationEndpoint),
+            .authenticatedRequest(.requestDoesNotMatchRoute),
+            .authenticatedRequest(.authorizationFailed),
+            .authenticatedRequest(.credentialsReadFailed),
+            .authenticatedRequest(.missingCredentials),
+            .authenticatedRequest(.missingAccessToken),
+            .authenticatedRequest(.missingRefreshToken),
+            .authenticatedRequest(.credentialPersistenceFailed),
+            .authenticatedRequest(.savedLoginCredentialsReadFailed),
+            .authenticatedRequest(.refreshRejected),
+            .authenticatedRequest(.unexpectedRefreshStatus),
+            .authenticatedRequest(.malformedRefreshResponse),
+            .authenticatedRequest(.automaticReauthenticationFailed),
+            .authenticatedRequest(.retriedRequestUnauthorized),
+            .authenticatedRequest(.requestCancelled),
+            .authenticatedRequest(.refreshCancelled),
+            .unexpectedStatus, .invalidPlan:
+            return false
+        }
     }
 
     func download(
@@ -1404,6 +1647,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             progress[record.manifest.downloadID] = nil
             transferredBytesByTrack[record.manifest.downloadID] = nil
             pausedDownloadIDs.remove(record.manifest.downloadID)
+            pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
             playbackSuspendedDownloadIDs.remove(
                 record.manifest.downloadID
             )
@@ -1431,6 +1675,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .started(.cancelDownload, category: .download)
         )
         cancelledDownloadIDs.insert(record.manifest.downloadID)
+        pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -1475,6 +1720,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         pausedDownloadIDs.insert(record.manifest.downloadID)
+        pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
         let tasks = await session.allTasks
         for entry in record.manifest.entries where entry.state != .complete {
             guard let identity = Self.identity(for: entry, record: record)
@@ -2225,6 +2471,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     return
                 }
                 if finalized {
+                    if let current = record(
+                        downloadID: identity.downloadID
+                    ), !current.manifest.entries.contains(where: {
+                        $0.state != .complete
+                    }) {
+                        pendingRecoveryDownloadIDs.remove(
+                            identity.downloadID
+                        )
+                    }
                     finishTransferSpan(identity, outcome: .succeeded)
                     await diagnostics.record(
                         .completed(.completeDownload, category: .download)

@@ -1195,6 +1195,11 @@ final class AppModel {
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
     private var pendingLocalSessionSyncAccounts: [AccountID: ServerAccount] =
         [:]
+    @ObservationIgnored
+    private var downloadRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var pendingDownloadRecoveryAccounts: [AccountID: ServerAccount] =
+        [:]
 
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
@@ -3974,6 +3979,7 @@ final class AppModel {
                 }
                 networkPathState = state
                 schedulePendingLocalSessionSync(for: accounts)
+                scheduleDownloadRecovery(for: accounts)
                 await refreshAccountsAfterNetworkChange()
                 guard let account else {
                     continue
@@ -4039,6 +4045,32 @@ final class AppModel {
             localSessionSyncTask = nil
             if !pendingLocalSessionSyncAccounts.isEmpty {
                 schedulePendingLocalSessionSyncWork()
+            }
+        }
+    }
+
+    private func scheduleDownloadRecovery(for accounts: [ServerAccount]) {
+        for account in accounts {
+            pendingDownloadRecoveryAccounts[account.id] = account
+        }
+        scheduleDownloadRecoveryWork()
+    }
+
+    private func scheduleDownloadRecoveryWork() {
+        guard downloadRecoveryTask == nil else {
+            return
+        }
+        downloadRecoveryTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            while let next = pendingDownloadRecoveryAccounts.values.first {
+                pendingDownloadRecoveryAccounts[next.id] = nil
+                await downloads.recoverAfterNetworkChange(for: [next])
+            }
+            downloadRecoveryTask = nil
+            if !pendingDownloadRecoveryAccounts.isEmpty {
+                scheduleDownloadRecoveryWork()
             }
         }
     }
