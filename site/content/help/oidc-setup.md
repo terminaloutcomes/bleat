@@ -45,7 +45,6 @@ Enter the Audiobookshelf client ID and secret from the provider, and select a si
 
 If Audiobookshelf is served below a path prefix, select that prefix under Web Redirect URLs Subfolder. Confirm the mobile callback displayed by Audiobookshelf exactly matches the URI registered at the provider.
 
-
 Under Allowed Mobile Redirect URIs, add Bleat's exact callback:
 
 `bleat://oauth2redirect`
@@ -86,7 +85,7 @@ Compare its issuer, client credentials, endpoints, signing algorithm, scopes, an
 
 ## Upstream Documentation
 
-* [Audiobookshelf OIDC authentication](https://audiobookshelf.org/docs/documentation/server-management/oidc-authentication)
-* [Kanidm OAuth2 and OIDC integration](https://kanidm.github.io/kanidm/master/integrations/oauth2.html)
-* [Keycloak client configuration](https://www.keycloak.org/docs/latest/server_admin/#_clients)
-* [authentik OAuth2 and OIDC provider](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)
+- [Audiobookshelf OIDC authentication](https://audiobookshelf.org/docs/documentation/server-management/oidc-authentication)
+- [Kanidm OAuth2 and OIDC integration](https://kanidm.github.io/kanidm/master/integrations/oauth2.html)
+- [Keycloak client configuration](https://www.keycloak.org/docs/latest/server_admin/#_clients)
+- [authentik OAuth2 and OIDC provider](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)
