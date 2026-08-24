@@ -1,5 +1,6 @@
 use opentelemetry::{
-    KeyValue, global, propagation::TextMapCompositePropagator, trace::TracerProvider as _,
+    Array, KeyValue, Value, global, propagation::TextMapCompositePropagator,
+    trace::TracerProvider as _,
 };
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::{
@@ -27,16 +28,7 @@ pub struct Observability {
 impl Observability {
     pub fn install(config: &Config) -> Result<Self, ObservabilityError> {
         install_context_propagator();
-        let resource = Resource::builder()
-            .with_service_name("bleat-api")
-            .with_attributes([
-                KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
-                KeyValue::new(
-                    "deployment.environment.name",
-                    config.deployment_mode.to_string(),
-                ),
-            ])
-            .build();
+        let resource = telemetry_resource(config);
 
         let tracer_provider = build_tracer_provider(config, resource.clone())?;
         let logger_provider = build_logger_provider(config, resource)?;
@@ -60,6 +52,117 @@ impl Observability {
             warn!(error = %error, "failed to flush OpenTelemetry logs");
         }
     }
+}
+
+fn telemetry_resource(config: &Config) -> Resource {
+    let metadata = RuntimeResourceMetadata::from_lookup(|name| std::env::var(name).ok());
+    let mut attributes = vec![
+        KeyValue::new("service.version", metadata.service_version()),
+        KeyValue::new(
+            "deployment.environment.name",
+            config.deployment_mode.to_string(),
+        ),
+    ];
+    metadata.append_attributes(&mut attributes);
+
+    Resource::builder()
+        .with_service_name("bleat-api")
+        .with_attributes(attributes)
+        .build()
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct RuntimeResourceMetadata {
+    service_instance_id: Option<String>,
+    container_id: Option<String>,
+    image_name: Option<String>,
+    image_tag: Option<String>,
+}
+
+impl RuntimeResourceMetadata {
+    fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Self {
+        Self::from_values(
+            lookup("BLEAT_API_SERVICE_INSTANCE_ID"),
+            lookup("BLEAT_API_CONTAINER_ID"),
+            lookup("HOSTNAME"),
+            option_env!("BLEAT_API_IMAGE_NAME").map(str::to_owned),
+            option_env!("BLEAT_API_IMAGE_VERSION").map(str::to_owned),
+        )
+    }
+
+    fn from_values(
+        service_instance_id: Option<String>,
+        container_id: Option<String>,
+        hostname: Option<String>,
+        image_name: Option<String>,
+        image_tag: Option<String>,
+    ) -> Self {
+        let image_name = bounded_resource_value(image_name);
+        let image_tag = bounded_resource_value(image_tag);
+        let hostname = bounded_resource_value(hostname);
+        let explicit_container_id = normalize_container_id(container_id);
+        let detected_container_id = explicit_container_id.clone().or_else(|| {
+            hostname
+                .clone()
+                .filter(|value| looks_like_container_id(value))
+        });
+        let service_instance_id = bounded_resource_value(service_instance_id)
+            .or_else(|| detected_container_id.clone())
+            .or_else(|| image_tag.as_ref().and(hostname));
+
+        Self {
+            service_instance_id,
+            container_id: detected_container_id,
+            image_name,
+            image_tag,
+        }
+    }
+
+    fn service_version(&self) -> String {
+        self.image_tag
+            .clone()
+            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned())
+    }
+
+    fn append_attributes(&self, attributes: &mut Vec<KeyValue>) {
+        if let Some(value) = self.service_instance_id.clone() {
+            attributes.push(KeyValue::new("service.instance.id", value));
+        }
+        if let Some(value) = self.container_id.clone() {
+            attributes.push(KeyValue::new("container.id", value));
+        }
+        if let Some(value) = self.image_name.clone() {
+            attributes.push(KeyValue::new("container.image.name", value));
+        }
+        if let Some(value) = self.image_tag.clone() {
+            attributes.push(KeyValue::new(
+                "container.image.tags",
+                Value::Array(Array::String(vec![value.into()])),
+            ));
+        }
+    }
+}
+
+fn bounded_resource_value(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty() && trimmed.len() <= 256 && !trimmed.chars().any(char::is_control))
+            .then(|| trimmed.to_owned())
+    })
+}
+
+fn looks_like_container_id(value: &str) -> bool {
+    (12..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn normalize_container_id(value: Option<String>) -> Option<String> {
+    bounded_resource_value(value).and_then(|value| {
+        let identifier = ["containerd://", "docker://", "cri-o://"]
+            .iter()
+            .find_map(|prefix| value.strip_prefix(prefix))
+            .unwrap_or(&value);
+        (!identifier.is_empty()).then(|| identifier.to_owned())
+    })
 }
 
 fn install_context_propagator() {
@@ -322,6 +425,91 @@ mod tests {
             log_format,
             telemetry: TelemetryExportConfig::default(),
         }
+    }
+
+    #[test]
+    fn container_resource_metadata_identifies_the_runtime_and_built_image() {
+        let metadata = RuntimeResourceMetadata::from_values(
+            None,
+            None,
+            Some("c12a1d3eb1ea".to_owned()),
+            Some("ghcr.io/terminaloutcomes/bleat-api".to_owned()),
+            Some("build-20260824-210000".to_owned()),
+        );
+        let mut attributes = Vec::new();
+        metadata.append_attributes(&mut attributes);
+        let resource = Resource::builder_empty()
+            .with_attributes(attributes)
+            .build();
+
+        assert_eq!(metadata.service_version(), "build-20260824-210000");
+        assert_eq!(
+            resource.get(&Key::new("service.instance.id")),
+            Some("c12a1d3eb1ea".into())
+        );
+        assert_eq!(
+            resource.get(&Key::new("container.id")),
+            Some("c12a1d3eb1ea".into())
+        );
+        assert_eq!(
+            resource.get(&Key::new("container.image.name")),
+            Some("ghcr.io/terminaloutcomes/bleat-api".into())
+        );
+        assert_eq!(
+            resource.get(&Key::new("container.image.tags")),
+            Some(Value::Array(Array::String(vec![
+                "build-20260824-210000".into()
+            ])))
+        );
+    }
+
+    #[test]
+    fn explicit_instance_and_container_ids_override_orchestrator_hostname() {
+        let metadata = RuntimeResourceMetadata::from_values(
+            Some("f98cf521-38b3-46fe-ad91-730b4913ae98".to_owned()),
+            Some("containerd://4bf92f3577b34da6".to_owned()),
+            Some("bleat-api-68b469c8dc-7z4sf".to_owned()),
+            Some("ghcr.io/terminaloutcomes/bleat-api".to_owned()),
+            Some("0.1.0".to_owned()),
+        );
+
+        assert_eq!(
+            metadata.service_instance_id.as_deref(),
+            Some("f98cf521-38b3-46fe-ad91-730b4913ae98")
+        );
+        assert_eq!(metadata.container_id.as_deref(), Some("4bf92f3577b34da6"));
+    }
+
+    #[test]
+    fn orchestrator_hostname_identifies_the_service_without_becoming_a_container_id() {
+        let metadata = RuntimeResourceMetadata::from_values(
+            None,
+            None,
+            Some("bleat-api-68b469c8dc-7z4sf".to_owned()),
+            Some("ghcr.io/terminaloutcomes/bleat-api".to_owned()),
+            Some("0.1.0".to_owned()),
+        );
+
+        assert_eq!(
+            metadata.service_instance_id.as_deref(),
+            Some("bleat-api-68b469c8dc-7z4sf")
+        );
+        assert!(metadata.container_id.is_none());
+    }
+
+    #[test]
+    fn invalid_runtime_metadata_is_omitted() {
+        let metadata = RuntimeResourceMetadata::from_values(
+            Some("\n".to_owned()),
+            Some("x".repeat(257)),
+            Some("not-a-container".to_owned()),
+            None,
+            None,
+        );
+
+        assert_eq!(metadata.service_version(), env!("CARGO_PKG_VERSION"));
+        assert!(metadata.service_instance_id.is_none());
+        assert!(metadata.container_id.is_none());
     }
 
     #[test]
