@@ -1,7 +1,11 @@
-use opentelemetry::{KeyValue, global, trace::TracerProvider as _};
+use opentelemetry::{
+    KeyValue, global, propagation::TextMapCompositePropagator, trace::TracerProvider as _,
+};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::{
-    Resource, logs::SdkLoggerProvider, propagation::TraceContextPropagator,
+    Resource,
+    logs::SdkLoggerProvider,
+    propagation::{BaggagePropagator, TraceContextPropagator},
     trace::SdkTracerProvider,
 };
 use thiserror::Error;
@@ -22,7 +26,7 @@ pub struct Observability {
 
 impl Observability {
     pub fn install(config: &Config) -> Result<Self, ObservabilityError> {
-        global::set_text_map_propagator(TraceContextPropagator::new());
+        install_context_propagator();
         let resource = Resource::builder()
             .with_service_name("bleat-api")
             .with_attributes([
@@ -56,6 +60,13 @@ impl Observability {
             warn!(error = %error, "failed to flush OpenTelemetry logs");
         }
     }
+}
+
+fn install_context_propagator() {
+    global::set_text_map_propagator(TextMapCompositePropagator::new(vec![
+        Box::new(TraceContextPropagator::new()),
+        Box::new(BaggagePropagator::new()),
+    ]));
 }
 
 pub fn log_startup_settings(config: &Config) {
@@ -428,7 +439,7 @@ mod tests {
     #[tokio::test]
     async fn one_request_fans_out_locally_and_to_correlated_trace_and_log_signals() {
         let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
-        global::set_text_map_propagator(TraceContextPropagator::new());
+        install_context_propagator();
         let resource = Resource::builder_empty()
             .with_service_name("bleat-api")
             .with_attribute(KeyValue::new("deployment.environment.name", "development"))
@@ -486,6 +497,10 @@ mod tests {
             .header(
                 "traceparent",
                 "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            )
+            .header(
+                "baggage",
+                "service.instance.id=c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa",
             )
             .body(Body::from(sensitive_body))
             .expect("valid request");
@@ -579,6 +594,12 @@ mod tests {
         assert_eq!(
             span_attribute(&spans[0].attributes, "client.address"),
             Some(&Value::String("203.0.113.44".into()))
+        );
+        assert_eq!(
+            span_attribute(&spans[0].attributes, "service.instance.id"),
+            Some(&Value::String(
+                "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa".into()
+            ))
         );
         assert!(spans[0].events.is_empty());
         assert!(!format!("{spans:?}").contains(sensitive_body));

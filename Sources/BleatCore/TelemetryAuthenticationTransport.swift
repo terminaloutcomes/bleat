@@ -10,10 +10,12 @@ public final class URLSessionTelemetryAuthenticationTransport:
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let installationID: UUID?
 
     public init(
         baseURL: URL,
         allowsInsecureLoopback: Bool = false,
+        installationID: UUID? = nil,
         configuration: URLSessionConfiguration = .ephemeral
     ) throws(TelemetryAuthenticationTransportError) {
         guard Self.isValid(
@@ -23,6 +25,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
             throw .invalidConfiguration
         }
         self.baseURL = baseURL.appending(path: "")
+        self.installationID = installationID
         configuration.timeoutIntervalForRequest = 10
         configuration.timeoutIntervalForResource = 15
         configuration.httpCookieStorage = nil
@@ -116,6 +119,12 @@ public final class URLSessionTelemetryAuthenticationTransport:
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue("application/json", forHTTPHeaderField: "accept")
+        if let installationID {
+            request.setValue(
+                "service.instance.id=\(installationID.uuidString.lowercased())",
+                forHTTPHeaderField: "baggage"
+            )
+        }
         do {
             request.httpBody = try encoder.encode(body)
         } catch {

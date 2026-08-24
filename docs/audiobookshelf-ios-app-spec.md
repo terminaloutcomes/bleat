@@ -1599,9 +1599,10 @@ through the unavailable-startup screen. Telemetry initialization or runtime
 failure must never affect launch, browsing, authentication, downloads, playback,
 transcription, synchronization, or local Diagnostics.
 
-The reviewed resource allowlist is `service.name=bleat`, normalized numeric app
+The reviewed resource allowlist is `service.name=bleat`, an opaque random
+`service.instance.id` scoped to the app installation, normalized numeric app
 version and build, typed Apple platform, and numeric operating-system version.
-Hardware model and installation identifiers are excluded. The reviewed span
+The hardware model is excluded. The reviewed span
 names are app launch, account connection, library refresh, playback preparation,
 playback start, download transfer, playback progress synchronization, and
 transcription, plus private CloudKit synchronization. Span attributes are limited to a subsystem derived from the span
@@ -1726,8 +1727,8 @@ withdrawing application consent stops authentication and export and purges
 local telemetry, but does not delete the existing server enrollment. The
 service's server spans can retain a client network address and bounded
 user-agent for operational diagnostics, so App Store disclosure treats this
-other diagnostic data as linked even though client-originated spans and logs
-contain no installation identifier.
+other diagnostic data as linked. Client-originated spans and logs contain the
+disclosed opaque installation identifier for correlation.
 
 The repository validates a pinned stock OpenTelemetry Collector Contrib ingress
 configuration against the development token service through
@@ -1765,7 +1766,7 @@ configuration and remain excluded from OTLP logs.
 Client-originated remote telemetry must never contain credentials, tokens,
 cookies, authorization headers, playback session routes, App Attest evidence,
 backend
-JWTs, usernames, account or installation identifiers, server URLs or network
+JWTs, usernames, account identifiers, server URLs or network
 discovery data, IP addresses, audiobook/author/series/library names, filenames,
 filesystem paths, cover or media URLs, metadata, transcript/subtitle content,
 search or other entered text, HTTP bodies, or unreviewed URLs and query strings.

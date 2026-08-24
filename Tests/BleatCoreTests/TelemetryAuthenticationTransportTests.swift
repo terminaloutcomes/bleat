@@ -70,6 +70,7 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         configuration.protocolClasses = [TelemetryURLProtocolStub.self]
         let transport = try URLSessionTelemetryAuthenticationTransport(
             baseURL: XCTUnwrap(URL(string: "https://auth.example/auth")),
+            installationID: installationID,
             configuration: configuration
         )
 
@@ -99,6 +100,12 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
                 "/auth/v1/token/challenge",
                 "/auth/v1/token",
             ]
+        )
+        XCTAssertTrue(
+            requests.allSatisfy {
+                $0.value(forHTTPHeaderField: "baggage")
+                    == "service.instance.id=\(installationID.uuidString.lowercased())"
+            }
         )
         let enrollmentJSON = try XCTUnwrap(
             requests[1].httpBody.flatMap {

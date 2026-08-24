@@ -96,12 +96,18 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         pipeline.flush(timeout: 2)
 
+        let span = try XCTUnwrap(spanExporter.recordedSpans.first)
         XCTAssertEqual(
-            spanExporter.recordedSpans.map(\.name),
-            [RemoteTelemetryOperation.privateCloudSync.rawValue]
+            span.name,
+            RemoteTelemetryOperation.privateCloudSync.rawValue
         )
         let logs = logExporter.recordedLogs
         XCTAssertEqual(logs.count, 2)
+        for log in logs {
+            let context = try XCTUnwrap(log.spanContext)
+            XCTAssertEqual(context.traceId, span.traceId)
+            XCTAssertEqual(context.spanId, span.spanId)
+        }
         let failed = try XCTUnwrap(logs.last)
         XCTAssertEqual(failed.eventName, "bleat.cloudkit.sync.failed")
         XCTAssertEqual(failed.body, .string("CloudKit synchronization lifecycle"))
@@ -171,7 +177,10 @@ final class RemoteTelemetryTests: XCTestCase {
             platform: .iOS,
             operatingSystemMajorVersion: 26,
             operatingSystemMinorVersion: 3,
-            operatingSystemPatchVersion: 1
+            operatingSystemPatchVersion: 1,
+            installationID: UUID(
+                uuidString: "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa"
+            )!
         )
         XCTAssertEqual(
             resource.encodedAttributes,
@@ -181,12 +190,11 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.app.build": "42",
                 "os.type": "ios",
                 "os.version": "26.3.1",
+                "service.instance.id":
+                    "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa",
             ]
         )
         XCTAssertFalse(resource.encodedAttributes.keys.contains("device.model"))
-        XCTAssertFalse(
-            resource.encodedAttributes.keys.contains("service.instance.id")
-        )
     }
 
     func testResourceRejectsArbitraryOrUnboundedStrings() throws {
@@ -216,7 +224,8 @@ final class RemoteTelemetryTests: XCTestCase {
                 platform: .iOS,
                 operatingSystemMajorVersion: -1,
                 operatingSystemMinorVersion: 0,
-                operatingSystemPatchVersion: 0
+                operatingSystemPatchVersion: 0,
+                installationID: UUID()
             )
         )
     }
@@ -305,6 +314,8 @@ final class RemoteTelemetryTests: XCTestCase {
                     "bleat.app.build": "45",
                     "os.type": "ios",
                     "os.version": "26.0.0",
+                    "service.instance.id":
+                        "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa",
                 ]
             )
             XCTAssertTrue(span.events.isEmpty)
@@ -740,7 +751,10 @@ final class RemoteTelemetryTests: XCTestCase {
             platform: .iOS,
             operatingSystemMajorVersion: 26,
             operatingSystemMinorVersion: 0,
-            operatingSystemPatchVersion: 0
+            operatingSystemPatchVersion: 0,
+            installationID: UUID(
+                uuidString: "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa"
+            )!
         )
     }
 

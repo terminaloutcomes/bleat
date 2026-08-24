@@ -5,6 +5,11 @@ Release evidence for [GitHub issue
 to the exact signed archive inspected below. Remote telemetry is iOS-only,
 explicit opt-in, and default-off.
 
+This evidence predates the addition of `service.instance.id` to exported
+telemetry. A subsequent archive and App Store declaration must mark Product
+Interaction and Performance Data as linked before this evidence can be treated
+as current for a new release.
+
 ## Artifact
 
 | item | recorded value |

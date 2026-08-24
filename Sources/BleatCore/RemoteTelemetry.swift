@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import OpenTelemetryApi
 
 /// The application-facing tracing boundary. It deliberately exposes no raw
 /// OpenTelemetry span names or attribute dictionaries.
@@ -29,11 +30,21 @@ extension RemoteTelemetryTracing {
 public final class RemoteTelemetrySpan: @unchecked Sendable {
     private let lock = NSLock()
     private var endAction: (@Sendable (RemoteTelemetryOutcome) -> Void)?
+    private let contextProvider: @Sendable () -> SpanContext?
 
     public init(
         endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void
     ) {
         self.endAction = endAction
+        contextProvider = { nil }
+    }
+
+    init(
+        endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void,
+        contextProvider: @escaping @Sendable () -> SpanContext?
+    ) {
+        self.endAction = endAction
+        self.contextProvider = contextProvider
     }
 
     public func end(_ outcome: RemoteTelemetryOutcome) {
@@ -44,6 +55,8 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
         }
         action?(outcome)
     }
+
+    var spanContext: SpanContext? { contextProvider() }
 
     static let inactive = RemoteTelemetrySpan { _ in }
 }
@@ -98,13 +111,19 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
 /// The reviewed CloudKit log boundary. It intentionally accepts the typed
 /// lifecycle event rather than an arbitrary body or attributes dictionary.
 public protocol RemoteTelemetryLogging: Sendable {
-    func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent)
+    func recordPrivateCloudEvent(
+        _ event: PrivateCloudSyncEvent,
+        span: RemoteTelemetrySpan?
+    )
 }
 
 public struct InactiveRemoteTelemetryLogger: RemoteTelemetryLogging {
     public init() {}
 
-    public func recordPrivateCloudEvent(_ event: PrivateCloudSyncEvent) {}
+    public func recordPrivateCloudEvent(
+        _ event: PrivateCloudSyncEvent,
+        span: RemoteTelemetrySpan?
+    ) {}
 }
 
 public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
@@ -123,16 +142,21 @@ public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
     }
 
     public func record(_ event: PrivateCloudSyncEvent) {
-        logger.recordPrivateCloudEvent(event)
         switch event.phase {
         case .started:
-            spans[event.correlationID] = tracer.beginSpan(
+            let span = tracer.beginSpan(
                 operation: .privateCloudSync
             )
+            spans[event.correlationID] = span
+            logger.recordPrivateCloudEvent(event, span: span)
         case .completed:
-            spans.removeValue(forKey: event.correlationID)?.end(.succeeded)
+            let span = spans.removeValue(forKey: event.correlationID)
+            logger.recordPrivateCloudEvent(event, span: span)
+            span?.end(.succeeded)
         case .failed(let failure):
-            spans.removeValue(forKey: event.correlationID)?.end(
+            let span = spans.removeValue(forKey: event.correlationID)
+            logger.recordPrivateCloudEvent(event, span: span)
+            span?.end(
                 failure.remoteTelemetryOutcome
             )
         }
@@ -306,11 +330,12 @@ public enum RemoteTelemetryResourceError: Error, Equatable, Sendable {
     case invalidOperatingSystemVersion
 }
 
-/// Stable resource data permitted on every remote span.
+/// Stable resource data permitted on every remote span and log record.
 ///
 /// Versions are normalized from bounded numeric components so account names,
 /// server addresses, tokens, and other arbitrary strings cannot be smuggled
-/// through resource construction.
+/// through resource construction. The opaque installation identifier enables
+/// correlation of technical events from one app installation.
 public struct RemoteTelemetryResource: Equatable, Sendable {
     public static let serviceName = "bleat"
 
@@ -318,6 +343,7 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
     public let applicationBuild: String
     public let platform: RemoteTelemetryPlatform
     public let operatingSystemVersion: String
+    public let installationID: UUID
 
     public init(
         applicationVersion: String,
@@ -325,7 +351,8 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
         platform: RemoteTelemetryPlatform,
         operatingSystemMajorVersion: Int,
         operatingSystemMinorVersion: Int,
-        operatingSystemPatchVersion: Int
+        operatingSystemPatchVersion: Int,
+        installationID: UUID
     ) throws {
         guard
             let normalizedVersion = Self.normalizedApplicationVersion(
@@ -350,6 +377,7 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
         self.applicationVersion = normalizedVersion
         self.applicationBuild = normalizedBuild
         self.platform = platform
+        self.installationID = installationID
         operatingSystemVersion = osComponents.map(String.init).joined(
             separator: "."
         )
@@ -362,6 +390,7 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
             "bleat.app.build": applicationBuild,
             "os.type": platform.rawValue,
             "os.version": operatingSystemVersion,
+            "service.instance.id": installationID.uuidString.lowercased(),
         ]
     }
 
