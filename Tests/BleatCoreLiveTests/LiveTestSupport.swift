@@ -3,6 +3,48 @@ import XCTest
 
 @testable import BleatCore
 
+enum TelemetryLiveTestConfigurationError: Error, Equatable {
+    case invalidAuthenticationBaseURL
+}
+
+/// Reads only the disposable fixture URL. Do not fall back to
+/// `BLEAT_TELEMETRY_AUTH_BASE_URL`: `.envrc` uses that setting for production,
+/// where the fake development attester is intentionally rejected.
+func telemetryAuthenticationTestBaseURL(
+    environment: [String: String] = ProcessInfo.processInfo.environment
+) throws -> URL? {
+    guard let value = environment["BLEAT_TELEMETRY_TEST_AUTH_BASE_URL"] else {
+        return nil
+    }
+    guard let components = URLComponents(string: value),
+        components.scheme == "http",
+        let host = components.host?.lowercased(),
+        ["localhost", "127.0.0.1", "::1"].contains(host),
+        components.port != nil,
+        components.user == nil,
+        components.password == nil,
+        components.path.isEmpty || components.path == "/",
+        components.query == nil,
+        components.fragment == nil,
+        let url = components.url
+    else {
+        throw TelemetryLiveTestConfigurationError
+            .invalidAuthenticationBaseURL
+    }
+    return url
+}
+
+/// A missing fixture skips fixture-dependent tests, while an explicitly unsafe
+/// fixture URL fails so a typo cannot silently redirect test traffic elsewhere.
+func requireTelemetryAuthenticationTestBaseURL() throws -> URL {
+    guard let url = try telemetryAuthenticationTestBaseURL() else {
+        throw XCTSkip(
+            "Run scripts/test-telemetry.sh to provide the telemetry auth fixture"
+        )
+    }
+    return url
+}
+
 func secureLiveServerURL(for liveURL: String) throws -> NormalizedServerURL {
     var components = try XCTUnwrap(URLComponents(string: liveURL))
     components.scheme = "https"

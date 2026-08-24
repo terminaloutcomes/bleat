@@ -89,7 +89,8 @@ python3 -m unittest Tests/ScriptTests/test_telemetry_artifacts.py
 for test_suite in \
   TelemetryAuthenticationTests \
   AuthenticatedOtlpSpanExporterTests \
-  RemoteTelemetryTests; do
+  RemoteTelemetryTests \
+  TelemetryLiveTestConfigurationTests; do
   swift test --filter "${test_suite}"
 done
 
@@ -157,19 +158,22 @@ if docker compose --project-name "${project_name}" --file "${compose_file}" \
   exit 1
 fi
 
-BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+# Keep fake attestation on the disposable API. The regular authentication URL
+# points at production in local development; reusing it here causes the
+# production verifier to reject the development envelope with HTTP 401.
+BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
   swift test --filter TelemetryAuthenticationLiveTests
 
-BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
   swift test --filter AuthenticatedOtlpSpanExporterLiveTests
 
-BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT}" \
   swift test --filter OpenTelemetryCollectorLiveTests
 
-BLEAT_TELEMETRY_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
+BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_CONTROL_COMMAND="${PWD}/scripts/control-telemetry-test-service.sh" \
 BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \

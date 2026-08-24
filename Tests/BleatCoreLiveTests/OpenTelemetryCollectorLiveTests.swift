@@ -11,10 +11,9 @@
             async throws
         {
             let environment = ProcessInfo.processInfo.environment
+            let authenticationBaseURL =
+                try requireTelemetryAuthenticationTestBaseURL()
             guard
-                let authenticationBaseURL = environment[
-                    "BLEAT_TELEMETRY_AUTH_BASE_URL"
-                ].flatMap(URL.init(string:)),
                 let portText = environment[
                     "BLEAT_TELEMETRY_COLLECTOR_TEST_PORT"
                 ],

@@ -371,10 +371,9 @@
 
         static func current() throws -> Self {
             let values = ProcessInfo.processInfo.environment
+            let authenticationBaseURL =
+                try requireTelemetryAuthenticationTestBaseURL()
             guard
-                let authenticationBaseURL = values[
-                    "BLEAT_TELEMETRY_AUTH_BASE_URL"
-                ].flatMap(URL.init(string:)),
                 let collectorPort = values[
                     "BLEAT_TELEMETRY_COLLECTOR_TEST_PORT"
                 ].flatMap(Int.init),
