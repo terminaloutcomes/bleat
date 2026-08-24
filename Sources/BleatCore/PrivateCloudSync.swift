@@ -365,7 +365,8 @@ public struct DiagnosticPrivateCloudSyncEventRecorder:
             diagnostic = .privateCloudFailed(
                 failure: failure,
                 correlationID: event.correlationID,
-                durationMilliseconds: event.durationMilliseconds ?? 0
+                durationMilliseconds: event.durationMilliseconds ?? 0,
+                recordCount: event.recordCount
             )
         }
         await diagnostics.record(diagnostic)
@@ -2024,11 +2025,11 @@ public final class PrivateCloudSyncCoordinator:
                     records.records.map { .saveRecord($0.recordID) }
                     + records.deletions
             )
+            let recordCount = records.records.count + records.deletions.count
             try await perform(
                 .uploadChanges,
-                count: {
-                    _ in records.records.count + records.deletions.count
-                }
+                count: { _ in recordCount },
+                failureRecordCount: recordCount
             ) {
                 try await sendRecordChanges(
                     engine: engine,
@@ -2301,6 +2302,8 @@ public final class PrivateCloudSyncCoordinator:
         case .fetchedRecordZoneChanges(let changes):
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
+            let recordCount =
+                changes.modifications.count + changes.deletions.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -2320,8 +2323,7 @@ public final class PrivateCloudSyncCoordinator:
                     operation: .applyFetchedChanges,
                     correlationID: correlationID,
                     startedAt: startedAt,
-                    recordCount:
-                        changes.modifications.count + changes.deletions.count
+                    recordCount: recordCount
                 )
             } catch {
                 await recordFailure(
@@ -2330,12 +2332,18 @@ public final class PrivateCloudSyncCoordinator:
                         error: error
                     ),
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             }
         case .sentRecordZoneChanges(let changes):
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
+            let recordCount =
+                changes.savedRecords.count
+                + changes.deletedRecordIDs.count
+                + changes.failedRecordSaves.count
+                + changes.failedRecordDeletes.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -2360,11 +2368,7 @@ public final class PrivateCloudSyncCoordinator:
                     operation: .reconcileSentChanges,
                     correlationID: correlationID,
                     startedAt: startedAt,
-                    recordCount:
-                        changes.savedRecords.count
-                        + changes.deletedRecordIDs.count
-                        + changes.failedRecordSaves.count
-                        + changes.failedRecordDeletes.count
+                    recordCount: recordCount
                 )
             } catch {
                 await recordFailure(
@@ -2373,7 +2377,8 @@ public final class PrivateCloudSyncCoordinator:
                         error: error
                     ),
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             }
         default:
@@ -2406,6 +2411,7 @@ public final class PrivateCloudSyncCoordinator:
     private func perform<Value>(
         _ operation: PrivateCloudSyncOperation,
         count: ((Value) -> Int?)? = nil,
+        failureRecordCount: Int? = nil,
         _ body: () async throws -> Value
     ) async throws(PrivateCloudSyncFailure) -> Value {
         let correlationID = UUID()
@@ -2437,7 +2443,8 @@ public final class PrivateCloudSyncCoordinator:
                     cause: failure.cause
                 ),
                 correlationID: correlationID,
-                startedAt: startedAt
+                startedAt: startedAt,
+                recordCount: failureRecordCount
             )
             throw failure
         }
@@ -2492,7 +2499,8 @@ public final class PrivateCloudSyncCoordinator:
     private func recordFailure(
         _ failure: PrivateCloudSyncFailure,
         correlationID: UUID,
-        startedAt: ContinuousClock.Instant
+        startedAt: ContinuousClock.Instant,
+        recordCount: Int? = nil
     ) async {
         await eventRecorder.record(
             PrivateCloudSyncEvent(
@@ -2501,7 +2509,8 @@ public final class PrivateCloudSyncCoordinator:
                 phase: .failed(failure),
                 durationMilliseconds: Self.durationMilliseconds(
                     since: startedAt
-                )
+                ),
+                recordCount: recordCount
             )
         )
     }

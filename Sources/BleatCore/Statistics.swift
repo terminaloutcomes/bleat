@@ -465,10 +465,12 @@ public final class PrivateCloudStatisticsDeletionRecord {
     @Attribute(.unique)
     var recordName: String
     var recordType: String
+    var accountID: String
 
-    init(recordName: String, recordType: String) {
+    init(recordName: String, recordType: String, accountID: String) {
         self.recordName = recordName
         self.recordType = recordType
+        self.accountID = accountID
     }
 }
 
@@ -527,6 +529,7 @@ public struct StatisticsArchive: Codable, Sendable {
 struct PrivateCloudStatisticsDeletion: Equatable, Sendable {
     let recordName: String
     let recordType: String
+    let accountID: AccountID
 }
 
 public struct ListeningAccumulator: Sendable {
@@ -1059,7 +1062,8 @@ public actor StatisticsRepository {
             ).map {
                 PrivateCloudStatisticsDeletion(
                     recordName: $0.recordName,
-                    recordType: $0.recordType
+                    recordType: $0.recordType,
+                    accountID: AccountID(rawValue: $0.accountID)
                 )
             }
         } catch {
@@ -1094,7 +1098,15 @@ public actor StatisticsRepository {
             ).map {
                 "remote.\($0.accountID).\($0.sessionID)"
             }
-            return Set(sliceNames + completionNames + remoteSessionNames)
+            let deletionNames = try context.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>(
+                    predicate: #Predicate { $0.accountID == account }
+                )
+            ).map(\.recordName)
+            return Set(
+                sliceNames + completionNames + remoteSessionNames
+                    + deletionNames
+            )
         } catch {
             throw .persistenceFailed
         }
@@ -1212,7 +1224,8 @@ public actor StatisticsRepository {
                     context.insert(
                         PrivateCloudStatisticsDeletionRecord(
                             recordName: recordName,
-                            recordType: "ListeningSlice"
+                            recordType: "ListeningSlice",
+                            accountID: record.accountID
                         )
                     )
                 }
@@ -1230,7 +1243,8 @@ public actor StatisticsRepository {
                     context.insert(
                         PrivateCloudStatisticsDeletionRecord(
                             recordName: recordName,
-                            recordType: "CompletionMilestone"
+                            recordType: "CompletionMilestone",
+                            accountID: record.accountID
                         )
                     )
                 }
@@ -1248,7 +1262,8 @@ public actor StatisticsRepository {
                     context.insert(
                         PrivateCloudStatisticsDeletionRecord(
                             recordName: recordName,
-                            recordType: "RemoteListeningSession"
+                            recordType: "RemoteListeningSession",
+                            accountID: record.accountID
                         )
                     )
                 }

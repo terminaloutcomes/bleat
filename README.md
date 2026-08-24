@@ -494,11 +494,13 @@ Settings names iCloud as the failing service, chooses retry behavior from the
 typed CloudKit code, and local diagnostics retain the operation, exact code,
 partial-failure codes, and retry delay without recording record identifiers or
 localized error descriptions. Stage diagnostics also report privacy-safe
-durations and record counts for zone setup, fetch, fetched-record application,
-local preparation, and upload. Bleat retains each successful record's CloudKit
+durations and available record counts, including failed stages, for zone setup,
+fetch, fetched-record application, local preparation, and upload. Bleat retains
+each successful record's CloudKit
 system fields, mutable-record payload digests, per-row statistics sync state,
-and deletion tombstones across launches, so an unchanged sync does not scan or
-re-enqueue the complete statistics archive and interrupted deletions retry.
+and account-scoped deletion tombstones across launches, so an unchanged sync
+does not scan or re-enqueue the complete statistics archive and interrupted
+deletions retry.
 Legacy rows without synchronization state are reconciled, pending local
 deletions win over racing fetched records, and deleting the iCloud zone marks
 retained local statistics for upload if synchronization is enabled again.

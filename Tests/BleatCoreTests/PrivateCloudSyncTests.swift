@@ -102,7 +102,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let event = DiagnosticEvent.privateCloudFailed(
             failure: failure,
             correlationID: correlationID,
-            durationMilliseconds: 17
+            durationMilliseconds: 17,
+            recordCount: 23
         )
 
         XCTAssertEqual(event.operation, .privateCloudSync)
@@ -113,6 +114,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             "request_rate_limited"
         )
         XCTAssertEqual(event.privateCloud?.retryAfterMilliseconds, 1_250)
+        XCTAssertEqual(event.count, 23)
         XCTAssertTrue(
             event.text.contains("cloud_operation=apply_fetched_changes")
         )
@@ -120,6 +122,33 @@ final class PrivateCloudSyncTests: XCTestCase {
             event.text.contains("cloudkit_code=request_rate_limited")
         )
         XCTAssertFalse(event.text.contains("localizedDescription"))
+    }
+
+    func testFailedCloudKitEventRecorderPreservesRecordCount() async throws {
+        let diagnostics = PrivateCloudDiagnosticRecorderSpy()
+        let recorder = DiagnosticPrivateCloudSyncEventRecorder(
+            diagnostics: diagnostics
+        )
+        let failure = PrivateCloudSyncFailure(
+            operation: .uploadChanges,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure)))
+        )
+
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: UUID(),
+                operation: .uploadChanges,
+                phase: .failed(failure),
+                durationMilliseconds: 42,
+                recordCount: 17
+            )
+        )
+
+        let events = await diagnostics.events()
+        let event = try XCTUnwrap(events.first)
+        XCTAssertEqual(event.privateCloud?.operation, .uploadChanges)
+        XCTAssertEqual(event.count, 17)
+        XCTAssertTrue(event.text.contains("count=17"))
     }
 
     func testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount() {
@@ -1202,6 +1231,46 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
+    func testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        try await fixture.statistics.reset(
+            query: StatisticsQuery(accountID: slice.accountID)
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        let recordIDs = try await restoredStore.recordIDs(
+            for: slice.accountID,
+            includeStatistics: true,
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertEqual(
+            recordIDs.map(\.recordName),
+            ["slice.\(slice.id.uuidString.lowercased())"]
+        )
+    }
+
     func testNestedFailurePreservesSpecificOperation() {
         let stageFailure = PrivateCloudSyncFailure(
             operation: .fetchChanges,
@@ -1575,6 +1644,18 @@ private struct SyncStoreFixture {
     let defaults: UserDefaults
     let statistics: StatisticsRepository
     let store: PrivateCloudSyncStore
+}
+
+private actor PrivateCloudDiagnosticRecorderSpy: DiagnosticRecording {
+    private var recordedEvents: [DiagnosticEvent] = []
+
+    func record(_ event: DiagnosticEvent) {
+        recordedEvents.append(event)
+    }
+
+    func events() -> [DiagnosticEvent] {
+        recordedEvents
+    }
 }
 
 private struct LegacyCloudConfigurationSnapshot: Encodable {

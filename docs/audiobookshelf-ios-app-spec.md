@@ -1359,18 +1359,19 @@ on-device only. The iOS build retains the reviewed remote telemetry behavior.
 Successful record system fields, including server change tags, must survive
 process relaunch. Mutable records retain the last successfully synchronized
 payload digest, and statistics rows retain explicit synchronized state plus
-durable deletion tombstones. Local preparation must fetch and enqueue only new,
-changed, or deleted records, while interrupted or failed sends remain pending
-for retry. Missing synchronization state on older rows is reconciled rather
-than treated as success. A pending local deletion takes precedence over a
-racing fetched modification, and deleting the CloudKit zone marks retained
-local statistics for upload if synchronization is enabled again. Fetched
+durable account-scoped deletion tombstones. Local preparation must fetch and
+enqueue only new, changed, or deleted records, while interrupted or failed
+sends remain pending for retry. Missing synchronization state on older rows is
+reconciled rather than treated as success. A pending local deletion takes
+precedence over a racing fetched modification, and deleting the CloudKit zone
+marks retained local statistics for upload if synchronization is enabled again. Fetched
 statistics changes are decoded as a batch and imported with one bounded
 repository transaction per CloudKit callback rather than one full-ID scan and
 save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
-and record-count diagnostics. Presentation summary refresh follows a completed
+and available record-count diagnostics for successful and failed stages.
+Presentation summary refresh follows a completed
 CloudKit result and does not keep the iCloud state active. A
 `serverRecordChanged` save failure is resolved against the
 returned server record: matching payloads adopt its current system fields,
