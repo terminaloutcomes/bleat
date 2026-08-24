@@ -27,14 +27,22 @@
                     "Run scripts/test-telemetry.sh to provide the Collector fixture"
                 )
             }
+            let tracer = RemoteTelemetryTracer()
+            let appInstallationID = try XCTUnwrap(
+                UUID(
+                    uuidString: "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa"
+                )
+            )
             let store = CollectorEnrollmentStore()
             let provider = TelemetryTokenProvider(
                 attester: DevelopmentTelemetryAttester(keySeed: 12),
                 transport: try URLSessionTelemetryAuthenticationTransport(
                     baseURL: authenticationBaseURL,
-                    allowsInsecureLoopback: true
+                    allowsInsecureLoopback: true,
+                    installationID: appInstallationID
                 ),
-                store: store
+                store: store,
+                tracer: tracer
             )
             await provider.setEnabled(true)
 
@@ -50,7 +58,6 @@
                     isDirectory: true
                 )
             defer { try? FileManager.default.removeItem(at: storageURL) }
-            let tracer = RemoteTelemetryTracer()
             let pipeline = try RemoteTelemetryPipeline(
                 resource: RemoteTelemetryResource(
                     applicationVersion: "1.2.3",
@@ -59,7 +66,7 @@
                     operatingSystemMajorVersion: 26,
                     operatingSystemMinorVersion: 0,
                     operatingSystemPatchVersion: 0,
-                    installationID: UUID()
+                    installationID: appInstallationID
                 ),
                 storageURL: storageURL,
                 tracerFacade: tracer,
@@ -85,6 +92,7 @@
             let enrollment = await store.enrollment()
             XCTAssertNotNil(enrollment?.installationID)
             let token = try await provider.currentToken()
+            pipeline.flush(timeout: 10)
 
             XCTAssertEqual(
                 client.export(

@@ -222,6 +222,46 @@ jq --slurp -e '
   and ([.. | objects | select(.key? == "bleat.retry.bucket" and .value.stringValue? == "one")] | length) >= 1
 ' "${captured_traces}" >/dev/null
 jq --slurp -e '
+  ([.. | objects
+    | select(.name? == "bleat.telemetry.authentication")
+    | {traceId, spanId}]) as $auth
+  | ([.. | objects
+      | select(
+          .name? == "bleat.telemetry.challenge"
+          or .name? == "bleat.telemetry.enrolment"
+          or .name? == "bleat.telemetry.token"
+        )
+      | {name, traceId, spanId, parentSpanId}]) as $requests
+  | ([.. | objects
+      | select(
+          .name? == "POST /v1/attestation/challenge"
+          or .name? == "POST /v1/attestation/enroll"
+          or .name? == "POST /v1/token/challenge"
+          or .name? == "POST /v1/token"
+        )
+      | {name, traceId, spanId, parentSpanId}]) as $server
+  | ($auth | length) >= 1
+    and ($requests | length) >= 4
+    and any(
+      $auth[];
+      . as $parent
+      | ([$requests[]
+          | select(
+              .traceId == $parent.traceId
+              and .parentSpanId == $parent.spanId
+            )] | length) >= 4
+    )
+    and all(
+      $requests[];
+      . as $request
+      | any(
+          $server[];
+          .traceId == $request.traceId
+          and .parentSpanId == $request.spanId
+        )
+    )
+' "${captured_traces}" >/dev/null
+jq --slurp -e '
   [.. | objects | select(.eventName? == "bleat.cloudkit.sync.failed")] | length >= 1
 ' "${captured_logs}" >/dev/null
 

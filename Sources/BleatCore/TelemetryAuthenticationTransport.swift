@@ -119,6 +119,11 @@ public final class URLSessionTelemetryAuthenticationTransport:
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue("application/json", forHTTPHeaderField: "accept")
+        for (name, value) in RemoteTelemetrySpan.current?.propagationHeaders
+            ?? [:]
+        {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         if let installationID {
             request.setValue(
                 "service.instance.id=\(installationID.uuidString.lowercased())",

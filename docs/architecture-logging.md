@@ -79,7 +79,11 @@ telemetry token for this issuer and audience. The bearer token, its claims, and
 the App Attest evidence are not copied into exported telemetry. Bleat's separate
 random app-installation identifier is included as `service.instance.id` and is
 propagated to `bleat-api` with W3C baggage so both services can be queried by the
-same opaque correlation key.
+same opaque correlation key. The complete authentication dance is recorded as
+`bleat.telemetry.authentication`; its `bleat.telemetry.challenge`,
+`bleat.telemetry.enrolment`, and `bleat.telemetry.token` HTTP client spans inject
+W3C trace context so the corresponding `bleat-api` server spans have the client
+request spans as their distributed parents.
 
 ## Transport and trust
 

@@ -816,7 +816,10 @@ startup is unavailable. On iOS, the
 opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
 lifecycle log records away from the main actor, retaining failed span batches
 under the bounded persistence policy before authenticated OTLP export. Remote
-OpenTelemetry export is out of scope on native macOS: that build does not create
+telemetry authentication is traced end to end, with challenge, enrolment, and
+token client spans correlated to the matching `bleat-api` server spans through
+W3C trace context. Remote OpenTelemetry export is out of scope on native macOS:
+that build does not create
 App Attest keys, request telemetry tokens, retain export batches, or send OTLP.
 
 Foreground Socket.IO updates are suspended while the current path is marked

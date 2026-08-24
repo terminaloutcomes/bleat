@@ -147,7 +147,10 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 "Bleat/RemoteTelemetry",
                 isDirectory: true
             )
-            let tokenProvider = Self.makeTokenProvider(bundle: bundle)
+            let tokenProvider = Self.makeTokenProvider(
+                bundle: bundle,
+                tracer: tracer
+            )
             self.tokenProvider = tokenProvider
             let exporterConfiguration = Self.makeExporterConfiguration(
                 bundle: bundle
@@ -221,7 +224,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     }
 
     private static func makeTokenProvider(
-        bundle: Bundle
+        bundle: Bundle,
+        tracer: any RemoteTelemetryTracing
     ) -> TelemetryTokenProvider? {
         guard
             let value = bundle.object(
@@ -276,7 +280,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             transport: transport,
             store: TelemetryEnrollmentVault(
                 service: "\(bundleID).telemetry-app-attest"
-            )
+            ),
+            tracer: tracer
         )
     }
 

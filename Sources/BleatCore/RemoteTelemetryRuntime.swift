@@ -226,6 +226,32 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
         source: RemoteTelemetrySource?,
         retryBucket: RemoteTelemetryRetryBucket
     ) -> RemoteTelemetrySpan {
+        beginSpan(
+            operation: operation,
+            source: source,
+            retryBucket: retryBucket,
+            parent: nil
+        )
+    }
+
+    public func beginChildSpan(
+        operation: RemoteTelemetryOperation,
+        parent: RemoteTelemetrySpan
+    ) -> RemoteTelemetrySpan {
+        beginSpan(
+            operation: operation,
+            source: nil,
+            retryBucket: .none,
+            parent: parent
+        )
+    }
+
+    private func beginSpan(
+        operation: RemoteTelemetryOperation,
+        source: RemoteTelemetrySource?,
+        retryBucket: RemoteTelemetryRetryBucket,
+        parent: RemoteTelemetrySpan?
+    ) -> RemoteTelemetrySpan {
         let startedAt = Date()
         return lock.withLock {
             switch state {
@@ -237,7 +263,8 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
                     operation: operation,
                     source: source,
                     retryBucket: retryBucket,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    parent: parent
                 )
             case .initializing(var buffered):
                 guard buffered.count < maximumInitializingSpans else {
@@ -247,7 +274,8 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
                     operation: operation,
                     source: source,
                     retryBucket: retryBucket,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    parent: parent
                 )
                 buffered.append(pending)
                 state = .initializing(buffered)
@@ -264,11 +292,16 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
         operation: RemoteTelemetryOperation,
         source: RemoteTelemetrySource?,
         retryBucket: RemoteTelemetryRetryBucket,
-        startedAt: Date
+        startedAt: Date,
+        parent: RemoteTelemetrySpan?
     ) -> RemoteTelemetrySpan {
-        let span = tracer.spanBuilder(spanName: operation.rawValue)
+        let builder = tracer.spanBuilder(spanName: operation.rawValue)
             .setStartTime(time: startedAt)
-            .startSpan()
+            .setSpanKind(spanKind: operation.spanKind)
+        if let parentContext = parent?.spanContext {
+            _ = builder.setParent(parentContext)
+        }
+        let span = builder.startSpan()
         let box = OpenTelemetrySpanBox(span: span)
         return RemoteTelemetrySpan(
             endAction: { outcome in
@@ -296,6 +329,7 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
     private let source: RemoteTelemetrySource?
     private let retryBucket: RemoteTelemetryRetryBucket
     private let startedAt: Date
+    private let parent: RemoteTelemetrySpan?
     private var completion: Completion?
     private var materialized: OpenTelemetrySpanBox?
     private var discarded = false
@@ -304,12 +338,14 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
         operation: RemoteTelemetryOperation,
         source: RemoteTelemetrySource?,
         retryBucket: RemoteTelemetryRetryBucket,
-        startedAt: Date
+        startedAt: Date,
+        parent: RemoteTelemetrySpan?
     ) {
         self.operation = operation
         self.source = source
         self.retryBucket = retryBucket
         self.startedAt = startedAt
+        self.parent = parent
     }
 
     func end(_ outcome: RemoteTelemetryOutcome) {
@@ -327,9 +363,13 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
     func materialize(using tracer: any Tracer) {
         let result: (OpenTelemetrySpanBox, Completion?)? = lock.withLock {
             guard !discarded else { return nil }
-            let span = tracer.spanBuilder(spanName: operation.rawValue)
+            let builder = tracer.spanBuilder(spanName: operation.rawValue)
                 .setStartTime(time: startedAt)
-                .startSpan()
+                .setSpanKind(spanKind: operation.spanKind)
+            if let parentContext = parent?.spanContext {
+                _ = builder.setParent(parentContext)
+            }
+            let span = builder.startSpan()
             let box = OpenTelemetrySpanBox(span: span)
             materialized = box
             return (box, completion)

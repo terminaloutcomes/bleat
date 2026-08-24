@@ -20,6 +20,10 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.playback.progress_sync",
                 "bleat.transcription.run",
                 "bleat.cloudkit.sync",
+                "bleat.telemetry.authentication",
+                "bleat.telemetry.challenge",
+                "bleat.telemetry.enrolment",
+                "bleat.telemetry.token",
             ]
         )
 
@@ -46,6 +50,61 @@ final class RemoteTelemetryTests: XCTestCase {
                 encoded.attributes["bleat.failure.category"],
                 "transport"
             )
+        }
+    }
+
+    func testBufferedTelemetryAuthenticationRequestSpansShareParentTrace()
+        throws
+    {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let exporter = RecordingSpanExporter()
+        let tracer = RemoteTelemetryTracer()
+        tracer.prepareForActivation()
+
+        let authentication = tracer.beginSpan(
+            operation: .telemetryAuthentication
+        )
+        for operation in [
+            RemoteTelemetryOperation.telemetryChallenge,
+            .telemetryEnrolment,
+            .telemetryToken,
+        ] {
+            tracer.beginChildSpan(
+                operation: operation,
+                parent: authentication
+            ).end(.succeeded)
+        }
+        authentication.end(.succeeded)
+
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory,
+            tracerFacade: tracer,
+            downstreamExporter: exporter
+        )
+        defer {
+            pipeline.deactivate()
+            pipeline.purge()
+            pipeline.shutdown()
+        }
+        pipeline.flush(timeout: 2)
+
+        let spans = exporter.recordedSpans
+        XCTAssertEqual(spans.count, 4)
+        let parent = try XCTUnwrap(
+            spans.first { $0.name == "bleat.telemetry.authentication" }
+        )
+        XCTAssertEqual(parent.kind, .internal)
+        for name in [
+            "bleat.telemetry.challenge",
+            "bleat.telemetry.enrolment",
+            "bleat.telemetry.token",
+        ] {
+            let child = try XCTUnwrap(spans.first { $0.name == name })
+            XCTAssertEqual(child.kind, .client)
+            XCTAssertEqual(child.traceId, parent.traceId)
+            XCTAssertEqual(child.parentSpanId, parent.spanId)
         }
     }
 

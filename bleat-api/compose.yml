@@ -22,13 +22,20 @@ services:
       BLEAT_API_BIND_ADDRESS: 0.0.0.0:8080
       BLEAT_API_DATABASE_URL: postgres://bleat:${BLEAT_API_POSTGRES_PASSWORD:-development-only}@postgres:5432/bleat
       BLEAT_API_PUBLIC_ISSUER: ${BLEAT_API_PUBLIC_ISSUER:-http://127.0.0.1:18080}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry-capture:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
+      telemetry-capture:
+        condition: service_started
     ports:
       - "127.0.0.1:${BLEAT_API_TEST_PORT:-18080}:8080"
+    networks:
+      - default
+      - telemetry-private
 
   telemetry-capture:
     image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6

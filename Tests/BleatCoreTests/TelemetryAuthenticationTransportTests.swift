@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import OpenTelemetryApi
 import XCTest
 
 @testable import BleatCore
@@ -74,20 +75,37 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
             configuration: configuration
         )
 
-        let attestationChallenge = try await transport.attestationChallenge()
-        let enrolledID = try await transport.enroll(
-            challenge: attestationChallenge,
-            keyID: "opaque-key-id",
-            attestationObject: Data([1, 2, 3])
+        let context = SpanContext.create(
+            traceId: TraceId(
+                fromHexString: "4bf92f3577b34da6a3ce929d0e0e4736"
+            ),
+            spanId: SpanId(fromHexString: "00f067aa0ba902b7"),
+            traceFlags: TraceFlags().settingIsSampled(true),
+            traceState: TraceState()
         )
-        let tokenChallenge = try await transport.tokenChallenge(
-            installationID: enrolledID
+        let requestSpan = RemoteTelemetrySpan(
+            endAction: { _ in },
+            contextProvider: { context }
         )
-        let token = try await transport.token(
-            installationID: enrolledID,
-            challenge: tokenChallenge,
-            assertionObject: Data([4, 5, 6])
-        )
+        let (enrolledID, token) = try await RemoteTelemetrySpan.$current
+            .withValue(requestSpan) {
+                let attestationChallenge =
+                    try await transport.attestationChallenge()
+                let enrolledID = try await transport.enroll(
+                    challenge: attestationChallenge,
+                    keyID: "opaque-key-id",
+                    attestationObject: Data([1, 2, 3])
+                )
+                let tokenChallenge = try await transport.tokenChallenge(
+                    installationID: enrolledID
+                )
+                let token = try await transport.token(
+                    installationID: enrolledID,
+                    challenge: tokenChallenge,
+                    assertionObject: Data([4, 5, 6])
+                )
+                return (enrolledID, token)
+            }
 
         XCTAssertEqual(enrolledID, installationID)
         XCTAssertEqual(token.value, "header.payload.signature")
@@ -105,6 +123,12 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
             requests.allSatisfy {
                 $0.value(forHTTPHeaderField: "baggage")
                     == "service.instance.id=\(installationID.uuidString.lowercased())"
+            }
+        )
+        XCTAssertTrue(
+            requests.allSatisfy {
+                $0.value(forHTTPHeaderField: "traceparent")
+                    == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
             }
         )
         let enrollmentJSON = try XCTUnwrap(

@@ -8,10 +8,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let attester = FakeTelemetryAttester()
         let transport = FakeTelemetryTransport()
         let store = MemoryEnrollmentStore()
+        let tracer = AuthenticationTelemetryTracer()
         let provider = TelemetryTokenProvider(
             attester: attester,
             transport: transport,
-            store: store
+            store: store,
+            tracer: tracer
         )
 
         await XCTAssertThrowsTelemetryError(.disabled) {
@@ -30,6 +32,17 @@ final class TelemetryAuthenticationTests: XCTestCase {
         XCTAssertEqual(attester.generateKeyCount, 1)
         XCTAssertEqual(attester.attestationCount, 1)
         XCTAssertEqual(attester.assertionCount, 1)
+        XCTAssertEqual(
+            tracer.startedOperations,
+            [
+                .telemetryAuthentication,
+                .telemetryChallenge,
+                .telemetryEnrolment,
+                .telemetryChallenge,
+                .telemetryToken,
+            ]
+        )
+        XCTAssertEqual(tracer.completedOutcomes, Array(repeating: .succeeded, count: 5))
         XCTAssertEqual(
             storedEnrollment,
             TelemetryEnrollment(
@@ -410,6 +423,46 @@ final class TelemetryAuthenticationTests: XCTestCase {
             .joined(separator: "\n")
         for sensitive in ["challenge-value", "generated-key", "token-1"] {
             XCTAssertFalse(values.contains(sensitive))
+        }
+    }
+}
+
+private final class AuthenticationTelemetryTracer: RemoteTelemetryTracing,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var starts: [RemoteTelemetryOperation] = []
+    private var completions: [RemoteTelemetryOutcome] = []
+
+    var startedOperations: [RemoteTelemetryOperation] {
+        lock.withLock { starts }
+    }
+
+    var completedOutcomes: [RemoteTelemetryOutcome] {
+        lock.withLock { completions }
+    }
+
+    func beginSpan(
+        operation: RemoteTelemetryOperation,
+        source: RemoteTelemetrySource?,
+        retryBucket: RemoteTelemetryRetryBucket
+    ) -> RemoteTelemetrySpan {
+        record(operation)
+    }
+
+    func beginChildSpan(
+        operation: RemoteTelemetryOperation,
+        parent: RemoteTelemetrySpan
+    ) -> RemoteTelemetrySpan {
+        record(operation)
+    }
+
+    private func record(
+        _ operation: RemoteTelemetryOperation
+    ) -> RemoteTelemetrySpan {
+        lock.withLock { starts.append(operation) }
+        return RemoteTelemetrySpan { [weak self] outcome in
+            self?.lock.withLock { self?.completions.append(outcome) }
         }
     }
 }
