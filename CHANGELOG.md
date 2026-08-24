@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 - 2026-08-24
+
+### Added
+
+- Added optional privacy-preserving diagnostic telemetry with explicit user opt-in, App Attest authentication, short-lived credentials, and bounded collection.
+- Added CloudKit synchronization improvements including typed sync failures and safer conflict handling.
+- Added improved diagnostics and troubleshooting visibility for connection, sync, and application state.
+- Added OIDC setup guidance and privacy documentation updates.
+
+### Improved
+
+- Improved download handling with durable pause/resume support and safer interrupted transfer recovery.
+- Improved playback, search, transcription, and account lifecycle reliability.
+- Improved release security validation, dependency checks, and telemetry operational controls.
+
+### Fixed
+
+- Fixed corrupted CloudKit conflict states preventing synchronization recovery.
+- Fixed durable download pause/continue behavior.
+- Fixed UI test reliability around restored accounts and diagnostics visibility.
+- Fixed various edge cases around authentication, synchronization, and app state restoration.
 
 ## 0.1.2 - 2026-08-18
 
