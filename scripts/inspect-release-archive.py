@@ -18,11 +18,11 @@ EXPECTED_COLLECTION = {
         {"NSPrivacyCollectedDataTypePurposeAppFunctionality"},
     ),
     "NSPrivacyCollectedDataTypeProductInteraction": (
-        False,
+        True,
         {"NSPrivacyCollectedDataTypePurposeAnalytics"},
     ),
     "NSPrivacyCollectedDataTypePerformanceData": (
-        False,
+        True,
         {"NSPrivacyCollectedDataTypePurposeAppFunctionality"},
     ),
     "NSPrivacyCollectedDataTypeOtherDiagnosticData": (
@@ -153,7 +153,9 @@ def inspect_linkage(app: Path, archive: Path) -> dict[str, str]:
     }
     for package, marker in absent.items():
         if marker in symbols:
-            raise InspectionFailure(f"unexpected linked crypto/network package: {package}")
+            raise InspectionFailure(
+                f"unexpected linked crypto/network package: {package}"
+            )
     return {
         **{package: "linked statically" for package in linked},
         **{package: "resolved but not linked" for package in absent},
@@ -170,7 +172,9 @@ def inspect_archive(archive: Path, package_resolution: Path) -> None:
 
     app_manifest = app / "PrivacyInfo.xcprivacy"
     inspect_privacy_manifest(load_plist(app_manifest))
-    manifests = sorted(path.relative_to(app).as_posix() for path in app.rglob("PrivacyInfo.xcprivacy"))
+    manifests = sorted(
+        path.relative_to(app).as_posix() for path in app.rglob("PrivacyInfo.xcprivacy")
+    )
     expected_manifests = {
         "PrivacyInfo.xcprivacy",
         "AppAuth_AppAuthCore.bundle/PrivacyInfo.xcprivacy",
@@ -183,7 +187,9 @@ def inspect_archive(archive: Path, package_resolution: Path) -> None:
     for relative_path in expected_manifests - {"PrivacyInfo.xcprivacy"}:
         dependency_manifest = load_plist(app / relative_path)
         if dependency_manifest.get("NSPrivacyTracking") is not False:
-            raise InspectionFailure(f"dependency manifest enables tracking: {relative_path}")
+            raise InspectionFailure(
+                f"dependency manifest enables tracking: {relative_path}"
+            )
 
     archive_info = load_plist(archive / "Info.plist")
     signing_identity = archive_info.get("ApplicationProperties", {}).get(
