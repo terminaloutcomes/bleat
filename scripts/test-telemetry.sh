@@ -93,7 +93,7 @@ for test_suite in \
   swift test --filter "${test_suite}"
 done
 
-./scripts/test-bleat-api.sh
+mise run "api:test"
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   up --detach --build --wait api

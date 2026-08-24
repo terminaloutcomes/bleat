@@ -882,6 +882,12 @@ final class BleatUITests: XCTestCase {
                 "diagnostics.lastServerConnection"
             ].waitForExistence(timeout: 3)
         )
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "diagnostics.webSocketState",
+            direction: .up,
+            maxAttempts: 4
+        )
         XCTAssertTrue(
             app.descendants(matching: .any)[
                 "diagnostics.webSocketState"
@@ -963,6 +969,8 @@ final class BleatUITests: XCTestCase {
             app.staticTexts["diagnostics.telemetry.explanation"].exists
         )
 
+        app.swipeUp()
+        telemetry = app.switches["diagnostics.telemetry.enabled"]
         telemetry.coordinate(
             withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
         ).tap()
@@ -992,6 +1000,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
         XCTAssertEqual(telemetry.value as? String, "1")
 
+        app.swipeUp()
+        telemetry = app.switches["diagnostics.telemetry.enabled"]
         telemetry.coordinate(
             withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
         ).tap()

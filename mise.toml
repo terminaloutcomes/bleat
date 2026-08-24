@@ -17,30 +17,43 @@ dir = "./bleat-api"
 run = "cargo fmt --all"
 
 [tasks."api:check"]
-description = "Type-check bleat-api"
+description = "cargo-check bleat-api"
 dir = "./bleat-api"
 depends = ["api:fmt"]
 run = "cargo check --all-targets --all-features"
 
 [tasks."api:clippy"]
 description = "Lint bleat-api"
-depends = ["api:fmt"]
 dir = "./bleat-api"
+depends = ["api:fmt"]
 run = "cargo clippy --all-targets --all-features -- -D warnings"
 
 [tasks."api:test"]
 description = "Test bleat-api against disposable PostgreSQL"
 depends = ["api:fmt"]
-run = "./scripts/test-bleat-api.sh"
+run = """cargo test \
+  --quiet \
+  --locked \
+  --manifest-path bleat-api/Cargo.toml \
+  --all-features \
+  -- \
+  --nocapture \
+  --test-threads=4"""
 
 [tasks."api:build"]
 description = "Build the bleat-api release binary"
+depends = ["api:fmt"]
 dir = "./bleat-api"
 run = "cargo build --release --quiet"
 
 [tasks."api:coverage"]
 description = "Measure self-contained bleat-api Rust test coverage"
 run = "./scripts/coverage-bleat-api.sh"
+
+[tasks."api:validate"]
+description = "Run every bleat-api validation gate"
+depends = ["api:check", "api:clippy", "api:test"]
+run = ["cargo build --manifest-path bleat-api/Cargo.toml --release"]
 
 [tasks."api:run"]
 description = "Run bleat-api and PostgreSQL locally"
@@ -50,15 +63,6 @@ run = "docker compose --file bleat-api/compose.yml up --build api"
 description = "Stop the local bleat-api and PostgreSQL"
 run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orphans"
 
-[tasks."api:validate"]
-description = "Run every bleat-api validation gate"
-depends = ["api:check", "api:clippy"]
-run = [
-  "cargo fmt --manifest-path bleat-api/Cargo.toml --all -- --check",
-  "cargo clippy --manifest-path bleat-api/Cargo.toml --all-targets --all-features -- -D warnings",
-  "./scripts/test-bleat-api.sh",
-  "cargo build --manifest-path bleat-api/Cargo.toml --release",
-]
 
 [tasks."api:container:build-local"]
 description = "Build and push a local Docker image for bleat-api"
@@ -135,7 +139,7 @@ run = ["./scripts/audit-rust-dependencies.sh"]
 
 [tasks."security:validate"]
 description = "Run the repository-supported release security gate"
-run = [{ task = "security:secrets" }, { task = "security:dependencies" }]
+depends = ["security:secrets", "security:dependencies"]
 
 [tasks.clean]
 description = "Remove repository build artifacts"
@@ -155,6 +159,7 @@ run = ["./scripts/test-deep-links.sh"]
 
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
+depends = ["site-check"]
 run = [
   { task = "security:validate" },
   { task = "api:validate" },
