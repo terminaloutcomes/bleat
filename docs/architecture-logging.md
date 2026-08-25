@@ -157,6 +157,11 @@ device ingestion can continue for at most that window. If an incident requires
 immediate ingestion shutdown, separately disable the public device Collector
 route; that stronger response is not the normal kill switch.
 
+If the JWT signing private key is compromised, scaling only `bleat-api` to zero
+is insufficient because the key holder can mint new tokens without the API.
+Follow `docs/operations/jwks-revocation.md` to remove the key, replace the
+Collector's cached verifier state, prove old-key rejection, and restore ingress.
+
 API unavailability is isolated from launch, Audiobookshelf login, browsing,
 downloads, playback, synchronization, and transcription. Telemetry token
 renewal backs off, completed spans remain within the two-hour and 128 MiB local
