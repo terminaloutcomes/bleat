@@ -70,6 +70,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case syncBookmarks = "sync_bookmarks"
     case privateCloudSync = "private_cloud_sync"
     case exportRecentLogs = "export_recent_logs"
+    case removeLegacyDiagnosticDirectory = "remove_legacy_diagnostic_directory"
 }
 
 public enum DiagnosticState: String, Codable, Sendable {
@@ -141,6 +142,10 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case requestTransportFailed = "request_transport_failed"
     case nonHTTPResponse = "non_http_response"
     case logStorageUnavailable = "log_storage_unavailable"
+    case legacyDiagnosticDirectoryUnavailable =
+        "legacy_diagnostic_directory_unavailable"
+    case legacyDiagnosticDirectoryRemovalFailed =
+        "legacy_diagnostic_directory_removal_failed"
     case invalidInput = "invalid_input"
     case authenticationRequired = "authentication_required"
     case permissionDenied = "permission_denied"
