@@ -14,6 +14,7 @@ public enum BleatPersistenceModelCatalog {
         ListeningSliceRecord.self,
         CompletionMilestoneRecord.self,
         RemoteListeningSessionRecord.self,
+        PrivateCloudStatisticsDeletionRecord.self,
         StatisticsSessionAccountingRecord.self,
     ]
 }

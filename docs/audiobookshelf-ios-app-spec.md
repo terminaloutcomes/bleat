@@ -1357,7 +1357,23 @@ CloudKit record identifiers, and CloudKit `userInfo`. On native macOS, remote
 OpenTelemetry export is out of scope and the same typed lifecycle remains
 on-device only. The iOS build retains the reviewed remote telemetry behavior.
 Successful record system fields, including server change tags, must survive
-process relaunch. A `serverRecordChanged` save failure is resolved against the
+process relaunch. Mutable records retain the last successfully synchronized
+payload digest, and statistics rows retain explicit synchronized state plus
+durable account-scoped deletion tombstones. Local preparation must fetch and
+enqueue only new, changed, or deleted records, while interrupted or failed
+sends remain pending for retry. Missing synchronization state on older rows is
+reconciled rather than treated as success. A pending local deletion takes
+precedence over a racing fetched modification, and deleting the CloudKit zone
+marks retained local statistics for upload if synchronization is enabled again. Fetched
+statistics changes are decoded as a batch and imported with one bounded
+repository transaction per CloudKit callback rather than one full-ID scan and
+save per record; one invalid fetched record does not discard valid records in
+the same callback. Zone setup, fetch, fetched-record application, local
+preparation, upload, and sent-change reconciliation emit privacy-safe duration
+and available record-count diagnostics for successful and failed stages.
+Presentation summary refresh follows a completed
+CloudKit result and does not keep the iCloud state active. A
+`serverRecordChanged` save failure is resolved against the
 returned server record: matching payloads adopt its current system fields,
 unambiguous newer local configuration is rebased and retried once, and an
 ambiguous preference merge remains pending without overwriting either value.
@@ -1617,8 +1633,9 @@ span-name or attribute-dictionary API.
 
 The reviewed log schema is initially limited to private CloudKit lifecycle
 events. Its event names and static body are closed; attributes may contain only
-the typed CloudKit operation, outcome, privacy-safe failure category, exact
-CloudKit code, partial codes, retryability, retry delay, and duration. Raw
+the typed CloudKit operation or stage, outcome, privacy-safe failure category,
+exact CloudKit code, partial codes, retryability, retry delay, duration, and
+bounded record count. Raw
 errors, descriptions, `userInfo`, records, accounts, servers, and correlation
 identifiers are excluded. Logs use the same consent generation, resource,
 authenticated OTLP origin, foreground/background lifecycle, and synchronous

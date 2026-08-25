@@ -3699,18 +3699,26 @@ final class AppModel {
             guard let self else {
                 return
             }
-            await performPrivateCloudSynchronization(generation: generation)
+            let shouldReloadStatistics =
+                await performPrivateCloudSynchronization(
+                    generation: generation
+                )
             guard privateCloudSyncGeneration == generation else {
                 return
             }
             privateCloudSyncTask = nil
             canCancelPrivateCloudSynchronization = false
+            if shouldReloadStatistics {
+                await loadStatistics()
+            }
         }
         privateCloudSyncTask = task
         return task
     }
 
-    private func performPrivateCloudSynchronization(generation: UInt64) async {
+    private func performPrivateCloudSynchronization(
+        generation: UInt64
+    ) async -> Bool {
         do {
             let changes = try await service.synchronizePrivateCloud()
             let configurationConflict =
@@ -3718,14 +3726,14 @@ final class AppModel {
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {
-                return
+                return false
             }
             let synchronizedAccounts = try await service.accounts()
             let active = try await service.activeAccount()
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {
-                return
+                return false
             }
             queueCloudServerConfigurationChanges(changes)
             pendingCloudConfigurationConflict = configurationConflict
@@ -3735,24 +3743,20 @@ final class AppModel {
             }
             playback.reloadSyncedPreferences()
             downloads.reloadSyncedPreferences()
-            await loadStatistics()
-            guard privateCloudSyncGeneration == generation,
-                !Task.isCancelled
-            else {
-                return
-            }
             privateCloudState = .idle
+            canCancelPrivateCloudSynchronization = false
+            return true
         } catch let error {
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {
-                return
+                return false
             }
             if case .privateCloud(let failure) = error,
                 failure.cause == .cancelled
             {
                 privateCloudState = .cancelled
-                return
+                return false
             }
             privateCloudState = .failed(
                 AppFailure(
@@ -3760,6 +3764,7 @@ final class AppModel {
                     serviceError: error
                 )
             )
+            return false
         }
     }
 

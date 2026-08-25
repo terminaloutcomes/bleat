@@ -493,8 +493,21 @@ failure. CloudKit failures remain distinct from Audiobookshelf failures:
 Settings names iCloud as the failing service, chooses retry behavior from the
 typed CloudKit code, and local diagnostics retain the operation, exact code,
 partial-failure codes, and retry delay without recording record identifiers or
-localized error descriptions. Bleat retains each successful record's CloudKit
-system fields across launches. A stale-change-tag response is reconciled from
+localized error descriptions. Stage diagnostics also report privacy-safe
+durations and available record counts, including failed stages, for zone setup,
+fetch, fetched-record application, local preparation, and upload. Bleat retains
+each successful record's CloudKit
+system fields, mutable-record payload digests, per-row statistics sync state,
+and account-scoped deletion tombstones across launches, so an unchanged sync
+does not scan or re-enqueue the complete statistics archive and interrupted
+deletions retry.
+Legacy rows without synchronization state are reconciled, pending local
+deletions win over racing fetched records, and deleting the iCloud zone marks
+retained local statistics for upload if synchronization is enabled again.
+Fetched statistics are decoded and
+written in one batch instead of opening a persistence transaction per record,
+and the iCloud status stops spinning before the independent statistics-summary
+refresh completes. A stale-change-tag response is reconciled from
 the returned server record: identical data adopts the current server version,
 a newer unambiguous local edit is rebased and retried once, and an ambiguous
 preference conflict pauses synchronization. Bleat shows only the settings that

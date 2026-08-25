@@ -12,6 +12,10 @@ public enum PrivateCloudSyncStatus: Equatable, Sendable {
 
 public enum PrivateCloudSyncOperation: String, Codable, Equatable, Sendable {
     case synchronize
+    case setupZone = "setup_zone"
+    case fetchChanges = "fetch_changes"
+    case prepareLocalChanges = "prepare_local_changes"
+    case uploadChanges = "upload_changes"
     case pushServerConfiguration = "push_server_configuration"
     case resolveServerConfiguration = "resolve_server_configuration"
     case enable
@@ -286,19 +290,22 @@ public struct PrivateCloudSyncEvent: Equatable, Sendable {
     public let operation: PrivateCloudSyncOperation
     public let phase: PrivateCloudSyncEventPhase
     public let durationMilliseconds: Int?
+    public let recordCount: Int?
 
     public init(
         correlationID: UUID,
         timestamp: Date = Date(),
         operation: PrivateCloudSyncOperation,
         phase: PrivateCloudSyncEventPhase,
-        durationMilliseconds: Int? = nil
+        durationMilliseconds: Int? = nil,
+        recordCount: Int? = nil
     ) {
         self.correlationID = correlationID
         self.timestamp = timestamp
         self.operation = operation
         self.phase = phase
         self.durationMilliseconds = durationMilliseconds
+        self.recordCount = recordCount
     }
 }
 
@@ -351,13 +358,15 @@ public struct DiagnosticPrivateCloudSyncEventRecorder:
             diagnostic = .privateCloudCompleted(
                 operation: event.operation,
                 correlationID: event.correlationID,
-                durationMilliseconds: event.durationMilliseconds ?? 0
+                durationMilliseconds: event.durationMilliseconds ?? 0,
+                recordCount: event.recordCount
             )
         case .failed(let failure):
             diagnostic = .privateCloudFailed(
                 failure: failure,
                 correlationID: event.correlationID,
-                durationMilliseconds: event.durationMilliseconds ?? 0
+                durationMilliseconds: event.durationMilliseconds ?? 0,
+                recordCount: event.recordCount
             )
         }
         await diagnostics.record(diagnostic)
@@ -685,6 +694,10 @@ actor PrivateCloudSyncStore {
     private let defaults: UserDefaults
     private let recordSystemFieldsKey =
         "bleat.cloudKit.recordSystemFields.v1"
+    private let synchronizedPayloadDigestsKey =
+        "bleat.cloudKit.synchronizedPayloadDigests.v1"
+    private let retainedRecordPayloadsKey =
+        "bleat.cloudKit.retainedRecordPayloads.v1"
     private let ignoredAccountsKey =
         "bleat.cloudKit.ignoredAccounts.v1"
     private let ignoredStatisticsKey =
@@ -692,6 +705,7 @@ actor PrivateCloudSyncStore {
     private let pendingConfigurationConflictKey =
         "bleat.cloudKit.pendingConfigurationConflict.v1"
     private var records: [CKRecord.ID: CKRecord] = [:]
+    private var synchronizedPayloadDigests: [String: Data] = [:]
     private var pendingAccountChanges:
         [AccountID: CloudServerConfigurationChange] = [:]
     private var pendingConfigurationConflict: CloudConfigurationConflict?
@@ -729,6 +743,22 @@ actor PrivateCloudSyncStore {
                 records[record.recordID] = record
             }
         }
+        synchronizedPayloadDigests =
+            defaults.value.dictionary(
+                forKey: synchronizedPayloadDigestsKey
+            ) as? [String: Data] ?? [:]
+        if let retainedPayloads = defaults.value.dictionary(
+            forKey: retainedRecordPayloadsKey
+        ) as? [String: Data] {
+            for (recordName, payload) in retainedPayloads {
+                guard let record = records.first(where: {
+                    $0.key.recordName == recordName
+                })?.value else {
+                    continue
+                }
+                record[Self.payloadKey] = payload as CKRecordValue
+            }
+        }
         if let data = defaults.value.data(
             forKey: pendingConfigurationConflictKey
         ) {
@@ -761,15 +791,15 @@ actor PrivateCloudSyncStore {
         let archive: StatisticsArchive
         let accountValues: [ServerAccount]
         do {
-            archive = try await statistics.archive()
+            archive = try await statistics.privateCloudArchive()
             accountValues = try await accounts.accounts()
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
 
-        var prepared: [CKRecord] = []
+        var localRecords: [CKRecord] = []
         for slice in archive.slices {
-            prepared.append(
+            localRecords.append(
                 try record(
                     type: "ListeningSlice",
                     name: "slice.\(slice.id.uuidString.lowercased())",
@@ -779,7 +809,7 @@ actor PrivateCloudSyncStore {
             )
         }
         for completion in archive.completions {
-            prepared.append(
+            localRecords.append(
                 try record(
                     type: "CompletionMilestone",
                     name:
@@ -791,7 +821,7 @@ actor PrivateCloudSyncStore {
             )
         }
         for session in archive.remoteSessions {
-            prepared.append(
+            localRecords.append(
                 try record(
                     type: "RemoteListeningSession",
                     name:
@@ -806,7 +836,7 @@ actor PrivateCloudSyncStore {
             guard pendingAccountChanges[account.id] == nil else {
                 continue
             }
-            prepared.append(
+            localRecords.append(
                 try accountRecord(
                     account,
                     zoneID: zoneID,
@@ -815,7 +845,7 @@ actor PrivateCloudSyncStore {
             )
         }
         if pendingConfigurationConflict == nil {
-            prepared.append(
+            localRecords.append(
                 try record(
                     type: "Configuration",
                     name: "configuration.singleton",
@@ -824,34 +854,143 @@ actor PrivateCloudSyncStore {
                 )
             )
         }
-        for record in prepared {
+        for record in localRecords {
             records[record.recordID] = record
         }
-        return prepared
+        return localRecords.filter(needsUpload)
     }
 
     func record(for id: CKRecord.ID) -> CKRecord? {
         records[id]
     }
 
+    func prepareDeletionChanges(
+        zoneID: CKRecordZone.ID
+    ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        do {
+            return try await statistics.privateCloudDeletions().map {
+                .deleteRecord(
+                    CKRecord.ID(
+                        recordName: $0.recordName,
+                        zoneID: zoneID
+                    )
+                )
+            }
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+    }
+
     func apply(
         modifications: [CKDatabase.RecordZoneChange.Modification],
         deletions: [CKDatabase.RecordZoneChange.Deletion]
-    ) async throws {
-        for modification in modifications {
-            try await applyFetchedRecord(
-                modification.record,
-                persistSystemFields: false
-            )
-        }
+    ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        let fetchedResult = try await applyFetchedRecordsToleratingFailures(
+            modifications.map(\.record),
+            persistState: false
+        )
         for deletion in deletions {
             records.removeValue(forKey: deletion.recordID)
+            synchronizedPayloadDigests[deletion.recordID.recordName] = nil
             try await applyDeletion(
                 recordID: deletion.recordID,
                 recordType: deletion.recordType
             )
         }
-        persistRecordSystemFields()
+        do {
+            try await statistics.clearPrivateCloudDeletions(
+                recordNames: Set(deletions.map { $0.recordID.recordName })
+            )
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+        persistRecordState()
+        if let failure = fetchedResult.failure {
+            throw failure
+        }
+        return fetchedResult.pendingChanges
+    }
+
+    func applyFetchedRecords(
+        _ fetchedRecords: [CKRecord],
+        persistState: Bool = true
+    ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        let result = try await applyFetchedRecordsToleratingFailures(
+            fetchedRecords,
+            persistState: persistState
+        )
+        if let failure = result.failure {
+            throw failure
+        }
+        return result.pendingChanges
+    }
+
+    private func applyFetchedRecordsToleratingFailures(
+        _ fetchedRecords: [CKRecord],
+        persistState: Bool
+    ) async throws -> (
+        pendingChanges: [CKSyncEngine.PendingRecordZoneChange],
+        failure: PrivateCloudSyncError?
+    ) {
+        var recordsToApply: [CKRecord] = []
+        var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
+        let pendingDeletionNames: Set<String>
+        do {
+            pendingDeletionNames = Set(
+                try await statistics.privateCloudDeletions().map(\.recordName)
+            )
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+        var firstFailure: PrivateCloudSyncError?
+        for record in fetchedRecords {
+            guard !pendingDeletionNames.contains(record.recordID.recordName)
+            else {
+                continue
+            }
+            do {
+                let resolution = try await resolveIncomingRecord(
+                    record,
+                    previousRecord: records[record.recordID]
+                )
+                switch resolution {
+                case .applyRemote:
+                    recordsToApply.append(record)
+                case .preserveLocal(let data):
+                    record[Self.payloadKey] = data as CKRecordValue
+                    records[record.recordID] = record
+                    pendingChanges.append(.saveRecord(record.recordID))
+                case .requestAccountConfirmation(let change):
+                    records[record.recordID] = record
+                    pendingAccountChanges[change.id] = change
+                    markSynchronized(record)
+                case .requestConfigurationConfirmation(let conflict):
+                    records[record.recordID] = record
+                    try setPendingConfigurationConflict(conflict)
+                    markSynchronized(record)
+                }
+            } catch let error as PrivateCloudSyncError {
+                if firstFailure == nil {
+                    firstFailure = error
+                }
+            } catch {
+                if firstFailure == nil {
+                    firstFailure = .invalidRecord
+                }
+            }
+        }
+        let application = try await apply(recordsToApply)
+        if firstFailure == nil {
+            firstFailure = application.failure
+        }
+        for record in application.appliedRecords {
+            records[record.recordID] = record
+            markSynchronized(record)
+        }
+        if persistState {
+            persistRecordState()
+        }
+        return (pendingChanges, firstFailure)
     }
 
     @discardableResult
@@ -867,29 +1006,32 @@ actor PrivateCloudSyncStore {
         case .applyRemote:
             records[record.recordID] = record
             try await apply(record)
+            markSynchronized(record)
             if persistSystemFields {
-                persistRecordSystemFields()
+                persistRecordState()
             }
             return false
         case .preserveLocal(let data):
             record[Self.payloadKey] = data as CKRecordValue
             records[record.recordID] = record
             if persistSystemFields {
-                persistRecordSystemFields()
+                persistRecordState()
             }
             return true
         case .requestAccountConfirmation(let change):
             records[record.recordID] = record
             pendingAccountChanges[change.id] = change
+            markSynchronized(record)
             if persistSystemFields {
-                persistRecordSystemFields()
+                persistRecordState()
             }
             return false
         case .requestConfigurationConfirmation(let conflict):
             records[record.recordID] = record
             try setPendingConfigurationConflict(conflict)
+            markSynchronized(record)
             if persistSystemFields {
-                persistRecordSystemFields()
+                persistRecordState()
             }
             return false
         }
@@ -903,9 +1045,38 @@ actor PrivateCloudSyncStore {
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
         for record in savedRecords {
             records[record.recordID] = record
+            markSynchronized(record)
+        }
+        let savedStatistics = try statisticsArchive(from: savedRecords)
+        if !savedStatistics.slices.isEmpty
+            || !savedStatistics.completions.isEmpty
+            || !savedStatistics.remoteSessions.isEmpty
+        {
+            do {
+                try await statistics.markPrivateCloudArchiveSynchronized(
+                    savedStatistics
+                )
+            } catch {
+                throw PrivateCloudSyncError.persistenceFailed
+            }
         }
         for recordID in deletedRecordIDs {
             records.removeValue(forKey: recordID)
+            synchronizedPayloadDigests[recordID.recordName] = nil
+        }
+        let confirmedDeletedRecordNames = Set(
+            deletedRecordIDs.map(\.recordName)
+                + failedRecordDeletes.compactMap { element in
+                    element.value.code == .unknownItem
+                        ? element.key.recordName : nil
+                }
+        )
+        do {
+            try await statistics.clearPrivateCloudDeletions(
+                recordNames: confirmedDeletedRecordNames
+            )
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
         }
 
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
@@ -932,7 +1103,7 @@ actor PrivateCloudSyncStore {
         where error.code == .batchRequestFailed {
             pendingChanges.append(.deleteRecord(recordID))
         }
-        persistRecordSystemFields()
+        persistRecordState()
         return pendingChanges
     }
 
@@ -974,10 +1145,12 @@ actor PrivateCloudSyncStore {
         let local = await configuration.snapshot()
         if client == server {
             records[serverRecord.recordID] = serverRecord
+            markSynchronized(serverRecord)
             return false
         }
         if local == server {
             records[serverRecord.recordID] = serverRecord
+            markSynchronized(serverRecord)
             return false
         }
         if local == client {
@@ -987,11 +1160,12 @@ actor PrivateCloudSyncStore {
             )
             records[serverRecord.recordID] = serverRecord
             try setPendingConfigurationConflict(conflict)
+            markSynchronized(serverRecord)
             return false
         }
         do {
             serverRecord[Self.payloadKey] =
-                try JSONEncoder().encode(local) as CKRecordValue
+                try Self.encodePayload(local) as CKRecordValue
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
@@ -1048,7 +1222,7 @@ actor PrivateCloudSyncStore {
             let local = await configuration.snapshot()
             do {
                 record[Self.payloadKey] =
-                    try JSONEncoder().encode(local) as CKRecordValue
+                    try Self.encodePayload(local) as CKRecordValue
             } catch {
                 throw PrivateCloudSyncError.persistenceFailed
             }
@@ -1117,9 +1291,17 @@ actor PrivateCloudSyncStore {
         Array(records.keys)
     }
 
-    func removeAllRecords() {
+    func removeAllRecords() async throws {
+        do {
+            try await statistics.resetPrivateCloudSynchronizationState()
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
         records.removeAll()
+        synchronizedPayloadDigests.removeAll()
         defaults.removeObject(forKey: recordSystemFieldsKey)
+        defaults.removeObject(forKey: synchronizedPayloadDigestsKey)
+        defaults.removeObject(forKey: retainedRecordPayloadsKey)
         if pendingConfigurationConflictIsInvalid {
             clearPendingConfigurationConflict()
         }
@@ -1144,42 +1326,60 @@ actor PrivateCloudSyncStore {
 
     func recordIDs(
         for accountID: AccountID,
-        includeStatistics: Bool
-    ) -> [CKRecord.ID] {
-        records.values.compactMap { record in
-            if record.recordType == "ServerAccount" {
-                return record.recordID.recordName
-                    == "account.\(accountID.rawValue)"
-                    ? record.recordID : nil
+        includeStatistics: Bool,
+        zoneID: CKRecordZone.ID
+    ) async throws -> [CKRecord.ID] {
+        var matchingRecordIDs = Set(
+            records.values.compactMap { record in
+                if record.recordType == "ServerAccount" {
+                    return record.recordID.recordName
+                        == "account.\(accountID.rawValue)"
+                        ? record.recordID : nil
+                }
+                guard includeStatistics,
+                    let data = record[Self.payloadKey] as? Data
+                else {
+                    return nil
+                }
+                switch record.recordType {
+                case "ListeningSlice":
+                    return
+                        (try? JSONDecoder().decode(
+                            ListeningSlice.self,
+                            from: data
+                        ).accountID) == accountID ? record.recordID : nil
+                case "CompletionMilestone":
+                    return
+                        (try? JSONDecoder().decode(
+                            CompletionMilestone.self,
+                            from: data
+                        ).accountID) == accountID ? record.recordID : nil
+                case "RemoteListeningSession":
+                    return
+                        (try? JSONDecoder().decode(
+                            RemoteListeningSession.self,
+                            from: data
+                        ).accountID) == accountID ? record.recordID : nil
+                default:
+                    return nil
+                }
             }
-            guard includeStatistics,
-                let data = record[Self.payloadKey] as? Data
-            else {
-                return nil
-            }
-            switch record.recordType {
-            case "ListeningSlice":
-                return
-                    (try? JSONDecoder().decode(
-                        ListeningSlice.self,
-                        from: data
-                    ).accountID) == accountID ? record.recordID : nil
-            case "CompletionMilestone":
-                return
-                    (try? JSONDecoder().decode(
-                        CompletionMilestone.self,
-                        from: data
-                    ).accountID) == accountID ? record.recordID : nil
-            case "RemoteListeningSession":
-                return
-                    (try? JSONDecoder().decode(
-                        RemoteListeningSession.self,
-                        from: data
-                    ).accountID) == accountID ? record.recordID : nil
-            default:
-                return nil
+        )
+        if includeStatistics {
+            do {
+                let recordNames = try await statistics.privateCloudRecordNames(
+                    accountID: accountID
+                )
+                matchingRecordIDs.formUnion(
+                    recordNames.map {
+                        CKRecord.ID(recordName: $0, zoneID: zoneID)
+                    }
+                )
+            } catch {
+                throw PrivateCloudSyncError.persistenceFailed
             }
         }
+        return Array(matchingRecordIDs)
     }
 
     private func record<Value: Encodable>(
@@ -1197,7 +1397,7 @@ actor PrivateCloudSyncStore {
             ?? CKRecord(recordType: type, recordID: recordID)
         do {
             record[Self.payloadKey] =
-                try JSONEncoder().encode(value) as CKRecordValue
+                try Self.encodePayload(value) as CKRecordValue
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
@@ -1235,7 +1435,7 @@ actor PrivateCloudSyncStore {
         )
         do {
             record[Self.payloadKey] =
-                try JSONEncoder().encode(payload) as CKRecordValue
+                try Self.encodePayload(payload) as CKRecordValue
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
@@ -1243,72 +1443,170 @@ actor PrivateCloudSyncStore {
     }
 
     private func apply(_ record: CKRecord) async throws {
-        guard let data = record[Self.payloadKey] as? Data else {
+        let application = try await apply([record])
+        if let failure = application.failure {
+            throw failure
+        }
+    }
+
+    private func statisticsArchive(
+        from cloudRecords: [CKRecord]
+    ) throws -> StatisticsArchive {
+        var slices: [ListeningSlice] = []
+        var completions: [CompletionMilestone] = []
+        var remoteSessions: [RemoteListeningSession] = []
+        do {
+            for record in cloudRecords {
+                guard record.recordType == "ListeningSlice"
+                    || record.recordType == "CompletionMilestone"
+                    || record.recordType == "RemoteListeningSession"
+                else {
+                    continue
+                }
+                guard let data = record[Self.payloadKey] as? Data else {
+                    throw PrivateCloudSyncError.invalidRecord
+                }
+                switch record.recordType {
+                case "ListeningSlice":
+                    slices.append(
+                        try JSONDecoder().decode(
+                            ListeningSlice.self,
+                            from: data
+                        )
+                    )
+                case "CompletionMilestone":
+                    completions.append(
+                        try JSONDecoder().decode(
+                            CompletionMilestone.self,
+                            from: data
+                        )
+                    )
+                case "RemoteListeningSession":
+                    remoteSessions.append(
+                        try JSONDecoder().decode(
+                            RemoteListeningSession.self,
+                            from: data
+                        )
+                    )
+                default:
+                    continue
+                }
+            }
+            return StatisticsArchive(
+                slices: slices,
+                completions: completions,
+                remoteSessions: remoteSessions
+            )
+        } catch let error as PrivateCloudSyncError {
+            throw error
+        } catch {
             throw PrivateCloudSyncError.invalidRecord
         }
+    }
+
+    private func apply(
+        _ recordsToApply: [CKRecord]
+    ) async throws -> (
+        appliedRecords: [CKRecord],
+        failure: PrivateCloudSyncError?
+    ) {
+        var slices: [ListeningSlice] = []
+        var completions: [CompletionMilestone] = []
+        var remoteSessions: [RemoteListeningSession] = []
+        var accountsToSave: [ServerAccount] = []
+        var configurations: [CloudConfigurationSnapshot] = []
+        var appliedRecords: [CKRecord] = []
+        var firstFailure: PrivateCloudSyncError?
+        let ignoredStatisticsAccounts = ignoredStatisticsAccountIDs()
+        let ignoredAccounts = ignoredAccountIDs()
+        for record in recordsToApply {
+            do {
+                guard let data = record[Self.payloadKey] as? Data else {
+                    throw PrivateCloudSyncError.invalidRecord
+                }
+                switch record.recordType {
+                case "ListeningSlice":
+                    let value = try JSONDecoder().decode(
+                        ListeningSlice.self,
+                        from: data
+                    )
+                    if !ignoredStatisticsAccounts.contains(
+                        value.accountID.rawValue
+                    ) {
+                        slices.append(value)
+                    }
+                case "CompletionMilestone":
+                    let value = try JSONDecoder().decode(
+                        CompletionMilestone.self,
+                        from: data
+                    )
+                    if !ignoredStatisticsAccounts.contains(
+                        value.accountID.rawValue
+                    ) {
+                        completions.append(value)
+                    }
+                case "RemoteListeningSession":
+                    let value = try JSONDecoder().decode(
+                        RemoteListeningSession.self,
+                        from: data
+                    )
+                    if !ignoredStatisticsAccounts.contains(
+                        value.accountID.rawValue
+                    ) {
+                        remoteSessions.append(value)
+                    }
+                case "ServerAccount":
+                    let value = try decodeAccountPayload(data).account
+                    if !ignoredAccounts.contains(value.id.rawValue) {
+                        accountsToSave.append(value)
+                    }
+                case "Configuration":
+                    configurations.append(
+                        try JSONDecoder().decode(
+                            CloudConfigurationSnapshot.self,
+                            from: data
+                        )
+                    )
+                default:
+                    break
+                }
+                appliedRecords.append(record)
+            } catch let error as PrivateCloudSyncError {
+                if firstFailure == nil {
+                    firstFailure = error
+                }
+            } catch {
+                if firstFailure == nil {
+                    firstFailure = .invalidRecord
+                }
+            }
+        }
         do {
-            switch record.recordType {
-            case "ListeningSlice":
-                let value = try JSONDecoder().decode(
-                    ListeningSlice.self,
-                    from: data
+            if !slices.isEmpty || !completions.isEmpty
+                || !remoteSessions.isEmpty
+            {
+                let archive = StatisticsArchive(
+                    slices: slices,
+                    completions: completions,
+                    remoteSessions: remoteSessions
                 )
-                if !ignoredStatisticsAccountIDs().contains(
-                    value.accountID.rawValue
-                ) {
-                    try await statistics.importArchive(
-                        StatisticsArchive(
-                            slices: [value],
-                            completions: [],
-                            remoteSessions: []
-                        )
-                    )
-                }
-            case "CompletionMilestone":
-                let value = try JSONDecoder().decode(
-                    CompletionMilestone.self,
-                    from: data
+                try await statistics.importArchive(archive)
+                try await statistics.markPrivateCloudArchiveSynchronized(
+                    archive
                 )
-                if !ignoredStatisticsAccountIDs().contains(
-                    value.accountID.rawValue
-                ) {
-                    try await statistics.importArchive(
-                        StatisticsArchive(
-                            slices: [],
-                            completions: [value],
-                            remoteSessions: []
-                        )
-                    )
-                }
-            case "RemoteListeningSession":
-                let value = try JSONDecoder().decode(
-                    RemoteListeningSession.self,
-                    from: data
-                )
-                if !ignoredStatisticsAccountIDs().contains(
-                    value.accountID.rawValue
-                ) {
-                    try await statistics.upsertRemoteSessions([value])
-                }
-            case "ServerAccount":
-                let value = try decodeAccountPayload(data).account
-                if !ignoredAccountIDs().contains(value.id.rawValue) {
-                    try await accounts.save(value)
-                }
-            case "Configuration":
-                let value = try JSONDecoder().decode(
-                    CloudConfigurationSnapshot.self,
-                    from: data
-                )
-                try await configuration.apply(value)
-            default:
-                return
+            }
+            for account in accountsToSave {
+                try await accounts.save(account)
+            }
+            for snapshot in configurations {
+                try await configuration.apply(snapshot)
             }
         } catch let error as PrivateCloudSyncError {
             throw error
         } catch {
             throw PrivateCloudSyncError.invalidRecord
         }
+        return (appliedRecords, firstFailure)
     }
 
     private func resolveIncomingRecord(
@@ -1486,7 +1784,30 @@ actor PrivateCloudSyncStore {
         Set(defaults.stringArray(forKey: ignoredStatisticsKey) ?? [])
     }
 
-    private func persistRecordSystemFields() {
+    private func needsUpload(_ record: CKRecord) -> Bool {
+        guard let data = record[Self.payloadKey] as? Data else {
+            return true
+        }
+        return synchronizedPayloadDigests[record.recordID.recordName]
+            != Self.payloadDigest(data)
+    }
+
+    private func markSynchronized(_ record: CKRecord) {
+        if record.recordType == "ListeningSlice"
+            || record.recordType == "CompletionMilestone",
+            record.recordChangeTag != nil
+        {
+            synchronizedPayloadDigests[record.recordID.recordName] = nil
+            return
+        }
+        guard let data = record[Self.payloadKey] as? Data else {
+            return
+        }
+        synchronizedPayloadDigests[record.recordID.recordName] =
+            Self.payloadDigest(data)
+    }
+
+    private func persistRecordState() {
         let archivedRecords = records.reduce(
             into: [String: Data]()
         ) { result, element in
@@ -1495,6 +1816,43 @@ actor PrivateCloudSyncStore {
             )
         }
         defaults.set(archivedRecords, forKey: recordSystemFieldsKey)
+        let recordTypes = Dictionary(
+            uniqueKeysWithValues: records.map {
+                ($0.key.recordName, $0.value.recordType)
+            }
+        )
+        let durablePayloadDigests = synchronizedPayloadDigests.filter {
+            recordName, _ in
+            guard let type = recordTypes[recordName] else {
+                return false
+            }
+            return type != "ListeningSlice"
+                && type != "CompletionMilestone"
+        }
+        defaults.set(
+            durablePayloadDigests,
+            forKey: synchronizedPayloadDigestsKey
+        )
+        let retainedPayloads = records.reduce(
+            into: [String: Data]()
+        ) { result, element in
+            guard element.value.recordType == "ServerAccount"
+                || element.value.recordType == "Configuration",
+                let data = element.value[Self.payloadKey] as? Data
+            else {
+                return
+            }
+            result[element.key.recordName] = data
+        }
+        defaults.set(retainedPayloads, forKey: retainedRecordPayloadsKey)
+    }
+
+    private static func encodePayload<Value: Encodable>(
+        _ value: Value
+    ) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(value)
     }
 
     private func setPendingConfigurationConflict(
@@ -1637,29 +1995,49 @@ public final class PrivateCloudSyncCoordinator:
             guard let engine else {
                 throw PrivateCloudSyncError.engineUnavailable
             }
-            engine.state.add(
-                pendingDatabaseChanges: [
-                    .saveZone(CKRecordZone(zoneID: zoneID))
-                ]
-            )
-            try await engine.sendChanges()
-            try await engine.fetchChanges(
-                CKSyncEngine.FetchChangesOptions(
-                    scope: .zoneIDs([zoneID])
+            try await perform(.setupZone) {
+                engine.state.add(
+                    pendingDatabaseChanges: [
+                        .saveZone(CKRecordZone(zoneID: zoneID))
+                    ]
                 )
-            )
-            let records = try await store.prepareRecords(zoneID: zoneID)
-            engine.state.add(
-                pendingRecordZoneChanges: records.map {
-                    .saveRecord($0.recordID)
-                }
-            )
-            try await sendRecordChanges(
-                engine: engine,
-                CKSyncEngine.SendChangesOptions(
-                    scope: .zoneIDs([zoneID])
+                try await engine.sendChanges()
+            }
+            try await perform(.fetchChanges) {
+                try await engine.fetchChanges(
+                    CKSyncEngine.FetchChangesOptions(
+                        scope: .zoneIDs([zoneID])
+                    )
                 )
+            }
+            let records = try await perform(
+                .prepareLocalChanges,
+                count: { $0.records.count + $0.deletions.count }
+            ) {
+                let records = try await store.prepareRecords(zoneID: zoneID)
+                let deletions = try await store.prepareDeletionChanges(
+                    zoneID: zoneID
+                )
+                return (records: records, deletions: deletions)
+            }
+            engine.state.add(
+                pendingRecordZoneChanges:
+                    records.records.map { .saveRecord($0.recordID) }
+                    + records.deletions
             )
+            let recordCount = records.records.count + records.deletions.count
+            try await perform(
+                .uploadChanges,
+                count: { _ in recordCount },
+                failureRecordCount: recordCount
+            ) {
+                try await sendRecordChanges(
+                    engine: engine,
+                    CKSyncEngine.SendChangesOptions(
+                        scope: .zoneIDs([zoneID])
+                    )
+                )
+            }
         }
     }
 
@@ -1834,7 +2212,7 @@ public final class PrivateCloudSyncCoordinator:
                             pendingDatabaseChanges: [.deleteZone(zoneID)]
                         )
                         try await engine.sendChanges()
-                        await store.removeAllRecords()
+                        try await store.removeAllRecords()
                         defaults.removeObject(forKey: stateKey)
                     }
                 } catch let failure as PrivateCloudSyncFailure {
@@ -1857,9 +2235,10 @@ public final class PrivateCloudSyncCoordinator:
                 throw PrivateCloudSyncError.engineUnavailable
             }
             _ = try await store.prepareRecords(zoneID: zoneID)
-            let recordIDs = await store.recordIDs(
+            let recordIDs = try await store.recordIDs(
                 for: accountID,
-                includeStatistics: includeStatistics
+                includeStatistics: includeStatistics,
+                zoneID: zoneID
             )
             engine.state.add(
                 pendingRecordZoneChanges: recordIDs.map {
@@ -1912,7 +2291,7 @@ public final class PrivateCloudSyncCoordinator:
                 )
             } catch {
                 await recordFailure(
-                    mappedFailure(
+                    Self.mappedFailure(
                         operation: .persistEngineState,
                         error: PrivateCloudSyncError.persistenceFailed
                     ),
@@ -1923,6 +2302,8 @@ public final class PrivateCloudSyncCoordinator:
         case .fetchedRecordZoneChanges(let changes):
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
+            let recordCount =
+                changes.modifications.count + changes.deletions.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -1931,28 +2312,38 @@ public final class PrivateCloudSyncCoordinator:
                 )
             )
             do {
-                try await store.apply(
+                let pendingChanges = try await store.apply(
                     modifications: changes.modifications,
                     deletions: changes.deletions
+                )
+                syncEngine.state.add(
+                    pendingRecordZoneChanges: pendingChanges
                 )
                 await recordCompletion(
                     operation: .applyFetchedChanges,
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             } catch {
                 await recordFailure(
-                    mappedFailure(
+                    Self.mappedFailure(
                         operation: .applyFetchedChanges,
                         error: error
                     ),
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             }
         case .sentRecordZoneChanges(let changes):
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
+            let recordCount =
+                changes.savedRecords.count
+                + changes.deletedRecordIDs.count
+                + changes.failedRecordSaves.count
+                + changes.failedRecordDeletes.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -1976,16 +2367,18 @@ public final class PrivateCloudSyncCoordinator:
                 await recordCompletion(
                     operation: .reconcileSentChanges,
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             } catch {
                 await recordFailure(
-                    mappedFailure(
+                    Self.mappedFailure(
                         operation: .reconcileSentChanges,
                         error: error
                     ),
                     correlationID: correlationID,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    recordCount: recordCount
                 )
             }
         default:
@@ -1993,15 +2386,16 @@ public final class PrivateCloudSyncCoordinator:
         }
     }
 
-    func mappedFailure(
+    static func mappedFailure(
         operation: PrivateCloudSyncOperation,
         error: any Error
     ) -> PrivateCloudSyncFailure {
+        if let failure = error as? PrivateCloudSyncFailure {
+            return failure
+        }
         let cause: PrivateCloudSyncError
         if Task.isCancelled || error is CancellationError {
             cause = .cancelled
-        } else if let failure = error as? PrivateCloudSyncFailure {
-            cause = failure.cause
         } else if let error = error as? PrivateCloudSyncError {
             cause = error
         } else if let error = error as? CKError {
@@ -2016,6 +2410,8 @@ public final class PrivateCloudSyncCoordinator:
 
     private func perform<Value>(
         _ operation: PrivateCloudSyncOperation,
+        count: ((Value) -> Int?)? = nil,
+        failureRecordCount: Int? = nil,
         _ body: () async throws -> Value
     ) async throws(PrivateCloudSyncFailure) -> Value {
         let correlationID = UUID()
@@ -2032,15 +2428,23 @@ public final class PrivateCloudSyncCoordinator:
             await recordCompletion(
                 operation: operation,
                 correlationID: correlationID,
-                startedAt: startedAt
+                startedAt: startedAt,
+                recordCount: count?(value)
             )
             return value
         } catch {
-            let failure = mappedFailure(operation: operation, error: error)
+            let failure = Self.mappedFailure(
+                operation: operation,
+                error: error
+            )
             await recordFailure(
-                failure,
+                PrivateCloudSyncFailure(
+                    operation: operation,
+                    cause: failure.cause
+                ),
                 correlationID: correlationID,
-                startedAt: startedAt
+                startedAt: startedAt,
+                recordCount: failureRecordCount
             )
             throw failure
         }
@@ -2076,7 +2480,8 @@ public final class PrivateCloudSyncCoordinator:
     private func recordCompletion(
         operation: PrivateCloudSyncOperation,
         correlationID: UUID,
-        startedAt: ContinuousClock.Instant
+        startedAt: ContinuousClock.Instant,
+        recordCount: Int? = nil
     ) async {
         await eventRecorder.record(
             PrivateCloudSyncEvent(
@@ -2085,7 +2490,8 @@ public final class PrivateCloudSyncCoordinator:
                 phase: .completed,
                 durationMilliseconds: Self.durationMilliseconds(
                     since: startedAt
-                )
+                ),
+                recordCount: recordCount
             )
         )
     }
@@ -2093,7 +2499,8 @@ public final class PrivateCloudSyncCoordinator:
     private func recordFailure(
         _ failure: PrivateCloudSyncFailure,
         correlationID: UUID,
-        startedAt: ContinuousClock.Instant
+        startedAt: ContinuousClock.Instant,
+        recordCount: Int? = nil
     ) async {
         await eventRecorder.record(
             PrivateCloudSyncEvent(
@@ -2102,7 +2509,8 @@ public final class PrivateCloudSyncCoordinator:
                 phase: .failed(failure),
                 durationMilliseconds: Self.durationMilliseconds(
                     since: startedAt
-                )
+                ),
+                recordCount: recordCount
             )
         )
     }

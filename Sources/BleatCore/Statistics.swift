@@ -288,6 +288,8 @@ public enum StatisticsRepositoryError: Error, Equatable, Sendable {
 
 @Model
 public final class ListeningSliceRecord {
+    #Index<ListeningSliceRecord>([\.privateCloudSynchronized])
+
     @Attribute(.unique)
     var eventID: UUID
     var accountID: String
@@ -307,6 +309,7 @@ public final class ListeningSliceRecord {
     var title: String
     var author: String
     var duration: Double
+    var privateCloudSynchronized: Bool?
 
     init(_ slice: ListeningSlice) {
         eventID = slice.id
@@ -327,6 +330,7 @@ public final class ListeningSliceRecord {
         title = slice.title
         author = slice.author
         duration = slice.duration
+        privateCloudSynchronized = false
     }
 
     var domainValue: ListeningSlice {
@@ -355,6 +359,8 @@ public final class ListeningSliceRecord {
 
 @Model
 public final class CompletionMilestoneRecord {
+    #Index<CompletionMilestoneRecord>([\.privateCloudSynchronized])
+
     @Attribute(.unique)
     var eventID: UUID
     var accountID: String
@@ -364,6 +370,7 @@ public final class CompletionMilestoneRecord {
     var title: String
     var author: String
     var evidence: String
+    var privateCloudSynchronized: Bool?
 
     init(_ milestone: CompletionMilestone) {
         eventID = milestone.id
@@ -374,6 +381,7 @@ public final class CompletionMilestoneRecord {
         title = milestone.title
         author = milestone.author
         evidence = milestone.evidence.rawValue
+        privateCloudSynchronized = false
     }
 
     var domainValue: CompletionMilestone? {
@@ -395,6 +403,8 @@ public final class CompletionMilestoneRecord {
 
 @Model
 public final class RemoteListeningSessionRecord {
+    #Index<RemoteListeningSessionRecord>([\.privateCloudSynchronized])
+
     @Attribute(.unique)
     var compositeID: String
     var sessionID: String
@@ -407,6 +417,7 @@ public final class RemoteListeningSessionRecord {
     var duration: Double
     var title: String
     var author: String
+    var privateCloudSynchronized: Bool?
 
     init(_ session: RemoteListeningSession) {
         compositeID = Self.compositeID(
@@ -423,6 +434,7 @@ public final class RemoteListeningSessionRecord {
         duration = session.duration
         title = session.title
         author = session.author
+        privateCloudSynchronized = false
     }
 
     static func compositeID(
@@ -445,6 +457,20 @@ public final class RemoteListeningSessionRecord {
             title: title,
             author: author
         )
+    }
+}
+
+@Model
+public final class PrivateCloudStatisticsDeletionRecord {
+    @Attribute(.unique)
+    var recordName: String
+    var recordType: String
+    var accountID: String
+
+    init(recordName: String, recordType: String, accountID: String) {
+        self.recordName = recordName
+        self.recordType = recordType
+        self.accountID = accountID
     }
 }
 
@@ -498,6 +524,12 @@ public struct StatisticsArchive: Codable, Sendable {
         self.completions = completions
         self.remoteSessions = remoteSessions
     }
+}
+
+struct PrivateCloudStatisticsDeletion: Equatable, Sendable {
+    let recordName: String
+    let recordType: String
+    let accountID: AccountID
 }
 
 public struct ListeningAccumulator: Sendable {
@@ -745,6 +777,7 @@ public actor StatisticsRepository {
                     stored.duration = session.duration
                     stored.title = session.title
                     stored.author = session.author
+                    stored.privateCloudSynchronized = false
                 } else {
                     let record = RemoteListeningSessionRecord(session)
                     context.insert(record)
@@ -933,6 +966,202 @@ public actor StatisticsRepository {
         }
     }
 
+    func privateCloudArchive() throws(StatisticsRepositoryError)
+        -> StatisticsArchive
+    {
+        let context = ModelContext(modelContainer)
+        do {
+            return StatisticsArchive(
+                slices: try context.fetch(
+                    FetchDescriptor<ListeningSliceRecord>(
+                        predicate: #Predicate {
+                            $0.privateCloudSynchronized == false
+                                || $0.privateCloudSynchronized == nil
+                        }
+                    )
+                ).map(\.domainValue),
+                completions: try context.fetch(
+                    FetchDescriptor<CompletionMilestoneRecord>(
+                        predicate: #Predicate {
+                            $0.privateCloudSynchronized == false
+                                || $0.privateCloudSynchronized == nil
+                        }
+                    )
+                ).compactMap(\.domainValue),
+                remoteSessions: try context.fetch(
+                    FetchDescriptor<RemoteListeningSessionRecord>(
+                        predicate: #Predicate {
+                            $0.privateCloudSynchronized == false
+                                || $0.privateCloudSynchronized == nil
+                        }
+                    )
+                ).map(\.domainValue)
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    func markPrivateCloudArchiveSynchronized(
+        _ archive: StatisticsArchive
+    ) throws(StatisticsRepositoryError) {
+        let context = ModelContext(modelContainer)
+        do {
+            for slice in archive.slices {
+                let id = slice.id
+                let descriptor = FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.eventID == id }
+                )
+                if let record = try context.fetch(descriptor).first,
+                    record.domainValue == slice
+                {
+                    record.privateCloudSynchronized = true
+                }
+            }
+            for completion in archive.completions {
+                let id = completion.id
+                let descriptor = FetchDescriptor<CompletionMilestoneRecord>(
+                    predicate: #Predicate { $0.eventID == id }
+                )
+                if let record = try context.fetch(descriptor).first,
+                    record.domainValue == completion
+                {
+                    record.privateCloudSynchronized = true
+                }
+            }
+            for session in archive.remoteSessions {
+                let compositeID = RemoteListeningSessionRecord.compositeID(
+                    accountID: session.accountID,
+                    sessionID: session.id
+                )
+                let descriptor =
+                    FetchDescriptor<RemoteListeningSessionRecord>(
+                        predicate: #Predicate {
+                            $0.compositeID == compositeID
+                        }
+                    )
+                if let record = try context.fetch(descriptor).first,
+                    record.domainValue == session
+                {
+                    record.privateCloudSynchronized = true
+                }
+            }
+            try context.save()
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    func privateCloudDeletions() throws(StatisticsRepositoryError)
+        -> [PrivateCloudStatisticsDeletion]
+    {
+        let context = ModelContext(modelContainer)
+        do {
+            return try context.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+            ).map {
+                PrivateCloudStatisticsDeletion(
+                    recordName: $0.recordName,
+                    recordType: $0.recordType,
+                    accountID: AccountID(rawValue: $0.accountID)
+                )
+            }
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    func privateCloudRecordNames(
+        accountID: AccountID
+    ) throws(StatisticsRepositoryError) -> Set<String> {
+        let context = ModelContext(modelContainer)
+        let account = accountID.rawValue
+        do {
+            let sliceNames = try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.accountID == account }
+                )
+            ).map {
+                "slice.\($0.eventID.uuidString.lowercased())"
+            }
+            let completionNames = try context.fetch(
+                FetchDescriptor<CompletionMilestoneRecord>(
+                    predicate: #Predicate { $0.accountID == account }
+                )
+            ).map {
+                "completion.\($0.eventID.uuidString.lowercased())"
+            }
+            let remoteSessionNames = try context.fetch(
+                FetchDescriptor<RemoteListeningSessionRecord>(
+                    predicate: #Predicate { $0.accountID == account }
+                )
+            ).map {
+                "remote.\($0.accountID).\($0.sessionID)"
+            }
+            let deletionNames = try context.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>(
+                    predicate: #Predicate { $0.accountID == account }
+                )
+            ).map(\.recordName)
+            return Set(
+                sliceNames + completionNames + remoteSessionNames
+                    + deletionNames
+            )
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    func resetPrivateCloudSynchronizationState()
+        throws(StatisticsRepositoryError)
+    {
+        let context = ModelContext(modelContainer)
+        do {
+            for record in try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>()
+            ) {
+                record.privateCloudSynchronized = false
+            }
+            for record in try context.fetch(
+                FetchDescriptor<CompletionMilestoneRecord>()
+            ) {
+                record.privateCloudSynchronized = false
+            }
+            for record in try context.fetch(
+                FetchDescriptor<RemoteListeningSessionRecord>()
+            ) {
+                record.privateCloudSynchronized = false
+            }
+            for deletion in try context.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+            ) {
+                context.delete(deletion)
+            }
+            try context.save()
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    func clearPrivateCloudDeletions(
+        recordNames: Set<String>
+    ) throws(StatisticsRepositoryError) {
+        guard !recordNames.isEmpty else {
+            return
+        }
+        let context = ModelContext(modelContainer)
+        do {
+            for record in try context.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+            ) where recordNames.contains(record.recordName) {
+                context.delete(record)
+            }
+            try context.save()
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
     public func importArchive(
         _ archive: StatisticsArchive
     ) throws(StatisticsRepositoryError) {
@@ -977,12 +1206,29 @@ public actor StatisticsRepository {
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
         do {
+            let existingDeletionNames = Set(
+                try context.fetch(
+                    FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+                ).map(\.recordName)
+            )
+            var deletionNames = existingDeletionNames
             for record in try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
             ) where query.contains(
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.startedAt
             ) {
+                let recordName =
+                    "slice.\(record.eventID.uuidString.lowercased())"
+                if deletionNames.insert(recordName).inserted {
+                    context.insert(
+                        PrivateCloudStatisticsDeletionRecord(
+                            recordName: recordName,
+                            recordType: "ListeningSlice",
+                            accountID: record.accountID
+                        )
+                    )
+                }
                 context.delete(record)
             }
             for record in try context.fetch(
@@ -991,6 +1237,17 @@ public actor StatisticsRepository {
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.completedAt
             ) {
+                let recordName =
+                    "completion.\(record.eventID.uuidString.lowercased())"
+                if deletionNames.insert(recordName).inserted {
+                    context.insert(
+                        PrivateCloudStatisticsDeletionRecord(
+                            recordName: recordName,
+                            recordType: "CompletionMilestone",
+                            accountID: record.accountID
+                        )
+                    )
+                }
                 context.delete(record)
             }
             for record in try context.fetch(
@@ -999,6 +1256,17 @@ public actor StatisticsRepository {
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.startedAt
             ) {
+                let recordName =
+                    "remote.\(record.accountID).\(record.sessionID)"
+                if deletionNames.insert(recordName).inserted {
+                    context.insert(
+                        PrivateCloudStatisticsDeletionRecord(
+                            recordName: recordName,
+                            recordType: "RemoteListeningSession",
+                            accountID: record.accountID
+                        )
+                    )
+                }
                 context.delete(record)
             }
             for record in try context.fetch(

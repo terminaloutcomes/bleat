@@ -150,6 +150,9 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         if let duration = event.durationMilliseconds {
             attributes["bleat.duration_ms"] = .int(duration)
         }
+        if let recordCount = event.recordCount {
+            attributes["bleat.cloudkit.record_count"] = .int(recordCount)
+        }
         let builder = logger.logRecordBuilder()
             .setTimestamp(event.timestamp)
             .setSeverity(severity)

@@ -102,7 +102,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let event = DiagnosticEvent.privateCloudFailed(
             failure: failure,
             correlationID: correlationID,
-            durationMilliseconds: 17
+            durationMilliseconds: 17,
+            recordCount: 23
         )
 
         XCTAssertEqual(event.operation, .privateCloudSync)
@@ -113,6 +114,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             "request_rate_limited"
         )
         XCTAssertEqual(event.privateCloud?.retryAfterMilliseconds, 1_250)
+        XCTAssertEqual(event.count, 23)
         XCTAssertTrue(
             event.text.contains("cloud_operation=apply_fetched_changes")
         )
@@ -120,6 +122,48 @@ final class PrivateCloudSyncTests: XCTestCase {
             event.text.contains("cloudkit_code=request_rate_limited")
         )
         XCTAssertFalse(event.text.contains("localizedDescription"))
+    }
+
+    func testFailedCloudKitEventRecorderPreservesRecordCount() async throws {
+        let diagnostics = PrivateCloudDiagnosticRecorderSpy()
+        let recorder = DiagnosticPrivateCloudSyncEventRecorder(
+            diagnostics: diagnostics
+        )
+        let failure = PrivateCloudSyncFailure(
+            operation: .uploadChanges,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure)))
+        )
+
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: UUID(),
+                operation: .uploadChanges,
+                phase: .failed(failure),
+                durationMilliseconds: 42,
+                recordCount: 17
+            )
+        )
+
+        let events = await diagnostics.events()
+        let event = try XCTUnwrap(events.first)
+        XCTAssertEqual(event.privateCloud?.operation, .uploadChanges)
+        XCTAssertEqual(event.count, 17)
+        XCTAssertTrue(event.text.contains("count=17"))
+    }
+
+    func testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount() {
+        let event = DiagnosticEvent.privateCloudCompleted(
+            operation: .prepareLocalChanges,
+            correlationID: UUID(),
+            durationMilliseconds: 23,
+            recordCount: 17
+        )
+
+        XCTAssertTrue(
+            event.text.contains("cloud_operation=prepare_local_changes")
+        )
+        XCTAssertTrue(event.text.contains("duration_ms=23"))
+        XCTAssertTrue(event.text.contains("count=17"))
     }
 
     func testConfigurationSnapshotDefaultsHeadphoneCommands() async throws {
@@ -763,6 +807,528 @@ final class PrivateCloudSyncTests: XCTestCase {
         XCTAssertEqual(restored?.recordType, "Configuration")
     }
 
+    func testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertEqual(initial.map(\.recordType), ["Configuration"])
+
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: initial,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+
+        let unchanged = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(unchanged.isEmpty)
+
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+        let unchangedAfterRelaunch = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(unchangedAfterRelaunch.isEmpty)
+    }
+
+    func testUnconfirmedRecordsRemainPreparedForRetry() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+
+        let retry = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertEqual(retry.map(\.recordID), initial.map(\.recordID))
+    }
+
+    func testOnlyChangedConfigurationIsPreparedAfterBaseline() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: initial,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        try await fixture.configuration.apply(
+            makeSnapshot(
+                previousCommandAction: .previousChapter,
+                nextCommandAction: .nextChapter
+            )
+        )
+
+        let changed = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertEqual(changed.map(\.recordType), ["Configuration"])
+    }
+
+    func testSynchronizedStatisticsAreExcludedFromLaterPreparation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertEqual(
+            Set(initial.map(\.recordType)),
+            ["ListeningSlice", "Configuration"]
+        )
+
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: initial,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+
+        let unchanged = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(unchanged.isEmpty)
+    }
+
+    func testLegacyNilStatisticsSyncStateIsPreparedForReconciliation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        let context = ModelContext(fixture.container)
+        let legacyRecord = ListeningSliceRecord(slice)
+        legacyRecord.privateCloudSynchronized = nil
+        context.insert(legacyRecord)
+        try context.save()
+
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertTrue(
+            prepared.contains { $0.recordType == "ListeningSlice" }
+        )
+    }
+
+    func testDirtyStatisticsSurviveRelaunchAndAreReconciledOnce()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let sliceRecord = try XCTUnwrap(
+            initial.first { $0.recordType == "ListeningSlice" }
+        )
+        let otherRecords = initial.filter {
+            $0.recordType != "ListeningSlice"
+        }
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: otherRecords,
+            deletedRecordIDs: [],
+            failedRecordSaves: [
+                (
+                    record: sliceRecord,
+                    error: CKError(.networkFailure)
+                )
+            ],
+            failedRecordDeletes: [:]
+        )
+
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+        let reconciliation = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertEqual(
+            reconciliation.map(\.recordType),
+            ["ListeningSlice"]
+        )
+
+        _ = try await restoredStore.reconcileSentRecordZoneChanges(
+            savedRecords: reconciliation,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let nextSync = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(nextSync.isEmpty)
+    }
+
+    func testDeletedStatisticsRemainPendingUntilCloudKitConfirmsDeletion()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        try await fixture.statistics.reset(
+            query: StatisticsQuery(accountID: slice.accountID)
+        )
+        let recordID = CKRecord.ID(
+            recordName: "slice.\(slice.id.uuidString.lowercased())",
+            zoneID: fixture.zoneID
+        )
+
+        let initial = try await fixture.store.prepareDeletionChanges(
+            zoneID: fixture.zoneID
+        )
+        let retry = try await fixture.store.prepareDeletionChanges(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertEqual(initial, [.deleteRecord(recordID)])
+        XCTAssertEqual(retry, initial)
+
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [],
+            deletedRecordIDs: [recordID],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let confirmed = try await fixture.store.prepareDeletionChanges(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(confirmed.isEmpty)
+    }
+
+    func testFetchedRecordDoesNotOverridePendingLocalDeletion()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        try await fixture.statistics.reset(
+            query: StatisticsQuery(accountID: slice.accountID)
+        )
+        let fetched = try makeRecord(
+            type: "ListeningSlice",
+            name: "slice.\(slice.id.uuidString.lowercased())",
+            value: slice,
+            zoneID: fixture.zoneID
+        )
+
+        _ = try await fixture.store.applyFetchedRecords([fetched])
+
+        let archive = try await fixture.statistics.archive()
+        XCTAssertTrue(archive.slices.isEmpty)
+        let deletions = try await fixture.store.prepareDeletionChanges(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertEqual(deletions.count, 1)
+    }
+
+    func testValidFetchedRecordsPersistWhenAnotherRecordIsInvalid()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        let valid = try makeRecord(
+            type: "ListeningSlice",
+            name: "slice.\(slice.id.uuidString.lowercased())",
+            value: slice,
+            zoneID: fixture.zoneID
+        )
+        let invalid = CKRecord(
+            recordType: "CompletionMilestone",
+            recordID: CKRecord.ID(
+                recordName: "completion.invalid",
+                zoneID: fixture.zoneID
+            )
+        )
+        invalid[PrivateCloudSyncStore.payloadKey] =
+            Data([0x00]) as CKRecordValue
+
+        do {
+            _ = try await fixture.store.applyFetchedRecords([valid, invalid])
+            XCTFail("Expected the invalid fetched record to be reported")
+        } catch let error as PrivateCloudSyncError {
+            XCTAssertEqual(error, .invalidRecord)
+        }
+
+        let archive = try await fixture.statistics.archive()
+        XCTAssertEqual(archive.slices, [slice])
+    }
+
+    func testDeletingCloudZoneMakesLocalStatisticsUploadableAgain()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: initial,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let unchanged = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(unchanged.isEmpty)
+
+        try await fixture.store.removeAllRecords()
+
+        let afterZoneDeletion = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(
+            afterZoneDeletion.contains { $0.recordType == "ListeningSlice" }
+        )
+    }
+
+    func testAccountDeletionFindsCleanStatisticsAfterStoreRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: initial,
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        let recordIDs = try await restoredStore.recordIDs(
+            for: slice.accountID,
+            includeStatistics: true,
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertTrue(
+            recordIDs.contains {
+                $0.recordName
+                    == "slice.\(slice.id.uuidString.lowercased())"
+            }
+        )
+    }
+
+    func testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let slice = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+        try await fixture.statistics.reset(
+            query: StatisticsQuery(accountID: slice.accountID)
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+
+        let recordIDs = try await restoredStore.recordIDs(
+            for: slice.accountID,
+            includeStatistics: true,
+            zoneID: fixture.zoneID
+        )
+
+        XCTAssertEqual(
+            recordIDs.map(\.recordName),
+            ["slice.\(slice.id.uuidString.lowercased())"]
+        )
+    }
+
+    func testNestedFailurePreservesSpecificOperation() {
+        let stageFailure = PrivateCloudSyncFailure(
+            operation: .fetchChanges,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure)))
+        )
+
+        let mapped = PrivateCloudSyncCoordinator.mappedFailure(
+            operation: .synchronize,
+            error: stageFailure
+        )
+
+        XCTAssertEqual(mapped, stageFailure)
+    }
+
+    func testFetchedStatisticsBatchIsImportedIdempotently() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try (0..<100).flatMap { index -> [CKRecord] in
+            let slice = makeSlice(index: index)
+            let completion = CompletionMilestone(
+                accountID: slice.accountID,
+                itemID: slice.itemID,
+                completedAt: slice.startedAt,
+                duration: 60,
+                title: "Book",
+                author: "Author",
+                evidence: .naturalEnd
+            )
+            return try [
+                makeRecord(
+                    type: "ListeningSlice",
+                    name: "slice.\(slice.id.uuidString.lowercased())",
+                    value: slice,
+                    zoneID: fixture.zoneID
+                ),
+                makeRecord(
+                    type: "CompletionMilestone",
+                    name:
+                        "completion."
+                        + completion.id.uuidString.lowercased(),
+                    value: completion,
+                    zoneID: fixture.zoneID
+                ),
+            ]
+        }
+
+        _ = try await fixture.store.applyFetchedRecords(records)
+        _ = try await fixture.store.applyFetchedRecords(records)
+        let archive = try await fixture.statistics.archive()
+
+        XCTAssertEqual(archive.slices.count, 100)
+        XCTAssertEqual(archive.completions.count, 100)
+    }
+
     func testPendingConfigurationConflictSurvivesStoreRecreation()
         async throws
     {
@@ -890,7 +1456,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             XCTAssertEqual(error, .invalidRecord)
         }
 
-        await restoredStore.removeAllRecords()
+        try await restoredStore.removeAllRecords()
 
         XCTAssertNil(fixture.defaults.data(forKey: conflictKey))
         let preparedAfterDeletion = try await restoredStore.prepareRecords(
@@ -989,6 +1555,44 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
     }
 
+    private func makeRecord<Value: Encodable>(
+        type: CKRecord.RecordType,
+        name: String,
+        value: Value,
+        zoneID: CKRecordZone.ID
+    ) throws -> CKRecord {
+        let record = CKRecord(
+            recordType: type,
+            recordID: CKRecord.ID(recordName: name, zoneID: zoneID)
+        )
+        record[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(value) as CKRecordValue
+        return record
+    }
+
+    private func makeSlice(index: Int) -> ListeningSlice {
+        let startedAt = Date(timeIntervalSince1970: Double(index))
+        return ListeningSlice(
+            accountID: AccountID(rawValue: "account"),
+            itemID: LibraryItemID(rawValue: "item-\(index)"),
+            sessionID: PlaybackSessionID(rawValue: "session-\(index)"),
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(1),
+            startPosition: 0,
+            endPosition: 1,
+            realSeconds: 1,
+            audiobookSeconds: 1,
+            playbackRate: 1,
+            chapterID: nil,
+            chapterTitle: nil,
+            chapterStart: nil,
+            chapterEnd: nil,
+            title: "Book",
+            author: "Author",
+            duration: 60
+        )
+    }
+
     private func makeSyncStoreFixture() throws -> SyncStoreFixture {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         let modelConfiguration = ModelConfiguration(
@@ -1017,6 +1621,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             ),
             accounts: accounts,
             configuration: configuration,
+            container: container,
             defaults: recordDefaults,
             statistics: statistics,
             store: PrivateCloudSyncStore(
@@ -1035,9 +1640,22 @@ private struct SyncStoreFixture {
     let zoneID: CKRecordZone.ID
     let accounts: AccountStore
     let configuration: CloudConfigurationStore
+    let container: ModelContainer
     let defaults: UserDefaults
     let statistics: StatisticsRepository
     let store: PrivateCloudSyncStore
+}
+
+private actor PrivateCloudDiagnosticRecorderSpy: DiagnosticRecording {
+    private var recordedEvents: [DiagnosticEvent] = []
+
+    func record(_ event: DiagnosticEvent) {
+        recordedEvents.append(event)
+    }
+
+    func events() -> [DiagnosticEvent] {
+        recordedEvents
+    }
 }
 
 private struct LegacyCloudConfigurationSnapshot: Encodable {
