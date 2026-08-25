@@ -13,6 +13,20 @@ final class AppBootstrap {
 
     init() {
         let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
+        switch LegacyDiagnosticLogCleanup.removeLegacyDirectory() {
+        case .removed, .notPresent:
+            break
+        case .applicationSupportUnavailable, .removalFailed:
+            Task {
+                await diagnostics.record(
+                    .failed(
+                        .appStart,
+                        category: .app,
+                        failureCode: .localStorageUnavailable
+                    )
+                )
+            }
+        }
         let remoteTelemetry = RemoteTelemetryController()
 
         #if DEBUG || BLEAT_UI_TESTING
