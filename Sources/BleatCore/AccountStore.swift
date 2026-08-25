@@ -123,6 +123,21 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
+    func reidentified(
+        as accountID: AccountID
+    ) throws(ServerAccountValidationError) -> ServerAccount {
+        try ServerAccount(
+            id: accountID,
+            server: server,
+            localServer: localServer,
+            localServerValidated: localServerValidated,
+            serverVersion: serverVersion,
+            authenticationMethods: authenticationMethods,
+            user: user,
+            connectionState: connectionState
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case server
@@ -204,12 +219,71 @@ public final class ServerAccountRecord {
     }
 }
 
+@Model
+public final class AccountIdentityAliasRecord {
+    @Attribute(.unique)
+    var legacyAccountID: String
+    var canonicalAccountID: String
+
+    init(legacyAccountID: String, canonicalAccountID: String) {
+        self.legacyAccountID = legacyAccountID
+        self.canonicalAccountID = canonicalAccountID
+    }
+}
+
+public enum AccountCacheKind: String, Equatable, Sendable {
+    case libraryCollection
+    case library
+    case libraryPage
+    case librarySearch
+    case libraryHome
+    case bookDetail
+    case chapterTranscript
+    case transcriptionTask
+}
+
+public enum AccountCacheIdentityMigrationCause: Equatable, Sendable {
+    case malformedKey
+    case invalidPayload
+    case ambiguousCollision
+}
+
+public struct AccountCacheIdentityMigrationResidual: Equatable, Sendable {
+    public let legacyAccountID: AccountID
+    public let canonicalAccountID: AccountID
+    public let kind: AccountCacheKind
+    public let cause: AccountCacheIdentityMigrationCause
+}
+
+public struct AccountIdentityMigrationReport: Equatable, Sendable {
+    public let residuals: [AccountCacheIdentityMigrationResidual]
+
+    public init(residuals: [AccountCacheIdentityMigrationResidual] = []) {
+        self.residuals = residuals
+    }
+}
+
 public enum AccountStoreError: Error, Equatable, Sendable {
     case accountNotFound(AccountID)
     case duplicateRemoteAccount(existingAccountID: AccountID)
     case profileEncodingFailed
     case invalidStoredAccount(AccountID)
+    case contradictoryIdentityAlias(
+        legacyID: AccountID,
+        existingCanonicalID: AccountID,
+        requestedCanonicalID: AccountID
+    )
     case persistenceFailed
+}
+
+public struct AccountIdentityMigration: Equatable, Sendable {
+    public let legacyID: AccountID
+    public let canonicalID: AccountID
+
+    public init(legacyID: AccountID, canonicalID: AccountID) {
+        self.legacyID = legacyID
+        self.canonicalID = canonicalID
+    }
 }
 
 public enum AccountOnboardingError: Error, Equatable, Sendable {
@@ -232,6 +306,423 @@ public enum AccountLifecycleError: Error, Equatable, Sendable {
 
 @ModelActor
 public actor AccountStore {
+    public func legacyIdentityMigrations() throws(AccountStoreError)
+        -> [AccountIdentityMigration]
+    {
+        try accounts().compactMap { account in
+            let canonicalID = AccountID.canonical(
+                server: account.server,
+                userID: account.user.id
+            )
+            guard canonicalID != account.id else {
+                return nil
+            }
+            return AccountIdentityMigration(
+                legacyID: account.id,
+                canonicalID: canonicalID
+            )
+        }
+    }
+
+    @discardableResult
+    public func applyIdentityMigrations(
+        _ migrations: [AccountIdentityMigration]
+    ) throws(AccountStoreError) -> AccountIdentityMigrationReport {
+        guard !migrations.isEmpty else { return AccountIdentityMigrationReport() }
+        var mapping: [String: String] = [:]
+        for migration in migrations {
+            if let existing = mapping[migration.legacyID.rawValue],
+                existing != migration.canonicalID.rawValue
+            {
+                throw .contradictoryIdentityAlias(
+                    legacyID: migration.legacyID,
+                    existingCanonicalID: AccountID(rawValue: existing),
+                    requestedCanonicalID: migration.canonicalID
+                )
+            }
+            mapping[migration.legacyID.rawValue] =
+                migration.canonicalID.rawValue
+        }
+        return try applyIdentityChanges(mapping: mapping, replacements: [:])
+    }
+
+    @discardableResult
+    public func replaceAccountIdentity(
+        from legacyID: AccountID,
+        with account: ServerAccount
+    ) throws(AccountStoreError) -> AccountIdentityMigrationReport {
+        guard legacyID != account.id else {
+            try save(account)
+            return AccountIdentityMigrationReport()
+        }
+        return try applyIdentityChanges(
+            mapping: [legacyID.rawValue: account.id.rawValue],
+            replacements: [legacyID.rawValue: account]
+        )
+    }
+
+    private func applyIdentityChanges(
+        mapping: [String: String],
+        replacements: [String: ServerAccount]
+    ) throws(AccountStoreError) -> AccountIdentityMigrationReport {
+        do {
+            let accountRecords = try modelContext.fetch(
+                FetchDescriptor<ServerAccountRecord>()
+            )
+            for (legacy, canonical) in mapping
+            where accountRecords.contains(where: {
+                $0.accountID == canonical && $0.accountID != legacy
+            }) {
+                throw AccountStoreError.duplicateRemoteAccount(
+                    existingAccountID: AccountID(rawValue: canonical)
+                )
+            }
+            for record in accountRecords {
+                guard let canonical = mapping[record.accountID] else {
+                    continue
+                }
+                let migrated = try replacements[record.accountID]
+                    ?? decode(record).reidentified(
+                        as: AccountID(rawValue: canonical)
+                    )
+                record.accountID = canonical
+                record.serverURL = migrated.server.url.absoluteString
+                record.remoteUserID = migrated.user.id.rawValue
+                record.profileData = try JSONEncoder().encode(migrated)
+            }
+            let aliases = try modelContext.fetch(
+                FetchDescriptor<AccountIdentityAliasRecord>()
+            )
+            for (legacy, canonical) in mapping {
+                if let alias = aliases.first(where: {
+                    $0.legacyAccountID == legacy
+                }) {
+                    guard alias.canonicalAccountID == canonical else {
+                        throw AccountStoreError.contradictoryIdentityAlias(
+                            legacyID: AccountID(rawValue: legacy),
+                            existingCanonicalID: AccountID(
+                                rawValue: alias.canonicalAccountID
+                            ),
+                            requestedCanonicalID: AccountID(
+                                rawValue: canonical
+                            )
+                        )
+                    }
+                } else {
+                    modelContext.insert(AccountIdentityAliasRecord(
+                        legacyAccountID: legacy,
+                        canonicalAccountID: canonical
+                    ))
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<ListeningSliceRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<CompletionMilestoneRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<RemoteListeningSessionRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.compositeID = RemoteListeningSessionRecord
+                        .compositeID(
+                            accountID: AccountID(rawValue: canonical),
+                            sessionID: PlaybackSessionID(
+                                rawValue: record.sessionID
+                            )
+                        )
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<StatisticsSessionAccountingRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.compositeID = StatisticsSessionAccountingRecord
+                        .compositeID(
+                            accountID: AccountID(rawValue: canonical),
+                            sessionID: PlaybackSessionID(
+                                rawValue: record.sessionID
+                            )
+                        )
+                }
+            }
+            let residuals = try migrateLegacyCaches(mapping: mapping)
+            try modelContext.save()
+            return AccountIdentityMigrationReport(residuals: residuals)
+        } catch let error as AccountStoreError {
+            modelContext.rollback()
+            throw error
+        } catch {
+            modelContext.rollback()
+            throw .persistenceFailed
+        }
+    }
+
+    public func identityAliases() throws(AccountStoreError)
+        -> [AccountIdentityMigration]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<AccountIdentityAliasRecord>()
+            ).map {
+                AccountIdentityMigration(
+                    legacyID: AccountID(rawValue: $0.legacyAccountID),
+                    canonicalID: AccountID(rawValue: $0.canonicalAccountID)
+                )
+            }.sorted { $0.legacyID.rawValue < $1.legacyID.rawValue }
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    private func migrateLegacyCaches(
+        mapping: [String: String]
+    ) throws -> [AccountCacheIdentityMigrationResidual] {
+        var residuals: [AccountCacheIdentityMigrationResidual] = []
+        let decoder = JSONDecoder()
+
+        func residual(
+            accountID: String,
+            kind: AccountCacheKind,
+            cause: AccountCacheIdentityMigrationCause
+        ) {
+            guard let canonical = mapping[accountID] else { return }
+            residuals.append(AccountCacheIdentityMigrationResidual(
+                legacyAccountID: AccountID(rawValue: accountID),
+                canonicalAccountID: AccountID(rawValue: canonical),
+                kind: kind,
+                cause: cause
+            ))
+        }
+
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryCollectionRecord>()
+        ) {
+            guard let canonical = mapping[record.accountID] else { continue }
+            let records = try modelContext.fetch(
+                FetchDescriptor<CachedLibraryCollectionRecord>()
+            )
+            if let existing = records.first(where: {
+                $0.accountID == canonical && $0 !== record
+            }) {
+                if existing.refreshedAt >= record.refreshedAt {
+                    modelContext.delete(record)
+                } else {
+                    modelContext.delete(existing)
+                    record.accountID = canonical
+                }
+            } else {
+                record.accountID = canonical
+            }
+        }
+
+        func replacementKey(_ key: String, legacy: String, canonical: String)
+            -> String?
+        {
+            let bytes = Array(key.utf8)
+            guard let colon = bytes.firstIndex(of: 58), colon > 0,
+                let length = Int(String(decoding: bytes[..<colon], as: UTF8.self))
+            else { return nil }
+            let valueStart = colon + 1
+            let valueEnd = valueStart + length
+            guard valueEnd <= bytes.count,
+                String(decoding: bytes[valueStart..<valueEnd], as: UTF8.self)
+                    == legacy
+            else { return nil }
+            return "\(canonical.utf8.count):\(canonical)"
+                + String(decoding: bytes[valueEnd...], as: UTF8.self)
+        }
+
+        func migrate<Record: PersistentModel & AnyObject, Value: Decodable & Equatable>(
+            _ records: [Record],
+            kind: AccountCacheKind,
+            account: ReferenceWritableKeyPath<Record, String>,
+            key: ReferenceWritableKeyPath<Record, String>,
+            payload: KeyPath<Record, Data>,
+            timestamp: KeyPath<Record, Date>,
+            value: Value.Type,
+            identity: (Record) -> [String],
+            targetKey: (Record, String, String) -> String?
+        ) {
+            let targetKeys: [ObjectIdentifier: String] = Dictionary(
+                uniqueKeysWithValues: records.compactMap { record in
+                    let legacy = record[keyPath: account]
+                    guard let canonical = mapping[legacy],
+                        let target = targetKey(record, legacy, canonical)
+                    else { return nil }
+                    return (ObjectIdentifier(record), target)
+                }
+            )
+            var deleted: Set<ObjectIdentifier> = []
+            for record in records {
+                let recordIdentity = ObjectIdentifier(record)
+                guard !deleted.contains(recordIdentity) else { continue }
+                let legacy = record[keyPath: account]
+                guard let canonical = mapping[legacy] else { continue }
+                guard let targetKey = targetKey(record, legacy, canonical)
+                else {
+                    residual(accountID: legacy, kind: kind, cause: .malformedKey)
+                    continue
+                }
+                guard let decoded = try? decoder.decode(
+                    value,
+                    from: record[keyPath: payload]
+                ) else {
+                    residual(accountID: legacy, kind: kind, cause: .invalidPayload)
+                    continue
+                }
+                let collisions = records.filter {
+                    let identity = ObjectIdentifier($0)
+                    return $0 !== record && !deleted.contains(identity)
+                        && ($0[keyPath: key] == targetKey
+                            || targetKeys[identity] == targetKey)
+                }
+                guard let existing = collisions.first else {
+                    record[keyPath: account] = canonical
+                    record[keyPath: key] = targetKey
+                    continue
+                }
+                guard let existingValue = try? decoder.decode(
+                    value,
+                    from: existing[keyPath: payload]
+                ), identity(record) == identity(existing) else {
+                    residual(accountID: legacy, kind: kind, cause: .ambiguousCollision)
+                    continue
+                }
+                let recordDate = record[keyPath: timestamp]
+                let existingDate = existing[keyPath: timestamp]
+                if recordDate == existingDate && decoded != existingValue {
+                    residual(accountID: legacy, kind: kind, cause: .ambiguousCollision)
+                } else if recordDate > existingDate {
+                    modelContext.delete(existing)
+                    deleted.insert(ObjectIdentifier(existing))
+                    record[keyPath: account] = canonical
+                    record[keyPath: key] = targetKey
+                } else {
+                    modelContext.delete(record)
+                    deleted.insert(recordIdentity)
+                }
+            }
+        }
+
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedLibraryRecord>()),
+            kind: .library,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.refreshedAt,
+            value: LibrarySummary.self,
+            identity: { [$0.libraryID, String($0.position)] },
+            targetKey: { record, legacy, canonical in
+                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+            }
+        )
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedLibraryPageRecord>()),
+            kind: .libraryPage,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.refreshedAt,
+            value: LibraryItemsPage.self,
+            identity: { [$0.libraryID] },
+            targetKey: { record, legacy, canonical in
+                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+            }
+        )
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedLibrarySearchRecord>()),
+            kind: .librarySearch,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.refreshedAt,
+            value: LibrarySearchResults.self,
+            identity: { [$0.libraryID] },
+            targetKey: { record, legacy, canonical in
+                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+            }
+        )
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedLibraryHomeRecord>()),
+            kind: .libraryHome,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.refreshedAt,
+            value: [LibraryBookShelf].self,
+            identity: { [$0.libraryID] },
+            targetKey: { record, legacy, canonical in
+                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+            }
+        )
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedLibraryBookDetailRecord>()),
+            kind: .bookDetail,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.refreshedAt,
+            value: LibraryBookDetail.self,
+            identity: { [$0.userID, $0.libraryID, $0.libraryItemID] },
+            targetKey: { record, legacy, canonical in
+                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+            }
+        )
+        migrate(
+            try modelContext.fetch(FetchDescriptor<CachedChapterTranscriptRecord>()),
+            kind: .chapterTranscript,
+            account: \.accountID,
+            key: \.cacheKey,
+            payload: \.payload,
+            timestamp: \.updatedAt,
+            value: CachedChapterTranscript.self,
+            identity: { [$0.libraryItemID, String($0.chapterID)] },
+            targetKey: { record, _, canonical in
+                [canonical, record.libraryItemID, String(record.chapterID)]
+                    .map { "\($0.utf8.count):\($0)" }.joined()
+            }
+        )
+        migrate(
+            try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
+            ),
+            kind: .transcriptionTask,
+            account: \.accountID,
+            key: \.taskKey,
+            payload: \.payload,
+            timestamp: \.finishedAt,
+            value: CachedChapterTranscriptionTaskState.self,
+            identity: { [$0.libraryItemID] },
+            targetKey: { record, _, canonical in
+                [canonical, record.libraryItemID]
+                    .map { "\($0.utf8.count):\($0)" }.joined()
+            }
+        )
+        return residuals
+    }
     public func save(
         _ account: ServerAccount,
         makeActive: Bool = false
@@ -282,6 +773,30 @@ public actor AccountStore {
                 isActiveBrowsingAccount: shouldActivate
             ))
         }
+        try saveContext()
+    }
+
+    /// Stores an account restored from iCloud without making it usable until
+    /// this device has authenticated the expected remote user.
+    public func savePendingRestoredAccount(
+        _ account: ServerAccount
+    ) throws(AccountStoreError) {
+        let pending: ServerAccount
+        do {
+            pending = try account.updatingConnectionState(
+                .reauthenticationRequired
+            )
+        } catch {
+            throw .profileEncodingFailed
+        }
+        try save(pending)
+        let records = try fetchRecords()
+        guard let record = records.first(where: {
+            $0.accountID == pending.id.rawValue
+        }) else {
+            throw .accountNotFound(pending.id)
+        }
+        record.isActiveBrowsingAccount = false
         try saveContext()
     }
 
@@ -394,6 +909,56 @@ public actor AccountStore {
         }
         let removedActiveAccount = record.isActiveBrowsingAccount
         modelContext.delete(record)
+        do {
+            let aliases = try modelContext.fetch(
+                FetchDescriptor<AccountIdentityAliasRecord>()
+            ).filter { $0.canonicalAccountID == id.rawValue }
+            let legacyIDs = Set(aliases.map(\.legacyAccountID))
+            for alias in aliases { modelContext.delete(alias) }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibraryCollectionRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibraryRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibraryPageRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibrarySearchRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibraryHomeRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedLibraryBookDetailRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+        } catch {
+            modelContext.rollback()
+            throw .persistenceFailed
+        }
         if removedActiveAccount,
            let replacement = records
                .filter({ $0 !== record })
@@ -457,19 +1022,53 @@ extension AuthCoordinator {
             throw .localAuthenticationUnavailable
         }
 
-        let authenticated: AuthenticatedAccount
+        let authentication: LocalAuthenticationResult
         do {
-            authenticated = try await login(
+            authentication = try await Self.authenticateLocally(
                 accountID: accountID,
                 server: discoveredServer.baseURL,
                 username: username,
                 password: password,
-                expectedUserID: expectedUserID
+                expectedUserID: expectedUserID,
+                persistCredentials: false,
+                transport: transport,
+                credentialStore: credentialStore
             )
         } catch let error as LocalAuthenticationError {
             throw .authenticationFailed(error)
         } catch {
             throw .authenticationRequestFailed
+        }
+
+        let canonicalID = AccountID.canonical(
+            server: discoveredServer.baseURL,
+            userID: authentication.account.user.id
+        )
+        let authenticated = AuthenticatedAccount(
+            id: canonicalID,
+            server: authentication.account.server,
+            user: authentication.account.user
+        )
+        do {
+            let nativeLogin = try NativeLoginCredentials(
+                userID: authenticated.user.id,
+                username: username,
+                password: password
+            )
+            try await credentialStore.save(
+                authentication.tokens,
+                nativeLogin: nativeLogin,
+                for: canonicalID
+            )
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw .authenticationFailed(.credentialStorageUnavailable)
+            default:
+                throw .authenticationFailed(.credentialPersistenceFailed)
+            }
+        } catch {
+            throw .authenticationFailed(.credentialPersistenceFailed)
         }
 
         await onAuthenticationCompleted()
@@ -482,7 +1081,7 @@ extension AuthCoordinator {
             )
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: canonicalID,
                 originalError: .invalidAccount(error)
             )
         }
@@ -491,10 +1090,79 @@ extension AuthCoordinator {
             try await accountStore.save(account, makeActive: makeActive)
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: canonicalID,
                 originalError: .accountPersistenceFailed(error)
             )
         }
+        return account
+    }
+
+    public func loginForPersistedAccountUpdate(
+        previousAccountID: AccountID,
+        discoveredServer: DiscoveredServer,
+        username: String,
+        password: String,
+        expectedUserID: UserID,
+        onAuthenticationCompleted: @escaping @Sendable () async -> Void = {}
+    ) async throws(AccountOnboardingError) -> ServerAccount {
+        guard discoveredServer.authenticationMethods.contains(.local) else {
+            throw .localAuthenticationUnavailable
+        }
+        let authentication: LocalAuthenticationResult
+        do {
+            authentication = try await Self.authenticateLocally(
+                accountID: previousAccountID,
+                server: discoveredServer.baseURL,
+                username: username,
+                password: password,
+                expectedUserID: expectedUserID,
+                persistCredentials: false,
+                transport: transport,
+                credentialStore: credentialStore
+            )
+        } catch let error as LocalAuthenticationError {
+            throw .authenticationFailed(error)
+        } catch {
+            throw .authenticationRequestFailed
+        }
+        let canonicalID = AccountID.canonical(
+            server: discoveredServer.baseURL,
+            userID: authentication.account.user.id
+        )
+        let authenticated = AuthenticatedAccount(
+            id: canonicalID,
+            server: authentication.account.server,
+            user: authentication.account.user
+        )
+        let account: ServerAccount
+        do {
+            account = try ServerAccount(
+                authenticatedAccount: authenticated,
+                discoveredServer: discoveredServer
+            )
+            let nativeLogin = try NativeLoginCredentials(
+                userID: authenticated.user.id,
+                username: username,
+                password: password
+            )
+            try await credentialStore.save(
+                authentication.tokens,
+                nativeLogin: nativeLogin,
+                for: canonicalID
+            )
+        } catch let error as ServerAccountValidationError {
+            throw .invalidAccount(error)
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw .authenticationFailed(.credentialStorageUnavailable)
+            default:
+                throw .authenticationFailed(.credentialPersistenceFailed)
+            }
+        } catch {
+            throw .authenticationFailed(.credentialPersistenceFailed)
+        }
+        await onAuthenticationCompleted()
         return account
     }
 

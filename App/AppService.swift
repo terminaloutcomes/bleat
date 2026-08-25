@@ -151,6 +151,8 @@ enum AppServiceError: Error, Equatable, Sendable {
     case discoveryRequestFailed
     case onboarding(AccountOnboardingError)
     case accountStore(AccountStoreError)
+    case credentialStore(TokenVaultError)
+    case accountIdentityMigration(AccountIdentityMigrationFailure)
     case libraryRepository(LibraryRepositoryError)
     case pageRequest(LibraryPageRequestError)
     case homeRequest(LibraryHomeRequestError)
@@ -174,6 +176,13 @@ enum AppServiceError: Error, Equatable, Sendable {
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
     case privateCloud(PrivateCloudSyncFailure)
+}
+
+enum AccountIdentityMigrationFailure: Error, Equatable, Sendable {
+    case downloads(DownloadStorageError)
+    case bookmarks
+    case localPlaybackSessions
+    case playbackPositions
 }
 
 enum LocalServerValidationPolicy: Equatable, Sendable {
@@ -409,6 +418,15 @@ protocol AppServicing: Sendable {
         _ account: ServerAccount,
         password: String
     ) async throws(AppServiceError) -> ServerAccount
+
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount
+
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount?
 
     func reauthenticateWithOpenID(
         _ account: ServerAccount,
@@ -656,6 +674,10 @@ protocol AppServicing: Sendable {
         accept: Bool
     ) async throws(AppServiceError)
 
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError)
+
     func setPrivateCloudSyncEnabled(
         _ enabled: Bool,
         deleteCloudData: Bool
@@ -668,6 +690,49 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount? {
+        nil
+    }
+
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        guard !password.isEmpty else {
+            throw .passwordRequiredForCredentialChange
+        }
+        let authenticated = try await reauthenticate(
+            account,
+            password: password
+        )
+        guard authenticated.id == account.id else {
+            throw .onboarding(.authenticationFailed(.invalidAccountID))
+        }
+        guard authenticated.user.id == account.user.id else {
+            throw .onboarding(
+                .authenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: account.user.id.rawValue,
+                        actual: authenticated.user.id.rawValue
+                    )
+                )
+            )
+        }
+        try await activateAccount(authenticated)
+        return authenticated
+    }
+
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        try await resolvePrivateCloudServerConfigurationChange(
+            accountID: account.id,
+            accept: true
+        )
+    }
+
     func refreshedLibraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {
@@ -942,10 +1007,127 @@ actor LiveAppService: AppServicing {
     private let transcriptCache: ChapterTranscriptCache
     private let statisticsRepository: StatisticsRepository
     private let privateCloudSync: PrivateCloudSyncCoordinator?
+    private var didMigrateAccountIdentities = false
     private var networkPathMonitor: AppNetworkPathMonitor?
     private struct LiveClientRegistration: Sendable {
         let token: UUID
         let client: AudiobookshelfLiveEventClient
+    }
+
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        try await authenticateRestoredAccount(
+            account,
+            password: password,
+            preserveSynchronizedLoginOnFailure: false
+        )
+    }
+
+    private func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String,
+        preserveSynchronizedLoginOnFailure: Bool
+    ) async throws(AppServiceError) -> ServerAccount {
+        guard !password.isEmpty else {
+            throw .passwordRequiredForCredentialChange
+        }
+        let authenticated = try await reauthenticate(
+            account,
+            password: password
+        )
+        guard authenticated.id == account.id else {
+            try? await credentialStore.deleteSessionCredentials(
+                for: account.id
+            )
+            throw .onboarding(.authenticationFailed(.invalidAccountID))
+        }
+        guard authenticated.user.id == account.user.id else {
+            try? await credentialStore.deleteSessionCredentials(
+                for: account.id
+            )
+            throw .onboarding(
+                .authenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: account.user.id.rawValue,
+                        actual: authenticated.user.id.rawValue
+                    )
+                )
+            )
+        }
+        do {
+            try await accountStore.setActiveAccount(id: authenticated.id)
+            return authenticated
+        } catch let error {
+            if preserveSynchronizedLoginOnFailure {
+                try? await credentialStore.deleteSessionCredentials(
+                    for: account.id
+                )
+            } else {
+                try? await credentialStore.deleteCredentials(for: account.id)
+            }
+            try? await accountStore.setConnectionState(
+                .reauthenticationRequired,
+                for: account.id
+            )
+            throw .accountStore(error)
+        }
+    }
+
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount? {
+        let savedLogin: NativeLoginCredentials
+        do {
+            guard let credentials = try await credentialStore
+                .nativeLoginCredentials(for: account.id),
+                credentials.userID == account.user.id
+            else {
+                return nil
+            }
+            savedLogin = credentials
+        } catch {
+            return nil
+        }
+        do {
+            return try await authenticateRestoredAccount(
+                account,
+                password: savedLogin.password,
+                preserveSynchronizedLoginOnFailure: true
+            )
+        } catch let error {
+            switch error {
+            case .onboarding(.authenticationFailed),
+                .onboarding(.authenticationRequestFailed),
+                .onboarding(.localAuthenticationUnavailable):
+                return nil
+            default:
+                throw error
+            }
+        }
+    }
+
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .disabled
+                )
+            )
+        }
+        do {
+            try await privateCloudSync.resolveServerConfigurationChange(
+                accountID: account.id,
+                selected: account,
+                accept: true
+            )
+        } catch let error {
+            throw .privateCloud(error)
+        }
     }
 
     private var liveClients: [AccountID: LiveClientRegistration] = [:]
@@ -1469,6 +1651,7 @@ actor LiveAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
+        try await migrateAccountIdentitiesIfNeeded()
         startNetworkPathMonitoring()
         do {
             let accounts = try await accountStore.accounts()
@@ -1501,10 +1684,95 @@ actor LiveAppService: AppServicing {
     func activeAccount()
         async throws(AppServiceError) -> ServerAccount?
     {
+        try await migrateAccountIdentitiesIfNeeded()
         do {
             return try await accountStore.activeAccount()
         } catch let error {
             throw .accountStore(error)
+        }
+    }
+
+    private func migrateAccountIdentitiesIfNeeded()
+        async throws(AppServiceError)
+    {
+        guard !didMigrateAccountIdentities else { return }
+        let migrations: [AccountIdentityMigration]
+        do {
+            migrations = try await accountStore.legacyIdentityMigrations()
+            guard !migrations.isEmpty else {
+                didMigrateAccountIdentities = true
+                return
+            }
+            let downloadStorage = try DownloadStorage(
+                layout: DownloadStorageLayout.applicationSupport()
+            )
+            for migration in migrations {
+                try await credentialStore.migrateCredentials(
+                    from: migration.legacyID,
+                    to: migration.canonicalID
+                )
+                try await migrateAuxiliaryAccountData(
+                    migration,
+                    downloadStorage: downloadStorage
+                )
+            }
+            try await accountStore.applyIdentityMigrations(migrations)
+            for migration in migrations {
+                try await credentialStore.removeLegacyCredentials(
+                    after: migration
+                )
+            }
+            didMigrateAccountIdentities = true
+        } catch let error as AccountStoreError {
+            throw .accountStore(error)
+        } catch let error as TokenVaultError {
+            throw .credentialStore(error)
+        } catch let error as DownloadStorageError {
+            throw .accountIdentityMigration(.downloads(error))
+        } catch let error as AccountIdentityMigrationFailure {
+            throw .accountIdentityMigration(error)
+        } catch {
+            throw .accountStore(.persistenceFailed)
+        }
+    }
+
+    private func migrateAuxiliaryAccountData(
+        _ migration: AccountIdentityMigration,
+        downloadStorage: DownloadStorage
+    ) async throws {
+        try await downloadStorage.migrateAccountIdentity(
+            from: migration.legacyID,
+            to: migration.canonicalID
+        )
+        do {
+            try await MainActor.run {
+                try BookmarkMutationStore.shared.migrateAccountIdentity(
+                    from: migration.legacyID,
+                    to: migration.canonicalID
+                )
+            }
+        } catch {
+            throw AccountIdentityMigrationFailure.bookmarks
+        }
+        do {
+            try await MainActor.run {
+                try LocalPlaybackSessionStore.shared.migrateAccountIdentity(
+                    from: migration.legacyID,
+                    to: migration.canonicalID
+                )
+            }
+        } catch {
+            throw AccountIdentityMigrationFailure.localPlaybackSessions
+        }
+        do {
+            try await MainActor.run {
+                try PlaybackPositionStore.shared.migrateAccountIdentity(
+                    from: migration.legacyID,
+                    to: migration.canonicalID
+                )
+            }
+        } catch {
+            throw AccountIdentityMigrationFailure.playbackPositions
         }
     }
 
@@ -1610,8 +1878,12 @@ actor LiveAppService: AppServicing {
                         server: primary,
                         expectedUserID: account.user.id
                     )
+                let canonicalID = AccountID.canonical(
+                    server: primary,
+                    userID: authenticated.user.id
+                )
                 persisted = try ServerAccount(
-                    id: account.id,
+                    id: canonicalID,
                     server: primary,
                     serverVersion: discoveredPrimary.version.original,
                     authenticationMethods:
@@ -1620,28 +1892,73 @@ actor LiveAppService: AppServicing {
                     connectionState: account.connectionState
                 )
                 await progress(.savingAccount)
-                try await accountStore.save(persisted)
+                if canonicalID == account.id {
+                    try await accountStore.save(persisted)
+                } else {
+                    let migration = AccountIdentityMigration(
+                        legacyID: account.id,
+                        canonicalID: canonicalID
+                    )
+                    try await credentialStore.migrateCredentials(
+                        from: account.id,
+                        to: canonicalID
+                    )
+                    let downloadStorage = try DownloadStorage(
+                        layout: DownloadStorageLayout.applicationSupport()
+                    )
+                    try await migrateAuxiliaryAccountData(
+                        migration,
+                        downloadStorage: downloadStorage
+                    )
+                    try await accountStore.replaceAccountIdentity(
+                        from: account.id,
+                        with: persisted
+                    )
+                    try await credentialStore.removeLegacyCredentials(
+                        after: migration
+                    )
+                }
             } else {
                 await progress(.signingIn)
                 persisted =
                     try await authenticationCoordinator
-                    .loginAndPersistAccount(
-                        accountID: account.id,
+                    .loginForPersistedAccountUpdate(
+                        previousAccountID: account.id,
                         discoveredServer: discoveredPrimary,
                         username: username,
                         password: password,
                         expectedUserID: account.user.id,
-                        accountStore: accountStore,
-                        makeActive: false,
                         onAuthenticationCompleted: {
                             await progress(.savingAccount)
                         }
                     )
+                if persisted.id != account.id {
+                    let migration = AccountIdentityMigration(
+                        legacyID: account.id,
+                        canonicalID: persisted.id
+                    )
+                    let downloadStorage = try DownloadStorage(
+                        layout: DownloadStorageLayout.applicationSupport()
+                    )
+                    try await migrateAuxiliaryAccountData(
+                        migration,
+                        downloadStorage: downloadStorage
+                    )
+                    try await accountStore.replaceAccountIdentity(
+                        from: account.id,
+                        with: persisted
+                    )
+                    try await credentialStore.removeLegacyCredentials(
+                        after: migration
+                    )
+                } else {
+                    try await accountStore.save(persisted)
+                }
             }
             try await accountStore.setLocalServer(
                 local,
                 validated: localValidated,
-                for: account.id
+                for: persisted.id
             )
             let updated = try persisted.updatingLocalServer(
                 local,
@@ -1669,6 +1986,12 @@ actor LiveAppService: AppServicing {
             throw .onboarding(.invalidAccount(error))
         } catch let error as AccountStoreError {
             throw .accountStore(error)
+        } catch let error as TokenVaultError {
+            throw .credentialStore(error)
+        } catch let error as DownloadStorageError {
+            throw .accountIdentityMigration(.downloads(error))
+        } catch let error as AccountIdentityMigrationFailure {
+            throw .accountIdentityMigration(error)
         } catch {
             throw .accountStore(.profileEncodingFailed)
         }

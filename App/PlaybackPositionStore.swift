@@ -80,6 +80,27 @@ final class PlaybackPositionStore {
         defaults.set(data, forKey: storageKey)
     }
 
+    func migrateAccountIdentity(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws(PlaybackPositionStoreError) {
+        let legacyPrefix = accountPrefix(legacyID)
+        let canonicalPrefix = accountPrefix(canonicalID)
+        var positions = storedPositions()
+        for key in positions.keys where key.hasPrefix(legacyPrefix) {
+            guard let value = positions.removeValue(forKey: key) else {
+                continue
+            }
+            let migratedKey = canonicalPrefix
+                + key.dropFirst(legacyPrefix.count)
+            positions[migratedKey] = max(positions[migratedKey] ?? 0, value)
+        }
+        guard let data = try? JSONEncoder().encode(positions) else {
+            throw .persistenceFailed
+        }
+        defaults.set(data, forKey: storageKey)
+    }
+
     private func storedPositions() -> [String: Double] {
         guard
             let data = defaults.data(forKey: storageKey),
@@ -97,7 +118,10 @@ final class PlaybackPositionStore {
         accountID: AccountID,
         itemID: LibraryItemID
     ) -> String {
+        accountPrefix(accountID) + itemID.rawValue
+    }
+
+    private func accountPrefix(_ accountID: AccountID) -> String {
         "\(accountID.rawValue.utf8.count):\(accountID.rawValue)"
-            + itemID.rawValue
     }
 }

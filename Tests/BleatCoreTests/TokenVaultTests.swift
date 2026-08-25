@@ -81,6 +81,71 @@ final class TokenVaultTests: XCTestCase {
         #endif
     }
 
+    func testIdentityMigrationPreservesExistingCanonicalCredentials()
+        async throws
+    {
+        #if targetEnvironment(simulator)
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
+            )
+        #else
+            let suffix = UUID().uuidString
+            let store = TokenVault(
+                tokenService: "com.terminaloutcomes.bleat.tests.token.\(suffix)",
+                nativeLoginService:
+                    "com.terminaloutcomes.bleat.tests.login.\(suffix)",
+                legacyService: nil,
+                synchronizesNativeLogin: false
+            )
+            let legacyID = AccountID(rawValue: "legacy")
+            let canonicalID = AccountID(rawValue: "canonical")
+            let legacyTokens = try AuthenticationTokens(
+                accessToken: "legacy-access",
+                refreshToken: "legacy-refresh"
+            )
+            let canonicalTokens = try AuthenticationTokens(
+                accessToken: "canonical-access",
+                refreshToken: "canonical-refresh"
+            )
+            let legacyLogin = try NativeLoginCredentials(
+                userID: UserID(rawValue: "user"),
+                username: "legacy-reader",
+                password: "legacy-password"
+            )
+            let canonicalLogin = try NativeLoginCredentials(
+                userID: UserID(rawValue: "user"),
+                username: "canonical-reader",
+                password: "canonical-password"
+            )
+            addTeardownBlock {
+                try await store.deleteCredentials(for: legacyID)
+                try await store.deleteCredentials(for: canonicalID)
+            }
+            try await store.save(
+                legacyTokens,
+                nativeLogin: legacyLogin,
+                for: legacyID
+            )
+            try await store.save(
+                canonicalTokens,
+                nativeLogin: canonicalLogin,
+                for: canonicalID
+            )
+
+            try await store.migrateCredentials(
+                from: legacyID,
+                to: canonicalID
+            )
+
+            let migratedTokens = try await store.credentials(for: canonicalID)
+            let migratedLogin = try await store.nativeLoginCredentials(
+                for: canonicalID
+            )
+            XCTAssertEqual(migratedTokens, canonicalTokens)
+            XCTAssertEqual(migratedLogin, canonicalLogin)
+        #endif
+    }
+
     func testRejectsEmptyAccountID() async throws {
         let store = TokenVault(
             service: "com.terminaloutcomes.bleat.tests.\(UUID().uuidString)"

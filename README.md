@@ -485,6 +485,15 @@ local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
 
+Account identity is deterministic from the normalized primary server URL and
+Audiobookshelf user ID, so the same server user is one account on every device;
+an optional local-network URL does not change that identity. On upgrade, Bleat
+rekeys legacy device-generated account IDs across local persistence, pending
+mutations, downloads, caches, Keychain credentials, and private CloudKit data.
+Canonical CloudKit replacements are saved before obsolete legacy records are
+deleted. This migration changes record data only and requires no CloudKit
+Dashboard schema deployment.
+
 Launch restores local accounts and downloads before starting private iCloud
 synchronization as background maintenance. A slow CloudKit operation never
 holds the app on its launch screen. Settings exposes active synchronization,
@@ -515,10 +524,20 @@ differ and asks whether to upload this device's complete current settings or
 apply the complete iCloud settings. The pending choice survives relaunch and
 blocks automatic configuration uploads until it is resolved.
 
+On a fresh installation, the signed-out form shows **Sync from iCloud** while
+CloudKit is enabled. Automatic and manual restore share one synchronization
+task and visibly report progress, an empty private zone, or the typed iCloud
+failure. Restored account alternatives appear together as selectable cards
+showing only the main server, optional local server, and username. A restored
+descriptor remains inactive until this device authenticates the expected
+Audiobookshelf user; if no synchronized native password is available, Bleat
+prefills a dedicated password-required continuation. Rotating tokens remain
+device-only.
+
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from
-CloudKit is never applied silently: Bleat shows the current and incoming server
-URLs and asks whether to use the iCloud settings or keep this device's settings.
+CloudKit is never applied silently: Bleat aggregates the structurally distinct
+choices and requires one complete server configuration to be selected.
 Each pushed descriptor carries a generation ID and its predecessor identity, so
 a delayed predecessor is ignored instead of prompting or reverting the device.
 Keeping the device settings pushes them back to CloudKit.
@@ -788,8 +807,9 @@ another standard Audiobookshelf username/password login.
 Switching the browsing account does not stop current playback or unrelated
 background downloads.
 
-Each account can also have an optional **Local Network** server URL. Bleat keeps
-the primary URL as the account identity, tries the local URL first for matching
+Each account can also have an optional **Local Network** server URL. Bleat uses
+the primary URL together with the remote user ID as the account identity and
+tries the local URL first for matching
 requests, and falls back to the primary URL when the local endpoint cannot be
 reached. Every launch and network-path change clears the current local failure
 state and tries any configured local endpoint. An endpoint that has not yet

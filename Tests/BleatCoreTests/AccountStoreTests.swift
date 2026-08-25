@@ -118,6 +118,124 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(relaunchedActive?.id, second.id)
     }
 
+    func testLegacyIdentityMigrationRekeysAccountAndStatistics()
+        async throws
+    {
+        let fixture = try StoreFixture()
+        let legacy = try Self.account(
+            accountID: "device-generated-id",
+            server: "https://example.com/audiobookshelf",
+            userID: "remote-user",
+            username: "Reader"
+        )
+        try await fixture.store.save(legacy)
+        let statistics = StatisticsRepository(modelContainer: fixture.container)
+        let slice = ListeningSlice(
+            accountID: legacy.id,
+            itemID: LibraryItemID(rawValue: "item"),
+            sessionID: PlaybackSessionID(rawValue: "session"),
+            startedAt: Date(timeIntervalSince1970: 1),
+            endedAt: Date(timeIntervalSince1970: 2),
+            startPosition: 0,
+            endPosition: 1,
+            realSeconds: 1,
+            audiobookSeconds: 1,
+            playbackRate: 1,
+            chapterID: nil,
+            chapterTitle: nil,
+            chapterStart: nil,
+            chapterEnd: nil,
+            title: "Book",
+            author: "Author",
+            duration: 60
+        )
+        try await statistics.importArchive(
+            StatisticsArchive(
+                slices: [slice],
+                completions: [],
+                remoteSessions: []
+            )
+        )
+
+        let migrations = try await fixture.store.legacyIdentityMigrations()
+        try await fixture.store.applyIdentityMigrations(migrations)
+
+        let canonicalID = AccountID.canonical(
+            server: legacy.server,
+            userID: legacy.user.id
+        )
+        let removedLegacy = try await fixture.store.account(id: legacy.id)
+        let migratedAccount = try await fixture.store.account(id: canonicalID)
+        XCTAssertNil(removedLegacy)
+        XCTAssertEqual(migratedAccount?.id, canonicalID)
+        let archive = try await statistics.privateCloudArchive()
+        XCTAssertEqual(archive.slices.map(\.accountID), [canonicalID])
+        let aliases = try await fixture.store.identityAliases()
+        XCTAssertEqual(
+            aliases,
+            [AccountIdentityMigration(
+                legacyID: legacy.id,
+                canonicalID: canonicalID
+            )]
+        )
+    }
+
+    func testPendingRestoredAccountSurvivesRelaunchInactive() async throws {
+        let fixture = try StoreFixture()
+        let restored = try Self.account(
+            accountID: "restored",
+            server: "https://books.example",
+            userID: "remote-user",
+            username: "Reader"
+        )
+
+        try await fixture.store.savePendingRestoredAccount(restored)
+
+        let relaunched = AccountStore(modelContainer: fixture.container)
+        let pending = try await relaunched.account(id: restored.id)
+        XCTAssertEqual(pending?.connectionState, .reauthenticationRequired)
+        let active = try await relaunched.activeAccount()
+        XCTAssertNil(active)
+    }
+
+    func testContradictoryAliasIsTypedAndPreservesOriginal() async throws {
+        let fixture = try StoreFixture()
+        let legacy = try Self.account(
+            accountID: "legacy",
+            server: "https://books.example",
+            userID: "remote-user",
+            username: "Reader"
+        )
+        try await fixture.store.save(legacy)
+        let first = AccountID(rawValue: "canonical-one")
+        _ = try await fixture.store.applyIdentityMigrations([
+            AccountIdentityMigration(legacyID: legacy.id, canonicalID: first)
+        ])
+
+        do {
+            _ = try await fixture.store.applyIdentityMigrations([
+                AccountIdentityMigration(
+                    legacyID: legacy.id,
+                    canonicalID: AccountID(rawValue: "canonical-two")
+                )
+            ])
+            XCTFail("Expected contradictory alias failure")
+        } catch {
+            XCTAssertEqual(
+                error,
+                .contradictoryIdentityAlias(
+                    legacyID: legacy.id,
+                    existingCanonicalID: first,
+                    requestedCanonicalID: AccountID(
+                        rawValue: "canonical-two"
+                    )
+                )
+            )
+        }
+        let aliases = try await fixture.store.identityAliases()
+        XCTAssertEqual(aliases.first?.canonicalID, first)
+    }
+
     func testLocalServerPersistsWithoutChangingPrimaryIdentity() async throws {
         let fixture = try StoreFixture()
         let account = try Self.account(
@@ -140,6 +258,43 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(stored.server, account.server)
         XCTAssertEqual(stored.localServer, local)
         XCTAssertTrue(stored.localServerValidated)
+    }
+
+    func testReplacingPrimaryServerRekeysExistingAccountData() async throws {
+        let fixture = try StoreFixture()
+        let original = try Self.account(
+            accountID: "old-canonical-id",
+            server: "https://old.example",
+            userID: "remote-user",
+            username: "Reader"
+        )
+        try await fixture.store.save(original)
+        let replacementServer = try NormalizedServerURL("https://new.example")
+        let replacementID = AccountID.canonical(
+            server: replacementServer,
+            userID: original.user.id
+        )
+        let replacement = try ServerAccount(
+            id: replacementID,
+            server: replacementServer,
+            serverVersion: original.serverVersion,
+            authenticationMethods: original.authenticationMethods,
+            user: original.user
+        )
+
+        try await fixture.store.replaceAccountIdentity(
+            from: original.id,
+            with: replacement
+        )
+
+        let removedAccount = try await fixture.store.account(id: original.id)
+        let storedReplacement = try await fixture.store.account(
+            id: replacementID
+        )
+        let activeAccount = try await fixture.store.activeAccount()
+        XCTAssertNil(removedAccount)
+        XCTAssertEqual(storedReplacement, replacement)
+        XCTAssertEqual(activeAccount?.id, replacementID)
     }
 
     func testRemovingActiveAccountSelectsDeterministicReplacement()
@@ -321,11 +476,15 @@ final class AccountStoreTests: XCTestCase {
             accountStore: fixture.store
         )
 
-        XCTAssertEqual(account.id, accountID)
+        let canonicalID = AccountID.canonical(
+            server: account.server,
+            userID: account.user.id
+        )
+        XCTAssertEqual(account.id, canonicalID)
         XCTAssertEqual(account.user.id.rawValue, "remote-user")
         let active = try await fixture.store.activeAccount()
         let storedCredentials = await credentialStore.credentials(
-            for: accountID
+            for: canonicalID
         )
         let deleteCount = await credentialStore.deleteCount()
         XCTAssertEqual(active, account)
@@ -377,9 +536,11 @@ final class AccountStoreTests: XCTestCase {
             )
         }
 
-        let newCredentials = await credentialStore.credentials(
-            for: newID
+        let canonicalID = AccountID.canonical(
+            server: existing.server,
+            userID: existing.user.id
         )
+        let newCredentials = await credentialStore.credentials(for: canonicalID)
         let deleteCount = await credentialStore.deleteCount()
         let accounts = try await fixture.store.accounts()
         XCTAssertNil(newCredentials)
@@ -452,7 +613,13 @@ final class AccountStoreTests: XCTestCase {
                 .credentialRollbackFailed
             )
         }
-        let remainingCredentials = await credentials.credentials(for: newID)
+        let canonicalID = AccountID.canonical(
+            server: existing.server,
+            userID: existing.user.id
+        )
+        let remainingCredentials = await credentials.credentials(
+            for: canonicalID
+        )
         let accounts = try await fixture.store.accounts()
         XCTAssertNotNil(remainingCredentials)
         XCTAssertEqual(accounts, [existing])
@@ -470,21 +637,22 @@ final class AccountStoreTests: XCTestCase {
             credentialStore: credentials
         )
         let discovered = try Self.discoveredServer()
-        _ = try await coordinator.loginAndPersistAccount(
+        let account = try await coordinator.loginAndPersistAccount(
             accountID: accountID,
             discoveredServer: discovered,
             username: "reader",
             password: "correct",
             accountStore: fixture.store
         )
+        let canonicalID = account.id
 
         let signOut = try await coordinator.signOutPersistedAccount(
-            accountID: accountID,
+            accountID: canonicalID,
             accountStore: fixture.store
         )
-        let signedOutAccount = try await fixture.store.account(id: accountID)
+        let signedOutAccount = try await fixture.store.account(id: canonicalID)
         let signedOutCredentials = await credentials.credentials(
-            for: accountID
+            for: canonicalID
         )
         XCTAssertEqual(signOut.remoteStatus, .completed)
         XCTAssertEqual(
@@ -503,11 +671,11 @@ final class AccountStoreTests: XCTestCase {
             accountStore: fixture.store
         )
         let removal = try await coordinator.removePersistedAccount(
-            accountID: accountID,
+            accountID: canonicalID,
             accountStore: fixture.store
         )
-        let removedAccount = try await fixture.store.account(id: accountID)
-        let removedCredentials = await credentials.credentials(for: accountID)
+        let removedAccount = try await fixture.store.account(id: canonicalID)
+        let removedCredentials = await credentials.credentials(for: canonicalID)
         XCTAssertEqual(removal.remoteStatus, .completed)
         XCTAssertNil(removedAccount)
         XCTAssertNil(removedCredentials)
@@ -604,7 +772,7 @@ private struct StoreFixture {
     let store: AccountStore
 
     init() throws {
-        let schema = Schema([ServerAccountRecord.self])
+        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true

@@ -30,6 +30,13 @@ public enum DownloadStorageError: Error, Equatable, Sendable {
     case insufficientSpace(requiredBytes: Int64, availableBytes: Int64)
     case persistenceFailed
     case invalidStoredRecord
+    case identityMigrationConflict(DownloadIdentityMigrationConflict)
+}
+
+public enum DownloadIdentityMigrationConflict: String, Equatable, Sendable {
+    case malformedIdentity
+    case incompatibleManifests
+    case bothDirectoriesContainMedia
 }
 
 public struct DownloadStorageRequirement: Equatable, Sendable {
@@ -106,6 +113,23 @@ public struct DownloadStorageLayout: Sendable {
             throw .invalidRoot
         }
         self.rootURL = rootURL.standardizedFileURL
+    }
+
+    public static func applicationSupport()
+        throws(DownloadStorageError) -> DownloadStorageLayout
+    {
+        guard let supportURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            throw .invalidRoot
+        }
+        return try DownloadStorageLayout(
+            rootURL: supportURL.appendingPathComponent(
+                "Bleat/Downloads",
+                isDirectory: true
+            )
+        )
     }
 
     public func bookDirectory(
@@ -359,6 +383,264 @@ public actor DownloadStorage {
 
     public init(layout: DownloadStorageLayout) {
         self.layout = layout
+    }
+
+    public func migrateAccountIdentity(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws(DownloadStorageError) {
+        guard legacyID != canonicalID else { return }
+        let matchingRecords = try rawManifestRecords().filter {
+            $0.record.manifest.accountID == legacyID
+        }
+        let fileManager = FileManager.default
+        for discovered in matchingRecords {
+            let record = discovered.record
+            let source = layout.bookDirectory(
+                accountID: legacyID,
+                itemID: record.manifest.itemID
+            )
+            let destination = layout.bookDirectory(
+                accountID: canonicalID,
+                itemID: record.manifest.itemID
+            )
+            var migrated = record
+            migrated.manifest = DownloadManifest(
+                reidentifying: record.manifest,
+                as: canonicalID
+            )
+            if discovered.directory.standardizedFileURL
+                == destination.standardizedFileURL
+            {
+                // A previous attempt moved the directory but did not finish
+                // replacing its legacy manifest.
+                try persist(migrated)
+                continue
+            }
+            if fileManager.fileExists(atPath: destination.path) {
+                let destinationURL = destination.appendingPathComponent(
+                    "record.json",
+                    isDirectory: false
+                )
+                guard let destinationRecord = try? decoder.decode(
+                    DownloadedBookRecord.self,
+                    from: Data(contentsOf: destinationURL)
+                ), structurallyCompatible(
+                    record,
+                    destinationRecord,
+                    ignoringAccountIdentity: true
+                ) else {
+                    throw .identityMigrationConflict(.incompatibleManifests)
+                }
+                let sourceHasMedia = try directoryContainsMedia(source)
+                let destinationHasMedia = try directoryContainsMedia(
+                    destination
+                )
+                guard sourceHasMedia != destinationHasMedia else {
+                    throw .identityMigrationConflict(
+                        sourceHasMedia
+                            ? .bothDirectoriesContainMedia
+                            : .incompatibleManifests
+                    )
+                }
+                let mediaRecord = sourceHasMedia ? record : destinationRecord
+                let mediaDirectory = sourceHasMedia ? source : destination
+                guard try mediaMatchesManifest(
+                    mediaRecord,
+                    in: mediaDirectory
+                ) else {
+                    throw .identityMigrationConflict(.incompatibleManifests)
+                }
+                if sourceHasMedia {
+                    let metadataBackup = destination.appendingPathExtension(
+                        "migration-backup"
+                    )
+                    do {
+                        try fileManager.moveItem(
+                            at: destination,
+                            to: metadataBackup
+                        )
+                        try fileManager.moveItem(at: source, to: destination)
+                        do {
+                            try persist(migrated)
+                        } catch {
+                            try? fileManager.moveItem(
+                                at: destination,
+                                to: source
+                            )
+                            try? fileManager.moveItem(
+                                at: metadataBackup,
+                                to: destination
+                            )
+                            throw error
+                        }
+                        try fileManager.removeItem(at: metadataBackup)
+                    } catch let error as DownloadStorageError {
+                        throw error
+                    } catch {
+                        throw .persistenceFailed
+                    }
+                } else {
+                    var canonicalDestination = destinationRecord
+                    canonicalDestination.manifest = DownloadManifest(
+                        reidentifying: destinationRecord.manifest,
+                        as: canonicalID
+                    )
+                    try persist(canonicalDestination)
+                    do {
+                        try fileManager.removeItem(at: source)
+                    } catch {
+                        throw .persistenceFailed
+                    }
+                }
+                continue
+            }
+            guard fileManager.fileExists(atPath: source.path) else {
+                throw .persistenceFailed
+            }
+            do {
+                try fileManager.createDirectory(
+                    at: destination.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try fileManager.moveItem(at: source, to: destination)
+                do {
+                    try persist(migrated)
+                } catch {
+                    try? fileManager.moveItem(at: destination, to: source)
+                    throw error
+                }
+            } catch let error as DownloadStorageError {
+                throw error
+            } catch {
+                throw .persistenceFailed
+            }
+        }
+    }
+
+    private struct RawManifestRecord {
+        let record: DownloadedBookRecord
+        let directory: URL
+    }
+
+    /// Reads manifests without reconciling media or deleting invalid state.
+    private func rawManifestRecords() throws(DownloadStorageError)
+        -> [RawManifestRecord]
+    {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: layout.rootURL.path) else {
+            return []
+        }
+        guard let enumerator = fileManager.enumerator(
+            at: layout.rootURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            throw .persistenceFailed
+        }
+        var discovered: [RawManifestRecord] = []
+        for case let url as URL in enumerator
+        where url.lastPathComponent == "record.json" {
+            do {
+                discovered.append(RawManifestRecord(
+                    record: try decoder.decode(
+                        DownloadedBookRecord.self,
+                        from: Data(contentsOf: url)
+                    ),
+                    directory: url.deletingLastPathComponent()
+                ))
+            } catch {
+                // Migration must preserve malformed real-world state for a
+                // later diagnostic/recovery attempt.
+                continue
+            }
+        }
+        return discovered
+    }
+
+    private func directoryContainsMedia(
+        _ directory: URL
+    ) throws(DownloadStorageError) -> Bool {
+        do {
+            let names = try FileManager.default.contentsOfDirectory(
+                atPath: directory.path
+            )
+            return names.contains { $0 != "record.json" }
+        } catch {
+            throw .persistenceFailed
+        }
+    }
+
+    private func mediaMatchesManifest(
+        _ record: DownloadedBookRecord,
+        in directory: URL
+    ) throws(DownloadStorageError) -> Bool {
+        let fileManager = FileManager.default
+        let names: Set<String>
+        do {
+            names = Set(try fileManager.contentsOfDirectory(
+                atPath: directory.path
+            ))
+        } catch {
+            throw .persistenceFailed
+        }
+        var expectedNames: Set<String> = ["record.json"]
+        for entry in record.manifest.entries {
+            let finalizedName = entry.destinationEntry
+            let partialName = finalizedName + ".partial"
+            expectedNames.insert(finalizedName)
+            expectedNames.insert(partialName)
+            let finalized = directory.appendingPathComponent(finalizedName)
+            let partial = directory.appendingPathComponent(partialName)
+            let finalizedLength = Self.fileSize(at: finalized)
+            let partialLength = Self.fileSize(at: partial)
+            guard !(finalizedLength >= 0 && partialLength >= 0) else {
+                return false
+            }
+            if finalizedLength >= 0 {
+                guard entry.state == .complete,
+                    entry.placement == .finalized,
+                    finalizedLength == entry.expectedByteLength,
+                    entry.observedByteLength == entry.expectedByteLength
+                else { return false }
+            } else if partialLength >= 0 {
+                guard entry.state != .complete,
+                    entry.placement == .temporary,
+                    partialLength == entry.observedByteLength,
+                    partialLength <= entry.expectedByteLength
+                else { return false }
+            } else if entry.state == .complete
+                || (entry.observedByteLength ?? 0) > 0
+            {
+                return false
+            }
+        }
+        return names.isSubset(of: expectedNames)
+    }
+
+    private func structurallyCompatible(
+        _ lhs: DownloadedBookRecord,
+        _ rhs: DownloadedBookRecord,
+        ignoringAccountIdentity: Bool
+    ) -> Bool {
+        let left = lhs.manifest
+        let right = rhs.manifest
+        guard left.downloadID == right.downloadID,
+            left.itemID == right.itemID,
+            ignoringAccountIdentity || left.accountID == right.accountID,
+            left.purpose == right.purpose,
+            left.automaticWindow == right.automaticWindow,
+            lhs.detail == rhs.detail,
+            left.entries.count == right.entries.count
+        else { return false }
+        return zip(left.entries, right.entries).allSatisfy { left, right in
+            left.trackIndex == right.trackIndex
+                && left.expectedByteLength == right.expectedByteLength
+                && left.destinationEntry == right.destinationEntry
+                && left.inode == right.inode
+                && left.startOffset == right.startOffset
+                && left.duration == right.duration
+        }
     }
 
     public func preflight(

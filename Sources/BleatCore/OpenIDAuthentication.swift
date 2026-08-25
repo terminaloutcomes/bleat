@@ -803,14 +803,18 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             )
         }
 
+        let canonicalID = AccountID.canonical(
+            server: server,
+            userID: authorizationPayload.user.id
+        )
         do {
-            try await credentialStore.save(tokens, for: accountID)
+            try await credentialStore.save(tokens, for: canonicalID)
         } catch {
             throw OpenIDAuthenticationError.credentialPersistenceFailed
         }
 
         return AuthenticatedAccount(
-            id: accountID,
+            id: canonicalID,
             server: server,
             user: authorizationPayload.user.authenticatedUser
         )
@@ -851,7 +855,7 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
 
         if let expectedUserID, authenticated.user.id != expectedUserID {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: authenticated.id,
                 originalError: .openIDAuthenticationFailed(
                     .authorizedUserMismatch(
                         expected: expectedUserID.rawValue,
@@ -871,7 +875,7 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             )
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: authenticated.id,
                 originalError: .invalidAccount(error)
             )
         }
@@ -880,7 +884,7 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
             try await accountStore.save(account, makeActive: makeActive)
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: authenticated.id,
                 originalError: .accountPersistenceFailed(error)
             )
         }

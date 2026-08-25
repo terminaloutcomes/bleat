@@ -30,6 +30,28 @@ final class IdentifiersTests: XCTestCase {
         XCTAssertEqual(libraryID.rawValue, itemID.rawValue)
     }
 
+    func testCanonicalAccountIdentityUsesPrimaryServerAndRemoteUser() throws {
+        let server = try NormalizedServerURL(
+            "https://EXAMPLE.com/audiobookshelf/"
+        )
+        let equivalent = try NormalizedServerURL(
+            "https://example.com/audiobookshelf"
+        )
+        let user = UserID(rawValue: "remote-user")
+
+        XCTAssertEqual(
+            AccountID.canonical(server: server, userID: user),
+            AccountID.canonical(server: equivalent, userID: user)
+        )
+        XCTAssertNotEqual(
+            AccountID.canonical(server: server, userID: user),
+            AccountID.canonical(
+                server: server,
+                userID: UserID(rawValue: "another-user")
+            )
+        )
+    }
+
     func testAuthorAndSeriesIDsRejectEmptyAndControlCharacters() throws {
         XCTAssertNil(AuthorID(rawValue: ""))
         XCTAssertNil(AuthorID(rawValue: "author\n1"))

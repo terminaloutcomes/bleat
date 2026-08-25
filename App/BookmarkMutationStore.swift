@@ -33,6 +33,19 @@ struct QueuedBookmarkMutation: Codable, Equatable, Identifiable, Sendable {
             createdAtMilliseconds: createdAtMilliseconds
         )
     }
+
+    func reidentified(as accountID: AccountID) -> QueuedBookmarkMutation {
+        QueuedBookmarkMutation(
+            id: id,
+            accountID: accountID,
+            itemID: itemID,
+            time: time,
+            title: title,
+            createdAtMilliseconds: createdAtMilliseconds,
+            kind: kind,
+            status: status
+        )
+    }
 }
 
 enum BookmarkMutationStoreError: Error, Equatable {
@@ -181,6 +194,17 @@ final class BookmarkMutationStore {
         var stored = try entries()
         stored.removeAll { $0.accountID == accountID }
         try persist(stored)
+    }
+
+    func migrateAccountIdentity(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws(BookmarkMutationStoreError) {
+        let migrated = try entries().map {
+            $0.accountID == legacyID
+                ? $0.reidentified(as: canonicalID) : $0
+        }
+        try persist(migrated)
     }
 
     func applying(

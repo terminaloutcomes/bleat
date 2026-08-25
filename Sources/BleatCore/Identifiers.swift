@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// A remote or local identifier tagged with its domain at compile time.
@@ -32,6 +33,24 @@ public typealias BookID = TypedID<BookIDKind>
 public typealias PlaybackSessionID = TypedID<PlaybackSessionIDKind>
 public typealias DownloadID = TypedID<DownloadIDKind>
 public typealias ChapterID = TypedID<ChapterIDKind>
+
+extension TypedID where Kind == AccountIDKind {
+    public static func canonical(
+        server: NormalizedServerURL,
+        userID: UserID
+    ) -> AccountID {
+        let fields = [server.url.absoluteString, userID.rawValue]
+        let identity = fields.map {
+            "\($0.utf8.count):\($0)"
+        }.joined()
+        let digest = SHA256.hash(data: Data(identity.utf8))
+        return AccountID(
+            rawValue: "account-v1-" + digest.map {
+                String(format: "%02x", $0)
+            }.joined()
+        )
+    }
+}
 
 /// A server-scoped author identifier. Unlike the older generic ID aliases,
 /// author and series IDs are validated at every remote boundary because they
