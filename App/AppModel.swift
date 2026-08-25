@@ -343,6 +343,15 @@ enum PrivateCloudState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum CloudAccountRestoreState: Equatable, Sendable {
+    case idle
+    case synchronizing
+    case noAccounts
+    case awaitingSelection
+    case awaitingCredentials(AccountID)
+    case failed(AppFailure)
+}
+
 enum AccountRemovalScope: Equatable, Sendable {
     case thisDevice
     case allDevices
@@ -1262,6 +1271,7 @@ final class AppModel {
     private(set) var bookFinishedStates: [LibraryItemID: Bool] = [:]
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
     private(set) var privateCloudState: PrivateCloudState = .idle
+    private(set) var cloudAccountRestoreState: CloudAccountRestoreState = .idle
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
     private(set) var canCancelPrivateCloudSynchronization = false
@@ -1532,6 +1542,11 @@ final class AppModel {
                 .started(.restoreAccounts, category: .auth)
             )
             accounts = try await service.accounts()
+            if let pending = accounts.first(where: {
+                $0.connectionState == .reauthenticationRequired
+            }) {
+                cloudAccountRestoreState = .awaitingCredentials(pending.id)
+            }
             await diagnostics.record(
                 .completed(
                     .restoreAccounts,
@@ -3696,6 +3711,9 @@ final class AppModel {
         privateCloudSyncGeneration &+= 1
         let generation = privateCloudSyncGeneration
         privateCloudState = .syncing
+        if case .signedOut = phase, accounts.isEmpty {
+            cloudAccountRestoreState = .synchronizing
+        }
         canCancelPrivateCloudSynchronization = true
         let task = Task { @MainActor [weak self] in
             guard let self else {
@@ -3740,6 +3758,17 @@ final class AppModel {
             queueCloudServerConfigurationChanges(changes)
             pendingCloudConfigurationConflict = configurationConflict
             accounts = synchronizedAccounts
+            if !changes.isEmpty {
+                cloudAccountRestoreState = .awaitingSelection
+            } else if let pending = synchronizedAccounts.first(where: {
+                $0.connectionState == .reauthenticationRequired
+            }) {
+                cloudAccountRestoreState = .awaitingCredentials(pending.id)
+            } else if case .signedOut = phase, synchronizedAccounts.isEmpty {
+                cloudAccountRestoreState = .noAccounts
+            } else {
+                cloudAccountRestoreState = .idle
+            }
             if let active {
                 account = active
             }
@@ -3766,6 +3795,51 @@ final class AppModel {
                     serviceError: error
                 )
             )
+            if case .signedOut = phase, accounts.isEmpty {
+                cloudAccountRestoreState = .failed(
+                    AppFailure(
+                        operation: .privateCloudSync,
+                        serviceError: error
+                    )
+                )
+            }
+            return false
+        }
+    }
+
+    var pendingRestoredAccount: ServerAccount? {
+        accounts.first {
+            $0.connectionState == .reauthenticationRequired
+        }
+    }
+
+    @discardableResult
+    func authenticatePendingRestoredAccount(password: String) async -> Bool {
+        guard !password.isEmpty, let pending = pendingRestoredAccount,
+            !loginStatus.isSubmitting
+        else { return false }
+        loginStatus = .submitting(.signingIn)
+        do {
+            let authenticated = try await service.authenticateRestoredAccount(
+                pending,
+                password: password
+            )
+            account = authenticated
+            accounts.removeAll { $0.id == authenticated.id }
+            accounts.append(authenticated)
+            accounts.sort(by: Self.sortAccounts)
+            phase = .signedIn
+            cloudAccountRestoreState = .idle
+            loginStatus = .idle
+            await downloads.start(account: authenticated)
+            await loadLibraries()
+            await loadStatistics()
+            startLiveUpdates(for: authenticated)
+            return true
+        } catch let error {
+            loginStatus = .failed(
+                AppFailure(operation: .reauthenticate, serviceError: error)
+            )
             return false
         }
     }
@@ -3787,6 +3861,45 @@ final class AppModel {
             guard accept else {
                 return
             }
+            await stopLiveUpdatesAndWait()
+            hasStarted = false
+            phase = .launching
+            launchStage = initialLaunchStage
+            await start()
+        } catch let error {
+            privateCloudState = .failed(
+                AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
+    func resolveCloudServerConfigurationSelection(
+        _ selected: CloudServerConfigurationChange
+    ) async {
+        let candidates = pendingCloudServerConfigurationChanges
+        privateCloudState = .syncing
+        do {
+            for accountID in Set(candidates.map(\.id))
+            where accountID != selected.id {
+                try await service.resolvePrivateCloudServerConfigurationChange(
+                    accountID: accountID,
+                    accept: false
+                )
+            }
+            try await service.resolvePrivateCloudServerConfigurationSelection(
+                selected.incoming
+            )
+            pendingCloudServerConfigurationChanges.removeAll()
+            let restored = try await service
+                .authenticateRestoredAccountUsingSynchronizedCredential(
+                    selected.incoming
+                )
+            cloudAccountRestoreState = restored == nil
+                ? .awaitingCredentials(selected.id) : .idle
+            privateCloudState = .idle
             await stopLiveUpdatesAndWait()
             hasStarted = false
             phase = .launching

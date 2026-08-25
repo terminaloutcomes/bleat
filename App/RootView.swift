@@ -154,37 +154,22 @@ struct RootView: View {
                 Text(failure.message)
             }
         }
-        .alert(
-            "Use Server Settings from iCloud?",
+        .sheet(
             isPresented: Binding(
                 get: {
                     !model.pendingCloudServerConfigurationChanges.isEmpty
                 },
                 set: { _ in }
-            ),
-            presenting: model.pendingCloudServerConfigurationChanges.first
-        ) { change in
-            Button("Use iCloud Settings") {
-                Task {
-                    await model.resolveCloudServerConfigurationChange(
-                        change,
-                        accept: true
+            )
+        ) {
+            CloudAccountSelectionView(
+                candidates: model.pendingCloudServerConfigurationChanges,
+                onSelect: { selected in
+                    await model.resolveCloudServerConfigurationSelection(
+                        selected
                     )
                 }
-            }
-            Button(
-                change.current == nil ? "Don't Add" : "Keep This Device",
-                role: .cancel
-            ) {
-                Task {
-                    await model.resolveCloudServerConfigurationChange(
-                        change,
-                        accept: false
-                    )
-                }
-            }
-        } message: { change in
-            Text(cloudServerConfigurationChangeMessage(change))
+            )
         }
         .sheet(
             item: Binding(
@@ -228,23 +213,63 @@ struct RootView: View {
         }
     }
 
-    private func cloudServerConfigurationChangeMessage(
-        _ change: CloudServerConfigurationChange
-    ) -> String {
-        let incomingLocal =
-            change.incoming.localServer?.url.absoluteString
-            ?? "None"
-        if let current = change.current {
-            let currentLocal =
-                current.localServer?.url.absoluteString
-                ?? "None"
-            return
-                "This device uses primary \(current.server.url.absoluteString) and local \(currentLocal). iCloud returned primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
-        }
-        return
-            "iCloud returned a saved account using primary \(change.incoming.server.url.absoluteString) and local \(incomingLocal)."
-    }
+}
 
+private struct CloudAccountSelectionView: View {
+    let candidates: [CloudServerConfigurationChange]
+    let onSelect: (CloudServerConfigurationChange) async -> Void
+    @State private var selectedIndex: Int?
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Choose an Account Configuration") {
+                    ForEach(Array(candidates.enumerated()), id: \.offset) {
+                        index, candidate in
+                        Button {
+                            selectedIndex = index
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label(
+                                    candidate.incoming.user.username,
+                                    systemImage: selectedIndex == index
+                                        ? "checkmark.circle.fill"
+                                        : "circle"
+                                )
+                                Text(
+                                    "Main Server: \(candidate.incoming.server.url.absoluteString)"
+                                )
+                                Text(
+                                    "Local Server: \(candidate.incoming.localServer?.url.absoluteString ?? "None")"
+                                )
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(
+                            "icloud.accountCandidate.\(candidate.id.rawValue)"
+                        )
+                    }
+                }
+            }
+            .navigationTitle("Accounts from iCloud")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Use Selected") {
+                        guard let selectedIndex,
+                            candidates.indices.contains(selectedIndex)
+                        else { return }
+                        let selected = candidates[selectedIndex]
+                        isSaving = true
+                        Task { await onSelect(selected) }
+                    }
+                    .disabled(selectedIndex == nil || isSaving)
+                }
+            }
+        }
+        .interactiveDismissDisabled(isSaving)
+    }
 }
 
 private struct CloudConfigurationConflictView: View {
@@ -502,6 +527,10 @@ private struct NativeLoginView: View {
         model.loginStatus.isSubmitting
     }
 
+    private var pendingRestoredAccount: ServerAccount? {
+        model.pendingRestoredAccount
+    }
+
     private var canSubmit: Bool {
         !serverAddress.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -537,6 +566,7 @@ private struct NativeLoginView: View {
                     .iOSServerURLInput()
                     .accessibilityLabel("Server URL")
                     .accessibilityIdentifier("login.server")
+                    .disabled(pendingRestoredAccount != nil)
 
                     nearbyServers
                 }
@@ -582,6 +612,7 @@ private struct NativeLoginView: View {
                             .textContentType(.username)
                             .iOSNoAutocapitalization()
                             .accessibilityIdentifier("login.username")
+                            .disabled(pendingRestoredAccount != nil)
                         if isPasswordVisible {
                             TextField("Password", text: $password)
                                 .textContentType(.password)
@@ -618,14 +649,76 @@ private struct NativeLoginView: View {
                     }
                 }
 
+
+                if pendingRestoredAccount == nil,
+                    model.accounts.isEmpty,
+                    model.privateCloudSyncAvailable,
+                    model.privateCloudSyncEnabled
+                {
+                    Section {
+                        Button {
+                            Task { await model.synchronizePrivateCloud() }
+                        } label: {
+                            if case .synchronizing =
+                                model.cloudAccountRestoreState
+                            {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Syncing from iCloud…")
+                                }
+                            } else {
+                                Label(
+                                    "Sync from iCloud",
+                                    systemImage: "icloud.and.arrow.down"
+                                )
+                            }
+                        }
+                        .disabled(
+                            model.cloudAccountRestoreState == .synchronizing
+                        )
+                        .accessibilityIdentifier("login.icloudSync")
+                        if case .noAccounts = model.cloudAccountRestoreState {
+                            Text("No accounts found in iCloud")
+                                .foregroundStyle(.secondary)
+                                .accessibilityIdentifier(
+                                    "login.icloudSync.empty"
+                                )
+                        }
+                        if case .failed(let failure) =
+                            model.cloudAccountRestoreState
+                        {
+                            Text(failure.message)
+                                .foregroundStyle(.red)
+                                .accessibilityIdentifier(
+                                    "login.icloudSync.error"
+                                )
+                        }
+                    }
+                }
+
                 Section {
                     AccountSubmissionButton(
-                        idleTitle: "Sign In",
+                        idleTitle: pendingRestoredAccount == nil
+                            ? "Sign In" : "Continue Restore",
                         status: model.loginStatus,
                         isDisabled: !canSubmit || !supportsLocalLogin,
                         accessibilityIdentifier: "login.submit",
                         action: submit
                     )
+                    if let pendingRestoredAccount {
+                        Button("Use a Different Account", role: .destructive) {
+                            Task {
+                                _ = await model.removeAccount(
+                                    pendingRestoredAccount,
+                                    scope: .thisDevice
+                                )
+                            }
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier(
+                            "login.restore.useDifferentAccount"
+                        )
+                    }
                 }
 
                 Section {
@@ -653,6 +746,10 @@ private struct NativeLoginView: View {
             .navigationTitle(navigationTitle)
             .task {
                 model.startNearbyServerDiscovery()
+                if let pending = pendingRestoredAccount {
+                    serverAddress = pending.server.url.absoluteString
+                    username = pending.user.username
+                }
             }
             .task(id: serverAddress) {
                 try? await Task.sleep(for: .milliseconds(300))
@@ -795,11 +892,18 @@ private struct NativeLoginView: View {
         }
 
         Task {
-            let signedIn = await model.login(
-                serverAddress: submittedServerAddress,
-                username: submittedUsername,
-                password: submittedPassword
-            )
+            let signedIn: Bool
+            if pendingRestoredAccount != nil {
+                signedIn = await model.authenticatePendingRestoredAccount(
+                    password: submittedPassword
+                )
+            } else {
+                signedIn = await model.login(
+                    serverAddress: submittedServerAddress,
+                    username: submittedUsername,
+                    password: submittedPassword
+                )
+            }
             if signedIn {
                 onSignedIn()
                 password = ""

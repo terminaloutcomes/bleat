@@ -524,10 +524,20 @@ differ and asks whether to upload this device's complete current settings or
 apply the complete iCloud settings. The pending choice survives relaunch and
 blocks automatic configuration uploads until it is resolved.
 
+On a fresh installation, the signed-out form shows **Sync from iCloud** while
+CloudKit is enabled. Automatic and manual restore share one synchronization
+task and visibly report progress, an empty private zone, or the typed iCloud
+failure. Restored account alternatives appear together as selectable cards
+showing only the main server, optional local server, and username. A restored
+descriptor remains inactive until this device authenticates the expected
+Audiobookshelf user; if no synchronized native password is available, Bleat
+prefills a dedicated password-required continuation. Rotating tokens remain
+device-only.
+
 Saving an account's primary or local server settings immediately pushes that
 account descriptor to CloudKit. A different account descriptor fetched from
-CloudKit is never applied silently: Bleat shows the current and incoming server
-URLs and asks whether to use the iCloud settings or keep this device's settings.
+CloudKit is never applied silently: Bleat aggregates the structurally distinct
+choices and requires one complete server configuration to be selected.
 Each pushed descriptor carries a generation ID and its predecessor identity, so
 a delayed predecessor is ignored instead of prompting or reverting the device.
 Keeping the device settings pushes them back to CloudKit.

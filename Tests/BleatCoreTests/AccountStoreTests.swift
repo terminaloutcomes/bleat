@@ -170,6 +170,70 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(migratedAccount?.id, canonicalID)
         let archive = try await statistics.privateCloudArchive()
         XCTAssertEqual(archive.slices.map(\.accountID), [canonicalID])
+        let aliases = try await fixture.store.identityAliases()
+        XCTAssertEqual(
+            aliases,
+            [AccountIdentityMigration(
+                legacyID: legacy.id,
+                canonicalID: canonicalID
+            )]
+        )
+    }
+
+    func testPendingRestoredAccountSurvivesRelaunchInactive() async throws {
+        let fixture = try StoreFixture()
+        let restored = try Self.account(
+            accountID: "restored",
+            server: "https://books.example",
+            userID: "remote-user",
+            username: "Reader"
+        )
+
+        try await fixture.store.savePendingRestoredAccount(restored)
+
+        let relaunched = AccountStore(modelContainer: fixture.container)
+        let pending = try await relaunched.account(id: restored.id)
+        XCTAssertEqual(pending?.connectionState, .reauthenticationRequired)
+        let active = try await relaunched.activeAccount()
+        XCTAssertNil(active)
+    }
+
+    func testContradictoryAliasIsTypedAndPreservesOriginal() async throws {
+        let fixture = try StoreFixture()
+        let legacy = try Self.account(
+            accountID: "legacy",
+            server: "https://books.example",
+            userID: "remote-user",
+            username: "Reader"
+        )
+        try await fixture.store.save(legacy)
+        let first = AccountID(rawValue: "canonical-one")
+        _ = try await fixture.store.applyIdentityMigrations([
+            AccountIdentityMigration(legacyID: legacy.id, canonicalID: first)
+        ])
+
+        do {
+            _ = try await fixture.store.applyIdentityMigrations([
+                AccountIdentityMigration(
+                    legacyID: legacy.id,
+                    canonicalID: AccountID(rawValue: "canonical-two")
+                )
+            ])
+            XCTFail("Expected contradictory alias failure")
+        } catch {
+            XCTAssertEqual(
+                error,
+                .contradictoryIdentityAlias(
+                    legacyID: legacy.id,
+                    existingCanonicalID: first,
+                    requestedCanonicalID: AccountID(
+                        rawValue: "canonical-two"
+                    )
+                )
+            )
+        }
+        let aliases = try await fixture.store.identityAliases()
+        XCTAssertEqual(aliases.first?.canonicalID, first)
     }
 
     func testLocalServerPersistsWithoutChangingPrimaryIdentity() async throws {

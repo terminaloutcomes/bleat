@@ -419,6 +419,15 @@ protocol AppServicing: Sendable {
         password: String
     ) async throws(AppServiceError) -> ServerAccount
 
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount
+
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount?
+
     func reauthenticateWithOpenID(
         _ account: ServerAccount,
         progress: @escaping AccountSubmissionProgress
@@ -665,6 +674,10 @@ protocol AppServicing: Sendable {
         accept: Bool
     ) async throws(AppServiceError)
 
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError)
+
     func setPrivateCloudSyncEnabled(
         _ enabled: Bool,
         deleteCloudData: Bool
@@ -677,6 +690,49 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount? {
+        nil
+    }
+
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        guard !password.isEmpty else {
+            throw .passwordRequiredForCredentialChange
+        }
+        let authenticated = try await reauthenticate(
+            account,
+            password: password
+        )
+        guard authenticated.id == account.id else {
+            throw .onboarding(.authenticationFailed(.invalidAccountID))
+        }
+        guard authenticated.user.id == account.user.id else {
+            throw .onboarding(
+                .authenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: account.user.id.rawValue,
+                        actual: authenticated.user.id.rawValue
+                    )
+                )
+            )
+        }
+        try await activateAccount(authenticated)
+        return authenticated
+    }
+
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        try await resolvePrivateCloudServerConfigurationChange(
+            accountID: account.id,
+            accept: true
+        )
+    }
+
     func refreshedLibraries(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {
@@ -956,6 +1012,122 @@ actor LiveAppService: AppServicing {
     private struct LiveClientRegistration: Sendable {
         let token: UUID
         let client: AudiobookshelfLiveEventClient
+    }
+
+    func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String
+    ) async throws(AppServiceError) -> ServerAccount {
+        try await authenticateRestoredAccount(
+            account,
+            password: password,
+            preserveSynchronizedLoginOnFailure: false
+        )
+    }
+
+    private func authenticateRestoredAccount(
+        _ account: ServerAccount,
+        password: String,
+        preserveSynchronizedLoginOnFailure: Bool
+    ) async throws(AppServiceError) -> ServerAccount {
+        guard !password.isEmpty else {
+            throw .passwordRequiredForCredentialChange
+        }
+        let authenticated = try await reauthenticate(
+            account,
+            password: password
+        )
+        guard authenticated.id == account.id else {
+            try? await credentialStore.deleteSessionCredentials(
+                for: account.id
+            )
+            throw .onboarding(.authenticationFailed(.invalidAccountID))
+        }
+        guard authenticated.user.id == account.user.id else {
+            try? await credentialStore.deleteSessionCredentials(
+                for: account.id
+            )
+            throw .onboarding(
+                .authenticationFailed(
+                    .authorizedUserMismatch(
+                        expected: account.user.id.rawValue,
+                        actual: authenticated.user.id.rawValue
+                    )
+                )
+            )
+        }
+        do {
+            try await accountStore.setActiveAccount(id: authenticated.id)
+            return authenticated
+        } catch let error {
+            if preserveSynchronizedLoginOnFailure {
+                try? await credentialStore.deleteSessionCredentials(
+                    for: account.id
+                )
+            } else {
+                try? await credentialStore.deleteCredentials(for: account.id)
+            }
+            try? await accountStore.setConnectionState(
+                .reauthenticationRequired,
+                for: account.id
+            )
+            throw .accountStore(error)
+        }
+    }
+
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount? {
+        let savedLogin: NativeLoginCredentials
+        do {
+            guard let credentials = try await credentialStore
+                .nativeLoginCredentials(for: account.id),
+                credentials.userID == account.user.id
+            else {
+                return nil
+            }
+            savedLogin = credentials
+        } catch {
+            return nil
+        }
+        do {
+            return try await authenticateRestoredAccount(
+                account,
+                password: savedLogin.password,
+                preserveSynchronizedLoginOnFailure: true
+            )
+        } catch let error {
+            switch error {
+            case .onboarding(.authenticationFailed),
+                .onboarding(.authenticationRequestFailed),
+                .onboarding(.localAuthenticationUnavailable):
+                return nil
+            default:
+                throw error
+            }
+        }
+    }
+
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .disabled
+                )
+            )
+        }
+        do {
+            try await privateCloudSync.resolveServerConfigurationChange(
+                accountID: account.id,
+                selected: account,
+                accept: true
+            )
+        } catch let error {
+            throw .privateCloud(error)
+        }
     }
 
     private var liveClients: [AccountID: LiveClientRegistration] = [:]

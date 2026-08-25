@@ -1341,9 +1341,15 @@ data and offers to retain or delete the private CloudKit zone. Saving primary
 or local server settings immediately pushes the updated non-secret account
 descriptor. A
 different account descriptor fetched from CloudKit remains pending until the
-user explicitly accepts its server URLs or keeps the device's current URLs;
+user explicitly selects one complete structural configuration from a single
+aggregate choice; cancelling preserves the candidates and pauses account sync;
 keeping the device values pushes them back to CloudKit. A cloud-only account
-likewise requires confirmation before it is added locally. Account descriptors
+likewise requires confirmation before it is added locally. On a fresh install,
+the signed-out form exposes the same single-flight automatic/manual restore as
+**Sync from iCloud**, including progress, empty-zone, and typed failure states.
+The chosen descriptor remains inactive with `reauthenticationRequired` until a
+mandatory native password authenticates the expected remote user and canonical
+identity; rotating tokens remain device-only. Account descriptors
 carry a generation ID and predecessor identity; a delayed predecessor is stale
 and must be ignored and replaced without prompting or changing local settings.
 Legacy device-generated account IDs are canonicalized from the normalized
@@ -1352,7 +1358,8 @@ aliases long enough to rekey account-scoped statistics fetched later. Save each
 canonical CloudKit replacement before deleting its obsolete account or remote
 session record; interrupted migration must converge on a later sync without
 re-presenting the legacy configuration. This is a private-zone data migration,
-not a CloudKit record-type or field deployment.
+not a CloudKit record-type or field deployment, and requires no CloudKit
+Dashboard schema deployment.
 `BLEAT_CLOUDKIT_MODE=disabled`
 selects CloudKit-free entitlements for development teams that do not support
 the capability; those builds do not initialize or present CloudKit

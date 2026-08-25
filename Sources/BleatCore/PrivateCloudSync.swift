@@ -374,13 +374,23 @@ public struct DiagnosticPrivateCloudSyncEventRecorder:
 }
 
 public struct CloudServerConfigurationChange:
-    Equatable, Identifiable, Sendable
+    Codable, Equatable, Identifiable, Sendable
 {
     public let current: ServerAccount?
     public let incoming: ServerAccount
 
     public var id: AccountID {
         incoming.id
+    }
+
+    var structuralKey: String {
+        [
+            incoming.id.rawValue,
+            incoming.server.url.absoluteString,
+            incoming.localServer?.url.absoluteString ?? "",
+            incoming.user.id.rawValue,
+            incoming.user.username,
+        ].map { "\($0.utf8.count):\($0)" }.joined()
     }
 
     public init(current: ServerAccount?, incoming: ServerAccount) {
@@ -736,6 +746,8 @@ actor PrivateCloudSyncStore {
         "bleat.cloudKit.ignoredStatisticsAccounts.v1"
     private let pendingConfigurationConflictKey =
         "bleat.cloudKit.pendingConfigurationConflict.v1"
+    private let pendingAccountChangesKey =
+        "bleat.cloudKit.pendingAccountChanges.v1"
     private let legacyAccountIdentityMappingsKey =
         "bleat.cloudKit.legacyAccountIdentityMappings.v1"
     private let pendingLegacyRecordDeletionsKey =
@@ -743,7 +755,7 @@ actor PrivateCloudSyncStore {
     private var records: [CKRecord.ID: CKRecord] = [:]
     private var synchronizedPayloadDigests: [String: Data] = [:]
     private var pendingAccountChanges:
-        [AccountID: CloudServerConfigurationChange] = [:]
+        [AccountID: [CloudServerConfigurationChange]] = [:]
     private var pendingConfigurationConflict: CloudConfigurationConflict?
     private var pendingConfigurationConflictRevision: UUID?
     private var pendingConfigurationConflictIsInvalid = false
@@ -832,6 +844,17 @@ actor PrivateCloudSyncStore {
                 record[Self.payloadKey] = payload as CKRecordValue
             }
         }
+        if let data = defaults.value.data(forKey: pendingAccountChangesKey),
+            let changes = try? JSONDecoder().decode(
+                [CloudServerConfigurationChange].self,
+                from: data
+            )
+        {
+            pendingAccountChanges = Dictionary(grouping: changes, by: \.id)
+                .mapValues { candidates in
+                    candidates.sorted { $0.structuralKey < $1.structuralKey }
+                }
+        }
     }
 
     func prepareRecords(
@@ -840,6 +863,7 @@ actor PrivateCloudSyncStore {
         guard !pendingConfigurationConflictIsInvalid else {
             throw PrivateCloudSyncError.invalidRecord
         }
+        try await seedLegacyAccountMappingsFromAliases()
         let archive: StatisticsArchive
         let accountValues: [ServerAccount]
         do {
@@ -1004,6 +1028,7 @@ actor PrivateCloudSyncStore {
     ) {
         var recordsToApply: [CKRecord] = []
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
+        try await seedLegacyAccountMappingsFromAliases()
         learnLegacyAccountMappings(from: fetchedRecords)
         let pendingDeletionNames: Set<String>
         do {
@@ -1074,7 +1099,7 @@ actor PrivateCloudSyncStore {
                         continue
                     }
                     records[fetchedRecord.recordID] = fetchedRecord
-                    pendingAccountChanges[change.id] = change
+                    appendPendingAccountChange(change)
                     registerLegacyRecordDeletion(
                         canonicalization.legacyRecordID,
                         afterSaving: record.recordID
@@ -1171,7 +1196,7 @@ actor PrivateCloudSyncStore {
                 return true
             }
             records[record.recordID] = record
-            pendingAccountChanges[change.id] = change
+            appendPendingAccountChange(change)
             registerLegacyRecordDeletion(
                 canonicalization.legacyRecordID,
                 afterSaving: incomingRecord.recordID
@@ -1357,6 +1382,7 @@ actor PrivateCloudSyncStore {
         zoneID: CKRecordZone.ID
     ) throws -> CKRecord {
         pendingAccountChanges[account.id] = nil
+        persistPendingAccountChanges()
         let record = try accountRecord(
             account,
             zoneID: zoneID,
@@ -1369,11 +1395,45 @@ actor PrivateCloudSyncStore {
     func pendingServerConfigurationChanges()
         -> [CloudServerConfigurationChange]
     {
-        pendingAccountChanges.values.sorted {
+        pendingAccountChanges.values.flatMap { $0 }.sorted {
+            if $0.incoming.id != $1.incoming.id {
+                return $0.incoming.id.rawValue < $1.incoming.id.rawValue
+            }
+            return $0.structuralKey < $1.structuralKey
+        }
+    }
+
+    private func appendPendingAccountChange(
+        _ change: CloudServerConfigurationChange,
+        persist: Bool = true
+    ) {
+        var candidates = pendingAccountChanges[change.id] ?? []
+        guard !candidates.contains(where: {
+            $0.incoming == change.incoming
+        }) else { return }
+        candidates.append(change)
+        candidates.sort { $0.structuralKey < $1.structuralKey }
+        pendingAccountChanges[change.id] = candidates
+        if persist { persistPendingAccountChanges() }
+    }
+
+    private func persistPendingAccountChanges() {
+        let changes = pendingAccountChanges.values.flatMap { $0 }.sorted {
+            $0.structuralKey < $1.structuralKey
+        }
+        if let data = try? JSONEncoder().encode(changes) {
+            defaults.set(data, forKey: pendingAccountChangesKey)
+        }
+    }
+
+    private func firstPendingAccountChange(
+        accountID: AccountID
+    ) -> CloudServerConfigurationChange? {
+        pendingAccountChanges[accountID]?.sorted {
             $0.incoming.user.username.localizedStandardCompare(
                 $1.incoming.user.username
             ) == .orderedAscending
-        }
+        }.first
     }
 
     func configurationConflict() -> CloudConfigurationConflict? {
@@ -1431,17 +1491,29 @@ actor PrivateCloudSyncStore {
 
     func acceptServerConfigurationChange(
         accountID: AccountID,
+        selected: ServerAccount? = nil,
         zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
-        guard let change = pendingAccountChanges.removeValue(
-            forKey: accountID
-        ) else {
+        guard let candidates = pendingAccountChanges[accountID],
+            let change = selected.flatMap({ selection in
+                candidates.first { $0.incoming == selection }
+            }) ?? firstPendingAccountChange(accountID: accountID)
+        else {
             return nil
         }
+        pendingAccountChanges[accountID] = nil
+        persistPendingAccountChanges()
         do {
-            try await accounts.save(change.incoming)
+            if change.current == nil {
+                try await accounts.savePendingRestoredAccount(
+                    change.incoming
+                )
+            } else {
+                try await accounts.save(change.incoming)
+            }
         } catch {
-            pendingAccountChanges[accountID] = change
+            pendingAccountChanges[accountID] = candidates
+            persistPendingAccountChanges()
             throw PrivateCloudSyncError.persistenceFailed
         }
         return try prepareAccountRecord(change.incoming, zoneID: zoneID)
@@ -1451,11 +1523,12 @@ actor PrivateCloudSyncStore {
         accountID: AccountID,
         zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
-        guard let change = pendingAccountChanges.removeValue(
+        guard let candidates = pendingAccountChanges.removeValue(
             forKey: accountID
-        ) else {
+        ), let change = candidates.first else {
             return nil
         }
+        persistPendingAccountChanges()
         guard let current = change.current else {
             var ignored = ignoredAccountIDs()
             ignored.insert(accountID.rawValue)
@@ -1847,6 +1920,33 @@ actor PrivateCloudSyncStore {
                         canonicalID.rawValue
                     changed = true
                 }
+            }
+        }
+        guard changed else { return }
+        defaults.set(
+            legacyAccountIdentityMappings,
+            forKey: legacyAccountIdentityMappingsKey
+        )
+    }
+
+    private func seedLegacyAccountMappingsFromAliases() async throws {
+        let aliases: [AccountIdentityMigration]
+        do {
+            aliases = try await accounts.identityAliases()
+        } catch {
+            throw PrivateCloudSyncError.persistenceFailed
+        }
+        var changed = false
+        for alias in aliases {
+            if let existing = legacyAccountIdentityMappings[
+                alias.legacyID.rawValue
+            ], existing != alias.canonicalID.rawValue {
+                throw PrivateCloudSyncError.invalidRecord
+            }
+            if legacyAccountIdentityMappings[alias.legacyID.rawValue] == nil {
+                legacyAccountIdentityMappings[alias.legacyID.rawValue] =
+                    alias.canonicalID.rawValue
+                changed = true
             }
         }
         guard changed else { return }
@@ -2558,6 +2658,7 @@ public final class PrivateCloudSyncCoordinator:
 
     public func resolveServerConfigurationChange(
         accountID: AccountID,
+        selected: ServerAccount? = nil,
         accept: Bool
     ) async throws(PrivateCloudSyncFailure) {
         try await perform(.resolveServerConfiguration) {
@@ -2565,6 +2666,7 @@ public final class PrivateCloudSyncCoordinator:
             if accept {
                 record = try await store.acceptServerConfigurationChange(
                     accountID: accountID,
+                    selected: selected,
                     zoneID: zoneID
                 )
             } else {

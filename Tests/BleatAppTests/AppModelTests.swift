@@ -5693,6 +5693,58 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(resolutions[0].accept)
     }
 
+    func testFreshInstallCloudRestoreShowsSingleFlightAndEmptyResult()
+        async throws
+    {
+        let gate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([]),
+            activeAccount: .success(nil),
+            privateCloudSyncGate: gate
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        let started = await waitUntil(timeout: .seconds(2)) {
+            model.cloudAccountRestoreState == .synchronizing
+        }
+        XCTAssertTrue(started)
+        async let retry: Void = model.synchronizePrivateCloud()
+        await gate.release()
+        _ = await retry
+        let completed = await waitUntil(timeout: .seconds(2)) {
+            model.cloudAccountRestoreState == .noAccounts
+        }
+        XCTAssertTrue(completed)
+    }
+
+    func testPendingRestoredAccountRemainsSignedOutAwaitingPassword()
+        async throws
+    {
+        let connected = try fixtureAccount()
+        let pending = try connected.updatingConnectionState(
+            .reauthenticationRequired
+        )
+        let service = TestAppService(
+            accounts: .success([pending]),
+            activeAccount: .success(nil)
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertEqual(model.pendingRestoredAccount, pending)
+        XCTAssertEqual(
+            model.cloudAccountRestoreState,
+            .awaitingCredentials(pending.id)
+        )
+        let acceptedEmptyPassword =
+            await model.authenticatePendingRestoredAccount(password: "")
+        XCTAssertFalse(acceptedEmptyPassword)
+    }
+
     func testCloudConfigurationConflictWaitsForExplicitResolution()
         async throws
     {
