@@ -273,7 +273,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
 
         let edited = try makeAccount(
-            server: "https://primary.example",
+            server: "https://remote.example",
             localServer: "https://local.example"
         )
         try await fixture.accounts.save(edited)
@@ -347,7 +347,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             initialData as CKRecordValue
 
         let edited = try makeAccount(
-            server: "https://primary.example",
+            server: "https://remote.example",
             localServer: "https://local.example"
         )
         try await fixture.accounts.save(edited)
@@ -411,7 +411,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             recordID: baseline.recordID
         )
         let remoteUpdate = try makeAccount(
-            server: "https://primary.example",
+            server: "https://remote.example",
             localServer: "https://local.example"
         )
         incoming[PrivateCloudSyncStore.payloadKey] =
@@ -433,8 +433,9 @@ final class PrivateCloudSyncTests: XCTestCase {
             ]
         )
 
-        try await fixture.store.acceptServerConfigurationChange(
-            accountID: remoteUpdate.id
+        _ = try await fixture.store.acceptServerConfigurationChange(
+            accountID: remoteUpdate.id,
+            zoneID: fixture.zoneID
         )
         let accepted = try await fixture.accounts.account(
             id: remoteUpdate.id
@@ -480,6 +481,112 @@ final class PrivateCloudSyncTests: XCTestCase {
                     incoming: incoming
                 )
             ]
+        )
+    }
+
+    func testTwoLegacyDeviceAccountsConvergeWithoutDuplicatePrompts()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let canonical = try makeAccount(
+            server: "https://remote.example",
+            localServer: "https://local.example"
+        )
+        try await fixture.accounts.save(canonical)
+        let firstLegacy = try canonical
+            .updatingLocalServer(nil)
+            .reidentified(as: AccountID(rawValue: "device-one"))
+        let secondLegacy = try canonical.reidentified(
+            as: AccountID(rawValue: "device-two")
+        )
+        let firstRecord = try makeRecord(
+            type: "ServerAccount",
+            name: "account.device-one",
+            value: firstLegacy,
+            zoneID: fixture.zoneID
+        )
+        let secondRecord = try makeRecord(
+            type: "ServerAccount",
+            name: "account.device-two",
+            value: secondLegacy,
+            zoneID: fixture.zoneID
+        )
+
+        let pending = try await fixture.store.applyFetchedRecords([
+            firstRecord,
+            secondRecord,
+        ])
+        let changes = await fixture.store.pendingServerConfigurationChanges()
+        let canonicalRecordID = CKRecord.ID(
+            recordName: "account.\(canonical.id.rawValue)",
+            zoneID: fixture.zoneID
+        )
+        let savedValue = await fixture.store.record(for: canonicalRecordID)
+        let saved = try XCTUnwrap(savedValue)
+
+        XCTAssertTrue(changes.isEmpty)
+        XCTAssertEqual(
+            Set(pending.compactMap {
+                if case .saveRecord(let recordID) = $0 { return recordID }
+                return nil
+            }),
+            [canonicalRecordID]
+        )
+
+        let followUp = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [saved],
+            deletedRecordIDs: [],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        XCTAssertEqual(
+            Set(followUp.compactMap {
+                if case .deleteRecord(let recordID) = $0 { return recordID }
+                return nil
+            }),
+            [firstRecord.recordID, secondRecord.recordID]
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults)
+        )
+        let restoredDeletions = try await restoredStore
+            .prepareDeletionChanges(zoneID: fixture.zoneID)
+        XCTAssertEqual(
+            Set(restoredDeletions.compactMap {
+                if case .deleteRecord(let recordID) = $0 { return recordID }
+                return nil
+            }),
+            [firstRecord.recordID, secondRecord.recordID]
+        )
+        _ = try await restoredStore.reconcileSentRecordZoneChanges(
+            savedRecords: [],
+            deletedRecordIDs: [firstRecord.recordID, secondRecord.recordID],
+            failedRecordSaves: [],
+            failedRecordDeletes: [:]
+        )
+        let confirmedDeletions = try await restoredStore
+            .prepareDeletionChanges(zoneID: fixture.zoneID)
+        XCTAssertTrue(confirmedDeletions.isEmpty)
+        let data = try XCTUnwrap(
+            saved[PrivateCloudSyncStore.payloadKey] as? Data
+        )
+        let payload = try JSONDecoder().decode(
+            CloudServerAccountRecordPayload.self,
+            from: data
+        )
+        XCTAssertEqual(payload.account, canonical)
+        XCTAssertEqual(
+            payload.legacyAccountIDs,
+            [firstLegacy.id, secondLegacy.id]
         )
     }
 
@@ -1514,31 +1621,36 @@ final class PrivateCloudSyncTests: XCTestCase {
         server: String,
         localServer: String?
     ) throws -> ServerAccount {
-        try ServerAccount(
-            id: AccountID(rawValue: "account"),
-            server: NormalizedServerURL(server),
+        let normalizedServer = try NormalizedServerURL(server)
+        let user = AuthenticatedUser(
+            id: UserID(rawValue: "user"),
+            username: "reader",
+            type: .user,
+            permissions: UserPermissions(
+                download: true,
+                update: false,
+                delete: false,
+                upload: false,
+                createEReader: false,
+                accessAllLibraries: true,
+                accessAllTags: true,
+                accessExplicitContent: true,
+                selectedTagsNotAccessible: false
+            ),
+            accessibleLibraryIDs: [],
+            selectedItemTags: []
+        )
+        return try ServerAccount(
+            id: AccountID.canonical(
+                server: normalizedServer,
+                userID: user.id
+            ),
+            server: normalizedServer,
             localServer: try localServer.map(NormalizedServerURL.init),
             localServerValidated: localServer != nil,
             serverVersion: "2.29.0",
             authenticationMethods: [.local],
-            user: AuthenticatedUser(
-                id: UserID(rawValue: "user"),
-                username: "reader",
-                type: .user,
-                permissions: UserPermissions(
-                    download: true,
-                    update: false,
-                    delete: false,
-                    upload: false,
-                    createEReader: false,
-                    accessAllLibraries: true,
-                    accessAllTags: true,
-                    accessExplicitContent: true,
-                    selectedTagsNotAccessible: false
-                ),
-                accessibleLibraryIDs: [],
-                selectedItemTags: []
-            )
+            user: user
         )
     }
 

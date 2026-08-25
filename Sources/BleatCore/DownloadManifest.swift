@@ -205,6 +205,17 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         }
     }
 
+    init(reidentifying manifest: DownloadManifest, as accountID: AccountID) {
+        downloadID = manifest.downloadID
+        self.accountID = accountID
+        itemID = manifest.itemID
+        state = manifest.state
+        purpose = manifest.purpose
+        bookFinishedAt = manifest.bookFinishedAt
+        automaticWindow = manifest.automaticWindow
+        entries = manifest.entries
+    }
+
     public mutating func markDownloading(
         trackIndex: Int,
         observedByteLength: Int64? = nil,

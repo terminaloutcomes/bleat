@@ -83,6 +83,20 @@ final class LocalPlaybackSessionStore {
         try persist(stored)
     }
 
+    func migrateAccountIdentity(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws(LocalPlaybackSessionStoreError) {
+        let migrated = try entries().map {
+            StoredLocalPlaybackSession(
+                accountID: $0.accountID == legacyID
+                    ? canonicalID : $0.accountID,
+                session: $0.session
+            )
+        }
+        try persist(migrated)
+    }
+
     private func entries()
         throws(LocalPlaybackSessionStoreError)
         -> [StoredLocalPlaybackSession]

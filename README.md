@@ -485,6 +485,15 @@ local data and moves stable native credentials back to device-only Keychain
 storage; the confirmation also offers to retain or delete the private CloudKit
 copy.
 
+Account identity is deterministic from the normalized primary server URL and
+Audiobookshelf user ID, so the same server user is one account on every device;
+an optional local-network URL does not change that identity. On upgrade, Bleat
+rekeys legacy device-generated account IDs across local persistence, pending
+mutations, downloads, caches, Keychain credentials, and private CloudKit data.
+Canonical CloudKit replacements are saved before obsolete legacy records are
+deleted. This migration changes record data only and requires no CloudKit
+Dashboard schema deployment.
+
 Launch restores local accounts and downloads before starting private iCloud
 synchronization as background maintenance. A slow CloudKit operation never
 holds the app on its launch screen. Settings exposes active synchronization,
@@ -788,8 +797,9 @@ another standard Audiobookshelf username/password login.
 Switching the browsing account does not stop current playback or unrelated
 background downloads.
 
-Each account can also have an optional **Local Network** server URL. Bleat keeps
-the primary URL as the account identity, tries the local URL first for matching
+Each account can also have an optional **Local Network** server URL. Bleat uses
+the primary URL together with the remote user ID as the account identity and
+tries the local URL first for matching
 requests, and falls back to the primary URL when the local endpoint cannot be
 reached. Every launch and network-path change clears the current local failure
 state and tries any configured local endpoint. An endpoint that has not yet

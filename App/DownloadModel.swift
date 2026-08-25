@@ -506,18 +506,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if let storageRootURL {
                 rootURL = storageRootURL
             } else {
-                guard
-                    let supportURL = FileManager.default.urls(
-                        for: .applicationSupportDirectory,
-                        in: .userDomainMask
-                    ).first
-                else {
-                    throw DownloadStorageError.invalidRoot
-                }
-                rootURL = supportURL.appendingPathComponent(
-                    "Bleat/Downloads",
-                    isDirectory: true
-                )
+                let layout = try DownloadStorageLayout.applicationSupport()
+                rootURL = layout.rootURL
             }
             let layout = try DownloadStorageLayout(
                 rootURL: rootURL

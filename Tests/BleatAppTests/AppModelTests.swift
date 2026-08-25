@@ -4439,6 +4439,67 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testAccountIdentityMigrationRekeysPendingAppData() throws {
+        let suite = "AccountIdentityAppStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let legacyID = AccountID(rawValue: "legacy-device")
+        let canonicalID = AccountID(rawValue: "account-canonical")
+        let itemID = LibraryItemID(rawValue: "item")
+        let bookmark = AudioBookmark(
+            libraryItemID: itemID,
+            time: 42,
+            title: "Queued",
+            createdAtMilliseconds: 1
+        )
+        let bookmarks = BookmarkMutationStore(defaults: defaults)
+        let mutation = try bookmarks.enqueue(
+            accountID: legacyID,
+            bookmark: bookmark,
+            kind: .create,
+            status: .pending
+        )
+        let sessions = LocalPlaybackSessionStore(defaults: defaults)
+        let session = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169",
+            itemID: itemID.rawValue
+        )
+        try sessions.save(session, accountID: legacyID)
+        let positions = PlaybackPositionStore(defaults: defaults)
+        try positions.save(42, accountID: legacyID, itemID: itemID)
+
+        try bookmarks.migrateAccountIdentity(
+            from: legacyID,
+            to: canonicalID
+        )
+        try sessions.migrateAccountIdentity(
+            from: legacyID,
+            to: canonicalID
+        )
+        try positions.migrateAccountIdentity(
+            from: legacyID,
+            to: canonicalID
+        )
+
+        XCTAssertTrue(try bookmarks.mutations(accountID: legacyID).isEmpty)
+        XCTAssertEqual(
+            try bookmarks.mutations(accountID: canonicalID).map(\.id),
+            [mutation.id]
+        )
+        XCTAssertTrue(try sessions.pending(accountID: legacyID).isEmpty)
+        XCTAssertEqual(
+            try sessions.pending(accountID: canonicalID).map(\.id),
+            [session.id]
+        )
+        XCTAssertNil(positions.position(accountID: legacyID, itemID: itemID))
+        XCTAssertEqual(
+            positions.position(accountID: canonicalID, itemID: itemID),
+            42
+        )
+    }
+
     func testPendingLocalSessionsRetryWithSameIDUntilAcknowledged()
         async throws
     {

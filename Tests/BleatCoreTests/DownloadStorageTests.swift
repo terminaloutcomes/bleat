@@ -19,6 +19,96 @@ extension DownloadStorageLayout {
 }
 
 final class DownloadStorageTests: XCTestCase {
+    func testAccountIdentityMigrationMovesManifestAndMedia() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let legacyIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let chunk = fixture.rootURL.appendingPathComponent("migration.chunk")
+        try Data([1, 2]).write(to: chunk)
+        _ = try fixture.layout.appendChunk(
+            from: chunk,
+            identity: legacyIdentity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+        _ = try await fixture.storage.markPaused(
+            legacyIdentity,
+            observedByteLength: 2
+        )
+        let canonicalID = AccountID(rawValue: "account-canonical")
+
+        try await fixture.storage.migrateAccountIdentity(
+            from: fixture.accountID,
+            to: canonicalID
+        )
+
+        let records = try await fixture.storage.records()
+        let migrated = try XCTUnwrap(records.first)
+        XCTAssertEqual(migrated.manifest.accountID, canonicalID)
+        let canonicalIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: canonicalID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        XCTAssertEqual(
+            try fixture.layout.partialByteLength(for: canonicalIdentity),
+            2
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: fixture.layout.recordURL(
+                    accountID: fixture.accountID,
+                    itemID: fixture.itemID
+                ).path
+            )
+        )
+    }
+
+    func testAccountIdentityMigrationResumesAfterDirectoryMove() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let canonicalID = AccountID(rawValue: "account-canonical")
+        let source = fixture.layout.bookDirectory(
+            accountID: fixture.accountID,
+            itemID: fixture.itemID
+        )
+        let destination = fixture.layout.bookDirectory(
+            accountID: canonicalID,
+            itemID: fixture.itemID
+        )
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.moveItem(at: source, to: destination)
+
+        try await fixture.storage.migrateAccountIdentity(
+            from: fixture.accountID,
+            to: canonicalID
+        )
+
+        let records = try await fixture.storage.records()
+        XCTAssertEqual(records.map(\.manifest.accountID), [canonicalID])
+    }
+
     func testFinalizedLateTrackKeepsRemainingTracksPaused() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }

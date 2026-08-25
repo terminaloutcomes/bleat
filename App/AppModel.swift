@@ -706,7 +706,9 @@ struct AppFailure: Equatable, Sendable {
             case .accountPersistenceFailed, .credentialRollbackFailed:
                 return .localStorageUnavailable
             }
-        case .accountStore, .libraryCache, .transcriptCache, .statistics:
+        case .accountStore, .credentialStore, .accountIdentityMigration,
+            .libraryCache,
+            .transcriptCache, .statistics:
             return .localStorageUnavailable
         case .privateCloud(let error):
             return .privateCloud(error)

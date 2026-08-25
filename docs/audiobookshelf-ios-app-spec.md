@@ -133,9 +133,10 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Leaving the password blank while editing preserves the existing device
   credentials; entering a password replaces them after successful
   authentication.
-- The primary URL remains the account identity; matching requests prefer the
-  local URL and fall back to the primary URL when the local endpoint is
-  unavailable.
+- The normalized primary URL and remote Audiobookshelf user ID form a
+  deterministic account identity shared by every device; the local URL does
+  not affect identity. Matching requests prefer the local URL and fall back to
+  the primary URL when the local endpoint is unavailable.
 
 ### 4.2 Library
 
@@ -587,7 +588,9 @@ Do not log provider URLs, callback URLs, authorization codes, tokens, cookies, o
   iCloud synchronization is enabled, and migrates back to a device-only item
   when the user opts out. A build with the CloudKit capability disabled also
   keeps this credential device-only.
-- Use a distinct Keychain service/account key for every local `AccountID`.
+- Use a distinct Keychain service/account key for every canonical `AccountID`.
+  Migrate legacy device-generated account keys locally without placing access
+  or refresh tokens in synchronizing Keychain storage.
 - Use the access token only in `Authorization: Bearer` headers.
 - The current server also extracts an access token from `?token=`, but this client never uses or stores token-bearing URLs.
 - Use the refresh token only in `x-refresh-token` for:
@@ -1343,6 +1346,13 @@ keeping the device values pushes them back to CloudKit. A cloud-only account
 likewise requires confirmation before it is added locally. Account descriptors
 carry a generation ID and predecessor identity; a delayed predecessor is stale
 and must be ignored and replaced without prompting or changing local settings.
+Legacy device-generated account IDs are canonicalized from the normalized
+primary server URL and remote user ID. Account descriptors retain legacy ID
+aliases long enough to rekey account-scoped statistics fetched later. Save each
+canonical CloudKit replacement before deleting its obsolete account or remote
+session record; interrupted migration must converge on a later sync without
+re-presenting the legacy configuration. This is a private-zone data migration,
+not a CloudKit record-type or field deployment.
 `BLEAT_CLOUDKIT_MODE=disabled`
 selects CloudKit-free entitlements for development teams that do not support
 the capability; those builds do not initialize or present CloudKit

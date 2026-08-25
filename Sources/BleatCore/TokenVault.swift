@@ -203,6 +203,106 @@ public actor TokenVault: AccountCredentialStore {
         }
     }
 
+    public func migrateCredentials(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws {
+        guard legacyID != canonicalID else { return }
+        let session = try storedData(
+            service: tokenService,
+            accountID: legacyID,
+            synchronizable: false
+        )
+        let native = tokenService == nativeLoginService
+            ? nil
+            : try storedData(
+                service: nativeLoginService,
+                accountID: legacyID,
+                synchronizable: synchronizesNativeLogin
+            )
+        let canonicalSession = try storedData(
+            service: tokenService,
+            accountID: canonicalID,
+            synchronizable: false
+        )
+        let canonicalNative = tokenService == nativeLoginService
+            ? nil
+            : try storedData(
+                service: nativeLoginService,
+                accountID: canonicalID,
+                synchronizable: synchronizesNativeLogin
+            )
+        if let session {
+            try Self.validateSessionCredentialData(session)
+        }
+        if let native {
+            try Self.validateNativeLoginData(native)
+        }
+        if let canonicalSession {
+            try Self.validateSessionCredentialData(canonicalSession)
+        }
+        if let canonicalNative {
+            try Self.validateNativeLoginData(canonicalNative)
+        }
+        var createdSession = false
+        do {
+            if let session, canonicalSession == nil {
+                try saveData(
+                    session,
+                    service: tokenService,
+                    accountID: canonicalID,
+                    synchronizable: false
+                )
+                createdSession = true
+            }
+            if let native, canonicalNative == nil {
+                try saveData(
+                    native,
+                    service: nativeLoginService,
+                    accountID: canonicalID,
+                    synchronizable: synchronizesNativeLogin
+                )
+            }
+        } catch {
+            if createdSession {
+                try? deleteItem(
+                    service: tokenService,
+                    accountID: canonicalID,
+                    synchronizable: false
+                )
+            }
+            throw error
+        }
+    }
+
+    private static func validateSessionCredentialData(_ data: Data) throws {
+        guard (try? JSONDecoder().decode(
+            AuthenticationTokens.self,
+            from: data
+        )) != nil || (try? JSONDecoder().decode(
+            StoredAccountCredentials.self,
+            from: data
+        )) != nil else {
+            throw TokenVaultError.invalidStoredCredentials
+        }
+    }
+
+    private static func validateNativeLoginData(_ data: Data) throws {
+        guard (try? JSONDecoder().decode(
+            NativeLoginCredentials.self,
+            from: data
+        )) != nil else {
+            throw TokenVaultError.invalidStoredCredentials
+        }
+    }
+
+    public func removeLegacyCredentials(after migration: AccountIdentityMigration)
+        throws
+    {
+        try deleteSessionTokens(for: migration.legacyID)
+        try deleteNativeLoginCredentials(for: migration.legacyID)
+    }
+
     nonisolated func deleteSessionTokens(
         for accountID: AccountID
     ) throws {

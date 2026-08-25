@@ -123,6 +123,21 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
+    func reidentified(
+        as accountID: AccountID
+    ) throws(ServerAccountValidationError) -> ServerAccount {
+        try ServerAccount(
+            id: accountID,
+            server: server,
+            localServer: localServer,
+            localServerValidated: localServerValidated,
+            serverVersion: serverVersion,
+            authenticationMethods: authenticationMethods,
+            user: user,
+            connectionState: connectionState
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case server
@@ -212,6 +227,16 @@ public enum AccountStoreError: Error, Equatable, Sendable {
     case persistenceFailed
 }
 
+public struct AccountIdentityMigration: Equatable, Sendable {
+    public let legacyID: AccountID
+    public let canonicalID: AccountID
+
+    public init(legacyID: AccountID, canonicalID: AccountID) {
+        self.legacyID = legacyID
+        self.canonicalID = canonicalID
+    }
+}
+
 public enum AccountOnboardingError: Error, Equatable, Sendable {
     case localAuthenticationUnavailable
     case authenticationFailed(LocalAuthenticationError)
@@ -232,6 +257,184 @@ public enum AccountLifecycleError: Error, Equatable, Sendable {
 
 @ModelActor
 public actor AccountStore {
+    public func legacyIdentityMigrations() throws(AccountStoreError)
+        -> [AccountIdentityMigration]
+    {
+        try accounts().compactMap { account in
+            let canonicalID = AccountID.canonical(
+                server: account.server,
+                userID: account.user.id
+            )
+            guard canonicalID != account.id else {
+                return nil
+            }
+            return AccountIdentityMigration(
+                legacyID: account.id,
+                canonicalID: canonicalID
+            )
+        }
+    }
+
+    public func applyIdentityMigrations(
+        _ migrations: [AccountIdentityMigration]
+    ) throws(AccountStoreError) {
+        guard !migrations.isEmpty else { return }
+        let mapping = Dictionary(
+            uniqueKeysWithValues: migrations.map {
+                ($0.legacyID.rawValue, $0.canonicalID.rawValue)
+            }
+        )
+        try applyIdentityChanges(mapping: mapping, replacements: [:])
+    }
+
+    public func replaceAccountIdentity(
+        from legacyID: AccountID,
+        with account: ServerAccount
+    ) throws(AccountStoreError) {
+        guard legacyID != account.id else {
+            try save(account)
+            return
+        }
+        try applyIdentityChanges(
+            mapping: [legacyID.rawValue: account.id.rawValue],
+            replacements: [legacyID.rawValue: account]
+        )
+    }
+
+    private func applyIdentityChanges(
+        mapping: [String: String],
+        replacements: [String: ServerAccount]
+    ) throws(AccountStoreError) {
+        do {
+            let accountRecords = try modelContext.fetch(
+                FetchDescriptor<ServerAccountRecord>()
+            )
+            for (legacy, canonical) in mapping
+            where accountRecords.contains(where: {
+                $0.accountID == canonical && $0.accountID != legacy
+            }) {
+                throw AccountStoreError.duplicateRemoteAccount(
+                    existingAccountID: AccountID(rawValue: canonical)
+                )
+            }
+            for record in accountRecords {
+                guard let canonical = mapping[record.accountID] else {
+                    continue
+                }
+                let migrated = try replacements[record.accountID]
+                    ?? decode(record).reidentified(
+                        as: AccountID(rawValue: canonical)
+                    )
+                record.accountID = canonical
+                record.serverURL = migrated.server.url.absoluteString
+                record.remoteUserID = migrated.user.id.rawValue
+                record.profileData = try JSONEncoder().encode(migrated)
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<ListeningSliceRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<CompletionMilestoneRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<RemoteListeningSessionRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.compositeID = RemoteListeningSessionRecord
+                        .compositeID(
+                            accountID: AccountID(rawValue: canonical),
+                            sessionID: PlaybackSessionID(
+                                rawValue: record.sessionID
+                            )
+                        )
+                    record.privateCloudSynchronized = false
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                }
+            }
+            for record in try modelContext.fetch(
+                FetchDescriptor<StatisticsSessionAccountingRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                    record.compositeID = StatisticsSessionAccountingRecord
+                        .compositeID(
+                            accountID: AccountID(rawValue: canonical),
+                            sessionID: PlaybackSessionID(
+                                rawValue: record.sessionID
+                            )
+                        )
+                }
+            }
+            try removeLegacyCaches(accountIDs: Set(mapping.keys))
+            try modelContext.save()
+        } catch let error as AccountStoreError {
+            modelContext.rollback()
+            throw error
+        } catch {
+            modelContext.rollback()
+            throw .persistenceFailed
+        }
+    }
+
+    private func removeLegacyCaches(accountIDs: Set<String>) throws {
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryCollectionRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryPageRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibrarySearchRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryHomeRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedLibraryBookDetailRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedChapterTranscriptRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+        for record in try modelContext.fetch(
+            FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
+        ) where accountIDs.contains(record.accountID) {
+            modelContext.delete(record)
+        }
+    }
     public func save(
         _ account: ServerAccount,
         makeActive: Bool = false
@@ -457,19 +660,53 @@ extension AuthCoordinator {
             throw .localAuthenticationUnavailable
         }
 
-        let authenticated: AuthenticatedAccount
+        let authentication: LocalAuthenticationResult
         do {
-            authenticated = try await login(
+            authentication = try await Self.authenticateLocally(
                 accountID: accountID,
                 server: discoveredServer.baseURL,
                 username: username,
                 password: password,
-                expectedUserID: expectedUserID
+                expectedUserID: expectedUserID,
+                persistCredentials: false,
+                transport: transport,
+                credentialStore: credentialStore
             )
         } catch let error as LocalAuthenticationError {
             throw .authenticationFailed(error)
         } catch {
             throw .authenticationRequestFailed
+        }
+
+        let canonicalID = AccountID.canonical(
+            server: discoveredServer.baseURL,
+            userID: authentication.account.user.id
+        )
+        let authenticated = AuthenticatedAccount(
+            id: canonicalID,
+            server: authentication.account.server,
+            user: authentication.account.user
+        )
+        do {
+            let nativeLogin = try NativeLoginCredentials(
+                userID: authenticated.user.id,
+                username: username,
+                password: password
+            )
+            try await credentialStore.save(
+                authentication.tokens,
+                nativeLogin: nativeLogin,
+                for: canonicalID
+            )
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw .authenticationFailed(.credentialStorageUnavailable)
+            default:
+                throw .authenticationFailed(.credentialPersistenceFailed)
+            }
+        } catch {
+            throw .authenticationFailed(.credentialPersistenceFailed)
         }
 
         await onAuthenticationCompleted()
@@ -482,7 +719,7 @@ extension AuthCoordinator {
             )
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: canonicalID,
                 originalError: .invalidAccount(error)
             )
         }
@@ -491,10 +728,79 @@ extension AuthCoordinator {
             try await accountStore.save(account, makeActive: makeActive)
         } catch let error {
             try await rollbackOnboardingCredentials(
-                accountID: accountID,
+                accountID: canonicalID,
                 originalError: .accountPersistenceFailed(error)
             )
         }
+        return account
+    }
+
+    public func loginForPersistedAccountUpdate(
+        previousAccountID: AccountID,
+        discoveredServer: DiscoveredServer,
+        username: String,
+        password: String,
+        expectedUserID: UserID,
+        onAuthenticationCompleted: @escaping @Sendable () async -> Void = {}
+    ) async throws(AccountOnboardingError) -> ServerAccount {
+        guard discoveredServer.authenticationMethods.contains(.local) else {
+            throw .localAuthenticationUnavailable
+        }
+        let authentication: LocalAuthenticationResult
+        do {
+            authentication = try await Self.authenticateLocally(
+                accountID: previousAccountID,
+                server: discoveredServer.baseURL,
+                username: username,
+                password: password,
+                expectedUserID: expectedUserID,
+                persistCredentials: false,
+                transport: transport,
+                credentialStore: credentialStore
+            )
+        } catch let error as LocalAuthenticationError {
+            throw .authenticationFailed(error)
+        } catch {
+            throw .authenticationRequestFailed
+        }
+        let canonicalID = AccountID.canonical(
+            server: discoveredServer.baseURL,
+            userID: authentication.account.user.id
+        )
+        let authenticated = AuthenticatedAccount(
+            id: canonicalID,
+            server: authentication.account.server,
+            user: authentication.account.user
+        )
+        let account: ServerAccount
+        do {
+            account = try ServerAccount(
+                authenticatedAccount: authenticated,
+                discoveredServer: discoveredServer
+            )
+            let nativeLogin = try NativeLoginCredentials(
+                userID: authenticated.user.id,
+                username: username,
+                password: password
+            )
+            try await credentialStore.save(
+                authentication.tokens,
+                nativeLogin: nativeLogin,
+                for: canonicalID
+            )
+        } catch let error as ServerAccountValidationError {
+            throw .invalidAccount(error)
+        } catch let error as TokenVaultError {
+            switch error {
+            case .missingEntitlement, .interactionNotAllowed:
+                throw .authenticationFailed(.credentialStorageUnavailable)
+            default:
+                throw .authenticationFailed(.credentialPersistenceFailed)
+            }
+        } catch {
+            throw .authenticationFailed(.credentialPersistenceFailed)
+        }
+        await onAuthenticationCompleted()
         return account
     }
 

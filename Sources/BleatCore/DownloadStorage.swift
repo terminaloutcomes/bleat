@@ -108,6 +108,23 @@ public struct DownloadStorageLayout: Sendable {
         self.rootURL = rootURL.standardizedFileURL
     }
 
+    public static func applicationSupport()
+        throws(DownloadStorageError) -> DownloadStorageLayout
+    {
+        guard let supportURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            throw .invalidRoot
+        }
+        return try DownloadStorageLayout(
+            rootURL: supportURL.appendingPathComponent(
+                "Bleat/Downloads",
+                isDirectory: true
+            )
+        )
+    }
+
     public func bookDirectory(
         accountID: AccountID,
         itemID: LibraryItemID
@@ -359,6 +376,74 @@ public actor DownloadStorage {
 
     public init(layout: DownloadStorageLayout) {
         self.layout = layout
+    }
+
+    public func migrateAccountIdentity(
+        from legacyID: AccountID,
+        to canonicalID: AccountID
+    ) throws(DownloadStorageError) {
+        guard legacyID != canonicalID else { return }
+        let matchingRecords = try records().filter {
+            $0.manifest.accountID == legacyID
+        }
+        let fileManager = FileManager.default
+        for record in matchingRecords {
+            let source = layout.bookDirectory(
+                accountID: legacyID,
+                itemID: record.manifest.itemID
+            )
+            let destination = layout.bookDirectory(
+                accountID: canonicalID,
+                itemID: record.manifest.itemID
+            )
+            var migrated = record
+            migrated.manifest = DownloadManifest(
+                reidentifying: record.manifest,
+                as: canonicalID
+            )
+            if fileManager.fileExists(atPath: destination.path) {
+                guard !fileManager.fileExists(atPath: source.path),
+                    let destinationRecord = try? decoder.decode(
+                        DownloadedBookRecord.self,
+                        from: Data(
+                            contentsOf: destination.appendingPathComponent(
+                                "record.json",
+                                isDirectory: false
+                            )
+                        )
+                    ),
+                    destinationRecord.manifest.downloadID
+                        == record.manifest.downloadID,
+                    destinationRecord.manifest.itemID
+                        == record.manifest.itemID,
+                    destinationRecord.manifest.accountID == legacyID
+                else {
+                    throw .duplicateDownload
+                }
+                try persist(migrated)
+                continue
+            }
+            guard fileManager.fileExists(atPath: source.path) else {
+                throw .persistenceFailed
+            }
+            do {
+                try fileManager.createDirectory(
+                    at: destination.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try fileManager.moveItem(at: source, to: destination)
+                do {
+                    try persist(migrated)
+                } catch {
+                    try? fileManager.moveItem(at: destination, to: source)
+                    throw error
+                }
+            } catch let error as DownloadStorageError {
+                throw error
+            } catch {
+                throw .persistenceFailed
+            }
+        }
     }
 
     public func preflight(

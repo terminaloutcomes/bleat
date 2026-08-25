@@ -412,25 +412,57 @@ public enum CloudConfigurationConflictResolution: Equatable, Sendable {
 }
 
 struct CloudServerAccountRecordPayload: Codable, Equatable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
+    static let supportedSchemaVersions = 1...currentSchemaVersion
 
     let schemaVersion: Int
     let generationID: UUID
     let supersededGenerationID: UUID?
     let supersededPayloadDigest: Data?
     let account: ServerAccount
+    let legacyAccountIDs: [AccountID]
 
     init(
         generationID: UUID = UUID(),
         supersededGenerationID: UUID? = nil,
         supersededPayloadDigest: Data?,
-        account: ServerAccount
+        account: ServerAccount,
+        legacyAccountIDs: [AccountID] = []
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.generationID = generationID
         self.supersededGenerationID = supersededGenerationID
         self.supersededPayloadDigest = supersededPayloadDigest
         self.account = account
+        self.legacyAccountIDs = legacyAccountIDs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case generationID
+        case supersededGenerationID
+        case supersededPayloadDigest
+        case account
+        case legacyAccountIDs
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+        generationID = try values.decode(UUID.self, forKey: .generationID)
+        supersededGenerationID = try values.decodeIfPresent(
+            UUID.self,
+            forKey: .supersededGenerationID
+        )
+        supersededPayloadDigest = try values.decodeIfPresent(
+            Data.self,
+            forKey: .supersededPayloadDigest
+        )
+        account = try values.decode(ServerAccount.self, forKey: .account)
+        legacyAccountIDs = try values.decodeIfPresent(
+            [AccountID].self,
+            forKey: .legacyAccountIDs
+        ) ?? []
     }
 }
 
@@ -704,6 +736,10 @@ actor PrivateCloudSyncStore {
         "bleat.cloudKit.ignoredStatisticsAccounts.v1"
     private let pendingConfigurationConflictKey =
         "bleat.cloudKit.pendingConfigurationConflict.v1"
+    private let legacyAccountIdentityMappingsKey =
+        "bleat.cloudKit.legacyAccountIdentityMappings.v1"
+    private let pendingLegacyRecordDeletionsKey =
+        "bleat.cloudKit.pendingLegacyRecordDeletions.v1"
     private var records: [CKRecord.ID: CKRecord] = [:]
     private var synchronizedPayloadDigests: [String: Data] = [:]
     private var pendingAccountChanges:
@@ -711,12 +747,20 @@ actor PrivateCloudSyncStore {
     private var pendingConfigurationConflict: CloudConfigurationConflict?
     private var pendingConfigurationConflictRevision: UUID?
     private var pendingConfigurationConflictIsInvalid = false
+    private var legacyAccountIdentityMappings: [String: String] = [:]
+    private var pendingLegacyRecordDeletions: [String: Set<String>] = [:]
 
     private enum IncomingRecordResolution {
         case applyRemote
         case preserveLocal(Data)
         case requestAccountConfirmation(CloudServerConfigurationChange)
         case requestConfigurationConfirmation(CloudConfigurationConflict)
+    }
+
+    private struct CanonicalizedCloudRecord {
+        let record: CKRecord
+        let legacyRecordID: CKRecord.ID?
+        let requiresUpload: Bool
     }
 
     init(
@@ -747,6 +791,14 @@ actor PrivateCloudSyncStore {
             defaults.value.dictionary(
                 forKey: synchronizedPayloadDigestsKey
             ) as? [String: Data] ?? [:]
+        legacyAccountIdentityMappings = defaults.value.dictionary(
+            forKey: legacyAccountIdentityMappingsKey
+        ) as? [String: String] ?? [:]
+        pendingLegacyRecordDeletions = (
+            defaults.value.dictionary(
+                forKey: pendingLegacyRecordDeletionsKey
+            ) as? [String: [String]] ?? [:]
+        ).mapValues(Set.init)
         if let retainedPayloads = defaults.value.dictionary(
             forKey: retainedRecordPayloadsKey
         ) as? [String: Data] {
@@ -868,14 +920,32 @@ actor PrivateCloudSyncStore {
         zoneID: CKRecordZone.ID
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
         do {
-            return try await statistics.privateCloudDeletions().map {
-                .deleteRecord(
+            var changes: [CKSyncEngine.PendingRecordZoneChange] =
+                try await statistics.privateCloudDeletions().map {
+                    CKSyncEngine.PendingRecordZoneChange.deleteRecord(
                     CKRecord.ID(
                         recordName: $0.recordName,
                         zoneID: zoneID
                     )
                 )
             }
+            for (canonicalName, legacyNames) in pendingLegacyRecordDeletions {
+                guard let canonicalRecord = records.first(where: {
+                    $0.key.recordName == canonicalName
+                })?.value,
+                    !needsUpload(canonicalRecord)
+                else {
+                    continue
+                }
+                changes.append(
+                    contentsOf: legacyNames.map {
+                        CKSyncEngine.PendingRecordZoneChange.deleteRecord(
+                            CKRecord.ID(recordName: $0, zoneID: zoneID)
+                        )
+                    }
+                )
+            }
+            return changes
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
@@ -934,6 +1004,7 @@ actor PrivateCloudSyncStore {
     ) {
         var recordsToApply: [CKRecord] = []
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
+        learnLegacyAccountMappings(from: fetchedRecords)
         let pendingDeletionNames: Set<String>
         do {
             pendingDeletionNames = Set(
@@ -943,7 +1014,22 @@ actor PrivateCloudSyncStore {
             throw PrivateCloudSyncError.persistenceFailed
         }
         var firstFailure: PrivateCloudSyncError?
-        for record in fetchedRecords {
+        for fetchedRecord in fetchedRecords {
+            let canonicalization: CanonicalizedCloudRecord
+            do {
+                canonicalization = try canonicalizedCloudRecord(fetchedRecord)
+            } catch let error as PrivateCloudSyncError {
+                if firstFailure == nil {
+                    firstFailure = error
+                }
+                continue
+            } catch {
+                if firstFailure == nil {
+                    firstFailure = .invalidRecord
+                }
+                continue
+            }
+            let record = canonicalization.record
             guard !pendingDeletionNames.contains(record.recordID.recordName)
             else {
                 continue
@@ -956,14 +1042,44 @@ actor PrivateCloudSyncStore {
                 switch resolution {
                 case .applyRemote:
                     recordsToApply.append(record)
+                    if canonicalization.requiresUpload {
+                        records[record.recordID] = record
+                        pendingChanges.append(.saveRecord(record.recordID))
+                        registerLegacyRecordDeletion(
+                            canonicalization.legacyRecordID,
+                            afterSaving: record.recordID
+                        )
+                    }
                 case .preserveLocal(let data):
                     record[Self.payloadKey] = data as CKRecordValue
                     records[record.recordID] = record
                     pendingChanges.append(.saveRecord(record.recordID))
                 case .requestAccountConfirmation(let change):
-                    records[record.recordID] = record
+                    if canonicalization.legacyRecordID != nil,
+                        let current = change.current
+                    {
+                        let localRecord = try accountRecord(
+                            current,
+                            zoneID: record.recordID.zoneID,
+                            forceNewGeneration: false
+                        )
+                        records[localRecord.recordID] = localRecord
+                        pendingChanges.append(
+                            .saveRecord(localRecord.recordID)
+                        )
+                        registerLegacyRecordDeletion(
+                            canonicalization.legacyRecordID,
+                            afterSaving: localRecord.recordID
+                        )
+                        continue
+                    }
+                    records[fetchedRecord.recordID] = fetchedRecord
                     pendingAccountChanges[change.id] = change
-                    markSynchronized(record)
+                    registerLegacyRecordDeletion(
+                        canonicalization.legacyRecordID,
+                        afterSaving: record.recordID
+                    )
+                    markSynchronized(fetchedRecord)
                 case .requestConfigurationConfirmation(let conflict):
                     records[record.recordID] = record
                     try setPendingConfigurationConflict(conflict)
@@ -985,7 +1101,14 @@ actor PrivateCloudSyncStore {
         }
         for record in application.appliedRecords {
             records[record.recordID] = record
-            markSynchronized(record)
+            if !pendingChanges.contains(where: {
+                if case .saveRecord(let recordID) = $0 {
+                    return recordID == record.recordID
+                }
+                return false
+            }) {
+                markSynchronized(record)
+            }
         }
         if persistState {
             persistRecordState()
@@ -998,29 +1121,61 @@ actor PrivateCloudSyncStore {
         _ record: CKRecord,
         persistSystemFields: Bool = true
     ) async throws -> Bool {
+        learnLegacyAccountMappings(from: [record])
+        let canonicalization = try canonicalizedCloudRecord(record)
+        let incomingRecord = canonicalization.record
         let resolution = try await resolveIncomingRecord(
-            record,
-            previousRecord: records[record.recordID]
+            incomingRecord,
+            previousRecord: records[incomingRecord.recordID]
         )
         switch resolution {
         case .applyRemote:
-            records[record.recordID] = record
-            try await apply(record)
-            markSynchronized(record)
+            records[incomingRecord.recordID] = incomingRecord
+            try await apply(incomingRecord)
+            if canonicalization.requiresUpload {
+                registerLegacyRecordDeletion(
+                    canonicalization.legacyRecordID,
+                    afterSaving: incomingRecord.recordID
+                )
+            } else {
+                markSynchronized(incomingRecord)
+            }
             if persistSystemFields {
                 persistRecordState()
             }
-            return false
+            return canonicalization.requiresUpload
         case .preserveLocal(let data):
-            record[Self.payloadKey] = data as CKRecordValue
-            records[record.recordID] = record
+            incomingRecord[Self.payloadKey] = data as CKRecordValue
+            records[incomingRecord.recordID] = incomingRecord
             if persistSystemFields {
                 persistRecordState()
             }
             return true
         case .requestAccountConfirmation(let change):
+            if canonicalization.legacyRecordID != nil,
+                let current = change.current
+            {
+                let localRecord = try accountRecord(
+                    current,
+                    zoneID: incomingRecord.recordID.zoneID,
+                    forceNewGeneration: false
+                )
+                records[localRecord.recordID] = localRecord
+                registerLegacyRecordDeletion(
+                    canonicalization.legacyRecordID,
+                    afterSaving: localRecord.recordID
+                )
+                if persistSystemFields {
+                    persistRecordState()
+                }
+                return true
+            }
             records[record.recordID] = record
             pendingAccountChanges[change.id] = change
+            registerLegacyRecordDeletion(
+                canonicalization.legacyRecordID,
+                afterSaving: incomingRecord.recordID
+            )
             markSynchronized(record)
             if persistSystemFields {
                 persistRecordState()
@@ -1080,6 +1235,30 @@ actor PrivateCloudSyncStore {
         }
 
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
+        for record in savedRecords {
+            let legacyRecordNames = pendingLegacyRecordDeletions[
+                record.recordID.recordName
+            ] ?? []
+            pendingChanges.append(
+                contentsOf: legacyRecordNames.map {
+                    .deleteRecord(
+                        CKRecord.ID(
+                            recordName: $0,
+                            zoneID: record.recordID.zoneID
+                        )
+                    )
+                }
+            )
+        }
+        if !confirmedDeletedRecordNames.isEmpty {
+            pendingLegacyRecordDeletions = pendingLegacyRecordDeletions
+                .compactMapValues { names in
+                    let remaining = names.subtracting(
+                        confirmedDeletedRecordNames
+                    )
+                    return remaining.isEmpty ? nil : remaining
+                }
+        }
         for failure in failedRecordSaves {
             switch failure.error.code {
             case .serverRecordChanged:
@@ -1251,12 +1430,13 @@ actor PrivateCloudSyncStore {
     }
 
     func acceptServerConfigurationChange(
-        accountID: AccountID
-    ) async throws {
+        accountID: AccountID,
+        zoneID: CKRecordZone.ID
+    ) async throws -> CKRecord? {
         guard let change = pendingAccountChanges.removeValue(
             forKey: accountID
         ) else {
-            return
+            return nil
         }
         do {
             try await accounts.save(change.incoming)
@@ -1264,6 +1444,7 @@ actor PrivateCloudSyncStore {
             pendingAccountChanges[accountID] = change
             throw PrivateCloudSyncError.persistenceFailed
         }
+        return try prepareAccountRecord(change.incoming, zoneID: zoneID)
     }
 
     func rejectServerConfigurationChange(
@@ -1332,8 +1513,16 @@ actor PrivateCloudSyncStore {
         var matchingRecordIDs = Set(
             records.values.compactMap { record in
                 if record.recordType == "ServerAccount" {
-                    return record.recordID.recordName
-                        == "account.\(accountID.rawValue)"
+                    let recordAccountID = AccountID(
+                        rawValue: String(
+                            record.recordID.recordName.dropFirst(
+                                "account.".count
+                            )
+                        )
+                    )
+                    return recordAccountID == accountID
+                        || canonicalAccountID(for: recordAccountID)
+                            == accountID
                         ? record.recordID : nil
                 }
                 guard includeStatistics,
@@ -1347,22 +1536,40 @@ actor PrivateCloudSyncStore {
                         (try? JSONDecoder().decode(
                             ListeningSlice.self,
                             from: data
-                        ).accountID) == accountID ? record.recordID : nil
+                        ).accountID).map {
+                            $0 == accountID
+                                || canonicalAccountID(for: $0) == accountID
+                        } == true ? record.recordID : nil
                 case "CompletionMilestone":
                     return
                         (try? JSONDecoder().decode(
                             CompletionMilestone.self,
                             from: data
-                        ).accountID) == accountID ? record.recordID : nil
+                        ).accountID).map {
+                            $0 == accountID
+                                || canonicalAccountID(for: $0) == accountID
+                        } == true ? record.recordID : nil
                 case "RemoteListeningSession":
                     return
                         (try? JSONDecoder().decode(
                             RemoteListeningSession.self,
                             from: data
-                        ).accountID) == accountID ? record.recordID : nil
+                        ).accountID).map {
+                            $0 == accountID
+                                || canonicalAccountID(for: $0) == accountID
+                        } == true ? record.recordID : nil
                 default:
                     return nil
                 }
+            }
+        )
+        matchingRecordIDs.formUnion(
+            legacyAccountIdentityMappings.compactMap { legacy, canonical in
+                canonical == accountID.rawValue
+                    ? CKRecord.ID(
+                        recordName: "account.\(legacy)",
+                        zoneID: zoneID
+                    ) : nil
             }
         )
         if includeStatistics {
@@ -1417,9 +1624,18 @@ actor PrivateCloudSyncStore {
             records[recordID]
             ?? CKRecord(recordType: "ServerAccount", recordID: recordID)
         let previousData = record[Self.payloadKey] as? Data
+        let legacyAccountIDs = legacyAccountIdentityMappings.compactMap {
+            legacy, canonical in
+            canonical == account.id.rawValue
+                ? AccountID(rawValue: legacy) : nil
+        }.sorted { $0.rawValue < $1.rawValue }
         if !forceNewGeneration,
             let previousData,
-            try decodeAccountPayload(previousData).account == account
+            let previousPayload = try? decodeAccountPayload(previousData),
+            previousPayload.schemaVersion
+                == CloudServerAccountRecordPayload.currentSchemaVersion,
+            previousPayload.account == account,
+            previousPayload.legacyAccountIDs == legacyAccountIDs
         {
             return record
         }
@@ -1431,7 +1647,8 @@ actor PrivateCloudSyncStore {
                 ).generationID
             },
             supersededPayloadDigest: previousData.map(Self.payloadDigest),
-            account: account
+            account: account,
+            legacyAccountIDs: legacyAccountIDs
         )
         do {
             record[Self.payloadKey] =
@@ -1609,6 +1826,197 @@ actor PrivateCloudSyncStore {
         return (appliedRecords, firstFailure)
     }
 
+    private func learnLegacyAccountMappings(from cloudRecords: [CKRecord]) {
+        var changed = false
+        for record in cloudRecords where record.recordType == "ServerAccount" {
+            guard let data = record[Self.payloadKey] as? Data,
+                let payload = try? decodeAccountPayload(data)
+            else {
+                continue
+            }
+            let canonicalID = AccountID.canonical(
+                server: payload.account.server,
+                userID: payload.account.user.id
+            )
+            for legacyID in payload.legacyAccountIDs + [payload.account.id]
+            where legacyID != canonicalID {
+                if legacyAccountIdentityMappings[legacyID.rawValue]
+                    != canonicalID.rawValue
+                {
+                    legacyAccountIdentityMappings[legacyID.rawValue] =
+                        canonicalID.rawValue
+                    changed = true
+                }
+            }
+        }
+        guard changed else { return }
+        defaults.set(
+            legacyAccountIdentityMappings,
+            forKey: legacyAccountIdentityMappingsKey
+        )
+    }
+
+    private func canonicalizedCloudRecord(
+        _ record: CKRecord
+    ) throws -> CanonicalizedCloudRecord {
+        guard let data = record[Self.payloadKey] as? Data else {
+            throw PrivateCloudSyncError.invalidRecord
+        }
+        let canonicalRecord: CKRecord
+        let canonicalData: Data
+        switch record.recordType {
+        case "ServerAccount":
+            let payload = try decodeAccountPayload(data)
+            let canonicalID = AccountID.canonical(
+                server: payload.account.server,
+                userID: payload.account.user.id
+            )
+            let canonicalAccount = try payload.account.reidentified(
+                as: canonicalID
+            )
+            let aliases = Set(
+                payload.legacyAccountIDs
+                    + (payload.account.id == canonicalID
+                        ? [] : [payload.account.id])
+                    + legacyAccountIdentityMappings.compactMap {
+                        legacy, canonical in
+                        canonical == canonicalID.rawValue
+                            ? AccountID(rawValue: legacy) : nil
+                    }
+            ).sorted { $0.rawValue < $1.rawValue }
+            let canonicalPayload = CloudServerAccountRecordPayload(
+                generationID: payload.generationID,
+                supersededGenerationID: payload.supersededGenerationID,
+                supersededPayloadDigest: payload.supersededPayloadDigest,
+                account: canonicalAccount,
+                legacyAccountIDs: aliases
+            )
+            canonicalData = try Self.encodePayload(canonicalPayload)
+            let canonicalIDValue = CKRecord.ID(
+                recordName: "account.\(canonicalID.rawValue)",
+                zoneID: record.recordID.zoneID
+            )
+            canonicalRecord = records[canonicalIDValue]
+                ?? CKRecord(
+                    recordType: record.recordType,
+                    recordID: canonicalIDValue
+                )
+        case "ListeningSlice":
+            let value = try JSONDecoder().decode(ListeningSlice.self, from: data)
+            guard let canonical = canonicalAccountID(for: value.accountID)
+            else {
+                return CanonicalizedCloudRecord(
+                    record: record,
+                    legacyRecordID: nil,
+                    requiresUpload: false
+                )
+            }
+            canonicalData = try Self.encodePayload(
+                value.reidentified(as: canonical)
+            )
+            canonicalRecord = record
+        case "CompletionMilestone":
+            let value = try JSONDecoder().decode(
+                CompletionMilestone.self,
+                from: data
+            )
+            guard let canonical = canonicalAccountID(for: value.accountID)
+            else {
+                return CanonicalizedCloudRecord(
+                    record: record,
+                    legacyRecordID: nil,
+                    requiresUpload: false
+                )
+            }
+            canonicalData = try Self.encodePayload(
+                value.reidentified(as: canonical)
+            )
+            canonicalRecord = record
+        case "RemoteListeningSession":
+            let value = try JSONDecoder().decode(
+                RemoteListeningSession.self,
+                from: data
+            )
+            guard let canonical = canonicalAccountID(for: value.accountID)
+            else {
+                return CanonicalizedCloudRecord(
+                    record: record,
+                    legacyRecordID: nil,
+                    requiresUpload: false
+                )
+            }
+            let canonicalValue = value.reidentified(as: canonical)
+            canonicalData = try Self.encodePayload(canonicalValue)
+            let canonicalIDValue = CKRecord.ID(
+                recordName: "remote.\(canonical.rawValue).\(value.id.rawValue)",
+                zoneID: record.recordID.zoneID
+            )
+            canonicalRecord = records[canonicalIDValue]
+                ?? CKRecord(
+                    recordType: record.recordType,
+                    recordID: canonicalIDValue
+                )
+        default:
+            return CanonicalizedCloudRecord(
+                record: record,
+                legacyRecordID: nil,
+                requiresUpload: false
+            )
+        }
+        let requiresUpload = canonicalRecord.recordID != record.recordID
+            || canonicalData != data
+        guard requiresUpload else {
+            return CanonicalizedCloudRecord(
+                record: record,
+                legacyRecordID: nil,
+                requiresUpload: false
+            )
+        }
+        canonicalRecord[Self.payloadKey] = canonicalData as CKRecordValue
+        return CanonicalizedCloudRecord(
+            record: canonicalRecord,
+            legacyRecordID: canonicalRecord.recordID == record.recordID
+                ? nil : record.recordID,
+            requiresUpload: true
+        )
+    }
+
+    private func canonicalAccountID(
+        for accountID: AccountID
+    ) -> AccountID? {
+        guard let rawValue = legacyAccountIdentityMappings[accountID.rawValue],
+            rawValue != accountID.rawValue
+        else {
+            return nil
+        }
+        return AccountID(rawValue: rawValue)
+    }
+
+    private func registerLegacyRecordDeletion(
+        _ legacyRecordID: CKRecord.ID?,
+        afterSaving canonicalRecordID: CKRecord.ID
+    ) {
+        guard let legacyRecordID,
+            legacyRecordID != canonicalRecordID
+        else {
+            return
+        }
+        pendingLegacyRecordDeletions[
+            canonicalRecordID.recordName,
+            default: []
+        ].insert(legacyRecordID.recordName)
+        persistPendingLegacyRecordDeletions()
+    }
+
+    private func persistPendingLegacyRecordDeletions() {
+        defaults.set(
+            pendingLegacyRecordDeletions.mapValues {
+                $0.sorted()
+            },
+            forKey: pendingLegacyRecordDeletionsKey
+        )
+    }
+
     private func resolveIncomingRecord(
         _ record: CKRecord,
         previousRecord: CKRecord?
@@ -1694,8 +2102,8 @@ actor PrivateCloudSyncStore {
             CloudServerAccountRecordPayload.self,
             from: data
         ) {
-            guard payload.schemaVersion
-                == CloudServerAccountRecordPayload.currentSchemaVersion
+            guard CloudServerAccountRecordPayload.supportedSchemaVersions
+                .contains(payload.schemaVersion)
             else {
                 throw PrivateCloudSyncError.invalidRecord
             }
@@ -1808,6 +2216,7 @@ actor PrivateCloudSyncStore {
     }
 
     private func persistRecordState() {
+        persistPendingLegacyRecordDeletions()
         let archivedRecords = records.reduce(
             into: [String: Data]()
         ) { result, element in
@@ -2152,16 +2561,19 @@ public final class PrivateCloudSyncCoordinator:
         accept: Bool
     ) async throws(PrivateCloudSyncFailure) {
         try await perform(.resolveServerConfiguration) {
+            let record: CKRecord?
             if accept {
-                try await store.acceptServerConfigurationChange(
-                    accountID: accountID
+                record = try await store.acceptServerConfigurationChange(
+                    accountID: accountID,
+                    zoneID: zoneID
                 )
-                return
+            } else {
+                record = try await store.rejectServerConfigurationChange(
+                    accountID: accountID,
+                    zoneID: zoneID
+                )
             }
-            guard let record = try await store.rejectServerConfigurationChange(
-                accountID: accountID,
-                zoneID: zoneID
-            ) else {
+            guard let record else {
                 return
             }
             guard let engine else {

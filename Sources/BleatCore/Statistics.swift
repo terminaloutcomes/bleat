@@ -106,6 +106,29 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         self.author = author
         self.duration = duration
     }
+
+    func reidentified(as accountID: AccountID) -> ListeningSlice {
+        ListeningSlice(
+            id: id,
+            accountID: accountID,
+            itemID: itemID,
+            sessionID: sessionID,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            startPosition: startPosition,
+            endPosition: endPosition,
+            realSeconds: realSeconds,
+            audiobookSeconds: audiobookSeconds,
+            playbackRate: playbackRate,
+            chapterID: chapterID,
+            chapterTitle: chapterTitle,
+            chapterStart: chapterStart,
+            chapterEnd: chapterEnd,
+            title: title,
+            author: author,
+            duration: duration
+        )
+    }
 }
 
 public enum CompletionEvidence: String, Codable, Sendable {
@@ -145,6 +168,19 @@ public struct CompletionMilestone:
         self.author = author
         self.evidence = evidence
     }
+
+    func reidentified(as accountID: AccountID) -> CompletionMilestone {
+        CompletionMilestone(
+            id: id,
+            accountID: accountID,
+            itemID: itemID,
+            completedAt: completedAt,
+            duration: duration,
+            title: title,
+            author: author,
+            evidence: evidence
+        )
+    }
 }
 
 public struct RemoteListeningSession:
@@ -183,6 +219,21 @@ public struct RemoteListeningSession:
         self.duration = duration
         self.title = title
         self.author = author
+    }
+
+    func reidentified(as accountID: AccountID) -> RemoteListeningSession {
+        RemoteListeningSession(
+            id: id,
+            accountID: accountID,
+            itemID: itemID,
+            startedAt: startedAt,
+            updatedAt: updatedAt,
+            realSeconds: realSeconds,
+            currentTime: currentTime,
+            duration: duration,
+            title: title,
+            author: author
+        )
     }
 }
 

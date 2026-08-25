@@ -441,8 +441,12 @@ final class OpenIDAuthenticationTests: XCTestCase {
             ),
             generator: PKCEGenerator(randomData: random.data)
         )
+        let canonicalID = AccountID.canonical(
+            server: server,
+            userID: UserID(rawValue: "fixture-user")
+        )
 
-        XCTAssertEqual(account.id, accountID)
+        XCTAssertEqual(account.id, canonicalID)
         XCTAssertEqual(account.server, server)
         XCTAssertEqual(account.user.username, "fixture-root")
         XCTAssertEqual(
@@ -500,7 +504,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
         XCTAssertNil(requests[2].url?.query)
 
-        let stored = await store.credentials(for: accountID)
+        let stored = await store.credentials(for: canonicalID)
         XCTAssertEqual(
             stored,
             try AuthenticationTokens(
@@ -508,6 +512,8 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 refreshToken: "fixture-refresh-token"
             )
         )
+        let provisionalStored = await store.credentials(for: accountID)
+        XCTAssertNil(provisionalStored)
         let clearCount = await transport.clearCount()
         let hasCookieSession = await transport.hasCookieSession()
         let openIDAttempt = await coordinator.openIDAttempt
