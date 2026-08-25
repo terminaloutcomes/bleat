@@ -1283,9 +1283,6 @@ final class AppModel {
     let playback: PlaybackModel
     let downloads: DownloadModel
     let transcription: ChapterTranscriptionModel
-    #if DEBUG
-        let diagnosticLogStore: PersistentDiagnosticLogStore?
-    #endif
 
     func cachedChapterTranscripts(
         for account: ServerAccount,
@@ -1338,7 +1335,6 @@ final class AppModel {
         downloadsStorageRootURL: URL? = nil,
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
-        diagnosticLogStore: (any DiagnosticRecording)? = nil,
         initialLaunchStage: AppLaunchStage? = nil,
         transcription: ChapterTranscriptionModel? = nil,
         remoteTelemetryConsentStore: RemoteTelemetryConsentStore? = nil,
@@ -1376,10 +1372,6 @@ final class AppModel {
             ?? ChapterTranscriptionModel(
                 remoteTelemetryTracer: remoteTelemetryTracer
             )
-        #if DEBUG
-            self.diagnosticLogStore =
-                diagnosticLogStore as? PersistentDiagnosticLogStore
-        #endif
         if let bootstrapError {
             hasStarted = true
             switch bootstrapError {

@@ -1,120 +1,7 @@
 import BleatCore
-import Foundation
-
-struct DiagnosticsEnvironment: Equatable, Sendable {
-    let appVersion: String
-    let operatingSystem: String
-
-    @MainActor
-    static var current: DiagnosticsEnvironment {
-        let bundle = Bundle.main
-        return DiagnosticsEnvironment(
-            appVersion: bundle.object(
-                forInfoDictionaryKey: "CFBundleShortVersionString"
-            ) as? String ?? "Unknown",
-            operatingSystem: PlatformDevice.operatingSystem
-        )
-    }
-}
-
-struct DiagnosticsReport: Equatable, Sendable {
-    let generatedAt: Date
-    let environment: DiagnosticsEnvironment
-    let appState: String
-    let accountCount: Int
-    let serverVersion: String?
-    let connectionState: String?
-    let localServerState: String?
-    let lastServerConnection: String?
-    let authenticationEndpoint: String?
-    let apiEndpoint: String?
-    let webSocketEndpoint: String?
-    let webSocketState: String
-    let libraryState: String
-    let homeState: String
-    let searchState: String
-    let playbackState: String
-    let playbackSyncState: String
-    let privateCloudState: String
-    let downloadCount: Int
-    let errorCodes: [String]
-
-    var text: String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [
-            .withInternetDateTime,
-            .withFractionalSeconds,
-        ]
-        let errors =
-            errorCodes.isEmpty
-            ? "None"
-            : errorCodes.joined(separator: ", ")
-        return """
-            Bleat Diagnostics
-            Generated: \(formatter.string(from: generatedAt))
-            App: \(environment.appVersion)
-            Operating system: \(environment.operatingSystem)
-            App state: \(appState)
-            Saved accounts: \(accountCount)
-            Server version: \(serverVersion ?? "Unavailable")
-            Connection state: \(connectionState ?? "No active account")
-            Local server: \(localServerState ?? "No active account")
-            Last server activity: \(lastServerConnection ?? "Not recorded this launch")
-            Last authentication: \(authenticationEndpoint ?? "Not recorded this launch")
-            Last API connection: \(apiEndpoint ?? "Not recorded this launch")
-            WebSocket endpoint: \(webSocketEndpoint ?? "No active account")
-            WebSocket state: \(webSocketState)
-            Libraries: \(libraryState)
-            Home: \(homeState)
-            Search: \(searchState)
-            Playback: \(playbackState)
-            Playback sync: \(playbackSyncState)
-            iCloud sync: \(privateCloudState)
-            Downloads: \(downloadCount)
-            Active error codes: \(errors)
-
-            Privacy: This report includes server hostnames for connection \
-            diagnosis. It excludes credentials, cookies, tokens, usernames, \
-            response bodies, URL paths and queries, media URLs, playback \
-            session IDs, and local file paths.
-            """
-    }
-}
 
 extension AppModel {
-    func diagnosticsReport(
-        generatedAt: Date = Date(),
-        environment: DiagnosticsEnvironment = .current
-    ) -> DiagnosticsReport {
-        DiagnosticsReport(
-            generatedAt: generatedAt,
-            environment: environment,
-            appState: phase.diagnosticsLabel,
-            accountCount: accounts.count,
-            serverVersion: account?.serverVersion,
-            connectionState: account?.connectionState.diagnosticsLabel,
-            localServerState:
-                endpointDiagnostics?.localServerState.diagnosticsLabel,
-            lastServerConnection:
-                endpointDiagnostics?.lastConnection?.diagnosticsLabel,
-            authenticationEndpoint:
-                endpointDiagnostics?.authentication?.diagnosticsLabel,
-            apiEndpoint: endpointDiagnostics?.api?.diagnosticsLabel,
-            webSocketEndpoint:
-                endpointDiagnostics?.webSocket.diagnosticsLabel,
-            webSocketState: liveUpdateConnectionState.diagnosticsLabel,
-            libraryState: libraries.diagnosticsLabel,
-            homeState: homeShelves.diagnosticsLabel,
-            searchState: searchResults.diagnosticsLabel,
-            playbackState: playback.state.diagnosticsLabel,
-            playbackSyncState: playback.syncState.diagnosticsLabel,
-            privateCloudState: privateCloudState.diagnosticsLabel,
-            downloadCount: downloads.records.count,
-            errorCodes: activeDiagnosticsErrors
-        )
-    }
-
-    private var activeDiagnosticsErrors: [String] {
+    var activeDiagnosticErrorCodes: [String] {
         var errors: [AppFailure] = []
         if case .unavailable(let failure) = phase {
             errors.append(failure)
@@ -166,7 +53,7 @@ extension AppModel {
 }
 
 extension AudiobookshelfLiveConnectionState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .connecting:
             "Connecting"
@@ -183,7 +70,7 @@ extension AudiobookshelfLiveConnectionState {
 }
 
 extension AppPhase {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .launching:
             "Launching"
@@ -198,7 +85,7 @@ extension AppPhase {
 }
 
 extension ResourceState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .idle:
             "Idle"
@@ -220,7 +107,7 @@ extension ResourceState {
 }
 
 extension AccountConnectionState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .connected:
             "Connected"
@@ -233,7 +120,7 @@ extension AccountConnectionState {
 }
 
 extension PlaybackState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .idle:
             "Idle"
@@ -263,7 +150,7 @@ extension PlaybackState {
 }
 
 extension PlaybackSyncState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .idle:
             "Idle"
@@ -276,7 +163,7 @@ extension PlaybackSyncState {
 }
 
 extension PrivateCloudState {
-    fileprivate var diagnosticsLabel: String {
+    var diagnosticsLabel: String {
         switch self {
         case .disabled: "Disabled"
         case .idle: "Idle"

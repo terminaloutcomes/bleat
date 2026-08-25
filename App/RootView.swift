@@ -1221,23 +1221,11 @@ private struct AccountEditorView: View {
 
 private struct DiagnosticsView: View {
     @Bindable var model: AppModel
-    #if DEBUG
-        @State private var recentLogExport: RecentLogExportModel?
-    #endif
 
-    init(model: AppModel) {
-        self.model = model
-        #if DEBUG
-            _recentLogExport = State(
-                initialValue: model.diagnosticLogStore.map(
-                    RecentLogExportModel.init
-                )
-            )
-        #endif
-    }
-
-    private var report: DiagnosticsReport {
-        model.diagnosticsReport()
+    private var appVersion: String {
+        Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "Unknown"
     }
 
     var body: some View {
@@ -1245,35 +1233,36 @@ private struct DiagnosticsView: View {
             Section("App") {
                 LabeledContent(
                     "Version",
-                    value: report.environment.appVersion
+                    value: appVersion
                 )
                 LabeledContent(
                     "Operating System",
-                    value: report.environment.operatingSystem
+                    value: PlatformDevice.operatingSystem
                 )
-                LabeledContent("State", value: report.appState)
+                LabeledContent("State", value: model.phase.diagnosticsLabel)
             }
 
             Section("Server") {
                 LabeledContent(
                     "Version",
-                    value: report.serverVersion ?? "Unavailable"
+                    value: model.account?.serverVersion ?? "Unavailable"
                 )
                 .accessibilityIdentifier(
                     "diagnostics.serverVersion"
                 )
                 LabeledContent(
                     "Connection",
-                    value: report.connectionState ?? "No active account"
+                    value: model.account?.connectionState.diagnosticsLabel
+                        ?? "No active account"
                 )
                 LabeledContent(
                     "Saved Accounts",
-                    value: String(report.accountCount)
+                    value: String(model.accounts.count)
                 )
                 LabeledContent(
                     "Last Server Activity",
                     value:
-                        report.lastServerConnection
+                        model.endpointDiagnostics?.lastConnection?.diagnosticsLabel
                         ?? "Not recorded this launch"
                 )
                 .accessibilityIdentifier(
@@ -1282,7 +1271,7 @@ private struct DiagnosticsView: View {
                 LabeledContent(
                     "Last Authentication",
                     value:
-                        report.authenticationEndpoint
+                        model.endpointDiagnostics?.authentication?.diagnosticsLabel
                         ?? "Not recorded this launch"
                 )
                 .accessibilityIdentifier(
@@ -1291,40 +1280,41 @@ private struct DiagnosticsView: View {
                 LabeledContent(
                     "Last API Connection",
                     value:
-                        report.apiEndpoint
+                        model.endpointDiagnostics?.api?.diagnosticsLabel
                         ?? "Not recorded this launch"
                 )
                 .accessibilityIdentifier("diagnostics.apiEndpoint")
                 LabeledContent(
                     "WebSocket",
-                    value: report.webSocketEndpoint ?? "No active account"
+                    value: model.endpointDiagnostics?.webSocket.diagnosticsLabel
+                        ?? "No active account"
                 )
                 .accessibilityIdentifier("diagnostics.webSocketEndpoint")
                 LabeledContent(
                     "WebSocket State",
-                    value: report.webSocketState
+                    value: model.liveUpdateConnectionState.diagnosticsLabel
                 )
                 .accessibilityIdentifier("diagnostics.webSocketState")
             }
 
             Section("Activity") {
-                LabeledContent("Libraries", value: report.libraryState)
-                LabeledContent("Home", value: report.homeState)
-                LabeledContent("Search", value: report.searchState)
-                LabeledContent("Playback", value: report.playbackState)
+                LabeledContent("Libraries", value: model.libraries.diagnosticsLabel)
+                LabeledContent("Home", value: model.homeShelves.diagnosticsLabel)
+                LabeledContent("Search", value: model.searchResults.diagnosticsLabel)
+                LabeledContent("Playback", value: model.playback.state.diagnosticsLabel)
                 LabeledContent(
                     "Playback Sync",
-                    value: report.playbackSyncState
+                    value: model.playback.syncState.diagnosticsLabel
                 )
                 LabeledContent(
                     "Downloads",
-                    value: String(report.downloadCount)
+                    value: String(model.downloads.records.count)
                 )
             }
 
-            if !report.errorCodes.isEmpty {
+            if !model.activeDiagnosticErrorCodes.isEmpty {
                 Section("Active Errors") {
-                    ForEach(report.errorCodes, id: \.self) { code in
+                    ForEach(model.activeDiagnosticErrorCodes, id: \.self) { code in
                         Text(code)
                     }
                 }
@@ -1345,107 +1335,11 @@ private struct DiagnosticsView: View {
             }
 
             RemoteTelemetryConsentSection(model: model)
-
-            Section {
-                ShareLink(
-                    item: report.text,
-                    subject: Text("Bleat Diagnostics")
-                ) {
-                    Label(
-                        "Export Diagnostics",
-                        systemImage: "square.and.arrow.up"
-                    )
-                }
-                .accessibilityIdentifier("diagnostics.export")
-
-                #if DEBUG
-                    Button {
-                        guard let recentLogExport else {
-                            return
-                        }
-                        Task {
-                            await recentLogExport.prepare(
-                                environment: report.environment
-                            )
-                        }
-                    } label: {
-                        if recentLogExport?.state == .preparing {
-                            Label(
-                                "Preparing Recent Logs",
-                                systemImage: "hourglass"
-                            )
-                        } else {
-                            Label(
-                                "Export Recent Logs",
-                                systemImage: "doc.text"
-                            )
-                        }
-                    }
-                    .disabled(
-                        recentLogExport == nil
-                            || recentLogExport?.state == .preparing
-                    )
-                    .accessibilityIdentifier(
-                        "diagnostics.exportRecentLogs"
-                    )
-                #endif
-            } footer: {
-                Text(
-                    "The snapshot includes server hostnames and ports. Exports exclude account names, URL paths and queries, credentials, tokens, response bodies, media titles and URLs, remote identifiers, session IDs, listening positions, and local file paths."
-                )
-            }
         }
         .navigationTitle("Diagnostics")
         .task {
             await model.refreshEndpointDiagnostics()
         }
-        #if DEBUG
-            .sheet(
-                isPresented: Binding(
-                    get: {
-                        recentLogExport?.sharingURL != nil
-                    },
-                    set: { isPresented in
-                        if !isPresented {
-                            recentLogExport?.finishSharing()
-                        }
-                    }
-                )
-            ) {
-                if let url = recentLogExport?.sharingURL {
-                    DiagnosticActivityView(fileURL: url) {
-                        recentLogExport?.finishSharing()
-                    }
-                    .accessibilityIdentifier(
-                        "diagnostics.activityView"
-                    )
-                }
-            }
-            .alert(
-                "Unable to Export Logs",
-                isPresented: Binding(
-                    get: {
-                        recentLogExport?.failure != nil
-                    },
-                    set: { isPresented in
-                        if !isPresented {
-                            recentLogExport?.dismissFailure()
-                        }
-                    }
-                )
-            ) {
-                Button("OK") {
-                    recentLogExport?.dismissFailure()
-                }
-            } message: {
-                if let failure = recentLogExport?.failure {
-                    Text(failure.message)
-                }
-            }
-            .onDisappear {
-                recentLogExport?.finishSharing()
-            }
-        #endif
     }
 }
 

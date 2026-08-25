@@ -276,7 +276,6 @@ public enum DiagnosticEventName: String, Codable, Sendable {
     case operationCompleted = "operation_completed"
     case operationFailed = "operation_failed"
     case stateTransition = "state_transition"
-    case historyTruncated = "history_truncated"
 }
 
 public struct DiagnosticEvent: Codable, Equatable, Sendable {
@@ -461,14 +460,6 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         )
     }
 
-    public static var historyTruncated: DiagnosticEvent {
-        DiagnosticEvent(
-            category: .app,
-            level: .notice,
-            name: .historyTruncated
-        )
-    }
-
     public var text: String {
         var fields = [
             "level=\(level.rawValue)",
@@ -549,16 +540,6 @@ extension PrivateCloudSyncError {
     }
 }
 
-public struct DiagnosticRecord: Codable, Equatable, Sendable {
-    public let timestamp: Date
-    public let event: DiagnosticEvent
-
-    public init(timestamp: Date, event: DiagnosticEvent) {
-        self.timestamp = timestamp
-        self.event = event
-    }
-}
-
 public protocol DiagnosticRecording: Sendable {
     func record(_ event: DiagnosticEvent) async
 }
@@ -578,24 +559,4 @@ public actor SystemDiagnosticRecorder: DiagnosticRecording {
             "\(event.text, privacy: .public)"
         )
     }
-}
-
-public actor CompositeDiagnosticRecorder: DiagnosticRecording {
-    private let recorders: [any DiagnosticRecording]
-
-    public init(_ recorders: [any DiagnosticRecording]) {
-        self.recorders = recorders
-    }
-
-    public func record(_ event: DiagnosticEvent) async {
-        for recorder in recorders {
-            await recorder.record(event)
-        }
-    }
-}
-
-public struct DisabledDiagnosticRecorder: DiagnosticRecording {
-    public init() {}
-
-    public func record(_ event: DiagnosticEvent) async {}
 }

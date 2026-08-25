@@ -12,18 +12,7 @@ final class AppBootstrap {
     let model: AppModel
 
     init() {
-        #if DEBUG
-            let diagnosticLogStore = PersistentDiagnosticLogStore()
-            let diagnostics: any DiagnosticRecording =
-                CompositeDiagnosticRecorder([
-                    SystemDiagnosticRecorder.shared,
-                    diagnosticLogStore,
-                ])
-        #else
-            let diagnostics: any DiagnosticRecording =
-                SystemDiagnosticRecorder.shared
-            let diagnosticLogStore: (any DiagnosticRecording)? = nil
-        #endif
+        let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
         let remoteTelemetry = RemoteTelemetryController()
 
         #if DEBUG || BLEAT_UI_TESTING
@@ -34,7 +23,6 @@ final class AppBootstrap {
                         UnavailableNearbyServerDiscovery(),
                     bootstrapError: UITestAppService.bootstrapError,
                     diagnostics: diagnostics,
-                    diagnosticLogStore: diagnosticLogStore,
                     remoteTelemetryConsentController: remoteTelemetry,
                     remoteTelemetryTracer: remoteTelemetry.tracer
                 )
@@ -82,7 +70,6 @@ final class AppBootstrap {
                     }
                 ),
                 diagnostics: diagnostics,
-                diagnosticLogStore: diagnosticLogStore,
                 remoteTelemetryConsentController: remoteTelemetry,
                 remoteTelemetryTracer: remoteTelemetry.tracer
             )
@@ -91,7 +78,6 @@ final class AppBootstrap {
                 service: UnavailableAppService(),
                 bootstrapError: error,
                 diagnostics: diagnostics,
-                diagnosticLogStore: diagnosticLogStore,
                 remoteTelemetryConsentController: remoteTelemetry,
                 remoteTelemetryTracer: remoteTelemetry.tracer
             )

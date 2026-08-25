@@ -862,16 +862,10 @@ independent of that optional realtime connection, and socket progress never
 changes the foreground player's timeline.
 **About** shows the app icon, version, build timestamp, developer,
 and bundle identifier.
-All builds provide **Export Diagnostics** for sharing the current snapshot.
-Development builds additionally provide **Export Recent Logs**, which shares a
-text file containing up to 15 minutes of categorized app,
-authentication, API, playback, download, and synchronization events, including
-events from an earlier launch within that window. Release builds compile out
-the recent-log export and rolling log file. Snapshot exports include these
-server hostnames and ports but exclude URL paths and
-queries, account names, credentials, tokens, response bodies, media titles and
-URLs, remote identifiers, playback session IDs, listening positions, and local
-file paths. Recent logs continue to exclude server addresses.
+Diagnostics shows live, privacy-safe operational status and keeps the
+**Share diagnostic telemetry** control and Bonjour troubleshooter available.
+Bleat emits typed diagnostic events through the system log; it does not create
+or share an app-owned diagnostic snapshot or rolling log file.
 
 Each visible failure retains both the operation and a specific safe cause—for
 example authentication, permission, missing content, invalid server data,

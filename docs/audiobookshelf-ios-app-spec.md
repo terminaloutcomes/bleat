@@ -1600,22 +1600,17 @@ WebSocket connection state. A central account-aware endpoint activity boundary
 must publish live changes from routed and direct API/authentication requests,
 WebSockets, cover requests, streamed playback sources, and foreground or
 restored background downloads; Diagnostics must not rely on a one-time copied
-snapshot. Snapshot export should include app version, iOS version, server
-version, those endpoint hostnames and roles, endpoint name, HTTP status,
-request correlation ID, player state transitions, and redacted errors. It must
-not include credentials or full response bodies by default.
+snapshot or create a shareable report.
 
 Every diagnostic failure event carries its operation and a stable typed cause.
 Do not derive either from localized text, serialized errors, or raw server
 payloads.
 
-The Diagnostics status screen and snapshot export remain available in release
-builds. Development builds additionally provide recent-log exports. Recent logs
-use typed, identifier-free events, retain at most the preceding 15 minutes
-across launches in a protected, backup-excluded 5 MiB rolling file, and export
-chronologically as UTF-8 text through the system sharing sheet. Release builds
-compile out the recent-log export and rolling file while continuing to emit the
-redacted `OSLog` categories.
+The Diagnostics status screen remains available in every build and presents
+live operational state, the Bonjour troubleshooter, and telemetry consent. It
+does not export a diagnostic snapshot, retain app-owned diagnostic history, or
+create a temporary diagnostic sharing file. Typed, redacted diagnostic events
+continue to emit through the applicable `OSLog` categories in every build.
 
 Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
 diagnose bounded technical application operations without collecting user,
@@ -1819,6 +1814,8 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 - Before the first release, scan logs, diagnostics, persistence, exports, URLs,
   live-test artifacts, and Release archives for seeded secrets and bearer-like
   values ([GitHub issue #48](https://github.com/terminaloutcomes/bleat/issues/48)).
+- Diagnostics must emit typed events through `OSLog` without creating or
+  sharing an app-owned diagnostic snapshot, history, or export file.
 - Treat playback session IDs as transient bearer-like capabilities even though they are not JWTs.
 - Use secure random generation from Security/CryptoKit for OAuth material.
 - Enforce exact OAuth callback matching.
