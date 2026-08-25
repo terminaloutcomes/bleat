@@ -83,3 +83,9 @@ proptest = "1.11.0"
 rcgen = "0.14.9"
 testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 tower = { version = "0.5.3", features = ["util"] }
+
+[profile.release]
+lto = true          # default is false, we want it to try harder
+codegen-units = 4
+panic = "unwind"    # default
+incremental = false # default

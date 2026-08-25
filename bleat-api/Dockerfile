@@ -7,6 +7,10 @@ ARG ADD_BUILD_ARGS=" --quiet"
 ARG BLEAT_API_IMAGE_NAME
 ARG BLEAT_API_IMAGE_VERSION
 
+ENV RUSTFLAGS="-Clinker=clang"
+
+RUN apt-get update && apt-get install -y --no-install-recommends clang ca-certificates && rm -rf /var/lib/apt/lists/* && apt-get clean
+
 ENV BLEAT_API_IMAGE_NAME=${BLEAT_API_IMAGE_NAME}
 ENV BLEAT_API_IMAGE_VERSION=${BLEAT_API_IMAGE_VERSION}
 
