@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "server": {
     "friendlyName": "Barnyard",
     "hostname": "barnyard.terminaloutcomes.com",
@@ -98,12 +98,15 @@
     }
   ],
   "screenshots": [
+    { "file": "00-login.png", "scenario": "Native username and password login" },
     { "file": "01-home.png", "scenario": "Home with kid, Barnyard, and Continue Listening" },
     { "file": "02-library.png", "scenario": "Library with Barnyard catalogue and series" },
     { "file": "03-goat-sounds-detail.png", "scenario": "Thirteen Hours of Goat Sounds detail" },
     { "file": "04-goat-sounds-chapters.png", "scenario": "Thirteen Hours of Goat Sounds chapters" },
-    { "file": "05-now-playing.png", "scenario": "Now Playing in romantic goats" },
-    { "file": "06-search.png", "scenario": "Search for goat" },
-    { "file": "07-settings.png", "scenario": "Barnyard account settings" }
+    { "file": "05-mini-player.png", "scenario": "Mini-player for Thirteen Hours of Goat Sounds" },
+    { "file": "06-now-playing.png", "scenario": "Now Playing in romantic goats" },
+    { "file": "07-downloads.png", "scenario": "Downloads for Barnyard" },
+    { "file": "08-search.png", "scenario": "Search for goat" },
+    { "file": "09-settings.png", "scenario": "Barnyard account settings" }
   ]
 }

@@ -301,15 +301,19 @@ Successful output contains only the screenshots and a non-sensitive manifest:
 ```text
 .build/release-screenshots/
   manifest.json
-  iphone/01-home.png … 07-settings.png
-  iphone/01-home-dark.png … 07-settings-dark.png
-  ipad/01-home.png … 07-settings.png
-  ipad/01-home-dark.png … 07-settings-dark.png
+  iphone/00-login.png … 09-settings.png
+  iphone/00-login-dark.png … 09-settings-dark.png
+  ipad/00-login.png … 09-settings.png
+  ipad/00-login-dark.png … 09-settings-dark.png
+  iphone/landscapeLeft/00-login.png … 09-settings.png
+  ipad/landscapeLeft/00-login.png … 09-settings.png
 ```
 
 By default the harness captures both light and dark appearances in a single
-run; dark screenshots use a `-dark` filename suffix (for example
-`01-home-dark.png`). On failure, redacted Compose logs and the relevant
+run, in portrait and landscape-left; dark screenshots use a `-dark` filename
+suffix (for example `01-home-dark.png`). Landscape screenshots sit below the
+device's `landscapeLeft/` directory, and the manifest records each capture's
+actual orientation and pixel dimensions. On failure, redacted Compose logs and the relevant
 `.xcresult` bundles remain under the same directory for inspection. Everything
 else—including generated media, Caddy certificates, Docker volumes, credentials,
 and simulators—is removed automatically.
@@ -334,6 +338,11 @@ fixture and adding a matching named attachment in `BleatReleaseScreenshotTests`;
 the harness derives the `-dark` filename for each scene automatically. Bump
 `schemaVersion` when the fixture contract changes. Validate fixture changes
 without Docker or a Simulator with `mise run screenshots:check`.
+
+Run `mise run test:landscape` for the focused functional landscape audit. It
+uses `.landscapeLeft` on representative iPhone and iPad simulators, while its
+rotation test returns to portrait to verify that active playback and navigation
+state are retained.
 
 ## Open in Xcode
 

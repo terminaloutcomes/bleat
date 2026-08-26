@@ -34,6 +34,7 @@ bleat_captured_dimensions=""
 typeset -a bleat_simulators
 typeset -a bleat_result_bundles
 typeset -a bleat_appearances
+typeset -a bleat_orientations
 
 bleat_fail() {
     print -u2 -- "$*"
@@ -120,7 +121,7 @@ bleat_abort() {
 bleat_validate_fixture() {
     [[ -f "${bleat_fixture}" ]] || bleat_fail "Fixture manifest is missing"
     jq --exit-status '
-        .schemaVersion == 1
+        .schemaVersion == 2
         and .server.friendlyName == "Barnyard"
         and .server.hostname == "barnyard.terminaloutcomes.com"
         and .server.pathPrefix == "/audiobookshelf"
@@ -137,12 +138,13 @@ bleat_validate_fixture() {
                 and (.progress.currentTime <= .duration)
                 and ((.progress.isFinished | type) == "boolean")
             else true end))
-        and ([.screenshots[].file] | length == 7)
-        and ([.screenshots[].file] | unique | length == 7)
+        and ([.screenshots[].file] | length == 10)
+        and ([.screenshots[].file] | unique | length == 10)
         and (.screenshots | map(.file) == [
-            "01-home.png", "02-library.png", "03-goat-sounds-detail.png",
-            "04-goat-sounds-chapters.png", "05-now-playing.png",
-            "06-search.png", "07-settings.png"
+            "00-login.png", "01-home.png", "02-library.png",
+            "03-goat-sounds-detail.png", "04-goat-sounds-chapters.png",
+            "05-mini-player.png", "06-now-playing.png", "07-downloads.png",
+            "08-search.png", "09-settings.png"
         ])
         and (.books[] | select(.key == "thirteen-hours-of-goat-sounds")
             | .duration == 46800
@@ -513,6 +515,18 @@ bleat_expected_dimensions() {
     esac
 }
 
+bleat_oriented_dimensions() {
+    local dimensions="$1"
+    local orientation="$2"
+    case "${orientation}" in
+        portrait) print -r -- "${dimensions}" ;;
+        landscapeLeft)
+            print -r -- "${dimensions#*x}x${dimensions%x*}"
+            ;;
+        *) bleat_fail "Unsupported screenshot orientation: ${orientation}" ;;
+    esac
+}
+
 bleat_validate_attachment_manifest() {
     local attachment_manifest="$1"
     local appearance="$2"
@@ -564,6 +578,7 @@ bleat_validate_exported_screenshot() {
     local expected_dimensions="$2"
     local device_label="$3"
     local filename="$4"
+    local orientation="$5"
     [[ -f "${screenshot}" ]] \
         || bleat_fail "Screenshot attachment export is missing ${filename} for ${device_label}"
     local dimensions
@@ -572,7 +587,17 @@ bleat_validate_exported_screenshot() {
         || bleat_fail "Screenshot dimensions for ${device_label}/${filename} were ${dimensions}, expected ${expected_dimensions}"
     local width="${dimensions%x*}"
     local height="${dimensions#*x}"
-    (( height > width )) || bleat_fail "Screenshot is not portrait: ${device_label}/${filename}"
+    case "${orientation}" in
+        portrait)
+            (( height > width )) || bleat_fail "Screenshot is not portrait: ${device_label}/${filename}"
+            ;;
+        landscapeLeft)
+            (( width > height )) || bleat_fail "Screenshot is not landscape: ${device_label}/${filename}"
+            ;;
+        *)
+            bleat_fail "Unsupported screenshot orientation: ${orientation}"
+            ;;
+    esac
 }
 
 bleat_validate_public_manifest() {
@@ -591,6 +616,7 @@ bleat_validate_exported_artifacts() {
     local expected_dimensions="$3"
     local device_label="$4"
     local appearance="$5"
+    local orientation="$6"
     bleat_validate_attachment_manifest "${attachment_manifest}" "${appearance}"
 
     local filename exported_name
@@ -600,7 +626,7 @@ bleat_validate_exported_artifacts() {
             || bleat_fail "Screenshot attachment export is missing ${filename} for ${device_label}"
         bleat_validate_exported_screenshot \
             "${attachment_directory}/${exported_name}" "${expected_dimensions}" \
-            "${device_label}" "${filename}"
+            "${device_label}" "${filename}" "${orientation}"
     done < <(bleat_expected_screenshot_names "${appearance}")
 }
 
@@ -609,8 +635,12 @@ bleat_export_screenshots() {
     local device_label="$2"
     local expected_dimensions="$3"
     local appearance="$4"
-    local exported_directory="${bleat_work_directory}/attachments-${device_label}-${appearance}"
+    local orientation="$5"
+    local exported_directory="${bleat_work_directory}/attachments-${device_label}-${orientation}-${appearance}"
     local destination_directory="${bleat_output_directory}/${device_label}"
+    if [[ "${orientation}" != "portrait" ]]; then
+        destination_directory="${destination_directory}/${orientation}"
+    fi
     mkdir -p "${exported_directory}" "${destination_directory}"
     xcrun xcresulttool export attachments --path "${result_bundle}" \
         --output-path "${exported_directory}" >/dev/null
@@ -623,11 +653,11 @@ bleat_export_screenshots() {
             || bleat_fail "Screenshot attachment export is missing ${filename} for ${device_label}"
         bleat_validate_exported_screenshot \
             "${exported_directory}/${exported_name}" "${expected_dimensions}" \
-            "${device_label}" "${filename}"
+            "${device_label}" "${filename}" "${orientation}"
         cp "${exported_directory}/${exported_name}" "${destination_directory}/${filename}"
         bleat_validate_exported_screenshot \
             "${destination_directory}/${filename}" "${expected_dimensions}" \
-            "${device_label}" "${filename}"
+            "${device_label}" "${filename}" "${orientation}"
     done < <(bleat_expected_screenshot_names "${appearance}")
 }
 
@@ -644,22 +674,20 @@ bleat_build_manifest() {
     [[ -n "$(git -C "${bleat_repository_root}" status --porcelain)" ]] && dirty=true
     local appearances_json
     appearances_json="$(jq --compact-output -n --args '$ARGS.positional' -- "${bleat_appearances[@]}")"
+    local orientations_json
+    orientations_json="$(jq --compact-output -n --args '$ARGS.positional' -- "${bleat_orientations[@]}")"
     local screenshots_json
     screenshots_json="$(
-        jq --compact-output --argjson appearances "${appearances_json}" '
+        jq --compact-output --argjson appearances "${appearances_json}" --argjson orientations "${orientations_json}" '
             .screenshots as $base
-            | $appearances
-            | map(
-                . as $appearance
-                | $base | map(
-                    . + {
-                        appearance: $appearance,
-                        file: (if $appearance == "dark"
-                            then (.file | sub("\\.png$"; "-dark.png"))
-                            else .file end)
-                    }
-                )
-            ) | add
+            | [$orientations[] as $orientation | $appearances[] as $appearance
+                | $base | map(. + {
+                    appearance: $appearance,
+                    orientation: $orientation,
+                    file: (if $appearance == "dark"
+                        then (.file | sub("\\.png$"; "-dark.png"))
+                        else .file end)
+                })] | add
         ' "${bleat_fixture}"
     )"
     jq --null-input \
@@ -668,6 +696,7 @@ bleat_build_manifest() {
         --arg commit "${commit}" --arg xcode "${xcode_version}" \
         --arg runtime "${bleat_runtime}" --arg locale "${bleat_locale}" \
         --argjson appearances "${appearances_json}" \
+        --argjson orientations "${orientations_json}" \
         --arg iphone_dimensions "${iphone_dimensions}" \
         --arg ipad_dimensions "${ipad_dimensions}" --arg iphone_type "${iphone_type}" \
         --arg ipad_type "${ipad_type}" --arg abs_image "${bleat_abs_image}" \
@@ -675,6 +704,14 @@ bleat_build_manifest() {
         --argjson dirty "${dirty}" \
         --argjson schema_version "$(jq '.schemaVersion' "${bleat_fixture}")" \
         --argjson screenshots "${screenshots_json}" '
+            def captures($dimensions):
+                $orientations | map({
+                    orientation: ., pixelDimensions: (
+                        if . == "portrait" then $dimensions
+                        else ($dimensions | split("x") | "\(.[1])x\(.[0])")
+                        end
+                    )
+                });
             {
                 app: {version: $app_version, build: $build_number},
                 git: {commit: $commit, dirtyWorktree: $dirty},
@@ -683,9 +720,10 @@ bleat_build_manifest() {
                     runtime: $runtime,
                     locale: $locale,
                     appearances: $appearances,
-                    iphone: {deviceType: $iphone_type, pixelDimensions: $iphone_dimensions, orientation: "portrait"}
+                    orientations: $orientations,
+                    iphone: {deviceType: $iphone_type, captures: captures($iphone_dimensions)}
                 } + (if $ipad_dimensions == "" then {} else {
-                    ipad: {deviceType: $ipad_type, pixelDimensions: $ipad_dimensions, orientation: "portrait"}
+                    ipad: {deviceType: $ipad_type, captures: captures($ipad_dimensions)}
                 } end)),
                 images: {audiobookshelf: $abs_image, caddy: $caddy_image},
                 fixtureSchemaVersion: $schema_version,
@@ -729,21 +767,26 @@ bleat_capture_device() {
     plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_ENABLED' -string '1' "${bleat_xctestrun}"
 
     mkdir -p "${bleat_output_directory}/results"
-    local appearance
-    for appearance in "${bleat_appearances[@]}"; do
-        xcrun simctl ui "${simulator}" appearance "${appearance}"
-        bleat_set_xctestrun_env 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_APPEARANCE' "${appearance}"
+    local orientation appearance
+    for orientation in "${bleat_orientations[@]}"; do
+        local oriented_dimensions
+        oriented_dimensions="$(bleat_oriented_dimensions "${dimensions}" "${orientation}")"
+        for appearance in "${bleat_appearances[@]}"; do
+            xcrun simctl ui "${simulator}" appearance "${appearance}"
+            bleat_set_xctestrun_env 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_APPEARANCE' "${appearance}"
+            bleat_set_xctestrun_env 'BleatUITests.EnvironmentVariables.BLEAT_SCREENSHOT_ORIENTATION' "${orientation}"
 
-        local result_bundle="${bleat_output_directory}/results/${label}-${appearance}.xcresult"
-        bleat_result_bundles+=("${result_bundle}")
-        xcodebuild -quiet -xctestrun "${bleat_xctestrun}" \
-            -destination "id=${simulator}" -parallel-testing-enabled NO \
-            -resultBundlePath "${result_bundle}" \
-            -only-testing:BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
-            test-without-building
-        [[ -f "${result_bundle}/Info.plist" ]] \
-            || bleat_fail "Screenshot test did not produce a result bundle for ${label} ${appearance}"
-        bleat_export_screenshots "${result_bundle}" "${label}" "${dimensions}" "${appearance}"
+            local result_bundle="${bleat_output_directory}/results/${label}-${orientation}-${appearance}.xcresult"
+            bleat_result_bundles+=("${result_bundle}")
+            xcodebuild -quiet -xctestrun "${bleat_xctestrun}" \
+                -destination "id=${simulator}" -parallel-testing-enabled NO \
+                -resultBundlePath "${result_bundle}" \
+                -only-testing:BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
+                test-without-building
+            [[ -f "${result_bundle}/Info.plist" ]] \
+                || bleat_fail "Screenshot test did not produce a result bundle for ${label} ${orientation} ${appearance}"
+            bleat_export_screenshots "${result_bundle}" "${label}" "${oriented_dimensions}" "${appearance}" "${orientation}"
+        done
     done
     bleat_captured_dimensions="${dimensions}"
 }
@@ -769,6 +812,7 @@ bleat_main() {
     bleat_validate_fixture
     bleat_require_prerequisites
     bleat_resolve_appearances
+    bleat_orientations=(portrait landscapeLeft)
     [[ "${bleat_locale}" == [a-z][a-z]_[A-Z][A-Z] ]] \
         || bleat_fail "BLEAT_SCREENSHOT_LOCALE must use a language_REGION value such as en_AU"
     bleat_resolve_runtime
@@ -841,13 +885,16 @@ case "${1:-}" in
             || bleat_fail "BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY is required"
         [[ -n "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS:-}" ]] \
             || bleat_fail "BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS is required"
+        [[ -n "${BLEAT_SCREENSHOT_EXPECTED_ORIENTATION:-}" ]] \
+            || bleat_fail "BLEAT_SCREENSHOT_EXPECTED_ORIENTATION is required"
         bleat_resolve_appearances
         local appearance
         for appearance in "${bleat_appearances[@]}"; do
             bleat_validate_exported_artifacts \
                 "${BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST}" \
                 "${BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY}" \
-                "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS}" artifact-check "${appearance}"
+                "${BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS}" artifact-check "${appearance}" \
+                "${BLEAT_SCREENSHOT_EXPECTED_ORIENTATION}"
         done
         ;;
     --validate-manifest)

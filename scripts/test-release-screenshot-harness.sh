@@ -84,6 +84,21 @@ BLEAT_SCREENSHOT_APPEARANCES=light,dark \
 BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
 BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
 BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
+BLEAT_SCREENSHOT_EXPECTED_ORIENTATION=portrait \
+    "${bleat_harness}" --validate-artifacts
+
+readonly bleat_landscape_attachment_directory="${bleat_temporary_directory}/landscape-attachments"
+cp -R "${bleat_attachment_directory}" "${bleat_landscape_attachment_directory}"
+for attachment in "${bleat_landscape_attachment_directory}"/*.png; do
+    landscape_attachment="${attachment%.png}-resized.png"
+    sips -z 1320 2868 "${attachment}" --out "${landscape_attachment}" >/dev/null
+    mv "${landscape_attachment}" "${attachment}"
+done
+BLEAT_SCREENSHOT_APPEARANCES=light,dark \
+BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
+BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_landscape_attachment_directory}" \
+BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=2868x1320 \
+BLEAT_SCREENSHOT_EXPECTED_ORIENTATION=landscapeLeft \
     "${bleat_harness}" --validate-artifacts
 
 jq '.[0].attachments |= map(select(.suggestedHumanReadableName | endswith("-dark_0_fixture.png") | not))' \
@@ -92,6 +107,7 @@ if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
     BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/missing-dark.json" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
+    BLEAT_SCREENSHOT_EXPECTED_ORIENTATION=portrait \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
     print -u2 "The artifact validator accepted a missing dark capture"
     exit 1
@@ -103,6 +119,7 @@ if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
     BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_temporary_directory}/duplicate-dark.json" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
+    BLEAT_SCREENSHOT_EXPECTED_ORIENTATION=portrait \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
     print -u2 "The artifact validator accepted a duplicate dark capture"
     exit 1
@@ -117,6 +134,7 @@ if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
     BLEAT_SCREENSHOT_ATTACHMENT_MANIFEST="${bleat_attachment_manifest}" \
     BLEAT_SCREENSHOT_ATTACHMENT_DIRECTORY="${bleat_attachment_directory}" \
     BLEAT_SCREENSHOT_EXPECTED_DIMENSIONS=1320x2868 \
+    BLEAT_SCREENSHOT_EXPECTED_ORIENTATION=portrait \
     "${bleat_harness}" --validate-artifacts >/dev/null 2>&1; then
     print -u2 "The artifact validator accepted invalid dark screenshot dimensions"
     exit 1

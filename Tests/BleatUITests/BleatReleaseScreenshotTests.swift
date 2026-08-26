@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class BleatReleaseScreenshotTests: XCTestCase {
     private var screenshotSuffix: String = ""
@@ -10,13 +11,43 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
+        apply(environment.orientation, to: app)
+        captureLogin(app)
         signIn(environment, app: app)
         captureHome(app)
         captureLibrary(app)
         captureBookDetailAndChapters(app)
         captureNowPlaying(app)
+        captureDownloads(app)
         captureSettings(app)
         captureSearch(app)
+    }
+
+    @MainActor
+    private func apply(
+        _ orientation: ScreenshotOrientation,
+        to app: XCUIApplication
+    ) {
+        guard orientation == .landscapeLeft else {
+            return
+        }
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let settled = expectation(description: "Landscape orientation settles")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            settled.fulfill()
+        }
+        wait(for: [settled], timeout: 5)
+        XCTAssertEqual(XCUIDevice.shared.orientation, .landscapeLeft)
+        XCTAssertTrue(app.exists)
+    }
+
+    @MainActor
+    private func captureLogin(_ app: XCUIApplication) {
+        XCTAssertTrue(app.textFields["login.server"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.textFields["login.username"].exists)
+        XCTAssertTrue(app.secureTextFields["login.password"].exists)
+        XCTAssertTrue(app.buttons["login.submit"].exists)
+        attachScreenshot(named: "00-login.png")
     }
 
     @MainActor
@@ -123,6 +154,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         play.tap()
         let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 45))
+        XCTAssertTrue(miniPlayer.isHittable)
+        attachScreenshot(named: "05-mini-player.png")
         miniPlayer.tap()
         XCTAssertTrue(
             app.otherElements["player.screen"].waitForExistence(timeout: 20)
@@ -135,8 +168,15 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         wait(for: [romanticGoats], timeout: 20)
         XCTAssertEqual(chapter.label, "romantic goats")
         waitForLoadingIndicatorsToDisappear(in: app)
-        attachScreenshot(named: "05-now-playing.png")
+        attachScreenshot(named: "06-now-playing.png")
         app.buttons["Close"].tap()
+    }
+
+    @MainActor
+    private func captureDownloads(_ app: XCUIApplication) {
+        app.buttons.matching(identifier: "arrow.down.circle").firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Downloads"].waitForExistence(timeout: 10))
+        attachScreenshot(named: "07-downloads.png")
     }
 
     @MainActor
@@ -166,7 +206,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
                 .waitForExistence(timeout: 5)
         )
         waitForLoadingIndicatorsToDisappear(in: app)
-        attachScreenshot(named: "06-search.png")
+        attachScreenshot(named: "08-search.png")
     }
 
     @MainActor
@@ -178,7 +218,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             NSPredicate(format: "label CONTAINS %@", "barnyard.terminaloutcomes.com")
         ).firstMatch
         XCTAssertTrue(barnyard.waitForExistence(timeout: 10))
-        attachScreenshot(named: "07-settings.png")
+        attachScreenshot(named: "09-settings.png")
     }
 
     @MainActor
@@ -268,11 +308,17 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             throw ScreenshotEnvironmentError.incomplete
         }
         let appearance = environment["BLEAT_SCREENSHOT_APPEARANCE"] ?? "light"
+        guard let orientation = ScreenshotOrientation(
+            rawValue: environment["BLEAT_SCREENSHOT_ORIENTATION"] ?? "portrait"
+        ) else {
+            throw ScreenshotEnvironmentError.invalidOrientation
+        }
         return ScreenshotEnvironment(
             server: server,
             username: username,
             password: password,
-            appearance: appearance
+            appearance: appearance,
+            orientation: orientation
         )
     }
 }
@@ -282,8 +328,15 @@ private struct ScreenshotEnvironment {
     let username: String
     let password: String
     let appearance: String
+    let orientation: ScreenshotOrientation
+}
+
+private enum ScreenshotOrientation: String {
+    case portrait
+    case landscapeLeft
 }
 
 private enum ScreenshotEnvironmentError: Error {
     case incomplete
+    case invalidOrientation
 }

@@ -171,6 +171,10 @@ run = ["./scripts/capture-release-screenshots.sh"]
 description = "Validate the release screenshot fixture and harness contracts"
 run = ["./scripts/test-release-screenshot-harness.sh"]
 
+[tasks."test:landscape"]
+description = "Run the focused landscape UI audit on iPhone and iPad simulators"
+run = ["./scripts/test-landscape-ui.sh"]
+
 [tasks."test:deep-links"]
 description = "Validate cold and warm bleat URL routing on a disposable iOS Simulator"
 run = ["./scripts/test-deep-links.sh"]
