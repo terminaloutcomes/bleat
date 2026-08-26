@@ -176,6 +176,9 @@ telemetry drains before declaring recovery complete. Reconcile any temporary
 deployment override with the declarative infrastructure configuration so a
 later deployment cannot unexpectedly reapply the emergency state.
 
+Follow `docs/operations/bleat-api-scaling.md` for the complete scale-up,
+scale-down, verification, and restoration procedure.
+
 ## Production retention and access
 
 The production ClickHouse tables delete traces after seven days and logs after
