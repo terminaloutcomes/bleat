@@ -4,6 +4,11 @@ import UIKit
 final class BleatReleaseScreenshotTests: XCTestCase {
     private var screenshotSuffix: String = ""
 
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
     @MainActor
     func testReleaseScreenshots() throws {
         let environment = try screenshotEnvironment()
@@ -11,6 +16,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
+        ensureSignedOut(app)
         apply(environment.orientation, to: app)
         captureLogin(app)
         signIn(environment, app: app)
@@ -28,25 +34,39 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         _ orientation: ScreenshotOrientation,
         to app: XCUIApplication
     ) {
-        guard orientation == .landscapeLeft else {
-            return
-        }
-        XCUIDevice.shared.orientation = .landscapeLeft
-        let settled = expectation(description: "Landscape orientation settles")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            settled.fulfill()
-        }
-        wait(for: [settled], timeout: 5)
-        XCTAssertEqual(XCUIDevice.shared.orientation, .landscapeLeft)
+        let deviceOrientation: UIDeviceOrientation = orientation == .landscapeLeft
+            ? .landscapeLeft
+            : .portrait
+        XCUIDevice.shared.orientation = deviceOrientation
+        let expectsLandscape = orientation == .landscapeLeft
+        let geometryMatches = expectation(
+            for: NSPredicate { object, _ in
+                guard let application = object as? XCUIApplication else {
+                    return false
+                }
+                let frame = application.frame
+                guard !frame.isEmpty else { return false }
+                return expectsLandscape
+                    ? frame.width > frame.height
+                    : frame.height > frame.width
+            },
+            evaluatedWith: app
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [geometryMatches], timeout: 5),
+            .completed,
+            "Application geometry did not settle for \(orientation): \(app.frame)"
+        )
+        XCTAssertEqual(XCUIDevice.shared.orientation, deviceOrientation)
         XCTAssertTrue(app.exists)
     }
 
     @MainActor
     private func captureLogin(_ app: XCUIApplication) {
+        let form = app.collectionViews["login.form"]
+        XCTAssertTrue(form.waitForExistence(timeout: 20))
         XCTAssertTrue(app.textFields["login.server"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.textFields["login.username"].exists)
-        XCTAssertTrue(app.secureTextFields["login.password"].exists)
-        XCTAssertTrue(app.buttons["login.submit"].exists)
         attachScreenshot(named: "00-login.png")
     }
 
@@ -55,8 +75,9 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         _ environment: ScreenshotEnvironment,
         app: XCUIApplication
     ) {
+        let form = app.collectionViews["login.form"]
         let server = app.textFields["login.server"]
-        XCTAssertTrue(server.waitForExistence(timeout: 20))
+        scrollUntilHittable(server, in: form, app: app)
         server.tap()
         if let value = server.value as? String, !value.isEmpty {
             server.press(forDuration: 1)
@@ -65,13 +86,27 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             selectAll.tap()
         }
         server.typeText(environment.server)
-        app.textFields["login.username"].tap()
-        app.textFields["login.username"].typeText(environment.username)
-        app.secureTextFields["login.password"].tap()
-        app.secureTextFields["login.password"].typeText(environment.password)
-        app.buttons["login.submit"].tap()
+        server.typeText("\n")
+
+        let username = app.textFields["login.username"]
+        scrollUntilHittable(username, in: form, app: app)
+        username.tap()
+        username.typeText(environment.username)
+        username.typeText("\n")
+
+        let password = app.secureTextFields["login.password"]
+        scrollUntilHittable(password, in: form, app: app)
+        password.tap()
+        password.typeText(environment.password)
+        password.typeText("\n")
 
         let signedIn = app.otherElements["app.signedIn"]
+        if !signedIn.waitForExistence(timeout: 2) {
+            let submit = app.buttons["login.submit"]
+            scrollUntilHittable(submit, in: form, app: app)
+            XCTAssertTrue(submit.isEnabled)
+            submit.tap()
+        }
         XCTAssertTrue(signedIn.waitForExistence(timeout: 45))
         dismissSavePasswordPromptIfNeeded(app: app)
     }
@@ -121,14 +156,16 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         XCTAssertTrue(heroSeries.waitForExistence(timeout: 20))
         heroSeries.tap()
 
-        let hero = app.staticTexts["Thirteen Hours of Goat Sounds"].firstMatch
+        let hero = app.buttons.matching(
+            NSPredicate(
+                format: "label BEGINSWITH %@",
+                "Open Thirteen Hours of Goat Sounds"
+            )
+        ).firstMatch
         XCTAssertTrue(hero.waitForExistence(timeout: 20))
         hero.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["book.detail"].waitForExistence(
-                timeout: 30
-            )
-        )
+        let detail = app.descendants(matching: .any)["book.detail"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 30))
         XCTAssertTrue(
             app.buttons["book.detail.author.0"].waitForExistence(timeout: 10)
         )
@@ -138,18 +175,28 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "03-goat-sounds-detail.png")
 
-        scrollUntilVisible(chapter(named: "romantic goats", in: app), in: app)
-        scrollUntilVisible(
+        scrollUntilHittable(
+            chapter(named: "romantic goats", in: app),
+            in: detail,
+            app: app
+        )
+        scrollUntilHittable(
             chapter(named: "oh no leave each other alone", in: app),
-            in: app
+            in: detail,
+            app: app
         )
         attachScreenshot(named: "04-goat-sounds-chapters.png")
     }
 
     @MainActor
     private func captureNowPlaying(_ app: XCUIApplication) {
-        scrollUntilVisible(app.buttons["book.detail.play"], in: app, up: false)
         let play = app.buttons["book.detail.play"]
+        scrollUntilHittable(
+            play,
+            in: app.descendants(matching: .any)["book.detail"],
+            app: app,
+            scrollsTowardTopWhenMissing: false
+        )
         XCTAssertTrue(play.isHittable)
         play.tap()
         let miniPlayer = app.buttons["player.mini.open"]
@@ -167,6 +214,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         )
         wait(for: [romanticGoats], timeout: 20)
         XCTAssertEqual(chapter.label, "romantic goats")
+        let playerScroll = app.descendants(matching: .any)["player.scroll"]
+        scrollUntilHittable(app.buttons["player.toggle"], in: playerScroll, app: app)
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "06-now-playing.png")
         app.buttons["Close"].tap()
@@ -207,6 +256,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         )
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "08-search.png")
+        let done = app.buttons["search.done"]
+        if done.exists {
+            done.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        }
     }
 
     @MainActor
@@ -219,6 +273,35 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(barnyard.waitForExistence(timeout: 10))
         attachScreenshot(named: "09-settings.png")
+    }
+
+    @MainActor
+    private func ensureSignedOut(_ app: XCUIApplication) {
+        guard app.otherElements["app.signedIn"].waitForExistence(timeout: 2) else {
+            return
+        }
+        app.buttons.matching(identifier: "gearshape").firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        let account = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "settings.account.")
+        ).firstMatch
+        scrollUntilVisible(account, in: app, up: false)
+        account.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
+        ).tap()
+
+        let remove = app.buttons["accountEditor.removeAccount"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 10))
+        remove.tap()
+        let thisDevice = app.sheets.buttons["Only on This Device"]
+        XCTAssertTrue(thisDevice.waitForExistence(timeout: 10))
+        thisDevice.tap()
+        let keepHistory = app.sheets.buttons["Keep Listening History"]
+        XCTAssertTrue(keepHistory.waitForExistence(timeout: 10))
+        keepHistory.tap()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 20)
+        )
     }
 
     @MainActor
@@ -241,10 +324,19 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     private func scrollUntilVisible(
         _ element: XCUIElement,
         in app: XCUIApplication,
-        up: Bool = true
+        up: Bool = true,
+        below navigationBar: XCUIElement? = nil
     ) {
         for _ in 0..<20 {
-            if element.waitForExistence(timeout: 0.5), element.isHittable {
+            let elementExists = element.waitForExistence(timeout: 0.5)
+            let clearsNavigationBar = elementExists
+                && (navigationBar.map {
+                    element.frame.minY >= $0.frame.maxY
+                } ?? true)
+            if elementExists,
+                element.isHittable,
+                clearsNavigationBar
+            {
                 return
             }
             if up {
@@ -254,6 +346,45 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             }
         }
         XCTFail("Expected element was not visible: \(element)")
+    }
+
+    @MainActor
+    private func scrollUntilHittable(
+        _ element: XCUIElement,
+        in container: XCUIElement,
+        app: XCUIApplication,
+        scrollsTowardTopWhenMissing: Bool = true
+    ) {
+        XCTAssertTrue(
+            container.waitForExistence(timeout: 5),
+            "Missing scroll container \(container)"
+        )
+        for _ in 0..<20 {
+            let elementExists = element.exists
+            if elementExists,
+                app.frame.contains(element.frame),
+                element.isHittable
+            {
+                return
+            }
+            let scrollsTowardTop = elementExists
+                ? element.frame.midY >= app.frame.midY
+                : scrollsTowardTopWhenMissing
+            let start = container.coordinate(
+                withNormalizedOffset: CGVector(
+                    dx: 0.1,
+                    dy: scrollsTowardTop ? 0.65 : 0.35
+                )
+            )
+            let end = container.coordinate(
+                withNormalizedOffset: CGVector(
+                    dx: 0.1,
+                    dy: scrollsTowardTop ? 0.45 : 0.55
+                )
+            )
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTFail("Could not scroll to hittable element \(element) in \(container)")
     }
 
     @MainActor
@@ -272,9 +403,9 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         guard app.keyboards.firstMatch.exists else {
             return
         }
-        let dismiss = app.buttons["Done"]
-        XCTAssertTrue(dismiss.waitForExistence(timeout: 5))
-        dismiss.tap()
+        let results = app.descendants(matching: .any)["search.results"]
+        XCTAssertTrue(results.waitForExistence(timeout: 5))
+        results.swipeDown()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
     }
 

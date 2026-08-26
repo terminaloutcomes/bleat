@@ -253,8 +253,10 @@ struct MiniPlayerView: View {
     @State private var isDismissing = false
 
     @ColourSchemePreference private var colourScheme
+    var miniPlayerRoundingRadius: CGFloat = 8
 
     var body: some View {
+
         if !isDismissing {
             HStack(spacing: 12) {
                 Button(action: showPlayer) {
@@ -308,13 +310,13 @@ struct MiniPlayerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .shadow(
+                color: .black.opacity(0.12),
+                radius: miniPlayerRoundingRadius,
+                y: 2
             )
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 50)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .highPriorityGesture(miniPlayerGesture)
             .accessibilityElement(children: .contain)
@@ -671,11 +673,11 @@ struct NowPlaying: View {
                         .equatable()
 
                         #if os(iOS)
-                        AirPlayRoutePicker()
-                            .frame(width: 44, height: 44)
-                            .accessibilityLabel("AirPlay")
-                            .accessibilityIdentifier("player.airPlay")
-                            .tint(colourScheme.color)
+                            AirPlayRoutePicker()
+                                .frame(width: 44, height: 44)
+                                .accessibilityLabel("AirPlay")
+                                .accessibilityIdentifier("player.airPlay")
+                                .tint(colourScheme.color)
                         #endif
                     }
 
@@ -703,6 +705,7 @@ struct NowPlaying: View {
                 }
                 .padding()
             }
+            .accessibilityIdentifier("player.scroll")
             .toolbar {
                 playerToolbar
             }
@@ -729,18 +732,18 @@ struct NowPlaying: View {
     }
 
     #if os(iOS)
-    private struct AirPlayRoutePicker: UIViewRepresentable {
-        func makeUIView(context: Context) -> AVRoutePickerView {
-            let picker = AVRoutePickerView()
-            picker.prioritizesVideoDevices = false
-            return picker
-        }
+        private struct AirPlayRoutePicker: UIViewRepresentable {
+            func makeUIView(context: Context) -> AVRoutePickerView {
+                let picker = AVRoutePickerView()
+                picker.prioritizesVideoDevices = false
+                return picker
+            }
 
-        func updateUIView(
-            _ picker: AVRoutePickerView,
-            context: Context
-        ) {}
-    }
+            func updateUIView(
+                _ picker: AVRoutePickerView,
+                context: Context
+            ) {}
+        }
     #endif
 
     private func playbackTime(_ value: Double) -> String {

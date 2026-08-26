@@ -512,6 +512,12 @@ private struct AccountSubmissionButton: View {
 }
 
 private struct NativeLoginView: View {
+    private enum FocusedField: Hashable {
+        case server
+        case username
+        case password
+    }
+
     @Bindable var model: AppModel
     var navigationTitle = "Bleat"
     var onSignedIn: () -> Void = {}
@@ -522,6 +528,7 @@ private struct NativeLoginView: View {
     @State private var isPasswordVisible = false
     @State private var invalidURLErrorMessage: String?
     @State private var autoLaunchedServer: String?
+    @FocusState private var focusedField: FocusedField?
 
     private var isSubmitting: Bool {
         model.loginStatus.isSubmitting
@@ -564,6 +571,11 @@ private struct NativeLoginView: View {
                         text: $serverAddress
                     )
                     .iOSServerURLInput()
+                    .focused($focusedField, equals: .server)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        focusedField = supportsLocalLogin ? .username : nil
+                    }
                     .accessibilityLabel("Server URL")
                     .accessibilityIdentifier("login.server")
                     .disabled(pendingRestoredAccount != nil)
@@ -611,15 +623,24 @@ private struct NativeLoginView: View {
                         TextField("Username", text: $username)
                             .textContentType(.username)
                             .iOSNoAutocapitalization()
+                            .focused($focusedField, equals: .username)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .password }
                             .accessibilityIdentifier("login.username")
                             .disabled(pendingRestoredAccount != nil)
                         if isPasswordVisible {
                             TextField("Password", text: $password)
                                 .textContentType(.password)
+                                .focused($focusedField, equals: .password)
+                                .submitLabel(.done)
+                                .onSubmit { focusedField = nil }
                                 .accessibilityIdentifier("login.password")
                         } else {
                             SecureField("Password", text: $password)
                                 .textContentType(.password)
+                                .focused($focusedField, equals: .password)
+                                .submitLabel(.done)
+                                .onSubmit { focusedField = nil }
                                 .accessibilityIdentifier("login.password")
 
                         }
@@ -648,7 +669,6 @@ private struct NativeLoginView: View {
                             .accessibilityIdentifier("login.error")
                     }
                 }
-
 
                 if pendingRestoredAccount == nil,
                     model.accounts.isEmpty,
@@ -732,6 +752,7 @@ private struct NativeLoginView: View {
                 }
 
             }
+            .accessibilityIdentifier("login.form")
             #if os(macOS)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     Text("Please log into a server")
@@ -1262,7 +1283,8 @@ private struct DiagnosticsView: View {
                 LabeledContent(
                     "Last Server Activity",
                     value:
-                        model.endpointDiagnostics?.lastConnection?.diagnosticsLabel
+                        model.endpointDiagnostics?.lastConnection?
+                        .diagnosticsLabel
                         ?? "Not recorded this launch"
                 )
                 .accessibilityIdentifier(
@@ -1271,7 +1293,8 @@ private struct DiagnosticsView: View {
                 LabeledContent(
                     "Last Authentication",
                     value:
-                        model.endpointDiagnostics?.authentication?.diagnosticsLabel
+                        model.endpointDiagnostics?.authentication?
+                        .diagnosticsLabel
                         ?? "Not recorded this launch"
                 )
                 .accessibilityIdentifier(
@@ -1298,10 +1321,14 @@ private struct DiagnosticsView: View {
             }
 
             Section("Activity") {
-                LabeledContent("Libraries", value: model.libraries.diagnosticsLabel)
-                LabeledContent("Home", value: model.homeShelves.diagnosticsLabel)
-                LabeledContent("Search", value: model.searchResults.diagnosticsLabel)
-                LabeledContent("Playback", value: model.playback.state.diagnosticsLabel)
+                LabeledContent(
+                    "Libraries", value: model.libraries.diagnosticsLabel)
+                LabeledContent(
+                    "Home", value: model.homeShelves.diagnosticsLabel)
+                LabeledContent(
+                    "Search", value: model.searchResults.diagnosticsLabel)
+                LabeledContent(
+                    "Playback", value: model.playback.state.diagnosticsLabel)
                 LabeledContent(
                     "Playback Sync",
                     value: model.playback.syncState.diagnosticsLabel
@@ -1314,7 +1341,8 @@ private struct DiagnosticsView: View {
 
             if !model.activeDiagnosticErrorCodes.isEmpty {
                 Section("Active Errors") {
-                    ForEach(model.activeDiagnosticErrorCodes, id: \.self) { code in
+                    ForEach(model.activeDiagnosticErrorCodes, id: \.self) {
+                        code in
                         Text(code)
                     }
                 }
@@ -1469,36 +1497,47 @@ private struct SignedInView: View {
             }
         }
     #else
+        @ViewBuilder
         private func mobileTabs(containerHeight: CGFloat) -> some View {
+            if model.playback.showsMiniPlayer {
+                mobileTabView(containerHeight: containerHeight)
+                    .tabViewBottomAccessory {
+                        MiniPlayerView(
+                            playback: model.playback,
+                            containerHeight: containerHeight
+                        ) {
+                            navigation.showsPlayer = true
+                        }
+                    }
+            } else {
+                mobileTabView(containerHeight: containerHeight)
+            }
+        }
+
+        private func mobileTabView(containerHeight: CGFloat) -> some View {
             TabView(selection: $navigation.selectedTab) {
                 Tab(value: .home) {
-                    tabContent(containerHeight: containerHeight) {
-                        HomeView(
-                            model: model,
-                            navigation: navigation,
-                            handlePlaybackOutcome: handlePlaybackOutcome
-                        )
-                    }
+                    HomeView(
+                        model: model,
+                        navigation: navigation,
+                        handlePlaybackOutcome: handlePlaybackOutcome
+                    )
                 } label: {
                     mobileTabLabel("Home", systemImage: "house")
                 }
 
                 Tab(value: .library) {
-                    tabContent(containerHeight: containerHeight) {
-                        LibraryView(
-                            model: model,
-                            navigation: navigation,
-                            handlePlaybackOutcome: handlePlaybackOutcome
-                        )
-                    }
+                    LibraryView(
+                        model: model,
+                        navigation: navigation,
+                        handlePlaybackOutcome: handlePlaybackOutcome
+                    )
                 } label: {
                     mobileTabLabel("Library", systemImage: "books.vertical")
                 }
 
                 Tab(value: .downloads) {
-                    tabContent(containerHeight: containerHeight) {
-                        DownloadsView(model: model)
-                    }
+                    DownloadsView(model: model)
                 } label: {
                     mobileTabLabel(
                         "Downloads",
@@ -1507,21 +1546,17 @@ private struct SignedInView: View {
                 }
 
                 Tab(value: .settings) {
-                    tabContent(containerHeight: containerHeight) {
-                        SettingsView(model: model, navigation: navigation)
-                    }
+                    SettingsView(model: model, navigation: navigation)
                 } label: {
                     mobileTabLabel("Settings", systemImage: "gearshape")
                 }
 
                 Tab(value: .search, role: .search) {
-                    tabContent(containerHeight: containerHeight) {
-                        SearchView(
-                            model: model,
-                            navigation: navigation,
-                            handlePlaybackOutcome: handlePlaybackOutcome
-                        )
-                    }
+                    SearchView(
+                        model: model,
+                        navigation: navigation,
+                        handlePlaybackOutcome: handlePlaybackOutcome
+                    )
                 } label: {
                     mobileTabLabel(
                         "Search",
@@ -1540,22 +1575,24 @@ private struct SignedInView: View {
         }
     #endif
 
-    private func tabContent<Content: View>(
-        containerHeight: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if model.playback.showsMiniPlayer {
-                    MiniPlayerView(
-                        playback: model.playback,
-                        containerHeight: containerHeight
-                    ) {
-                        navigation.showsPlayer = true
+    #if os(macOS)
+        private func tabContent<Content: View>(
+            containerHeight: CGFloat,
+            @ViewBuilder content: () -> Content
+        ) -> some View {
+            content()
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if model.playback.showsMiniPlayer {
+                        MiniPlayerView(
+                            playback: model.playback,
+                            containerHeight: containerHeight
+                        ) {
+                            navigation.showsPlayer = true
+                        }
                     }
                 }
-            }
-    }
+        }
+    #endif
 
     private func handlePlaybackOutcome(_ outcome: PlaybackStartOutcome) {
         guard let failure = outcome.presentationFailure else { return }
@@ -2830,6 +2867,7 @@ private struct SearchView: View {
                     Button("Done") {
                         isSearchFocused = false
                     }
+                    .accessibilityIdentifier("search.done")
                 }
                 .padding()
             }
@@ -2837,7 +2875,6 @@ private struct SearchView: View {
         .task(id: taskContext) {
             await model.search(query: navigation.searchQuery)
         }
-        .accessibilityIdentifier("search.screen")
     }
 
     @ViewBuilder
@@ -2966,6 +3003,7 @@ private struct SearchView: View {
                         }
                     }
                 }
+                .scrollDismissesKeyboard(.immediately)
                 .accessibilityIdentifier("search.results")
             }
         }

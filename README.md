@@ -325,14 +325,18 @@ release requires a specific installed runtime or presentation:
 BLEAT_SCREENSHOT_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-26-3 \
 BLEAT_SCREENSHOT_DEVICES='com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB' \
 BLEAT_SCREENSHOT_APPEARANCES=light,dark \
+BLEAT_SCREENSHOT_ORIENTATIONS=portrait,landscapeLeft \
 BLEAT_SCREENSHOT_LOCALE=en_AU \
 mise run screenshots
 ```
 
 `BLEAT_SCREENSHOT_APPEARANCES` accepts a comma-separated list of `light` and/or
 `dark` (default `light,dark`). Set it to a single appearance to capture only
-that set. The device list must contain one supported iPhone and one supported
-iPad. The harness reports the available runtime device types when a selection is
+that set. `BLEAT_SCREENSHOT_ORIENTATIONS` accepts `portrait` and/or
+`landscapeLeft` (default `portrait,landscapeLeft`). For a focused landscape
+audit, set the appearance to `light` and the orientation to `landscapeLeft`.
+The device list must contain one supported iPhone and one supported iPad. The
+harness reports the available runtime device types when a selection is
 unavailable. Add a scene by extending the ordered `screenshots` list in the
 fixture and adding a matching named attachment in `BleatReleaseScreenshotTests`;
 the harness derives the `-dark` filename for each scene automatically. Bump

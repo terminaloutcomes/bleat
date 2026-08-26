@@ -14,6 +14,7 @@ readonly bleat_run_id="$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
 readonly bleat_compose_project="bleat-release-screenshots-${bleat_run_id}"
 readonly bleat_password="$(/usr/bin/uuidgen)"
 readonly bleat_appearances_raw="${BLEAT_SCREENSHOT_APPEARANCES:-light,dark}"
+readonly bleat_orientations_raw="${BLEAT_SCREENSHOT_ORIENTATIONS-portrait,landscapeLeft}"
 readonly bleat_locale="${BLEAT_SCREENSHOT_LOCALE:-en_AU}"
 readonly bleat_requested_port="${BLEAT_SCREENSHOT_PORT:-}"
 readonly bleat_device_types_raw="${BLEAT_SCREENSHOT_DEVICES:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB}"
@@ -600,12 +601,28 @@ bleat_validate_exported_screenshot() {
     esac
 }
 
+bleat_normalize_exported_screenshot() {
+    local screenshot="$1"
+    local orientation="$2"
+    [[ "${orientation}" == "landscapeLeft" ]] || return
+
+    local dimensions
+    dimensions="$(bleat_image_dimensions "${screenshot}")"
+    local width="${dimensions%x*}"
+    local height="${dimensions#*x}"
+    (( height > width )) || return
+
+    local rotated="${screenshot%.png}-landscapeLeft.png"
+    sips --rotate -90 "${screenshot}" --out "${rotated}" >/dev/null
+    mv "${rotated}" "${screenshot}"
+}
+
 bleat_validate_public_manifest() {
     local manifest="$1"
     [[ -f "${manifest}" ]] || bleat_fail "Release screenshot manifest is missing"
     jq --exit-status '
         ([.. | objects | keys_unsorted[]? | select(test("token|password|credential|resolved|response"; "i"))] | length == 0)
-        and ([.. | strings | select(test("bearer[[:space:]]|access[_-]?token|refresh[_-]?token|password|https?://|/Users/"; "i"))] | length == 0)
+        and ([.. | strings | select(test("bearer[[:space:]]|access[_-]?token|refresh[_-]?token|https?://|/Users/"; "i"))] | length == 0)
     ' "${manifest}" >/dev/null \
         || bleat_fail "Release screenshot manifest contains sensitive data"
 }
@@ -651,6 +668,8 @@ bleat_export_screenshots() {
         exported_name="$(bleat_exported_attachment_name "${exported_directory}/manifest.json" "${filename}")"
         [[ -n "${exported_name}" ]] \
             || bleat_fail "Screenshot attachment export is missing ${filename} for ${device_label}"
+        bleat_normalize_exported_screenshot \
+            "${exported_directory}/${exported_name}" "${orientation}"
         bleat_validate_exported_screenshot \
             "${exported_directory}/${exported_name}" "${expected_dimensions}" \
             "${device_label}" "${filename}" "${orientation}"
@@ -659,6 +678,28 @@ bleat_export_screenshots() {
             "${destination_directory}/${filename}" "${expected_dimensions}" \
             "${device_label}" "${filename}" "${orientation}"
     done < <(bleat_expected_screenshot_names "${appearance}")
+}
+
+bleat_validate_test_result() {
+    local result_bundle="$1"
+    local device_label="$2"
+    local orientation="$3"
+    local appearance="$4"
+    local summary
+    summary="$(
+        xcrun xcresulttool get test-results summary \
+            --path "${result_bundle}" --compact
+    )"
+    jq --exit-status '
+        .result == "Passed"
+        and .totalTestCount == 1
+        and .passedTests == 1
+        and .failedTests == 0
+        and .skippedTests == 0
+        and .expectedFailures == 0
+    ' <<<"${summary}" >/dev/null \
+        || bleat_fail "Screenshot result for ${device_label} ${orientation} ${appearance} did not contain exactly one passing test"
+    print "Verified ${device_label} ${orientation} ${appearance}: exactly one screenshot test passed"
 }
 
 bleat_build_manifest() {
@@ -785,6 +826,8 @@ bleat_capture_device() {
                 test-without-building
             [[ -f "${result_bundle}/Info.plist" ]] \
                 || bleat_fail "Screenshot test did not produce a result bundle for ${label} ${orientation} ${appearance}"
+            bleat_validate_test_result \
+                "${result_bundle}" "${label}" "${orientation}" "${appearance}"
             bleat_export_screenshots "${result_bundle}" "${label}" "${oriented_dimensions}" "${appearance}" "${orientation}"
         done
     done
@@ -808,11 +851,28 @@ bleat_resolve_appearances() {
     bleat_appearances=("${parsed[@]}")
 }
 
+bleat_resolve_orientations() {
+    local raw orientation
+    local -a parsed
+    for raw in "${(@s:,:)bleat_orientations_raw}"; do
+        orientation="${raw//[[:space:]]/}"
+        case "${orientation}" in
+            portrait|landscapeLeft) ;;
+            *) bleat_fail "BLEAT_SCREENSHOT_ORIENTATIONS must be a comma-separated list of portrait and/or landscapeLeft (got: ${bleat_orientations_raw})" ;;
+        esac
+        if (( ${parsed[(Ie)${orientation}]} == 0 )); then
+            parsed+=("${orientation}")
+        fi
+    done
+    (( ${#parsed} >= 1 )) || bleat_fail "BLEAT_SCREENSHOT_ORIENTATIONS must contain at least one orientation"
+    bleat_orientations=("${parsed[@]}")
+}
+
 bleat_main() {
     bleat_validate_fixture
     bleat_require_prerequisites
     bleat_resolve_appearances
-    bleat_orientations=(portrait landscapeLeft)
+    bleat_resolve_orientations
     [[ "${bleat_locale}" == [a-z][a-z]_[A-Z][A-Z] ]] \
         || bleat_fail "BLEAT_SCREENSHOT_LOCALE must use a language_REGION value such as en_AU"
     bleat_resolve_runtime
@@ -874,6 +934,10 @@ trap bleat_handle_exit EXIT
 trap bleat_handle_exit ZERR
 
 case "${1:-}" in
+    --validate-options)
+        bleat_resolve_appearances
+        bleat_resolve_orientations
+        ;;
     --validate-fixtures)
         bleat_validate_fixture
         ;;

@@ -15,6 +15,19 @@ trap bleat_cleanup EXIT
 
 "${bleat_harness}" --validate-fixtures
 
+BLEAT_SCREENSHOT_ORIENTATIONS='landscapeLeft, portrait,landscapeLeft' \
+    "${bleat_harness}" --validate-options
+if BLEAT_SCREENSHOT_ORIENTATIONS='' \
+    "${bleat_harness}" --validate-options >/dev/null 2>&1; then
+    print -u2 "The harness accepted an empty orientation selection"
+    exit 1
+fi
+if BLEAT_SCREENSHOT_ORIENTATIONS='portrait,upsideDown' \
+    "${bleat_harness}" --validate-options >/dev/null 2>&1; then
+    print -u2 "The harness accepted an unsupported orientation"
+    exit 1
+fi
+
 bleat_expect_invalid_fixture() {
     local fixture="$1"
     local message="$2"
@@ -140,7 +153,10 @@ if BLEAT_SCREENSHOT_APPEARANCES=light,dark \
     exit 1
 fi
 
-jq --null-input '{app: {version: "1.0", build: "1"}, screenshots: []}' \
+jq --null-input '{
+    app: {version: "1.0", build: "1"},
+    screenshots: [{scenario: "Native username and password login"}]
+}' \
     >"${bleat_temporary_directory}/public-manifest.json"
 BLEAT_SCREENSHOT_MANIFEST="${bleat_temporary_directory}/public-manifest.json" \
     "${bleat_harness}" --validate-manifest

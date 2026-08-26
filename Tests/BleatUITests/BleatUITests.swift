@@ -905,7 +905,13 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertFalse(app.buttons["diagnostics.export"].exists)
         XCTAssertFalse(app.buttons["diagnostics.exportRecentLogs"].exists)
-        app.navigationBars.buttons.firstMatch.tap()
+        let diagnosticsBack = app.buttons["BackButton"]
+        XCTAssertTrue(diagnosticsBack.isHittable)
+        diagnosticsBack.tap()
+        XCTAssertTrue(
+            app.navigationBars["Diagnostics"].waitForNonExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
 
         Self.scrollUntilHittable(
             app: app,
@@ -914,6 +920,11 @@ final class BleatUITests: XCTestCase {
         )
         let account = app.buttons["settings.account.ui-account"]
         XCTAssertTrue(account.waitForExistence(timeout: 3))
+        let settingsBar = app.navigationBars["Settings"]
+        for _ in 0..<3 where account.frame.minY < settingsBar.frame.maxY {
+            app.swipeDown()
+        }
+        XCTAssertGreaterThanOrEqual(account.frame.minY, settingsBar.frame.maxY)
         account.coordinate(
             withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
         ).tap()

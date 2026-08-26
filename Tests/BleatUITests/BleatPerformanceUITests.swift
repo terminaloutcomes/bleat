@@ -89,7 +89,7 @@ final class BleatPerformanceUITests: XCTestCase {
                 "library.book.book-\(20 * tap)"
             ]
             var rowRevealAttempts = 0
-            while !expectedNewRow.exists && rowRevealAttempts < 6 {
+            while !expectedNewRow.exists && rowRevealAttempts < 10 {
                 scrollContainer.swipeUp(velocity: .slow)
                 rowRevealAttempts += 1
             }

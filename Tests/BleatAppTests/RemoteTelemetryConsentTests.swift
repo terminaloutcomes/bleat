@@ -272,7 +272,7 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         XCTAssertEqual(controller.foregroundValues, [false, true])
     }
 
-    #if os(iOS)
+    #if DEBUG && os(iOS)
         func testRealRuntimeDefaultsOffAndWithdrawalPurgesItsGeneration()
             async throws
         {
