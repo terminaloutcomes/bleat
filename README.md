@@ -778,8 +778,10 @@ explicit download. **Download Full Book** promotes an automatic cache in place,
 keeps its verified files, and downloads only the remaining files.
 
 Book detail keeps Play, Download, and finished-state actions above long
-description and metadata content. It shows series and sequence, audio-file and
-chapter counts, and a duration beside every chapter. When detail loading fails,
+description and metadata content. Its Details and Chapters sections are
+collapsible; the Chapters header shows the count, and each chapter shows its
+duration and asks for confirmation before moving playback there. Bookmarks
+follow Chapters. When detail loading fails,
 the screen distinguishes missing or forbidden items, expired authentication,
 invalid server responses, local-storage failures, offline cache misses, and
 temporary server failures. Retryable failures include a **Try Again** action;

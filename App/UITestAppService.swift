@@ -545,7 +545,7 @@
                         sequence: "1"
                     ),
                 ],
-                genres: ["Fiction"],
+                genres: ["Fiction", "Adventure"],
                 tags: [],
                 publishedYear: "2026",
                 publishedDate: nil,

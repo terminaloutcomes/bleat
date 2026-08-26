@@ -207,6 +207,16 @@ final class BleatUITests: XCTestCase {
             app.buttons["book.detail.series.1"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.series.1"].isHittable)
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "book.detail.chapters.disclosure",
+            direction: .up
+        )
+        let chaptersDisclosure = app.descendants(matching: .any)[
+            "book.detail.chapters.disclosure"
+        ]
+        XCTAssertTrue(chaptersDisclosure.isHittable)
+        chaptersDisclosure.tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["book.detail.chapter.0"]
                 .waitForExistence(timeout: 3)
@@ -393,6 +403,135 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookDetailDisclosuresAndConfirmedChapterNavigation() {
+        let app = launch(scenario: "--ui-testing-playback")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        let detailsDisclosure = app.descendants(matching: .any)[
+            "book.detail.details.disclosure"
+        ]
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "book.detail.details.disclosure",
+            direction: .up
+        )
+        XCTAssertTrue(detailsDisclosure.isHittable)
+        let duration = app.staticTexts["book.detail.details.duration"]
+        XCTAssertFalse(duration.exists)
+        detailsDisclosure.tap()
+        XCTAssertTrue(duration.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            app.staticTexts.matching(
+                NSPredicate(format: "label == %@", "Chapters")
+            ).count,
+            1
+        )
+
+        let language = app.staticTexts["book.detail.details.language"]
+        let genres = app.staticTexts["book.detail.details.genres"]
+        XCTAssertTrue(language.waitForExistence(timeout: 3))
+        XCTAssertTrue(genres.waitForExistence(timeout: 3))
+        XCTAssertEqual(language.frame.maxX, genres.frame.maxX, accuracy: 1)
+        detailsDisclosure.tap()
+        XCTAssertTrue(duration.waitForNonExistence(timeout: 3))
+
+        let chaptersDisclosure = app.descendants(matching: .any)[
+            "book.detail.chapters.disclosure"
+        ]
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "book.detail.chapters.disclosure",
+            direction: .up
+        )
+        XCTAssertTrue(chaptersDisclosure.isHittable)
+        XCTAssertEqual(chaptersDisclosure.label, "Chapters, 2")
+        XCTAssertFalse(
+            app.descendants(matching: .any)["book.detail.chapter.0"].exists
+        )
+        chaptersDisclosure.tap()
+
+        let chapter = app.buttons["book.detail.chapter.1"]
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        XCTAssertTrue(chapter.isHittable)
+        chapter.tap()
+
+        let confirmation = app.alerts["Go to “Chapter Two”?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        confirmation.buttons["book.detail.chapter.cancel"].firstMatch.tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+
+        chapter.tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.buttons["book.detail.chapter.confirm"].firstMatch.tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 3))
+        let miniPlayer = app.buttons["player.mini.open"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+
+        let bookmark = app.descendants(matching: .any)[
+            "book.detail.bookmark"
+        ]
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "book.detail.bookmark",
+            direction: .up
+        )
+        XCTAssertTrue(bookmark.isHittable)
+        XCTAssertGreaterThan(bookmark.frame.minY, chaptersDisclosure.frame.minY)
+
+        miniPlayer.tap()
+        let playerChapters = app.buttons["player.chapters"]
+        XCTAssertTrue(playerChapters.waitForExistence(timeout: 3))
+        playerChapters.tap()
+        let selectedChapter = app.buttons["player.chapter.1"]
+        XCTAssertTrue(selectedChapter.waitForExistence(timeout: 3))
+        XCTAssertTrue(selectedChapter.isSelected)
+    }
+
+    @MainActor
+    func testBookDetailChapterNavigationPresentsTypedPlaybackFailure() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-playback-failure"]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.descendants(matching: .any)["home.book.ui-book"].tap()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "book.detail.chapters.disclosure",
+            direction: .up
+        )
+        app.descendants(matching: .any)[
+            "book.detail.chapters.disclosure"
+        ].tap()
+        let chapter = app.buttons["book.detail.chapter.0"]
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        chapter.tap()
+        let confirmation = app.alerts["Go to “Chapter One”?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.buttons["book.detail.chapter.confirm"].firstMatch.tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 3))
+
+        let failure = app.alerts["Server unavailable"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            failure.staticTexts[
+                "Bleat could not reach the Audiobookshelf server."
+            ].exists
+        )
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+    }
+
+    @MainActor
     func testPlayableCoverPreparationDisablesOnlyMatchingAction() {
         let app = launch(
             scenario: "--ui-testing-playback",
@@ -544,7 +683,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
         app.buttons["Mark Unplayed"].tap()
-        XCTAssertTrue(app.buttons["Mark Unplayed"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.buttons["Mark Unplayed"].waitForNonExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
 
@@ -911,7 +1051,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.navigationBars["Diagnostics"].waitForNonExistence(timeout: 3)
         )
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.navigationBars["Settings"].waitForExistence(timeout: 3))
 
         Self.scrollUntilHittable(
             app: app,
@@ -1830,7 +1971,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
         app.buttons[progressLabel].tap()
-        XCTAssertTrue(app.buttons[progressLabel].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.buttons[progressLabel].waitForNonExistence(timeout: 3))
     }
 
     @MainActor

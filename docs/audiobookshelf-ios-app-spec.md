@@ -388,12 +388,14 @@ The detail screen contains:
 - Resume/Play;
 - Download, pause, retry, or remove download;
 - progress and finished state;
-- metadata;
+- metadata in a collapsible Details section;
 - separate 44-point-or-larger author and series controls that retain their
   position-based accessibility identifiers; authors select a clearable Library
   filter and series push a series detail above the book;
-- chapters with durations;
-- bookmarks;
+- a collapsible Chapters section whose header shows the chapter count, with
+  duration-bearing rows that confirm before starting or repositioning playback
+  through the unified playback-start coordinator;
+- bookmarks after chapters;
 - Edit item in the top-right actions menu, gated by server permission;
 - a single Edit destination for metadata, cover, and server deletion;
 - server/account attribution when it could be ambiguous.

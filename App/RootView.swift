@@ -2031,7 +2031,8 @@ private struct HomeView: View {
                     model: model,
                     book: book,
                     navigation: navigation,
-                    origin: .home
+                    origin: .home,
+                    handlePlaybackOutcome: handlePlaybackOutcome
                 )
             }
             .navigationDestination(for: SeriesDestination.self) { series in
@@ -2631,7 +2632,8 @@ private struct BookListContent: View {
                 model: model,
                 book: book,
                 navigation: navigation,
-                origin: origin
+                origin: origin,
+                handlePlaybackOutcome: handlePlaybackOutcome
             )
         }
         .navigationDestination(for: SeriesDestination.self) { series in
@@ -2842,7 +2844,8 @@ private struct SearchView: View {
                         model: model,
                         book: book,
                         navigation: navigation,
-                        origin: .search
+                        origin: .search,
+                        handlePlaybackOutcome: handlePlaybackOutcome
                     )
                 }
                 .navigationDestination(for: SeriesDestination.self) { series in
@@ -3413,11 +3416,15 @@ private struct BookDetailView: View {
     let book: LibraryBookSummary
     @Bindable var navigation: AppNavigationCoordinator
     let origin: AppRootTab
+    let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
     @State private var showChapterTranscription = false
     @State private var showRemoveDownloadConfirmation = false
-    @State private var playbackFailure: AppFailure?
+    @State private var detailsAreExpanded = false
+    @State private var chaptersAreExpanded = false
+    @State private var pendingChapter: PlaybackChapter?
+    @State private var showsChapterConfirmation = false
 
     @ColourSchemePreference private var colourScheme
 
@@ -3541,17 +3548,36 @@ private struct BookDetailView: View {
             )
         }
         .alert(
-            playbackFailure?.title ?? "Playback unavailable",
-            isPresented: Binding(
-                get: { playbackFailure != nil },
-                set: { if !$0 { playbackFailure = nil } }
-            )
+            pendingChapter.map { "Go to “\($0.title)”?" }
+                ?? "Go to Chapter?",
+            isPresented: $showsChapterConfirmation
         ) {
-            Button("OK") { playbackFailure = nil }
-        } message: {
-            if let playbackFailure {
-                Text(playbackFailure.message)
+            Button("Go to Chapter") {
+                guard let chapter = pendingChapter,
+                    let detail = loadedDetail,
+                    let account = model.account
+                else {
+                    showsChapterConfirmation = false
+                    pendingChapter = nil
+                    return
+                }
+                showsChapterConfirmation = false
+                pendingChapter = nil
+                Task {
+                    let outcome = await model.startPlayback(
+                        detail: detail,
+                        account: account,
+                        position: .chapter(chapter)
+                    )
+                    handlePlaybackOutcome(outcome)
+                }
             }
+            .accessibilityIdentifier("book.detail.chapter.confirm")
+            Button("Cancel", role: .cancel) {
+                showsChapterConfirmation = false
+                pendingChapter = nil
+            }
+            .accessibilityIdentifier("book.detail.chapter.cancel")
         }
     }
 
@@ -3783,29 +3809,9 @@ private struct BookDetailView: View {
 
                 detailsGrid(detail)
 
-                bookmarksSection
+                chaptersSection(detail)
 
-                if !detail.chapters.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Chapters")
-                            .font(.headline)
-                        ForEach(
-                            detail.chapters,
-                            id: \.id
-                        ) { chapter in
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(chapter.title)
-                                Spacer()
-                                Text(chapterDurationText(chapter))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier(
-                                "book.detail.chapter.\(chapter.id)"
-                            )
-                        }
-                    }
-                }
+                bookmarksSection
             }
             .padding()
         }
@@ -3860,34 +3866,125 @@ private struct BookDetailView: View {
 
     @ViewBuilder
     private func detailsGrid(_ detail: LibraryBookDetail) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Details")
-                .font(.headline)
-            LabeledContent("Duration", value: durationText(detail.duration))
-            LabeledContent(
-                "Audio Files",
-                value: String(detail.audioFileCount)
+        VStack(alignment: .leading, spacing: 0) {
+            disclosureHeader(
+                title: "Details",
+                isExpanded: $detailsAreExpanded,
+                identifier: "book.detail.details.disclosure"
             )
-            LabeledContent(
-                "Chapters",
-                value: String(detail.chapters.count)
-            )
-            if let publishedYear = detail.publishedYear {
-                LabeledContent("Published", value: publishedYear)
-            }
-            if let publisher = detail.publisher {
-                LabeledContent("Publisher", value: publisher)
-            }
-            if let language = detail.language {
-                LabeledContent("Language", value: language)
-            }
-            if !detail.genres.isEmpty {
-                LabeledContent(
-                    "Genres",
-                    value: detail.genres.joined(separator: ", ")
-                )
+            if detailsAreExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent(
+                        "Duration", value: durationText(detail.duration)
+                    )
+                    .accessibilityIdentifier("book.detail.details.duration")
+                    LabeledContent(
+                        "Audio Files",
+                        value: String(detail.audioFileCount)
+                    )
+                    if let publishedYear = detail.publishedYear {
+                        LabeledContent("Published", value: publishedYear)
+                    }
+                    if let publisher = detail.publisher {
+                        LabeledContent("Publisher", value: publisher)
+                    }
+                    if let language = detail.language {
+                        LabeledContent("Language", value: language)
+                            .accessibilityIdentifier(
+                                "book.detail.details.language"
+                            )
+                    }
+                    if !detail.genres.isEmpty {
+                        LabeledContent(
+                            "Genres",
+                            value: detail.genres.joined(separator: ", ")
+                        )
+                        .accessibilityIdentifier(
+                            "book.detail.details.genres"
+                        )
+                    }
+                }
+                .padding(.top, 8)
             }
         }
+    }
+
+    @ViewBuilder
+    private func chaptersSection(_ detail: LibraryBookDetail) -> some View {
+        if !detail.chapters.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                disclosureHeader(
+                    title: "Chapters",
+                    value: detail.chapters.count.formatted(),
+                    isExpanded: $chaptersAreExpanded,
+                    identifier: "book.detail.chapters.disclosure"
+                )
+                if chaptersAreExpanded {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(detail.chapters, id: \.id) { chapter in
+                            Button {
+                                pendingChapter = chapter
+                                showsChapterConfirmation = true
+                            } label: {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(chapter.title)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(chapterDurationText(chapter))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 44,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier(
+                                "book.detail.chapter.\(chapter.id)"
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+        }
+    }
+
+    private func disclosureHeader(
+        title: String,
+        value: String? = nil,
+        isExpanded: Binding<Bool>,
+        identifier: String
+    ) -> some View {
+        Button {
+            isExpanded.wrappedValue.toggle()
+        } label: {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                if let value {
+                    Text(value)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(
+                        .degrees(isExpanded.wrappedValue ? 90 : 0)
+                    )
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(
+            isExpanded.wrappedValue ? "Expanded" : "Collapsed"
+        )
+        .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -3921,9 +4018,7 @@ private struct BookDetailView: View {
                                     detail: detail,
                                     account: account
                                 )
-                                if case .failed(let failure) = outcome {
-                                    playbackFailure = failure
-                                }
+                                handlePlaybackOutcome(outcome)
                             }
                         case .playAgain:
                             Task {
@@ -3932,9 +4027,7 @@ private struct BookDetailView: View {
                                     account: account,
                                     position: .beginning
                                 )
-                                if case .failed(let failure) = outcome {
-                                    playbackFailure = failure
-                                }
+                                handlePlaybackOutcome(outcome)
                             }
                         }
                     } label: {
