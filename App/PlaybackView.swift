@@ -316,7 +316,7 @@ struct MiniPlayerView: View {
                 y: 2
             )
             .padding(.horizontal, 12)
-            .padding(.vertical, 50)
+            .padding(.vertical, 12)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .highPriorityGesture(miniPlayerGesture)
             .accessibilityElement(children: .contain)
