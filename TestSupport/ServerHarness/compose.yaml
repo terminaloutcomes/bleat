@@ -44,7 +44,7 @@ services:
       - root-config:/config
       - root-metadata:/metadata
       - caddy-data:/caddy-data:ro
-      - ./media:/audiobooks:ro
+      - "${BLEAT_MEDIA_ROOT:-./media}:/audiobooks:${BLEAT_MEDIA_ACCESS_MODE:-ro}"
       - ./media-large:/audiobooks-large:ro
     depends_on:
       caddy:
@@ -68,7 +68,7 @@ services:
       - prefix-config:/config
       - prefix-metadata:/metadata
       - caddy-data:/caddy-data:ro
-      - ./media:/audiobooks:ro
+      - "${BLEAT_MEDIA_ROOT:-./media}:/audiobooks:${BLEAT_MEDIA_ACCESS_MODE:-ro}"
       - ./media-large:/audiobooks-large:ro
     depends_on:
       caddy:
