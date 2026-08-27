@@ -9,7 +9,7 @@ cookies, and playback-session routes remain outside this gate's scope.
 
 | item | recorded value |
 | --- | --- |
-| source commit | `138b12b84e7e038add454b9e08f4fe029ffca20c` |
+| source commit | `8529d306f6a8cac816b7d1691c611fdb590dfb99` |
 | source tree | clean |
 | evaluation date | 2026-08-27 (Australia/Brisbane) |
 | application version | 0.1.3 |
@@ -40,12 +40,14 @@ The gate scanned process output, the test process configuration, nine xcresult
 bundles, unified Simulator logs, app-owned data captured while signed in before
 and after token rotation and again after logout, remote telemetry resources and
 payloads, Release test products, and the normal unsigned Release archive. It
-also scanned the redacted retained server-artifact copy. The scanner covered
-raw UTF-8, `Authorization: Bearer`, URL-percent encoding, JSON escaping with
-optional escaped slashes and ASCII Unicode escapes, standard and URL-safe Base64
-with and without padding, and UTF-16 little- and big-endian forms with and
-without byte order marks. It separately rejected access- or refresh-token query
-parameters.
+also scanned the sanitized temporary server-artifact copy. The archive retained
+the normal production capability modes and configured production telemetry
+origins; only signing was disabled. The scanner covered raw UTF-8,
+`Authorization: Bearer`, case-insensitive URL-percent encoding, JSON escaping
+with optional escaped slashes and ASCII Unicode escapes, standard and URL-safe
+Base64 with and without padding, and UTF-16 little- and big-endian forms with
+and without byte order marks. It separately rejected access- or refresh-token
+query parameters.
 
 Scanner fixtures proved every supported representation is detected and that
 reports contain labels, relative paths, representations, and counts without
@@ -53,12 +55,13 @@ secret values or digests.
 
 ## Result
 
-The final clean-source run executed nine tests and scanned 6,358 files totaling
-910,780,750 bytes across nine labeled surfaces. Two refresh-token occurrences in
-the disposable server's raw access logs were removed from the retained redacted
-server-artifact copy as required; they are test-harness evidence inputs, not a
-Bleat deployment finding. Every production-relevant Bleat surface was scanned
-without pre-redaction. The final finding count was zero.
+The final clean-source run executed nine tests and scanned 5,097 files totaling
+865,393,225 bytes across nine labeled surfaces. Two refresh-token occurrences in
+the disposable server's raw access logs were sanitized from the temporary
+server-artifact copy before scanning; only the privacy-safe redaction metadata
+was retained. They are test-harness evidence inputs, not a Bleat deployment
+finding. Every production-relevant Bleat surface was scanned without
+pre-redaction. The final finding count was zero.
 
 The broader `scripts/test-core.sh` run passed host tests, the optimized Release
 build, paid-capability build-mode checks, package resolution, and the application
