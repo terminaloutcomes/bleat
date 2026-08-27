@@ -1,5 +1,5 @@
 [env]
-_.file = { path = ".envrc", redact = true }
+_.file = { path = ".envrc", redact = true, required = true }
 
 [tools]
 gitleaks = "latest"
