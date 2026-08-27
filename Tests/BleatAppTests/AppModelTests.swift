@@ -2912,6 +2912,17 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(service: service, storageRootURL: root)
         await model.start(account: account)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .unavailable,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        XCTAssertTrue(
+            model.isWaitingForNetwork(try XCTUnwrap(model.records.first))
+        )
+        model.updateNetworkPathState(.unknown)
         let identity = try DownloadTaskIdentity(
             downloadID: DownloadID(rawValue: "active-transfer"),
             accountID: account.id,
@@ -3049,6 +3060,7 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(service: service, storageRootURL: root)
         await model.start(account: account)
+        model.setForegroundActive(true)
         let identities = try plan.tracks.map { track in
             try DownloadTaskIdentity(
                 downloadID: DownloadID(rawValue: "primary-fallback"),
@@ -3123,7 +3135,126 @@ final class AppModelTests: XCTestCase {
             descriptors.map(\.identity.trackIndex).sorted(),
             [0, 1]
         )
+        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 0)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        for _ in 0..<100 {
+            if model.transferInactivityWatchdogCountForTesting == 2 {
+                break
+            }
+            await Task.yield()
+        }
+        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 2)
+        model.setForegroundActive(false)
+        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 0)
 
+        session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRetryNetworkDrop-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Network drops during retry",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "retry-network-drop",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request)
+        )
+        let retryGate = AsyncGate()
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            transferRetrySleep: { _ in
+                await retryGate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "retry-network-drop"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let range = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 5,
+                expectedByteLength: identity.expectedByteLength,
+                chunkByteLength: DownloadModel.rangeChunkByteLength
+            )
+        )
+        let session = URLSession(configuration: .ephemeral)
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: nil
+        ).encode()
+
+        model.urlSession(
+            session,
+            task: task,
+            didCompleteWithError: URLError(.networkConnectionLost)
+        )
+        await retryGate.waitUntilEntered()
+        XCTAssertEqual(model.transferRetryCountForTesting(identity), 1)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .unavailable,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        await retryGate.release()
+        for _ in 0..<100 { await Task.yield() }
+
+        let scheduledDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(scheduledDescriptors.isEmpty)
+        XCTAssertEqual(
+            model.pendingRecoveryDownloadIDsForTesting,
+            [identity.downloadID]
+        )
+        XCTAssertTrue(
+            model.isWaitingForNetwork(try XCTUnwrap(model.records.first))
+        )
+        await model.pause(try XCTUnwrap(model.records.first))
+        XCTAssertEqual(model.transferRetryCountForTesting(identity), 0)
         session.invalidateAndCancel()
         await model.removeAll()
     }
@@ -3497,10 +3628,33 @@ final class AppModelTests: XCTestCase {
                 availableBytes: 500
             ),
             .transferFailed,
+            .transportUnavailable,
+            .requestRejected(statusCode: 503),
         ]
 
         XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+    }
+
+    func testDownloadTransferStatusRetryPolicyIsBoundedToTransientResponses() {
+        for status in [200, 408, 425, 429, 500, 503, 599] {
+            XCTAssertTrue(DownloadModel.isRetryableTransferStatus(status))
+        }
+        for status in [201, 206, 400, 401, 403, 404, 409, 416] {
+            XCTAssertFalse(DownloadModel.isRetryableTransferStatus(status))
+        }
+        XCTAssertEqual(DownloadModel.maximumTransferRetries, 2)
+        XCTAssertEqual(DownloadModel.transferInactivityTimeoutSeconds, 10)
+        XCTAssertEqual(
+            DownloadModel.transferHTTPDisposition(statusCode: 206),
+            .success
+        )
+        for status in [201, 204] {
+            XCTAssertEqual(
+                DownloadModel.transferHTTPDisposition(statusCode: status),
+                .terminalFailure
+            )
+        }
     }
 
     func testDownloadNetworkPolicyPersistsAndControlsRequests() throws {

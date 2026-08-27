@@ -9,6 +9,8 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
     case repairPlanChanged
     case insufficientStorage(requiredBytes: Int64, availableBytes: Int64)
     case transferFailed
+    case transportUnavailable
+    case requestRejected(statusCode: Int)
 
     var message: String {
         switch self {
@@ -24,6 +26,10 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
             "This download needs \(Self.byteCount(requiredBytes)), but only \(Self.byteCount(availableBytes)) is available."
         case .transferFailed:
             "One or more audio files could not be downloaded."
+        case .transportUnavailable:
+            "The connection was lost repeatedly while downloading."
+        case .requestRejected(let statusCode):
+            "The server rejected a download request (HTTP \(statusCode))."
         }
     }
 
@@ -265,6 +271,11 @@ private struct AutomaticDownloadTaskKey: Hashable {
     }
 }
 
+private struct TransferInactivityWatchdog {
+    let taskIdentifier: Int
+    let timer: Task<Void, Never>
+}
+
 struct AutomaticCachePin: Hashable, Sendable {
     fileprivate let id: UUID
     fileprivate let downloadID: DownloadID
@@ -306,11 +317,21 @@ private enum DownloadTransferOutcome {
     case placementRejected
     case transportFailed(rejectedRequest: URLRequest?)
     case unauthorized(rejectedRequest: URLRequest)
-    case requestRejected(statusCode: Int, hasTransportError: Bool)
+    case requestRejected(
+        statusCode: Int,
+        rejectedRequest: URLRequest?
+    )
 }
 
 enum DownloadTransferResult: Equatable, Sendable {
     case chunkStored(finalized: Bool)
+    case retryableFailure
+    case terminalFailure
+}
+
+enum DownloadTransferHTTPDisposition: Equatable, Sendable {
+    case success
+    case unauthorized
     case retryableFailure
     case terminalFailure
 }
@@ -422,6 +443,8 @@ enum DownloadRepairPlanner {
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
     static let rangeChunkByteLength: Int64 = 16 * 1_024 * 1_024
+    static let maximumTransferRetries = 2
+    static let transferInactivityTimeoutSeconds: TimeInterval = 10
 
     static var supportsNetworkPolicySelection: Bool {
         #if os(macOS)
@@ -434,6 +457,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
     private let remoteTelemetryTracer: any RemoteTelemetryTracing
+    private let transferRetrySleep:
+        @Sendable (Duration) async throws -> Void
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
     private let automaticLookaheadKey =
@@ -447,6 +472,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var cancelledDownloadIDs: Set<DownloadID> = []
     private var pendingRecoveryDownloadIDs: Set<DownloadID> = []
     private var pendingRecoveryTaskKeys: Set<AutomaticDownloadTaskKey> = []
+    private var transferRetryCounts: [AutomaticDownloadTaskKey: Int] = [:]
+    private var terminalTransferTaskKeys: Set<AutomaticDownloadTaskKey> = []
+    private var transferInactivityWatchdogs:
+        [AutomaticDownloadTaskKey: TransferInactivityWatchdog] = [:]
     private var isRecoveringInterruptedTransfers = false
     private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
     private var pendingAutomaticUpdates:
@@ -464,6 +493,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         [DownloadID: DeferredAutomaticCacheCleanup] = [:]
     private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
     private var displayedDownloadedBytes: [DownloadID: Int64] = [:]
+    private var networkPathState: AppNetworkPathState = .unknown
+    private var isForegroundActive = false
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
     private lazy var session: URLSession = {
@@ -497,11 +528,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
         remoteTelemetryTracer: any RemoteTelemetryTracing =
-            InactiveRemoteTelemetryTracer()
+            InactiveRemoteTelemetryTracer(),
+        transferRetrySleep:
+            @escaping @Sendable (Duration) async throws -> Void = {
+                try await Task.sleep(for: $0)
+            }
     ) {
         self.service = service
         self.diagnostics = diagnostics
         self.remoteTelemetryTracer = remoteTelemetryTracer
+        self.transferRetrySleep = transferRetrySleep
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         automaticLookaheadCount = Self.normalizedLookaheadCount(
@@ -580,8 +616,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 storage: storage
             )
         }
-        for (task, _) in currentTasks where task.state == .suspended {
-            task.resume()
+        for (task, descriptor) in currentTasks {
+            if task.state == .suspended {
+                task.resume()
+            }
+            armTransferInactivityWatchdog(
+                for: task,
+                identity: descriptor.identity
+            )
         }
         await cleanupExpiredAutomaticDownloads()
         scheduleAutomaticCleanup()
@@ -617,7 +659,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let stillRecoverable: Bool
             if let record = record(downloadID: downloadID),
                 record.manifest.state == .downloading
-                    || record.manifest.state == .queued,
+                    || record.manifest.state == .queued
+                    || (record.manifest.state == .failed
+                        && pendingRecoveryTaskKeys.contains(where: {
+                            $0.downloadID == downloadID
+                        })),
                 !pausedDownloadIDs.contains(downloadID),
                 accounts[record.manifest.accountID] != nil {
                 stillRecoverable = true
@@ -675,6 +721,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         for record in records
         where record.manifest.state == .downloading
             || record.manifest.state == .queued
+            || (record.manifest.state == .failed
+                && pendingRecoveryTaskKeys.contains(where: {
+                    $0.downloadID == record.manifest.downloadID
+                }))
         {
             let downloadID = record.manifest.downloadID
             if case .interruptedOnly(let accountIDs) = scope {
@@ -708,9 +758,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     else {
                         return false
                     }
-                    return !activeTaskKeys.contains(
-                        AutomaticDownloadTaskKey(identity)
-                    )
+                    let key = AutomaticDownloadTaskKey(identity)
+                    if terminalTransferTaskKeys.contains(key) {
+                        return false
+                    }
+                    return !activeTaskKeys.contains(key)
                 }
                 if !missingTracks.isEmpty {
                     try await schedule(
@@ -725,12 +777,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     scheduledDownloadCount += 1
                 }
                 for track in missingTracks {
-                    pendingRecoveryTaskKeys.remove(
-                        AutomaticDownloadTaskKey(
-                            downloadID: downloadID,
-                            trackIndex: track.index
-                        )
+                    let key = AutomaticDownloadTaskKey(
+                        downloadID: downloadID,
+                        trackIndex: track.index
                     )
+                    pendingRecoveryTaskKeys.remove(key)
+                    transferRetryCounts[key] = nil
                 }
                 if !pendingRecoveryTaskKeys.contains(where: {
                     $0.downloadID == downloadID
@@ -817,8 +869,57 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingRecoveryDownloadIDs
     }
 
+    var transferInactivityWatchdogCountForTesting: Int {
+        transferInactivityWatchdogs.count
+    }
+
+    func transferRetryCountForTesting(
+        _ identity: DownloadTaskIdentity
+    ) -> Int {
+        transferRetryCounts[AutomaticDownloadTaskKey(identity), default: 0]
+    }
+
     func isWaitingForNetwork(_ record: DownloadedBookRecord) -> Bool {
+        if networkPathState.availability == .unavailable {
+            return record.manifest.state == .downloading
+                || record.manifest.state == .queued
+                || pendingRecoveryDownloadIDs.contains(
+                    record.manifest.downloadID
+                )
+        }
+        return pendingRecoveryDownloadIDs.contains(
+            record.manifest.downloadID
+        ) && networkPathState.availability != .satisfied
+    }
+
+    func isRetrying(_ record: DownloadedBookRecord) -> Bool {
         pendingRecoveryDownloadIDs.contains(record.manifest.downloadID)
+            && networkPathState.availability == .satisfied
+    }
+
+    func updateNetworkPathState(_ state: AppNetworkPathState) {
+        networkPathState = state
+        if state.availability != .satisfied {
+            cancelAllTransferInactivityWatchdogs()
+        } else if isForegroundActive,
+            state.availability == .satisfied
+        {
+            Task { @MainActor [weak self] in
+                await self?.armWatchdogsForActiveTransfers()
+            }
+        }
+    }
+
+    func setForegroundActive(_ active: Bool) {
+        isForegroundActive = active
+        if active && networkPathState.availability == .satisfied {
+            Task { @MainActor [weak self] in
+                guard self?.isForegroundActive == true else { return }
+                await self?.armWatchdogsForActiveTransfers()
+            }
+        } else {
+            cancelAllTransferInactivityWatchdogs()
+        }
     }
 
     private static func reconciliationFailureCode(
@@ -1481,6 +1582,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
+            cancelTransferInactivityWatchdog(for: identity)
         }
         for record in legacyRecords {
             try? await storage.remove(record)
@@ -1652,6 +1754,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             task.resume()
+            armTransferInactivityWatchdog(for: task, identity: identity)
         }
     }
 
@@ -1675,6 +1778,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
+            cancelTransferInactivityWatchdog(for: identity)
         }
         do {
             try await storage.remove(record)
@@ -1688,6 +1792,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
                 $0.downloadID != record.manifest.downloadID
             }
+            resetTransferRetryBudget(for: record.manifest.downloadID)
             playbackSuspendedDownloadIDs.remove(
                 record.manifest.downloadID
             )
@@ -1729,6 +1834,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .started(.cancelDownload, category: .download)
         )
         cancelledDownloadIDs.insert(record.manifest.downloadID)
+        resetTransferRetryBudget(for: record.manifest.downloadID)
         pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
         pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
             $0.downloadID != record.manifest.downloadID
@@ -1745,6 +1851,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
+            cancelTransferInactivityWatchdog(for: identity)
         }
         if let storage {
             for entry in record.manifest.entries where entry.state != .complete
@@ -1778,6 +1885,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         pausedDownloadIDs.insert(record.manifest.downloadID)
+        resetTransferRetryBudget(for: record.manifest.downloadID)
         pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
         pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
             $0.downloadID != record.manifest.downloadID
@@ -1802,6 +1910,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             else { continue }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
+            cancelTransferInactivityWatchdog(for: identity)
             clearTransferredBytes(for: identity)
         }
         await refresh()
@@ -1819,6 +1928,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         pausedDownloadIDs.remove(record.manifest.downloadID)
+        resetTransferRetryBudget(for: record.manifest.downloadID)
         await repair(record, account: account)
         await diagnostics.record(
             .completed(.resumeDownload, category: .download)
@@ -1859,6 +1969,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         failure = nil
+        resetTransferRetryBudget(for: record.manifest.downloadID)
         accounts[account.id] = account
         do {
             let plan = try await service.downloadPlan(
@@ -2042,6 +2153,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if blocked {
                 if task.state == .running {
                     task.suspend()
+                    cancelTransferInactivityWatchdog(for: identity)
                     playbackSuspendedDownloadIDs.insert(
                         identity.downloadID
                     )
@@ -2050,6 +2162,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity.downloadID
             ) && !pausedDownloadIDs.contains(identity.downloadID) {
                 task.resume()
+                armTransferInactivityWatchdog(for: task, identity: identity)
             }
         }
         if !blocked {
@@ -2500,6 +2613,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     validator: validator,
                     finalized: finalized
                 )
+                transferRetryCounts[AutomaticDownloadTaskKey(identity)] = nil
+                terminalTransferTaskKeys.remove(
+                    AutomaticDownloadTaskKey(identity)
+                )
                 clearTransferredBytes(for: identity)
                 await refresh()
                 context = transferContext(
@@ -2616,40 +2733,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     storage: storage
                 ) == .retry
             else { return }
-            guard let rejectedRequest,
-                let rejectedURL = rejectedRequest.url,
-                let fallbackRequest =
-                    await service.primaryFallbackDownloadRequest(
-                        for: rejectedRequest
-                ),
-                fallbackRequest.url != rejectedURL,
-                pendingRecoveryTaskKeys.contains(
-                    AutomaticDownloadTaskKey(identity)
-                )
-            else { return }
-            let scheduled = await scheduleReconciledReplacement(
-                fallbackRequest,
+            await recoverRetryableTransfer(
+                rejectedRequest,
                 taskDescription: taskDescription,
                 identity: identity,
-                retryCount: 1
+                terminalFailure: .transportUnavailable,
+                category: .transport,
+                storage: storage
             )
-            if scheduled {
-                pendingRecoveryTaskKeys.remove(
-                    AutomaticDownloadTaskKey(identity)
-                )
-                if !pendingRecoveryTaskKeys.contains(where: {
-                    $0.downloadID == identity.downloadID
-                }) {
-                    pendingRecoveryDownloadIDs.remove(identity.downloadID)
-                }
-            } else if
-                let current = record(downloadID: identity.downloadID),
-                (current.manifest.state == .downloading
-                    || current.manifest.state == .queued),
-                !pausedDownloadIDs.contains(identity.downloadID)
-            {
-                pendingRecoveryDownloadIDs.insert(identity.downloadID)
-            }
         case .unauthorized(let rejectedRequest):
             guard
                 await recordFailedTransferForReconciliation(
@@ -2685,11 +2776,34 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 await refresh()
             }
 
-        case .requestRejected(let statusCode, let hasTransportError):
+        case .requestRejected(let statusCode, let rejectedRequest):
             let category = Self.remoteTelemetryFailureCategory(
                 statusCode: statusCode,
-                hasTransportError: hasTransportError
+                hasTransportError: false
             )
+            if Self.isRetryableTransferStatus(statusCode) {
+                guard
+                    await recordFailedTransferForReconciliation(
+                        identity,
+                        taskDescription: taskDescription,
+                        result: .retryableFailure,
+                        category: category,
+                        retryDisposition: .afterNetworkChange,
+                        storage: storage
+                    ) == .retry
+                else { return }
+                await recoverRetryableTransfer(
+                    rejectedRequest,
+                    taskDescription: taskDescription,
+                    identity: identity,
+                    terminalFailure: .requestRejected(
+                        statusCode: statusCode
+                    ),
+                    category: category,
+                    storage: storage
+                )
+                return
+            }
             _ = await recordFailedTransferForReconciliation(
                 identity,
                 taskDescription: taskDescription,
@@ -2698,6 +2812,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 retryDisposition: .immediate,
                 storage: storage
             )
+            failure = .requestRejected(statusCode: statusCode)
         }
     }
 
@@ -2734,9 +2849,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await refresh()
             return nextAction
         }
-        pendingRecoveryDownloadIDs.remove(identity.downloadID)
-        pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
-            $0.downloadID != identity.downloadID
+        pendingRecoveryTaskKeys.remove(AutomaticDownloadTaskKey(identity))
+        terminalTransferTaskKeys.insert(AutomaticDownloadTaskKey(identity))
+        if !pendingRecoveryTaskKeys.contains(where: {
+            $0.downloadID == identity.downloadID
+        }) {
+            pendingRecoveryDownloadIDs.remove(identity.downloadID)
         }
         _ = try? await storage.markFailed(identity)
         failure = .transferFailed
@@ -2745,6 +2863,86 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return .fail
         }
         return nextAction
+    }
+
+    private func recoverRetryableTransfer(
+        _ rejectedRequest: URLRequest?,
+        taskDescription: String,
+        identity: DownloadTaskIdentity,
+        terminalFailure: DownloadModelFailure,
+        category: RemoteTelemetryFailureCategory,
+        storage: DownloadStorage
+    ) async {
+        let key = AutomaticDownloadTaskKey(identity)
+        guard let rejectedRequest,
+            pendingRecoveryTaskKeys.contains(key)
+        else { return }
+
+        if let rejectedURL = rejectedRequest.url,
+            let fallbackRequest =
+                await service.primaryFallbackDownloadRequest(
+                    for: rejectedRequest
+                ),
+            fallbackRequest.url != rejectedURL,
+            pendingRecoveryTaskKeys.contains(key),
+            await scheduleReconciledReplacement(
+                fallbackRequest,
+                taskDescription: taskDescription,
+                identity: identity,
+                retryCount: 1
+            )
+        {
+            resolvePendingRecovery(for: identity)
+            return
+        }
+
+        guard networkPathState.availability == .satisfied else {
+            return
+        }
+        let retryCount = transferRetryCounts[key, default: 0]
+        guard retryCount < Self.maximumTransferRetries else {
+            _ = await recordFailedTransferForReconciliation(
+                identity,
+                taskDescription: taskDescription,
+                result: .terminalFailure,
+                category: category,
+                retryDisposition: .immediate,
+                storage: storage
+            )
+            failure = terminalFailure
+            return
+        }
+        let nextRetryCount = retryCount + 1
+        transferRetryCounts[key] = nextRetryCount
+        do {
+            try await transferRetrySleep(
+                .seconds(1 << (nextRetryCount - 1))
+            )
+        } catch {
+            return
+        }
+        guard pendingRecoveryTaskKeys.contains(key),
+            networkPathState.availability == .satisfied
+        else {
+            return
+        }
+        if await scheduleReconciledReplacement(
+            rejectedRequest,
+            taskDescription: taskDescription,
+            identity: identity,
+            retryCount: nextRetryCount
+        ) {
+            resolvePendingRecovery(for: identity)
+        }
+    }
+
+    private func resolvePendingRecovery(for identity: DownloadTaskIdentity) {
+        pendingRecoveryTaskKeys.remove(AutomaticDownloadTaskKey(identity))
+        if !pendingRecoveryTaskKeys.contains(where: {
+            $0.downloadID == identity.downloadID
+        }) {
+            pendingRecoveryDownloadIDs.remove(identity.downloadID)
+        }
     }
 
     private func advanceAutomaticDownload(
@@ -2776,6 +2974,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let identity = descriptor.identity
+        cancelTransferInactivityWatchdog(for: identity)
         if error != nil {
             await reconcileTransfer(
                 identity: identity,
@@ -2790,18 +2989,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard let response = task.response as? HTTPURLResponse else {
             return
         }
-        if response.statusCode == 200 {
+        switch Self.transferHTTPDisposition(statusCode: response.statusCode) {
+        case .retryableFailure, .terminalFailure:
             await reconcileTransfer(
                 identity: identity,
                 taskDescription: description,
                 outcome: .requestRejected(
                     statusCode: response.statusCode,
-                    hasTransportError: error != nil
+                    rejectedRequest:
+                        task.currentRequest ?? task.originalRequest
                 )
             )
             return
-        }
-        if (200..<300).contains(response.statusCode), error == nil {
+        case .success:
             if let url = response.url ?? task.currentRequest?.url
                 ?? task.originalRequest?.url
             {
@@ -2811,8 +3011,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             }
             return
-        }
-        if response.statusCode == 401, let request = task.originalRequest {
+        case .unauthorized:
+            guard let request = task.originalRequest else {
+                await reconcileTransfer(
+                    identity: identity,
+                    taskDescription: description,
+                    outcome: .requestRejected(
+                        statusCode: response.statusCode,
+                        rejectedRequest: task.currentRequest
+                    )
+                )
+                return
+            }
             await reconcileTransfer(
                 identity: identity,
                 taskDescription: description,
@@ -2820,14 +3030,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             return
         }
-        await reconcileTransfer(
-            identity: identity,
-            taskDescription: description,
-            outcome: .requestRejected(
-                statusCode: response.statusCode,
-                hasTransportError: error != nil
-            )
-        )
+    }
+
+    static func transferHTTPDisposition(
+        statusCode: Int
+    ) -> DownloadTransferHTTPDisposition {
+        if statusCode == 206 {
+            return .success
+        }
+        if statusCode == 401 {
+            return .unauthorized
+        }
+        if isRetryableTransferStatus(statusCode) {
+            return .retryableFailure
+        }
+        return .terminalFailure
     }
 
     private func scheduleReconciledReplacement(
@@ -2915,6 +3132,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             replacementTask.resume()
+            armTransferInactivityWatchdog(
+                for: replacementTask,
+                identity: identity
+            )
         }
         return true
     }
@@ -2957,6 +3178,77 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         case 429: return .rateLimited
         case 500...599: return .serverRejected
         default: return .serverRejected
+        }
+    }
+
+    static func isRetryableTransferStatus(_ statusCode: Int) -> Bool {
+        switch statusCode {
+        case 200, 408, 425, 429, 500...599:
+            true
+        default:
+            false
+        }
+    }
+
+    private func armTransferInactivityWatchdog(
+        for task: URLSessionTask,
+        identity: DownloadTaskIdentity
+    ) {
+        guard isForegroundActive,
+            networkPathState.availability == .satisfied,
+            task.state == .running
+        else { return }
+        let key = AutomaticDownloadTaskKey(identity)
+        transferInactivityWatchdogs[key]?.timer.cancel()
+        let taskIdentifier = task.taskIdentifier
+        let timer = Task { @MainActor [weak self, weak task] in
+            try? await Task.sleep(
+                for: .seconds(Self.transferInactivityTimeoutSeconds)
+            )
+            guard !Task.isCancelled,
+                let self,
+                self.transferInactivityWatchdogs[key]?.taskIdentifier
+                    == taskIdentifier
+            else { return }
+            self.transferInactivityWatchdogs[key] = nil
+            task?.cancel()
+        }
+        transferInactivityWatchdogs[key] = TransferInactivityWatchdog(
+            taskIdentifier: taskIdentifier,
+            timer: timer
+        )
+    }
+
+    private func cancelTransferInactivityWatchdog(
+        for identity: DownloadTaskIdentity
+    ) {
+        let key = AutomaticDownloadTaskKey(identity)
+        transferInactivityWatchdogs.removeValue(forKey: key)?.timer.cancel()
+    }
+
+    private func cancelAllTransferInactivityWatchdogs() {
+        for watchdog in transferInactivityWatchdogs.values {
+            watchdog.timer.cancel()
+        }
+        transferInactivityWatchdogs = [:]
+    }
+
+    private func armWatchdogsForActiveTransfers() async {
+        for task in await session.allTasks where task.state == .running {
+            guard let description = task.taskDescription,
+                let identity = try? DownloadTaskIdentity
+                    .decodeTaskDescription(description)
+            else { continue }
+            armTransferInactivityWatchdog(for: task, identity: identity)
+        }
+    }
+
+    private func resetTransferRetryBudget(for downloadID: DownloadID) {
+        transferRetryCounts = transferRetryCounts.filter {
+            $0.key.downloadID != downloadID
+        }
+        terminalTransferTaskKeys = terminalTransferTaskKeys.filter {
+            $0.downloadID != downloadID
         }
     }
 
@@ -3210,6 +3502,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             self?.updateTransferredBytes(
                 totalBytesWritten,
                 for: identity
+            )
+            self?.armTransferInactivityWatchdog(
+                for: downloadTask,
+                identity: identity
             )
         }
     }

@@ -119,6 +119,7 @@ struct RootView: View {
         #endif
         .task {
             model.setRemoteTelemetryForeground(scenePhase == .active)
+            model.setDownloadForeground(scenePhase == .active)
             await model.start()
             if let route = deepLinkInbox.takePendingRoute() {
                 navigation.receive(route: route)
@@ -202,6 +203,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { previousPhase, phase in
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
+            model.setDownloadForeground(phase == .active)
             if AppLifecycleCloudSyncPolicy.shouldSynchronize(
                 wasActive: previousPhase == .active,
                 isActive: phase == .active
@@ -4325,6 +4327,9 @@ private struct BookDetailView: View {
         if model.downloads.isWaitingForNetwork(record) {
             return "Waiting for network"
         }
+        if model.downloads.isRetrying(record) {
+            return "Retrying download"
+        }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
         ) {
@@ -4368,6 +4373,9 @@ private struct BookDetailView: View {
         }
         if model.downloads.isWaitingForNetwork(record) {
             return "wifi.exclamationmark"
+        }
+        if model.downloads.isRetrying(record) {
+            return "arrow.clockwise.circle"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -5391,6 +5399,9 @@ private struct DownloadStorageView: View {
         }
         if model.downloads.isWaitingForNetwork(record) {
             return "Waiting for network"
+        }
+        if model.downloads.isRetrying(record) {
+            return "Retrying download"
         }
         if let state = model.downloads.automaticCacheState(
             for: record

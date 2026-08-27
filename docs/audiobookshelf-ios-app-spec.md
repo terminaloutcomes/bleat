@@ -1062,7 +1062,9 @@ Requirements:
 - never append a `200 OK` response to a ranged transfer;
 - keep playback-driven suspension separate from persisted user Pause;
 - retry;
-- stalled/failure detection with bounded exponential retry;
+- foreground-only stalled detection after 10 seconds without progress, feeding
+  bounded exponential retry while leaving background-session inactivity
+  timeout policy under system control;
 - 401 refresh and rescheduling with a newly constructed `URLRequest`, because an existing background task's authorization header cannot be rotated in place;
 - background completion-handler support;
 - progress aggregation by known bytes, with an indeterminate fallback;

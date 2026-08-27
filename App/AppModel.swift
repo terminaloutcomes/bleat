@@ -1532,6 +1532,10 @@ final class AppModel {
         }
     }
 
+    func setDownloadForeground(_ foreground: Bool) {
+        downloads.setForegroundActive(foreground)
+    }
+
     func startNearbyServerDiscovery() {
         let discovery =
             nearbyServerDiscovery
@@ -4777,6 +4781,7 @@ final class AppModel {
                     return
                 }
                 networkPathState = state
+                downloads.updateNetworkPathState(state)
                 schedulePendingLocalSessionSync(for: accounts)
                 scheduleDownloadRecovery(for: accounts)
                 await refreshAccountsAfterNetworkChange()
