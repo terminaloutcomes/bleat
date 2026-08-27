@@ -14,8 +14,10 @@ Bleat has two telemetry producers:
   image identity. Docker runtimes also emit their hexadecimal `container.id`;
   an orchestrator can provide its authoritative runtime ID explicitly. Local
   stderr logging remains active if remote export fails or is not configured.
-- The opted-in iOS application emits its reviewed spans and CloudKit lifecycle
-  logs with `service.name=bleat`. Native macOS does not create remote telemetry
+- The opted-in iOS application emits its reviewed spans plus CloudKit and
+  download lifecycle logs with `service.name=bleat`. Download logs retain only
+  typed stages, outcomes, retry state, HTTP or transport codes, and
+  privacy-safe failure causes. Native macOS does not create remote telemetry
   state or send OTLP.
 
 Both producers ultimately write the standard ClickHouse OpenTelemetry tables

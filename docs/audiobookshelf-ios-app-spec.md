@@ -1061,6 +1061,9 @@ Requirements:
   and send it as `If-Range` on later chunks;
 - never append a `200 OK` response to a ranged transfer;
 - keep playback-driven suspension separate from persisted user Pause;
+- serialize each book's track transfers, preferring a durable partial track,
+  so reconnecting a multi-file book cannot create a task storm or aggregate
+  bytes from abandoned requests;
 - retry;
 - delegate-reported failure handling with bounded exponential retry; do not
   infer a stalled or failed transfer solely from elapsed time between progress
@@ -1664,11 +1667,14 @@ none, one, two, or three-or-more. Duration comes from span timing and is not an
 application-supplied attribute. Application code must not receive an arbitrary
 span-name or attribute-dictionary API.
 
-The reviewed log schema is initially limited to private CloudKit lifecycle
-events. Its event names and static body are closed; attributes may contain only
-the typed CloudKit operation or stage, outcome, privacy-safe failure category,
-exact CloudKit code, partial codes, retryability, retry delay, duration, and
-bounded record count. Raw
+The reviewed log schema is limited to private CloudKit and download-transfer
+lifecycle events. Event names and static bodies are closed. CloudKit attributes
+may contain only the typed operation or stage, outcome, privacy-safe failure
+category, exact CloudKit code, partial codes, retryability, retry delay,
+duration, and bounded record count. Download attributes may contain only the
+typed processing stage, lifecycle state, exact privacy-safe failure code,
+retry bucket, retryability, HTTP status, and numeric URL loading-system error
+code. Raw
 errors, descriptions, `userInfo`, records, accounts, servers, and correlation
 identifiers are excluded. Logs use the same consent generation, resource,
 authenticated OTLP origin, foreground/background lifecycle, and synchronous

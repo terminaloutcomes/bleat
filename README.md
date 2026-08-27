@@ -645,7 +645,9 @@ durable partial bytes when connectivity returns; user-paused downloads stay
 paused. Unavailable paths show **Waiting for network**, and satisfied-path
 recovery shows **Retrying download**. Bleat does not infer failure from gaps in
 progress callbacks; delegate-reported failures enter its bounded replacement
-flow. The Downloads tab shows durable state and
+flow. Multi-file books transfer one track at a time, resume an existing partial
+track before starting another, and report durable bytes plus only the active
+request's in-flight bytes. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;
@@ -773,7 +775,7 @@ can be correlated. Turning the setting off does not affect local Diagnostics. Th
 Diagnostics screen remains available while signed out and when application
 startup is unavailable. On iOS, the
 opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
-lifecycle log records away from the main actor, retaining failed span batches
+and download lifecycle log records away from the main actor, retaining failed span batches
 under the bounded persistence policy before authenticated OTLP export. Remote
 telemetry authentication is traced end to end, with challenge, enrolment, and
 token client spans correlated to the matching `bleat-api` server spans through

@@ -305,27 +305,37 @@ final class AppModelTests: XCTestCase {
             authorizedDownloadRequest: .success(request)
         )
         let tracer = RecordingRemoteTelemetryTracer()
+        let logger = RecordingRemoteTelemetryDownloadLogger()
         let downloads = DownloadModel(
             service: service,
             storageRootURL: root,
-            remoteTelemetryTracer: tracer
+            remoteTelemetryTracer: tracer,
+            remoteTelemetryDownloadLogger: logger
         )
 
         await downloads.download(detail: detail, account: account)
+        let scheduled = await downloads.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(scheduled.count, 1)
+        XCTAssertEqual(scheduled.first?.identity.trackIndex, 0)
         let record = try XCTUnwrap(downloads.records.first)
         await downloads.cancel(record)
 
         XCTAssertEqual(
             tracer.spans,
-            plan.tracks.map { _ in
+            [
                 RecordedRemoteTelemetrySpan(
                     operation: .downloadTransfer,
                     source: .remote,
                     retryBucket: .none,
                     outcome: .cancelled
                 )
-            }
+            ]
         )
+        XCTAssertEqual(logger.events.count, 2)
+        XCTAssertEqual(logger.events.first?.stage, .taskScheduled)
+        XCTAssertEqual(logger.events.first?.state, .started)
+        XCTAssertEqual(logger.events.last?.stage, .taskCompletion)
+        XCTAssertEqual(logger.events.last?.state, .cancelled)
     }
 
     func testPlayableCoverStateUsesExactAccountAndItemIdentity() {
@@ -2407,6 +2417,43 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testManualTrackAdvancesOnlyAfterActiveTrackFinalizes() throws {
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: plan.itemID.rawValue,
+                title: "Serial download",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "serial-download"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan
+        )
+        try manifest.markDownloading(trackIndex: 0)
+        var record = DownloadedBookRecord(manifest: manifest, detail: detail)
+
+        XCTAssertEqual(
+            DownloadModel.nextManualDownloadIdentity(in: record)?.trackIndex,
+            0
+        )
+
+        try manifest.markComplete(
+            trackIndex: 0,
+            observedByteLength: plan.tracks[0].expectedByteLength,
+            placement: .finalized
+        )
+        record = DownloadedBookRecord(manifest: manifest, detail: detail)
+
+        XCTAssertEqual(
+            DownloadModel.nextManualDownloadIdentity(in: record)?.trackIndex,
+            1
+        )
+    }
+
     func testAccountRemovalDeletesDownloads()
         async throws
     {
@@ -2868,14 +2915,12 @@ final class AppModelTests: XCTestCase {
         let descriptors =
             await model
             .scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
-        XCTAssertEqual(descriptors[0].range.start, 0)
-        XCTAssertEqual(descriptors[0].range.length, 4)
-        XCTAssertEqual(descriptors[1].range.start, 5)
-        XCTAssertEqual(descriptors[1].range.length, 3)
+        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+        XCTAssertEqual(descriptors[0].range.start, 5)
+        XCTAssertEqual(descriptors[0].range.length, 3)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
-        XCTAssertEqual(requests.map(\.trackIndex), [0, 1])
+        XCTAssertEqual(requests.map(\.trackIndex), [1])
         let preservedBytes = try await storage.partialByteLength(
             partialIdentity
         )
@@ -2883,7 +2928,7 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
-    func testTransportFailureWaitsForNetworkAndPreservesDisplayedProgress()
+    func testTransportFailureWaitsForNetworkAndDropsTransientProgress()
         async throws
     {
         let root = FileManager.default.temporaryDirectory
@@ -2915,9 +2960,11 @@ final class AppModelTests: XCTestCase {
             downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
             authorizedDownloadRequest: .success(request)
         )
+        let telemetry = RecordingRemoteTelemetryDownloadLogger()
         let model = DownloadModel(
             service: service,
             storageRootURL: root,
+            remoteTelemetryDownloadLogger: telemetry,
             backgroundSessionIdentifier:
                 "bleat.tests.active-transfer.\(UUID().uuidString)"
         )
@@ -2994,7 +3041,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.failure)
         XCTAssertEqual(
             model.displayedDownloadedByteLength(for: waitingRecord),
-            7
+            5
+        )
+        let transportFailure = try XCTUnwrap(
+            telemetry.events.first(where: {
+                $0.stage == .taskCompletion && $0.state == .failed
+            })
+        )
+        XCTAssertEqual(transportFailure.failureCause, .offline)
+        XCTAssertEqual(
+            transportFailure.transportErrorCode,
+            URLError.notConnectedToInternet.rawValue
         )
         let descriptorsWhileWaiting =
             await model.scheduledTransferDescriptorsForTesting()
@@ -3006,18 +3063,13 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
         let resumedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(resumedDescriptors.count, 2)
-        XCTAssertEqual(
-            resumedDescriptors.filter {
-                $0.identity.trackIndex == identity.trackIndex
-            }.count,
-            1
-        )
+        XCTAssertEqual(resumedDescriptors.count, 1)
+        XCTAssertEqual(resumedDescriptors.first?.identity.trackIndex, 1)
         let resumedRecord = try XCTUnwrap(model.records.first)
         XCTAssertEqual(resumedRecord.manifest.state, .downloading)
         XCTAssertEqual(
             model.displayedDownloadedByteLength(for: resumedRecord),
-            7
+            5
         )
         session.invalidateAndCancel()
         await model.removeAll()
@@ -3411,11 +3463,11 @@ final class AppModelTests: XCTestCase {
         await model.recoverAfterNetworkChange(for: [account])
 
         let descriptors = await model.scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
-        XCTAssertEqual(descriptors[1].range.start, 5)
+        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+        XCTAssertEqual(descriptors[0].range.start, 5)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
-        XCTAssertEqual(requests.map(\.trackIndex), [0, 1])
+        XCTAssertEqual(requests.map(\.trackIndex), [1])
         staleSession.invalidateAndCancel()
         await model.removeAll()
     }
@@ -3462,13 +3514,13 @@ final class AppModelTests: XCTestCase {
         let descriptors =
             await model
             .scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
+        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
         let planRequests = await service.downloadPlanRequests()
         XCTAssertEqual(planRequests.count, 2)
         let transferRequests =
             await service
             .authorizedDownloadRequestIdentities()
-        XCTAssertEqual(transferRequests.map(\.trackIndex), [0, 1])
+        XCTAssertEqual(transferRequests.map(\.trackIndex), [1])
         await model.removeAll()
     }
 
@@ -3531,7 +3583,7 @@ final class AppModelTests: XCTestCase {
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(
             descriptors.map { $0.identity.accountID.rawValue },
-            ["account-1", "account-1"]
+            ["account-1"]
         )
 
         await model.recoverAfterNetworkChange(for: [secondAccount])
@@ -3539,8 +3591,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             descriptors.map { $0.identity.accountID.rawValue },
             [
-                "account-1", "account-1",
-                "account-2", "account-2",
+                "account-1", "account-2",
             ]
         )
         await model.removeAll()
@@ -3605,13 +3656,13 @@ final class AppModelTests: XCTestCase {
         for _ in 0..<500 {
             descriptors = await model.downloads
                 .scheduledTransferDescriptorsForTesting()
-            if descriptors.count == 2 {
+            if descriptors.count == 1 {
                 break
             }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [0, 1])
-        XCTAssertEqual(descriptors[1].range.start, 5)
+        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+        XCTAssertEqual(descriptors[0].range.start, 5)
         await model.downloads.removeAll()
     }
 

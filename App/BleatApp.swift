@@ -59,7 +59,8 @@ final class AppBootstrap {
                     bootstrapError: UITestAppService.bootstrapError,
                     diagnostics: diagnostics,
                     remoteTelemetryConsentController: remoteTelemetry,
-                    remoteTelemetryTracer: remoteTelemetry.tracer
+                    remoteTelemetryTracer: remoteTelemetry.tracer,
+                    remoteTelemetryDownloadLogger: remoteTelemetry.logger
                 )
                 if UITestAppService.opensSettingsAtLaunch {
                     AppDeepLinkInbox.shared.openSettings()
@@ -107,7 +108,8 @@ final class AppBootstrap {
                 nearbyServerDiscovery: launchMode.makeNearbyServerDiscovery(),
                 diagnostics: diagnostics,
                 remoteTelemetryConsentController: remoteTelemetry,
-                remoteTelemetryTracer: remoteTelemetry.tracer
+                remoteTelemetryTracer: remoteTelemetry.tracer,
+                remoteTelemetryDownloadLogger: remoteTelemetry.logger
             )
         } catch let error {
             model = AppModel(
@@ -115,7 +117,8 @@ final class AppBootstrap {
                 bootstrapError: error,
                 diagnostics: diagnostics,
                 remoteTelemetryConsentController: remoteTelemetry,
-                remoteTelemetryTracer: remoteTelemetry.tracer
+                remoteTelemetryTracer: remoteTelemetry.tracer,
+                remoteTelemetryDownloadLogger: remoteTelemetry.logger
             )
         }
     }
