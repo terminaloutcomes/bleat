@@ -55,6 +55,12 @@ private final class SystemAppAttestService:
 final class AppAttestTelemetryAttester:
     TelemetryAttester, @unchecked Sendable
 {
+    private enum Operation {
+        case generateKey
+        case attestKey
+        case generateAssertion
+    }
+
     private let service: any AppAttestServicing
 
     init(service: any AppAttestServicing = SystemAppAttestService()) {
@@ -74,7 +80,7 @@ final class AppAttestTelemetryAttester:
         do {
             return try await service.generateKey()
         } catch {
-            throw Self.map(error)
+            throw Self.map(error, operation: .generateKey)
         }
     }
 
@@ -89,7 +95,7 @@ final class AppAttestTelemetryAttester:
                 clientDataHash: clientDataHash
             )
         } catch {
-            throw Self.map(error)
+            throw Self.map(error, operation: .attestKey)
         }
     }
 
@@ -104,11 +110,14 @@ final class AppAttestTelemetryAttester:
                 clientDataHash: clientDataHash
             )
         } catch {
-            throw Self.map(error)
+            throw Self.map(error, operation: .generateAssertion)
         }
     }
 
-    private static func map(_ error: any Error) -> TelemetryAttesterError {
+    private static func map(
+        _ error: any Error,
+        operation: Operation
+    ) -> TelemetryAttesterError {
         let error = error as NSError
         guard error.domain == DCError.errorDomain,
             let code = DCError.Code(rawValue: error.code)
@@ -121,7 +130,8 @@ final class AppAttestTelemetryAttester:
         case .invalidKey:
             return .keyInvalidated
         case .invalidInput:
-            return .rejected
+            return operation == .generateAssertion
+                ? .keyInvalidated : .rejected
         case .serverUnavailable, .unknownSystemFailure:
             return .temporarilyUnavailable
         @unknown default:

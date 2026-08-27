@@ -1367,7 +1367,10 @@ private struct DiagnosticsView: View {
         }
         .navigationTitle("Diagnostics")
         .task {
-            await model.refreshEndpointDiagnostics()
+            async let endpointRefresh: Void = model.refreshEndpointDiagnostics()
+            async let tokenAvailabilityMonitor: Void =
+                model.monitorRemoteTelemetryTokenAvailability()
+            _ = await (endpointRefresh, tokenAvailabilityMonitor)
         }
     }
 }
@@ -4543,6 +4546,11 @@ private struct RemoteTelemetryConsentSection: View {
 
     var body: some View {
         Section {
+            LabeledContent(
+                "OpenTelemetry Token",
+                value: model.remoteTelemetryTokenAvailability.diagnosticsLabel
+            )
+            .accessibilityIdentifier("diagnostics.telemetry.token")
             Toggle(
                 "Share diagnostic telemetry",
                 isOn: Binding(

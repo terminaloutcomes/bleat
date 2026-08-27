@@ -1625,6 +1625,11 @@ live operational state, the Bonjour troubleshooter, and telemetry consent. It
 does not export a diagnostic snapshot, retain app-owned diagnostic history, or
 create a temporary diagnostic sharing file. Typed, redacted diagnostic events
 continue to emit through the applicable `OSLog` categories in every build.
+The current OpenTelemetry export-token row reads only memory state and must
+present disabled, acquiring, missing, expiring, expired, available, and typed
+failure causes separately. It must not combine distinct states into an
+ambiguous label or start enrollment or renewal merely because Diagnostics is
+visible.
 
 Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
 diagnose bounded technical application operations without collecting user,
@@ -1709,16 +1714,19 @@ retaining enrollment for later re-enablement.
 
 The client gates App Attest on `DCAppAttestService.isSupported`, treats macOS as unsupported, and retains only the App Attest key identifier plus an
 opaque backend installation identifier in one non-synchronizing, device-only
-Keychain record. Invalidated keys clear that record and restart enrollment.
+Keychain record. Invalidated keys clear that record and restart enrollment
+once. Assertion-time `DCError.invalidInput` receives the same bounded recovery
+because App Attest returns it for a stale installation key after an app
+reinstall; invalid input from key generation or attestation remains terminal.
 When App Attest is enabled, Debug iOS builds use its development entitlement
 and Release iOS builds use its production entitlement. Debug may select the
 deterministic fake attester; Release cannot. System App Attest is unavailable unless
 the effective `BLEAT_APP_ATTEST_MODE` is exactly `enabled`; the Debug fake
 attester remains available independently for disposable development tests. The
 backend base URL comes only from
-`BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
-unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
-The OTLP origin comes only from `BLEAT_TELEMETRY_OTLP_ENDPOINT` and must be an
+`BLEAT_TELEMETRY_AUTH_BASE_URL`; iOS builds fail when it is missing or not HTTPS
+outside Debug loopback. The OTLP origin comes only from
+`BLEAT_TELEMETRY_OTLP_ENDPOINT`; iOS builds fail when it is missing or not an
 HTTPS origin without credentials, path, query, or fragment. Traces and logs use
 OTLP/HTTP protobuf at `/v1/traces` and `/v1/logs` through one ephemeral
 `URLSession`, retaining platform TLS validation without a custom trust root or

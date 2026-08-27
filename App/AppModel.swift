@@ -1352,6 +1352,10 @@ final class AppModel {
     private(set) var pendingCloudConfigurationConflict:
         CloudConfigurationConflict?
     private(set) var remoteTelemetryEnabled: Bool
+    private(set) var remoteTelemetryTokenAvailability:
+        TelemetryTokenAvailability = .disabled
+    @ObservationIgnored
+    private var remoteTelemetryTokenAvailabilityGeneration: UInt64 = 0
     let playback: PlaybackModel
     let downloads: DownloadModel
     let transcription: ChapterTranscriptionModel
@@ -1489,6 +1493,10 @@ final class AppModel {
         // before export or token renewal.
         let storageGeneration = remoteTelemetryConsentStore.setEnabled(enabled)
         remoteTelemetryEnabled = enabled
+        remoteTelemetryTokenAvailabilityGeneration &+= 1
+        if !enabled {
+            remoteTelemetryTokenAvailability = .disabled
+        }
         remoteTelemetryConsentController
             .applyRemoteTelemetryConsent(
                 enabled,
@@ -1499,6 +1507,29 @@ final class AppModel {
     func setRemoteTelemetryForeground(_ foreground: Bool) {
         remoteTelemetryConsentController
             .setRemoteTelemetryForeground(foreground)
+    }
+
+    func refreshRemoteTelemetryTokenAvailability() async {
+        let generation = remoteTelemetryTokenAvailabilityGeneration
+        let availability =
+            await remoteTelemetryConsentController.telemetryTokenAvailability()
+        guard generation == remoteTelemetryTokenAvailabilityGeneration else {
+            return
+        }
+        remoteTelemetryTokenAvailability = availability
+    }
+
+    func monitorRemoteTelemetryTokenAvailability(
+        interval: Duration = .seconds(1)
+    ) async {
+        while !Task.isCancelled {
+            await refreshRemoteTelemetryTokenAvailability()
+            do {
+                try await Task.sleep(for: interval)
+            } catch {
+                return
+            }
+        }
     }
 
     func startNearbyServerDiscovery() {

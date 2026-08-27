@@ -1,14 +1,15 @@
 [env]
-_.file = { path = ".envrc", redact = true }
+_.file = { path = ".envrc", redact = true, required = true }
 
 [tools]
-gitleaks = "8.30.1"
+gitleaks = "latest"
 node = "24"
 pnpm = "11.17.0"
 rust = "1.97.0"
 zola = "0.22.1"
 "cargo:cargo-audit" = "0.22.2"
 "cargo:cargo-tarpaulin" = "0.32.8"
+ripgrep = "latest"
 
 [tasks."api:fmt"]
 description = "Fix bleat-api Rust formatting"

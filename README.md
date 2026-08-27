@@ -57,6 +57,9 @@ resuming.
 - XcodeGen 2.46 or newer only when changing `project.yml`
 - Optionally, an Apple development team for signed native macOS runtime tests
 
+See the [development guide](docs/development.md) for the supported test and
+validation workflows.
+
 Confirm the active toolchain:
 
 ```sh
@@ -101,127 +104,6 @@ Compile an unsigned native macOS Release app:
 ```sh
 mise run macos:compile
 ```
-
-### Paid developer capability build modes
-
-`BUILD_WITHOUT_PAID_DEVELOPER` accepts exactly `YES` or `NO` and defaults to
-`NO`. Set it to `YES` for a Personal Team build: it overrides the individual
-capability settings, removes both CloudKit and App Attest from signing, and
-retains the Keychain entitlement.
-
-When the global setting is `NO`, the individual settings remain available:
-
-- `BLEAT_CLOUDKIT_MODE=enabled|disabled` controls CloudKit signing and runtime
-  synchronization.
-- `BLEAT_APP_ATTEST_MODE=enabled|disabled` controls App Attest signing and
-  whether the system App Attest telemetry attester is available.
-
-Both individual settings default to `enabled` for paid-team, beta, and
-distribution builds. Unsupported values fail the build. The selected effective
-modes are embedded in `Info.plist`, and Xcode selects the matching entitlement
-file from all four CloudKit/App Attest combinations.
-
-The physical-device workflows use paid capabilities by default:
-
-```sh
-mise run iphone:build
-```
-
-For a direct Personal Team Xcode build, pass the global setting:
-
-```sh
-xcodebuild \
-  -project Bleat.xcodeproj \
-  -scheme Bleat \
-  -destination 'generic/platform=iOS' \
-  BUILD_WITHOUT_PAID_DEVELOPER=YES \
-  build
-```
-
-Build and launch a development-signed macOS app:
-
-```sh
-export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
-mise run macos
-```
-
-The signed app is written to
-`.build/macos-signed/Build/Products/Release/Bleat.app`. The task
-verifies its signature, development team, and application-identifier
-entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
-identifier is unavailable to the selected team. Keep the same team and bundle
-identifier to retain access to existing Keychain credentials.
-
-Signed macOS launch, native login, and account restoration are supported.
-The signed login/relaunch evidence is tracked in
-[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
-post-1.0 work and does not block the 1.0 release. Notarization, distribution,
-Mac-specific interface adaptation, and unlisted Mac media or background
-behavior are also not release gates.
-
-Build products and intermediate files are written beneath `.build/`.
-Remove all repository-owned build and app-live artifacts with:
-
-```sh
-mise run clean
-```
-
-Use `mise run clean -- --dry-run` to preview the cleanup. The cleanup does not
-touch tracked fixtures, `.git`, or caches outside the repository.
-
-If `project.yml` changes, regenerate the checked-in project before building:
-
-```sh
-brew install xcodegen
-xcodegen generate
-```
-
-## Test
-
-Run every automated test that does not require a physical device:
-
-```sh
-mise run check
-```
-
-The exhaustive check validates the website, then runs the local host and
-Simulator gate, disposable-server core integration tests, and disposable-server
-app journeys sequentially. It requires Xcode with an iOS Simulator runtime and
-Docker, but does not require development signing or a connected iPhone. Run an
-individual app stage with `mise run test:local`, `mise run test:live`, or
-`mise run test:app-live`.
-
-## Website
-
-The Zola site source lives in `site/`. Install its pinned toolchain with
-`mise install`, then use:
-
-- `mise run site-css` to install the locked frontend packages and generate CSS;
-- `mise run site-check` to validate the Zola project;
-- `mise run site-build` to build `site/public`;
-- `mise run site-serve` to preview it locally.
-
-The published website includes the stable
-[Audiobookshelf OIDC setup guide](https://bleat.terminaloutcomes.com/help/oidc-setup/)
-linked from Bleat's add-server screen. It documents the canonical
-`bleat://oauth2redirect` callback and the root-hosted and path-prefixed
-Audiobookshelf provider callbacks.
-
-Run the host test suite with code coverage:
-
-```sh
-swift test --enable-code-coverage
-```
-
-Run the complete current validation gate—core unit tests with coverage, Release
-build, and iOS Simulator application unit and UI tests:
-
-```sh
-./scripts/test-core.sh
-```
-
-See the [development guide](docs/development.md) for the supported test and
-validation workflows.
 
 The validation script defaults to an `iPhone 17 Pro` simulator. Select another
 installed simulator by passing an Xcode destination:
@@ -410,8 +292,11 @@ Release archives and physical-device builds require
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and `BLEAT_TELEMETRY_OTLP_ENDPOINT` to be
 exported as HTTPS URLs. Keep local values in an ignored environment file such
 as `.envrc`; the supported build scripts pass them to Xcode and verify the
-values embedded in the built application. Direct Xcode GUI builds do not read
-`.envrc` and must receive these build settings through Xcode instead.
+values embedded in the built application. iOS builds fail before producing an
+app when either value is absent, the OTLP URL is not HTTPS, or the
+authentication URL is not HTTPS (except Debug loopback). Direct Xcode GUI
+builds do not read `.envrc` and must receive these build settings through Xcode
+instead.
 
 The archive is written to `.build/Bleat.xcarchive` and is checked for a valid
 bundle plus the required `PrivacyInfo.xcprivacy` manifest. The manifest
@@ -868,7 +753,14 @@ Diagnostics also distinguishes a local endpoint that is not yet validated,
 being checked, available, or temporarily unavailable.
 
 The Diagnostics **Privacy** section also records device-local, default-off
-consent for **Share diagnostic telemetry**. The reviewed schema permits only
+consent for **Share diagnostic telemetry** and whether a current OpenTelemetry
+export token is available. The token status reads the exporter's in-memory
+state without requesting a refresh and never exposes credential material. It
+distinguishes disabled, acquiring, missing, expiring, expired, available,
+invalid authentication configuration, invalid authentication response, invalid
+export configuration, unavailable App Attest, authentication rejection, rate
+limiting, temporary unavailability, retry backoff, unsupported platform, and
+inactive-controller states. The reviewed schema permits only
 bounded technical operation, outcome, timing, app-version, and operating-system data;
 it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and hardware or advertising identifiers. A random

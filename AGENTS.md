@@ -101,6 +101,9 @@ Preserve both the originating operation and typed failure cause through service,
 model, UI, and diagnostics boundaries. Do not collapse distinct failures into a
 generic unavailable/failed state: translate them only into a typed,
 privacy-safe presentation cause, with retry behavior decided from that type.
+Always separate operationally distinct states. For example, missing, expired,
+disabled, unsupported, and failed states require separate typed model cases and
+separate user-visible diagnostics; collapsing them into one state is unhelpful.
 Observability must emit a stable machine-readable code for the most specific
 typed failure cause and the exact processing stage that rejected it. A broad
 category may be included for aggregation, but must never replace the specific

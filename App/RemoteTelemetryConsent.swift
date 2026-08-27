@@ -75,10 +75,15 @@ protocol RemoteTelemetryConsentApplying: Sendable {
         storageGeneration: UUID?
     )
     func setRemoteTelemetryForeground(_ foreground: Bool)
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability
 }
 
 extension RemoteTelemetryConsentApplying {
     func setRemoteTelemetryForeground(_ foreground: Bool) {}
+
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        .failed(.inactiveController)
+    }
 }
 
 struct InactiveRemoteTelemetryConsentController:
@@ -113,11 +118,19 @@ enum RemoteTelemetryAttesterSelection: Equatable {
 
 @MainActor
 final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
+    private enum TokenProviderConstruction {
+        case ready(TelemetryTokenProvider)
+        case failed(TelemetryTokenAvailabilityFailure)
+    }
+
     let tracer = RemoteTelemetryTracer()
     let logger = RemoteTelemetryLogger()
     let privateCloudEvents: any PrivateCloudSyncEventRecording
     let tokenProvider: TelemetryTokenProvider?
+    private let tokenAvailabilityFailure:
+        TelemetryTokenAvailabilityFailure?
     private let worker: RemoteTelemetryRuntimeWorker?
+    private var telemetryEnabled = false
 
     init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
         privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
@@ -129,6 +142,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             // Do not create App Attest state, tokens, persisted batches, or OTLP
             // traffic on that platform.
             tokenProvider = nil
+            tokenAvailabilityFailure = .unsupportedPlatform
             worker = nil
         #else
             let version =
@@ -158,14 +172,26 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 "Bleat/RemoteTelemetry",
                 isDirectory: true
             )
-            let tokenProvider = Self.makeTokenProvider(
+            let tokenProviderConstruction = Self.makeTokenProvider(
                 bundle: bundle,
                 tracer: tracer
             )
-            self.tokenProvider = tokenProvider
+            let providerFailure: TelemetryTokenAvailabilityFailure?
+            switch tokenProviderConstruction {
+            case .ready(let tokenProvider):
+                self.tokenProvider = tokenProvider
+                providerFailure = nil
+            case .failed(let failure):
+                self.tokenProvider = nil
+                providerFailure = failure
+            }
             let exporterConfiguration = Self.makeExporterConfiguration(
                 bundle: bundle
             )
+            tokenAvailabilityFailure =
+                providerFailure
+                ?? (exporterConfiguration == nil
+                    ? .exportConfigurationInvalid : nil)
             let downstreamExportersFactory:
                 (@Sendable () -> AuthenticatedOtlpExporters?)? =
                     if let tokenProvider, let exporterConfiguration {
@@ -200,6 +226,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 logger: logger
             )
             tokenProvider = nil
+            tokenAvailabilityFailure = .inactiveController
             worker = RemoteTelemetryRuntimeWorker(
                 tracer: tracer,
                 logger: logger,
@@ -213,6 +240,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         _ enabled: Bool,
         storageGeneration: UUID?
     ) {
+        telemetryEnabled = enabled
         guard let worker else { return }
         if let tokenProvider {
             Task {
@@ -234,10 +262,21 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         worker?.setForeground(foreground)
     }
 
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        guard telemetryEnabled else { return .disabled }
+        if let tokenAvailabilityFailure {
+            return .failed(tokenAvailabilityFailure)
+        }
+        guard let tokenProvider else {
+            return .failed(.inactiveController)
+        }
+        return await tokenProvider.cachedTokenAvailability()
+    }
+
     private static func makeTokenProvider(
         bundle: Bundle,
         tracer: any RemoteTelemetryTracing
-    ) -> TelemetryTokenProvider? {
+    ) -> TokenProviderConstruction {
         guard
             let value = bundle.object(
                 forInfoDictionaryKey: "BleatTelemetryAuthenticationBaseURL"
@@ -245,7 +284,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let baseURL = URL(string: value)
         else {
-            return nil
+            return .failed(.authenticationConfigurationInvalid)
         }
 
         #if DEBUG || BLEAT_RELEASE_SECRET_SCAN
@@ -260,7 +299,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 installationID: InstallationIdentifierStore().uuid
             )
         else {
-            return nil
+            return .failed(.authenticationConfigurationInvalid)
         }
 
         let selection = RemoteTelemetryAttesterSelection.resolve(
@@ -274,25 +313,27 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         let attester: any TelemetryAttester
         switch selection {
         case .unavailable:
-            return nil
+            return .failed(.attesterUnavailable)
         case .development:
             #if DEBUG || BLEAT_RELEASE_SECRET_SCAN
                 attester = DevelopmentTelemetryAttester()
             #else
-                return nil
+                return .failed(.attesterUnavailable)
             #endif
         case .appAttest:
             attester = AppAttestTelemetryAttester()
         }
 
         let bundleID = bundle.bundleIdentifier ?? "com.terminaloutcomes.Bleat"
-        return TelemetryTokenProvider(
-            attester: attester,
-            transport: transport,
-            store: TelemetryEnrollmentVault(
-                service: "\(bundleID).telemetry-app-attest"
-            ),
-            tracer: tracer
+        return .ready(
+            TelemetryTokenProvider(
+                attester: attester,
+                transport: transport,
+                store: TelemetryEnrollmentVault(
+                    service: "\(bundleID).telemetry-app-attest"
+                ),
+                tracer: tracer
+            )
         )
     }
 
