@@ -1519,6 +1519,19 @@ final class AppModel {
         remoteTelemetryTokenAvailability = availability
     }
 
+    func monitorRemoteTelemetryTokenAvailability(
+        interval: Duration = .seconds(1)
+    ) async {
+        while !Task.isCancelled {
+            await refreshRemoteTelemetryTokenAvailability()
+            do {
+                try await Task.sleep(for: interval)
+            } catch {
+                return
+            }
+        }
+    }
+
     func startNearbyServerDiscovery() {
         let discovery =
             nearbyServerDiscovery

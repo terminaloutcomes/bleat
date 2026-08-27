@@ -1368,9 +1368,9 @@ private struct DiagnosticsView: View {
         .navigationTitle("Diagnostics")
         .task {
             async let endpointRefresh: Void = model.refreshEndpointDiagnostics()
-            async let tokenAvailabilityRefresh: Void =
-                model.refreshRemoteTelemetryTokenAvailability()
-            _ = await (endpointRefresh, tokenAvailabilityRefresh)
+            async let tokenAvailabilityMonitor: Void =
+                model.monitorRemoteTelemetryTokenAvailability()
+            _ = await (endpointRefresh, tokenAvailabilityMonitor)
         }
     }
 }

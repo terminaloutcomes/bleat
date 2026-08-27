@@ -294,6 +294,38 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         )
     }
 
+    func testAppModelMonitorsTokenAcquiredAfterDiagnosticsAppears() async {
+        let controller = RecordingRemoteTelemetryConsentController()
+        let model = AppModel(
+            service: UnavailableAppService(),
+            remoteTelemetryConsentController: controller
+        )
+        model.setRemoteTelemetryEnabled(true)
+
+        let monitor = Task { @MainActor in
+            await model.monitorRemoteTelemetryTokenAvailability(
+                interval: .milliseconds(1)
+            )
+        }
+        while controller.tokenAvailabilityRequests == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(
+            model.remoteTelemetryTokenAvailability,
+            .missingOrExpired
+        )
+
+        controller.tokenAvailability = .available
+        while model.remoteTelemetryTokenAvailability != .available {
+            await Task.yield()
+        }
+        monitor.cancel()
+        await monitor.value
+
+        XCTAssertGreaterThanOrEqual(controller.tokenAvailabilityRequests, 2)
+        XCTAssertEqual(model.remoteTelemetryTokenAvailability, .available)
+    }
+
     func testTelemetryTokenAvailabilityDiscardsResultAfterWithdrawal()
         async
     {
