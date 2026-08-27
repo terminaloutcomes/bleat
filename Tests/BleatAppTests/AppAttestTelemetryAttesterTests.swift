@@ -51,6 +51,44 @@ final class AppAttestTelemetryAttesterTests: XCTestCase {
                 XCTAssertEqual(error, .keyInvalidated)
             }
         }
+
+        func testInvalidAssertionInputMapsToTypedReenrollmentFailure() async {
+            let service = FailingAppAttestService(
+                error: NSError(
+                    domain: DCError.errorDomain,
+                    code: DCError.Code.invalidInput.rawValue
+                )
+            )
+            let attester = AppAttestTelemetryAttester(service: service)
+            do {
+                _ = try await attester.assertion(
+                    keyID: "stale-installation-key",
+                    clientDataHash: Data(repeating: 4, count: 32)
+                )
+                XCTFail("invalid assertion input unexpectedly succeeded")
+            } catch let error {
+                XCTAssertEqual(error, .keyInvalidated)
+            }
+        }
+
+        func testInvalidAttestationInputRemainsRejected() async {
+            let service = FailingAppAttestService(
+                error: NSError(
+                    domain: DCError.errorDomain,
+                    code: DCError.Code.invalidInput.rawValue
+                )
+            )
+            let attester = AppAttestTelemetryAttester(service: service)
+            do {
+                _ = try await attester.attest(
+                    keyID: "key-id",
+                    clientDataHash: Data(repeating: 5, count: 32)
+                )
+                XCTFail("invalid attestation input unexpectedly succeeded")
+            } catch let error {
+                XCTAssertEqual(error, .rejected)
+            }
+        }
     #endif
 
     #if os(macOS)

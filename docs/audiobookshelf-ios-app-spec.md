@@ -1709,7 +1709,10 @@ retaining enrollment for later re-enablement.
 
 The client gates App Attest on `DCAppAttestService.isSupported`, treats macOS as unsupported, and retains only the App Attest key identifier plus an
 opaque backend installation identifier in one non-synchronizing, device-only
-Keychain record. Invalidated keys clear that record and restart enrollment.
+Keychain record. Invalidated keys clear that record and restart enrollment
+once. Assertion-time `DCError.invalidInput` receives the same bounded recovery
+because App Attest returns it for a stale installation key after an app
+reinstall; invalid input from key generation or attestation remains terminal.
 When App Attest is enabled, Debug iOS builds use its development entitlement
 and Release iOS builds use its production entitlement. Debug may select the
 deterministic fake attester; Release cannot. System App Attest is unavailable unless
