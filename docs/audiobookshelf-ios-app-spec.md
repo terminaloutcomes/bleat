@@ -2040,9 +2040,9 @@ If one of these fails, revise the architecture before proceeding.
 The 1.0 release is acceptable only when:
 
 - [ ] **AC-01:** Two different Audiobookshelf accounts can remain signed in concurrently.
-- [ ] **AC-02:** No token, cookie, password, verifier, or OAuth code appears in
-  logs or media URLs; the release deep scan is tracked in
-  [GitHub issue #48](https://github.com/terminaloutcomes/bleat/issues/48).
+- [x] **AC-02:** No token, cookie, password, verifier, or OAuth code appears in
+  logs or media URLs. `mise run test:release-secrets` verifies the native-auth
+  Release boundary recorded in `docs/release-evidence/secret-leakage.md`.
 - [ ] **AC-03:** Native username/password login, rotating refresh tokens, and logout work without an identity provider.
 - [ ] **AC-04:** Twenty concurrent expired-token requests cause one refresh and at most one retry each.
 - [ ] **AC-05:** Server path prefixes work for API, covers, playback, and downloads.
