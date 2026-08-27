@@ -4550,29 +4550,7 @@ final class AppModel {
             .started(.resetAppData, category: .app)
         )
 
-        await invalidatePlaybackStarts()
-        await stopLiveUpdatesAndWait()
         await cancelPrivateCloudSynchronization()
-        await playback.stop()
-        for account in accounts {
-            transcription.cancel(for: account.id)
-        }
-        guard await downloads.removeAllForLocalDataReset() else {
-            let failure = AppFailure(
-                operation: .resetAppData,
-                serviceError: .localDataReset(.downloads)
-            )
-            localDataResetFailure = failure
-            await diagnostics.record(
-                .failed(
-                    .resetAppData,
-                    category: .app,
-                    failureCode: failure.diagnosticFailureCode
-                )
-            )
-            isResettingLocalData = false
-            return
-        }
         do {
             if privateCloudSyncAvailable, privateCloudSyncEnabled {
                 try await service.setPrivateCloudSyncEnabled(
@@ -4581,6 +4559,28 @@ final class AppModel {
                 )
                 privateCloudSyncEnabled = false
                 privateCloudState = .disabled
+            }
+            await invalidatePlaybackStarts()
+            await stopLiveUpdatesAndWait()
+            await playback.stop()
+            for account in accounts {
+                transcription.cancel(for: account.id)
+            }
+            guard await downloads.removeAllForLocalDataReset() else {
+                let failure = AppFailure(
+                    operation: .resetAppData,
+                    serviceError: .localDataReset(.downloads)
+                )
+                localDataResetFailure = failure
+                await diagnostics.record(
+                    .failed(
+                        .resetAppData,
+                        category: .app,
+                        failureCode: failure.diagnosticFailureCode
+                    )
+                )
+                isResettingLocalData = false
+                return
             }
             try await service.resetLocalData()
             clearLocalPreferences()
