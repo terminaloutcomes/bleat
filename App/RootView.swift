@@ -119,7 +119,6 @@ struct RootView: View {
         #endif
         .task {
             model.setRemoteTelemetryForeground(scenePhase == .active)
-            model.setDownloadForeground(scenePhase == .active)
             await model.start()
             if let route = deepLinkInbox.takePendingRoute() {
                 navigation.receive(route: route)
@@ -203,7 +202,6 @@ struct RootView: View {
         .onChange(of: scenePhase) { previousPhase, phase in
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
-            model.setDownloadForeground(phase == .active)
             if AppLifecycleCloudSyncPolicy.shouldSynchronize(
                 wasActive: previousPhase == .active,
                 isActive: phase == .active

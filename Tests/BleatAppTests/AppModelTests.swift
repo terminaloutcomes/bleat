@@ -3075,7 +3075,6 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.primary-fallback.\(UUID().uuidString)"
         )
         await model.start(account: account)
-        model.setForegroundActive(true)
         let identities = try plan.tracks.map { track in
             try DownloadTaskIdentity(
                 downloadID: DownloadID(rawValue: "primary-fallback"),
@@ -3150,24 +3149,6 @@ final class AppModelTests: XCTestCase {
             descriptors.map(\.identity.trackIndex).sorted(),
             [0, 1]
         )
-        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 0)
-        model.updateNetworkPathState(
-            AppNetworkPathState(
-                availability: .satisfied,
-                isConstrained: false,
-                isExpensive: false
-            )
-        )
-        for _ in 0..<100 {
-            if model.transferInactivityWatchdogCountForTesting == 2 {
-                break
-            }
-            await Task.yield()
-        }
-        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 2)
-        model.setForegroundActive(false)
-        XCTAssertEqual(model.transferInactivityWatchdogCountForTesting, 0)
-
         session.invalidateAndCancel()
         await model.removeAll()
     }
@@ -3661,7 +3642,6 @@ final class AppModelTests: XCTestCase {
             XCTAssertFalse(DownloadModel.isRetryableTransferStatus(status))
         }
         XCTAssertEqual(DownloadModel.maximumTransferRetries, 2)
-        XCTAssertEqual(DownloadModel.transferInactivityTimeoutSeconds, 10)
         XCTAssertEqual(
             DownloadModel.transferHTTPDisposition(statusCode: 206),
             .success

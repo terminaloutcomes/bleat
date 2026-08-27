@@ -642,12 +642,10 @@ persists an offline metadata snapshot and byte-exact manifest, and restores
 system-owned tasks after relaunch. An interrupted non-paused transfer that could
 not be restored because Bleat launched offline resumes automatically from its
 durable partial bytes when connectivity returns; user-paused downloads stay
-paused. While the app is visible, unavailable paths show **Waiting for
-network**, satisfied-path recovery shows **Retrying download**, and a running
-transfer with no progress for 10 seconds is cancelled into the bounded retry
-flow. Background transfers retain the system session's native inactivity
-timeout behavior; delegate-reported failures still enter Bleat's bounded
-replacement flow. The Downloads tab shows durable state and
+paused. Unavailable paths show **Waiting for network**, and satisfied-path
+recovery shows **Retrying download**. Bleat does not infer failure from gaps in
+progress callbacks; delegate-reported failures enter its bounded replacement
+flow. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;

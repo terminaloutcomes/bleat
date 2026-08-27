@@ -271,11 +271,6 @@ private struct AutomaticDownloadTaskKey: Hashable {
     }
 }
 
-private struct TransferInactivityWatchdog {
-    let taskIdentifier: Int
-    let timer: Task<Void, Never>
-}
-
 struct AutomaticCachePin: Hashable, Sendable {
     fileprivate let id: UUID
     fileprivate let downloadID: DownloadID
@@ -444,7 +439,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
     static let rangeChunkByteLength: Int64 = 16 * 1_024 * 1_024
     static let maximumTransferRetries = 2
-    static let transferInactivityTimeoutSeconds: TimeInterval = 10
 
     static var supportsNetworkPolicySelection: Bool {
         #if os(macOS)
@@ -475,8 +469,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var pendingRecoveryTaskKeys: Set<AutomaticDownloadTaskKey> = []
     private var transferRetryCounts: [AutomaticDownloadTaskKey: Int] = [:]
     private var terminalTransferTaskKeys: Set<AutomaticDownloadTaskKey> = []
-    private var transferInactivityWatchdogs:
-        [AutomaticDownloadTaskKey: TransferInactivityWatchdog] = [:]
     private var isRecoveringInterruptedTransfers = false
     private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
     private var pendingAutomaticUpdates:
@@ -495,7 +487,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
     private var displayedDownloadedBytes: [DownloadID: Int64] = [:]
     private var networkPathState: AppNetworkPathState = .unknown
-    private var isForegroundActive = false
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
     private lazy var session: URLSession = {
@@ -620,14 +611,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 storage: storage
             )
         }
-        for (task, descriptor) in currentTasks {
+        for (task, _) in currentTasks {
             if task.state == .suspended {
                 task.resume()
             }
-            armTransferInactivityWatchdog(
-                for: task,
-                identity: descriptor.identity
-            )
         }
         await cleanupExpiredAutomaticDownloads()
         scheduleAutomaticCleanup()
@@ -873,10 +860,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingRecoveryDownloadIDs
     }
 
-    var transferInactivityWatchdogCountForTesting: Int {
-        transferInactivityWatchdogs.count
-    }
-
     func transferRetryCountForTesting(
         _ identity: DownloadTaskIdentity
     ) -> Int {
@@ -903,27 +886,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func updateNetworkPathState(_ state: AppNetworkPathState) {
         networkPathState = state
-        if state.availability != .satisfied {
-            cancelAllTransferInactivityWatchdogs()
-        } else if isForegroundActive,
-            state.availability == .satisfied
-        {
-            Task { @MainActor [weak self] in
-                await self?.armWatchdogsForActiveTransfers()
-            }
-        }
-    }
-
-    func setForegroundActive(_ active: Bool) {
-        isForegroundActive = active
-        if active && networkPathState.availability == .satisfied {
-            Task { @MainActor [weak self] in
-                guard self?.isForegroundActive == true else { return }
-                await self?.armWatchdogsForActiveTransfers()
-            }
-        } else {
-            cancelAllTransferInactivityWatchdogs()
-        }
     }
 
     private static func reconciliationFailureCode(
@@ -1586,7 +1548,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
-            cancelTransferInactivityWatchdog(for: identity)
         }
         for record in legacyRecords {
             try? await storage.remove(record)
@@ -1758,7 +1719,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             task.resume()
-            armTransferInactivityWatchdog(for: task, identity: identity)
         }
     }
 
@@ -1782,7 +1742,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
-            cancelTransferInactivityWatchdog(for: identity)
         }
         do {
             try await storage.remove(record)
@@ -1855,7 +1814,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
-            cancelTransferInactivityWatchdog(for: identity)
         }
         if let storage {
             for entry in record.manifest.entries where entry.state != .complete
@@ -1914,7 +1872,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             else { continue }
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
-            cancelTransferInactivityWatchdog(for: identity)
             clearTransferredBytes(for: identity)
         }
         await refresh()
@@ -2157,7 +2114,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if blocked {
                 if task.state == .running {
                     task.suspend()
-                    cancelTransferInactivityWatchdog(for: identity)
                     playbackSuspendedDownloadIDs.insert(
                         identity.downloadID
                     )
@@ -2166,7 +2122,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity.downloadID
             ) && !pausedDownloadIDs.contains(identity.downloadID) {
                 task.resume()
-                armTransferInactivityWatchdog(for: task, identity: identity)
             }
         }
         if !blocked {
@@ -2978,7 +2933,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let identity = descriptor.identity
-        cancelTransferInactivityWatchdog(for: identity)
         if error != nil {
             await reconcileTransfer(
                 identity: identity,
@@ -3136,10 +3090,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             replacementTask.resume()
-            armTransferInactivityWatchdog(
-                for: replacementTask,
-                identity: identity
-            )
         }
         return true
     }
@@ -3191,59 +3141,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             true
         default:
             false
-        }
-    }
-
-    private func armTransferInactivityWatchdog(
-        for task: URLSessionTask,
-        identity: DownloadTaskIdentity
-    ) {
-        guard isForegroundActive,
-            networkPathState.availability == .satisfied,
-            task.state == .running
-        else { return }
-        let key = AutomaticDownloadTaskKey(identity)
-        transferInactivityWatchdogs[key]?.timer.cancel()
-        let taskIdentifier = task.taskIdentifier
-        let timer = Task { @MainActor [weak self, weak task] in
-            try? await Task.sleep(
-                for: .seconds(Self.transferInactivityTimeoutSeconds)
-            )
-            guard !Task.isCancelled,
-                let self,
-                self.transferInactivityWatchdogs[key]?.taskIdentifier
-                    == taskIdentifier
-            else { return }
-            self.transferInactivityWatchdogs[key] = nil
-            task?.cancel()
-        }
-        transferInactivityWatchdogs[key] = TransferInactivityWatchdog(
-            taskIdentifier: taskIdentifier,
-            timer: timer
-        )
-    }
-
-    private func cancelTransferInactivityWatchdog(
-        for identity: DownloadTaskIdentity
-    ) {
-        let key = AutomaticDownloadTaskKey(identity)
-        transferInactivityWatchdogs.removeValue(forKey: key)?.timer.cancel()
-    }
-
-    private func cancelAllTransferInactivityWatchdogs() {
-        for watchdog in transferInactivityWatchdogs.values {
-            watchdog.timer.cancel()
-        }
-        transferInactivityWatchdogs = [:]
-    }
-
-    private func armWatchdogsForActiveTransfers() async {
-        for task in await session.allTasks where task.state == .running {
-            guard let description = task.taskDescription,
-                let identity = try? DownloadTaskIdentity
-                    .decodeTaskDescription(description)
-            else { continue }
-            armTransferInactivityWatchdog(for: task, identity: identity)
         }
     }
 
@@ -3506,10 +3403,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             self?.updateTransferredBytes(
                 totalBytesWritten,
                 for: identity
-            )
-            self?.armTransferInactivityWatchdog(
-                for: downloadTask,
-                identity: identity
             )
         }
     }

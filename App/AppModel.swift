@@ -1532,10 +1532,6 @@ final class AppModel {
         }
     }
 
-    func setDownloadForeground(_ foreground: Bool) {
-        downloads.setForegroundActive(foreground)
-    }
-
     func startNearbyServerDiscovery() {
         let discovery =
             nearbyServerDiscovery
