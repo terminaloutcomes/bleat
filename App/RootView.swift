@@ -1097,6 +1097,7 @@ private struct AccountEditorView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("accountEditor.form")
             .navigationTitle("Edit Account")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -127,6 +127,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func captureHome(_ app: XCUIApplication) {
+        selectRootTab(named: "Home", in: app)
         XCTAssertTrue(
             app.descendants(matching: .any)["home.shelves"].waitForExistence(
                 timeout: 30
@@ -145,7 +146,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func captureLibrary(_ app: XCUIApplication) {
-        app.buttons.matching(identifier: "books.vertical").firstMatch.tap()
+        selectRootTab(named: "Library", in: app)
         XCTAssertTrue(
             app.descendants(matching: .any)["books.list"].waitForExistence(
                 timeout: 30
@@ -188,6 +189,16 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         )
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "03-goat-sounds-detail.png")
+
+        let chaptersDisclosure = app.descendants(matching: .any)[
+            "book.detail.chapters.disclosure"
+        ]
+        scrollUntilHittable(
+            chaptersDisclosure,
+            in: detail,
+            app: app
+        )
+        chaptersDisclosure.tap()
 
         scrollUntilHittable(
             chapter(named: "romantic goats", in: app),
@@ -237,14 +248,14 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func captureDownloads(_ app: XCUIApplication) {
-        app.buttons.matching(identifier: "arrow.down.circle").firstMatch.tap()
+        selectRootTab(named: "Downloads", in: app)
         XCTAssertTrue(app.navigationBars["Downloads"].waitForExistence(timeout: 10))
         attachScreenshot(named: "07-downloads.png")
     }
 
     @MainActor
     private func captureSearch(_ app: XCUIApplication) {
-        app.buttons.matching(identifier: "magnifyingglass").firstMatch.tap()
+        selectRootTab(named: "Search", in: app)
         let search = app.searchFields.firstMatch
         if !search.waitForExistence(timeout: 2) {
             let presentSearch = app.navigationBars["Search"].buttons["Search"]
@@ -279,7 +290,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func captureSettings(_ app: XCUIApplication) {
-        app.buttons.matching(identifier: "gearshape").firstMatch.tap()
+        selectRootTab(named: "Settings", in: app)
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["kid"].waitForExistence(timeout: 10))
         let barnyard = app.descendants(matching: .any).matching(
@@ -294,7 +305,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         guard app.otherElements["app.signedIn"].waitForExistence(timeout: 2) else {
             return
         }
-        app.buttons.matching(identifier: "gearshape").firstMatch.tap()
+        selectRootTab(named: "Settings", in: app)
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         let account = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "settings.account.")
@@ -305,7 +316,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         ).tap()
 
         let remove = app.buttons["accountEditor.removeAccount"]
-        XCTAssertTrue(remove.waitForExistence(timeout: 10))
+        scrollUntilHittable(
+            remove,
+            in: app.collectionViews["accountEditor.form"],
+            app: app
+        )
         remove.tap()
         let thisDevice = app.sheets.buttons["Only on This Device"]
         XCTAssertTrue(thisDevice.waitForExistence(timeout: 10))
@@ -316,6 +331,15 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         XCTAssertTrue(
             app.textFields["login.server"].waitForExistence(timeout: 20)
         )
+    }
+
+    @MainActor
+    private func selectRootTab(named label: String, in app: XCUIApplication) {
+        let button = app.buttons.matching(
+            NSPredicate(format: "label == %@", label)
+        ).firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 10))
+        button.tap()
     }
 
     @MainActor

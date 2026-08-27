@@ -604,13 +604,13 @@ bleat_validate_exported_screenshot() {
 bleat_normalize_exported_screenshot() {
     local screenshot="$1"
     local orientation="$2"
-    [[ "${orientation}" == "landscapeLeft" ]] || return
+    [[ "${orientation}" == "landscapeLeft" ]] || return 0
 
     local dimensions
     dimensions="$(bleat_image_dimensions "${screenshot}")"
     local width="${dimensions%x*}"
     local height="${dimensions#*x}"
-    (( height > width )) || return
+    (( height > width )) || return 0
 
     local rotated="${screenshot%.png}-landscapeLeft.png"
     sips --rotate -90 "${screenshot}" --out "${rotated}" >/dev/null
