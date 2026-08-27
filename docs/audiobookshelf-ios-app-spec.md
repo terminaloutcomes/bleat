@@ -1064,6 +1064,8 @@ Requirements:
 - serialize each book's track transfers, preferring a durable partial track,
   so reconnecting a multi-file book cannot create a task storm or aggregate
   bytes from abandoned requests;
+- derive the book-level state from all track states, so one failed track cannot
+  present the book as failed while a retained track is still downloading;
 - retry;
 - delegate-reported failure handling with bounded exponential retry; do not
   infer a stalled or failed transfer solely from elapsed time between progress

@@ -647,7 +647,9 @@ recovery shows **Retrying download**. Bleat does not infer failure from gaps in
 progress callbacks; delegate-reported failures enter its bounded replacement
 flow. Multi-file books transfer one track at a time, resume an existing partial
 track before starting another, and report durable bytes plus only the active
-request's in-flight bytes. The Downloads tab shows durable state and
+request's in-flight bytes. A failed track does not label the whole book failed
+while another retained transfer is still active; the failure becomes visible
+only when no track is continuing. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;

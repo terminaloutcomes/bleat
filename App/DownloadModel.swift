@@ -1,6 +1,7 @@
 import BleatCore
 import Foundation
 import Observation
+import Synchronization
 
 enum DownloadModelFailure: Error, Equatable, Sendable {
     case storageUnavailable
@@ -500,7 +501,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var playbackBlockedAutomaticDownloads: Set<AutomaticDownloadKey> =
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
+    private var resumingDownloadIDs: Set<DownloadID> = []
     private var supersededTaskDescriptions: Set<String> = []
+    private nonisolated let invalidatedTransferIDs = Mutex(Set<UUID>())
     private var transferSpans: [AutomaticDownloadTaskKey: RemoteTelemetrySpan] =
         [:]
     private var automaticCachePins: [DownloadID: [UUID: Set<Int>]] = [:]
@@ -528,11 +531,110 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var records: [DownloadedBookRecord] = []
     private(set) var progress: [DownloadID: Double] = [:]
     private(set) var pausedDownloadIDs: Set<DownloadID> = []
-    private(set) var failure: DownloadModelFailure?
+    private(set) var failure: DownloadModelFailure? {
+        didSet {
+            failureDownloadID = nil
+        }
+    }
+    private var failureDownloadID: DownloadID?
     private(set) var networkPolicy: DownloadNetworkPolicy
     private(set) var automaticLookaheadCount: Int
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
+
+    var presentedFailure: DownloadModelFailure? {
+        Self.presentedFailure(
+            failure,
+            downloadID: failureDownloadID,
+            records: records
+        )
+    }
+
+    static func presentedFailure(
+        _ failure: DownloadModelFailure?,
+        downloadID: DownloadID?,
+        records: [DownloadedBookRecord]
+    ) -> DownloadModelFailure? {
+        guard let failure else { return nil }
+        switch failure {
+        case .transferFailed, .transportUnavailable, .requestRejected:
+            guard let downloadID else { return failure }
+            return records.first(where: {
+                $0.manifest.downloadID == downloadID
+            })?.manifest.state == .failed ? failure : nil
+        case .storageUnavailable, .permissionDenied, .preparationFailed,
+            .repairPlanChanged, .insufficientStorage:
+            return failure
+        }
+    }
+
+    private func recordFailure(
+        _ failure: DownloadModelFailure,
+        for downloadID: DownloadID
+    ) {
+        self.failure = failure
+        failureDownloadID = downloadID
+    }
+
+    private func presentTransferOperationFailure(_ error: any Error) {
+        if let storageError = error as? DownloadStorageError {
+            failure = storageFailure(storageError)
+        } else if let modelFailure = error as? DownloadModelFailure {
+            failure = modelFailure
+        } else {
+            failure = .transferFailed
+        }
+    }
+
+    private func persistTransferFailure(
+        _ identity: DownloadTaskIdentity,
+        storage: DownloadStorage,
+        taskDescription: String? = nil,
+        presentedFailure: DownloadModelFailure = .transferFailed
+    ) async -> Bool {
+        guard transferMayTerminalize(
+            identity,
+            taskDescription: taskDescription
+        ) else { return false }
+        do {
+            guard
+                try await storage.markFailedIfDownloading(identity) != nil
+            else { return false }
+            guard transferMayTerminalize(
+                identity,
+                taskDescription: taskDescription
+            ) else { return false }
+            recordFailure(presentedFailure, for: identity.downloadID)
+            return true
+        } catch {
+            guard transferMayTerminalize(
+                identity,
+                taskDescription: taskDescription
+            ) else { return false }
+            recordDownloadTelemetry(
+                identity,
+                stage: .manifestCommit,
+                state: .failed,
+                failureCause: Self.downloadStorageFailureCause(error)
+            )
+            failure = storageFailure(error)
+            return false
+        }
+    }
+
+    private func transferMayTerminalize(
+        _ identity: DownloadTaskIdentity,
+        taskDescription: String?
+    ) -> Bool {
+        let context = transferContext(
+            for: identity,
+            taskDescription: taskDescription ?? ""
+        )
+        return DownloadTransferReconciler.nextAction(
+            after: .terminalFailure,
+            context: context
+        ) != .stop
+    }
 
     init(
         service: any AppServicing,
@@ -865,6 +967,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             guard let description = task.taskDescription,
                 task.state == .running || task.state == .suspended,
                 !supersededTaskDescriptions.contains(description),
+                !isInvalidatedTask(description),
                 let descriptor = try? DownloadChunkTaskDescription.decode(
                     description
                 ),
@@ -885,6 +988,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         for task in await session.allTasks
         where task.state == .running || task.state == .suspended {
             guard let description = task.taskDescription,
+                !isInvalidatedTask(description),
                 let descriptor = try? DownloadChunkTaskDescription.decode(
                     description
                 )
@@ -1973,6 +2077,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             $0.downloadID != record.manifest.downloadID
         }
         let tasks = await session.allTasks
+        for task in tasks {
+            guard let description = task.taskDescription,
+                let identity = try? DownloadTaskIdentity
+                    .decodeTaskDescription(description),
+                identity.downloadID == record.manifest.downloadID
+            else { continue }
+            invalidateTask(description)
+        }
         for entry in record.manifest.entries where entry.state != .complete {
             guard let identity = Self.identity(for: entry, record: record)
             else { continue }
@@ -2013,9 +2125,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             failure = .permissionDenied
             return
         }
-        pausedDownloadIDs.remove(record.manifest.downloadID)
-        resetTransferRetryBudget(for: record.manifest.downloadID)
+        let downloadID = record.manifest.downloadID
+        resumingDownloadIDs.insert(downloadID)
+        pausedDownloadIDs.remove(downloadID)
+        resetTransferRetryBudget(for: downloadID)
         await repair(record, account: account)
+        resumingDownloadIDs.remove(downloadID)
+        if self.record(downloadID: downloadID)?.manifest.state == .paused {
+            pausedDownloadIDs.insert(downloadID)
+        }
         await diagnostics.record(
             .completed(.resumeDownload, category: .download)
         )
@@ -2619,6 +2737,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             pausedDownloadIDs = Set(
                 records.compactMap {
                     $0.manifest.state == .paused
+                        && !resumingDownloadIDs.contains(
+                            $0.manifest.downloadID
+                        )
                         ? $0.manifest.downloadID : nil
                 }
             )
@@ -2648,6 +2769,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             for: identity,
             taskDescription: taskDescription
         )
+
+        if isInvalidatedTask(taskDescription) {
+            await resumeAfterInvalidatedTransfer(
+                identity,
+                storage: storage
+            )
+            return
+        }
 
         if context.isDeleting {
             try? await storage.removeTrackFiles(identity)
@@ -2824,8 +2953,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         identity,
                         outcome: .failed(.localStorage)
                     )
-                    _ = try? await storage.markFailed(identity)
-                    failure = .transferFailed
+                    presentTransferOperationFailure(error)
                     await refresh()
                 }
             } catch {
@@ -2836,8 +2964,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     failureCause: Self.downloadStorageFailureCause(error)
                 )
                 finishTransferSpan(identity, outcome: .failed(.localStorage))
-                _ = try? await storage.markFailed(identity)
-                failure = .transferFailed
+                presentTransferOperationFailure(error)
                 await refresh()
             }
 
@@ -2857,9 +2984,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 failureCause: cause
             )
             finishTransferSpan(identity, outcome: .failed(.media))
-            _ = try? await storage.markFailed(identity)
             clearTransferredBytes(for: identity)
-            failure = .transferFailed
+            _ = await persistTransferFailure(
+                identity,
+                storage: storage,
+                taskDescription: taskDescription
+            )
             await refresh()
 
         case .transportFailed(let rejectedRequest, let cause, let errorCode):
@@ -2949,8 +3079,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     state: .failed,
                     failureCause: .authenticationRefreshFailed
                 )
-                _ = try? await storage.markFailed(identity)
-                failure = .transferFailed
+                _ = await persistTransferFailure(
+                    identity,
+                    storage: storage,
+                    taskDescription: taskDescription
+                )
                 await refresh()
             }
 
@@ -3002,9 +3135,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 result: .terminalFailure,
                 category: category,
                 retryDisposition: .immediate,
+                terminalFailure: .requestRejected(
+                    statusCode: statusCode
+                ),
                 storage: storage
             )
-            failure = .requestRejected(statusCode: statusCode)
         }
     }
 
@@ -3014,6 +3149,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         result: DownloadTransferResult,
         category: RemoteTelemetryFailureCategory,
         retryDisposition: DownloadRetryDisposition,
+        terminalFailure: DownloadModelFailure = .transferFailed,
         storage: DownloadStorage
     ) async -> DownloadTransferNextAction {
         let context = transferContext(
@@ -3041,15 +3177,24 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await refresh()
             return nextAction
         }
-        pendingRecoveryTaskKeys.remove(AutomaticDownloadTaskKey(identity))
-        terminalTransferTaskKeys.insert(AutomaticDownloadTaskKey(identity))
+        let taskKey = AutomaticDownloadTaskKey(identity)
+        pendingRecoveryTaskKeys.remove(taskKey)
         if !pendingRecoveryTaskKeys.contains(where: {
             $0.downloadID == identity.downloadID
         }) {
             pendingRecoveryDownloadIDs.remove(identity.downloadID)
         }
-        _ = try? await storage.markFailed(identity)
-        failure = .transferFailed
+        let didPersistTerminalFailure = await persistTransferFailure(
+            identity,
+            storage: storage,
+            taskDescription: taskDescription,
+            presentedFailure: terminalFailure
+        )
+        if didPersistTerminalFailure {
+            terminalTransferTaskKeys.insert(taskKey)
+        } else {
+            terminalTransferTaskKeys.remove(taskKey)
+        }
         await refresh()
         guard record(downloadID: identity.downloadID) != nil else {
             return .fail
@@ -3121,9 +3266,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 result: .terminalFailure,
                 category: category,
                 retryDisposition: .immediate,
+                terminalFailure: terminalFailure,
                 storage: storage
             )
-            failure = terminalFailure
             return
         }
         let nextRetryCount = retryCount + 1
@@ -3210,8 +3355,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 nextIdentity,
                 outcome: .failed(.localStorage)
             )
-            _ = try? await storage.markFailed(nextIdentity)
-            failure = .transferFailed
+            presentTransferOperationFailure(error)
             await refresh()
         }
     }
@@ -3701,8 +3845,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity.trackIndex
             ) == false
         return DownloadTransferContext(
-            isPaused: pausedDownloadIDs.contains(identity.downloadID)
-                || currentRecord?.manifest.state == .paused,
+            isPaused: pausedDownloadIDs.contains(identity.downloadID),
             isCancelled: cancelledDownloadIDs.contains(identity.downloadID),
             isDeleting: deletingDownloadIDs.contains(identity.downloadID),
             isSuperseded: supersededTaskDescriptions.contains(taskDescription)
@@ -3721,75 +3864,87 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let descriptor = try? DownloadChunkTaskDescription.decode(
                 description
             ),
-            let layout
+            let layout,
+            response.statusCode == 206
         else {
             return
         }
-        guard response.statusCode == 206 else {
-            return
-        }
         let identity = descriptor.identity
-        let result: DownloadPlacementResult
-        do {
-            try DownloadRangeResponseValidator.validate(
-                statusCode: response.statusCode,
-                contentRangeHeader: response.value(
-                    forHTTPHeaderField: "Content-Range"
-                ),
-                requestedRange: descriptor.range,
-                expectedTotalByteLength: identity.expectedByteLength
-            )
-        } catch let error {
-            Task { @MainActor [weak self] in
-                await self?.reconcileTransfer(
-                    identity: identity,
-                    taskDescription: description,
-                    outcome: .placementRejected(
-                        stage: .rangeValidation,
-                        cause: Self.downloadRangeFailureCause(error)
+        let result: DownloadPlacementResult? =
+            invalidatedTransferIDs.withLock {
+                invalidated -> DownloadPlacementResult? in
+                guard !invalidated.contains(descriptor.transferID) else {
+                    return nil
+                }
+                do {
+                    try DownloadRangeResponseValidator.validate(
+                        statusCode: response.statusCode,
+                        contentRangeHeader: response.value(
+                            forHTTPHeaderField: "Content-Range"
+                        ),
+                        requestedRange: descriptor.range,
+                        expectedTotalByteLength: identity.expectedByteLength
                     )
+                } catch {
+                    return .rejected(
+                        stage: .rangeValidation,
+                        cause: (error as? DownloadRangeError).map(
+                            Self.downloadRangeFailureCause
+                        ) ?? .unknown
+                    )
+                }
+                do {
+                    let validator =
+                        descriptor.validator
+                        ?? DownloadRangeResponseValidator.validator(
+                            etag: response.value(
+                                forHTTPHeaderField: "ETag"
+                            ),
+                            lastModified: response.value(
+                                forHTTPHeaderField: "Last-Modified"
+                            )
+                        )
+                    let committed = try layout.appendChunk(
+                        from: location,
+                        identity: identity,
+                        expectedOffset: descriptor.range.start,
+                        expectedChunkLength: descriptor.range.length
+                    )
+                    let finalized = committed == identity.expectedByteLength
+                    if finalized {
+                        _ = try layout.finalizePartial(identity)
+                    }
+                    return .placed(
+                        committedByteLength: committed,
+                        validator: validator,
+                        finalized: finalized
+                    )
+                } catch {
+                    return .rejected(
+                        stage: .chunkPlacement,
+                        cause: Self.downloadStorageFailureCause(error)
+                    )
+                }
+            }
+        guard let result else {
+            Task { @MainActor [weak self] in
+                guard let self, let storage = self.storage else { return }
+                await self.resumeAfterInvalidatedTransfer(
+                    identity,
+                    storage: storage
                 )
             }
             return
-        }
-        do {
-            let validator =
-                descriptor.validator
-                ?? DownloadRangeResponseValidator.validator(
-                    etag: response.value(forHTTPHeaderField: "ETag"),
-                    lastModified: response.value(
-                        forHTTPHeaderField: "Last-Modified"
-                    )
-                )
-            let committed = try layout.appendChunk(
-                from: location,
-                identity: identity,
-                expectedOffset: descriptor.range.start,
-                expectedChunkLength: descriptor.range.length
-            )
-            let finalized = committed == identity.expectedByteLength
-            if finalized {
-                _ = try layout.finalizePartial(identity)
-            }
-            result = .placed(
-                committedByteLength: committed,
-                validator: validator,
-                finalized: finalized
-            )
-        } catch {
-            result = .rejected(
-                stage: .chunkPlacement,
-                cause: Self.downloadStorageFailureCause(error)
-            )
         }
         Task { @MainActor [weak self] in
+            guard let self else { return }
             switch result {
             case .placed(
                 let committedByteLength,
                 let validator,
                 let finalized
             ):
-                await self?.reconcileTransfer(
+                await self.reconcileTransfer(
                     identity: identity,
                     taskDescription: description,
                     outcome: .chunkStored(
@@ -3799,7 +3954,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 )
             case .rejected(let stage, let cause):
-                await self?.reconcileTransfer(
+                await self.reconcileTransfer(
                     identity: identity,
                     taskDescription: description,
                     outcome: .placementRejected(
@@ -3808,6 +3963,50 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 )
             }
+        }
+    }
+
+    private nonisolated func invalidateTask(_ description: String) {
+        guard let transferID = try? DownloadChunkTaskDescription.decode(
+            description
+        ).transferID else { return }
+        _ = invalidatedTransferIDs.withLock { transferIDs in
+            transferIDs.insert(transferID)
+        }
+    }
+
+    private nonisolated func isInvalidatedTask(_ description: String) -> Bool {
+        guard let transferID = try? DownloadChunkTaskDescription.decode(
+            description
+        ).transferID else { return false }
+        return invalidatedTransferIDs.withLock { transferIDs in
+            transferIDs.contains(transferID)
+        }
+    }
+
+    private func resumeAfterInvalidatedTransfer(
+        _ identity: DownloadTaskIdentity,
+        storage: DownloadStorage
+    ) async {
+        guard !resumingDownloadIDs.contains(identity.downloadID) else {
+            return
+        }
+        await refresh()
+        guard !resumingDownloadIDs.contains(identity.downloadID) else {
+            return
+        }
+        let shouldResumeManual =
+            !pausedDownloadIDs.contains(identity.downloadID)
+            && record(downloadID: identity.downloadID)?.manifest.purpose
+                == .manual
+        let hasActiveTask = await activeTransferTaskKeys().contains {
+            $0.downloadID == identity.downloadID
+        }
+        if shouldResumeManual, !hasActiveTask {
+            await advanceManualDownload(
+                after: identity,
+                storage: storage
+            )
         }
     }
 
@@ -3848,7 +4047,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 ) == false,
                 self?.supersededTaskDescriptions.contains(
                     description
-                ) == false
+                ) == false,
+                self?.isInvalidatedTask(description) == false
             else {
                 return
             }

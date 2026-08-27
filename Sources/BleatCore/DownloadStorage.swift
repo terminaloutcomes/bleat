@@ -934,6 +934,26 @@ public actor DownloadStorage {
         return record
     }
 
+    public func markFailedIfDownloading(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> DownloadedBookRecord? {
+        var record = try load(identity)
+        guard record.manifest.entries.first(where: {
+            $0.trackIndex == identity.trackIndex
+        })?.state == .downloading else {
+            return nil
+        }
+        do {
+            try record.manifest.markFailed(
+                trackIndex: identity.trackIndex
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
     public func markQueued(
         _ identity: DownloadTaskIdentity
     ) throws(DownloadStorageError) -> DownloadedBookRecord {

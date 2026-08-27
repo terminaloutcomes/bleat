@@ -19,6 +19,45 @@ extension DownloadStorageLayout {
 }
 
 final class DownloadStorageTests: XCTestCase {
+    func testConditionalFailureDoesNotOverwritePauseOrContinueState()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        _ = try await fixture.storage.markDownloading(identity)
+        _ = try await fixture.storage.markPaused(
+            identity,
+            observedByteLength: 0
+        )
+
+        let ignoredFailure = try await fixture.storage
+            .markFailedIfDownloading(identity)
+        let pausedRecords = try await fixture.storage.records()
+        XCTAssertNil(ignoredFailure)
+        XCTAssertEqual(
+            pausedRecords.first?.manifest.state,
+            .paused
+        )
+
+        _ = try await fixture.storage.markDownloading(identity)
+        let failed = try await fixture.storage.markFailedIfDownloading(
+            identity
+        )
+        XCTAssertEqual(failed?.manifest.state, .failed)
+    }
+
     func testAccountIdentityMigrationMovesManifestAndMedia() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }

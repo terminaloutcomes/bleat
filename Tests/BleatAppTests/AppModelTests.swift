@@ -87,6 +87,13 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(
             DownloadTransferReconciler.nextAction(
+                after: .terminalFailure,
+                context: paused
+            ),
+            .stop
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
                 after: .chunkStored(finalized: false),
                 context: cancelled
             ),
@@ -95,6 +102,20 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             DownloadTransferReconciler.nextAction(
                 after: .chunkStored(finalized: true),
+                context: superseded
+            ),
+            .stop
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .terminalFailure,
+                context: cancelled
+            ),
+            .stop
+        )
+        XCTAssertEqual(
+            DownloadTransferReconciler.nextAction(
+                after: .terminalFailure,
                 context: superseded
             ),
             .stop
@@ -3391,6 +3412,114 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(record.manifest.state, .paused)
     }
 
+    func testLateCancelledTaskCallbackDoesNotFailContinuedDownload()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatLatePausedCallback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Late paused callback",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "late-paused-callback",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.late-paused-callback.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        let initialDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        let oldDescriptor = try XCTUnwrap(initialDescriptors.first)
+
+        await model.pause(try XCTUnwrap(model.records.first))
+        await model.continueDownload(try XCTUnwrap(model.records.first))
+        let continuedDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(
+            continuedDescriptors.count,
+            1,
+            "continued descriptors: \(continuedDescriptors)"
+        )
+        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        if let continuedDescriptor = continuedDescriptors.first {
+            XCTAssertNotEqual(
+                continuedDescriptor.transferID,
+                oldDescriptor.transferID
+            )
+        }
+
+        let lateConfiguration = URLSessionConfiguration.ephemeral
+        lateConfiguration.protocolClasses = [LatePausedDownloadURLProtocol.self]
+        let lateSession = URLSession(
+            configuration: lateConfiguration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let lateRequest = DownloadRangeRequest.applying(
+            range: oldDescriptor.range,
+            validator: oldDescriptor.validator,
+            to: request
+        )
+        let lateTask = lateSession.downloadTask(with: lateRequest)
+        lateTask.taskDescription = try oldDescriptor.encode()
+        lateTask.resume()
+        for _ in 0..<200 {
+            let descriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+            if lateTask.state == .completed, descriptors.count == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertNil(model.failure)
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        let finalDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(
+            finalDescriptors.count,
+            1,
+            "final descriptors: \(finalDescriptors)"
+        )
+        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        let identity = oldDescriptor.identity
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let partialByteLength = try await storage.partialByteLength(identity)
+        XCTAssertEqual(partialByteLength, 5)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: layout.destinationURL(for: identity).path
+            )
+        )
+        lateSession.invalidateAndCancel()
+        await model.removeAll()
+    }
+
     func testOfflineRelaunchDoesNotRetryPermanentPlanFailure() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -3707,6 +3836,108 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+    }
+
+    func testTransferFailureIsNotPresentedWhileManifestIsDownloading()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatFailurePresentation-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Continuing download",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        _ = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "continuing-download",
+            committedByteCount: 5
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404)))
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.failure-presentation.\(UUID().uuidString)"
+        )
+
+        await model.start(account: account)
+
+        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        XCTAssertNil(
+            DownloadModel.presentedFailure(
+                .transferFailed,
+                downloadID: model.records.first?.manifest.downloadID,
+                records: model.records
+            )
+        )
+        XCTAssertEqual(
+            DownloadModel.presentedFailure(
+                .transferFailed,
+                downloadID: nil,
+                records: model.records
+            ),
+            .transferFailed
+        )
+        let activeRecord = try XCTUnwrap(model.records.first)
+        var failedManifest = activeRecord.manifest
+        try failedManifest.markFailed(trackIndex: 1)
+        let failedRecord = DownloadedBookRecord(
+            manifest: failedManifest,
+            detail: activeRecord.detail
+        )
+        let otherDownloadID = DownloadID(rawValue: "other-download")
+        let otherPlan = DownloadPlan(
+            itemID: activeRecord.manifest.itemID,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "other-track",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        var otherManifest = try DownloadManifest(
+            downloadID: otherDownloadID,
+            accountID: activeRecord.manifest.accountID,
+            plan: otherPlan
+        )
+        try otherManifest.markDownloading(trackIndex: 0)
+        let otherActiveRecord = DownloadedBookRecord(
+            manifest: otherManifest,
+            detail: activeRecord.detail
+        )
+        XCTAssertNil(
+            DownloadModel.presentedFailure(
+                .transferFailed,
+                downloadID: otherDownloadID,
+                records: [failedRecord, otherActiveRecord]
+            )
+        )
+        XCTAssertEqual(
+            DownloadModel.presentedFailure(
+                .transferFailed,
+                downloadID: failedRecord.manifest.downloadID,
+                records: [failedRecord]
+            ),
+            .transferFailed
+        )
+        await model.removeAll()
     }
 
     func testDownloadTransferStatusRetryPolicyIsBoundedToTransientResponses() {
@@ -14981,6 +15212,44 @@ private actor AsyncGate {
         entered = false
         released = false
     }
+}
+
+private final class LatePausedDownloadURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 206,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Range": "bytes 5-7/8"]
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data(repeating: 0xCD, count: 3))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private struct TestChapterTranscriber: ChapterTranscribing {

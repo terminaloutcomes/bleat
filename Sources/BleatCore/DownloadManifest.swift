@@ -317,7 +317,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             entries[index].observedByteLength = observedByteLength
             entries[index].placement = observedByteLength > 0 ? .temporary : nil
         }
-        state = .failed
+        updateIncompleteState()
     }
 
     public mutating func markQueued(

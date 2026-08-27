@@ -5126,7 +5126,7 @@ private struct DownloadStorageView: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            if let failure = model.downloads.failure {
+            if let failure = model.downloads.presentedFailure {
                 Label(
                     failure.message,
                     systemImage: "externaldrive.badge.exclamationmark"
