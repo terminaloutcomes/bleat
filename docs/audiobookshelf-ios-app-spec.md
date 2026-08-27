@@ -151,10 +151,16 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - A long press on any single-book Home, Library, Search, or Series card exposes
   one native menu backed by the existing Book Detail actions: exactly one of
   Mark Played or Mark Unplayed, permitted Download and Edit actions, and the
-  platform's transcription availability. Selecting an action loads canonical
-  detail through the normal repository, re-checks item access, and does not
-  navigate or activate the separate cover playback control. Collapsed-series
-  entries remain navigation-only.
+  platform's transcription availability. Played-state changes dismiss the menu
+  normally and run through an account- and item-scoped asynchronous coordinator
+  with a 30-second logical deadline. The coordinator loads canonical detail,
+  re-checks item access, leaves local state unchanged until the progress PATCH
+  returns HTTP 200, commits locally, and schedules detail, Home, Library, and
+  Search reconciliation separately. Preparation or mutation failure presents
+  one typed dismissible alert; confirmed success has no pending or success
+  presentation. Download, Edit, and Transcribe retain their modal preparation
+  path. No context action navigates or activates the separate cover playback
+  control. Collapsed-series entries remain navigation-only.
 - In CarPlay I can browse Home shelves, choose an audiobook library, page and
   search its books, and play verified whole-book downloads.
 
@@ -1220,7 +1226,13 @@ Track a local `lastCommonServerUpdate` and position for each item.
 - Before uploading queued local progress, fetch `GET /api/me/progress/<library-item-id>`. Use `lastUpdate` to determine whether the server moved after the common checkpoint.
 - Timestamps are the only concurrency signal the current server provides. Account for clock skew and never claim this is atomic conflict prevention.
 
-Marking a book finished or unfinished is an explicit progress mutation and follows the same conflict rules.
+Marking a book finished or unfinished is an explicit progress mutation. It
+currently performs a canonical detail and access recheck before submission but
+does not yet compare the server timestamp with a persisted common checkpoint.
+[GitHub issue #146](https://github.com/terminaloutcomes/bleat/issues/146)
+tracks that pre-submission conflict check. Until it is complete, explicit
+finished-state changes must not be described as implementing these conflict
+rules.
 
 ## 12. Lifetime listening statistics
 

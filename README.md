@@ -623,9 +623,13 @@ Long-press a single-book card or row on Home, Library, Search, or Series to use
 the same actions as Book Detail without navigating first. The menu offers one
 of **Mark Played** or **Mark Unplayed**, plus permitted Download and Edit
 actions; on iPhone and iPad it also reports whether on-device transcription is
-available. Actions load canonical detail through the existing online-first,
-cache-fallback path and re-check account access before continuing. Collapsed
-series remain navigation-only, and long-pressing never starts playback.
+available. Played-state changes dismiss the menu and run without a preparation
+sheet: Bleat loads canonical detail, re-checks account access, and changes local
+state only after the server confirms the mutation. Preparation and mutation
+failures use a dismissible alert, while successful server reconciliation runs
+separately. Download, Edit, and Transcribe retain their existing preparation
+presentation. Collapsed series remain navigation-only, and long-pressing never
+starts playback.
 
 Bleat opens native Audiobookshelf playback sessions and uses session-scoped
 direct-play or HLS URLs without putting access tokens in media URLs. The
@@ -809,7 +813,9 @@ the server acknowledges them, including after app or account restoration. When
 both the
 saved device position and server position changed after the download snapshot,
 Now Playing asks which position to keep before syncing. Book detail also
-supports explicit **Mark Finished** and **Mark Unfinished** actions.
+supports explicit **Mark Finished** and **Mark Unfinished** actions through the
+same account- and item-scoped non-modal mutation coordinator used by browsing
+menus.
 
 ## Use multiple accounts
 

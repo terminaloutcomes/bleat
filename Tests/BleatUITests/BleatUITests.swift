@@ -685,15 +685,33 @@ final class BleatUITests: XCTestCase {
         app.buttons["Mark Unplayed"].tap()
         XCTAssertTrue(
             app.buttons["Mark Unplayed"].waitForNonExistence(timeout: 3))
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "book.context.ui-book.loading"
+            ].exists
+        )
+        XCTAssertFalse(app.staticTexts["Preparing The Test Audiobook"].exists)
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
 
         tabButton("Library", in: app).tap()
-        assertContextMenu(
-            for: app.descendants(matching: .any)["library.book.ui-book"],
-            progressLabel: "Mark Played",
-            in: app
+        let libraryBook = app.descendants(matching: .any)[
+            "library.book.ui-book"
+        ]
+        XCTAssertTrue(libraryBook.waitForExistence(timeout: 3))
+        libraryBook.press(forDuration: 1)
+        let markPlayed = app.buttons["Mark Played"]
+        XCTAssertTrue(markPlayed.waitForExistence(timeout: 3))
+        markPlayed.tap()
+        XCTAssertTrue(markPlayed.waitForNonExistence(timeout: 3))
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "book.context.ui-book.loading"
+            ].exists
         )
+        XCTAssertFalse(app.staticTexts["Preparing The Test Audiobook"].exists)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
 
         tabButton("Search", in: app).tap()
         let searchField = app.searchFields.firstMatch

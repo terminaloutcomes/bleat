@@ -394,6 +394,32 @@ enum BookProgressUpdateState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+struct BookProgressFailureEntry: Equatable, Sendable {
+    let itemID: LibraryItemID
+    let failure: AppFailure
+}
+
+private struct BookProgressMutationKey: Hashable, Sendable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
+}
+
+private enum BookProgressMutationStage: Sendable {
+    case preparing
+    case submitted
+}
+
+private enum BookProgressMutationResult: Sendable {
+    case confirmed(LibraryBookDetail)
+    case failed(AppFailure)
+    case cancelled
+}
+
+private enum TimedBookProgressMutationResult: Sendable {
+    case operation(BookProgressMutationResult)
+    case deadline
+}
+
 enum BookActionPreparationResult: Equatable, Sendable {
     case loaded(LibraryBookDetail)
     case failed(AppFailure)
@@ -1207,6 +1233,24 @@ final class AppModel {
     private var pendingLocalSessionSyncAccounts: [AccountID: ServerAccount] =
         [:]
     @ObservationIgnored
+    private var pendingBookProgressMutations:
+        [BookProgressMutationKey: UUID] = [:]
+    @ObservationIgnored
+    private var bookProgressMutationStages:
+        [BookProgressMutationKey: BookProgressMutationStage] = [:]
+    @ObservationIgnored
+    private var bookProgressMutationRevisions:
+        [BookProgressMutationKey: UInt64] = [:]
+    @ObservationIgnored
+    private var bookProgressReconciliationTasks:
+        [BookProgressMutationKey: Task<Void, Never>] = [:]
+    @ObservationIgnored
+    private var bookProgressRevision: UInt64 = 0
+    @ObservationIgnored
+    private(set) var bookProgressActionGeneration: UInt64 = 0
+    private let bookProgressOperationTimeout: Duration
+    private let bookProgressSleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored
     private var downloadRecoveryTask: Task<Void, Never>?
     @ObservationIgnored
     private var pendingDownloadRecoveryAccounts: [AccountID: ServerAccount] =
@@ -1268,6 +1312,11 @@ final class AppModel {
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
+    private(set) var bookProgressFailures: [BookProgressFailureEntry] = []
+    private(set) var presentedBookProgressFailure: BookProgressFailureEntry?
+    var bookProgressFailure: AppFailure? {
+        presentedBookProgressFailure?.failure
+    }
     private(set) var bookFinishedStates: [LibraryItemID: Bool] = [:]
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
     private(set) var privateCloudState: PrivateCloudState = .idle
@@ -1342,7 +1391,11 @@ final class AppModel {
             any RemoteTelemetryConsentApplying =
             InactiveRemoteTelemetryConsentController(),
         remoteTelemetryTracer: any RemoteTelemetryTracing =
-            InactiveRemoteTelemetryTracer()
+            InactiveRemoteTelemetryTracer(),
+        bookProgressOperationTimeout: Duration = .seconds(30),
+        bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -1353,6 +1406,8 @@ final class AppModel {
         self.remoteTelemetryConsentController =
             remoteTelemetryConsentController
         self.remoteTelemetryTracer = remoteTelemetryTracer
+        self.bookProgressOperationTimeout = bookProgressOperationTimeout
+        self.bookProgressSleep = bookProgressSleep
         remoteTelemetryEnabled = consentStore.isEnabled
         let launchStage =
             initialLaunchStage
@@ -2296,7 +2351,8 @@ final class AppModel {
         )
 
         await reloadBooks(preservingLoadedContent: true)
-        guard self.account?.id == account.id,
+        guard !Task.isCancelled,
+            self.account?.id == account.id,
             selectedLibrary?.id == library.id,
             operationGeneration == homeShelvesGeneration
         else {
@@ -2310,7 +2366,8 @@ final class AppModel {
                 for: account,
                 libraryID: library.id
             )
-            guard self.account?.id == account.id,
+            guard !Task.isCancelled,
+                self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
                 operationGeneration == homeShelvesGeneration
             else {
@@ -2331,7 +2388,8 @@ final class AppModel {
                 )
             )
         } catch let error {
-            guard self.account?.id == account.id,
+            guard !Task.isCancelled,
+                self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
                 operationGeneration == homeShelvesGeneration
             else {
@@ -2483,7 +2541,8 @@ final class AppModel {
                     )
                 }
             }
-            guard operationGeneration == libraryPageGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
                 libraryBrowseFilter == filter
@@ -2505,7 +2564,8 @@ final class AppModel {
                 )
             )
         } catch let error {
-            guard operationGeneration == libraryPageGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
                 selectedLibrary?.id == library.id
             else {
@@ -2796,6 +2856,13 @@ final class AppModel {
     }
 
     func search(query: String) async {
+        await search(query: query, preservingLoadedContent: false)
+    }
+
+    private func search(
+        query: String,
+        preservingLoadedContent: Bool
+    ) async {
         searchGeneration &+= 1
         let operationGeneration = searchGeneration
         searchQuery = query
@@ -2813,7 +2880,9 @@ final class AppModel {
             )
             return
         }
-        searchResults = .loading
+        if !preservingLoadedContent {
+            searchResults = .loading
+        }
         await diagnostics.record(
             .started(.search, category: .api)
         )
@@ -2824,7 +2893,9 @@ final class AppModel {
                 libraryID: selectedLibrary.id,
                 query: normalizedQuery
             )
-            guard searchGeneration == operationGeneration else {
+            guard !Task.isCancelled,
+                searchGeneration == operationGeneration
+            else {
                 return
             }
             searchResults = .loaded(results)
@@ -2843,6 +2914,16 @@ final class AppModel {
                 return
             }
             let failure = AppFailure(operation: .search, serviceError: error)
+            if preservingLoadedContent {
+                await diagnostics.record(
+                    .failed(
+                        .search,
+                        category: .api,
+                        failureCode: failure.diagnosticFailureCode
+                    )
+                )
+                return
+            }
             searchResults = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -3128,22 +3209,287 @@ final class AppModel {
         detail: LibraryBookDetail
     ) async {
         guard let account else {
-            bookProgressUpdateState = .failed(
-                AppFailure(.updateProgress, .authenticationRequired)
+            publishBookProgressFailure(
+                AppFailure(.updateProgress, .authenticationRequired),
+                itemID: detail.id
             )
             return
         }
-        guard bookProgressUpdateState != .saving else {
+        await setFinished(
+            isFinished,
+            book: detail.summary,
+            expectedAccount: account,
+            expectedContextGeneration: bookProgressActionGeneration
+        )
+    }
+
+    func setFinished(
+        _ isFinished: Bool,
+        book: LibraryBookSummary,
+        expectedAccount: ServerAccount
+    ) async {
+        await setFinished(
+            isFinished,
+            book: book,
+            expectedAccount: expectedAccount,
+            expectedContextGeneration: bookProgressActionGeneration
+        )
+    }
+
+    func setFinished(
+        _ isFinished: Bool,
+        book: LibraryBookSummary,
+        expectedAccount: ServerAccount,
+        expectedContextGeneration: UInt64
+    ) async {
+        guard account?.id == expectedAccount.id,
+            bookProgressActionGeneration == expectedContextGeneration
+        else { return }
+        let key = BookProgressMutationKey(
+            accountID: expectedAccount.id,
+            itemID: book.id
+        )
+        guard pendingBookProgressMutations[key] == nil else {
             return
         }
+
+        let token = UUID()
+        bookProgressRevision &+= 1
+        let revision = bookProgressRevision
+        invalidateBookProgressReconciliation(for: key)
+        pendingBookProgressMutations[key] = token
+        bookProgressMutationStages[key] = .preparing
+        bookProgressMutationRevisions[key] = revision
         bookProgressUpdateState = .saving
+
+        let timedResult = await timedBookProgressMutation(
+            isFinished: isFinished,
+            book: book,
+            account: expectedAccount,
+            key: key,
+            token: token,
+            contextGeneration: expectedContextGeneration,
+            revision: revision
+        )
+        guard pendingBookProgressMutations[key] == token else {
+            return
+        }
+        let stage = bookProgressMutationStages.removeValue(forKey: key)
+        pendingBookProgressMutations.removeValue(forKey: key)
+
+        guard account?.id == expectedAccount.id,
+            bookProgressActionGeneration == expectedContextGeneration,
+            bookProgressMutationRevisions[key] == revision
+        else {
+            return
+        }
+        switch timedResult {
+        case .deadline:
+            let cause: AppFailureCause =
+                stage == .submitted ? .uncertainMutation : .timeout
+            publishBookProgressFailure(
+                AppFailure(.updateProgress, cause),
+                itemID: book.id
+            )
+        case .operation(.failed(let failure)):
+            publishBookProgressFailure(failure, itemID: book.id)
+        case .operation(.cancelled):
+            break
+        case .operation(.confirmed(let preparedDetail)):
+            let confirmedProgress = commitFinishedState(
+                isFinished,
+                detail: preparedDetail,
+                account: expectedAccount
+            )
+            bookProgressUpdateState = .saved
+            scheduleBookProgressReconciliation(
+                for: expectedAccount,
+                detail: preparedDetail,
+                key: key,
+                contextGeneration: expectedContextGeneration,
+                revision: revision,
+                confirmedProgress: confirmedProgress
+            )
+        }
+    }
+
+    func isBookProgressMutationPending(_ itemID: LibraryItemID) -> Bool {
+        guard let account else { return false }
+        return pendingBookProgressMutations[
+            BookProgressMutationKey(accountID: account.id, itemID: itemID)
+        ] != nil
+    }
+
+    func dismissBookProgressFailure() {
+        guard presentedBookProgressFailure != nil else { return }
+        presentedBookProgressFailure = nil
+        guard !bookProgressFailures.isEmpty else { return }
+        bookProgressFailures.removeFirst()
+        if let next = bookProgressFailures.first {
+            bookProgressUpdateState = .failed(next.failure)
+        } else if case .failed = bookProgressUpdateState {
+            bookProgressUpdateState = .idle
+        }
+        guard !bookProgressFailures.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard
+                let self,
+                self.presentedBookProgressFailure == nil,
+                let next = self.bookProgressFailures.first
+            else {
+                return
+            }
+            self.presentedBookProgressFailure = next
+        }
+    }
+
+    private func timedBookProgressMutation(
+        isFinished: Bool,
+        book: LibraryBookSummary,
+        account: ServerAccount,
+        key: BookProgressMutationKey,
+        token: UUID,
+        contextGeneration: UInt64,
+        revision: UInt64
+    ) async -> TimedBookProgressMutationResult {
+        let (stream, continuation) =
+            AsyncStream<TimedBookProgressMutationResult>.makeStream(
+                bufferingPolicy: .bufferingNewest(1)
+            )
+        let operationTask = Task { @MainActor [weak self] in
+            guard let self else {
+                continuation.yield(.operation(.cancelled))
+                continuation.finish()
+                return
+            }
+            let result = await performBookProgressMutation(
+                isFinished: isFinished,
+                book: book,
+                account: account,
+                key: key,
+                token: token,
+                contextGeneration: contextGeneration,
+                revision: revision
+            )
+            continuation.yield(.operation(result))
+            continuation.finish()
+        }
+        let sleep = bookProgressSleep
+        let timeout = bookProgressOperationTimeout
+        let deadlineTask = Task {
+            do {
+                try await sleep(timeout)
+                guard !Task.isCancelled else { return }
+                continuation.yield(.deadline)
+                continuation.finish()
+            } catch {
+                // Cancellation means the operation won the race.
+            }
+        }
+        var iterator = stream.makeAsyncIterator()
+        let result = await iterator.next() ?? .deadline
+        operationTask.cancel()
+        deadlineTask.cancel()
+        return result
+    }
+
+    private func performBookProgressMutation(
+        isFinished: Bool,
+        book: LibraryBookSummary,
+        account: ServerAccount,
+        key: BookProgressMutationKey,
+        token: UUID,
+        contextGeneration: UInt64,
+        revision: UInt64
+    ) async -> BookProgressMutationResult {
+        let detail: LibraryBookDetail
+        do {
+            detail = try await fetchBookDetail(book, account: account)
+        } catch let error {
+            return .failed(
+                AppFailure(operation: .updateProgress, serviceError: error)
+            )
+        }
+        guard !Task.isCancelled,
+            pendingBookProgressMutations[key] == token,
+            bookProgressMutationRevisions[key] == revision,
+            bookProgressActionGeneration == contextGeneration,
+            self.account?.id == account.id
+        else {
+            return .cancelled
+        }
+        let availability = BookActionAvailability(
+            user: account.user,
+            detail: detail
+        )
+        guard availability.access == .allowed else {
+            return .failed(
+                AppFailure(
+                    .updateProgress,
+                    Self.failureCause(for: availability.access)
+                )
+            )
+        }
+
+        bookProgressMutationStages[key] = .submitted
         do {
             try await service.updateBookProgress(
                 for: account,
                 itemID: detail.id,
                 update: BookProgressUpdate(isFinished: isFinished)
             )
-            if isFinished {
+        } catch let error {
+            let failure =
+                Self.isUncertainProgressMutation(error)
+                ? AppFailure(.updateProgress, .uncertainMutation)
+                : AppFailure(operation: .updateProgress, serviceError: error)
+            return .failed(failure)
+        }
+        guard !Task.isCancelled,
+            pendingBookProgressMutations[key] == token,
+            bookProgressMutationRevisions[key] == revision,
+            bookProgressActionGeneration == contextGeneration,
+            self.account?.id == account.id
+        else {
+            return .cancelled
+        }
+        return .confirmed(detail)
+    }
+
+    private func commitFinishedState(
+        _ isFinished: Bool,
+        detail: LibraryBookDetail,
+        account: ServerAccount
+    ) -> LibraryBookProgress? {
+        guard self.account?.id == account.id else { return nil }
+        let nowMilliseconds = Int64(Date().timeIntervalSince1970 * 1_000)
+        let previous = detail.progress
+        let progress = LibraryBookProgress(
+            id: previous?.id ?? "local-\(detail.id.rawValue)",
+            userID: account.user.id,
+            libraryItemID: detail.id,
+            bookID: detail.bookID,
+            duration: previous?.duration ?? detail.duration,
+            progress: isFinished ? 1 : (previous?.progress ?? 0),
+            currentTime: isFinished
+                ? detail.duration : (previous?.currentTime ?? 0),
+            isFinished: isFinished,
+            hideFromContinueListening:
+                previous?.hideFromContinueListening ?? false,
+            lastUpdateMilliseconds: nowMilliseconds,
+            startedAtMilliseconds:
+                previous?.startedAtMilliseconds ?? nowMilliseconds,
+            finishedAtMilliseconds: isFinished ? nowMilliseconds : nil
+        )
+        let updatedDetail = detail.replacingProgress(with: progress)
+        bookFinishedStates[detail.id] = isFinished
+        if selectedBookID == detail.id {
+            bookDetail = .loaded(updatedDetail)
+        }
+        if isFinished {
+            removeFromContinueListening(detail.id)
+            Task { [service] in
                 try? await service.recordCompletion(
                     CompletionMilestone(
                         accountID: account.id,
@@ -3158,27 +3504,220 @@ final class AppModel {
                     )
                 )
             }
-            let updated = try await service.bookDetail(
-                for: account,
-                libraryID: detail.libraryID,
-                itemID: detail.id
-            )
-            guard self.account?.id == account.id else {
-                return
+        }
+        return progress
+    }
+
+    private func removeFromContinueListening(_ itemID: LibraryItemID) {
+        guard case .loaded(let shelves) = homeShelves else { return }
+        homeShelves = .loaded(
+            shelves.map { shelf in
+                guard shelf.id == "continue-listening" else { return shelf }
+                let remaining = shelf.items.filter { $0.id != itemID }
+                guard remaining.count != shelf.items.count else { return shelf }
+                return LibraryBookShelf(
+                    id: shelf.id,
+                    label: shelf.label,
+                    labelLocalizationKey: shelf.labelLocalizationKey,
+                    items: remaining,
+                    total: max(remaining.count, shelf.total - 1)
+                )
             }
-            bookFinishedStates[updated.id] =
-                updated.progress?.isFinished ?? isFinished
-            if selectedBookID == updated.id {
-                bookDetail = .loaded(updated)
+        )
+    }
+
+    private func scheduleBookProgressReconciliation(
+        for account: ServerAccount,
+        detail: LibraryBookDetail,
+        key: BookProgressMutationKey,
+        contextGeneration: UInt64,
+        revision: UInt64,
+        confirmedProgress: LibraryBookProgress?
+    ) {
+        let query = searchQuery
+        let task = Task { @MainActor [weak self] in
+            guard let self,
+                isCurrentBookProgressMutation(
+                    key: key,
+                    contextGeneration: contextGeneration,
+                    revision: revision
+                )
+            else { return }
+            defer {
+                finishBookProgressReconciliation(
+                    key: key,
+                    revision: revision
+                )
             }
-            bookProgressUpdateState = .saved
-        } catch let error {
-            guard self.account?.id == account.id else {
-                return
+            if selectedBookID == detail.id {
+                do {
+                    let reconciled = try await service.refreshedBookDetail(
+                        for: account,
+                        libraryID: detail.libraryID,
+                        itemID: detail.id
+                    )
+                    guard isCurrentBookProgressMutation(
+                        key: key,
+                        contextGeneration: contextGeneration,
+                        revision: revision
+                    ), selectedBookID == detail.id else { return }
+                    let merged = Self.reconciledBookDetail(
+                        reconciled,
+                        preserving: confirmedProgress,
+                        newerThan: detail.progress?.lastUpdateMilliseconds
+                    )
+                    bookDetail = .loaded(merged)
+                    bookFinishedStates[detail.id] =
+                        merged.progress?.isFinished
+                        ?? bookFinishedStates[detail.id]
+                        ?? false
+                } catch let error {
+                    guard isCurrentBookProgressMutation(
+                        key: key,
+                        contextGeneration: contextGeneration,
+                        revision: revision
+                    ), selectedBookID == detail.id else { return }
+                    let failure =
+                        if let serviceError = error as? AppServiceError {
+                            AppFailure(
+                                operation: .loadBook,
+                                serviceError: serviceError
+                            )
+                        } else {
+                            AppFailure(.loadBook, .invalidServerResponse)
+                        }
+                    await diagnostics.record(
+                        .failed(
+                            .loadBook,
+                            category: .api,
+                            failureCode: failure.diagnosticFailureCode
+                        )
+                    )
+                }
             }
-            bookProgressUpdateState = .failed(
-                AppFailure(operation: .updateProgress, serviceError: error)
-            )
+            guard isCurrentBookProgressMutation(
+                key: key,
+                contextGeneration: contextGeneration,
+                revision: revision
+            ) else { return }
+            await refreshSelectedLibraryContent()
+            guard isCurrentBookProgressMutation(
+                key: key,
+                contextGeneration: contextGeneration,
+                revision: revision
+            ),
+                searchQuery == query,
+                !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            await search(query: query, preservingLoadedContent: true)
+        }
+        bookProgressReconciliationTasks[key] = task
+    }
+
+    static func reconciledBookDetail(
+        _ refreshed: LibraryBookDetail,
+        preserving confirmedProgress: LibraryBookProgress?,
+        newerThan canonicalLastUpdateMilliseconds: Int64?
+    ) -> LibraryBookDetail {
+        guard let confirmedProgress else { return refreshed }
+        guard let refreshedProgress = refreshed.progress else {
+            return refreshed.replacingProgress(with: confirmedProgress)
+        }
+        guard let canonicalLastUpdateMilliseconds else {
+            return refreshed
+        }
+        guard
+            refreshedProgress.lastUpdateMilliseconds
+                > canonicalLastUpdateMilliseconds
+        else {
+            return refreshed.replacingProgress(with: confirmedProgress)
+        }
+        return refreshed
+    }
+
+    private func invalidateBookProgressReconciliation(
+        for key: BookProgressMutationKey
+    ) {
+        guard let task = bookProgressReconciliationTasks.removeValue(
+            forKey: key
+        ) else { return }
+        task.cancel()
+    }
+
+    private func finishBookProgressReconciliation(
+        key: BookProgressMutationKey,
+        revision: UInt64
+    ) {
+        guard bookProgressMutationRevisions[key] == revision else { return }
+        bookProgressReconciliationTasks[key] = nil
+    }
+
+    private func isCurrentBookProgressMutation(
+        key: BookProgressMutationKey,
+        contextGeneration: UInt64,
+        revision: UInt64
+    ) -> Bool {
+        !Task.isCancelled
+            && account?.id == key.accountID
+            && bookProgressActionGeneration == contextGeneration
+            && bookProgressMutationRevisions[key] == revision
+    }
+
+    private func publishBookProgressFailure(
+        _ failure: AppFailure,
+        itemID: LibraryItemID
+    ) {
+        let entry = BookProgressFailureEntry(itemID: itemID, failure: failure)
+        bookProgressFailures.append(entry)
+        if presentedBookProgressFailure == nil,
+            bookProgressFailures.count == 1
+        {
+            presentedBookProgressFailure = entry
+        }
+        bookProgressUpdateState = .failed(failure)
+    }
+
+    private static func failureCause(
+        for access: LibraryItemAccessDecision
+    ) -> AppFailureCause {
+        switch access {
+        case .allowed: .permissionDenied
+        case .inaccessibleLibrary: .inaccessibleLibrary
+        case .inaccessibleTags: .inaccessibleTags
+        case .explicitContentDenied: .explicitContentDenied
+        }
+    }
+
+    private static func isUncertainProgressMutation(
+        _ error: AppServiceError
+    ) -> Bool {
+        guard case .progress(let progressError) = error else { return false }
+        switch progressError {
+        case .requestFailed:
+            return true
+        case .authenticationFailed(let authenticationError):
+            switch authenticationError {
+            case .requestCancelled, .requestTransportFailed,
+                .refreshTransportFailed, .refreshCancelled,
+                .automaticReauthenticationTransportFailed:
+                return true
+            case .invalidAccountID, .accountOperationInProgress,
+                .authenticationEndpoint, .requestDoesNotMatchRoute,
+                .credentialsReadFailed, .missingCredentials,
+                .authorizationFailed, .refreshRequestConstructionFailed,
+                .refreshRejected, .unexpectedRefreshStatus,
+                .malformedRefreshResponse, .missingAccessToken,
+                .missingRefreshToken, .credentialPersistenceFailed,
+                .savedLoginCredentialsReadFailed,
+                .automaticReauthenticationFailed,
+                .retriedRequestUnauthorized:
+                return false
+            }
+        case .invalidItemID, .emptyUpdate, .invalidDuration,
+            .invalidCurrentTime, .invalidProgress,
+            .requestConstructionFailed, .requestEncodingFailed,
+            .unexpectedStatus, .malformedResponse:
+            return false
         }
     }
 
@@ -4502,6 +5041,17 @@ final class AppModel {
     }
 
     private func resetBrowsingResourcesForAccountChange() {
+        bookProgressActionGeneration &+= 1
+        for task in bookProgressReconciliationTasks.values {
+            task.cancel()
+        }
+        bookProgressReconciliationTasks = [:]
+        pendingBookProgressMutations = [:]
+        bookProgressMutationStages = [:]
+        bookProgressMutationRevisions = [:]
+        bookProgressFailures = []
+        presentedBookProgressFailure = nil
+        bookProgressUpdateState = .idle
         librariesGeneration &+= 1
         libraryPageGeneration &+= 1
         homeShelvesGeneration &+= 1
@@ -4523,6 +5073,10 @@ final class AppModel {
 
     func isBookFinished(_ itemID: LibraryItemID) -> Bool {
         bookFinishedStates[itemID] ?? false
+    }
+
+    func isBookFinished(_ itemID: LibraryItemID, fallback: Bool) -> Bool {
+        bookFinishedStates[itemID] ?? fallback
     }
 
     private func refreshBookProgress(for account: ServerAccount) async {
