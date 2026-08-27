@@ -7,6 +7,15 @@ services:
       - "${BLEAT_HTTPS_ROOT_PORT:-13478}:8443"
       - "${BLEAT_HTTPS_PREFIX_PORT:-13479}:8444"
       - "${BLEAT_OIDC_HTTPS_PORT:-13480}:8445"
+      - "${BLEAT_TELEMETRY_AUTH_HTTPS_PORT:-13481}:8446"
+      - "${BLEAT_TELEMETRY_OTLP_HTTPS_PORT:-13482}:8447"
+      - "${BLEAT_SECRET_BROKER_HTTPS_PORT:-13483}:8448"
+    environment:
+      BLEAT_API_TEST_PORT: ${BLEAT_API_TEST_PORT:-18080}
+      BLEAT_TELEMETRY_COLLECTOR_TEST_PORT: ${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT:-14318}
+      BLEAT_SECRET_BROKER_TEST_PORT: ${BLEAT_SECRET_BROKER_TEST_PORT:-18081}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

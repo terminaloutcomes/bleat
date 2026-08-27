@@ -4,13 +4,30 @@
 }
 
 https://localhost:8443 {
+	log
 	reverse_proxy audiobookshelf-root:80
 }
 
 https://localhost:8444 {
+	log
 	reverse_proxy audiobookshelf-prefix:80
 }
 
 https://localhost:8445, https://caddy:8445 {
 	reverse_proxy keycloak:8080
+}
+
+https://localhost:8446 {
+	log
+	reverse_proxy host.docker.internal:{$BLEAT_API_TEST_PORT:18080}
+}
+
+https://localhost:8447 {
+	log
+	reverse_proxy host.docker.internal:{$BLEAT_TELEMETRY_COLLECTOR_TEST_PORT:14318}
+}
+
+https://localhost:8448 {
+	log
+	reverse_proxy host.docker.internal:{$BLEAT_SECRET_BROKER_TEST_PORT:18081}
 }

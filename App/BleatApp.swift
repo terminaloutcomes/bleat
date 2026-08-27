@@ -37,6 +37,10 @@ final class AppBootstrap {
 
     init() {
         let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
+        #if BLEAT_RELEASE_SECRET_SCAN
+            RemoteTelemetryConsentStore
+                .applyReleaseSecretScanLaunchOverride()
+        #endif
         if let event = LegacyDiagnosticLogCleanup.removeLegacyDirectory()
             .failureDiagnosticEvent {
             Task {

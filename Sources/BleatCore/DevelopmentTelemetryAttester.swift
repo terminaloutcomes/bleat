@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || BLEAT_RELEASE_SECRET_SCAN
     import CryptoKit
     import Foundation
 
