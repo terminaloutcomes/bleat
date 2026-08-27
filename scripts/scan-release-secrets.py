@@ -25,7 +25,6 @@ def representations(value: str) -> dict[str, bytes]:
     encoded = {
         "raw-utf8": raw,
         "authorization-bearer": f"Bearer {value}".encode("utf-8"),
-        "url-percent": quote(value, safe="").encode("ascii"),
         "json-escaped": json_unicode.encode("utf-8"),
         "json-escaped-slashes": json_unicode.replace("/", "\\/").encode(
             "utf-8"
@@ -47,6 +46,32 @@ def representations(value: str) -> dict[str, bytes]:
         "utf16-be-bom": b"\xfe\xff" + value.encode("utf-16-be"),
     }
     return {name: pattern for name, pattern in encoded.items() if pattern}
+
+
+def percent_encoded_pattern(value: str) -> re.Pattern[bytes] | None:
+    encoded = quote(value, safe="")
+    if encoded == value:
+        return None
+    parts: list[bytes] = []
+    index = 0
+    while index < len(encoded):
+        if encoded[index] == "%" and index + 2 < len(encoded):
+            parts.append(b"%")
+            for character in encoded[index + 1:index + 3]:
+                if character.isalpha():
+                    parts.append(
+                        b"["
+                        + character.lower().encode("ascii")
+                        + character.upper().encode("ascii")
+                        + b"]"
+                    )
+                else:
+                    parts.append(character.encode("ascii"))
+            index += 3
+            continue
+        parts.append(re.escape(encoded[index].encode("ascii")))
+        index += 1
+    return re.compile(b"".join(parts))
 
 
 def load_secrets(manifests: list[Path]) -> dict[str, str]:
@@ -87,6 +112,13 @@ def scan_bytes(
 ) -> list[tuple[str, str, int]]:
     findings: list[tuple[str, str, int]] = []
     for label, value in secrets.items():
+        percent_pattern = percent_encoded_pattern(value)
+        if percent_pattern is not None:
+            count = len(percent_pattern.findall(data))
+            if count:
+                findings.append(
+                    (label, "url-percent-case-insensitive", count)
+                )
         seen: set[bytes] = set()
         for representation, pattern in representations(value).items():
             if pattern in seen:
@@ -103,6 +135,16 @@ def redact_bytes(
 ) -> tuple[bytes, list[tuple[str, str, int]]]:
     redactions: list[tuple[str, str, int]] = []
     for label, value in secrets.items():
+        percent_pattern = percent_encoded_pattern(value)
+        if percent_pattern is not None:
+            replacement = (
+                f"[REDACTED:{label}:url-percent-case-insensitive]".encode()
+            )
+            data, count = percent_pattern.subn(replacement, data)
+            if count:
+                redactions.append(
+                    (label, "url-percent-case-insensitive", count)
+                )
         patterns = sorted(
             representations(value).items(),
             key=lambda item: len(item[1]),

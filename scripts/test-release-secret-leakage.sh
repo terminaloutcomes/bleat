@@ -24,6 +24,8 @@ readonly bleat_device_type="${BLEAT_LIVE_DEVICE_TYPE:-com.apple.CoreSimulator.Si
 readonly bleat_bundle_id="${BUNDLE_ID_PREFIX:-com.terminaloutcomes}.Bleat"
 readonly bleat_port_base="$((31000 + RANDOM % 15000))"
 readonly bleat_test_password="$(uuidgen | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr '[:upper:]' '[:lower:]')!+/%"
+readonly bleat_production_telemetry_auth_base_url="${BLEAT_TELEMETRY_AUTH_BASE_URL:?}"
+readonly bleat_production_telemetry_otlp_endpoint="${BLEAT_TELEMETRY_OTLP_ENDPOINT:?}"
 
 export BLEAT_ABS_ROOT_PORT="${bleat_port_base}"
 export BLEAT_ABS_PREFIX_PORT="$((bleat_port_base + 1))"
@@ -134,9 +136,9 @@ bleat_verify_result() {
                         name: .name,
                         result: .result,
                         duration: (.duration // null),
-                        failures: [.. | objects
+                        failureCount: ([.. | objects
                             | select(.nodeType? == "Failure Message")
-                            | .name]
+                            ] | length)
                     }
                 ] as $tests
                 | ($tests | length) == 1
@@ -151,9 +153,9 @@ bleat_verify_result() {
                 name: .name,
                 result: .result,
                 duration: (.duration // null),
-                failures: [.. | objects
+                failureCount: ([.. | objects
                     | select(.nodeType? == "Failure Message")
-                    | .name]
+                    ] | length)
             }
         ]' >"${output}"
 }
@@ -185,9 +187,9 @@ bleat_run_test() {
                     name: .name,
                     result: .result,
                     duration: (.duration // null),
-                    failures: [.. | objects
+                    failureCount: ([.. | objects
                         | select(.nodeType? == "Failure Message")
-                        | .name]
+                        ] | length)
                 }
             ]' >"${bleat_result_root}/${label}.tests.json" || true
     fi
@@ -393,11 +395,8 @@ jq --slurp --exit-status '
 bleat_stage="unsigned Release archive"
 print "Creating and inspecting the normal unsigned Release archive"
 BLEAT_ARCHIVE_PATH="${bleat_archive_path}" \
-BUILD_WITHOUT_PAID_DEVELOPER=YES \
-BLEAT_APP_ATTEST_MODE=disabled \
-BLEAT_CLOUDKIT_MODE=disabled \
-BLEAT_TELEMETRY_AUTH_BASE_URL="https://localhost:${BLEAT_TELEMETRY_AUTH_HTTPS_PORT}" \
-BLEAT_TELEMETRY_OTLP_ENDPOINT="https://localhost:${BLEAT_TELEMETRY_OTLP_HTTPS_PORT}" \
+BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_production_telemetry_auth_base_url}" \
+BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_production_telemetry_otlp_endpoint}" \
     "${bleat_script_dir}/archive-beta.sh" \
     >"${bleat_process_root}/archive.log" 2>&1
 

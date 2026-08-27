@@ -30,8 +30,9 @@ The password reached the UI test through a one-shot private HTTPS broker instead
 of XCTest environment or launch arguments. The broker returned the value once,
 sent `Cache-Control: no-store`, logged no value, and stopped. Raw token manifests
 and server artifacts stayed in a mode-0700 temporary directory and were deleted
-after the scan. Only the server-artifact copy was sanitized before retention;
-production-relevant Bleat surfaces were scanned without pre-redaction.
+after the scan. The server-artifact copy was sanitized before evidence scanning;
+only its privacy-safe redaction metadata was retained. Production-relevant Bleat
+surfaces were scanned without pre-redaction.
 
 ## Scanned surfaces and encodings
 

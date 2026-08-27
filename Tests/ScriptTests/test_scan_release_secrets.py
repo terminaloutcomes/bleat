@@ -43,6 +43,21 @@ class ReleaseSecretScannerTests(unittest.TestCase):
             )
         )
 
+    def test_lowercase_and_mixed_case_percent_escaping_is_detected(self):
+        secret = "private/+羊-token-0123456789"
+        for case_name, encoded in {
+            "lowercase": b"private%2f%2b%e7%be%8a-token-0123456789",
+            "mixed-case": b"private%2f%2b%E7%Be%8a-token-0123456789",
+        }.items():
+            with self.subTest(case=case_name):
+                findings = SCANNER.scan_bytes(encoded, {"fixture": secret})
+                self.assertTrue(
+                    any(
+                        finding[1] == "url-percent-case-insensitive"
+                        for finding in findings
+                    )
+                )
+
     def test_safe_surface_has_zero_matches(self):
         findings = SCANNER.scan_bytes(
             b"typed failure code=network.transport stage=library status=failed",

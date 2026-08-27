@@ -48,13 +48,19 @@
                 AuthenticationTokens.self,
                 from: data
             )
-            XCTAssertNotEqual(
-                tokens.accessToken,
-                try XCTUnwrap(initial.value(for: "initial-access-token"))
+            let initialAccessToken = try XCTUnwrap(
+                initial.value(for: "initial-access-token")
             )
-            XCTAssertNotEqual(
-                tokens.refreshToken,
-                try XCTUnwrap(initial.value(for: "initial-refresh-token"))
+            let initialRefreshToken = try XCTUnwrap(
+                initial.value(for: "initial-refresh-token")
+            )
+            XCTAssertTrue(
+                tokens.accessToken != initialAccessToken,
+                "Access token did not rotate"
+            )
+            XCTAssertTrue(
+                tokens.refreshToken != initialRefreshToken,
+                "Refresh token did not rotate"
             )
             try writeManifest(
                 [
