@@ -89,8 +89,45 @@ extension TelemetryTokenAvailability {
         switch self {
         case .available:
             "Available"
-        case .missingOrExpired:
-            "Missing or expired"
+        case .acquiring:
+            "Acquiring"
+        case .missing:
+            "Missing"
+        case .expiring:
+            "Expiring"
+        case .expired:
+            "Expired"
+        case .disabled:
+            "Disabled"
+        case .failed(let failure):
+            "Failed — \(failure.diagnosticsLabel)"
+        }
+    }
+}
+
+private extension TelemetryTokenAvailabilityFailure {
+    var diagnosticsLabel: String {
+        switch self {
+        case .unsupportedPlatform:
+            "Unsupported platform"
+        case .authenticationConfigurationInvalid:
+            "Authentication configuration invalid"
+        case .exportConfigurationInvalid:
+            "Export configuration invalid"
+        case .attesterUnavailable:
+            "App Attest unavailable"
+        case .authenticationResponseInvalid:
+            "Authentication response invalid"
+        case .authenticationRejected:
+            "Authentication rejected"
+        case .rateLimited:
+            "Rate limited"
+        case .temporarilyUnavailable:
+            "Temporarily unavailable"
+        case .retryBackoff:
+            "Waiting to retry"
+        case .inactiveController:
+            "Telemetry controller inactive"
         }
     }
 }

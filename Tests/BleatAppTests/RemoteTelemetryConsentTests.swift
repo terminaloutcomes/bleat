@@ -290,8 +290,63 @@ final class RemoteTelemetryConsentTests: XCTestCase {
 
         XCTAssertEqual(
             model.remoteTelemetryTokenAvailability,
-            .missingOrExpired
+            .disabled
         )
+    }
+
+    func testTelemetryTokenAvailabilityLabelsRemainDistinct() {
+        let values: [(TelemetryTokenAvailability, String)] = [
+            (.available, "Available"),
+            (.acquiring, "Acquiring"),
+            (.missing, "Missing"),
+            (.expiring, "Expiring"),
+            (.expired, "Expired"),
+            (.disabled, "Disabled"),
+            (
+                .failed(.authenticationConfigurationInvalid),
+                "Failed — Authentication configuration invalid"
+            ),
+            (
+                .failed(.exportConfigurationInvalid),
+                "Failed — Export configuration invalid"
+            ),
+            (
+                .failed(.attesterUnavailable),
+                "Failed — App Attest unavailable"
+            ),
+            (
+                .failed(.authenticationResponseInvalid),
+                "Failed — Authentication response invalid"
+            ),
+            (
+                .failed(.authenticationRejected),
+                "Failed — Authentication rejected"
+            ),
+            (
+                .failed(.rateLimited),
+                "Failed — Rate limited"
+            ),
+            (
+                .failed(.temporarilyUnavailable),
+                "Failed — Temporarily unavailable"
+            ),
+            (
+                .failed(.retryBackoff),
+                "Failed — Waiting to retry"
+            ),
+            (
+                .failed(.inactiveController),
+                "Failed — Telemetry controller inactive"
+            ),
+            (
+                .failed(.unsupportedPlatform),
+                "Failed — Unsupported platform"
+            ),
+        ]
+
+        for (availability, label) in values {
+            XCTAssertEqual(availability.diagnosticsLabel, label)
+        }
     }
 
     func testAppModelMonitorsTokenAcquiredAfterDiagnosticsAppears() async {
@@ -312,7 +367,7 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         }
         XCTAssertEqual(
             model.remoteTelemetryTokenAvailability,
-            .missingOrExpired
+            .missing
         )
 
         controller.tokenAvailability = .available
@@ -349,7 +404,7 @@ final class RemoteTelemetryConsentTests: XCTestCase {
 
         XCTAssertEqual(
             model.remoteTelemetryTokenAvailability,
-            .missingOrExpired
+            .disabled
         )
     }
 
@@ -477,7 +532,7 @@ private final class RecordingRemoteTelemetryConsentController:
     private(set) var persistedValues: [Bool] = []
     private(set) var foregroundValues: [Bool] = []
     private(set) var storageGenerations: [UUID?] = []
-    var tokenAvailability: TelemetryTokenAvailability = .missingOrExpired
+    var tokenAvailability: TelemetryTokenAvailability = .missing
     private(set) var tokenAvailabilityRequests = 0
 
     init(defaultsSuiteName: String? = nil) {

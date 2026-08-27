@@ -1625,6 +1625,11 @@ live operational state, the Bonjour troubleshooter, and telemetry consent. It
 does not export a diagnostic snapshot, retain app-owned diagnostic history, or
 create a temporary diagnostic sharing file. Typed, redacted diagnostic events
 continue to emit through the applicable `OSLog` categories in every build.
+The current OpenTelemetry export-token row reads only memory state and must
+present disabled, acquiring, missing, expiring, expired, available, and typed
+failure causes separately. It must not combine distinct states into an
+ambiguous label or start enrollment or renewal merely because Diagnostics is
+visible.
 
 Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
 diagnose bounded technical application operations without collecting user,

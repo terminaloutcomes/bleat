@@ -33,13 +33,32 @@ public struct TelemetryBearerToken: Equatable, Sendable {
     }
 }
 
-/// The current in-memory availability of the exporter credential.
+public enum TelemetryTokenAvailabilityFailure: Equatable, Sendable {
+    case unsupportedPlatform
+    case authenticationConfigurationInvalid
+    case exportConfigurationInvalid
+    case attesterUnavailable
+    case authenticationResponseInvalid
+    case authenticationRejected
+    case rateLimited
+    case temporarilyUnavailable
+    case retryBackoff
+    case inactiveController
+}
+
+/// The current in-memory state of the exporter credential.
 ///
-/// This deliberately reports only whether `currentToken()` could use the
-/// cached token immediately. It never starts enrollment or token renewal.
+/// This never starts enrollment or token renewal. Missing, expiring, expired,
+/// disabled, and failed states remain distinct so diagnostics retain the
+/// actionable cause instead of collapsing them into one label.
 public enum TelemetryTokenAvailability: Equatable, Sendable {
     case available
-    case missingOrExpired
+    case acquiring
+    case missing
+    case expiring
+    case expired
+    case disabled
+    case failed(TelemetryTokenAvailabilityFailure)
 }
 
 public enum TelemetryAttesterError: Error, Equatable, Sendable {
@@ -105,7 +124,10 @@ public enum TelemetryTokenProviderError: Error, Equatable, Sendable {
     case unsupported
     case backingOff
     case cancelled
+    case invalidConfiguration
+    case invalidResponse
     case authenticationRejected
+    case rateLimited
     case temporarilyUnavailable
 }
 
@@ -160,6 +182,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private var refreshWaiters:
         [UUID: CheckedContinuation<RefreshResult, Never>] = [:]
     private var transientFailureCount = 0
+    private var transientFailure: TelemetryTokenProviderError?
     private var nextRetryAt: Date?
     private var terminalFailure: TelemetryTokenProviderError?
 
@@ -196,6 +219,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         }
         token = nil
         transientFailureCount = 0
+        transientFailure = nil
         nextRetryAt = nil
         terminalFailure = nil
     }
@@ -241,13 +265,47 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     /// tokens inside that window are renewed before export and therefore are
     /// not reported as currently available.
     public func cachedTokenAvailability() -> TelemetryTokenAvailability {
-        guard enabled,
-            attester.isSupported,
-            terminalFailure == nil,
-            let token,
-            token.expiresAt.timeIntervalSince(dateProvider()) > refreshWindow
-        else {
-            return .missingOrExpired
+        guard enabled else { return .disabled }
+        guard attester.isSupported else {
+            return .failed(.attesterUnavailable)
+        }
+        if let terminalFailure {
+            switch terminalFailure {
+            case .invalidConfiguration:
+                return .failed(.authenticationConfigurationInvalid)
+            case .invalidResponse:
+                return .failed(.authenticationResponseInvalid)
+            case .authenticationRejected:
+                return .failed(.authenticationRejected)
+            case .rateLimited:
+                return .failed(.rateLimited)
+            case .temporarilyUnavailable, .backingOff:
+                return .failed(.temporarilyUnavailable)
+            case .unsupported:
+                return .failed(.attesterUnavailable)
+            case .disabled, .cancelled:
+                return .disabled
+            }
+        }
+        if refreshTask != nil {
+            return .acquiring
+        }
+        if transientFailureCount > 0 {
+            if transientFailure == .rateLimited {
+                return .failed(.rateLimited)
+            }
+            if let nextRetryAt, nextRetryAt > dateProvider() {
+                return .failed(.retryBackoff)
+            }
+            return .failed(.temporarilyUnavailable)
+        }
+        guard let token else { return .missing }
+        let remaining = token.expiresAt.timeIntervalSince(dateProvider())
+        if remaining <= 0 {
+            return .expired
+        }
+        if remaining <= refreshWindow {
+            return .expiring
         }
         return .available
     }
@@ -256,6 +314,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         guard token?.value == rejectedToken else { return }
         token = nil
         transientFailureCount = 0
+        transientFailure = nil
         nextRetryAt = nil
     }
 
@@ -322,6 +381,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             case .success(let refreshed):
                 token = refreshed
                 transientFailureCount = 0
+                transientFailure = nil
                 nextRetryAt = nil
                 terminalFailure = nil
             case .failure(let failure):
@@ -336,12 +396,17 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     }
 
     private func recordFailure(_ failure: TelemetryTokenProviderError) {
-        if failure == .authenticationRejected {
+        if failure == .authenticationRejected
+            || failure == .invalidConfiguration
+            || failure == .invalidResponse
+        {
             terminalFailure = failure
             return
         }
-        guard failure == .temporarilyUnavailable else { return }
+        guard failure == .temporarilyUnavailable || failure == .rateLimited
+        else { return }
         transientFailureCount = min(transientFailureCount + 1, 6)
+        transientFailure = failure
         let base = min(pow(2, Double(transientFailureCount - 1)), 32)
         let jitter = min(max(jitterProvider(), 0.5), 1.5)
         nextRetryAt = dateProvider().addingTimeInterval(base * jitter)
@@ -572,8 +637,14 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             switch failure {
             case .cancelled, .disabled:
                 return .cancelled
+            case .invalidConfiguration:
+                return .failed(.unknown)
+            case .invalidResponse:
+                return .failed(.invalidResponse)
             case .authenticationRejected:
                 return .failed(.authentication)
+            case .rateLimited:
+                return .failed(.rateLimited)
             case .unsupported:
                 return .failed(.unsupported)
             case .backingOff, .temporarilyUnavailable:
@@ -609,10 +680,10 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             switch failure {
             case .cancelled: return .cancelled
             case .authenticationRejected: return .authenticationRejected
-            case .invalidConfiguration, .malformedResponse:
-                return .authenticationRejected
-            case .temporarilyUnavailable, .rateLimited:
-                return .temporarilyUnavailable
+            case .invalidConfiguration: return .invalidConfiguration
+            case .malformedResponse: return .invalidResponse
+            case .rateLimited: return .rateLimited
+            case .temporarilyUnavailable: return .temporarilyUnavailable
             }
         }
         return .temporarilyUnavailable

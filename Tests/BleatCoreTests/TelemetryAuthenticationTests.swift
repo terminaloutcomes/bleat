@@ -15,13 +15,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         )
 
         let disabledAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(disabledAvailability, .missingOrExpired)
+        XCTAssertEqual(disabledAvailability, .disabled)
         let disabledRequestCount = await transport.requestCount
         XCTAssertEqual(disabledRequestCount, 0)
 
         await provider.setEnabled(true)
         let missingAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(missingAvailability, .missingOrExpired)
+        XCTAssertEqual(missingAvailability, .missing)
         let missingRequestCount = await transport.requestCount
         XCTAssertEqual(missingRequestCount, 0)
 
@@ -33,9 +33,145 @@ final class TelemetryAuthenticationTests: XCTestCase {
 
         clock.advance(by: 481)
         let expiringAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(expiringAvailability, .missingOrExpired)
+        XCTAssertEqual(expiringAvailability, .expiring)
         let expiringRequestCount = await transport.requestCount
         XCTAssertEqual(expiringRequestCount, 4)
+
+        clock.advance(by: 120)
+        let expiredAvailability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(expiredAvailability, .expired)
+        let expiredRequestCount = await transport.requestCount
+        XCTAssertEqual(expiredRequestCount, 4)
+    }
+
+    func testCachedTokenAvailabilityPreservesFailureCause() async {
+        let unsupported = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(isSupported: false),
+            transport: FakeTelemetryTransport(),
+            store: MemoryEnrollmentStore()
+        )
+        await unsupported.setEnabled(true)
+        let unsupportedAvailability =
+            await unsupported.cachedTokenAvailability()
+        XCTAssertEqual(
+            unsupportedAvailability,
+            .failed(.attesterUnavailable)
+        )
+
+        let rejected = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: FakeTelemetryTransport(
+                enrollmentFailure: .authenticationRejected
+            ),
+            store: MemoryEnrollmentStore()
+        )
+        await rejected.setEnabled(true)
+        _ = try? await rejected.currentToken()
+        let rejectedAvailability = await rejected.cachedTokenAvailability()
+        XCTAssertEqual(
+            rejectedAvailability,
+            .failed(.authenticationRejected)
+        )
+
+        let invalidConfiguration = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: FakeTelemetryTransport(
+                enrollmentFailure: .invalidConfiguration
+            ),
+            store: MemoryEnrollmentStore()
+        )
+        await invalidConfiguration.setEnabled(true)
+        await XCTAssertThrowsTelemetryError(.invalidConfiguration) {
+            try await invalidConfiguration.currentToken()
+        }
+        let invalidConfigurationAvailability =
+            await invalidConfiguration.cachedTokenAvailability()
+        XCTAssertEqual(
+            invalidConfigurationAvailability,
+            .failed(.authenticationConfigurationInvalid)
+        )
+
+        let invalidResponse = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: FakeTelemetryTransport(
+                enrollmentFailure: .malformedResponse
+            ),
+            store: MemoryEnrollmentStore()
+        )
+        await invalidResponse.setEnabled(true)
+        await XCTAssertThrowsTelemetryError(.invalidResponse) {
+            try await invalidResponse.currentToken()
+        }
+        let invalidResponseAvailability =
+            await invalidResponse.cachedTokenAvailability()
+        XCTAssertEqual(
+            invalidResponseAvailability,
+            .failed(.authenticationResponseInvalid)
+        )
+
+        let rateLimited = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: FakeTelemetryTransport(
+                enrollmentFailure: .rateLimited
+            ),
+            store: MemoryEnrollmentStore()
+        )
+        await rateLimited.setEnabled(true)
+        await XCTAssertThrowsTelemetryError(.rateLimited) {
+            try await rateLimited.currentToken()
+        }
+        let rateLimitedAvailability =
+            await rateLimited.cachedTokenAvailability()
+        XCTAssertEqual(rateLimitedAvailability, .failed(.rateLimited))
+
+        let unavailableClock = TestClock(
+            Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        let unavailable = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: FakeTelemetryTransport(
+                clock: unavailableClock,
+                attestationChallengeFailures: 1
+            ),
+            store: MemoryEnrollmentStore(),
+            dateProvider: unavailableClock.now,
+            jitterProvider: { 1 }
+        )
+        await unavailable.setEnabled(true)
+        _ = try? await unavailable.currentToken()
+        let unavailableAvailability =
+            await unavailable.cachedTokenAvailability()
+        XCTAssertEqual(
+            unavailableAvailability,
+            .failed(.retryBackoff)
+        )
+        unavailableClock.advance(by: 1.1)
+        let retryableAvailability =
+            await unavailable.cachedTokenAvailability()
+        XCTAssertEqual(
+            retryableAvailability,
+            .failed(.temporarilyUnavailable)
+        )
+    }
+
+    func testCachedTokenAvailabilityReportsActiveAcquisition() async {
+        let transport = FakeTelemetryTransport(tokenDelay: .seconds(5))
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore()
+        )
+        await provider.setEnabled(true)
+        let acquisition = Task { try await provider.currentToken() }
+        while await transport.tokenCount == 0 {
+            await Task.yield()
+        }
+
+        let availability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(availability, .acquiring)
+
+        acquisition.cancel()
+        _ = try? await acquisition.value
     }
 
     func testConsentEnablementIsLazyAndFirstTokenEnrolls() async throws {
@@ -504,7 +640,8 @@ private final class AuthenticationTelemetryTracer: RemoteTelemetryTracing,
 private extension TelemetryTokenProviderError {
     static let allTestValues: [Self] = [
         .disabled, .unsupported, .backingOff, .cancelled,
-        .authenticationRejected, .temporarilyUnavailable,
+        .invalidConfiguration, .invalidResponse, .authenticationRejected,
+        .rateLimited, .temporarilyUnavailable,
     ]
 }
 

@@ -1353,7 +1353,7 @@ final class AppModel {
         CloudConfigurationConflict?
     private(set) var remoteTelemetryEnabled: Bool
     private(set) var remoteTelemetryTokenAvailability:
-        TelemetryTokenAvailability = .missingOrExpired
+        TelemetryTokenAvailability = .disabled
     @ObservationIgnored
     private var remoteTelemetryTokenAvailabilityGeneration: UInt64 = 0
     let playback: PlaybackModel
@@ -1495,7 +1495,7 @@ final class AppModel {
         remoteTelemetryEnabled = enabled
         remoteTelemetryTokenAvailabilityGeneration &+= 1
         if !enabled {
-            remoteTelemetryTokenAvailability = .missingOrExpired
+            remoteTelemetryTokenAvailability = .disabled
         }
         remoteTelemetryConsentController
             .applyRemoteTelemetryConsent(

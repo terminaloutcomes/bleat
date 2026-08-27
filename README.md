@@ -873,8 +873,12 @@ being checked, available, or temporarily unavailable.
 The Diagnostics **Privacy** section also records device-local, default-off
 consent for **Share diagnostic telemetry** and whether a current OpenTelemetry
 export token is available. The token status reads the exporter's in-memory
-state without requesting a refresh and never exposes credential material. The
-reviewed schema permits only
+state without requesting a refresh and never exposes credential material. It
+distinguishes disabled, acquiring, missing, expiring, expired, available,
+invalid authentication configuration, invalid authentication response, invalid
+export configuration, unavailable App Attest, authentication rejection, rate
+limiting, temporary unavailability, retry backoff, unsupported platform, and
+inactive-controller states. The reviewed schema permits only
 bounded technical operation, outcome, timing, app-version, and operating-system data;
 it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and hardware or advertising identifiers. A random
