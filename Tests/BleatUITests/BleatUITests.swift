@@ -685,6 +685,11 @@ final class BleatUITests: XCTestCase {
         app.buttons["Mark Unplayed"].tap()
         XCTAssertTrue(
             app.buttons["Mark Unplayed"].waitForNonExistence(timeout: 3))
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "book.context.ui-book.loading"
+            ].exists
+        )
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
 

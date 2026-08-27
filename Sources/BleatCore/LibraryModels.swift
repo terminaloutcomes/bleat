@@ -612,6 +612,39 @@ public struct LibraryBookDetail: Codable, Hashable, Sendable {
 }
 
 extension LibraryBookDetail {
+    public func replacingProgress(
+        with progress: LibraryBookProgress?
+    ) -> Self {
+        Self(
+            id: id,
+            libraryID: libraryID,
+            bookID: bookID,
+            title: title,
+            subtitle: subtitle,
+            authors: authors,
+            narrators: narrators,
+            series: series,
+            genres: genres,
+            tags: tags,
+            publishedYear: publishedYear,
+            publishedDate: publishedDate,
+            publisher: publisher,
+            descriptionPlain: descriptionPlain,
+            isbn: isbn,
+            asin: asin,
+            language: language,
+            duration: duration,
+            trackCount: trackCount,
+            audioFileCount: audioFileCount,
+            chapters: chapters,
+            addedAtMilliseconds: addedAtMilliseconds,
+            updatedAtMilliseconds: updatedAtMilliseconds,
+            isExplicit: isExplicit,
+            isAbridged: isAbridged,
+            progress: progress
+        )
+    }
+
     public var summary: LibraryBookSummary {
         LibraryBookSummary(
             id: id,

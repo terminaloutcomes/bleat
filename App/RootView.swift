@@ -1437,6 +1437,21 @@ private struct SignedInView: View {
                 Text(playbackFailure.message)
             }
         }
+        .alert(
+            model.bookProgressFailure?.title ?? "Progress update failed",
+            isPresented: Binding(
+                get: { model.bookProgressFailure != nil },
+                set: { if !$0 { model.dismissBookProgressFailure() } }
+            )
+        ) {
+            Button("OK") {
+                model.dismissBookProgressFailure()
+            }
+        } message: {
+            if let failure = model.bookProgressFailure {
+                Text(failure.message)
+            }
+        }
         .accessibilityIdentifier("app.signedIn")
         .environment(bookActionPresentation)
         .onChange(of: model.account?.id) {
@@ -1689,7 +1704,6 @@ extension AppRootTab {
 }
 
 private enum BookContextAction: Hashable {
-    case markPlayed(Bool)
     case download
     case edit
     case transcribe
@@ -1790,8 +1804,18 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 systemImage: model.isBookFinished(book.id)
                     ? "arrow.uturn.backward.circle" : "checkmark.circle"
             ) {
-                begin(.markPlayed(!model.isBookFinished(book.id)))
+                let isFinished = !model.isBookFinished(book.id)
+                let contextGeneration = model.bookProgressActionGeneration
+                Task {
+                    await model.setFinished(
+                        isFinished,
+                        book: book,
+                        expectedAccount: account,
+                        expectedContextGeneration: contextGeneration
+                    )
+                }
             }
+            .disabled(model.isBookProgressMutationPending(book.id))
             .accessibilityIdentifier(
                 "book.context.\(book.id.rawValue).progress"
             )
@@ -1903,7 +1927,7 @@ private struct BookActionPreparationView: View {
                     downloads: model.downloads
                 )
 
-            case .download, .markPlayed:
+            case .download:
                 EmptyView()
             }
         }
@@ -1932,14 +1956,6 @@ private struct BookActionPreparationView: View {
                 return
             }
             switch request.action {
-            case .markPlayed(let isFinished):
-                await model.setFinished(isFinished, detail: detail)
-                if case .failed(let failure) = model.bookProgressUpdateState {
-                    preparationFailure = failure
-                    isPreparing = false
-                } else {
-                    presentation.dismiss()
-                }
             case .download:
                 guard availability.visibleActions.contains(.download) else {
                     preparationFailure = AppFailure(
@@ -1992,7 +2008,6 @@ private struct BookActionPreparationView: View {
         for action: BookContextAction
     ) -> AppFailureOperation {
         switch action {
-        case .markPlayed: .updateProgress
         case .download: .download
         case .edit: .saveMetadata
         case .transcribe: .loadBook
@@ -3462,19 +3477,29 @@ private struct BookDetailView: View {
                                 .accessibilityIdentifier("book.detail.edit")
 
                                 Button(
-                                    detail.progress?.isFinished == true
+                                    isFinished(detail)
                                         ? "Mark Unfinished" : "Mark Finished"
                                 ) {
+                                    guard let account = model.account else {
+                                        return
+                                    }
+                                    let contextGeneration =
+                                        model.bookProgressActionGeneration
                                     Task {
                                         await model.setFinished(
-                                            detail.progress?.isFinished != true,
-                                            detail: detail
+                                            !isFinished(detail),
+                                            book: detail.summary,
+                                            expectedAccount: account,
+                                            expectedContextGeneration:
+                                                contextGeneration
                                         )
                                     }
                                 }
                                 .buttonStyle(.bordered)
                                 .disabled(
-                                    model.bookProgressUpdateState == .saving
+                                    model.isBookProgressMutationPending(
+                                        detail.id
+                                    )
                                 )
                                 .accessibilityIdentifier(
                                     "book.detail.finished"
@@ -3579,6 +3604,13 @@ private struct BookDetailView: View {
             }
             .accessibilityIdentifier("book.detail.chapter.cancel")
         }
+    }
+
+    private func isFinished(_ detail: LibraryBookDetail) -> Bool {
+        model.isBookFinished(
+            detail.id,
+            fallback: detail.progress?.isFinished ?? false
+        )
     }
 
     @ViewBuilder
@@ -3790,16 +3822,6 @@ private struct BookDetailView: View {
                     downloadAction(detail)
 
                 }
-                if case .failed(let failure) =
-                    model.bookProgressUpdateState
-                {
-                    Text(failure.message)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier(
-                            "book.detail.progressError"
-                        )
-                }
-
                 if let description = detail.descriptionPlain,
                     !description.isEmpty
                 {

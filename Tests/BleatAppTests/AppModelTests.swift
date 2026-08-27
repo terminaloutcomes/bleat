@@ -7733,7 +7733,7 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testSetFinishedUpdatesProgressAndRefetchesDetail() async throws {
+    func testSetFinishedCommitsProgressAfterCanonicalPreparation() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
         let item = fixturePage(libraryID: library.id).items[0]
@@ -7845,6 +7845,7 @@ final class AppModelTests: XCTestCase {
         let detail = fixtureBookDetail(item: item)
         let service = TestAppService(
             activeAccount: .success(account),
+            bookDetail: .success(detail),
             progressUpdate: .failure(.progress(.unexpectedStatus(503)))
         )
         let model = AppModel(service: service)
@@ -7857,7 +7858,590 @@ final class AppModelTests: XCTestCase {
             .failed(AppFailure(.updateProgress, .serverUnavailable))
         )
         let detailRequests = await service.bookDetailRequests()
-        XCTAssertTrue(detailRequests.isEmpty)
+        XCTAssertEqual(detailRequests.count, 1)
+        XCTAssertFalse(model.isBookFinished(detail.id))
+    }
+
+    func testSetFinishedLeavesLocalStateUnchangedUntilPatchConfirms()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let patchGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            progressUpdateGate: patchGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let mutation = Task {
+            await model.setFinished(true, detail: detail)
+        }
+        await patchGate.waitUntilEntered()
+
+        XCTAssertFalse(model.isBookFinished(detail.id))
+        XCTAssertTrue(model.isBookProgressMutationPending(detail.id))
+        await patchGate.release()
+        await mutation.value
+        XCTAssertTrue(model.isBookFinished(detail.id))
+    }
+
+    func testSetFinishedSuppressesRepeatedMutationForSameItem()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let patchGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            progressUpdateGate: patchGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let first = Task { await model.setFinished(true, detail: detail) }
+        await patchGate.waitUntilEntered()
+        await model.setFinished(false, detail: detail)
+
+        let repeatedRequests = await service.progressUpdateRequests()
+        XCTAssertEqual(repeatedRequests.count, 1)
+        await patchGate.release()
+        await first.value
+        XCTAssertTrue(model.isBookFinished(detail.id))
+    }
+
+    func testSetFinishedAllowsDifferentItemsToMutateConcurrently()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstItem = fixtureBook(
+            id: "item-1", title: "First", libraryID: library.id
+        )
+        let secondItem = fixtureBook(
+            id: "item-2", title: "Second", libraryID: library.id
+        )
+        let firstDetail = fixtureBookDetail(item: firstItem)
+        let secondDetail = fixtureBookDetail(item: secondItem)
+        let patchGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(firstDetail),
+            progressUpdateGate: patchGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        let first = Task {
+            await model.setFinished(
+                true, book: firstItem, expectedAccount: account
+            )
+        }
+        await patchGate.waitUntilEntered()
+        await service.setBookDetail(.success(secondDetail))
+        let second = Task {
+            await model.setFinished(
+                true, book: secondItem, expectedAccount: account
+            )
+        }
+        let secondBecamePending = await waitUntil(timeout: .seconds(1)) {
+            model.isBookProgressMutationPending(secondItem.id)
+        }
+        XCTAssertTrue(secondBecamePending)
+        let concurrentRequests = await service.progressUpdateRequests()
+        XCTAssertEqual(concurrentRequests.count, 2)
+
+        await patchGate.release()
+        await first.value
+        await second.value
+        XCTAssertTrue(model.isBookFinished(firstItem.id))
+        XCTAssertTrue(model.isBookFinished(secondItem.id))
+    }
+
+    func testSetFinishedFailureKindsPreserveTypedMutationOutcome()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            progressUpdate: .failure(.progress(.unexpectedStatus(403)))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setFinished(true, detail: detail)
+        XCTAssertEqual(
+            model.bookProgressFailure,
+            AppFailure(.updateProgress, .permissionDenied)
+        )
+        XCTAssertFalse(model.isBookFinished(detail.id))
+
+        await service.setProgressUpdate(
+            .failure(.progress(.requestFailed))
+        )
+        await model.setFinished(true, detail: detail)
+        XCTAssertEqual(
+            model.bookProgressFailure,
+            AppFailure(.updateProgress, .uncertainMutation)
+        )
+        XCTAssertFalse(model.isBookFinished(detail.id))
+    }
+
+    func testSetFinishedDeadlineDistinguishesPreparationFromSubmittedPatch()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+
+        let preparationGate = AsyncGate()
+        let preparationDeadline = AsyncGate()
+        let preparationService = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            bookDetailGate: preparationGate
+        )
+        let preparationModel = AppModel(
+            service: preparationService,
+            bookProgressOperationTimeout: .seconds(30),
+            bookProgressSleep: { _ in
+                await preparationDeadline.enterAndWait()
+            }
+        )
+        await preparationModel.start()
+        let preparing = Task {
+            await preparationModel.setFinished(true, detail: detail)
+        }
+        await preparationGate.waitUntilEntered()
+        await preparationDeadline.release()
+        await preparing.value
+        XCTAssertEqual(
+            preparationModel.bookProgressFailure,
+            AppFailure(.updateProgress, .timeout)
+        )
+        await preparationGate.release()
+
+        let patchGate = AsyncGate()
+        let patchDeadline = AsyncGate()
+        let patchService = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            progressUpdateGate: patchGate
+        )
+        let patchModel = AppModel(
+            service: patchService,
+            bookProgressOperationTimeout: .seconds(30),
+            bookProgressSleep: { _ in
+                await patchDeadline.enterAndWait()
+            }
+        )
+        await patchModel.start()
+        let submitted = Task {
+            await patchModel.setFinished(true, detail: detail)
+        }
+        await patchGate.waitUntilEntered()
+        await patchDeadline.release()
+        await submitted.value
+        XCTAssertEqual(
+            patchModel.bookProgressFailure,
+            AppFailure(.updateProgress, .uncertainMutation)
+        )
+        XCTAssertFalse(patchModel.isBookFinished(detail.id))
+        await patchGate.release()
+    }
+
+    func testSetFinishedAccountSwitchSuppressesStalePublication()
+        async throws
+    {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let patchGate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            bookDetail: .success(detail),
+            progressUpdateGate: patchGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let mutation = Task {
+            await model.setFinished(true, detail: detail)
+        }
+        await patchGate.waitUntilEntered()
+
+        await model.switchAccount(to: second)
+        await patchGate.release()
+        await mutation.value
+
+        XCTAssertEqual(model.account?.id, second.id)
+        XCTAssertFalse(model.isBookFinished(detail.id))
+        XCTAssertNil(model.bookProgressFailure)
+    }
+
+    func testSetFinishedStaleActionCannotPublishAfterAccountRoundTrip()
+        async throws
+    {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            bookDetail: .success(detail),
+            progressUpdate: .failure(.progress(.unexpectedStatus(403)))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let staleGeneration = model.bookProgressActionGeneration
+
+        await model.setFinished(true, detail: detail)
+        XCTAssertNotNil(model.bookProgressFailure)
+        await model.switchAccount(to: second)
+        XCTAssertNil(model.bookProgressFailure)
+        await model.switchAccount(to: first)
+
+        let requestCount = await service.progressUpdateRequests().count
+        await model.setFinished(
+            true,
+            book: item,
+            expectedAccount: first,
+            expectedContextGeneration: staleGeneration
+        )
+
+        let finalRequestCount = await service.progressUpdateRequests().count
+        XCTAssertNil(model.bookProgressFailure)
+        XCTAssertEqual(finalRequestCount, requestCount)
+    }
+
+    func testSetFinishedNewerCommitRejectsOlderDetailReconciliation()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let finishedDetail = detail.replacingProgress(
+            with: fixtureProgress(
+                userID: account.user.id,
+                itemID: item.id,
+                isFinished: true
+            )
+        )
+        let initialGate = AsyncGate()
+        let firstPreparationGate = AsyncGate()
+        let oldReconciliationGate = AsyncGate()
+        let secondPreparationGate = AsyncGate()
+        let newReconciliationGate = AsyncGate()
+        await initialGate.release()
+        await firstPreparationGate.release()
+        await secondPreparationGate.release()
+        await newReconciliationGate.release()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail)
+        )
+        await service.queueBookDetails(
+            [
+                .success(detail),
+                .success(detail),
+                .success(finishedDetail),
+                .success(finishedDetail),
+                .success(detail),
+            ],
+            gates: [
+                initialGate,
+                firstPreparationGate,
+                oldReconciliationGate,
+                secondPreparationGate,
+                newReconciliationGate,
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadBookDetail(item)
+
+        await model.setFinished(true, detail: detail)
+        await oldReconciliationGate.waitUntilEntered()
+        await model.setFinished(false, detail: finishedDetail)
+        await oldReconciliationGate.release()
+        try? await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertFalse(model.isBookFinished(item.id))
+        guard case .loaded(let reconciled) = model.bookDetail else {
+            return XCTFail("Expected loaded detail")
+        }
+        XCTAssertFalse(reconciled.progress?.isFinished ?? false)
+    }
+
+    func testSetFinishedReconciliationDoesNotRestoreObsoleteSearch()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let homeRefreshGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            search: .success([item]),
+            bookDetail: .success(detail),
+            homeShelvesRefreshGate: homeRefreshGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.search(query: "Old")
+
+        await model.setFinished(true, detail: detail)
+        await homeRefreshGate.waitUntilEntered()
+        await model.search(query: "New")
+        await homeRefreshGate.release()
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let searchQueries = await service.searchRequests().map(\.query)
+        XCTAssertEqual(model.searchQuery, "New")
+        XCTAssertEqual(searchQueries, ["Old", "New"])
+    }
+
+    func testCompletedReconciliationDoesNotCancelLaterUserSearch()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let searchGate = AsyncGate()
+        let detailGates = (0..<5).map { _ in AsyncGate() }
+        for gate in detailGates.dropLast() {
+            await gate.release()
+        }
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            search: .success([item]),
+            bookDetail: .success(detail),
+            searchGate: searchGate
+        )
+        await service.queueBookDetails(
+            Array(repeating: .success(detail), count: 5),
+            gates: detailGates
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadBookDetail(item)
+        await model.setFinished(true, detail: detail)
+        var firstReconciliationFinished = false
+        for _ in 0..<50 {
+            if await service.bookDetailRequests().count >= 3 {
+                firstReconciliationFinished = true
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(firstReconciliationFinished)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        let userSearch = Task { await model.search(query: "User") }
+        await searchGate.waitUntilEntered()
+        await model.setFinished(false, detail: detail)
+        await detailGates[4].waitUntilEntered()
+        await searchGate.release()
+        await userSearch.value
+
+        XCTAssertEqual(model.searchQuery, "User")
+        guard case .loaded = model.searchResults else {
+            await detailGates[4].release()
+            return XCTFail("Expected the user search to finish")
+        }
+        await detailGates[4].release()
+    }
+
+    func testCancelledReconciliationSearchPreservesLoadedResults()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let initialSearchGate = AsyncGate()
+        let reconciliationSearchGate = AsyncGate()
+        await initialSearchGate.release()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            search: .success([item]),
+            bookDetail: .success(detail)
+        )
+        await service.queueSearches(
+            [.success([item]), .success([item])],
+            gates: [initialSearchGate, reconciliationSearchGate]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.search(query: "User")
+        guard case .loaded(let initialResults) = model.searchResults else {
+            return XCTFail("Expected initial search results")
+        }
+
+        await model.setFinished(true, detail: detail)
+        await reconciliationSearchGate.waitUntilEntered()
+        await service.setProgressUpdate(
+            .failure(.progress(.unexpectedStatus(403)))
+        )
+        await model.setFinished(false, detail: detail)
+        await reconciliationSearchGate.release()
+        try? await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(model.searchQuery, "User")
+        XCTAssertEqual(model.searchResults, .loaded(initialResults))
+        XCTAssertEqual(
+            model.bookProgressFailure,
+            AppFailure(.updateProgress, .permissionDenied)
+        )
+    }
+
+    func testBookDetailFinishedStateFallsBackToCanonicalProgress()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let finishedDetail = detail.replacingProgress(
+            with: fixtureProgress(
+                userID: account.user.id,
+                itemID: item.id,
+                isFinished: true
+            )
+        )
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                allBookProgress: [
+                    .failure(.progress(.unexpectedStatus(503)))
+                ]
+            )
+        )
+        await model.start()
+
+        XCTAssertTrue(
+            model.isBookFinished(
+                item.id,
+                fallback: finishedDetail.progress?.isFinished ?? false
+            )
+        )
+    }
+
+    func testSetFinishedUpdatesContinueListeningOnlyForPlayedBooks()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let refreshGate = AsyncGate()
+        let shelves = [
+            LibraryBookShelf(
+                id: "continue-listening",
+                label: "Continue Listening",
+                labelLocalizationKey: nil,
+                items: [item],
+                total: 3
+            ),
+            LibraryBookShelf(
+                id: "recent",
+                label: "Recent",
+                labelLocalizationKey: nil,
+                items: [item],
+                total: 1
+            ),
+        ]
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(shelves),
+            bookDetail: .success(detail),
+            homeShelvesRefreshGate: refreshGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setFinished(true, detail: detail)
+        guard case .loaded(let playedShelves) = model.homeShelves else {
+            return XCTFail("Expected loaded shelves")
+        }
+        XCTAssertEqual(playedShelves[0].items, [])
+        XCTAssertEqual(playedShelves[0].total, 2)
+        XCTAssertEqual(playedShelves[1].items, [item])
+
+        await model.setFinished(false, detail: detail)
+        guard case .loaded(let unplayedShelves) = model.homeShelves else {
+            return XCTFail("Expected loaded shelves")
+        }
+        XCTAssertEqual(unplayedShelves[0].items, [])
+        XCTAssertEqual(unplayedShelves[0].total, 2)
+        await refreshGate.release()
+    }
+
+    func testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let refreshGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            bookDetail: .success(detail),
+            homeShelvesRefreshGate: refreshGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await service.setFirstPage(
+            .failure(.libraryRepository(.remote(.unexpectedStatus(503))))
+        )
+        await service.setHomeShelves(
+            .failure(.libraryRepository(.remote(.unexpectedStatus(503))))
+        )
+
+        await model.setFinished(true, detail: detail)
+        XCTAssertTrue(model.isBookFinished(detail.id))
+        XCTAssertNil(model.bookProgressFailure)
+        await refreshGate.release()
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(model.isBookFinished(detail.id))
+        XCTAssertNil(model.bookProgressFailure)
     }
 
     func testPlaybackStartRequestsAutomaticServerPreference() async throws {
@@ -11731,11 +12315,17 @@ private actor TestAppService: AppServicing {
             LibrarySearchResults,
             AppServiceError
         >
+    private var queuedSearchResults:
+        [Result<LibrarySearchResults, AppServiceError>] = []
+    private var searchRequestGates: [AsyncGate] = []
     private var bookDetailResult:
         Result<
             LibraryBookDetail,
             AppServiceError
         >
+    private var queuedBookDetailResults:
+        [Result<LibraryBookDetail, AppServiceError>] = []
+    private var bookDetailRequestGates: [AsyncGate] = []
     private var bookmarksResult:
         Result<
             [AudioBookmark],
@@ -11771,6 +12361,7 @@ private actor TestAppService: AppServicing {
     private let firstAllBookProgressGate: AsyncGate?
     private let localSessionSyncGate: AsyncGate?
     private let bookDetailGate: AsyncGate?
+    private let progressUpdateGate: AsyncGate?
     private let playbackGate: AsyncGate?
     private let playbackCloseGate: AsyncGate?
     private let statisticsFinishGate: AsyncGate?
@@ -11958,6 +12549,7 @@ private actor TestAppService: AppServicing {
         firstAllBookProgressGate: AsyncGate? = nil,
         localSessionSyncGate: AsyncGate? = nil,
         bookDetailGate: AsyncGate? = nil,
+        progressUpdateGate: AsyncGate? = nil,
         playbackGate: AsyncGate? = nil,
         playbackCloseGate: AsyncGate? = nil,
         statisticsFinishGate: AsyncGate? = nil,
@@ -12018,6 +12610,7 @@ private actor TestAppService: AppServicing {
         self.firstAllBookProgressGate = firstAllBookProgressGate
         self.localSessionSyncGate = localSessionSyncGate
         self.bookDetailGate = bookDetailGate
+        self.progressUpdateGate = progressUpdateGate
         self.playbackGate = playbackGate
         self.playbackCloseGate = playbackCloseGate
         self.statisticsFinishGate = statisticsFinishGate
@@ -12460,8 +13053,13 @@ private actor TestAppService: AppServicing {
                 query: query
             )
         )
-        let result = searchResult
-        if recordedSearchRequests.count == 1,
+        let requestIndex = recordedSearchRequests.count - 1
+        let result =
+            queuedSearchResults.isEmpty
+            ? searchResult : queuedSearchResults.removeFirst()
+        if requestIndex < searchRequestGates.count {
+            await searchRequestGates[requestIndex].enterAndWait()
+        } else if recordedSearchRequests.count == 1,
             let searchGate
         {
             await searchGate.enterAndWait()
@@ -12560,10 +13158,16 @@ private actor TestAppService: AppServicing {
                 itemID: itemID
             )
         )
-        if let bookDetailGate {
+        let requestIndex = recordedBookDetailRequests.count - 1
+        let result =
+            queuedBookDetailResults.isEmpty
+            ? bookDetailResult : queuedBookDetailResults.removeFirst()
+        if requestIndex < bookDetailRequestGates.count {
+            await bookDetailRequestGates[requestIndex].enterAndWait()
+        } else if let bookDetailGate {
             await bookDetailGate.enterAndWait()
         }
-        return try value(from: bookDetailResult)
+        return try value(from: result)
     }
 
     func saveMetadata(
@@ -12738,6 +13342,9 @@ private actor TestAppService: AppServicing {
                 update: update
             )
         )
+        if let progressUpdateGate {
+            await progressUpdateGate.enterAndWait()
+        }
         try value(from: progressUpdateResult)
     }
 
@@ -12787,10 +13394,34 @@ private actor TestAppService: AppServicing {
         searchResult = result.map { LibrarySearchResults(books: $0) }
     }
 
+    func queueSearches(
+        _ results: [Result<[LibraryBookSummary], AppServiceError>],
+        gates: [AsyncGate]
+    ) {
+        queuedSearchResults = results.map {
+            $0.map { LibrarySearchResults(books: $0) }
+        }
+        searchRequestGates = gates
+    }
+
     func setBookDetail(
         _ result: Result<LibraryBookDetail, AppServiceError>
     ) {
         bookDetailResult = result
+    }
+
+    func queueBookDetails(
+        _ results: [Result<LibraryBookDetail, AppServiceError>],
+        gates: [AsyncGate]
+    ) {
+        queuedBookDetailResults = results
+        bookDetailRequestGates = gates
+    }
+
+    func setProgressUpdate(
+        _ result: Result<Void, AppServiceError>
+    ) {
+        progressUpdateResult = result
     }
 
     func activeAccountRequestCount() -> Int {
