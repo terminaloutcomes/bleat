@@ -8,6 +8,39 @@ import dnssd
 
 @MainActor
 final class NearbyServerDiscoveryTests: XCTestCase {
+    func testReleaseScreenshotLaunchModeUsesNoResultsDiscovery() {
+        let mode = AppLaunchMode(
+            arguments: [AppLaunchMode.releaseScreenshotArgument]
+        )
+
+        XCTAssertEqual(mode, .releaseScreenshot)
+        XCTAssertTrue(
+            mode.makeNearbyServerDiscovery()
+                is NoResultsNearbyServerDiscovery
+        )
+    }
+
+    func testStandardLaunchModeUsesBonjourDiscovery() {
+        let mode = AppLaunchMode(arguments: [])
+
+        XCTAssertEqual(mode, .standard)
+        XCTAssertTrue(
+            mode.makeNearbyServerDiscovery()
+                is BonjourNearbyServerDiscovery
+        )
+    }
+
+    func testNoResultsDiscoveryImmediatelyPublishesNoResults() {
+        let discovery = NoResultsNearbyServerDiscovery()
+        var states: [NearbyServerDiscoveryState] = []
+
+        discovery.start { state in
+            states.append(state)
+        }
+
+        XCTAssertEqual(states, [.noResults])
+    }
+
     func testResolveRequestUsesInstanceComponentsAndInterfaceIndex() {
         let service = discoveredService(
             name: "Audiobookshelf",

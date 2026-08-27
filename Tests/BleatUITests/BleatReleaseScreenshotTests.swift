@@ -14,6 +14,9 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let environment = try screenshotEnvironment()
         screenshotSuffix = environment.appearance == "dark" ? "-dark" : ""
         let app = XCUIApplication()
+        app.launchArguments = [
+            "--release-screenshot-disable-nearby-server-discovery"
+        ]
         app.launch()
 
         ensureSignedOut(app)
@@ -65,8 +68,16 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     private func captureLogin(_ app: XCUIApplication) {
         let form = app.collectionViews["login.form"]
         XCTAssertTrue(form.waitForExistence(timeout: 20))
-        XCTAssertTrue(app.textFields["login.server"].waitForExistence(timeout: 20))
+        let server = app.textFields["login.server"]
+        XCTAssertTrue(server.waitForExistence(timeout: 20))
         XCTAssertTrue(app.textFields["login.username"].exists)
+        XCTAssertTrue(
+            app.staticTexts["login.nearby.noResults"].waitForExistence(
+                timeout: 20
+            )
+        )
+        XCTAssertFalse(app.buttons["login.nearby.server"].exists)
+        XCTAssertEqual(server.value as? String, server.label)
         attachScreenshot(named: "00-login.png")
     }
 
@@ -79,7 +90,10 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let server = app.textFields["login.server"]
         scrollUntilHittable(server, in: form, app: app)
         server.tap()
-        if let value = server.value as? String, !value.isEmpty {
+        if let value = server.value as? String,
+           !value.isEmpty,
+           value != server.label
+        {
             server.press(forDuration: 1)
             let selectAll = app.menuItems["Select All"]
             XCTAssertTrue(selectAll.waitForExistence(timeout: 2))

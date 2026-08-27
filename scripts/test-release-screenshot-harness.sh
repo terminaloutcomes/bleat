@@ -7,6 +7,7 @@ readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_harness="${bleat_script_dir}/capture-release-screenshots.sh"
 readonly bleat_fixture="${bleat_repository_root}/TestSupport/ReleaseScreenshots/fixtures.json"
 readonly bleat_temporary_directory="$(mktemp -d /tmp/bleat-release-screenshot-tests.XXXXXX)"
+readonly bleat_screenshot_launch_argument='--release-screenshot-disable-nearby-server-discovery'
 
 bleat_cleanup() {
     rm -rf "${bleat_temporary_directory}"
@@ -14,6 +15,27 @@ bleat_cleanup() {
 trap bleat_cleanup EXIT
 
 "${bleat_harness}" --validate-fixtures
+
+if ! rg --fixed-strings --quiet \
+    "app.launchArguments = [" \
+    "${bleat_repository_root}/Tests/BleatUITests/BleatReleaseScreenshotTests.swift" \
+    || ! rg --fixed-strings --quiet \
+        -- \
+        "${bleat_screenshot_launch_argument}" \
+        "${bleat_repository_root}/Tests/BleatUITests/BleatReleaseScreenshotTests.swift" \
+    || ! rg --fixed-strings --quiet \
+        "BLEAT_SCREENSHOT_ENABLED" \
+        "${bleat_repository_root}/Tests/BleatUITests/BleatReleaseScreenshotTests.swift" \
+    || ! rg --fixed-strings --quiet \
+        -- \
+        "${bleat_screenshot_launch_argument}" \
+        "${bleat_repository_root}/App/BleatApp.swift" \
+    || ! rg --fixed-strings --quiet \
+        "NoResultsNearbyServerDiscovery()" \
+        "${bleat_repository_root}/App/BleatApp.swift"; then
+    print -u2 "The screenshot launch-mode contract is incomplete"
+    exit 1
+fi
 
 BLEAT_SCREENSHOT_ORIENTATIONS='landscapeLeft, portrait,landscapeLeft' \
     "${bleat_harness}" --validate-options
