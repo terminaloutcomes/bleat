@@ -2454,6 +2454,27 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testRepairActionStaysHiddenWhileNextTrackIsBeingScheduled() {
+        XCTAssertTrue(
+            DownloadModel.shouldOfferRepair(
+                manifestState: .partial,
+                isAdvancingToNextTrack: false
+            )
+        )
+        XCTAssertFalse(
+            DownloadModel.shouldOfferRepair(
+                manifestState: .partial,
+                isAdvancingToNextTrack: true
+            )
+        )
+        XCTAssertFalse(
+            DownloadModel.shouldOfferRepair(
+                manifestState: .downloading,
+                isAdvancingToNextTrack: false
+            )
+        )
+    }
+
     func testAccountRemovalDeletesDownloads()
         async throws
     {

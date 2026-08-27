@@ -4222,10 +4222,7 @@ private struct BookDetailView: View {
             .deleting,
         ].contains(record.manifest.state) {
             EmptyView()
-        } else if [
-            DownloadManifestState.failed,
-            .partial,
-        ].contains(record.manifest.state) {
+        } else if model.downloads.shouldOfferRepair(record) {
             Button(
                 record.manifest.state == .partial ? "Repair" : "Retry"
             ) {
@@ -4291,6 +4288,7 @@ private struct BookDetailView: View {
             .downloading,
             .paused,
         ].contains(record.manifest.state)
+            || model.downloads.isAdvancingToNextTrack(record)
     }
 
     private var downloadedRecord: DownloadedBookRecord? {
@@ -4327,6 +4325,9 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "Retrying download"
+        }
+        if model.downloads.isAdvancingToNextTrack(record) {
+            return "Downloading"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -4374,6 +4375,9 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "arrow.clockwise.circle"
+        }
+        if model.downloads.isAdvancingToNextTrack(record) {
+            return "arrow.down.circle"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -5314,10 +5318,7 @@ private struct DownloadStorageView: View {
                 if downloadIsActive(record) {
                     transferControls(record)
                 }
-            } else if [
-                DownloadManifestState.failed,
-                .partial,
-            ].contains(record.manifest.state) {
+            } else if model.downloads.shouldOfferRepair(record) {
                 if let account = model.account,
                     account.id == record.manifest.accountID
                 {
@@ -5401,6 +5402,9 @@ private struct DownloadStorageView: View {
         if model.downloads.isRetrying(record) {
             return "Retrying download"
         }
+        if model.downloads.isAdvancingToNextTrack(record) {
+            return "Downloading"
+        }
         if let state = model.downloads.automaticCacheState(
             for: record
         ) {
@@ -5462,6 +5466,7 @@ private struct DownloadStorageView: View {
             DownloadManifestState.queued,
             .downloading,
         ].contains(record.manifest.state)
+            || model.downloads.isAdvancingToNextTrack(record)
     }
 
     private func accountLabel(_ accountID: AccountID) -> String {

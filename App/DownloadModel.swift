@@ -507,6 +507,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var deferredAutomaticCacheCleanup:
         [DownloadID: DeferredAutomaticCacheCleanup] = [:]
     private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
+    private var advancingManualDownloadIDs: Set<DownloadID> = []
     private var networkPathState: AppNetworkPathState = .unknown
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
@@ -937,6 +938,25 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     func isRetrying(_ record: DownloadedBookRecord) -> Bool {
         pendingRecoveryDownloadIDs.contains(record.manifest.downloadID)
             && networkPathState.availability == .satisfied
+    }
+
+    func isAdvancingToNextTrack(_ record: DownloadedBookRecord) -> Bool {
+        advancingManualDownloadIDs.contains(record.manifest.downloadID)
+    }
+
+    func shouldOfferRepair(_ record: DownloadedBookRecord) -> Bool {
+        Self.shouldOfferRepair(
+            manifestState: record.manifest.state,
+            isAdvancingToNextTrack: isAdvancingToNextTrack(record)
+        )
+    }
+
+    static func shouldOfferRepair(
+        manifestState: DownloadManifestState,
+        isAdvancingToNextTrack: Bool
+    ) -> Bool {
+        [DownloadManifestState.failed, .partial].contains(manifestState)
+            && !isAdvancingToNextTrack
     }
 
     func updateNetworkPathState(_ state: AppNetworkPathState) {
@@ -2695,12 +2715,24 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 return
             }
             do {
-                _ = try await storage.recordCommittedChunk(
+                let committedRecord = try await storage.recordCommittedChunk(
                     identity,
                     committedByteLength: committedByteLength,
                     validator: validator,
                     finalized: finalized
                 )
+                let isAdvancingManualDownload =
+                    finalized
+                    && committedRecord.manifest.purpose == .manual
+                    && committedRecord.manifest.state != .complete
+                if isAdvancingManualDownload {
+                    advancingManualDownloadIDs.insert(identity.downloadID)
+                }
+                defer {
+                    if isAdvancingManualDownload {
+                        advancingManualDownloadIDs.remove(identity.downloadID)
+                    }
+                }
                 recordDownloadTelemetry(
                     identity,
                     stage: .manifestCommit,
