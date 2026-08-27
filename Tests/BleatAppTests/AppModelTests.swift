@@ -7983,6 +7983,7 @@ final class AppModelTests: XCTestCase {
             AppFailure(.updateProgress, .permissionDenied)
         )
         XCTAssertFalse(model.isBookFinished(detail.id))
+        model.dismissBookProgressFailure()
 
         await service.setProgressUpdate(
             .failure(.progress(.requestFailed))
@@ -7993,6 +7994,61 @@ final class AppModelTests: XCTestCase {
             AppFailure(.updateProgress, .uncertainMutation)
         )
         XCTAssertFalse(model.isBookFinished(detail.id))
+    }
+
+    func testSetFinishedQueuesFailuresForDifferentBooks() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstItem = fixtureBook(
+            id: "item-1", title: "First", libraryID: library.id
+        )
+        let secondItem = fixtureBook(
+            id: "item-2", title: "Second", libraryID: library.id
+        )
+        let firstDetail = fixtureBookDetail(item: firstItem)
+        let secondDetail = fixtureBookDetail(item: secondItem)
+        let failure = AppFailure(.updateProgress, .permissionDenied)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(firstDetail),
+            progressUpdate: .failure(.progress(.unexpectedStatus(403)))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.setFinished(true, detail: firstDetail)
+        await service.setBookDetail(.success(secondDetail))
+        await model.setFinished(true, detail: secondDetail)
+
+        XCTAssertEqual(
+            model.bookProgressFailures,
+            [
+                BookProgressFailureEntry(
+                    itemID: firstItem.id,
+                    failure: failure
+                ),
+                BookProgressFailureEntry(
+                    itemID: secondItem.id,
+                    failure: failure
+                ),
+            ]
+        )
+        XCTAssertEqual(model.bookProgressFailure, failure)
+
+        model.dismissBookProgressFailure()
+        XCTAssertEqual(model.bookProgressFailures.map(\.itemID), [secondItem.id])
+        XCTAssertNil(model.bookProgressFailure)
+
+        let secondWasPresented = await waitUntil(timeout: .seconds(1)) {
+            model.presentedBookProgressFailure?.itemID == secondItem.id
+        }
+        XCTAssertTrue(secondWasPresented)
+        XCTAssertEqual(model.bookProgressFailure, failure)
+
+        model.dismissBookProgressFailure()
+        XCTAssertTrue(model.bookProgressFailures.isEmpty)
+        XCTAssertNil(model.bookProgressFailure)
+        XCTAssertEqual(model.bookProgressUpdateState, .idle)
     }
 
     func testSetFinishedDeadlineDistinguishesPreparationFromSubmittedPatch()
@@ -8442,6 +8498,54 @@ final class AppModelTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(100))
         XCTAssertTrue(model.isBookFinished(detail.id))
         XCTAssertNil(model.bookProgressFailure)
+    }
+
+    func testSetFinishedUsesRemoteOnlyDetailReconciliation() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            bookDetail: .success(detail)
+        )
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        await model.start()
+        await model.loadBookDetail(item)
+        await service.setRefreshedBookDetail(
+            .failure(.bookDetail(.remote(.unexpectedStatus(503))))
+        )
+
+        await model.setFinished(true, detail: detail)
+
+        var events = await diagnostics.events()
+        for _ in 0..<100
+        where !events.contains(where: {
+            $0.name == .operationFailed && $0.operation == .loadBook
+        }) {
+            try? await Task.sleep(for: .milliseconds(10))
+            events = await diagnostics.events()
+        }
+        let refreshRequestCount =
+            await service.refreshedBookDetailRequests().count
+        XCTAssertEqual(refreshRequestCount, 1)
+        XCTAssertTrue(model.isBookFinished(detail.id))
+        guard case .loaded(let committedDetail) = model.bookDetail else {
+            return XCTFail("Expected confirmed detail to remain loaded")
+        }
+        XCTAssertTrue(committedDetail.progress?.isFinished ?? false)
+        XCTAssertNil(model.bookProgressFailure)
+        XCTAssertTrue(
+            events.contains {
+                $0.name == .operationFailed
+                    && $0.operation == .loadBook
+                    && $0.failureCode == .bookUnavailable
+            }
+        )
     }
 
     func testSetFinishedReconciliationFailuresRecordTypedDiagnostics()
@@ -12394,6 +12498,8 @@ private actor TestAppService: AppServicing {
             LibraryBookDetail,
             AppServiceError
         >
+    private var refreshedBookDetailResult:
+        Result<LibraryBookDetail, AppServiceError>?
     private var queuedBookDetailResults:
         [Result<LibraryBookDetail, AppServiceError>] = []
     private var bookDetailRequestGates: [AsyncGate] = []
@@ -12480,6 +12586,7 @@ private actor TestAppService: AppServicing {
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
+    private var recordedRefreshedBookDetailRequests: [BookDetailRequest] = []
     private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
     private var recordedPlaybackCloseSessionIDs: [PlaybackSessionID] = []
     private var recordedPlaybackSyncSessionIDs: [PlaybackSessionID] = []
@@ -13241,6 +13348,28 @@ private actor TestAppService: AppServicing {
         return try value(from: result)
     }
 
+    func refreshedBookDetail(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        recordedRefreshedBookDetailRequests.append(
+            BookDetailRequest(
+                accountID: account.id,
+                libraryID: libraryID,
+                itemID: itemID
+            )
+        )
+        if let refreshedBookDetailResult {
+            return try value(from: refreshedBookDetailResult)
+        }
+        return try await bookDetail(
+            for: account,
+            libraryID: libraryID,
+            itemID: itemID
+        )
+    }
+
     func saveMetadata(
         for account: ServerAccount,
         baseline: LibraryBookDetail,
@@ -13481,6 +13610,12 @@ private actor TestAppService: AppServicing {
         bookDetailResult = result
     }
 
+    func setRefreshedBookDetail(
+        _ result: Result<LibraryBookDetail, AppServiceError>
+    ) {
+        refreshedBookDetailResult = result
+    }
+
     func queueBookDetails(
         _ results: [Result<LibraryBookDetail, AppServiceError>],
         gates: [AsyncGate]
@@ -13545,6 +13680,10 @@ private actor TestAppService: AppServicing {
 
     func bookDetailRequests() -> [BookDetailRequest] {
         recordedBookDetailRequests
+    }
+
+    func refreshedBookDetailRequests() -> [BookDetailRequest] {
+        recordedRefreshedBookDetailRequests
     }
 
     func playbackOpenRequests() -> [PlaybackOpenRequest] {

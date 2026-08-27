@@ -394,6 +394,11 @@ enum BookProgressUpdateState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+struct BookProgressFailureEntry: Equatable, Sendable {
+    let itemID: LibraryItemID
+    let failure: AppFailure
+}
+
 private struct BookProgressMutationKey: Hashable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
@@ -1307,7 +1312,11 @@ final class AppModel {
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
-    private(set) var bookProgressFailure: AppFailure?
+    private(set) var bookProgressFailures: [BookProgressFailureEntry] = []
+    private(set) var presentedBookProgressFailure: BookProgressFailureEntry?
+    var bookProgressFailure: AppFailure? {
+        presentedBookProgressFailure?.failure
+    }
     private(set) var bookFinishedStates: [LibraryItemID: Bool] = [:]
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
     private(set) var privateCloudState: PrivateCloudState = .idle
@@ -3201,7 +3210,8 @@ final class AppModel {
     ) async {
         guard let account else {
             publishBookProgressFailure(
-                AppFailure(.updateProgress, .authenticationRequired)
+                AppFailure(.updateProgress, .authenticationRequired),
+                itemID: detail.id
             )
             return
         }
@@ -3250,7 +3260,6 @@ final class AppModel {
         pendingBookProgressMutations[key] = token
         bookProgressMutationStages[key] = .preparing
         bookProgressMutationRevisions[key] = revision
-        bookProgressFailure = nil
         bookProgressUpdateState = .saving
 
         let timedResult = await timedBookProgressMutation(
@@ -3278,9 +3287,12 @@ final class AppModel {
         case .deadline:
             let cause: AppFailureCause =
                 stage == .submitted ? .uncertainMutation : .timeout
-            publishBookProgressFailure(AppFailure(.updateProgress, cause))
+            publishBookProgressFailure(
+                AppFailure(.updateProgress, cause),
+                itemID: book.id
+            )
         case .operation(.failed(let failure)):
-            publishBookProgressFailure(failure)
+            publishBookProgressFailure(failure, itemID: book.id)
         case .operation(.cancelled):
             break
         case .operation(.confirmed(let preparedDetail)):
@@ -3308,9 +3320,26 @@ final class AppModel {
     }
 
     func dismissBookProgressFailure() {
-        bookProgressFailure = nil
-        if case .failed = bookProgressUpdateState {
+        guard presentedBookProgressFailure != nil else { return }
+        presentedBookProgressFailure = nil
+        guard !bookProgressFailures.isEmpty else { return }
+        bookProgressFailures.removeFirst()
+        if let next = bookProgressFailures.first {
+            bookProgressUpdateState = .failed(next.failure)
+        } else if case .failed = bookProgressUpdateState {
             bookProgressUpdateState = .idle
+        }
+        guard !bookProgressFailures.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard
+                let self,
+                self.presentedBookProgressFailure == nil,
+                let next = self.bookProgressFailures.first
+            else {
+                return
+            }
+            self.presentedBookProgressFailure = next
         }
     }
 
@@ -3519,7 +3548,7 @@ final class AppModel {
             }
             if selectedBookID == detail.id {
                 do {
-                    let reconciled = try await service.bookDetail(
+                    let reconciled = try await service.refreshedBookDetail(
                         for: account,
                         libraryID: detail.libraryID,
                         itemID: detail.id
@@ -3605,8 +3634,17 @@ final class AppModel {
             && bookProgressMutationRevisions[key] == revision
     }
 
-    private func publishBookProgressFailure(_ failure: AppFailure) {
-        bookProgressFailure = failure
+    private func publishBookProgressFailure(
+        _ failure: AppFailure,
+        itemID: LibraryItemID
+    ) {
+        let entry = BookProgressFailureEntry(itemID: itemID, failure: failure)
+        bookProgressFailures.append(entry)
+        if presentedBookProgressFailure == nil,
+            bookProgressFailures.count == 1
+        {
+            presentedBookProgressFailure = entry
+        }
         bookProgressUpdateState = .failed(failure)
     }
 
@@ -4982,7 +5020,8 @@ final class AppModel {
         pendingBookProgressMutations = [:]
         bookProgressMutationStages = [:]
         bookProgressMutationRevisions = [:]
-        bookProgressFailure = nil
+        bookProgressFailures = []
+        presentedBookProgressFailure = nil
         bookProgressUpdateState = .idle
         librariesGeneration &+= 1
         libraryPageGeneration &+= 1

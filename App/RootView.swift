@@ -1444,9 +1444,7 @@ private struct SignedInView: View {
                 set: { if !$0 { model.dismissBookProgressFailure() } }
             )
         ) {
-            Button("OK") {
-                model.dismissBookProgressFailure()
-            }
+            Button("OK") {}
         } message: {
             if let failure = model.bookProgressFailure {
                 Text(failure.message)

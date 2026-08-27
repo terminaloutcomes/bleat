@@ -580,6 +580,18 @@
             )
         }
 
+        func refreshedBookDetail(
+            for account: ServerAccount,
+            libraryID: LibraryID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> LibraryBookDetail {
+            try await bookDetail(
+                for: account,
+                libraryID: libraryID,
+                itemID: itemID
+            )
+        }
+
         func cachedChapterTranscripts(
             accountID: AccountID,
             itemID: LibraryItemID

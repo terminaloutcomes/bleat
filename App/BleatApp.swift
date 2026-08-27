@@ -240,6 +240,14 @@ struct UnavailableAppService: AppServicing {
         throw .accountStore(.persistenceFailed)
     }
 
+    func refreshedBookDetail(
+        for account: ServerAccount,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> LibraryBookDetail {
+        throw .accountStore(.persistenceFailed)
+    }
+
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
