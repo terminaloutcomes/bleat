@@ -4572,6 +4572,7 @@ private struct SettingsView: View {
     @State private var showAddAccount = false
     @State private var editingAccount: ServerAccount?
     @State private var showDisableCloudSyncConfirmation = false
+    @State private var showResetLocalDataConfirmation = false
 
     @ColourSchemePreference private var colourScheme
 
@@ -4764,6 +4765,8 @@ private struct SettingsView: View {
                     )
                 }
 
+                localDataResetSection
+
                 Section {
                     Picker(
                         "Previous Command",
@@ -4893,6 +4896,50 @@ private struct SettingsView: View {
                     "Your statistics, accounts, preferences, and credentials remain on this device."
                 )
             }
+            .confirmationDialog(
+                "Reset All Local Data?",
+                isPresented: $showResetLocalDataConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Reset All Local Data", role: .destructive) {
+                    Task {
+                        await model.resetLocalData()
+                    }
+                }
+                .accessibilityIdentifier("settings.resetLocalData.confirm")
+                Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("settings.resetLocalData.cancel")
+            } message: {
+                Text(
+                    "This cannot be undone. It also removes saved credentials, including synchronized native credentials when iCloud Keychain is enabled."
+                )
+                .accessibilityIdentifier("settings.resetLocalData.message")
+            }
+        }
+    }
+
+    private var localDataResetSection: some View {
+        Section {
+            Button("Reset All Local Data", role: .destructive) {
+                showResetLocalDataConfirmation = true
+            }
+            .disabled(model.isResettingLocalData)
+            .accessibilityIdentifier("settings.resetLocalData")
+
+            if model.isResettingLocalData {
+                ProgressView("Resetting local data…")
+            }
+            if let failure = model.localDataResetFailure {
+                Text(failure.message)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("settings.resetLocalData.error")
+            }
+        } header: {
+            Text("Data")
+        } footer: {
+            Text(
+                "Erases accounts, downloads, caches, listening data, preferences, and saved credentials. This does not delete data from your Audiobookshelf server or private CloudKit database; Bleat disables private-cloud sync so erased data is not restored. If iCloud Keychain is enabled, saved native credentials are also removed from it."
+            )
         }
     }
 

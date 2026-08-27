@@ -947,7 +947,7 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app,
             identifier: "settings.account.ui-account",
-            direction: .down
+            direction: .up
         )
         let reauthenticate = app.buttons["settings.account.ui-account"]
         XCTAssertTrue(reauthenticate.waitForExistence(timeout: 3))
@@ -1075,7 +1075,7 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app,
             identifier: "settings.account.ui-account",
-            direction: .down
+            direction: .up
         )
         let account = app.buttons["settings.account.ui-account"]
         XCTAssertTrue(account.waitForExistence(timeout: 3))
@@ -1103,6 +1103,51 @@ final class BleatUITests: XCTestCase {
             app.textFields["login.server"].waitForExistence(
                 timeout: 3
             ))
+    }
+
+    @MainActor
+    func testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch() {
+        var app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-persist-local-data-reset",
+                "--ui-testing-clear-local-data-reset",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        tabButton("Settings", in: app).tap()
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.resetLocalData",
+            direction: .up
+        )
+        let reset = app.buttons["settings.resetLocalData"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 3))
+        reset.tap()
+
+        let confirm = app.buttons[
+            "settings.resetLocalData.confirm"
+        ].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 3)
+        )
+
+        app.terminate()
+        app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-persist-local-data-reset"
+            ]
+        )
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.otherElements["app.signedIn"].exists)
     }
 
     @MainActor

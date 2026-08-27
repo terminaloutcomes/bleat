@@ -1660,6 +1660,20 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    /// Removes every downloaded book and reports whether the filesystem and
+    /// persisted manifests were both cleared. Reset must not continue when a
+    /// download remains, because it would otherwise claim to have erased all
+    /// local data.
+    func removeAllForLocalDataReset() async -> Bool {
+        let removableRecords = records
+        for record in removableRecords {
+            guard await remove(record) else {
+                return false
+            }
+        }
+        return true
+    }
+
     func cancel(_ record: DownloadedBookRecord) async {
         await diagnostics.record(
             .started(.cancelDownload, category: .download)

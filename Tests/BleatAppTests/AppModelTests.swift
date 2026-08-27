@@ -4,6 +4,7 @@ import BleatTranscription
 import CloudKit
 import MediaPlayer
 import Observation
+import SwiftData
 import XCTest
 
 @testable import Bleat
@@ -10669,6 +10670,275 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.accountActionStatus, .idle)
     }
 
+    func testResetLocalDataClearsEveryAccountAndReturnsToSignedOut()
+        async throws
+    {
+        let active = try fixtureAccount()
+        let inactive = try fixtureAccount(
+            accountID: "inactive-account",
+            server: "https://other.example"
+        )
+        let service = TestAppService(
+            accounts: .success([active, inactive]),
+            activeAccount: .success(active),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+
+        let resetRequestCount = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(resetRequestCount, 1)
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertTrue(model.accounts.isEmpty)
+        XCTAssertNil(model.account)
+        XCTAssertEqual(model.libraries, .idle)
+        XCTAssertEqual(model.statistics, .idle)
+        XCTAssertFalse(model.isResettingLocalData)
+        XCTAssertNil(model.localDataResetFailure)
+    }
+
+    func testResetLocalDataPreservesSignedInStateWhenStoreCannotBeCleared()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([]),
+            localDataReset: .failure(.localDataReset(.persistentStore))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+
+        let resetRequestCount = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(resetRequestCount, 1)
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(
+            model.localDataResetFailure,
+            AppFailure(
+                operation: .resetAppData,
+                serviceError: .localDataReset(.persistentStore)
+            )
+        )
+    }
+
+    func testResetLocalDataDisablesPrivateCloudBeforeItCanResynchronize()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+        let synchronizationRequestsAfterReset = await service
+            .privateCloudSynchronizationRequestCount()
+        await model.synchronizePrivateCloud()
+
+        XCTAssertFalse(model.privateCloudSyncEnabled)
+        XCTAssertEqual(model.privateCloudState, .disabled)
+        let syncSettingRequests = await service.privateCloudSyncSettingRequests()
+        XCTAssertEqual(syncSettingRequests.count, 1)
+        XCTAssertEqual(syncSettingRequests.first?.enabled, false)
+        XCTAssertEqual(syncSettingRequests.first?.deleteCloudData, false)
+        let synchronizationRequestCount = await service
+            .privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(
+            synchronizationRequestCount,
+            synchronizationRequestsAfterReset
+        )
+    }
+
+    func testResetLocalDataPreservesDownloadsWhenPrivateCloudDisableFails()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let item = fixtureBook(
+            id: plan.itemID.rawValue,
+            title: "Downloaded",
+            libraryID: fixtureLibrary().id
+        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatResetCloudFailure-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        _ = try await storage.create(
+            downloadID: DownloadID(
+                rawValue: UUID().uuidString.lowercased()
+            ),
+            accountID: account.id,
+            plan: plan,
+            detail: fixtureBookDetail(item: item)
+        )
+        let disableFailure = AppServiceError.privateCloud(
+            PrivateCloudSyncFailure(
+                operation: .disable,
+                cause: .persistenceFailed
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([]),
+            privateCloudSyncSetting: .failure(disableFailure)
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root
+        )
+        await model.start()
+        XCTAssertEqual(model.downloads.records.count, 1)
+
+        await model.resetLocalData()
+
+        let restoredDownloadCount = try await storage.records().count
+        let resetRequestCount = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(model.downloads.records.count, 1)
+        XCTAssertEqual(restoredDownloadCount, 1)
+        XCTAssertEqual(resetRequestCount, 0)
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(
+            model.localDataResetFailure,
+            AppFailure(
+                operation: .resetAppData,
+                serviceError: disableFailure
+            )
+        )
+    }
+
+    func testResetLocalDataClearsRealStorageAndSurvivesRelaunch()
+        async throws
+    {
+        let fixture = try await makeLocalDataLifecycleFixture()
+        let cleanupVault = fixture.makeCredentialStore()
+        addTeardownBlock {
+            try await cleanupVault.deleteAllCredentials()
+        }
+        let service = try makeLocalDataLifecycleService(
+            modelContainer: fixture.modelContainer,
+            credentialStore: fixture.makeCredentialStore()
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: fixture.downloadsURL
+        )
+        await model.start()
+        XCTAssertEqual(model.accounts.count, 2)
+        XCTAssertEqual(model.downloads.records.count, 2)
+
+        await model.resetLocalData()
+
+        XCTAssertNil(model.localDataResetFailure)
+        XCTAssertEqual(model.phase, .signedOut)
+        let relaunchedVault = fixture.makeCredentialStore()
+        let relaunchedService = try makeLocalDataLifecycleService(
+            modelContainer: try makeLocalDataLifecycleContainer(
+                storeURL: fixture.storeURL
+            ),
+            credentialStore: relaunchedVault
+        )
+        let relaunchedModel = AppModel(
+            service: relaunchedService,
+            downloadsStorageRootURL: fixture.downloadsURL
+        )
+        await relaunchedModel.start()
+
+        XCTAssertEqual(relaunchedModel.phase, .signedOut)
+        XCTAssertTrue(relaunchedModel.accounts.isEmpty)
+        XCTAssertTrue(relaunchedModel.downloads.records.isEmpty)
+        for account in fixture.accounts {
+            let credentials = try await relaunchedVault.credentials(
+                for: account.id
+            )
+            let nativeLogin = try await relaunchedVault
+                .nativeLoginCredentials(
+                    for: account.id
+                )
+            XCTAssertNil(credentials)
+            XCTAssertNil(nativeLogin)
+        }
+    }
+
+    func testRemovingOneOfTwoRealAccountsSurvivesRelaunch()
+        async throws
+    {
+        let fixture = try await makeLocalDataLifecycleFixture()
+        let cleanupVault = fixture.makeCredentialStore()
+        addTeardownBlock {
+            try await cleanupVault.deleteAllCredentials()
+        }
+        let service = try makeLocalDataLifecycleService(
+            modelContainer: fixture.modelContainer,
+            credentialStore: fixture.makeCredentialStore()
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: fixture.downloadsURL
+        )
+        await model.start()
+        let retainedAccount = fixture.accounts[0]
+        let removedAccount = fixture.accounts[1]
+
+        let removed = await model.removeAccount(removedAccount)
+
+        XCTAssertTrue(removed)
+        let relaunchedVault = fixture.makeCredentialStore()
+        let relaunchedService = try makeLocalDataLifecycleService(
+            modelContainer: try makeLocalDataLifecycleContainer(
+                storeURL: fixture.storeURL
+            ),
+            credentialStore: relaunchedVault
+        )
+        let relaunchedModel = AppModel(
+            service: relaunchedService,
+            downloadsStorageRootURL: fixture.downloadsURL
+        )
+        await relaunchedModel.start()
+
+        XCTAssertEqual(relaunchedModel.phase, .signedIn)
+        XCTAssertEqual(relaunchedModel.accounts, [retainedAccount])
+        XCTAssertEqual(relaunchedModel.account, retainedAccount)
+        XCTAssertEqual(
+            relaunchedModel.downloads.records.map(\.manifest.accountID),
+            [retainedAccount.id]
+        )
+        let retainedCredentials = try await relaunchedVault.credentials(
+            for: retainedAccount.id
+        )
+        let retainedNativeLogin = try await relaunchedVault
+            .nativeLoginCredentials(
+                for: retainedAccount.id
+            )
+        let removedCredentials = try await relaunchedVault.credentials(
+            for: removedAccount.id
+        )
+        let removedNativeLogin = try await relaunchedVault
+            .nativeLoginCredentials(
+                for: removedAccount.id
+            )
+        XCTAssertNotNil(retainedCredentials)
+        XCTAssertNotNil(retainedNativeLogin)
+        XCTAssertNil(removedCredentials)
+        XCTAssertNil(removedNativeLogin)
+    }
+
     func testRemoveInactiveAccountKeepsBrowsingAccount() async throws {
         let active = try fixtureAccount()
         let inactive = try fixtureAccount(
@@ -11723,6 +11993,199 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    private struct LocalDataLifecycleFixture {
+        let rootURL: URL
+        let storeURL: URL
+        let downloadsURL: URL
+        let modelContainer: ModelContainer
+        let accounts: [ServerAccount]
+        let tokenService: String
+        let nativeLoginService: String
+        let legacyService: String
+
+        func makeCredentialStore() -> TokenVault {
+            TokenVault(
+                tokenService: tokenService,
+                nativeLoginService: nativeLoginService,
+                legacyService: legacyService,
+                synchronizesNativeLogin: false
+            )
+        }
+    }
+
+    private struct LocalDataLifecycleOpenIDBrowser: OpenIDBrowserSession {
+        func authenticate(
+            at authorizationURL: URL,
+            callbackScheme: String
+        ) async throws -> URL {
+            throw CancellationError()
+        }
+    }
+
+    private func makeLocalDataLifecycleFixture()
+        async throws -> LocalDataLifecycleFixture
+    {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatLocalDataLifecycle-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        // ModelContainer has no explicit close operation. Keep the SQLite
+        // fixture under the process-owned temporary directory so the OS can
+        // reclaim it after the app-host test exits without unlinking an open
+        // database.
+        try FileManager.default.createDirectory(
+            at: rootURL,
+            withIntermediateDirectories: true
+        )
+        let storeURL = rootURL.appendingPathComponent("bleat.store")
+        let downloadsURL = rootURL.appendingPathComponent(
+            "Downloads",
+            isDirectory: true
+        )
+        let modelContainer = try makeLocalDataLifecycleContainer(
+            storeURL: storeURL
+        )
+        let first = try localDataLifecycleAccount(
+            server: "https://127.0.0.1:1",
+            userID: "lifecycle-user-1",
+            username: "reader-a"
+        )
+        let second = try localDataLifecycleAccount(
+            server: "https://127.0.0.1:2",
+            userID: "lifecycle-user-2",
+            username: "reader-b"
+        )
+        let accounts = [first, second]
+        let accountStore = AccountStore(modelContainer: modelContainer)
+        let libraryCache = LibraryCache(modelContainer: modelContainer)
+        for (index, account) in accounts.enumerated() {
+            try await accountStore.save(account, makeActive: index == 0)
+            try await libraryCache.replaceLibraries([], for: account.id)
+        }
+
+        let serviceSuffix = UUID().uuidString.lowercased()
+        let fixture = LocalDataLifecycleFixture(
+            rootURL: rootURL,
+            storeURL: storeURL,
+            downloadsURL: downloadsURL,
+            modelContainer: modelContainer,
+            accounts: accounts,
+            tokenService: "com.terminaloutcomes.Bleat.tests.tokens.\(serviceSuffix)",
+            nativeLoginService:
+                "com.terminaloutcomes.Bleat.tests.login.\(serviceSuffix)",
+            legacyService:
+                "com.terminaloutcomes.Bleat.tests.legacy.\(serviceSuffix)"
+        )
+        let credentialStore = fixture.makeCredentialStore()
+        for account in accounts {
+            try await credentialStore.save(
+                AuthenticationTokens(
+                    accessToken: "access-\(account.user.id.rawValue)",
+                    refreshToken: "refresh-\(account.user.id.rawValue)"
+                ),
+                nativeLogin: NativeLoginCredentials(
+                    userID: account.user.id,
+                    username: account.user.username,
+                    password: "password-\(account.user.id.rawValue)"
+                ),
+                for: account.id
+            )
+        }
+
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let item = fixtureBook(
+            id: plan.itemID.rawValue,
+            title: "Lifecycle Download",
+            libraryID: fixtureLibrary().id
+        )
+        let downloadStorage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: downloadsURL)
+        )
+        for account in accounts {
+            _ = try await downloadStorage.create(
+                downloadID: DownloadID(
+                    rawValue: UUID().uuidString.lowercased()
+                ),
+                accountID: account.id,
+                plan: plan,
+                detail: fixtureBookDetail(item: item)
+            )
+        }
+        return fixture
+    }
+
+    private func makeLocalDataLifecycleContainer(
+        storeURL: URL
+    ) throws -> ModelContainer {
+        let schema = Schema(
+            versionedSchema: BleatPersistenceSchemaCurrent.self
+        )
+        return try ModelContainer(
+            for: schema,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema,
+                    url: storeURL,
+                    cloudKitDatabase: .none
+                )
+            ]
+        )
+    }
+
+    private func makeLocalDataLifecycleService(
+        modelContainer: ModelContainer,
+        credentialStore: TokenVault
+    ) throws -> LiveAppService {
+        try LiveAppService(
+            modelContainer: modelContainer,
+            credentialStore: credentialStore,
+            privateCloudAvailable: false,
+            openIDBrowserProvider: {
+                LocalDataLifecycleOpenIDBrowser()
+            }
+        )
+    }
+
+    private func localDataLifecycleAccount(
+        server: String,
+        userID: String,
+        username: String
+    ) throws -> ServerAccount {
+        let normalizedServer = try NormalizedServerURL(server)
+        let user = AuthenticatedUser(
+            id: UserID(rawValue: userID),
+            username: username,
+            type: .user,
+            permissions: UserPermissions(
+                download: true,
+                update: false,
+                delete: false,
+                upload: false,
+                createEReader: false,
+                accessAllLibraries: true,
+                accessAllTags: true,
+                accessExplicitContent: true,
+                selectedTagsNotAccessible: false
+            ),
+            accessibleLibraryIDs: [],
+            selectedItemTags: []
+        )
+        return try ServerAccount(
+            id: AccountID.canonical(
+                server: normalizedServer,
+                userID: user.id
+            ),
+            server: normalizedServer,
+            serverVersion: "2.36.0",
+            authenticationMethods: [.local],
+            user: user
+        )
+    }
+
     private func fixtureLibrary() -> LibrarySummary {
         LibrarySummary(
             id: LibraryID(rawValue: "library-1"),
@@ -12629,6 +13092,9 @@ private actor TestAppService: AppServicing {
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
     private var removeAccountResult: Result<Void, AppServiceError>
+    private var localDataResetResult: Result<Void, AppServiceError>
+    private var privateCloudSyncSettingResult:
+        Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -12662,6 +13128,7 @@ private actor TestAppService: AppServicing {
     private let transcriptionTaskStateSaveResults:
         [Result<Void, AppServiceError>]
     private let privateCloudSyncAvailable: Bool
+    private var privateCloudSyncEnabled = true
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?
@@ -12705,9 +13172,13 @@ private actor TestAppService: AppServicing {
     private var recordedDownloadPlanRequests: [LibraryItemID] = []
     private var recordedAuthorizedDownloadRequests: [DownloadTaskIdentity] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
+    private var localDataResetRequests = 0
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
     private var privateCloudCancellationRequests = 0
+    private var recordedPrivateCloudSyncSettingRequests:
+        [(enabled: Bool, deleteCloudData: Bool)] = []
+    private var privateCloudSynchronizationRequests = 0
     private var recordedCloudResolutions:
         [(accountID: AccountID, accept: Bool)] = []
     private var recordedCloudConfigurationResolutions:
@@ -12818,6 +13289,9 @@ private actor TestAppService: AppServicing {
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
+        localDataReset: Result<Void, AppServiceError> = .success(()),
+        privateCloudSyncSetting:
+            Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         accountUpdateGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -12879,6 +13353,8 @@ private actor TestAppService: AppServicing {
         downloadPlanResult = downloadPlan
         authorizedDownloadRequestResult = authorizedDownloadRequest
         removeAccountResult = removeAccount
+        localDataResetResult = localDataReset
+        privateCloudSyncSettingResult = privateCloudSyncSetting
         self.loginGate = loginGate
         self.accountUpdateGate = accountUpdateGate
         self.removeGate = removeGate
@@ -12921,6 +13397,10 @@ private actor TestAppService: AppServicing {
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSyncAvailable
+    }
+
+    func isPrivateCloudSyncEnabled() async -> Bool {
+        privateCloudSyncEnabled
     }
 
     func cachedChapterTranscripts(
@@ -13032,6 +13512,7 @@ private actor TestAppService: AppServicing {
     func synchronizePrivateCloud() async throws(AppServiceError)
         -> [CloudServerConfigurationChange]
     {
+        privateCloudSynchronizationRequests += 1
         if let privateCloudSyncGate {
             await privateCloudSyncGate.enterAndWait()
         }
@@ -13041,6 +13522,27 @@ private actor TestAppService: AppServicing {
     func cancelPrivateCloudSynchronization() async {
         privateCloudCancellationRequests += 1
         await privateCloudSyncGate?.release()
+    }
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool
+    ) async throws(AppServiceError) {
+        recordedPrivateCloudSyncSettingRequests.append(
+            (enabled, deleteCloudData)
+        )
+        try value(from: privateCloudSyncSettingResult)
+        privateCloudSyncEnabled = enabled
+    }
+
+    func privateCloudSyncSettingRequests()
+        -> [(enabled: Bool, deleteCloudData: Bool)]
+    {
+        recordedPrivateCloudSyncSettingRequests
+    }
+
+    func privateCloudSynchronizationRequestCount() -> Int {
+        privateCloudSynchronizationRequests
     }
 
     func pendingPrivateCloudConfigurationConflict() async
@@ -13660,6 +14162,15 @@ private actor TestAppService: AppServicing {
             await removeGate.enterAndWait()
         }
         try value(from: removeAccountResult)
+    }
+
+    func resetLocalData() async throws(AppServiceError) {
+        localDataResetRequests += 1
+        try value(from: localDataResetResult)
+    }
+
+    func resetLocalDataRequestCount() -> Int {
+        localDataResetRequests
     }
 
     func setLibraries(

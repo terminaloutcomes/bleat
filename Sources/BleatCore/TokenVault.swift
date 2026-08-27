@@ -203,6 +203,30 @@ public actor TokenVault: AccountCredentialStore {
         }
     }
 
+    /// Removes every credential stored by this vault, including synchronized
+    /// native-login credentials written while iCloud Keychain was enabled.
+    /// This is intentionally limited to the vault's own services.
+    public func deleteAllCredentials() throws(TokenVaultError) {
+        var queries: [(service: String, synchronizable: Bool)] = [
+            (tokenService, false),
+            (nativeLoginService, false),
+        ]
+        // A user may disable iCloud Keychain after native credentials have
+        // already been synchronized. Reset must still remove those app-owned
+        // credentials rather than relying on the vault's current setting.
+        queries.append((nativeLoginService, true))
+        if let legacyService {
+            queries.append((legacyService, false))
+        }
+
+        for query in queries {
+            try deleteItems(
+                service: query.service,
+                synchronizable: query.synchronizable
+            )
+        }
+    }
+
     public func migrateCredentials(
         from legacyID: AccountID,
         to canonicalID: AccountID
@@ -583,7 +607,7 @@ public actor TokenVault: AccountCredentialStore {
         service: String,
         accountID: AccountID,
         synchronizable: Bool
-    ) throws {
+    ) throws(TokenVaultError) {
         let status = SecItemDelete(
             try baseQuery(
                 service: service,
@@ -595,6 +619,44 @@ public actor TokenVault: AccountCredentialStore {
             return
         }
         try Self.check(status)
+    }
+
+    private nonisolated func deleteItems(
+        service: String,
+        synchronizable: Bool
+    ) throws(TokenVaultError) {
+        guard !service.isEmpty else {
+            throw TokenVaultError.invalidService
+        }
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrSynchronizable:
+                synchronizable ? kCFBooleanTrue as Any : kCFBooleanFalse as Any,
+            kSecReturnAttributes: kCFBooleanTrue as Any,
+            kSecMatchLimit: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return
+        }
+        try Self.check(status)
+
+        guard let attributes = result as? [[String: Any]] else {
+            throw TokenVaultError.unexpectedStatus(errSecParam)
+        }
+        for attribute in attributes {
+            guard let accountID = attribute[kSecAttrAccount as String] as? String
+            else {
+                throw TokenVaultError.unexpectedStatus(errSecParam)
+            }
+            try deleteItem(
+                service: service,
+                accountID: AccountID(rawValue: accountID),
+                synchronizable: synchronizable
+            )
+        }
     }
 
     private nonisolated func baseQuery(

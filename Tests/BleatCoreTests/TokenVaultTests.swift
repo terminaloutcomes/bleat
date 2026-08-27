@@ -81,6 +81,111 @@ final class TokenVaultTests: XCTestCase {
         #endif
     }
 
+    func testDeleteAllCredentialsRemovesEveryAccountAndCredentialKind()
+        async throws
+    {
+        #if targetEnvironment(simulator)
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
+            )
+        #else
+            let suffix = UUID().uuidString
+            let store = TokenVault(
+                tokenService: "com.terminaloutcomes.bleat.tests.token.\(suffix)",
+                nativeLoginService:
+                    "com.terminaloutcomes.bleat.tests.login.\(suffix)",
+                legacyService: "com.terminaloutcomes.bleat.tests.legacy.\(suffix)",
+                synchronizesNativeLogin: false
+            )
+            let firstAccount = AccountID(rawValue: "first")
+            let secondAccount = AccountID(rawValue: "second")
+            let tokens = try AuthenticationTokens(
+                accessToken: "access",
+                refreshToken: "refresh"
+            )
+            let login = try NativeLoginCredentials(
+                userID: UserID(rawValue: "reader"),
+                username: "reader",
+                password: "password"
+            )
+            addTeardownBlock {
+                try await store.deleteAllCredentials()
+            }
+
+            try await store.save(tokens, nativeLogin: login, for: firstAccount)
+            try await store.save(tokens, nativeLogin: login, for: secondAccount)
+
+            try await store.deleteAllCredentials()
+
+            let firstTokens = try await store.credentials(for: firstAccount)
+            let secondTokens = try await store.credentials(for: secondAccount)
+            let firstLogin = try await store.nativeLoginCredentials(
+                for: firstAccount
+            )
+            let secondLogin = try await store.nativeLoginCredentials(
+                for: secondAccount
+            )
+            XCTAssertNil(firstTokens)
+            XCTAssertNil(secondTokens)
+            XCTAssertNil(firstLogin)
+            XCTAssertNil(secondLogin)
+        #endif
+    }
+
+    func testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled()
+        async throws
+    {
+        #if targetEnvironment(simulator)
+            throw XCTSkip(
+                "Requires the future app test host's Keychain entitlement"
+            )
+        #else
+            let suffix = UUID().uuidString
+            let tokenService = "com.terminaloutcomes.bleat.tests.token.\(suffix)"
+            let nativeLoginService =
+                "com.terminaloutcomes.bleat.tests.login.\(suffix)"
+            let enabledStore = TokenVault(
+                tokenService: tokenService,
+                nativeLoginService: nativeLoginService,
+                legacyService: nil,
+                synchronizesNativeLogin: true
+            )
+            let disabledStore = TokenVault(
+                tokenService: tokenService,
+                nativeLoginService: nativeLoginService,
+                legacyService: nil,
+                synchronizesNativeLogin: false
+            )
+            let account = AccountID(rawValue: "account")
+            let login = try NativeLoginCredentials(
+                userID: UserID(rawValue: "reader"),
+                username: "reader",
+                password: "password"
+            )
+            addTeardownBlock {
+                try await enabledStore.deleteAllCredentials()
+            }
+
+            do {
+                try await enabledStore.save(
+                    try AuthenticationTokens(
+                        accessToken: "access",
+                        refreshToken: "refresh"
+                    ),
+                    nativeLogin: login,
+                    for: account
+                )
+            } catch TokenVaultError.missingEntitlement {
+                throw XCTSkip("Requires an iCloud Keychain entitlement")
+            }
+            try await disabledStore.deleteAllCredentials()
+
+            let remainingLogin = try await enabledStore
+                .nativeLoginCredentials(for: account)
+            XCTAssertNil(remainingLogin)
+        #endif
+    }
+
     func testIdentityMigrationPreservesExistingCanonicalCredentials()
         async throws
     {

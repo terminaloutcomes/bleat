@@ -432,7 +432,8 @@ enum LibraryPaginationState: Equatable, Sendable {
 }
 
 enum AppFailureOperation: String, Equatable, Sendable {
-    case appStart, login, reauthenticate, switchAccount, removeAccount
+    case appStart, login, reauthenticate, switchAccount, removeAccount,
+        resetAppData
     case loadLibraries, loadLibraryPage, loadHome, search, loadBook
     case openPlayback, recoverPlayback, loadBookmarks, saveMetadata
     case replaceCover, deleteBook, updateProgress, download, localPlayback
@@ -444,6 +445,7 @@ enum AppFailureOperation: String, Equatable, Sendable {
             .loadBookmarks, .loadStatistics, .privateCloudSync:
             true
         case .appStart, .login, .reauthenticate, .switchAccount, .removeAccount,
+            .resetAppData,
             .openPlayback, .recoverPlayback, .saveMetadata, .replaceCover,
             .deleteBook, .updateProgress, .download, .localPlayback:
             false
@@ -452,7 +454,7 @@ enum AppFailureOperation: String, Equatable, Sendable {
 }
 
 enum AppFailureCause: Equatable, Sendable {
-    case persistenceUnavailable, invalidInput, serverRequiresHTTPS,
+    case persistenceUnavailable, storedDataMigrationFailed, invalidInput, serverRequiresHTTPS,
         serverNotReady
     case serverUnsupported, localLoginUnavailable, invalidCredentials
     case authenticationRequired, permissionDenied, itemNotFound
@@ -467,6 +469,7 @@ enum AppFailureCause: Equatable, Sendable {
     case inaccessibleLibrary, inaccessibleTags, explicitContentDenied
     case invalidPlaybackPosition, unknownPlaybackChapter
     case invalidPlaybackChapterOffset
+    case localDataReset(LocalDataResetFailure)
     case privateCloud(PrivateCloudSyncFailure)
 
     static let notFound = Self.itemNotFound
@@ -488,6 +491,7 @@ struct AppFailure: Equatable, Sendable {
     var title: String {
         switch cause {
         case .privateCloud(let failure): failure.presentationTitle
+        case .localDataReset: "Local data reset incomplete"
         case .accountUnavailable: "Account unavailable"
         case .playbackIdentityMismatch: "Audiobook mismatch"
         case .inaccessibleLibrary, .inaccessibleTags,
@@ -500,7 +504,8 @@ struct AppFailure: Equatable, Sendable {
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
         case .invalidServerResponse: "Invalid server response"
-        case .localStorageUnavailable, .persistenceUnavailable:
+        case .localStorageUnavailable, .persistenceUnavailable,
+            .storedDataMigrationFailed:
             "Local storage unavailable"
         case .unavailableOffline: "Unavailable offline"
         case .serverUnavailable: "Server unavailable"
@@ -530,6 +535,15 @@ struct AppFailure: Equatable, Sendable {
     var message: String {
         switch cause {
         case .privateCloud(let failure): failure.presentationMessage
+        case .localDataReset(let failure):
+            switch failure {
+            case .downloads:
+                "Bleat could not remove every downloaded file. Your accounts and saved credentials were left unchanged."
+            case .credentials:
+                "Bleat removed its local store but could not confirm deletion of every saved credential."
+            case .persistentStore:
+                "Bleat could not clear its local store. Your accounts and saved credentials were left unchanged."
+            }
         case .accountUnavailable:
             "That saved account is no longer available."
         case .playbackIdentityMismatch:
@@ -548,6 +562,8 @@ struct AppFailure: Equatable, Sendable {
             "That position is outside the selected chapter."
         case .persistenceUnavailable:
             "Bleat could not open its local data store."
+        case .storedDataMigrationFailed:
+            "Bleat could not upgrade its existing local data store. Your saved data was left in place."
         case .invalidInput:
             "Review the information and try again."
         case .serverRequiresHTTPS:
@@ -606,6 +622,7 @@ struct AppFailure: Equatable, Sendable {
     var systemImage: String {
         switch cause {
         case .privateCloud(let failure): failure.systemImage
+        case .localDataReset: "externaldrive.badge.exclamationmark"
         case .accountUnavailable, .authenticationRequired:
             "person.crop.circle.badge.exclamationmark"
         case .playbackIdentityMismatch, .invalidPlaybackPosition,
@@ -620,7 +637,8 @@ struct AppFailure: Equatable, Sendable {
             .authenticationBridgeFailed, .authenticationCallbackInvalid,
             .authenticationCredentialInvalid:
             "exclamationmark.triangle"
-        case .localStorageUnavailable, .persistenceUnavailable:
+        case .localStorageUnavailable, .persistenceUnavailable,
+            .storedDataMigrationFailed:
             "externaldrive.badge.exclamationmark"
         case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
             "wifi.exclamationmark"
@@ -745,6 +763,8 @@ struct AppFailure: Equatable, Sendable {
             .libraryCache,
             .transcriptCache, .statistics:
             return .localStorageUnavailable
+        case .localDataReset(let error):
+            return .localDataReset(error)
         case .privateCloud(let error):
             return .privateCloud(error)
         case .libraryRepository(let error), .bookDetail(let error):
@@ -1027,7 +1047,8 @@ extension AppFailureCause {
             .serverRejected
         case .invalidServerResponse, .playbackIdentityMismatch:
             .invalidResponse
-        case .persistenceUnavailable, .localStorageUnavailable:
+        case .persistenceUnavailable, .storedDataMigrationFailed,
+            .localStorageUnavailable, .localDataReset:
             .localStorage
         case .mediaUnavailable:
             .media
@@ -1263,6 +1284,8 @@ final class AppModel {
     private(set) var nearbyServerDiscoveryState: NearbyServerDiscoveryState =
         .idle
     private(set) var accountActionStatus: AccountActionStatus = .idle
+    private(set) var isResettingLocalData = false
+    private(set) var localDataResetFailure: AppFailure?
     private(set) var endpointDiagnostics: AppEndpointDiagnostics?
     private(set) var liveUpdateConnectionState:
         AudiobookshelfLiveConnectionState = .disconnected
@@ -1432,6 +1455,10 @@ final class AppModel {
             switch bootstrapError {
             case .persistenceUnavailable:
                 phase = .unavailable(.persistenceUnavailable)
+            case .storedDataMigrationFailed:
+                phase = .unavailable(
+                    AppFailure(.appStart, .storedDataMigrationFailed)
+                )
             }
         } else {
             phase = .launching
@@ -4511,6 +4538,96 @@ final class AppModel {
                 )
             )
         }
+    }
+
+    func resetLocalData() async {
+        guard !isResettingLocalData else {
+            return
+        }
+        isResettingLocalData = true
+        localDataResetFailure = nil
+        await diagnostics.record(
+            .started(.resetAppData, category: .app)
+        )
+
+        await cancelPrivateCloudSynchronization()
+        do {
+            if privateCloudSyncAvailable, privateCloudSyncEnabled {
+                try await service.setPrivateCloudSyncEnabled(
+                    false,
+                    deleteCloudData: false
+                )
+                privateCloudSyncEnabled = false
+                privateCloudState = .disabled
+            }
+            await invalidatePlaybackStarts()
+            await stopLiveUpdatesAndWait()
+            await playback.stop()
+            for account in accounts {
+                transcription.cancel(for: account.id)
+            }
+            guard await downloads.removeAllForLocalDataReset() else {
+                let failure = AppFailure(
+                    operation: .resetAppData,
+                    serviceError: .localDataReset(.downloads)
+                )
+                localDataResetFailure = failure
+                await diagnostics.record(
+                    .failed(
+                        .resetAppData,
+                        category: .app,
+                        failureCode: failure.diagnosticFailureCode
+                    )
+                )
+                isResettingLocalData = false
+                return
+            }
+            try await service.resetLocalData()
+            clearLocalPreferences()
+            accounts.removeAll()
+            account = nil
+            resetBrowsingResourcesForAccountChange()
+            statistics = .idle
+            accountActionStatus = .idle
+            loginStatus = .idle
+            privateCloudSyncEnabled = false
+            privateCloudState = .disabled
+            cloudAccountRestoreState = .idle
+            pendingCloudServerConfigurationChanges.removeAll()
+            pendingCloudConfigurationConflict = nil
+            phase = .signedOut
+            await diagnostics.record(
+                .completed(.resetAppData, category: .app)
+            )
+        } catch let error {
+            let failure = AppFailure(
+                operation: .resetAppData,
+                serviceError: error
+            )
+            localDataResetFailure = failure
+            await diagnostics.record(
+                .failed(
+                    .resetAppData,
+                    category: .app,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+        }
+        isResettingLocalData = false
+    }
+
+    private func clearLocalPreferences() {
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys
+        where key.hasPrefix("bleat.") || key == AppPreferenceKey.colourScheme {
+            defaults.removeObject(forKey: key)
+        }
+        // The cloud database is deliberately retained. Keep synchronization
+        // off after reset so it cannot immediately restore the erased local
+        // state; the user can explicitly re-enable it in Settings later.
+        defaults.set(false, forKey: "bleat.cloudKit.enabled.v1")
+        ColourSchemeStore.shared.value = .defaultValue
+        setRemoteTelemetryEnabled(false)
     }
 
     @discardableResult

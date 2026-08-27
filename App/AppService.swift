@@ -8,6 +8,7 @@ private let bleatOpenIDCallbackURL =
 
 enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
+    case storedDataMigrationFailed
 }
 
 enum BleatLocalStore {
@@ -176,6 +177,13 @@ enum AppServiceError: Error, Equatable, Sendable {
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
     case privateCloud(PrivateCloudSyncFailure)
+    case localDataReset(LocalDataResetFailure)
+}
+
+enum LocalDataResetFailure: Error, Equatable, Sendable {
+    case downloads
+    case credentials(TokenVaultError)
+    case persistentStore
 }
 
 enum AccountIdentityMigrationFailure: Error, Equatable, Sendable {
@@ -693,6 +701,8 @@ protocol AppServicing: Sendable {
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(AppServiceError)
+
+    func resetLocalData() async throws(AppServiceError)
 }
 
 extension AppServicing {
@@ -987,6 +997,8 @@ extension AppServicing {
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(AppServiceError) {}
+
+    func resetLocalData() async throws(AppServiceError) {}
 }
 
 actor LiveAppService: AppServicing {
@@ -1150,24 +1162,44 @@ actor LiveAppService: AppServicing {
         privateCloudEvents: (
             any PrivateCloudSyncEventRecording
         )? = nil,
+        modelContainer suppliedModelContainer: ModelContainer? = nil,
+        credentialStore suppliedCredentialStore: TokenVault? = nil,
+        privateCloudAvailable suppliedPrivateCloudAvailable: Bool? = nil,
         openIDBrowserProvider: @escaping @MainActor @Sendable ()
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
-        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
-        do {
-            let storeURL = try BleatLocalStore.storeURL()
-            modelContainer = try ModelContainer(
-                for: schema,
-                configurations: [
-                    ModelConfiguration(
-                        schema: schema,
-                        url: storeURL,
-                        cloudKitDatabase: .none
-                    )
-                ]
+        let schema = Schema(
+            versionedSchema: BleatPersistenceSchemaCurrent.self
+        )
+        if let suppliedModelContainer {
+            modelContainer = suppliedModelContainer
+        } else {
+            let storeURL: URL
+            do {
+                storeURL = try BleatLocalStore.storeURL()
+            } catch {
+                throw .persistenceUnavailable
+            }
+            let existingStore = FileManager.default.fileExists(
+                atPath: storeURL.path
             )
-        } catch {
-            throw .persistenceUnavailable
+            do {
+                modelContainer = try ModelContainer(
+                    for: schema,
+                    migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
+                    configurations: [
+                        ModelConfiguration(
+                            schema: schema,
+                            url: storeURL,
+                            cloudKitDatabase: .none
+                        )
+                    ]
+                )
+            } catch {
+                throw existingStore
+                    ? .storedDataMigrationFailed
+                    : .persistenceUnavailable
+            }
         }
 
         let endpointRouter = ServerEndpointRouter()
@@ -1181,7 +1213,9 @@ actor LiveAppService: AppServicing {
             diagnostics: diagnostics,
             endpointRouter: endpointRouter
         )
-        let privateCloudAvailable = BleatCloudKitCapability.isAvailable
+        let privateCloudAvailable =
+            suppliedPrivateCloudAvailable
+            ?? BleatCloudKitCapability.isAvailable
         let privateCloudEnabled =
             privateCloudAvailable
             && (UserDefaults.standard.object(
@@ -1190,12 +1224,14 @@ actor LiveAppService: AppServicing {
                 || UserDefaults.standard.bool(
                     forKey: "bleat.cloudKit.enabled.v1"
                 ))
-        credentialStore = TokenVault(
-            tokenService: "com.terminaloutcomes.Bleat.session-tokens",
-            nativeLoginService: "com.terminaloutcomes.Bleat.native-login",
-            legacyService: "com.terminaloutcomes.Bleat.credentials",
-            synchronizesNativeLogin: privateCloudEnabled
-        )
+        credentialStore =
+            suppliedCredentialStore
+            ?? TokenVault(
+                tokenService: "com.terminaloutcomes.Bleat.session-tokens",
+                nativeLoginService: "com.terminaloutcomes.Bleat.native-login",
+                legacyService: "com.terminaloutcomes.Bleat.credentials",
+                synchronizesNativeLogin: privateCloudEnabled
+            )
         coordinator = Coordinator(
             transport: transport,
             credentialStore: credentialStore
@@ -2817,6 +2853,42 @@ actor LiveAppService: AppServicing {
         await presentProviderLogout(logoutResult.providerLogoutURL)
     }
 
+    func resetLocalData() async throws(AppServiceError) {
+        let activeAccountIDs = Array(liveClients.keys)
+        for accountID in activeAccountIDs {
+            await stopLiveUpdates(for: accountID)
+        }
+        await privateCloudSync?.cancelSynchronization()
+
+        do {
+            let context = ModelContext(modelContainer)
+            try context.delete(model: ServerAccountRecord.self)
+            try context.delete(model: AccountIdentityAliasRecord.self)
+            try context.delete(model: CachedLibraryCollectionRecord.self)
+            try context.delete(model: CachedLibraryRecord.self)
+            try context.delete(model: CachedLibraryPageRecord.self)
+            try context.delete(model: CachedLibrarySearchRecord.self)
+            try context.delete(model: CachedLibraryHomeRecord.self)
+            try context.delete(model: CachedLibraryBookDetailRecord.self)
+            try context.delete(model: CachedChapterTranscriptRecord.self)
+            try context.delete(model: CachedChapterTranscriptionTaskRecord.self)
+            try context.delete(model: ListeningSliceRecord.self)
+            try context.delete(model: CompletionMilestoneRecord.self)
+            try context.delete(model: RemoteListeningSessionRecord.self)
+            try context.delete(model: PrivateCloudStatisticsDeletionRecord.self)
+            try context.delete(model: StatisticsSessionAccountingRecord.self)
+            try context.save()
+        } catch {
+            throw .localDataReset(.persistentStore)
+        }
+
+        do {
+            try await credentialStore.deleteAllCredentials()
+        } catch let error {
+            throw .localDataReset(.credentials(error))
+        }
+    }
+
     func removeAccountFromThisDevice(
         _ account: ServerAccount,
         includeStatistics: Bool
@@ -2838,10 +2910,21 @@ actor LiveAppService: AppServicing {
         )
         let logoutResult: LogoutResult
         do {
-            logoutResult = try await coordinator.removePersistedAccountFromDevice(
-                accountID: account.id,
-                accountStore: accountStore
-            )
+            if privateCloudSync?.isEnabled == true {
+                logoutResult = try await coordinator
+                    .removePersistedAccountFromDevice(
+                        accountID: account.id,
+                        accountStore: accountStore
+                    )
+            } else {
+                // Without active private-cloud restoration there is no
+                // synchronized credential scope to retain. Remove the
+                // device-only native login with the session credentials.
+                logoutResult = try await coordinator.removePersistedAccount(
+                    accountID: account.id,
+                    accountStore: accountStore
+                )
+            }
         } catch let error {
             throw .accountRemoval(error)
         }
