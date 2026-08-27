@@ -2454,23 +2454,26 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testRepairActionStaysHiddenWhileNextTrackIsBeingScheduled() {
+    func testRepairActionRequiresStableTerminalPresentation() {
         XCTAssertTrue(
-            DownloadModel.shouldOfferRepair(
+            DownloadRepairActionPolicy.isEligible(
                 manifestState: .partial,
-                isAdvancingToNextTrack: false
+                isWaitingForNetwork: false,
+                isRetrying: false
             )
         )
         XCTAssertFalse(
-            DownloadModel.shouldOfferRepair(
-                manifestState: .partial,
-                isAdvancingToNextTrack: true
+            DownloadRepairActionPolicy.isEligible(
+                manifestState: .failed,
+                isWaitingForNetwork: false,
+                isRetrying: true
             )
         )
         XCTAssertFalse(
-            DownloadModel.shouldOfferRepair(
-                manifestState: .downloading,
-                isAdvancingToNextTrack: false
+            DownloadRepairActionPolicy.isEligible(
+                manifestState: .partial,
+                isWaitingForNetwork: true,
+                isRetrying: false
             )
         )
     }

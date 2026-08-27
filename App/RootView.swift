@@ -4222,7 +4222,10 @@ private struct BookDetailView: View {
             .deleting,
         ].contains(record.manifest.state) {
             EmptyView()
-        } else if model.downloads.shouldOfferRepair(record) {
+        } else if [
+            DownloadManifestState.failed,
+            .partial,
+        ].contains(record.manifest.state) {
             Button(
                 record.manifest.state == .partial ? "Repair" : "Retry"
             ) {
@@ -4288,7 +4291,6 @@ private struct BookDetailView: View {
             .downloading,
             .paused,
         ].contains(record.manifest.state)
-            || model.downloads.isAdvancingToNextTrack(record)
     }
 
     private var downloadedRecord: DownloadedBookRecord? {
@@ -4325,9 +4327,6 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "Retrying download"
-        }
-        if model.downloads.isAdvancingToNextTrack(record) {
-            return "Downloading"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -4375,9 +4374,6 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "arrow.clockwise.circle"
-        }
-        if model.downloads.isAdvancingToNextTrack(record) {
-            return "arrow.down.circle"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -5098,6 +5094,7 @@ private struct DownloadsView: View {
 private struct DownloadStorageView: View {
     @Bindable var model: AppModel
     @State private var showRemoveAllConfirmation = false
+    @State private var visibleRepairDownloadIDs: Set<DownloadID> = []
 
     var body: some View {
         Group {
@@ -5318,22 +5315,26 @@ private struct DownloadStorageView: View {
                 if downloadIsActive(record) {
                     transferControls(record)
                 }
-            } else if model.downloads.shouldOfferRepair(record) {
+            } else if repairActionIsEligible(record) {
                 if let account = model.account,
                     account.id == record.manifest.accountID
                 {
-                    Button(
-                        record.manifest.state == .partial
-                            ? "Repair" : "Retry"
+                    if visibleRepairDownloadIDs.contains(
+                        record.manifest.downloadID
                     ) {
-                        Task {
-                            await model.downloads.repair(
-                                record,
-                                account: account
-                            )
+                        Button(
+                            record.manifest.state == .partial
+                                ? "Repair" : "Retry"
+                        ) {
+                            Task {
+                                await model.downloads.repair(
+                                    record,
+                                    account: account
+                                )
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 } else {
                     Text("Account required to retry this download.")
                         .font(.caption)
@@ -5342,6 +5343,21 @@ private struct DownloadStorageView: View {
             } else if !downloadIsComplete(record) {
                 transferControls(record)
             }
+        }
+        .task(id: repairActionIsEligible(record)) {
+            guard repairActionIsEligible(record) else {
+                visibleRepairDownloadIDs.remove(record.manifest.downloadID)
+                return
+            }
+            do {
+                try await Task.sleep(
+                    for: DownloadRepairActionPolicy.visibilityDelay
+                )
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            visibleRepairDownloadIDs.insert(record.manifest.downloadID)
         }
         .swipeActions {
             if record.manifest.downloadID != protectedDownloadID {
@@ -5401,9 +5417,6 @@ private struct DownloadStorageView: View {
         }
         if model.downloads.isRetrying(record) {
             return "Retrying download"
-        }
-        if model.downloads.isAdvancingToNextTrack(record) {
-            return "Downloading"
         }
         if let state = model.downloads.automaticCacheState(
             for: record
@@ -5466,7 +5479,16 @@ private struct DownloadStorageView: View {
             DownloadManifestState.queued,
             .downloading,
         ].contains(record.manifest.state)
-            || model.downloads.isAdvancingToNextTrack(record)
+    }
+
+    private func repairActionIsEligible(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        DownloadRepairActionPolicy.isEligible(
+            manifestState: record.manifest.state,
+            isWaitingForNetwork: model.downloads.isWaitingForNetwork(record),
+            isRetrying: model.downloads.isRetrying(record)
+        )
     }
 
     private func accountLabel(_ accountID: AccountID) -> String {
@@ -5486,6 +5508,20 @@ private struct DownloadStorageView: View {
             fromByteCount: max(value, 0),
             countStyle: .file
         )
+    }
+}
+
+enum DownloadRepairActionPolicy {
+    static let visibilityDelay = Duration.seconds(1)
+
+    static func isEligible(
+        manifestState: DownloadManifestState,
+        isWaitingForNetwork: Bool,
+        isRetrying: Bool
+    ) -> Bool {
+        [DownloadManifestState.failed, .partial].contains(manifestState)
+            && !isWaitingForNetwork
+            && !isRetrying
     }
 }
 
