@@ -8548,6 +8548,108 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testBookProgressReconciliationPreservesConfirmedProgressWhenRefreshOmitsIt()
+        throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let confirmed = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: true,
+            lastUpdateMilliseconds: 20
+        )
+
+        let reconciled = AppModel.reconciledBookDetail(
+            detail.replacingProgress(with: nil),
+            preserving: confirmed,
+            newerThan: 10
+        )
+
+        XCTAssertEqual(reconciled.progress, confirmed)
+    }
+
+    func testBookProgressReconciliationRejectsNonAdvancingProgressAndAcceptsNewerServerProgress()
+        throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let confirmed = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: true,
+            lastUpdateMilliseconds: 2_000
+        )
+        let stale = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: false,
+            lastUpdateMilliseconds: 10
+        )
+        let equal = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: false,
+            lastUpdateMilliseconds: 20
+        )
+        let newer = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: false,
+            lastUpdateMilliseconds: 30
+        )
+
+        let staleReconciliation = AppModel.reconciledBookDetail(
+            detail.replacingProgress(with: stale),
+            preserving: confirmed,
+            newerThan: 20
+        )
+        let equalReconciliation = AppModel.reconciledBookDetail(
+            detail.replacingProgress(with: equal),
+            preserving: confirmed,
+            newerThan: 20
+        )
+        let newerReconciliation = AppModel.reconciledBookDetail(
+            detail.replacingProgress(with: newer),
+            preserving: confirmed,
+            newerThan: 20
+        )
+
+        XCTAssertEqual(staleReconciliation.progress, confirmed)
+        XCTAssertEqual(equalReconciliation.progress, confirmed)
+        XCTAssertEqual(newerReconciliation.progress, newer)
+    }
+
+    func testBookProgressReconciliationRejectsOlderSameStateProgress()
+        throws
+    {
+        let account = try fixtureAccount()
+        let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let confirmed = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: false,
+            lastUpdateMilliseconds: 2_000
+        )
+        let olderSameState = fixtureProgress(
+            userID: account.user.id,
+            itemID: item.id,
+            isFinished: false,
+            lastUpdateMilliseconds: 10
+        )
+
+        let reconciled = AppModel.reconciledBookDetail(
+            detail.replacingProgress(with: olderSameState),
+            preserving: confirmed,
+            newerThan: 20
+        )
+
+        XCTAssertEqual(reconciled.progress, confirmed)
+    }
+
     func testSetFinishedReconciliationFailuresRecordTypedDiagnostics()
         async throws
     {
@@ -11632,7 +11734,8 @@ final class AppModelTests: XCTestCase {
     private func fixtureProgress(
         userID: UserID,
         itemID: LibraryItemID,
-        isFinished: Bool
+        isFinished: Bool,
+        lastUpdateMilliseconds: Int64 = 1
     ) -> LibraryBookProgress {
         LibraryBookProgress(
             id: "progress-\(itemID.rawValue)",
@@ -11644,9 +11747,10 @@ final class AppModelTests: XCTestCase {
             currentTime: isFinished ? 60 : 0,
             isFinished: isFinished,
             hideFromContinueListening: false,
-            lastUpdateMilliseconds: 1,
+            lastUpdateMilliseconds: lastUpdateMilliseconds,
             startedAtMilliseconds: 1,
-            finishedAtMilliseconds: isFinished ? 1 : nil
+            finishedAtMilliseconds:
+                isFinished ? lastUpdateMilliseconds : nil
         )
     }
 

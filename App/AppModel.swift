@@ -3296,7 +3296,7 @@ final class AppModel {
         case .operation(.cancelled):
             break
         case .operation(.confirmed(let preparedDetail)):
-            commitFinishedState(
+            let confirmedProgress = commitFinishedState(
                 isFinished,
                 detail: preparedDetail,
                 account: expectedAccount
@@ -3307,7 +3307,8 @@ final class AppModel {
                 detail: preparedDetail,
                 key: key,
                 contextGeneration: expectedContextGeneration,
-                revision: revision
+                revision: revision,
+                confirmedProgress: confirmedProgress
             )
         }
     }
@@ -3460,8 +3461,8 @@ final class AppModel {
         _ isFinished: Bool,
         detail: LibraryBookDetail,
         account: ServerAccount
-    ) {
-        guard self.account?.id == account.id else { return }
+    ) -> LibraryBookProgress? {
+        guard self.account?.id == account.id else { return nil }
         let nowMilliseconds = Int64(Date().timeIntervalSince1970 * 1_000)
         let previous = detail.progress
         let progress = LibraryBookProgress(
@@ -3504,6 +3505,7 @@ final class AppModel {
                 )
             }
         }
+        return progress
     }
 
     private func removeFromContinueListening(_ itemID: LibraryItemID) {
@@ -3529,7 +3531,8 @@ final class AppModel {
         detail: LibraryBookDetail,
         key: BookProgressMutationKey,
         contextGeneration: UInt64,
-        revision: UInt64
+        revision: UInt64,
+        confirmedProgress: LibraryBookProgress?
     ) {
         let query = searchQuery
         let task = Task { @MainActor [weak self] in
@@ -3558,9 +3561,14 @@ final class AppModel {
                         contextGeneration: contextGeneration,
                         revision: revision
                     ), selectedBookID == detail.id else { return }
-                    bookDetail = .loaded(reconciled)
+                    let merged = Self.reconciledBookDetail(
+                        reconciled,
+                        preserving: confirmedProgress,
+                        newerThan: detail.progress?.lastUpdateMilliseconds
+                    )
+                    bookDetail = .loaded(merged)
                     bookFinishedStates[detail.id] =
-                        reconciled.progress?.isFinished
+                        merged.progress?.isFinished
                         ?? bookFinishedStates[detail.id]
                         ?? false
                 } catch let error {
@@ -3604,6 +3612,27 @@ final class AppModel {
             await search(query: query, preservingLoadedContent: true)
         }
         bookProgressReconciliationTasks[key] = task
+    }
+
+    static func reconciledBookDetail(
+        _ refreshed: LibraryBookDetail,
+        preserving confirmedProgress: LibraryBookProgress?,
+        newerThan canonicalLastUpdateMilliseconds: Int64?
+    ) -> LibraryBookDetail {
+        guard let confirmedProgress else { return refreshed }
+        guard let refreshedProgress = refreshed.progress else {
+            return refreshed.replacingProgress(with: confirmedProgress)
+        }
+        guard let canonicalLastUpdateMilliseconds else {
+            return refreshed
+        }
+        guard
+            refreshedProgress.lastUpdateMilliseconds
+                > canonicalLastUpdateMilliseconds
+        else {
+            return refreshed.replacingProgress(with: confirmedProgress)
+        }
+        return refreshed
     }
 
     private func invalidateBookProgressReconciliation(
