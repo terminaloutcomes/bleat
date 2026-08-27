@@ -1,0 +1,6 @@
+{
+  "accounts": [
+    { "id": "migration-account-a", "server": "https://one.example", "user": "one" },
+    { "id": "migration-account-b", "server": "https://two.example", "user": "two" }
+  ]
+}

@@ -1,7 +1,7 @@
 import SwiftData
 
 public enum BleatPersistenceModelCatalog {
-    public static let allModelTypes: [any PersistentModel.Type] = [
+    public static let currentModelTypes: [any PersistentModel.Type] = [
         ServerAccountRecord.self,
         AccountIdentityAliasRecord.self,
         CachedLibraryCollectionRecord.self,
@@ -18,4 +18,6 @@ public enum BleatPersistenceModelCatalog {
         PrivateCloudStatisticsDeletionRecord.self,
         StatisticsSessionAccountingRecord.self,
     ]
+
+    public static let allModelTypes = currentModelTypes
 }

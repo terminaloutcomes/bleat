@@ -40,6 +40,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case reauthenticate
     case switchAccount = "switch_account"
     case removeAccount = "remove_account"
+    case resetAppData = "reset_app_data"
     case httpRequest = "http_request"
     case loadLibraries = "load_libraries"
     case loadHome = "load_home"
@@ -96,6 +97,7 @@ public enum DiagnosticState: String, Codable, Sendable {
 
 public enum DiagnosticFailureCode: String, Codable, Sendable {
     case persistenceUnavailable = "persistence_unavailable"
+    case storedDataMigrationFailed = "stored_data_migration_failed"
     case invalidServerAddress = "invalid_server_address"
     case serverUnavailable = "server_unavailable"
     case serverRequiresHTTPS = "server_requires_https"
@@ -142,6 +144,9 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case requestTransportFailed = "request_transport_failed"
     case nonHTTPResponse = "non_http_response"
     case logStorageUnavailable = "log_storage_unavailable"
+    case localDataResetDownloadsFailed = "local_data_reset_downloads_failed"
+    case localDataResetCredentialsFailed = "local_data_reset_credentials_failed"
+    case localDataResetStoreFailed = "local_data_reset_store_failed"
     case legacyDiagnosticDirectoryUnavailable =
         "legacy_diagnostic_directory_unavailable"
     case legacyDiagnosticDirectoryRemovalFailed =

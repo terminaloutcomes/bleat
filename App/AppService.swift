@@ -8,6 +8,7 @@ private let bleatOpenIDCallbackURL =
 
 enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
+    case storedDataMigrationFailed
 }
 
 enum BleatLocalStore {
@@ -176,6 +177,13 @@ enum AppServiceError: Error, Equatable, Sendable {
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
     case privateCloud(PrivateCloudSyncFailure)
+    case localDataReset(LocalDataResetFailure)
+}
+
+enum LocalDataResetFailure: Error, Equatable, Sendable {
+    case downloads
+    case credentials(TokenVaultError)
+    case persistentStore
 }
 
 enum AccountIdentityMigrationFailure: Error, Equatable, Sendable {
@@ -693,6 +701,8 @@ protocol AppServicing: Sendable {
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(AppServiceError)
+
+    func resetLocalData() async throws(AppServiceError)
 }
 
 extension AppServicing {
@@ -987,6 +997,8 @@ extension AppServicing {
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(AppServiceError) {}
+
+    func resetLocalData() async throws(AppServiceError) {}
 }
 
 actor LiveAppService: AppServicing {
@@ -1153,11 +1165,22 @@ actor LiveAppService: AppServicing {
         openIDBrowserProvider: @escaping @MainActor @Sendable ()
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
-        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
+        let schema = Schema(
+            versionedSchema: BleatPersistenceSchemaCurrent.self
+        )
+        let storeURL: URL
         do {
-            let storeURL = try BleatLocalStore.storeURL()
+            storeURL = try BleatLocalStore.storeURL()
+        } catch {
+            throw .persistenceUnavailable
+        }
+        let existingStore = FileManager.default.fileExists(
+            atPath: storeURL.path
+        )
+        do {
             modelContainer = try ModelContainer(
                 for: schema,
+                migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
                 configurations: [
                     ModelConfiguration(
                         schema: schema,
@@ -1167,7 +1190,9 @@ actor LiveAppService: AppServicing {
                 ]
             )
         } catch {
-            throw .persistenceUnavailable
+            throw existingStore
+                ? .storedDataMigrationFailed
+                : .persistenceUnavailable
         }
 
         let endpointRouter = ServerEndpointRouter()
@@ -2815,6 +2840,42 @@ actor LiveAppService: AppServicing {
             throw .accountRemoval(error)
         }
         await presentProviderLogout(logoutResult.providerLogoutURL)
+    }
+
+    func resetLocalData() async throws(AppServiceError) {
+        let activeAccountIDs = Array(liveClients.keys)
+        for accountID in activeAccountIDs {
+            await stopLiveUpdates(for: accountID)
+        }
+        await privateCloudSync?.cancelSynchronization()
+
+        do {
+            let context = ModelContext(modelContainer)
+            try context.delete(model: ServerAccountRecord.self)
+            try context.delete(model: AccountIdentityAliasRecord.self)
+            try context.delete(model: CachedLibraryCollectionRecord.self)
+            try context.delete(model: CachedLibraryRecord.self)
+            try context.delete(model: CachedLibraryPageRecord.self)
+            try context.delete(model: CachedLibrarySearchRecord.self)
+            try context.delete(model: CachedLibraryHomeRecord.self)
+            try context.delete(model: CachedLibraryBookDetailRecord.self)
+            try context.delete(model: CachedChapterTranscriptRecord.self)
+            try context.delete(model: CachedChapterTranscriptionTaskRecord.self)
+            try context.delete(model: ListeningSliceRecord.self)
+            try context.delete(model: CompletionMilestoneRecord.self)
+            try context.delete(model: RemoteListeningSessionRecord.self)
+            try context.delete(model: PrivateCloudStatisticsDeletionRecord.self)
+            try context.delete(model: StatisticsSessionAccountingRecord.self)
+            try context.save()
+        } catch {
+            throw .localDataReset(.persistentStore)
+        }
+
+        do {
+            try await credentialStore.deleteAllCredentials()
+        } catch let error {
+            throw .localDataReset(.credentials(error))
+        }
     }
 
     func removeAccountFromThisDevice(

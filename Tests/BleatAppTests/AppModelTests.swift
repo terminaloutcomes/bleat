@@ -10669,6 +10669,92 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.accountActionStatus, .idle)
     }
 
+    func testResetLocalDataClearsEveryAccountAndReturnsToSignedOut()
+        async throws
+    {
+        let active = try fixtureAccount()
+        let inactive = try fixtureAccount(
+            accountID: "inactive-account",
+            server: "https://other.example"
+        )
+        let service = TestAppService(
+            accounts: .success([active, inactive]),
+            activeAccount: .success(active),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+
+        let resetRequestCount = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(resetRequestCount, 1)
+        XCTAssertEqual(model.phase, .signedOut)
+        XCTAssertTrue(model.accounts.isEmpty)
+        XCTAssertNil(model.account)
+        XCTAssertEqual(model.libraries, .idle)
+        XCTAssertEqual(model.statistics, .idle)
+        XCTAssertFalse(model.isResettingLocalData)
+        XCTAssertNil(model.localDataResetFailure)
+    }
+
+    func testResetLocalDataPreservesSignedInStateWhenStoreCannotBeCleared()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([]),
+            localDataReset: .failure(.localDataReset(.persistentStore))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+
+        let resetRequestCount = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(resetRequestCount, 1)
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(
+            model.localDataResetFailure,
+            AppFailure(
+                operation: .resetAppData,
+                serviceError: .localDataReset(.persistentStore)
+            )
+        )
+    }
+
+    func testResetLocalDataDisablesPrivateCloudBeforeItCanResynchronize()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([])
+        )
+        let model = AppModel(service: service)
+        await model.start()
+
+        await model.resetLocalData()
+        let synchronizationRequestsAfterReset = await service
+            .privateCloudSynchronizationRequestCount()
+        await model.synchronizePrivateCloud()
+
+        XCTAssertFalse(model.privateCloudSyncEnabled)
+        XCTAssertEqual(model.privateCloudState, .disabled)
+        let syncSettingRequests = await service.privateCloudSyncSettingRequests()
+        XCTAssertEqual(syncSettingRequests.count, 1)
+        XCTAssertEqual(syncSettingRequests.first?.enabled, false)
+        XCTAssertEqual(syncSettingRequests.first?.deleteCloudData, false)
+        let synchronizationRequestCount = await service
+            .privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(
+            synchronizationRequestCount,
+            synchronizationRequestsAfterReset
+        )
+    }
+
     func testRemoveInactiveAccountKeepsBrowsingAccount() async throws {
         let active = try fixtureAccount()
         let inactive = try fixtureAccount(
@@ -12629,6 +12715,7 @@ private actor TestAppService: AppServicing {
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
     private var removeAccountResult: Result<Void, AppServiceError>
+    private var localDataResetResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -12662,6 +12749,7 @@ private actor TestAppService: AppServicing {
     private let transcriptionTaskStateSaveResults:
         [Result<Void, AppServiceError>]
     private let privateCloudSyncAvailable: Bool
+    private var privateCloudSyncEnabled = true
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?
@@ -12705,9 +12793,13 @@ private actor TestAppService: AppServicing {
     private var recordedDownloadPlanRequests: [LibraryItemID] = []
     private var recordedAuthorizedDownloadRequests: [DownloadTaskIdentity] = []
     private var recordedRemovedAccounts: [ServerAccount] = []
+    private var localDataResetRequests = 0
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
     private var privateCloudCancellationRequests = 0
+    private var recordedPrivateCloudSyncSettingRequests:
+        [(enabled: Bool, deleteCloudData: Bool)] = []
+    private var privateCloudSynchronizationRequests = 0
     private var recordedCloudResolutions:
         [(accountID: AccountID, accept: Bool)] = []
     private var recordedCloudConfigurationResolutions:
@@ -12818,6 +12910,7 @@ private actor TestAppService: AppServicing {
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
+        localDataReset: Result<Void, AppServiceError> = .success(()),
         loginGate: AsyncGate? = nil,
         accountUpdateGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -12879,6 +12972,7 @@ private actor TestAppService: AppServicing {
         downloadPlanResult = downloadPlan
         authorizedDownloadRequestResult = authorizedDownloadRequest
         removeAccountResult = removeAccount
+        localDataResetResult = localDataReset
         self.loginGate = loginGate
         self.accountUpdateGate = accountUpdateGate
         self.removeGate = removeGate
@@ -12921,6 +13015,10 @@ private actor TestAppService: AppServicing {
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSyncAvailable
+    }
+
+    func isPrivateCloudSyncEnabled() async -> Bool {
+        privateCloudSyncEnabled
     }
 
     func cachedChapterTranscripts(
@@ -13032,6 +13130,7 @@ private actor TestAppService: AppServicing {
     func synchronizePrivateCloud() async throws(AppServiceError)
         -> [CloudServerConfigurationChange]
     {
+        privateCloudSynchronizationRequests += 1
         if let privateCloudSyncGate {
             await privateCloudSyncGate.enterAndWait()
         }
@@ -13041,6 +13140,24 @@ private actor TestAppService: AppServicing {
     func cancelPrivateCloudSynchronization() async {
         privateCloudCancellationRequests += 1
         await privateCloudSyncGate?.release()
+    }
+
+    func setPrivateCloudSyncEnabled(
+        _ enabled: Bool,
+        deleteCloudData: Bool
+    ) async throws(AppServiceError) {
+        privateCloudSyncEnabled = enabled
+        recordedPrivateCloudSyncSettingRequests.append((enabled, deleteCloudData))
+    }
+
+    func privateCloudSyncSettingRequests()
+        -> [(enabled: Bool, deleteCloudData: Bool)]
+    {
+        recordedPrivateCloudSyncSettingRequests
+    }
+
+    func privateCloudSynchronizationRequestCount() -> Int {
+        privateCloudSynchronizationRequests
     }
 
     func pendingPrivateCloudConfigurationConflict() async
@@ -13660,6 +13777,15 @@ private actor TestAppService: AppServicing {
             await removeGate.enterAndWait()
         }
         try value(from: removeAccountResult)
+    }
+
+    func resetLocalData() async throws(AppServiceError) {
+        localDataResetRequests += 1
+        try value(from: localDataResetResult)
+    }
+
+    func resetLocalDataRequestCount() -> Int {
+        localDataResetRequests
     }
 
     func setLibraries(

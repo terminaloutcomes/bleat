@@ -193,7 +193,14 @@ extension AppFailure {
         case (.loadBook, .unavailableOffline): .bookUnavailableOffline
         case (.loadBook, .serverUnavailable): .bookUnavailable
         case (.loadBook, .requestRejected): .bookRequestRejected
+        case (_, .localDataReset(.downloads)):
+            .localDataResetDownloadsFailed
+        case (_, .localDataReset(.credentials)):
+            .localDataResetCredentialsFailed
+        case (_, .localDataReset(.persistentStore)):
+            .localDataResetStoreFailed
         case (_, .persistenceUnavailable): .persistenceUnavailable
+        case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput
         case (_, .serverRequiresHTTPS): .serverRequiresHTTPS
         case (_, .serverNotReady): .serverNotReady
