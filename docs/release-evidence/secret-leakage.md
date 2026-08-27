@@ -9,7 +9,7 @@ cookies, and playback-session routes remain outside this gate's scope.
 
 | item | recorded value |
 | --- | --- |
-| source commit | `f7d9b30a3a5557e4d6baad8aad42701c4789ad4a` |
+| source commit | `014eec32aa74d7db6feb37aeacc76064b5bfe286` |
 | source tree | clean |
 | evaluation date | 2026-08-27 (Australia/Brisbane) |
 | application version | 0.1.3 |
@@ -56,8 +56,8 @@ secret values or digests.
 
 ## Result
 
-The final clean-source run executed nine tests and scanned 5,854 files totaling
-1,790,437,058 bytes across nine labeled surfaces. Two refresh-token occurrences
+The final clean-source run executed nine tests and scanned 5,910 files totaling
+1,787,872,690 bytes across nine labeled surfaces. Two refresh-token occurrences
 in the disposable server's raw access logs were sanitized from the temporary
 server-artifact copy before scanning; only the privacy-safe redaction metadata
 was retained. They are test-harness evidence inputs, not a Bleat deployment
