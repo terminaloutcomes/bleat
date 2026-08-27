@@ -1005,8 +1005,9 @@ candidate. On AP16, verify:
 - whole-book seeking, chapter/file transitions, and persisted playback speed;
 - background, lock-screen, Control Center, wired/headset, Bluetooth, and
   AirPlay controls, including removed-output pause behavior;
-- download continuation across backgrounding and relaunch, followed by local
-  playback with the server unavailable;
+- the [AC-22 background-download recovery matrix](docs/release-evidence/download-recovery.md), including suspension, termination/relaunch, offline recovery, and a mid-range 401 replacement.
+  Record the required redacted device and server evidence rather than treating a
+  build or Simulator result as completion;
 - Low Data Mode suspends the foreground WebSocket without blocking REST or
   downloaded playback, then reconnects once with a catch-up refresh after Low
   Data Mode is disabled;
