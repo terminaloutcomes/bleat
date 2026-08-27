@@ -5,6 +5,7 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_environment_script="${bleat_script_dir}/live-test-environment.sh"
+readonly bleat_harness_override="${bleat_repository_root}/TestSupport/ServerHarness/compose.release-secret-scan.yaml"
 readonly bleat_run_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 readonly bleat_private_root="$(mktemp -d /tmp/bleat-release-secret-scan.XXXXXX)"
 readonly bleat_report_root="${bleat_repository_root}/.build/release-secret-scan"
@@ -22,6 +23,7 @@ readonly bleat_secret_broker_path="/v1/private-test-secret/${bleat_run_id}"
 readonly bleat_device_type="${BLEAT_LIVE_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
 readonly bleat_bundle_id="${BUNDLE_ID_PREFIX:-com.terminaloutcomes}.Bleat"
 readonly bleat_port_base="$((31000 + RANDOM % 15000))"
+readonly bleat_test_password="$(uuidgen | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr '[:upper:]' '[:lower:]')!+/%"
 
 export BLEAT_ABS_ROOT_PORT="${bleat_port_base}"
 export BLEAT_ABS_PREFIX_PORT="$((bleat_port_base + 1))"
@@ -39,8 +41,8 @@ export BLEAT_SECRET_BROKER_HTTPS_PORT="$((bleat_port_base + 11))"
 export BLEAT_API_POSTGRES_PASSWORD="telemetry-${bleat_run_id}"
 export BLEAT_API_PUBLIC_ISSUER="http://host.docker.internal:${BLEAT_API_TEST_PORT}"
 export BLEAT_COMPOSE_PROJECT_NAME="${bleat_live_project}"
+export BLEAT_COMPOSE_OVERRIDE_FILE="${bleat_harness_override}"
 export BLEAT_TEST_USERNAME="bleat-${bleat_run_id}"
-export BLEAT_TEST_PASSWORD="$(uuidgen | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr '[:upper:]' '[:lower:]')!+/%"
 export BLEAT_LIVE_APP_URL="https://localhost:${BLEAT_HTTPS_PREFIX_PORT}/audiobookshelf"
 export BLEAT_LIVE_USERNAME="${BLEAT_TEST_USERNAME}"
 export TEST_RUNNER_BLEAT_LIVE_APP_URL="${BLEAT_LIVE_APP_URL}"
@@ -100,7 +102,7 @@ bleat_cleanup() {
     case "${bleat_private_root}" in
         /tmp/bleat-release-secret-scan.*) rm -rf "${bleat_private_root}" ;;
     esac
-    unset BLEAT_TEST_PASSWORD BLEAT_API_POSTGRES_PASSWORD
+    unset BLEAT_API_POSTGRES_PASSWORD
     exit "${exit_code}"
 }
 
@@ -109,6 +111,14 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 131' QUIT
 trap 'exit 143' TERM
+
+bleat_live_compose() {
+    docker compose \
+        --project-name "${bleat_live_project}" \
+        --file "${bleat_repository_root}/TestSupport/ServerHarness/compose.yaml" \
+        --file "${bleat_harness_override}" \
+        "$@"
+}
 
 bleat_verify_result() {
     local result_bundle="$1"
@@ -191,6 +201,26 @@ bleat_run_test() {
     fi
 }
 
+bleat_capture_app_owned_data() {
+    local label="$1"
+    local data_container
+    local destination="${bleat_scan_root}/app-owned-data/${label}"
+    data_container="$(
+        xcrun simctl get_app_container \
+            "${bleat_simulator_id}" "${bleat_bundle_id}" data
+    )"
+    mkdir -p "${destination}"
+    ditto "${data_container}" "${destination}"
+    local private_capture="${destination}/Library/Application Support/Bleat/ReleaseSecretScan"
+    case "${private_capture}" in
+        "${bleat_scan_root}/app-owned-data/"*)
+            rm -rf "${private_capture}"
+            ;;
+    esac
+    [[ ! -e "${private_capture}" ]] \
+        || { print -u2 "Private capture remained in ${label} snapshot"; exit 1; }
+}
+
 for command in docker jq python3 xcodebuild xcrun uuidgen; do
     command -v "${command}" >/dev/null \
         || { print -u2 "Required command is unavailable: ${command}"; exit 1; }
@@ -198,14 +228,20 @@ done
 
 chmod 700 "${bleat_private_root}"
 rm -rf "${bleat_report_root}"
+case "${bleat_derived_data}" in
+    "${bleat_repository_root}"/.build/release-secret-compile)
+        rm -rf "${bleat_derived_data}"
+        ;;
+esac
 mkdir -p "${bleat_report_root}" "${bleat_result_root}" \
     "${bleat_process_root}" "${bleat_scan_root}" "${bleat_secret_root}" \
     "${bleat_telemetry_capture}"
 
 bleat_stage="scanner self-test"
 python3 -m unittest Tests.ScriptTests.test_scan_release_secrets
-jq --null-input --arg value "${BLEAT_TEST_PASSWORD}" \
-    '{secrets: [{label: "password", value: $value}]}' \
+print -rn -- "${bleat_test_password}" \
+    | jq --raw-input --slurp \
+        '{secrets: [{label: "password", value: .}]}' \
     >"${bleat_secret_root}/password.json"
 python3 "${bleat_script_dir}/serve-private-test-secret.py" \
     --manifest "${bleat_secret_root}/password.json" \
@@ -244,7 +280,8 @@ curl --silent --fail \
 
 bleat_stage="Audiobookshelf environment startup"
 bleat_harness_started=1
-"${bleat_environment_script}" reset
+BLEAT_TEST_PASSWORD="${bleat_test_password}" \
+    "${bleat_environment_script}" reset
 
 bleat_stage="Simulator creation"
 bleat_runtime="$(
@@ -281,18 +318,20 @@ xcodebuild -quiet \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BLEAT_RELEASE_SECRET_SCAN' \
     build-for-testing >"${bleat_process_root}/build-for-testing.log" 2>&1
 
-bleat_xctestrun="$(
-    find "${bleat_derived_data}/Build/Products" -name '*.xctestrun' -print -quit
-)"
-[[ -n "${bleat_xctestrun}" ]] \
-    || { print -u2 "Release build did not produce an xctestrun"; exit 1; }
+typeset -a bleat_xctestruns
+bleat_xctestruns=("${bleat_derived_data}"/Build/Products/**/*.xctestrun(N))
+(( ${#bleat_xctestruns} == 1 )) \
+    || { print -u2 "Release build did not produce exactly one xctestrun"; exit 1; }
+bleat_xctestrun="${bleat_xctestruns[1]}"
 
 bleat_run_test online \
     BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload
+bleat_capture_app_owned_data signed-in-online
 bleat_run_test capture-initial \
     BleatAppTests/ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh
 bleat_run_test refresh \
     BleatUITests/BleatLiveUITests/testReleaseSecretScanRefreshAfterTokenInvalidation
+bleat_capture_app_owned_data signed-in-post-refresh
 bleat_run_test capture-rotated \
     BleatAppTests/ReleaseSecretLeakageTests/testCaptureRotatedTokens
 
@@ -308,13 +347,11 @@ bleat_run_test remove-private-capture \
     BleatAppTests/ReleaseSecretLeakageTests/testRemovePrivateCapture
 
 bleat_stage="offline restoration journey"
-docker compose --project-name "${bleat_live_project}" \
-    --file "${bleat_repository_root}/TestSupport/ServerHarness/compose.yaml" \
+bleat_live_compose \
     stop audiobookshelf-root audiobookshelf-prefix keycloak
 bleat_run_test offline \
     BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress
-docker compose --project-name "${bleat_live_project}" \
-    --file "${bleat_repository_root}/TestSupport/ServerHarness/compose.yaml" \
+bleat_live_compose \
     up --detach --wait audiobookshelf-root audiobookshelf-prefix
 "${bleat_environment_script}" wait
 bleat_run_test logout \
@@ -325,17 +362,12 @@ bleat_run_test logout-private-capture \
     BleatAppTests/ReleaseSecretLeakageTests/testPrivateCaptureRemainsRemovedAfterLogout
 
 bleat_stage="runtime artifact collection"
-bleat_data_container="$(
-    xcrun simctl get_app_container \
-        "${bleat_simulator_id}" "${bleat_bundle_id}" data
-)"
 mkdir -p "${bleat_scan_root}/runtime-logs" \
-    "${bleat_scan_root}/app-container" \
     "${bleat_scan_root}/server-artifacts"
 xcrun simctl spawn "${bleat_simulator_id}" log collect \
     --output "${bleat_scan_root}/runtime-logs/Bleat.logarchive" \
     --last 30m >"${bleat_process_root}/log-collect.log" 2>&1
-ditto "${bleat_data_container}" "${bleat_scan_root}/app-container"
+bleat_capture_app_owned_data post-logout
 "${bleat_environment_script}" artifacts \
     "${bleat_scan_root}/server-artifacts"
 docker compose --project-name "${bleat_telemetry_project}" \
@@ -376,9 +408,10 @@ python3 "${bleat_script_dir}/scan-release-secrets.py" \
     --manifest "${bleat_secret_root}/rotated.json" \
     --redact-surface "server-artifacts=${bleat_scan_root}/server-artifacts" \
     --surface "process-output=${bleat_process_root}" \
+    --surface "process-configuration=${bleat_xctestrun}" \
     --surface "xcresult-bundles=${bleat_result_root}" \
     --surface "unified-logs=${bleat_scan_root}/runtime-logs" \
-    --surface "app-owned-data=${bleat_scan_root}/app-container" \
+    --surface "app-owned-data=${bleat_scan_root}/app-owned-data" \
     --surface "server-artifacts=${bleat_scan_root}/server-artifacts" \
     --surface "remote-telemetry=${bleat_telemetry_capture}" \
     --surface "release-test-products=${bleat_derived_data}/Build/Products" \
@@ -397,6 +430,11 @@ bleat_build="$(
         "${bleat_repository_root}/project.yml"
 )"
 bleat_commit="$(git -C "${bleat_repository_root}" rev-parse HEAD)"
+if [[ -z "$(git -C "${bleat_repository_root}" status --porcelain --untracked-files=all)" ]]; then
+    bleat_source_tree_state="clean"
+else
+    bleat_source_tree_state="dirty"
+fi
 bleat_platform="$(xcodebuild -version | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 bleat_runtime_name="$(
     xcrun simctl list runtimes --json \
@@ -408,6 +446,7 @@ jq --null-input \
     --slurpfile tests "${bleat_report_root}/tests.json" \
     --arg status passed \
     --arg sourceCommit "${bleat_commit}" \
+    --arg sourceTreeState "${bleat_source_tree_state}" \
     --arg applicationVersion "${bleat_version}" \
     --arg applicationBuild "${bleat_build}" \
     --arg platform "${bleat_platform}; ${bleat_runtime_name}" \
@@ -415,6 +454,7 @@ jq --null-input \
     '{
         status: $status,
         sourceCommit: $sourceCommit,
+        sourceTreeState: $sourceTreeState,
         applicationVersion: $applicationVersion,
         applicationBuild: $applicationBuild,
         platform: $platform,

@@ -15,13 +15,29 @@ from urllib.parse import quote
 
 def representations(value: str) -> dict[str, bytes]:
     raw = value.encode("utf-8")
+    json_unicode = json.dumps(value, ensure_ascii=False)[1:-1]
+    json_ascii = json.dumps(value, ensure_ascii=True)[1:-1]
+    json_ascii_upper = re.sub(
+        r"\\u([0-9a-fA-F]{4})",
+        lambda match: "\\u" + match.group(1).upper(),
+        json_ascii,
+    )
     encoded = {
         "raw-utf8": raw,
         "authorization-bearer": f"Bearer {value}".encode("utf-8"),
         "url-percent": quote(value, safe="").encode("ascii"),
-        "json-escaped": json.dumps(value, ensure_ascii=False)[1:-1].encode(
+        "json-escaped": json_unicode.encode("utf-8"),
+        "json-escaped-slashes": json_unicode.replace("/", "\\/").encode(
             "utf-8"
         ),
+        "json-ascii-escaped": json_ascii.encode("ascii"),
+        "json-ascii-escaped-slashes": json_ascii.replace(
+            "/", "\\/"
+        ).encode("ascii"),
+        "json-ascii-uppercase": json_ascii_upper.encode("ascii"),
+        "json-ascii-uppercase-slashes": json_ascii_upper.replace(
+            "/", "\\/"
+        ).encode("ascii"),
         "base64": base64.b64encode(raw),
         "base64url-padded": base64.urlsafe_b64encode(raw),
         "base64url-unpadded": base64.urlsafe_b64encode(raw).rstrip(b"="),

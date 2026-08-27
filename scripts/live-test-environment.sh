@@ -5,6 +5,7 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_compose_file="${bleat_repository_root}/TestSupport/ServerHarness/compose.yaml"
+readonly bleat_compose_override_file="${BLEAT_COMPOSE_OVERRIDE_FILE:-}"
 readonly bleat_project_name="${BLEAT_COMPOSE_PROJECT_NAME:-bleat-live-tests}"
 readonly bleat_root_port="${BLEAT_ABS_ROOT_PORT:-13378}"
 readonly bleat_prefix_port="${BLEAT_ABS_PREFIX_PORT:-13379}"
@@ -18,9 +19,13 @@ readonly bleat_test_username="${BLEAT_TEST_USERNAME:-}"
 readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-}"
 
 bleat_compose() {
+    local -a compose_files=(--file "${bleat_compose_file}")
+    if [[ -n "${bleat_compose_override_file}" ]]; then
+        compose_files+=(--file "${bleat_compose_override_file}")
+    fi
     docker compose \
         --project-name "${bleat_project_name}" \
-        --file "${bleat_compose_file}" \
+        "${compose_files[@]}" \
         "$@"
 }
 

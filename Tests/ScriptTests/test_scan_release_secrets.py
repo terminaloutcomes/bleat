@@ -15,13 +15,33 @@ SPEC.loader.exec_module(SCANNER)
 class ReleaseSecretScannerTests(unittest.TestCase):
     def test_every_supported_representation_is_detected(self):
         secret = 'sentinel-!"\\/+% unicode-羊-0123456789'
+        seen = set()
         for name, value in SCANNER.representations(secret).items():
+            if value in seen:
+                continue
+            seen.add(value)
             with self.subTest(representation=name):
                 findings = SCANNER.scan_bytes(value, {"fixture": secret})
-                self.assertTrue(findings, name)
                 self.assertTrue(
-                    any(finding[0] == "fixture" for finding in findings)
+                    any(
+                        finding[0] == "fixture" and finding[1] == name
+                        for finding in findings
+                    ),
+                    name,
                 )
+
+    def test_foundation_style_json_escaping_is_detected(self):
+        secret = "private/羊-refresh-token-0123456789"
+        findings = SCANNER.scan_bytes(
+            b"private\\/\\u7F8A-refresh-token-0123456789",
+            {"fixture": secret},
+        )
+        self.assertTrue(
+            any(
+                finding[1] == "json-ascii-uppercase-slashes"
+                for finding in findings
+            )
+        )
 
     def test_safe_surface_has_zero_matches(self):
         findings = SCANNER.scan_bytes(
