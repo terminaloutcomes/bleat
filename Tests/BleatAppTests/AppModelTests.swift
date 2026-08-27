@@ -2878,6 +2878,256 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    func testTransportFailureWaitsForNetworkAndPreservesDisplayedProgress()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatActiveTransferRecovery-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Interrupted active transfer",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "active-transfer",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(service: service, storageRootURL: root)
+        await model.start(account: account)
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "active-transfer"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let range = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 5,
+                expectedByteLength: identity.expectedByteLength,
+                chunkByteLength: DownloadModel.rangeChunkByteLength
+            )
+        )
+        let session = URLSession(configuration: .ephemeral)
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: nil
+        ).encode()
+
+        model.urlSession(
+            session,
+            downloadTask: task,
+            didWriteData: 2,
+            totalBytesWritten: 2,
+            totalBytesExpectedToWrite: range.length
+        )
+        for _ in 0..<100 {
+            guard let record = model.records.first else { break }
+            if model.displayedDownloadedByteLength(for: record) == 7 {
+                break
+            }
+            await Task.yield()
+        }
+        let activeRecord = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(
+            model.displayedDownloadedByteLength(for: activeRecord),
+            7
+        )
+
+        model.urlSession(
+            session,
+            task: task,
+            didCompleteWithError: URLError(.notConnectedToInternet)
+        )
+        for _ in 0..<100 {
+            if model.pendingRecoveryDownloadIDsForTesting.contains(
+                identity.downloadID
+            ) {
+                break
+            }
+            await Task.yield()
+        }
+
+        let waitingRecord = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(waitingRecord.manifest.state, .downloading)
+        XCTAssertTrue(model.isWaitingForNetwork(waitingRecord))
+        XCTAssertNil(model.failure)
+        XCTAssertEqual(
+            model.displayedDownloadedByteLength(for: waitingRecord),
+            7
+        )
+        let descriptorsWhileWaiting =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptorsWhileWaiting.isEmpty)
+
+        await service.setDownloadPlan(.success(plan))
+        await model.recoverAfterNetworkChange(for: [account])
+
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        let resumedDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(resumedDescriptors.count, 2)
+        XCTAssertEqual(
+            resumedDescriptors.filter {
+                $0.identity.trackIndex == identity.trackIndex
+            }.count,
+            1
+        )
+        let resumedRecord = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(resumedRecord.manifest.state, .downloading)
+        XCTAssertEqual(
+            model.displayedDownloadedByteLength(for: resumedRecord),
+            7
+        )
+        session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testTransportFailureUsesChangedPrimaryFallbackExactlyOnce()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatPrimaryFallback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Local fallback",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "primary-fallback",
+            committedByteCount: 5
+        )
+        let localURL = try XCTUnwrap(
+            URL(string: "https://192.0.2.1/audio")
+        )
+        let primaryURL = try XCTUnwrap(
+            URL(string: "https://192.0.2.2/audio")
+        )
+        let failedRequests = ["bytes=0-3", "bytes=5-7"].map { range in
+            var request = URLRequest(url: localURL)
+            request.setValue(range, forHTTPHeaderField: "Range")
+            request.setValue(
+                "\"validator\"",
+                forHTTPHeaderField: "If-Range"
+            )
+            return request
+        }
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(failedRequests[0]),
+            primaryFallbackURL: primaryURL
+        )
+        let model = DownloadModel(service: service, storageRootURL: root)
+        await model.start(account: account)
+        let identities = try plan.tracks.map { track in
+            try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "primary-fallback"),
+                accountID: account.id,
+                itemID: detail.id,
+                track: track
+            )
+        }
+        let ranges = try [
+            XCTUnwrap(
+                DownloadByteRange.next(
+                    committedByteLength: 0,
+                    expectedByteLength: identities[0].expectedByteLength,
+                    chunkByteLength: DownloadModel.rangeChunkByteLength
+                )
+            ),
+            XCTUnwrap(
+                DownloadByteRange.next(
+                    committedByteLength: 5,
+                    expectedByteLength: identities[1].expectedByteLength,
+                    chunkByteLength: DownloadModel.rangeChunkByteLength
+                )
+            ),
+        ]
+        let session = URLSession(configuration: .ephemeral)
+        let tasks = try zip(identities, ranges).enumerated().map {
+            index, pair in
+            let task = session.downloadTask(with: failedRequests[index])
+            task.taskDescription = try DownloadChunkTaskDescription(
+                identity: pair.0,
+                range: pair.1,
+                validator: nil
+            ).encode()
+            return task
+        }
+        for task in tasks {
+            model.urlSession(
+                session,
+                task: task,
+                didCompleteWithError: URLError(.cannotConnectToHost)
+            )
+        }
+        var fallbackRequests: [URLRequest] = []
+        for _ in 0..<100 {
+            fallbackRequests =
+                await model.scheduledTransferRequestsForTesting()
+            if fallbackRequests.count == 2 {
+                break
+            }
+            await Task.yield()
+        }
+
+        XCTAssertEqual(fallbackRequests.count, 2)
+        XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
+        XCTAssertEqual(
+            Set(fallbackRequests.compactMap {
+                $0.value(forHTTPHeaderField: "Range")
+            }),
+            ["bytes=0-3", "bytes=5-7"]
+        )
+        XCTAssertTrue(
+            fallbackRequests.allSatisfy {
+                $0.value(forHTTPHeaderField: "If-Range")
+                    == "\"validator\""
+            }
+        )
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(descriptors.count, 2)
+        XCTAssertEqual(
+            descriptors.map(\.identity.trackIndex).sorted(),
+            [0, 1]
+        )
+
+        session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
     func testNetworkRecoveryLeavesUserPausedDownloadsPaused() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -13091,6 +13341,7 @@ private actor TestAppService: AppServicing {
     private var downloadPlanResult: Result<DownloadPlan, AppServiceError>?
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
+    private let primaryFallbackURL: URL?
     private var removeAccountResult: Result<Void, AppServiceError>
     private var localDataResetResult: Result<Void, AppServiceError>
     private var privateCloudSyncSettingResult:
@@ -13288,6 +13539,7 @@ private actor TestAppService: AppServicing {
         downloadPlan: Result<DownloadPlan, AppServiceError>? = nil,
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
+        primaryFallbackURL: URL? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
         localDataReset: Result<Void, AppServiceError> = .success(()),
         privateCloudSyncSetting:
@@ -13352,6 +13604,7 @@ private actor TestAppService: AppServicing {
         playbackResults = playback
         downloadPlanResult = downloadPlan
         authorizedDownloadRequestResult = authorizedDownloadRequest
+        self.primaryFallbackURL = primaryFallbackURL
         removeAccountResult = removeAccount
         localDataResetResult = localDataReset
         privateCloudSyncSettingResult = privateCloudSyncSetting
@@ -13487,6 +13740,17 @@ private actor TestAppService: AppServicing {
                 }
             }
         }
+    }
+
+    func primaryFallbackDownloadRequest(
+        for failedRequest: URLRequest
+    ) async -> URLRequest? {
+        guard let primaryFallbackURL else {
+            return nil
+        }
+        var request = failedRequest
+        request.url = primaryFallbackURL
+        return request
     }
 
     func emitNetworkPathUpdate(

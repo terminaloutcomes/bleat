@@ -4322,6 +4322,9 @@ private struct BookDetailView: View {
         if record.manifest.state == .deleting {
             return "Removing"
         }
+        if model.downloads.isWaitingForNetwork(record) {
+            return "Waiting for network"
+        }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
         ) {
@@ -4363,6 +4366,9 @@ private struct BookDetailView: View {
         if record.manifest.state == .deleting {
             return "trash"
         }
+        if model.downloads.isWaitingForNetwork(record) {
+            return "wifi.exclamationmark"
+        }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
         ) {
@@ -4397,7 +4403,7 @@ private struct BookDetailView: View {
         _ record: DownloadedBookRecord
     ) -> String {
         DownloadByteProgressFormatter.string(
-            downloadedBytes: model.downloads.downloadedByteLength(
+            downloadedBytes: model.downloads.displayedDownloadedByteLength(
                 for: record
             ),
             expectedBytes: model.downloads.expectedByteLength(for: record)
@@ -5254,7 +5260,7 @@ private struct DownloadStorageView: View {
                 Spacer()
 
                 Text(
-                    "\(byteCount(model.downloads.downloadedByteLength(for: record))) of \(byteCount(model.downloads.expectedByteLength(for: record)))"
+                    "\(byteCount(model.downloads.displayedDownloadedByteLength(for: record))) of \(byteCount(model.downloads.expectedByteLength(for: record)))"
                 )
             }
             .font(.caption)
@@ -5382,6 +5388,9 @@ private struct DownloadStorageView: View {
     ) -> String {
         if record.manifest.state == .deleting {
             return "Removing"
+        }
+        if model.downloads.isWaitingForNetwork(record) {
+            return "Waiting for network"
         }
         if let state = model.downloads.automaticCacheState(
             for: record
