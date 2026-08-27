@@ -8444,6 +8444,77 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.bookProgressFailure)
     }
 
+    func testSetFinishedReconciliationFailuresRecordTypedDiagnostics()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success(fixtureShelves(libraryID: library.id)),
+            search: .success([item]),
+            bookDetail: .success(detail)
+        )
+        await service.queueBookDetails(
+            [
+                .success(detail),
+                .success(detail),
+                .failure(.bookDetail(.remote(.unexpectedStatus(503)))),
+            ],
+            gates: []
+        )
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        await model.start()
+        await model.loadBookDetail(item)
+        await model.search(query: "Test")
+        await service.setSearch(
+            .failure(
+                .searchCoordinator(
+                    .repository(.remote(.unexpectedStatus(503)))
+                )
+            )
+        )
+
+        await model.setFinished(true, detail: detail)
+
+        var events = await diagnostics.events()
+        for _ in 0..<100
+        where !events.contains(where: {
+            $0.name == .operationFailed && $0.operation == .search
+        }) {
+            try? await Task.sleep(for: .milliseconds(10))
+            events = await diagnostics.events()
+        }
+        XCTAssertTrue(
+            events.contains {
+                $0.name == .operationFailed
+                    && $0.operation == .loadBook
+                    && $0.failureCode == .bookUnavailable
+            }
+        )
+        XCTAssertTrue(
+            events.contains {
+                $0.name == .operationFailed
+                    && $0.operation == .search
+                    && $0.failureCode == .serverUnavailable
+            }
+        )
+        XCTAssertTrue(model.isBookFinished(detail.id))
+        XCTAssertNil(model.bookProgressFailure)
+        guard case .loaded(let committedDetail) = model.bookDetail else {
+            return XCTFail("Expected confirmed detail to remain loaded")
+        }
+        XCTAssertTrue(committedDetail.progress?.isFinished ?? false)
+        guard case .loaded = model.searchResults else {
+            return XCTFail("Expected prior Search results to remain loaded")
+        }
+    }
+
     func testPlaybackStartRequestsAutomaticServerPreference() async throws {
         let fixture = try playbackRecoveryFixture()
         defer {

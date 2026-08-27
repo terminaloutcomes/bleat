@@ -2904,10 +2904,17 @@ final class AppModel {
             else {
                 return
             }
+            let failure = AppFailure(operation: .search, serviceError: error)
             if preservingLoadedContent {
+                await diagnostics.record(
+                    .failed(
+                        .search,
+                        category: .api,
+                        failureCode: failure.diagnosticFailureCode
+                    )
+                )
                 return
             }
-            let failure = AppFailure(operation: .search, serviceError: error)
             searchResults = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -3510,24 +3517,46 @@ final class AppModel {
                     revision: revision
                 )
             }
-            if selectedBookID == detail.id,
-                let reconciled = try? await service.bookDetail(
-                    for: account,
-                    libraryID: detail.libraryID,
-                    itemID: detail.id
-                ),
-                isCurrentBookProgressMutation(
-                    key: key,
-                    contextGeneration: contextGeneration,
-                    revision: revision
-                ),
-                selectedBookID == detail.id
-            {
-                bookDetail = .loaded(reconciled)
-                bookFinishedStates[detail.id] =
-                    reconciled.progress?.isFinished
-                    ?? bookFinishedStates[detail.id]
-                    ?? false
+            if selectedBookID == detail.id {
+                do {
+                    let reconciled = try await service.bookDetail(
+                        for: account,
+                        libraryID: detail.libraryID,
+                        itemID: detail.id
+                    )
+                    guard isCurrentBookProgressMutation(
+                        key: key,
+                        contextGeneration: contextGeneration,
+                        revision: revision
+                    ), selectedBookID == detail.id else { return }
+                    bookDetail = .loaded(reconciled)
+                    bookFinishedStates[detail.id] =
+                        reconciled.progress?.isFinished
+                        ?? bookFinishedStates[detail.id]
+                        ?? false
+                } catch let error {
+                    guard isCurrentBookProgressMutation(
+                        key: key,
+                        contextGeneration: contextGeneration,
+                        revision: revision
+                    ), selectedBookID == detail.id else { return }
+                    let failure =
+                        if let serviceError = error as? AppServiceError {
+                            AppFailure(
+                                operation: .loadBook,
+                                serviceError: serviceError
+                            )
+                        } else {
+                            AppFailure(.loadBook, .invalidServerResponse)
+                        }
+                    await diagnostics.record(
+                        .failed(
+                            .loadBook,
+                            category: .api,
+                            failureCode: failure.diagnosticFailureCode
+                        )
+                    )
+                }
             }
             guard isCurrentBookProgressMutation(
                 key: key,
