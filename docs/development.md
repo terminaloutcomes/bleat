@@ -71,6 +71,96 @@ export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 mise run macos:test
 ```
 
+
+### Paid developer capability build modes
+
+`BUILD_WITHOUT_PAID_DEVELOPER` accepts exactly `YES` or `NO` and defaults to
+`NO`. Set it to `YES` for a Personal Team build: it overrides the individual
+capability settings, removes both CloudKit and App Attest from signing, and
+retains the Keychain entitlement.
+
+When the global setting is `NO`, the individual settings remain available:
+
+- `BLEAT_CLOUDKIT_MODE=enabled|disabled` controls CloudKit signing and runtime
+  synchronization.
+- `BLEAT_APP_ATTEST_MODE=enabled|disabled` controls App Attest signing and
+  whether the system App Attest telemetry attester is available.
+
+Both individual settings default to `enabled` for paid-team, beta, and
+distribution builds. Unsupported values fail the build. The selected effective
+modes are embedded in `Info.plist`, and Xcode selects the matching entitlement
+file from all four CloudKit/App Attest combinations.
+
+The physical-device workflows use paid capabilities by default:
+
+```sh
+mise run iphone:build
+```
+
+For a direct Personal Team Xcode build, pass the global setting:
+
+```sh
+xcodebuild \
+  -project Bleat.xcodeproj \
+  -scheme Bleat \
+  -destination 'generic/platform=iOS' \
+  BUILD_WITHOUT_PAID_DEVELOPER=YES \
+  build
+```
+
+Build and launch a development-signed macOS app:
+
+```sh
+export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
+mise run macos
+```
+
+The signed app is written to
+`.build/macos-signed/Build/Products/Release/Bleat.app`. The task
+verifies its signature, development team, and application-identifier
+entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
+identifier is unavailable to the selected team. Keep the same team and bundle
+identifier to retain access to existing Keychain credentials.
+
+Signed macOS launch, native login, and account restoration are supported.
+The signed login/relaunch evidence is tracked in
+[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
+post-1.0 work and does not block the 1.0 release. Notarization, distribution,
+Mac-specific interface adaptation, and unlisted Mac media or background
+behavior are also not release gates.
+
+Build products and intermediate files are written beneath `.build/`.
+Remove all repository-owned build and app-live artifacts with:
+
+```sh
+mise run clean
+```
+
+Use `mise run clean -- --dry-run` to preview the cleanup. The cleanup does not
+touch tracked fixtures, `.git`, or caches outside the repository.
+
+If `project.yml` changes, regenerate the checked-in project before building:
+
+```sh
+brew install xcodegen
+xcodegen generate
+```
+
+## Test
+
+Run every automated test that does not require a physical device:
+
+```sh
+mise run check
+```
+
+The exhaustive check validates the website, then runs the local host and
+Simulator gate, disposable-server core integration tests, and disposable-server
+app journeys sequentially. It requires Xcode with an iOS Simulator runtime and
+Docker, but does not require development signing or a connected iPhone. Run an
+individual app stage with `mise run test:local`, `mise run test:live`, or
+`mise run test:app-live`.
+
 ## Disposable-server validation
 
 Contract or server-behavior changes require the disposable live suite:
