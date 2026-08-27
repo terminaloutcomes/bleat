@@ -75,10 +75,15 @@ protocol RemoteTelemetryConsentApplying: Sendable {
         storageGeneration: UUID?
     )
     func setRemoteTelemetryForeground(_ foreground: Bool)
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability
 }
 
 extension RemoteTelemetryConsentApplying {
     func setRemoteTelemetryForeground(_ foreground: Bool) {}
+
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        .missingOrExpired
+    }
 }
 
 struct InactiveRemoteTelemetryConsentController:
@@ -118,6 +123,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let privateCloudEvents: any PrivateCloudSyncEventRecording
     let tokenProvider: TelemetryTokenProvider?
     private let worker: RemoteTelemetryRuntimeWorker?
+    private var telemetryEnabled = false
 
     init(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) {
         privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
@@ -213,6 +219,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         _ enabled: Bool,
         storageGeneration: UUID?
     ) {
+        telemetryEnabled = enabled
         guard let worker else { return }
         if let tokenProvider {
             Task {
@@ -232,6 +239,13 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
 
     func setRemoteTelemetryForeground(_ foreground: Bool) {
         worker?.setForeground(foreground)
+    }
+
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        guard telemetryEnabled, let tokenProvider else {
+            return .missingOrExpired
+        }
+        return await tokenProvider.cachedTokenAvailability()
     }
 
     private static func makeTokenProvider(

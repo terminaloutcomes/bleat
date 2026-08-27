@@ -4,6 +4,40 @@ import XCTest
 @testable import BleatCore
 
 final class TelemetryAuthenticationTests: XCTestCase {
+    func testCachedTokenAvailabilityDoesNotRefresh() async throws {
+        let clock = TestClock(Date(timeIntervalSince1970: 2_000_000_000))
+        let transport = FakeTelemetryTransport(clock: clock)
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore(),
+            dateProvider: clock.now
+        )
+
+        let disabledAvailability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(disabledAvailability, .missingOrExpired)
+        let disabledRequestCount = await transport.requestCount
+        XCTAssertEqual(disabledRequestCount, 0)
+
+        await provider.setEnabled(true)
+        let missingAvailability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(missingAvailability, .missingOrExpired)
+        let missingRequestCount = await transport.requestCount
+        XCTAssertEqual(missingRequestCount, 0)
+
+        _ = try await provider.currentToken()
+        let currentAvailability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(currentAvailability, .available)
+        let currentRequestCount = await transport.requestCount
+        XCTAssertEqual(currentRequestCount, 4)
+
+        clock.advance(by: 481)
+        let expiringAvailability = await provider.cachedTokenAvailability()
+        XCTAssertEqual(expiringAvailability, .missingOrExpired)
+        let expiringRequestCount = await transport.requestCount
+        XCTAssertEqual(expiringRequestCount, 4)
+    }
+
     func testConsentEnablementIsLazyAndFirstTokenEnrolls() async throws {
         let attester = FakeTelemetryAttester()
         let transport = FakeTelemetryTransport()

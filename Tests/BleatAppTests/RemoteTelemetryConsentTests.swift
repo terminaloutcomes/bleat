@@ -272,6 +272,55 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         XCTAssertEqual(controller.foregroundValues, [false, true])
     }
 
+    func testAppModelRefreshesTelemetryTokenAvailability() async {
+        let controller = RecordingRemoteTelemetryConsentController()
+        let model = AppModel(
+            service: UnavailableAppService(),
+            remoteTelemetryConsentController: controller
+        )
+        controller.tokenAvailability = .available
+
+        model.setRemoteTelemetryEnabled(true)
+        await model.refreshRemoteTelemetryTokenAvailability()
+
+        XCTAssertEqual(model.remoteTelemetryTokenAvailability, .available)
+        XCTAssertEqual(controller.tokenAvailabilityRequests, 1)
+
+        model.setRemoteTelemetryEnabled(false)
+
+        XCTAssertEqual(
+            model.remoteTelemetryTokenAvailability,
+            .missingOrExpired
+        )
+    }
+
+    func testTelemetryTokenAvailabilityDiscardsResultAfterWithdrawal()
+        async
+    {
+        let controller = DeferredTelemetryAvailabilityController()
+        let model = AppModel(
+            service: UnavailableAppService(),
+            remoteTelemetryConsentController: controller
+        )
+        model.setRemoteTelemetryEnabled(true)
+
+        let refresh = Task { @MainActor in
+            await model.refreshRemoteTelemetryTokenAvailability()
+        }
+        while !controller.isAvailabilityRequestPending {
+            await Task.yield()
+        }
+
+        model.setRemoteTelemetryEnabled(false)
+        controller.completeAvailabilityRequest(with: .available)
+        await refresh.value
+
+        XCTAssertEqual(
+            model.remoteTelemetryTokenAvailability,
+            .missingOrExpired
+        )
+    }
+
     #if DEBUG && os(iOS)
         func testRealRuntimeDefaultsOffAndWithdrawalPurgesItsGeneration()
             async throws
@@ -396,6 +445,8 @@ private final class RecordingRemoteTelemetryConsentController:
     private(set) var persistedValues: [Bool] = []
     private(set) var foregroundValues: [Bool] = []
     private(set) var storageGenerations: [UUID?] = []
+    var tokenAvailability: TelemetryTokenAvailability = .missingOrExpired
+    private(set) var tokenAvailabilityRequests = 0
 
     init(defaultsSuiteName: String? = nil) {
         self.defaultsSuiteName = defaultsSuiteName
@@ -421,6 +472,11 @@ private final class RecordingRemoteTelemetryConsentController:
     func setRemoteTelemetryForeground(_ foreground: Bool) {
         foregroundValues.append(foreground)
     }
+
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        tokenAvailabilityRequests += 1
+        return tokenAvailability
+    }
 }
 
 @MainActor
@@ -432,5 +488,34 @@ private struct UnavailableRemoteTelemetryConsentController:
         storageGeneration: UUID?
     ) {
         // A telemetry runtime owns and contains its own failures.
+    }
+}
+
+@MainActor
+private final class DeferredTelemetryAvailabilityController:
+    RemoteTelemetryConsentApplying
+{
+    private var availabilityContinuation:
+        CheckedContinuation<TelemetryTokenAvailability, Never>?
+
+    var isAvailabilityRequestPending: Bool {
+        availabilityContinuation != nil
+    }
+
+    func applyRemoteTelemetryConsent(
+        _ enabled: Bool,
+        storageGeneration: UUID?
+    ) {}
+
+    func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
+        await withCheckedContinuation { continuation in
+            availabilityContinuation = continuation
+        }
+    }
+
+    func completeAvailabilityRequest(with availability: TelemetryTokenAvailability) {
+        let continuation = availabilityContinuation
+        availabilityContinuation = nil
+        continuation?.resume(returning: availability)
     }
 }

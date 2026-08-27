@@ -33,6 +33,15 @@ public struct TelemetryBearerToken: Equatable, Sendable {
     }
 }
 
+/// The current in-memory availability of the exporter credential.
+///
+/// This deliberately reports only whether `currentToken()` could use the
+/// cached token immediately. It never starts enrollment or token renewal.
+public enum TelemetryTokenAvailability: Equatable, Sendable {
+    case available
+    case missingOrExpired
+}
+
 public enum TelemetryAttesterError: Error, Equatable, Sendable {
     case unsupported
     case keyInvalidated
@@ -224,6 +233,23 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
         case .failure(let failure):
             throw failure
         }
+    }
+
+    /// Reports whether the exporter can use its in-memory token immediately.
+    ///
+    /// The refresh-window comparison intentionally matches `currentToken()`:
+    /// tokens inside that window are renewed before export and therefore are
+    /// not reported as currently available.
+    public func cachedTokenAvailability() -> TelemetryTokenAvailability {
+        guard enabled,
+            attester.isSupported,
+            terminalFailure == nil,
+            let token,
+            token.expiresAt.timeIntervalSince(dateProvider()) > refreshWindow
+        else {
+            return .missingOrExpired
+        }
+        return .available
     }
 
     public func invalidateToken(ifCurrent rejectedToken: String) {

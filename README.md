@@ -868,7 +868,10 @@ Diagnostics also distinguishes a local endpoint that is not yet validated,
 being checked, available, or temporarily unavailable.
 
 The Diagnostics **Privacy** section also records device-local, default-off
-consent for **Share diagnostic telemetry**. The reviewed schema permits only
+consent for **Share diagnostic telemetry** and whether a current OpenTelemetry
+export token is available. The token status reads the exporter's in-memory
+state without requesting a refresh and never exposes credential material. The
+reviewed schema permits only
 bounded technical operation, outcome, timing, app-version, and operating-system data;
 it excludes audiobook content, credentials, accounts, servers, searches,
 transcripts, paths, and hardware or advertising identifiers. A random

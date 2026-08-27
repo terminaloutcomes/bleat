@@ -84,6 +84,17 @@ extension AppPhase {
     }
 }
 
+extension TelemetryTokenAvailability {
+    var diagnosticsLabel: String {
+        switch self {
+        case .available:
+            "Available"
+        case .missingOrExpired:
+            "Missing or expired"
+        }
+    }
+}
+
 extension ResourceState {
     var diagnosticsLabel: String {
         switch self {
