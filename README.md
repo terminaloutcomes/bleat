@@ -220,19 +220,8 @@ build, and iOS Simulator application unit and UI tests:
 ./scripts/test-core.sh
 ```
 
-Run the deterministic Release native-authentication secret-leakage gate with:
-
-```sh
-mise run test:release-secrets
-```
-
-The gate uses disposable Audiobookshelf, telemetry, and Simulator resources;
-exercises login, token refresh, authenticated browsing, download, offline
-playback, diagnostics, telemetry, and logout; creates a normal unsigned Release
-archive; and scans the collected production-relevant surfaces for private
-sentinels. Private manifests and raw server artifacts are deleted during
-cleanup. The retained non-secret result is
-`.build/release-secret-scan/report.json`.
+See the [development guide](docs/development.md) for the supported test and
+validation workflows.
 
 The validation script defaults to an `iPhone 17 Pro` simulator. Select another
 installed simulator by passing an Xcode destination:
