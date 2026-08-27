@@ -2840,7 +2840,12 @@ final class AppModelTests: XCTestCase {
             ),
             authorizedDownloadRequest: .success(authorizedRequest)
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.offline-relaunch.\(UUID().uuidString)"
+        )
 
         await model.start(account: account)
 
@@ -2910,7 +2915,12 @@ final class AppModelTests: XCTestCase {
             downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
             authorizedDownloadRequest: .success(request)
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.active-transfer.\(UUID().uuidString)"
+        )
         await model.start(account: account)
         model.updateNetworkPathState(
             AppNetworkPathState(
@@ -3058,7 +3068,12 @@ final class AppModelTests: XCTestCase {
             authorizedDownloadRequest: .success(failedRequests[0]),
             primaryFallbackURL: primaryURL
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.primary-fallback.\(UUID().uuidString)"
+        )
         await model.start(account: account)
         model.setForegroundActive(true)
         let identities = try plan.tracks.map { track in
@@ -3193,6 +3208,8 @@ final class AppModelTests: XCTestCase {
         let model = DownloadModel(
             service: service,
             storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.retry-network-drop.\(UUID().uuidString)",
             transferRetrySleep: { _ in
                 await retryGate.enterAndWait()
             }

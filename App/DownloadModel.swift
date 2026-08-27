@@ -457,6 +457,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let service: any AppServicing
     private let diagnostics: any DiagnosticRecording
     private let remoteTelemetryTracer: any RemoteTelemetryTracing
+    private let backgroundSessionIdentifier: String
     private let transferRetrySleep:
         @Sendable (Duration) async throws -> Void
     private let defaults: UserDefaults
@@ -499,7 +500,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(
-            withIdentifier: bleatBackgroundDownloadSessionIdentifier
+            withIdentifier: backgroundSessionIdentifier
         )
         configuration.httpMaximumConnectionsPerHost =
             bleatBackgroundDownloadMaximumConnectionsPerHost
@@ -529,6 +530,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             SystemDiagnosticRecorder.shared,
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer(),
+        backgroundSessionIdentifier: String =
+            bleatBackgroundDownloadSessionIdentifier,
         transferRetrySleep:
             @escaping @Sendable (Duration) async throws -> Void = {
                 try await Task.sleep(for: $0)
@@ -537,6 +540,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.service = service
         self.diagnostics = diagnostics
         self.remoteTelemetryTracer = remoteTelemetryTracer
+        self.backgroundSessionIdentifier = backgroundSessionIdentifier
         self.transferRetrySleep = transferRetrySleep
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
