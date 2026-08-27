@@ -232,6 +232,9 @@ resolution, and temporary directories outside the repository.
 
 ## Tests and validation
 
+Use `docs/development.md` as the canonical reference for supported test and
+validation commands.
+
 Put tests in test targets, not production entry points. Add focused tests with
 each implementation change and use versioned saved fixtures for response
 decoding.

@@ -220,6 +220,9 @@ build, and iOS Simulator application unit and UI tests:
 ./scripts/test-core.sh
 ```
 
+See the [development guide](docs/development.md) for the supported test and
+validation workflows.
+
 The validation script defaults to an `iPhone 17 Pro` simulator. Select another
 installed simulator by passing an Xcode destination:
 

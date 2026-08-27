@@ -25,6 +25,7 @@
 		421E1D94991D910E1C6FAA04 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */; };
 		429A5E8508DCBC43350A5D8B /* BleatPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA2A9B233BE9C12B1B7C714 /* BleatPerformanceUITests.swift */; };
 		509E512BD4358EA5BCBA799D /* AudioChapterSliceExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10759FAD9A628F0F553DB7B1 /* AudioChapterSliceExporterTests.swift */; };
+		52E5BD72E43B63251709DE89 /* ReleaseSecretLeakageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */; };
 		57CA1597F166AE8B84AF6EC7 /* AppAttestTelemetryAttesterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */; };
 		5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */; };
 		5CBC0B4592A31E3B706AC40E /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */; };
@@ -104,6 +105,7 @@
 		492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsent.swift; sourceTree = "<group>"; };
 		4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
+		4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSecretLeakageTests.swift; sourceTree = "<group>"; };
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttester.swift; sourceTree = "<group>"; };
 		523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTroubleshooterView.swift; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 				D9AB72375ED47B619ABB13FC /* LegacyDiagnosticLogCleanupTests.swift */,
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
+				4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */,
 				C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */,
 				B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */,
 				342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */,
@@ -482,6 +485,7 @@
 				6B48DBD681D8425A66B571CE /* LegacyDiagnosticLogCleanupTests.swift in Sources */,
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
+				52E5BD72E43B63251709DE89 /* ReleaseSecretLeakageTests.swift in Sources */,
 				5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */,
 				30FC3808C6E7EB0FA36DF71F /* RemoteTelemetryTestSupport.swift in Sources */,
 				FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */,

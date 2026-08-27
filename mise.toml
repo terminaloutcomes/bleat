@@ -158,6 +158,10 @@ run = ["./scripts/audit-rust-dependencies.sh"]
 description = "Run the repository-supported release security gate"
 depends = ["security:secrets", "security:dependencies"]
 
+[tasks."test:release-secrets"]
+description = "Run the Release native-authentication secret-leakage gate"
+run = ["./scripts/test-release-secret-leakage.sh"]
+
 [tasks.clean]
 description = "Remove repository build artifacts"
 run = ["./scripts/clean-build-artifacts.sh"]

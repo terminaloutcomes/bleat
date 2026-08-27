@@ -2036,8 +2036,8 @@ final class BleatUITests: XCTestCase {
 final class BleatLiveUITests: XCTestCase {
     @MainActor
     func testLiveOnlineLoginPlaybackAndDownload() async throws {
-        let environment = try liveEnvironment()
-        let app = XCUIApplication()
+        let environment = try await liveEnvironment()
+        var app = XCUIApplication()
         app.launch()
 
         XCTAssertTrue(
@@ -2182,12 +2182,47 @@ final class BleatLiveUITests: XCTestCase {
             app.buttons["player.mini.open"].waitForExistence(timeout: 30)
         )
         XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        if releaseSecretScanIsEnabled {
+            app.terminate()
+            app = XCUIApplication()
+            app.launchArguments = [
+                "--release-secret-scan-enable-telemetry"
+            ]
+            app.launch()
+            XCTAssertTrue(
+                app.otherElements["app.signedIn"].waitForExistence(
+                    timeout: 30
+                )
+            )
+            tabButton("Settings", in: app).tap()
+            let diagnostics = app.buttons["settings.diagnostics"]
+            scrollUntilHittable(diagnostics, in: app, direction: .up)
+            XCTAssertTrue(diagnostics.isHittable)
+            diagnostics.tap()
+            XCTAssertTrue(
+                app.navigationBars["Diagnostics"].waitForExistence(
+                    timeout: 10
+                )
+            )
+            XCTAssertTrue(
+                app.descendants(matching: .any)[
+                    "diagnostics.serverVersion"
+                ].waitForExistence(timeout: 10)
+            )
+            app.navigationBars.buttons.firstMatch.tap()
+            tabButton("Library", in: app).tap()
+            XCTAssertTrue(
+                app.descendants(matching: .any)["books.list"]
+                    .waitForExistence(timeout: 30)
+            )
+            try await Task.sleep(for: .seconds(12))
+        }
         app.terminate()
     }
 
     @MainActor
     func testLiveOfflineCachedDownloadAndLocalProgress() throws {
-        _ = try liveEnvironment()
+        try requireLiveConfiguration()
         let app = XCUIApplication()
         app.launch()
 
@@ -2230,6 +2265,64 @@ final class BleatLiveUITests: XCTestCase {
             app.staticTexts["multi-track"].waitForExistence(timeout: 10)
         )
         XCTAssertFalse(app.buttons["Play Offline"].exists)
+        app.terminate()
+    }
+
+    @MainActor
+    func testReleaseSecretScanRefreshAfterTokenInvalidation() throws {
+        guard releaseSecretScanIsEnabled else {
+            throw XCTSkip("Run scripts/test-release-secret-leakage.sh")
+        }
+        try requireLiveConfiguration()
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 30)
+        )
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["books.list"]
+                .waitForExistence(timeout: 30)
+        )
+        app.terminate()
+    }
+
+    @MainActor
+    func testReleaseSecretScanLogout() throws {
+        guard releaseSecretScanIsEnabled else {
+            throw XCTSkip("Run scripts/test-release-secret-leakage.sh")
+        }
+        try requireLiveConfiguration()
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 30)
+        )
+        tabButton("Settings", in: app).tap()
+        let account = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@",
+                "settings.account."
+            )
+        ).firstMatch
+        scrollUntilHittable(account, in: app, direction: .down)
+        XCTAssertTrue(account.isHittable)
+        account.tap()
+
+        let remove = app.buttons["accountEditor.removeAccount"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 10))
+        remove.tap()
+        let thisDevice = app.sheets.buttons["Only on This Device"]
+        XCTAssertTrue(thisDevice.waitForExistence(timeout: 10))
+        thisDevice.tap()
+        let deleteHistory = app.sheets.buttons["Delete Listening History"]
+        XCTAssertTrue(deleteHistory.waitForExistence(timeout: 10))
+        deleteHistory.tap()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 30)
+        )
         app.terminate()
     }
 
@@ -2300,20 +2393,83 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(toggle.waitForNonExistence(timeout: 10))
     }
 
-    private func liveEnvironment() throws -> (
+    private enum LiveScrollDirection {
+        case up, down
+    }
+
+    @MainActor
+    private func scrollUntilHittable(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        direction: LiveScrollDirection
+    ) {
+        for _ in 0..<20 {
+            if element.waitForExistence(timeout: 0.5), element.isHittable {
+                return
+            }
+            switch direction {
+            case .up:
+                app.swipeUp()
+            case .down:
+                app.swipeDown()
+            }
+        }
+    }
+
+    private var releaseSecretScanIsEnabled: Bool {
+        ProcessInfo.processInfo.environment["BLEAT_RELEASE_SECRET_SCAN"] == "1"
+    }
+
+    @MainActor
+    private func liveEnvironment() async throws -> (
         server: String,
         username: String,
         password: String
     ) {
         let environment = ProcessInfo.processInfo.environment
         guard let server = environment["BLEAT_LIVE_APP_URL"],
-            let username = environment["BLEAT_LIVE_USERNAME"],
-            let password = environment["BLEAT_LIVE_PASSWORD"]
+            let username = environment["BLEAT_LIVE_USERNAME"]
         else {
             throw XCTSkip(
                 "Run scripts/test-app-live.sh to provide live app data"
             )
         }
+        let password: String?
+        if releaseSecretScanIsEnabled {
+            guard let rawURL = environment[
+                "BLEAT_RELEASE_SECRET_BROKER_URL"
+            ], let url = URL(string: rawURL)
+            else {
+                throw XCTSkip(
+                    "Run scripts/test-release-secret-leakage.sh"
+                )
+            }
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                data.count >= 16
+            else {
+                throw URLError(.badServerResponse)
+            }
+            password = String(data: data, encoding: .utf8)
+        } else {
+            password = environment["BLEAT_LIVE_PASSWORD"]
+        }
+        guard let password else {
+            throw XCTSkip(
+                "Run scripts/test-app-live.sh to provide live app data"
+            )
+        }
         return (server, username, password)
+    }
+
+    private func requireLiveConfiguration() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["BLEAT_LIVE_APP_URL"] != nil,
+            environment["BLEAT_LIVE_USERNAME"] != nil
+        else {
+            throw XCTSkip(
+                "Run scripts/test-app-live.sh to provide live app data"
+            )
+        }
     }
 }

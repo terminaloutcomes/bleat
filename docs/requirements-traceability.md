@@ -174,7 +174,7 @@ other rows map section 22 release criteria.
 | ID | Acceptance behavior | Primary evidence | Status |
 | --- | --- | --- | --- |
 | AC-01 | Multiple concurrent accounts, including two users on one server | `ACCOUNT-001`, `ACCOUNT-004`, `APP-ACCOUNT-001` | verified |
-| AC-02 | No secret appears in logs, diagnostics, artifacts, persistence, exports, or media URLs | Route and diagnostics tests exist; the release deep scan is tracked in [GitHub issue #48](https://github.com/terminaloutcomes/bleat/issues/48) | implemented |
+| AC-02 | No secret appears in logs, diagnostics, artifacts, persistence, exports, or media URLs | Route and diagnostics tests; `mise run test:release-secrets`; `docs/release-evidence/secret-leakage.md` | verified |
 | AC-03 | Native login, rotating tokens, and logout work without an identity provider | `APP-AUTH-001`, `AUTH-001`, `AUTH-006`, `AUTH-007`, `AUTH-012` | verified |
 | AC-04 | Twenty expired-token requests cause one refresh and at most one retry each | `AUTH-007` | verified |
 | AC-05 | Server path prefixes work for API, covers, playback, and downloads | `ROUTE-001` through `ROUTE-007`, proxied live suites | verified |

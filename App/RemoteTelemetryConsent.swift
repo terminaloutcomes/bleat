@@ -49,6 +49,17 @@ final class RemoteTelemetryConsentStore {
         if let storageGeneration { return storageGeneration }
         return setEnabled(true)
     }
+
+    #if BLEAT_RELEASE_SECRET_SCAN
+        static func applyReleaseSecretScanLaunchOverride(
+            processInfo: ProcessInfo = .processInfo
+        ) {
+            guard processInfo.arguments.contains(
+                "--release-secret-scan-enable-telemetry"
+            ) else { return }
+            _ = RemoteTelemetryConsentStore().setEnabled(true)
+        }
+    #endif
 }
 
 /// The single application boundary for the private telemetry runtime. The
@@ -88,7 +99,7 @@ enum RemoteTelemetryAttesterSelection: Equatable {
         appAttestMode: String?,
         requestedMode: String?
     ) -> Self {
-        #if DEBUG
+        #if DEBUG || BLEAT_RELEASE_SECRET_SCAN
             if requestedMode == "fake" {
                 return .development
             }
@@ -237,7 +248,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             return nil
         }
 
-        #if DEBUG
+        #if DEBUG || BLEAT_RELEASE_SECRET_SCAN
             let allowsInsecureLoopback = true
         #else
             let allowsInsecureLoopback = false
@@ -265,7 +276,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         case .unavailable:
             return nil
         case .development:
-            #if DEBUG
+            #if DEBUG || BLEAT_RELEASE_SECRET_SCAN
                 attester = DevelopmentTelemetryAttester()
             #else
                 return nil
