@@ -28,6 +28,12 @@
             "--ui-testing-reset-telemetry-consent"
         static let enableRemoteTelemetryConsentArgument =
             "--ui-testing-enable-telemetry-consent"
+        static let persistLocalDataResetArgument =
+            "--ui-testing-persist-local-data-reset"
+        static let clearLocalDataResetArgument =
+            "--ui-testing-clear-local-data-reset"
+        static let localDataResetCompletedKey =
+            "Bleat.UITest.localDataResetCompleted"
     }
 
     private struct FixtureIDs: Sendable {
@@ -81,6 +87,13 @@
                     forKey: RemoteTelemetryConsentStore.generationKey
                 )
             }
+            if arguments.contains(
+                UITestScenarioStorage.clearLocalDataResetArgument
+            ) {
+                UserDefaults.standard.removeObject(
+                    forKey: UITestScenarioStorage.localDataResetCompletedKey
+                )
+            }
             if arguments.contains(UITestScenarioStorage.clearArgument) {
                 UserDefaults.standard.removeObject(
                     forKey: UITestScenarioStorage.persistedScenarioKey
@@ -92,6 +105,13 @@
                 .compactMap(UITestScenario.init(rawValue:))
                 .first
             {
+                if arguments.contains(
+                    UITestScenarioStorage.persistLocalDataResetArgument
+                ), UserDefaults.standard.bool(
+                    forKey: UITestScenarioStorage.localDataResetCompletedKey
+                ) {
+                    return UITestAppService(scenario: .signedOut)
+                }
                 if arguments.contains(UITestScenarioStorage.persistArgument) {
                     UserDefaults.standard.set(
                         scenario.rawValue,
@@ -910,6 +930,18 @@
         func removeAccount(
             _ account: ServerAccount
         ) async throws(AppServiceError) {}
+
+        func resetLocalData() async throws(AppServiceError) {
+            guard ProcessInfo.processInfo.arguments.contains(
+                UITestScenarioStorage.persistLocalDataResetArgument
+            ) else {
+                return
+            }
+            UserDefaults.standard.set(
+                true,
+                forKey: UITestScenarioStorage.localDataResetCompletedKey
+            )
+        }
 
         private func account() throws(AppServiceError) -> ServerAccount {
             switch accountResult {

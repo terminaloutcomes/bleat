@@ -1106,8 +1106,14 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testResetLocalDataRequiresDestructiveConfirmation() {
-        let app = launch(scenario: "--ui-testing-signed-in")
+    func testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch() {
+        var app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-persist-local-data-reset",
+                "--ui-testing-clear-local-data-reset",
+            ]
+        )
 
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
@@ -1126,6 +1132,22 @@ final class BleatUITests: XCTestCase {
             "settings.resetLocalData.confirm"
         ].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 3)
+        )
+
+        app.terminate()
+        app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-persist-local-data-reset"
+            ]
+        )
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.otherElements["app.signedIn"].exists)
     }
 
     @MainActor
