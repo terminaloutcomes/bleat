@@ -1716,9 +1716,9 @@ deterministic fake attester; Release cannot. System App Attest is unavailable un
 the effective `BLEAT_APP_ATTEST_MODE` is exactly `enabled`; the Debug fake
 attester remains available independently for disposable development tests. The
 backend base URL comes only from
-`BLEAT_TELEMETRY_AUTH_BASE_URL`; missing configuration leaves authentication
-unavailable, Release requires HTTPS, and Debug permits HTTP only for loopback.
-The OTLP origin comes only from `BLEAT_TELEMETRY_OTLP_ENDPOINT` and must be an
+`BLEAT_TELEMETRY_AUTH_BASE_URL`; iOS builds fail when it is missing or not HTTPS
+outside Debug loopback. The OTLP origin comes only from
+`BLEAT_TELEMETRY_OTLP_ENDPOINT`; iOS builds fail when it is missing or not an
 HTTPS origin without credentials, path, query, or fragment. Traces and logs use
 OTLP/HTTP protobuf at `/v1/traces` and `/v1/logs` through one ephemeral
 `URLSession`, retaining platform TLS validation without a custom trust root or

@@ -410,8 +410,11 @@ Release archives and physical-device builds require
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and `BLEAT_TELEMETRY_OTLP_ENDPOINT` to be
 exported as HTTPS URLs. Keep local values in an ignored environment file such
 as `.envrc`; the supported build scripts pass them to Xcode and verify the
-values embedded in the built application. Direct Xcode GUI builds do not read
-`.envrc` and must receive these build settings through Xcode instead.
+values embedded in the built application. iOS builds fail before producing an
+app when either value is absent, the OTLP URL is not HTTPS, or the
+authentication URL is not HTTPS (except Debug loopback). Direct Xcode GUI
+builds do not read `.envrc` and must receive these build settings through Xcode
+instead.
 
 The archive is written to `.build/Bleat.xcarchive` and is checked for a valid
 bundle plus the required `PrivacyInfo.xcprivacy` manifest. The manifest
