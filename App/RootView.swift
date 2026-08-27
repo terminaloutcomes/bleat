@@ -876,9 +876,9 @@ private struct NativeLoginView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("No nearby servers found")
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("login.nearby.noResults")
                 retryDiscoveryButton
             }
-            .accessibilityIdentifier("login.nearby.noResults")
         case .failed(let failure):
             VStack(alignment: .leading, spacing: 8) {
                 Text(failure.title)
@@ -1097,6 +1097,7 @@ private struct AccountEditorView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("accountEditor.form")
             .navigationTitle("Edit Account")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

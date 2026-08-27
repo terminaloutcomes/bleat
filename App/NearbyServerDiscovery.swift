@@ -335,3 +335,17 @@ final class UnavailableNearbyServerDiscovery: NearbyServerDiscovering {
 
     func cancel() {}
 }
+
+@MainActor
+final class NoResultsNearbyServerDiscovery: NearbyServerDiscovering {
+    func start(
+        update:
+            @escaping @MainActor @Sendable (
+                NearbyServerDiscoveryState
+            ) -> Void
+    ) {
+        update(.noResults)
+    }
+
+    func cancel() {}
+}

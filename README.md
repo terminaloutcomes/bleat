@@ -296,6 +296,13 @@ fresh unprinted password. The fixture data and original cover art are versioned
 under `TestSupport/ReleaseScreenshots/fixtures.json` and
 `TestSupport/ReleaseScreenshots/covers/`.
 
+For the screenshot app process only, the journey disables Bonjour nearby-server
+browsing and resolution so `00-login.png` always has an empty server field and
+the deterministic “No nearby servers found” state. It still uses the real
+`LiveAppService` and signs in to the disposable HTTPS Barnyard fixture after
+capturing that screen. Normal application launches continue to discover nearby
+Audiobookshelf servers.
+
 Successful output contains only the screenshots and a non-sensitive manifest:
 
 ```text

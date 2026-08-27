@@ -8,6 +8,30 @@ import AppKit
 #endif
 
 @MainActor
+enum AppLaunchMode: Equatable {
+    static let releaseScreenshotArgument =
+        "--release-screenshot-disable-nearby-server-discovery"
+
+    case standard
+    case releaseScreenshot
+
+    init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        self = arguments.contains(Self.releaseScreenshotArgument)
+            ? .releaseScreenshot
+            : .standard
+    }
+
+    func makeNearbyServerDiscovery() -> any NearbyServerDiscovering {
+        switch self {
+        case .standard:
+            BonjourNearbyServerDiscovery()
+        case .releaseScreenshot:
+            NoResultsNearbyServerDiscovery()
+        }
+    }
+}
+
+@MainActor
 final class AppBootstrap {
     let model: AppModel
 
@@ -20,6 +44,7 @@ final class AppBootstrap {
             }
         }
         let remoteTelemetry = RemoteTelemetryController()
+        let launchMode = AppLaunchMode()
 
         #if DEBUG || BLEAT_UI_TESTING
             if let testService = UITestAppService.current() {
@@ -75,6 +100,7 @@ final class AppBootstrap {
                         )
                     }
                 ),
+                nearbyServerDiscovery: launchMode.makeNearbyServerDiscovery(),
                 diagnostics: diagnostics,
                 remoteTelemetryConsentController: remoteTelemetry,
                 remoteTelemetryTracer: remoteTelemetry.tracer
