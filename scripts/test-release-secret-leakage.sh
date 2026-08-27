@@ -19,6 +19,7 @@ readonly bleat_live_project="bleat-secret-scan-${bleat_run_id}"
 readonly bleat_telemetry_project="bleat-secret-telemetry-${bleat_run_id}"
 readonly bleat_telemetry_compose="${bleat_repository_root}/bleat-api/compose.yml"
 readonly bleat_telemetry_capture="${bleat_private_root}/telemetry-capture"
+readonly bleat_log_archive="${bleat_private_root}/Bleat.logarchive"
 readonly bleat_secret_broker_path="/v1/private-test-secret/${bleat_run_id}"
 readonly bleat_device_type="${BLEAT_LIVE_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
 readonly bleat_bundle_id="${BUNDLE_ID_PREFIX:-com.terminaloutcomes}.Bleat"
@@ -367,8 +368,22 @@ bleat_stage="runtime artifact collection"
 mkdir -p "${bleat_scan_root}/runtime-logs" \
     "${bleat_scan_root}/server-artifacts"
 xcrun simctl spawn "${bleat_simulator_id}" log collect \
-    --output "${bleat_scan_root}/runtime-logs/Bleat.logarchive" \
+    --output "${bleat_log_archive}" \
     --last 30m >"${bleat_process_root}/log-collect.log" 2>&1
+bleat_stage="unified log decoding"
+/usr/bin/log show \
+    --archive "${bleat_log_archive}" \
+    --style ndjson \
+    --info \
+    --debug \
+    --no-pager \
+    --color none \
+    >"${bleat_scan_root}/runtime-logs/Bleat.ndjson"
+test -s "${bleat_scan_root}/runtime-logs/Bleat.ndjson"
+jq --exit-status \
+    'select(((.subsystem? // "") | ascii_downcase)
+        == "com.terminaloutcomes.bleat")' \
+    "${bleat_scan_root}/runtime-logs/Bleat.ndjson" >/dev/null
 bleat_capture_app_owned_data post-logout
 "${bleat_environment_script}" artifacts \
     "${bleat_scan_root}/server-artifacts"
