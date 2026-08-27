@@ -9,7 +9,7 @@ cookies, and playback-session routes remain outside this gate's scope.
 
 | item | recorded value |
 | --- | --- |
-| source commit | `8529d306f6a8cac816b7d1691c611fdb590dfb99` |
+| source commit | `f7d9b30a3a5557e4d6baad8aad42701c4789ad4a` |
 | source tree | clean |
 | evaluation date | 2026-08-27 (Australia/Brisbane) |
 | application version | 0.1.3 |
@@ -37,12 +37,13 @@ surfaces were scanned without pre-redaction.
 ## Scanned surfaces and encodings
 
 The gate scanned process output, the test process configuration, nine xcresult
-bundles, unified Simulator logs, app-owned data captured while signed in before
-and after token rotation and again after logout, remote telemetry resources and
-payloads, Release test products, and the normal unsigned Release archive. It
-also scanned the sanitized temporary server-artifact copy. The archive retained
-the normal production capability modes and configured production telemetry
-origins; only signing was disabled. The scanner covered raw UTF-8,
+bundles, unified Simulator messages decoded from the collected `.logarchive`,
+app-owned data captured while signed in before and after token rotation and
+again after logout, remote telemetry resources and payloads, Release test
+products, and the normal unsigned Release archive. It also scanned the sanitized
+temporary server-artifact copy. The archive retained the normal production
+capability modes and configured production telemetry origins; only signing was
+disabled. The scanner covered raw UTF-8,
 `Authorization: Bearer`, case-insensitive URL-percent encoding, JSON escaping
 with optional escaped slashes and ASCII Unicode escapes, standard and URL-safe
 Base64 with and without padding, and UTF-16 little- and big-endian forms with
@@ -55,9 +56,9 @@ secret values or digests.
 
 ## Result
 
-The final clean-source run executed nine tests and scanned 5,097 files totaling
-865,393,225 bytes across nine labeled surfaces. Two refresh-token occurrences in
-the disposable server's raw access logs were sanitized from the temporary
+The final clean-source run executed nine tests and scanned 5,854 files totaling
+1,790,437,058 bytes across nine labeled surfaces. Two refresh-token occurrences
+in the disposable server's raw access logs were sanitized from the temporary
 server-artifact copy before scanning; only the privacy-safe redaction metadata
 was retained. They are test-harness evidence inputs, not a Bleat deployment
 finding. Every production-relevant Bleat surface was scanned without

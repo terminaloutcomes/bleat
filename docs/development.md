@@ -102,8 +102,9 @@ The gate uses disposable Audiobookshelf, telemetry, and Simulator resources;
 exercises login, token refresh, authenticated browsing, download, offline
 playback, diagnostics, telemetry, and logout; creates a normal unsigned Release
 archive; and scans the collected production-relevant surfaces for private
-sentinels. Private manifests and raw server artifacts are deleted during
-cleanup. The retained non-secret result is
+sentinels. Collected unified logs are decoded to NDJSON before their messages
+are scanned. Private manifests, the raw log archive, and raw server artifacts
+are deleted during cleanup. The retained non-secret result is
 `.build/release-secret-scan/report.json`.
 
 ## Release packaging
