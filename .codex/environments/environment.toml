@@ -16,7 +16,7 @@ fi
 
 install -m 600 -l s "$source_envrc" "$worktree_envrc"
 
-exec $(mise env)
+eval "$(mise env -s bash)"
 
 if [ -z "$(mise exec -- echo "$BLEAT_BUNDLE_ID")" ]; then
    echo "Mise .envrc loading failed"
