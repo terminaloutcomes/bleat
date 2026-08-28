@@ -11,12 +11,16 @@ readonly bleat_artifact_dir="${bleat_artifact_root}/${bleat_run_id}"
 readonly bleat_derived_data="${bleat_repository_root}/.build/live-xcode-derived-${bleat_run_id}"
 readonly bleat_compose_project_name="bleat-app-live-${bleat_run_id}"
 readonly bleat_https_prefix_port="${BLEAT_HTTPS_PREFIX_PORT:-13479}"
+readonly bleat_abs_prefix_port="${BLEAT_ABS_PREFIX_PORT:-13379}"
 readonly bleat_test_username="${BLEAT_TEST_USERNAME:-bleat-$(/usr/bin/uuidgen)}"
 readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-$(/usr/bin/uuidgen)}"
 readonly bleat_device_type="${BLEAT_LIVE_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
+readonly bleat_fault_proxy_script="${bleat_repository_root}/TestSupport/ServerHarness/download_fault_proxy.py"
 
 bleat_simulator_id=""
 bleat_ca_file=""
+bleat_media_root=""
+bleat_fault_proxy_pid=""
 bleat_harness_started=0
 
 bleat_require_result_bundle() {
@@ -58,6 +62,13 @@ bleat_cleanup() {
     if [[ -n "${bleat_ca_file}" ]]; then
         rm -f "${bleat_ca_file}"
     fi
+    if [[ -n "${bleat_fault_proxy_pid}" ]]; then
+        kill "${bleat_fault_proxy_pid}" >/dev/null 2>&1 || true
+        wait "${bleat_fault_proxy_pid}" >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${bleat_media_root}" ]]; then
+        rm -rf "${bleat_media_root}"
+    fi
     rm -rf "${bleat_derived_data}"
     if (( bleat_harness_started )); then
         "${bleat_environment_script}" down >/dev/null 2>&1 || true
@@ -83,10 +94,49 @@ fi
 mkdir -p "${bleat_artifact_dir}"
 export BLEAT_COMPOSE_PROJECT_NAME="${bleat_compose_project_name}"
 
+bleat_media_root="$(mktemp -d /tmp/bleat-app-live-media.XXXXXX)"
+cp -R \
+    "${bleat_repository_root}/TestSupport/ServerHarness/media/." \
+    "${bleat_media_root}"
+dd if=/dev/zero bs=1048576 count=34 \
+    >> "${bleat_media_root}/multi-track/01.aac" \
+    2>/dev/null
+export BLEAT_MEDIA_ROOT="${bleat_media_root}"
+
+bleat_fault_proxy_port="$(
+    /usr/bin/python3 -c \
+        'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
+)"
+/usr/bin/python3 "${bleat_fault_proxy_script}" \
+    --listen-port "${bleat_fault_proxy_port}" \
+    --upstream-host 127.0.0.1 \
+    --upstream-port "${bleat_abs_prefix_port}" \
+    > "${bleat_artifact_dir}/download-fault-proxy.log" \
+    2>&1 &
+bleat_fault_proxy_pid=$!
+export BLEAT_PREFIX_UPSTREAM="host.docker.internal:${bleat_fault_proxy_port}"
+
+for _ in {1..50}; do
+    if curl --fail --silent \
+        "http://127.0.0.1:${bleat_fault_proxy_port}/__bleat_fault__/health" \
+        >/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+curl --fail --silent --show-error \
+    "http://127.0.0.1:${bleat_fault_proxy_port}/__bleat_fault__/health" \
+    >/dev/null
+
 export BLEAT_TEST_USERNAME="${bleat_test_username}"
 export BLEAT_TEST_PASSWORD="${bleat_test_password}"
 bleat_harness_started=1
 "${bleat_environment_script}" reset
+
+curl --fail --silent --show-error \
+    --request POST \
+    "http://127.0.0.1:${bleat_fault_proxy_port}/__bleat_fault__/arm" \
+    >/dev/null
 
 bleat_runtime="$(
     xcrun simctl list runtimes available --json \
@@ -169,6 +219,57 @@ xcodebuild \
     -only-testing:BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload \
     test-without-building
 bleat_require_result_bundle "${bleat_online_result_bundle}"
+
+readonly bleat_401_evidence="${bleat_artifact_dir}/download-401-evidence.json"
+curl --fail --silent --show-error \
+    "http://127.0.0.1:${bleat_fault_proxy_port}/__bleat_fault__/evidence" \
+    > "${bleat_401_evidence}"
+jq --exit-status '
+    ([.downloadEvents[] | select(.injected == true)]) as $faults
+    | (
+        [
+            .downloadEvents[]
+            | select(
+                .sequence < $faults[0].sequence
+                and .downloadKey == $faults[0].downloadKey
+                and .rangeStart == 0
+                and (.rangeEnd + 1) == $faults[0].rangeStart
+            )
+        ]
+    ) as $committed
+    | (
+        [
+            .downloadEvents[]
+            | select(
+                .sequence > $faults[0].sequence
+                and .downloadKey == $faults[0].downloadKey
+                and .range == $faults[0].range
+            )
+        ]
+    ) as $replacements
+    | .refreshEvents as $refreshes
+    | ($faults | length) == 1
+    and ($faults[0].status == 401)
+    and ($faults[0].authorizationScheme == "Bearer")
+    and ($faults[0].hasTokenQuery == false)
+    and ($faults[0].ifRange | type == "string" and length > 0)
+    and ($committed | length) == 1
+    and ($committed[0].status == 206)
+    and ($committed[0].injected == false)
+    and ($committed[0].ifRange == null)
+    and ($committed[0].authorizationScheme == "Bearer")
+    and ($committed[0].hasTokenQuery == false)
+    and ($replacements | length) == 1
+    and ($replacements[0].injected == false)
+    and ($replacements[0].ifRange == $faults[0].ifRange)
+    and ($replacements[0].status == 206)
+    and ($replacements[0].authorizationScheme == "Bearer")
+    and ($replacements[0].hasTokenQuery == false)
+    and .refreshCount == 1
+    and ($refreshes | length) == 1
+    and ($refreshes[0].sequence > $faults[0].sequence)
+    and ($refreshes[0].sequence < $replacements[0].sequence)
+' "${bleat_401_evidence}" >/dev/null
 
 "${bleat_environment_script}" stop
 

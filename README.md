@@ -849,14 +849,17 @@ cached browsing, and server-offline playback with:
 This runner adds a pinned Caddy HTTPS proxy, builds the real app service,
 creates a throwaway iPhone simulator, installs Caddy's local root certificate,
 and runs separate online and offline XCUITest phases without deleting the
-app's account, cache, or downloaded media between them. Disposable credentials
-are passed only through the generated `.xctestrun` test environment and entered
+app's account, cache, or downloaded media between them. Its one-shot download
+fault returns 401 after a committed range, then verifies exactly one refresh,
+one replacement with the same `Range` and `If-Range`, bearer authorization,
+no request query, and final app download completion. Disposable credentials are
+passed only through the generated `.xctestrun` test environment and entered
 through the app's secure login form; they are never printed. Each invocation
 uses a unique disposable Compose project, derived-data directory, and artifact
 subdirectory, so its cleanup cannot remove another live run's state. The runner
 deletes its generated test configuration, simulator, certificates, containers,
-and volumes when it exits. Redacted Docker logs, screenshots on failure, and
-complete XCTest result bundles are written beneath
+and volumes when it exits. Privacy-safe request evidence, redacted Docker logs,
+screenshots on failure, and complete XCTest result bundles are written beneath
 `TestSupport/ServerHarness/app-live-artifacts/`.
 
 Validate registered `bleat://` routes with a cold signed-in launch and warm
