@@ -219,6 +219,11 @@ public enum RemoteDownloadTransferState: String, CaseIterable, Sendable {
     case cancelled
 }
 
+public enum RemoteDownloadRetryDelaySource: String, CaseIterable, Sendable {
+    case exponentialBackoff = "exponential_backoff"
+    case serverRetryAfter = "server_retry_after"
+}
+
 public enum RemoteDownloadFailureCause: String, CaseIterable, Sendable {
     case offline
     case connectionLost = "connection_lost"
@@ -248,6 +253,8 @@ public struct RemoteDownloadTransferEvent: Equatable, Sendable {
     public let failureCause: RemoteDownloadFailureCause?
     public let retryBucket: RemoteTelemetryRetryBucket
     public let isRetryable: Bool
+    public let retryDelaySeconds: Int?
+    public let retryDelaySource: RemoteDownloadRetryDelaySource?
     public let httpStatusCode: Int?
     public let transportErrorCode: Int?
 
@@ -258,6 +265,8 @@ public struct RemoteDownloadTransferEvent: Equatable, Sendable {
         failureCause: RemoteDownloadFailureCause? = nil,
         retryBucket: RemoteTelemetryRetryBucket = .none,
         isRetryable: Bool = false,
+        retryDelaySeconds: Int? = nil,
+        retryDelaySource: RemoteDownloadRetryDelaySource? = nil,
         httpStatusCode: Int? = nil,
         transportErrorCode: Int? = nil
     ) {
@@ -267,6 +276,8 @@ public struct RemoteDownloadTransferEvent: Equatable, Sendable {
         self.failureCause = failureCause
         self.retryBucket = retryBucket
         self.isRetryable = isRetryable
+        self.retryDelaySeconds = retryDelaySeconds
+        self.retryDelaySource = retryDelaySource
         self.httpStatusCode = httpStatusCode
         self.transportErrorCode = transportErrorCode
     }

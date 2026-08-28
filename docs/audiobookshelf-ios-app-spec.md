@@ -1067,7 +1067,9 @@ Requirements:
 - derive the book-level state from all track states, so one failed track cannot
   present the book as failed while a retained track is still downloading;
 - retry;
-- delegate-reported failure handling with bounded exponential retry; do not
+- delegate-reported failure handling with bounded exponential retry; honor a
+  valid `Retry-After` delta-seconds or HTTP-date value on HTTP 429 and 503,
+  bounded to one hour and never shorter than the exponential delay; do not
   infer a stalled or failed transfer solely from elapsed time between progress
   callbacks;
 - 401 refresh and rescheduling with a newly constructed `URLRequest`, because an existing background task's authorization header cannot be rotated in place;
@@ -1675,8 +1677,9 @@ may contain only the typed operation or stage, outcome, privacy-safe failure
 category, exact CloudKit code, partial codes, retryability, retry delay,
 duration, and bounded record count. Download attributes may contain only the
 typed processing stage, lifecycle state, exact privacy-safe failure code,
-retry bucket, retryability, HTTP status, and numeric URL loading-system error
-code. Raw
+retry bucket, retryability, bounded chosen retry delay, whether that delay came
+from exponential backoff or an accepted server `Retry-After`, HTTP status, and
+numeric URL loading-system error code. Raw
 errors, descriptions, `userInfo`, records, accounts, servers, and correlation
 identifiers are excluded. Logs use the same consent generation, resource,
 authenticated OTLP origin, foreground/background lifecycle, and synchronous

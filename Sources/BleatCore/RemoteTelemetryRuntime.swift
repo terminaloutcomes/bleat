@@ -205,6 +205,16 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
                 failureCause.rawValue
             )
         }
+        if let retryDelaySeconds = event.retryDelaySeconds {
+            attributes["bleat.download.retry_delay_seconds"] = .int(
+                retryDelaySeconds
+            )
+        }
+        if let retryDelaySource = event.retryDelaySource {
+            attributes["bleat.download.retry_delay_source"] = .string(
+                retryDelaySource.rawValue
+            )
+        }
         if let httpStatusCode = event.httpStatusCode {
             attributes["http.response.status_code"] = .int(httpStatusCode)
         }

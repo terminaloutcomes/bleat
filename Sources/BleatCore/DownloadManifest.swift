@@ -55,6 +55,8 @@ public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public internal(set) var observedByteLength: Int64?
     public internal(set) var placement: DownloadFilePlacement?
     public internal(set) var validator: DownloadValidator? = nil
+    public internal(set) var retryNotBefore: Date? = nil
+    public internal(set) var transferRetryCount: Int? = nil
 }
 
 public enum DownloadManifestError: Error, Equatable, Sendable {
@@ -231,6 +233,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             entries[index].placement = .temporary
         }
         entries[index].validator = validator ?? entries[index].validator
+        entries[index].retryNotBefore = nil
         state = .downloading
     }
 
@@ -247,6 +250,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = observedByteLength > 0 ? .temporary : nil
         entries[index].validator = validator ?? entries[index].validator
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
         state = .paused
     }
 
@@ -262,6 +267,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].state = .partial
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = placement
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
         state = .partial
     }
 
@@ -301,6 +308,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].state = .complete
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = placement
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
         updateIncompleteState()
     }
 
@@ -317,6 +326,8 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             entries[index].observedByteLength = observedByteLength
             entries[index].placement = observedByteLength > 0 ? .temporary : nil
         }
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
         updateIncompleteState()
     }
 
@@ -328,7 +339,26 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].observedByteLength = nil
         entries[index].placement = nil
         entries[index].validator = nil
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
         updateIncompleteState()
+    }
+
+    public mutating func deferRetry(
+        trackIndex: Int,
+        until date: Date,
+        retryCount: Int
+    ) throws(DownloadManifestError) {
+        let index = try entryIndex(for: trackIndex)
+        entries[index].retryNotBefore = date
+        entries[index].transferRetryCount = max(retryCount, 0)
+    }
+
+    public mutating func resetTransferRetryBudget() {
+        for index in entries.indices where entries[index].state != .complete {
+            entries[index].retryNotBefore = nil
+            entries[index].transferRetryCount = nil
+        }
     }
 
     public mutating func markBookFinished(at date: Date?) {

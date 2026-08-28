@@ -3354,6 +3354,318 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    func testRetryAfterHeaderDelaysRetryableServerReplacement() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRetryAfter-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Server-directed retry",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "retry-after",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let primaryURL = try XCTUnwrap(
+            URL(string: "https://192.0.2.2/audio")
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request),
+            primaryFallbackURL: primaryURL
+        )
+        let retryDelayGate = RetryDelayGate()
+        let telemetry = RecordingRemoteTelemetryDownloadLogger()
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            remoteTelemetryDownloadLogger: telemetry,
+            backgroundSessionIdentifier:
+                "bleat.tests.retry-after.\(UUID().uuidString)",
+            transferRetrySleep: { duration in
+                await retryDelayGate.recordAndWait(duration)
+            }
+        )
+        await model.start(account: account)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "retry-after"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let range = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 5,
+                expectedByteLength: identity.expectedByteLength,
+                chunkByteLength: DownloadModel.rangeChunkByteLength
+            )
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RetryAfterDownloadURLProtocol.self]
+        let session = URLSession(
+            configuration: configuration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: nil
+        ).encode()
+        task.resume()
+
+        await retryDelayGate.waitUntilEntered()
+        let observedDelay = await retryDelayGate.observedDelay()
+        XCTAssertEqual(observedDelay, .seconds(120))
+        XCTAssertEqual(model.transferRetryCountForTesting(identity), 1)
+        let retryEvent = try XCTUnwrap(
+            telemetry.events.last(where: { $0.stage == .retryScheduled })
+        )
+        XCTAssertEqual(retryEvent.retryDelaySeconds, 120)
+        XCTAssertEqual(retryEvent.retryDelaySource, .serverRetryAfter)
+
+        let relaunched = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.retry-after-relaunch.\(UUID().uuidString)"
+        )
+        await relaunched.start(account: account)
+        let relaunchedDescriptors =
+            await relaunched.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(relaunchedDescriptors.isEmpty)
+        XCTAssertNotNil(
+            relaunched.records.first?.manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.retryNotBefore
+        )
+
+        await service.setDownloadPlan(.success(plan))
+        await model.recoverAfterNetworkChange(for: [account])
+        let earlyDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(earlyDescriptors.isEmpty)
+
+        await retryDelayGate.release()
+        var replacementDescriptors: [DownloadChunkTaskDescription] = []
+        for _ in 0..<100 {
+            replacementDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+            if replacementDescriptors.count == 1 {
+                break
+            }
+            await Task.yield()
+        }
+        XCTAssertEqual(replacementDescriptors.count, 1)
+        XCTAssertEqual(replacementDescriptors.first?.range.start, 5)
+        let replacementRequests =
+            await model.scheduledTransferRequestsForTesting()
+        XCTAssertEqual(replacementRequests.first?.url, primaryURL)
+        session.invalidateAndCancel()
+        await relaunched.cancel(try XCTUnwrap(relaunched.records.first))
+        await model.removeAll()
+    }
+
+    func testRetryAfterExpiryAndNetworkRecoveryScheduleOneTransfer()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRetryAfterExpiry-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Concurrent server retry",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "retry-after-expiry",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request)
+        )
+        let retryDelayGate = RetryDelayGate()
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.retry-after-expiry.\(UUID().uuidString)",
+            transferRetrySleep: { duration in
+                await retryDelayGate.recordAndWait(duration)
+            }
+        )
+        await model.start(account: account)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "retry-after-expiry"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let range = try XCTUnwrap(
+            DownloadByteRange.next(
+                committedByteLength: 5,
+                expectedByteLength: identity.expectedByteLength,
+                chunkByteLength: DownloadModel.rangeChunkByteLength
+            )
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [
+            ExpiringRetryAfterDownloadURLProtocol.self
+        ]
+        let session = URLSession(
+            configuration: configuration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: nil
+        ).encode()
+        task.resume()
+
+        await retryDelayGate.waitUntilEntered()
+        let observedDelay = await retryDelayGate.observedDelay()
+        XCTAssertEqual(observedDelay, .seconds(1))
+        await service.setDownloadPlan(.success(plan))
+        try await Task.sleep(for: .milliseconds(1_100))
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await retryDelayGate.release()
+            }
+            group.addTask {
+                await model.recoverAfterNetworkChange(for: [account])
+            }
+        }
+        await model.recoverAfterNetworkChange(for: [account])
+
+        var descriptors: [DownloadChunkTaskDescription] = []
+        for _ in 0..<100 {
+            descriptors = await model.scheduledTransferDescriptorsForTesting()
+            if descriptors.count == 1 { break }
+            await Task.yield()
+        }
+        XCTAssertEqual(descriptors.count, 1)
+        XCTAssertEqual(descriptors.first?.range.start, 5)
+        session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testRepairDurablyResetsRetryBudgetBeforeScheduling() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRetryReset-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "User retry reset",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "retry-reset",
+            committedByteCount: 5
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "retry-reset"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        _ = try await storage.deferRetry(
+            identity,
+            until: Date().addingTimeInterval(120),
+            retryCount: DownloadModel.maximumTransferRetries
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.retry-reset.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        XCTAssertEqual(
+            model.transferRetryCountForTesting(identity),
+            DownloadModel.maximumTransferRetries
+        )
+
+        await service.setDownloadPlan(.success(plan))
+        await model.repair(try XCTUnwrap(model.records.first), account: account)
+
+        XCTAssertEqual(model.transferRetryCountForTesting(identity), 0)
+        let recreated = DownloadStorage(layout: layout)
+        let recreatedRecords = try await recreated.records()
+        let entry = try XCTUnwrap(
+            recreatedRecords.first?.manifest.entries.first(
+                where: { $0.trackIndex == identity.trackIndex }
+            )
+        )
+        XCTAssertNil(entry.retryNotBefore)
+        XCTAssertNil(entry.transferRetryCount)
+        await model.removeAll()
+    }
+
     func testNetworkRecoveryLeavesUserPausedDownloadsPaused() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -3958,6 +4270,86 @@ final class AppModelTests: XCTestCase {
                 .terminalFailure
             )
         }
+    }
+
+    func testDownloadRetryAfterParsingAndBackoffRemainBounded() throws {
+        let timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let now = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    year: 2026,
+                    month: 8,
+                    day: 28,
+                    hour: 0,
+                    minute: 0,
+                    second: 0
+                )
+            )
+        )
+
+        XCTAssertEqual(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "120",
+                now: now
+            ),
+            120
+        )
+        XCTAssertEqual(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "Fri, 28 Aug 2026 00:02:00 GMT",
+                now: now
+            ),
+            120
+        )
+        XCTAssertEqual(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "Friday, 28-Aug-26 00:02:00 GMT",
+                now: now
+            ),
+            120
+        )
+        XCTAssertEqual(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "Fri Aug 28 00:02:00 2026",
+                now: now
+            ),
+            120
+        )
+        XCTAssertEqual(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "999999",
+                now: now
+            ),
+            DownloadModel.maximumServerRetryDelaySeconds
+        )
+        XCTAssertNil(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "later",
+                now: now
+            )
+        )
+        XCTAssertNil(
+            DownloadModel.retryAfterDelaySeconds(
+                headerValue: "-1",
+                now: now
+            )
+        )
+        XCTAssertEqual(
+            DownloadModel.retryDelaySeconds(
+                retryCount: 1,
+                retryAfterSeconds: 120
+            ),
+            120
+        )
+        XCTAssertEqual(
+            DownloadModel.retryDelaySeconds(
+                retryCount: 2,
+                retryAfterSeconds: nil
+            ),
+            2
+        )
     }
 
     func testDownloadNetworkPolicyPersistsAndControlsRequests() throws {
@@ -15212,6 +15604,122 @@ private actor AsyncGate {
         entered = false
         released = false
     }
+}
+
+private actor RetryDelayGate {
+    private var delay: Duration?
+    private var enteredContinuations: [CheckedContinuation<Void, Never>] = []
+    private var releaseContinuations: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+
+    func recordAndWait(_ duration: Duration) async {
+        delay = duration
+        let continuations = enteredContinuations
+        enteredContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+        guard !released else { return }
+        await withCheckedContinuation { continuation in
+            releaseContinuations.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard delay == nil else { return }
+        await withCheckedContinuation { continuation in
+            enteredContinuations.append(continuation)
+        }
+    }
+
+    func observedDelay() -> Duration? {
+        delay
+    }
+
+    func release() {
+        released = true
+        let continuations = releaseContinuations
+        releaseContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+}
+
+private final class RetryAfterDownloadURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 503,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Retry-After": "120"]
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class ExpiringRetryAfterDownloadURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 429,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Retry-After": "1"]
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private final class LatePausedDownloadURLProtocol: URLProtocol,

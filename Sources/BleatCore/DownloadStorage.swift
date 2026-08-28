@@ -874,6 +874,34 @@ public actor DownloadStorage {
         return record
     }
 
+    public func deferRetry(
+        _ identity: DownloadTaskIdentity,
+        until date: Date,
+        retryCount: Int
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(identity)
+        do {
+            try record.manifest.deferRetry(
+                trackIndex: identity.trackIndex,
+                until: date,
+                retryCount: retryCount
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func resetTransferRetryBudget(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        record.manifest.resetTransferRetryBudget()
+        try persist(record)
+        return record
+    }
+
     public func markComplete(
         _ identity: DownloadTaskIdentity,
         observedByteLength: Int64

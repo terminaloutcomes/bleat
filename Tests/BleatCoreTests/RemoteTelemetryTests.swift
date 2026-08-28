@@ -220,6 +220,17 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         logger.recordDownloadEvent(
             RemoteDownloadTransferEvent(
+                stage: .retryScheduled,
+                state: .retrying,
+                retryBucket: .one,
+                isRetryable: true,
+                retryDelaySeconds: 120,
+                retryDelaySource: .serverRetryAfter
+            ),
+            span: span
+        )
+        logger.recordDownloadEvent(
+            RemoteDownloadTransferEvent(
                 stage: .rangeValidation,
                 state: .failed,
                 failureCause: .mismatchedContentRange
@@ -231,7 +242,7 @@ final class RemoteTelemetryTests: XCTestCase {
 
         let exportedSpan = try XCTUnwrap(spanExporter.recordedSpans.first)
         let logs = logExporter.recordedLogs
-        XCTAssertEqual(logs.count, 2)
+        XCTAssertEqual(logs.count, 3)
         for log in logs {
             let context = try XCTUnwrap(log.spanContext)
             XCTAssertEqual(context.traceId, exportedSpan.traceId)
@@ -241,6 +252,16 @@ final class RemoteTelemetryTests: XCTestCase {
                 .string("Download transfer lifecycle")
             )
         }
+        let retry = logs[1]
+        XCTAssertEqual(
+            retry.attributes["bleat.download.retry_delay_seconds"],
+            .int(120)
+        )
+        XCTAssertEqual(
+            retry.attributes["bleat.download.retry_delay_source"],
+            .string("server_retry_after")
+        )
+        XCTAssertNil(retry.attributes["http.request.header.retry_after"])
         let failure = try XCTUnwrap(logs.last)
         XCTAssertEqual(
             failure.eventName,

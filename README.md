@@ -645,9 +645,12 @@ durable partial bytes when connectivity returns; user-paused downloads stay
 paused. Unavailable paths show **Waiting for network**, and satisfied-path
 recovery shows **Retrying download**. Bleat does not infer failure from gaps in
 progress callbacks; delegate-reported failures enter its bounded replacement
-flow. Multi-file books transfer one track at a time, resume an existing partial
-track before starting another, and report durable bytes plus only the active
-request's in-flight bytes. A failed track does not label the whole book failed
+flow. HTTP 429 and 503 responses honor valid `Retry-After` delta-seconds or
+HTTP-date values, bounded to one hour, while retaining exponential backoff as
+the minimum delay. Multi-file books transfer one track at a time, resume an
+existing partial track before starting another, and report durable bytes plus
+only the active request's in-flight bytes. A failed track does not label the
+whole book failed
 while another retained transfer is still active; the failure becomes visible
 only when no track is continuing. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of

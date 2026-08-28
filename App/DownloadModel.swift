@@ -322,7 +322,8 @@ private enum DownloadTransferOutcome {
     case unauthorized(rejectedRequest: URLRequest)
     case requestRejected(
         statusCode: Int,
-        rejectedRequest: URLRequest?
+        rejectedRequest: URLRequest?,
+        retryAfterSeconds: TimeInterval?
     )
 }
 
@@ -459,6 +460,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     static let largeDownloadThresholdBytes: Int64 = 100 * 1_024 * 1_024
     static let rangeChunkByteLength: Int64 = 16 * 1_024 * 1_024
     static let maximumTransferRetries = 2
+    static let maximumServerRetryDelaySeconds: TimeInterval = 60 * 60
     static let maximumConcurrentTracksPerDownload = 1
 
     static var supportsNetworkPolicySelection: Bool {
@@ -492,6 +494,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var pendingRecoveryTaskKeys: Set<AutomaticDownloadTaskKey> = []
     private var transferRetryCounts: [AutomaticDownloadTaskKey: Int] = [:]
     private var terminalTransferTaskKeys: Set<AutomaticDownloadTaskKey> = []
+    private var retrySchedulingDownloadIDs: Set<DownloadID> = []
+    private var deferredRetryWakeTasks:
+        [AutomaticDownloadTaskKey: Task<Void, Never>] = [:]
     private var isRecoveringInterruptedTransfers = false
     private var automaticUpdatesInProgress: Set<AutomaticDownloadKey> = []
     private var pendingAutomaticUpdates:
@@ -699,6 +704,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         _ = session
         await refresh()
+        restoreDeferredRetryState()
         pausedDownloadIDs = Set(
             records.compactMap {
                 $0.manifest.state == .paused
@@ -793,6 +799,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard let storage else {
             pendingRecoveryDownloadIDs = []
             pendingRecoveryTaskKeys = []
+            cancelAllDeferredRetryWakes()
             return
         }
         for downloadID in Array(pendingRecoveryDownloadIDs) {
@@ -815,6 +822,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
                     $0.downloadID != downloadID
                 }
+                cancelDeferredRetryWakes(for: downloadID)
             }
         }
         guard !pendingRecoveryDownloadIDs.isEmpty else {
@@ -884,6 +892,34 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }) else {
                 continue
             }
+            let futureRetries: [(DownloadTaskIdentity, Date)] =
+                record.manifest.entries.compactMap { entry in
+                    guard entry.state != .complete,
+                        let retryNotBefore = entry.retryNotBefore,
+                        retryNotBefore > Date(),
+                        let identity = Self.identity(for: entry, record: record)
+                    else { return nil }
+                    transferRetryCounts[AutomaticDownloadTaskKey(identity)] =
+                        entry.transferRetryCount
+                    return (identity, retryNotBefore)
+                }
+            if !futureRetries.isEmpty {
+                pendingRecoveryDownloadIDs.insert(downloadID)
+                for (identity, retryNotBefore) in futureRetries {
+                    pendingRecoveryTaskKeys.insert(
+                        AutomaticDownloadTaskKey(identity)
+                    )
+                    scheduleDeferredRetryWake(
+                        identity,
+                        retryNotBefore: retryNotBefore
+                    )
+                }
+                continue
+            }
+            guard !retrySchedulingDownloadIDs.contains(downloadID) else {
+                continue
+            }
+            retrySchedulingDownloadIDs.insert(downloadID)
             do {
                 let plan = try await service.downloadPlan(
                     for: account,
@@ -928,7 +964,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         trackIndex: track.index
                     )
                     pendingRecoveryTaskKeys.remove(key)
-                    transferRetryCounts[key] = nil
+                    let persistedRetryCount = record.manifest.entries
+                        .first(where: { $0.trackIndex == track.index })?
+                        .transferRetryCount ?? 0
+                    transferRetryCounts[key] = persistedRetryCount > 0
+                        ? persistedRetryCount : nil
+                    cancelDeferredRetryWake(for: key)
                 }
                 if !pendingRecoveryTaskKeys.contains(where: {
                     $0.downloadID == downloadID
@@ -955,9 +996,78 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 )
             }
+            retrySchedulingDownloadIDs.remove(downloadID)
         }
         await refresh()
         return scheduledDownloadCount
+    }
+
+    private func restoreDeferredRetryState() {
+        for record in records {
+            for entry in record.manifest.entries
+            where entry.state != .complete {
+                guard let identity = Self.identity(for: entry, record: record)
+                else { continue }
+                let key = AutomaticDownloadTaskKey(identity)
+                let persistedRetryCount = entry.transferRetryCount ?? 0
+                transferRetryCounts[key] = persistedRetryCount > 0
+                    ? persistedRetryCount : nil
+                guard let retryNotBefore = entry.retryNotBefore else {
+                    continue
+                }
+                pendingRecoveryDownloadIDs.insert(identity.downloadID)
+                pendingRecoveryTaskKeys.insert(key)
+                if retryNotBefore > Date() {
+                    scheduleDeferredRetryWake(
+                        identity,
+                        retryNotBefore: retryNotBefore
+                    )
+                }
+            }
+        }
+    }
+
+    private func scheduleDeferredRetryWake(
+        _ identity: DownloadTaskIdentity,
+        retryNotBefore: Date
+    ) {
+        let key = AutomaticDownloadTaskKey(identity)
+        guard deferredRetryWakeTasks[key] == nil else { return }
+        let delay = max(retryNotBefore.timeIntervalSinceNow, 0)
+        deferredRetryWakeTasks[key] = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.deferredRetryWakeTasks[key] = nil
+            await self.recoverAfterNetworkChange(
+                for: Array(self.accounts.values)
+            )
+        }
+    }
+
+    private func cancelDeferredRetryWake(
+        for key: AutomaticDownloadTaskKey
+    ) {
+        deferredRetryWakeTasks.removeValue(forKey: key)?.cancel()
+    }
+
+    private func cancelDeferredRetryWakes(for downloadID: DownloadID) {
+        let keys = deferredRetryWakeTasks.keys.filter {
+            $0.downloadID == downloadID
+        }
+        for key in keys {
+            cancelDeferredRetryWake(for: key)
+        }
+    }
+
+    private func cancelAllDeferredRetryWakes() {
+        for task in deferredRetryWakeTasks.values {
+            task.cancel()
+        }
+        deferredRetryWakeTasks = [:]
     }
 
     private func activeTransferTaskKeys() async
@@ -2176,6 +2286,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         resetTransferRetryBudget(for: record.manifest.downloadID)
         accounts[account.id] = account
         do {
+            _ = try await storage.resetTransferRetryBudget(record)
             let plan = try await service.downloadPlan(
                 for: account,
                 itemID: record.manifest.itemID
@@ -2835,7 +2946,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     stage: .manifestCommit,
                     state: .succeeded
                 )
-                transferRetryCounts[AutomaticDownloadTaskKey(identity)] = nil
+                let taskKey = AutomaticDownloadTaskKey(identity)
+                transferRetryCounts[taskKey] = nil
+                cancelDeferredRetryWake(for: taskKey)
                 terminalTransferTaskKeys.remove(
                     AutomaticDownloadTaskKey(identity)
                 )
@@ -3087,7 +3200,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 await refresh()
             }
 
-        case .requestRejected(let statusCode, let rejectedRequest):
+        case .requestRejected(
+            let statusCode,
+            let rejectedRequest,
+            let retryAfterSeconds
+        ):
             guard !context.isPaused, !context.isCancelled else {
                 finishTransferSpan(identity, outcome: .cancelled)
                 clearTransferredBytes(for: identity)
@@ -3125,7 +3242,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         statusCode: statusCode
                     ),
                     category: category,
-                    storage: storage
+                    storage: storage,
+                    retryAfterSeconds: retryAfterSeconds
                 )
                 return
             }
@@ -3179,6 +3297,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         let taskKey = AutomaticDownloadTaskKey(identity)
         pendingRecoveryTaskKeys.remove(taskKey)
+        cancelDeferredRetryWake(for: taskKey)
         if !pendingRecoveryTaskKeys.contains(where: {
             $0.downloadID == identity.downloadID
         }) {
@@ -3208,14 +3327,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         identity: DownloadTaskIdentity,
         terminalFailure: DownloadModelFailure,
         category: RemoteTelemetryFailureCategory,
-        storage: DownloadStorage
+        storage: DownloadStorage,
+        retryAfterSeconds: TimeInterval? = nil
     ) async {
         let key = AutomaticDownloadTaskKey(identity)
         guard let rejectedRequest,
             pendingRecoveryTaskKeys.contains(key)
         else { return }
 
-        if let rejectedURL = rejectedRequest.url,
+        if retryAfterSeconds == nil,
+            let rejectedURL = rejectedRequest.url,
             let fallbackRequest =
                 await service.primaryFallbackDownloadRequest(
                     for: rejectedRequest
@@ -3273,16 +3394,43 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         let nextRetryCount = retryCount + 1
         transferRetryCounts[key] = nextRetryCount
+        let retryDelaySeconds = Self.retryDelaySeconds(
+            retryCount: nextRetryCount,
+            retryAfterSeconds: retryAfterSeconds
+        )
+        let retryNotBefore = Date().addingTimeInterval(retryDelaySeconds)
+        do {
+            _ = try await storage.deferRetry(
+                identity,
+                until: retryNotBefore,
+                retryCount: nextRetryCount
+            )
+            await refresh()
+        } catch {
+            recordDownloadTelemetry(
+                identity,
+                stage: .manifestCommit,
+                state: .failed,
+                failureCause: Self.downloadStorageFailureCause(error)
+            )
+            presentTransferOperationFailure(error)
+            return
+        }
         recordDownloadTelemetry(
             identity,
             stage: .retryScheduled,
             state: .retrying,
             retryCount: nextRetryCount,
-            isRetryable: true
+            isRetryable: true,
+            retryDelaySeconds: Int(retryDelaySeconds.rounded(.up)),
+            retryDelaySource: retryAfterSeconds == nil
+                ? .exponentialBackoff : .serverRetryAfter
         )
         do {
             try await transferRetrySleep(
-                .seconds(1 << (nextRetryCount - 1))
+                .seconds(
+                    retryDelaySeconds
+                )
             )
         } catch {
             return
@@ -3291,6 +3439,43 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             networkPathState.availability == .satisfied
         else {
             return
+        }
+        guard !retrySchedulingDownloadIDs.contains(identity.downloadID) else {
+            return
+        }
+        retrySchedulingDownloadIDs.insert(identity.downloadID)
+        defer {
+            retrySchedulingDownloadIDs.remove(identity.downloadID)
+        }
+        let hasActiveTask = await activeTransferTaskKeys().contains {
+            $0.downloadID == identity.downloadID
+        }
+        guard !hasActiveTask else { return }
+        if retryAfterSeconds != nil,
+            let rejectedURL = rejectedRequest.url,
+            let fallbackRequest =
+                await service.primaryFallbackDownloadRequest(
+                    for: rejectedRequest
+                ),
+            fallbackRequest.url != rejectedURL,
+            pendingRecoveryTaskKeys.contains(key)
+        {
+            recordDownloadTelemetry(
+                identity,
+                stage: .primaryFallback,
+                state: .retrying,
+                retryCount: nextRetryCount,
+                isRetryable: true
+            )
+            if await scheduleReconciledReplacement(
+                fallbackRequest,
+                taskDescription: taskDescription,
+                identity: identity,
+                retryCount: nextRetryCount
+            ) {
+                resolvePendingRecovery(for: identity)
+                return
+            }
         }
         if await scheduleReconciledReplacement(
             rejectedRequest,
@@ -3303,7 +3488,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private func resolvePendingRecovery(for identity: DownloadTaskIdentity) {
-        pendingRecoveryTaskKeys.remove(AutomaticDownloadTaskKey(identity))
+        let key = AutomaticDownloadTaskKey(identity)
+        pendingRecoveryTaskKeys.remove(key)
+        cancelDeferredRetryWake(for: key)
         if !pendingRecoveryTaskKeys.contains(where: {
             $0.downloadID == identity.downloadID
         }) {
@@ -3419,7 +3606,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 outcome: .requestRejected(
                     statusCode: response.statusCode,
                     rejectedRequest:
-                        task.currentRequest ?? task.originalRequest
+                        task.currentRequest ?? task.originalRequest,
+                    retryAfterSeconds: Self.retryAfterDelaySeconds(
+                        response: response
+                    )
                 )
             )
             return
@@ -3440,7 +3630,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     taskDescription: description,
                     outcome: .requestRejected(
                         statusCode: response.statusCode,
-                        rejectedRequest: task.currentRequest
+                        rejectedRequest: task.currentRequest,
+                        retryAfterSeconds: nil
                     )
                 )
                 return
@@ -3597,6 +3788,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         failureCause: RemoteDownloadFailureCause? = nil,
         retryCount: Int = 0,
         isRetryable: Bool = false,
+        retryDelaySeconds: Int? = nil,
+        retryDelaySource: RemoteDownloadRetryDelaySource? = nil,
         httpStatusCode: Int? = nil,
         transportErrorCode: Int? = nil
     ) {
@@ -3609,6 +3802,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     retryCount: retryCount
                 ),
                 isRetryable: isRetryable,
+                retryDelaySeconds: retryDelaySeconds,
+                retryDelaySource: retryDelaySource,
                 httpStatusCode: httpStatusCode,
                 transportErrorCode: transportErrorCode
             ),
@@ -3707,10 +3902,72 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    static func retryAfterDelaySeconds(
+        headerValue: String?,
+        now: Date = Date()
+    ) -> TimeInterval? {
+        guard let headerValue else { return nil }
+        let value = headerValue.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !value.isEmpty else { return nil }
+        if let seconds = Int64(value), seconds >= 0 {
+            return min(
+                TimeInterval(seconds),
+                maximumServerRetryDelaySeconds
+            )
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.twoDigitStartDate = Date(timeIntervalSince1970: 0)
+        let formats = [
+            "EEE',' dd MMM yyyy HH':'mm':'ss 'GMT'",
+            "EEEE',' dd-MMM-yy HH':'mm':'ss 'GMT'",
+            "EEE MMM d HH':'mm':'ss yyyy",
+        ]
+        let date = formats.lazy.compactMap { format in
+            formatter.dateFormat = format
+            return formatter.date(from: value)
+        }.first
+        guard let date else { return nil }
+        return min(
+            max(date.timeIntervalSince(now), 0),
+            maximumServerRetryDelaySeconds
+        )
+    }
+
+    static func retryAfterDelaySeconds(
+        response: HTTPURLResponse,
+        now: Date = Date()
+    ) -> TimeInterval? {
+        guard response.statusCode == 429 || response.statusCode == 503 else {
+            return nil
+        }
+        return retryAfterDelaySeconds(
+            headerValue: response.value(forHTTPHeaderField: "Retry-After"),
+            now: now
+        )
+    }
+
+    static func retryDelaySeconds(
+        retryCount: Int,
+        retryAfterSeconds: TimeInterval?
+    ) -> TimeInterval {
+        let boundedRetryCount = min(max(retryCount, 1), 30)
+        let exponential = TimeInterval(1 << (boundedRetryCount - 1))
+        return min(
+            max(exponential, retryAfterSeconds ?? 0),
+            maximumServerRetryDelaySeconds
+        )
+    }
+
     private func resetTransferRetryBudget(for downloadID: DownloadID) {
         transferRetryCounts = transferRetryCounts.filter {
             $0.key.downloadID != downloadID
         }
+        cancelDeferredRetryWakes(for: downloadID)
         terminalTransferTaskKeys = terminalTransferTaskKeys.filter {
             $0.downloadID != downloadID
         }
