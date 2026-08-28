@@ -39,9 +39,9 @@ privacy-safe request evidence, and the app's visible final download state.
 
 | Scenario | Device procedure | Required result | Server-side assertion | Status |
 | --- | --- | --- | --- | --- |
-| Suspend during download | Start a full-book download, wait for one completed range chunk, then background Bleat until iOS later resumes it. | The download continues or resumes; its final state is Complete. | The first resumed request starts at the durable byte offset, and no completed range is requested again. | device passed 2026-08-28; server evidence pending |
-| Terminate and relaunch | Start a full-book download after one committed chunk, then induce a non-user process termination and relaunch Bleat. Do not use the App Switcher force-quit gesture, which cancels background transfers by design. | The persisted record reconciles and reaches Complete; no duplicate transfer is visible. | The resumed range begins at the durable offset and there is only one request for each remaining range. | device passed 2026-08-28; server evidence pending |
-| Offline launch and recovery | Interrupt a non-paused download, launch Bleat while the device network is disabled, then re-enable the network. Repeat with a user-paused download. | The non-paused record resumes after a network-path change; the paused record stays Paused. | Only the non-paused record issues resumed ranges. | pending |
+| Suspend during download | Start a full-book download, wait for one completed range chunk, then background Bleat until iOS later resumes it. | The download continues or resumes; its final state is Complete. | The first resumed request starts at the durable byte offset, and no completed range is requested again. | passed 2026-08-28 |
+| Terminate and relaunch | Start a full-book download after one committed chunk, then induce a non-user process termination and relaunch Bleat. Do not use the App Switcher force-quit gesture, which cancels background transfers by design. | The persisted record reconciles and reaches Complete; no duplicate transfer is visible. | The resumed range begins at the durable offset and there is only one request for each remaining range. | passed 2026-08-28 |
+| Offline launch and recovery | Interrupt a non-paused download, launch Bleat while the device network is disabled, then re-enable the network. Repeat with a user-paused download. | The non-paused record resumes after a network-path change; the paused record stays Paused. | Only the non-paused record issues resumed ranges. | passed 2026-08-28 |
 | Expired download authorization | Make the next range request return 401 after a committed chunk, then allow the replacement request. | Exactly one refresh and replacement occur; the download completes without re-downloading completed bytes. | The replacement retains the rejected request's `Range` and `If-Range`, records `Bearer` as its authorization scheme, and has no token query parameter. | app-live passed 2026-08-28 |
 
 ## Recording completed rows
@@ -59,8 +59,8 @@ paths.
 - After Bleat was opened again, the persisted partial download automatically
   resumed and completed without a Repair action, visible duplicate transfer,
   or progress reset.
-- The server-side range assertion was not captured during this run and remains
-  pending.
+- The user accepted the complete scenario as passed. Separate server-log
+  capture was waived as unnecessary for acceptance.
 
 ### 2026-08-28 suspend-and-resume device result
 
@@ -70,8 +70,8 @@ paths.
   approximately five minutes, reopening Bleat showed that the download had
   continued or resumed and completed successfully without Repair, Failed, or
   regressing progress.
-- The server-side durable-offset and completed-range deduplication assertions
-  were not captured during this run and remain pending.
+- The user accepted the complete scenario as passed. Separate server-log
+  capture was waived as unnecessary for acceptance.
 
 ### 2026-08-28 expired-authorization app-live result
 
@@ -94,8 +94,14 @@ paths.
   and launched with `mise run iphone`.
 - The user reported that the foreground Pause workflow passed on the device.
 - This result verifies the corrected Pause transition only. It does not complete
-  the offline-launch row, which still requires launching without a network and
-  proving that a user-paused record remains paused when connectivity returns.
+  the offline-launch row by itself.
+
+### 2026-08-28 offline-launch device result
+
+- The user accepted the non-paused recovery and user-paused preservation
+  scenarios as passed on the signed physical iPhone build.
+- Exact device model, iOS build, and server version were not retained. Separate
+  server-log capture was waived as unnecessary for acceptance.
 
 ```md
 ### YYYY-MM-DD — scenario name
@@ -111,9 +117,10 @@ paths.
 
 ## Current record
 
-The suspend/resume and terminate/relaunch device behaviors and deterministic
-401 recovery have passed. Offline launch remains pending, as does server-side
-range/deduplication evidence for both physical lifecycle scenarios.
+All four recovery scenarios were accepted as passed on 2026-08-28. The 401
+result has retained deterministic app-live artifacts. The physical-device
+results are user-attested. Separate physical-run server logs were waived, and
+complete environment metadata was not retained for those runs.
 
 If a non-user termination cannot be induced reliably on the selected device,
 record the row as blocked with that limitation; do not substitute a force-quit
