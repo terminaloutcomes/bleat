@@ -2480,21 +2480,32 @@ final class AppModelTests: XCTestCase {
             DownloadRepairActionPolicy.isEligible(
                 manifestState: .partial,
                 isWaitingForNetwork: false,
-                isRetrying: false
+                isRetrying: false,
+                isContinuing: false
             )
         )
         XCTAssertFalse(
             DownloadRepairActionPolicy.isEligible(
                 manifestState: .failed,
                 isWaitingForNetwork: false,
-                isRetrying: true
+                isRetrying: true,
+                isContinuing: false
             )
         )
         XCTAssertFalse(
             DownloadRepairActionPolicy.isEligible(
                 manifestState: .partial,
                 isWaitingForNetwork: true,
-                isRetrying: false
+                isRetrying: false,
+                isContinuing: false
+            )
+        )
+        XCTAssertFalse(
+            DownloadRepairActionPolicy.isEligible(
+                manifestState: .partial,
+                isWaitingForNetwork: false,
+                isRetrying: false,
+                isContinuing: true
             )
         )
     }
@@ -3829,6 +3840,131 @@ final class AppModelTests: XCTestCase {
             )
         )
         lateSession.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testSystemResumedRangeSuffixRetriesFromDurableOffset()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatSystemResumedSuffix-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "System resumed suffix",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, storage) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "system-resumed-suffix",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.system-resumed-suffix.\(UUID().uuidString)",
+            transferRetrySleep: { _ in }
+        )
+        await model.start(account: account)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        let initialDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(initialDescriptors.isEmpty)
+        let identity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "system-resumed-suffix"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let range = try DownloadByteRange(start: 5, endInclusive: 7)
+        let validator = DownloadValidator.strongETag("\"current\"")
+        let descriptor = DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: validator
+        )
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [
+            SystemResumedSuffixDownloadURLProtocol.self
+        ]
+        let resumedSession = URLSession(
+            configuration: configuration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let resumedSuffixRequest = DownloadRangeRequest.applying(
+            range: try DownloadByteRange(start: 6, endInclusive: 7),
+            validator: .strongETag("\"stale\""),
+            to: request
+        )
+        let resumedTask = resumedSession.downloadTask(
+            with: resumedSuffixRequest
+        )
+        resumedTask.taskDescription = try descriptor.encode()
+        resumedTask.resume()
+
+        var scheduledDescriptors: [DownloadChunkTaskDescription] = []
+        for _ in 0..<200 {
+            scheduledDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+            if scheduledDescriptors.count == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertNil(model.failure)
+        XCTAssertEqual(scheduledDescriptors.count, 1)
+        XCTAssertEqual(scheduledDescriptors.first?.range, range)
+        XCTAssertEqual(model.transferRetryCountForTesting(identity), 1)
+        let scheduledRequests =
+            await model.scheduledTransferRequestsForTesting()
+        XCTAssertEqual(
+            scheduledRequests.first?.value(
+                forHTTPHeaderField: "Range"
+            ),
+            "bytes=5-7"
+        )
+        XCTAssertEqual(
+            scheduledRequests.first?.value(
+                forHTTPHeaderField: "If-Range"
+            ),
+            validator.headerValue
+        )
+        let remainingPartialBytes =
+            try await storage.partialByteLength(identity)
+        XCTAssertEqual(remainingPartialBytes, 5)
+        let layout = try DownloadStorageLayout(rootURL: root)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: layout.destinationURL(for: identity).path
+            )
+        )
+        resumedSession.invalidateAndCancel()
         await model.removeAll()
     }
 
@@ -15740,6 +15876,44 @@ private final class LatePausedDownloadURLProtocol: URLProtocol,
                 statusCode: 206,
                 httpVersion: "HTTP/1.1",
                 headerFields: ["Content-Range": "bytes 5-7/8"]
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data(repeating: 0xCD, count: 3))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class SystemResumedSuffixDownloadURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 206,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Range": "bytes 6-7/8"]
             )
         else {
             client?.urlProtocol(

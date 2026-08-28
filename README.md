@@ -649,7 +649,10 @@ flow. HTTP 429 and 503 responses honor valid `Retry-After` delta-seconds or
 HTTP-date values, bounded to one hour, while retaining exponential backoff as
 the minimum delay. Multi-file books transfer one track at a time, resume an
 existing partial track before starting another, and report durable bytes plus
-only the active request's in-flight bytes. A failed track does not label the
+only the active request's in-flight bytes. If the system resumes within an
+active range but reports only the resumed suffix, Bleat discards the ambiguous
+temporary file and retries the bounded chunk from its durable offset. A failed
+track does not label the
 whole book failed
 while another retained transfer is still active; the failure becomes visible
 only when no track is continuing. The Downloads tab shows durable state and

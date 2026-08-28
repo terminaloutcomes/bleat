@@ -1058,7 +1058,8 @@ Requirements:
   tracks;
 - validate `206 Partial Content`, the complete `Content-Range`, and the expected
   total before appending; retain a strong `ETag` or `Last-Modified` validator
-  and send it as `If-Range` on later chunks;
+  and send it as `If-Range` on later chunks; reject an ambiguous system-resumed
+  suffix response and retry the bounded chunk from its durable offset;
 - never append a `200 OK` response to a ranged transfer;
 - keep playback-driven suspension separate from persisted user Pause;
 - serialize each book's track transfers, preferring a durable partial track,

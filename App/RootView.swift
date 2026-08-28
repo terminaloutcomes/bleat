@@ -4222,6 +4222,8 @@ private struct BookDetailView: View {
             .deleting,
         ].contains(record.manifest.state) {
             EmptyView()
+        } else if model.downloads.isContinuingManualDownload(record) {
+            automaticPauseControl(record)
         } else if [
             DownloadManifestState.failed,
             .partial,
@@ -4291,6 +4293,7 @@ private struct BookDetailView: View {
             .downloading,
             .paused,
         ].contains(record.manifest.state)
+            || model.downloads.isContinuingManualDownload(record)
     }
 
     private var downloadedRecord: DownloadedBookRecord? {
@@ -4327,6 +4330,9 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "Retrying download"
+        }
+        if model.downloads.isContinuingManualDownload(record) {
+            return "Downloading"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -4374,6 +4380,9 @@ private struct BookDetailView: View {
         }
         if model.downloads.isRetrying(record) {
             return "arrow.clockwise.circle"
+        }
+        if model.downloads.isContinuingManualDownload(record) {
+            return "arrow.down.circle"
         }
         if let cacheState = model.downloads.automaticCacheState(
             for: record
@@ -5418,6 +5427,9 @@ private struct DownloadStorageView: View {
         if model.downloads.isRetrying(record) {
             return "Retrying download"
         }
+        if model.downloads.isContinuingManualDownload(record) {
+            return "Downloading"
+        }
         if let state = model.downloads.automaticCacheState(
             for: record
         ) {
@@ -5479,6 +5491,7 @@ private struct DownloadStorageView: View {
             DownloadManifestState.queued,
             .downloading,
         ].contains(record.manifest.state)
+            || model.downloads.isContinuingManualDownload(record)
     }
 
     private func repairActionIsEligible(
@@ -5487,7 +5500,8 @@ private struct DownloadStorageView: View {
         DownloadRepairActionPolicy.isEligible(
             manifestState: record.manifest.state,
             isWaitingForNetwork: model.downloads.isWaitingForNetwork(record),
-            isRetrying: model.downloads.isRetrying(record)
+            isRetrying: model.downloads.isRetrying(record),
+            isContinuing: model.downloads.isContinuingManualDownload(record)
         )
     }
 
@@ -5517,11 +5531,13 @@ enum DownloadRepairActionPolicy {
     static func isEligible(
         manifestState: DownloadManifestState,
         isWaitingForNetwork: Bool,
-        isRetrying: Bool
+        isRetrying: Bool,
+        isContinuing: Bool
     ) -> Bool {
         [DownloadManifestState.failed, .partial].contains(manifestState)
             && !isWaitingForNetwork
             && !isRetrying
+            && !isContinuing
     }
 }
 

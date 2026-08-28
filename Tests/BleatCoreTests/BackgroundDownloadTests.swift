@@ -84,6 +84,16 @@ final class BackgroundDownloadTests: XCTestCase {
         )
         XCTAssertThrowsError(
             try DownloadRangeResponseValidator.validate(
+                statusCode: 206,
+                contentRangeHeader: "bytes 18-19/20",
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        ) { error in
+            XCTAssertEqual(error as? DownloadRangeError, .mismatchedContentRange)
+        }
+        XCTAssertThrowsError(
+            try DownloadRangeResponseValidator.validate(
                 statusCode: 200,
                 contentRangeHeader: nil,
                 requestedRange: final,

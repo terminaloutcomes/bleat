@@ -312,7 +312,8 @@ private enum DownloadTransferOutcome {
     )
     case placementRejected(
         stage: RemoteDownloadTransferStage,
-        cause: RemoteDownloadFailureCause
+        cause: RemoteDownloadFailureCause,
+        rejectedRequest: URLRequest?
     )
     case transportFailed(
         rejectedRequest: URLRequest?,
@@ -335,7 +336,8 @@ private enum DownloadPlacementResult: Sendable {
     )
     case rejected(
         stage: RemoteDownloadTransferStage,
-        cause: RemoteDownloadFailureCause
+        cause: RemoteDownloadFailureCause,
+        rejectedRequest: URLRequest?
     )
 }
 
@@ -507,6 +509,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
     private var resumingDownloadIDs: Set<DownloadID> = []
+    // Presentation-only: a completed manual track is being handed off to the
+    // next track. Never use this transient state for transfer decisions.
+    private var continuingManualDownloadIDs: Set<DownloadID> = []
     private var supersededTaskDescriptions: Set<String> = []
     private nonisolated let invalidatedTransferIDs = Mutex(Set<UUID>())
     private var transferSpans: [AutomaticDownloadTaskKey: RemoteTelemetrySpan] =
@@ -1151,6 +1156,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     func isRetrying(_ record: DownloadedBookRecord) -> Bool {
         pendingRecoveryDownloadIDs.contains(record.manifest.downloadID)
             && networkPathState.availability == .satisfied
+    }
+
+    func isContinuingManualDownload(_ record: DownloadedBookRecord) -> Bool {
+        continuingManualDownloadIDs.contains(record.manifest.downloadID)
     }
 
     func updateNetworkPathState(_ state: AppNetworkPathState) {
@@ -2935,12 +2944,25 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 return
             }
             do {
-                _ = try await storage.recordCommittedChunk(
+                let committedRecord = try await storage.recordCommittedChunk(
                     identity,
                     committedByteLength: committedByteLength,
                     validator: validator,
                     finalized: finalized
                 )
+                let isContinuingManualDownload = finalized
+                    && committedRecord.manifest.purpose == .manual
+                    && committedRecord.manifest.entries.contains {
+                        $0.state != .complete
+                    }
+                if isContinuingManualDownload {
+                    continuingManualDownloadIDs.insert(identity.downloadID)
+                }
+                defer {
+                    if isContinuingManualDownload {
+                        continuingManualDownloadIDs.remove(identity.downloadID)
+                    }
+                }
                 recordDownloadTelemetry(
                     identity,
                     stage: .manifestCommit,
@@ -3081,7 +3103,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 await refresh()
             }
 
-        case .placementRejected(let stage, let cause):
+        case .placementRejected(let stage, let cause, let rejectedRequest):
             guard !context.isPaused,
                 !context.isSuperseded,
                 !context.isCancelled
@@ -3090,12 +3112,36 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 clearTransferredBytes(for: identity)
                 return
             }
+            let shouldRetryRangeMismatch = stage == .rangeValidation
+                && cause == .mismatchedContentRange
             recordDownloadTelemetry(
                 identity,
                 stage: stage,
-                state: .failed,
-                failureCause: cause
+                state: shouldRetryRangeMismatch ? .retrying : .failed,
+                failureCause: cause,
+                isRetryable: shouldRetryRangeMismatch
             )
+            if shouldRetryRangeMismatch {
+                guard
+                    await recordFailedTransferForReconciliation(
+                        identity,
+                        taskDescription: taskDescription,
+                        result: .retryableFailure,
+                        category: .invalidResponse,
+                        retryDisposition: .afterNetworkChange,
+                        storage: storage
+                    ) == .retry
+                else { return }
+                await recoverRetryableTransfer(
+                    rejectedRequest,
+                    taskDescription: taskDescription,
+                    identity: identity,
+                    terminalFailure: .transferFailed,
+                    category: .invalidResponse,
+                    storage: storage
+                )
+                return
+            }
             finishTransferSpan(identity, outcome: .failed(.media))
             clearTransferredBytes(for: identity)
             _ = await persistTransferFailure(
@@ -4127,6 +4173,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let identity = descriptor.identity
+        let rejectedRequest = (
+            downloadTask.currentRequest ?? downloadTask.originalRequest
+        ).map {
+            DownloadRangeRequest.applying(
+                range: descriptor.range,
+                validator: descriptor.validator,
+                to: $0
+            )
+        }
         let result: DownloadPlacementResult? =
             invalidatedTransferIDs.withLock {
                 invalidated -> DownloadPlacementResult? in
@@ -4147,7 +4202,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         stage: .rangeValidation,
                         cause: (error as? DownloadRangeError).map(
                             Self.downloadRangeFailureCause
-                        ) ?? .unknown
+                        ) ?? .unknown,
+                        rejectedRequest: rejectedRequest
                     )
                 }
                 do {
@@ -4179,7 +4235,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 } catch {
                     return .rejected(
                         stage: .chunkPlacement,
-                        cause: Self.downloadStorageFailureCause(error)
+                        cause: Self.downloadStorageFailureCause(error),
+                        rejectedRequest: rejectedRequest
                     )
                 }
             }
@@ -4210,13 +4267,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         finalized: finalized
                     )
                 )
-            case .rejected(let stage, let cause):
+            case .rejected(let stage, let cause, let rejectedRequest):
                 await self.reconcileTransfer(
                     identity: identity,
                     taskDescription: description,
                     outcome: .placementRejected(
                         stage: stage,
-                        cause: cause
+                        cause: cause,
+                        rejectedRequest: rejectedRequest
                     )
                 )
             }
