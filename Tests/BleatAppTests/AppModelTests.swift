@@ -3876,7 +3876,9 @@ final class AppModelTests: XCTestCase {
         }
 
         let lateConfiguration = URLSessionConfiguration.ephemeral
-        lateConfiguration.protocolClasses = [LatePausedDownloadURLProtocol.self]
+        lateConfiguration.protocolClasses = [
+            LateTransferDownloadURLProtocol.self
+        ]
         let lateSession = URLSession(
             configuration: lateConfiguration,
             delegate: model,
@@ -3919,6 +3921,99 @@ final class AppModelTests: XCTestCase {
                 atPath: layout.destinationURL(for: identity).path
             )
         )
+        lateSession.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testLateCancelledTaskCallbackDoesNotRestartDownload() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatLateCancelledCallback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Late cancelled callback",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, storage) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "late-cancelled-callback",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.late-cancelled-callback.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        let initialDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        let oldDescriptor = try XCTUnwrap(initialDescriptors.first)
+
+        await model.cancel(try XCTUnwrap(model.records.first))
+        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+
+        let repairGate = AsyncGate()
+        await service.setDownloadPlanGate(repairGate)
+        let cancelledRecord = try XCTUnwrap(model.records.first)
+        let repairTask = Task { @MainActor in
+            await model.repair(cancelledRecord, account: account)
+        }
+        await repairGate.waitUntilEntered()
+
+        let lateConfiguration = URLSessionConfiguration.ephemeral
+        lateConfiguration.protocolClasses = [
+            LateTransferDownloadURLProtocol.self
+        ]
+        let lateSession = URLSession(
+            configuration: lateConfiguration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let lateRequest = DownloadRangeRequest.applying(
+            range: oldDescriptor.range,
+            validator: oldDescriptor.validator,
+            to: request
+        )
+        let lateTask = lateSession.downloadTask(with: lateRequest)
+        lateTask.taskDescription = try oldDescriptor.encode()
+        lateTask.resume()
+        for _ in 0..<200 where lateTask.state != .completed {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let cancelledDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(cancelledDescriptors.isEmpty)
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        let cancelledPartialByteLength = try await storage.partialByteLength(
+            oldDescriptor.identity
+        )
+        XCTAssertEqual(cancelledPartialByteLength, 0)
+
+        await repairGate.release()
+        await repairTask.value
+        let retriedDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(retriedDescriptors.count, 1)
+        XCTAssertEqual(retriedDescriptors.first?.range.start, 0)
         lateSession.invalidateAndCancel()
         await model.removeAll()
     }
@@ -14404,6 +14499,7 @@ private actor TestAppService: AppServicing {
     private var playbackResults:
         [Result<AppPlaybackPreparation, AppServiceError>]
     private var downloadPlanResult: Result<DownloadPlan, AppServiceError>?
+    private var downloadPlanGate: AsyncGate?
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
     private let primaryFallbackURL: URL?
@@ -15330,6 +15426,9 @@ private actor TestAppService: AppServicing {
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> DownloadPlan {
         recordedDownloadPlanRequests.append(itemID)
+        if let downloadPlanGate {
+            await downloadPlanGate.enterAndWait()
+        }
         if let downloadPlanResult {
             return try value(from: downloadPlanResult)
         }
@@ -15682,6 +15781,10 @@ private actor TestAppService: AppServicing {
         downloadPlanResult = result
     }
 
+    func setDownloadPlanGate(_ gate: AsyncGate?) {
+        downloadPlanGate = gate
+    }
+
     func downloadPlanRequests() -> [LibraryItemID] {
         recordedDownloadPlanRequests
     }
@@ -15938,7 +16041,7 @@ private final class ExpiringRetryAfterDownloadURLProtocol: URLProtocol,
     override func stopLoading() {}
 }
 
-private final class LatePausedDownloadURLProtocol: URLProtocol,
+private final class LateTransferDownloadURLProtocol: URLProtocol,
     @unchecked Sendable
 {
     override class func canInit(with request: URLRequest) -> Bool {

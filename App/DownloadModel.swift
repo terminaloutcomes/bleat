@@ -1975,7 +1975,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         purpose: DownloadPurpose,
         storage: DownloadStorage
     ) async throws {
-        cancelledDownloadIDs.remove(identity.downloadID)
         let committed = try await storage.partialByteLength(identity)
         guard
             let range = try DownloadByteRange.next(
@@ -2156,6 +2155,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             else {
                 continue
             }
+            invalidateTask(description)
             task.cancel()
             recordDownloadTelemetry(
                 identity,
@@ -2296,8 +2296,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             return
         }
+        let downloadID = record.manifest.downloadID
+        let ownsResumeReservation = resumingDownloadIDs.insert(
+            downloadID
+        ).inserted
+        defer {
+            if ownsResumeReservation {
+                resumingDownloadIDs.remove(downloadID)
+            }
+        }
         failure = nil
-        resetTransferRetryBudget(for: record.manifest.downloadID)
+        cancelledDownloadIDs.remove(downloadID)
+        resetTransferRetryBudget(for: downloadID)
         accounts[account.id] = account
         do {
             _ = try await storage.resetTransferRetryBudget(record)
@@ -4317,8 +4327,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         let shouldResumeManual =
             !pausedDownloadIDs.contains(identity.downloadID)
-            && record(downloadID: identity.downloadID)?.manifest.purpose
-                == .manual
+            && !cancelledDownloadIDs.contains(identity.downloadID)
+            && {
+                guard let record = record(downloadID: identity.downloadID),
+                    record.manifest.purpose == .manual
+                else { return false }
+                return switch record.manifest.state {
+                case .queued, .downloading, .partial:
+                    true
+                case .paused, .complete, .failed, .deleting:
+                    false
+                }
+            }()
         let hasActiveTask = await activeTransferTaskKeys().contains {
             $0.downloadID == identity.downloadID
         }
