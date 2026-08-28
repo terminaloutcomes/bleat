@@ -88,6 +88,15 @@ paths.
   `TestSupport/ServerHarness/app-live-artifacts/<run-id>/` as
   `download-401-evidence.json`, `online.xcresult`, and `offline.xcresult`.
 
+### 2026-08-28 pause-transition device result
+
+- A signed physical-iPhone Release build from commit `0484f9da` was installed
+  and launched with `mise run iphone`.
+- The user reported that the foreground Pause workflow passed on the device.
+- This result verifies the corrected Pause transition only. It does not complete
+  the offline-launch row, which still requires launching without a network and
+  proving that a user-paused record remains paused when connectivity returns.
+
 ```md
 ### YYYY-MM-DD — scenario name
 
