@@ -3815,6 +3815,603 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(record.manifest.state, .paused)
     }
 
+    func testPauseIntentPrecedesConcurrentTerminalCallback() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatPauseCallbackRace-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Pause callback race",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "pause-callback-race",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.pause-callback-race.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let scheduledDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        let descriptor = try XCTUnwrap(scheduledDescriptors.first)
+        let record = try XCTUnwrap(model.records.first)
+
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+
+        let callbackConfiguration = URLSessionConfiguration.ephemeral
+        callbackConfiguration.protocolClasses = [
+            PauseTerminalFailureURLProtocol.self
+        ]
+        let callbackSession = URLSession(
+            configuration: callbackConfiguration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        let callbackTask = callbackSession.downloadTask(with: request)
+        callbackTask.taskDescription = try descriptor.encode()
+        callbackTask.resume()
+        for _ in 0..<200 {
+            if callbackTask.state == .completed,
+                model.records.first?.manifest.state == .failed
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(model.pausedDownloadIDs.contains(record.manifest.downloadID))
+        XCTAssertNil(model.failure)
+        XCTAssertNotEqual(model.records.first?.manifest.state, .failed)
+
+        await gate.release()
+        await pauseTask.value
+        callbackSession.invalidateAndCancel()
+
+        XCTAssertEqual(model.records.first?.manifest.state, .paused)
+        await model.removeAll()
+    }
+
+    func testDownloadDiagnosticsRemainOrderedWithoutBlockingStart()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatOrderedDownloadDiagnostics-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let gate = AsyncGate()
+        let diagnostics = GatedOrderedDownloadDiagnosticRecorder(gate: gate)
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root,
+            diagnostics: diagnostics,
+            backgroundSessionIdentifier:
+                "bleat.tests.ordered-download-diagnostics.\(UUID().uuidString)"
+        )
+
+        await model.start(account: nil)
+        await gate.waitUntilEntered()
+        await gate.release()
+
+        var events: [DiagnosticEvent] = []
+        for _ in 0..<100 {
+            events = await diagnostics.events()
+            if events.count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(
+            events.map(\.name),
+            [.operationStarted, .operationCompleted]
+        )
+        XCTAssertEqual(
+            events.map(\.operation),
+            [.restoreDownloads, .restoreDownloads]
+        )
+    }
+
+    func testPauseStorageFailureIsVisibleAndDoesNotResume() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatPauseStorageFailure-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Pause storage failure",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "pause-storage-failure",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let completedIdentity = try DownloadTaskIdentity(
+            downloadID: DownloadID(rawValue: "pause-storage-failure"),
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+        let finalChunk = root.appendingPathComponent(
+            "pause-storage-failure-final-chunk"
+        )
+        try Data(repeating: 0xEF, count: 3).write(to: finalChunk)
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.pause-storage-failure.\(UUID().uuidString)",
+            pauseManifestCommit: { commitStorage, _, _ in
+                _ = try await commitStorage.commitChunk(
+                    completedIdentity,
+                    temporaryURL: finalChunk,
+                    range: try DownloadByteRange(
+                        start: 5,
+                        endInclusive: 7
+                    ),
+                    validator: nil
+                )
+                throw DownloadStorageError.persistenceFailed
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+
+        await model.pause(record)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(model.failure, .storageUnavailable)
+        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        XCTAssertEqual(model.records.first?.manifest.entries[1].state, .complete)
+        XCTAssertEqual(
+            model.records.first?.manifest.entries[1].placement,
+            .finalized
+        )
+        XCTAssertFalse(
+            model.pausedDownloadIDs.contains(record.manifest.downloadID)
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+
+        let relaunchedModel = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.pause-storage-relaunch.\(UUID().uuidString)"
+        )
+        await relaunchedModel.start(account: account)
+        XCTAssertEqual(
+            relaunchedModel.records.first?.manifest.state,
+            .failed
+        )
+        let relaunchedDescriptors =
+            await relaunchedModel.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(relaunchedDescriptors.isEmpty)
+        await relaunchedModel.removeAll()
+    }
+
+    func testPauseDoesNotOverwriteTrackCompletedWhilePending() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatPauseCompletedTrackRace-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Pause completed track race",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, storage) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "pause-completed-track-race",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.pause-completed-track-race.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+        let completedIdentity = try DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[1]
+        )
+
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+        let finalChunk = root.appendingPathComponent("final-pause-chunk")
+        try Data(repeating: 0xCD, count: 3).write(to: finalChunk)
+        _ = try await storage.commitChunk(
+            completedIdentity,
+            temporaryURL: finalChunk,
+            range: try DownloadByteRange(start: 5, endInclusive: 7),
+            validator: nil
+        )
+        await gate.release()
+        await pauseTask.value
+
+        let updated = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(updated.manifest.entries[1].state, .complete)
+        XCTAssertEqual(updated.manifest.entries[1].placement, .finalized)
+        let layout = try DownloadStorageLayout(rootURL: root)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: layout.destinationURL(for: completedIdentity).path
+            )
+        )
+        XCTAssertEqual(updated.manifest.entries[0].state, .paused)
+        XCTAssertEqual(updated.manifest.state, .paused)
+        await model.removeAll()
+    }
+
+    func testGatedPauseRejectsConcurrentCancel() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCancelSupersedesPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Cancel supersedes pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "cancel-supersedes-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cancel-supersedes-pause.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+        await model.cancel(record)
+        await gate.release()
+        await pauseTask.value
+
+        XCTAssertEqual(model.records.first?.manifest.state, .paused)
+        XCTAssertTrue(
+            model.pausedDownloadIDs.contains(record.manifest.downloadID)
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        await model.removeAll()
+    }
+
+    func testAccountRemovalInvalidatesGatedPauseAndDeletesDownload()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatAccountRemovalDuringPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Account removal during pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "account-removal-during-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.account-removal-pause.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+        await model.removeAll(for: account.id)
+        await gate.release()
+        await pauseTask.value
+
+        XCTAssertTrue(model.records.isEmpty)
+        let layout = try DownloadStorageLayout(rootURL: root)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: layout.recordURL(
+                    accountID: account.id,
+                    itemID: detail.id
+                ).path
+            )
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+    }
+
+    func testCancelledDownloadRejectsDelayedPause() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCancelRejectsPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Cancel rejects delayed pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "cancel-rejects-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cancel-rejects-pause.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        let staleRecord = try XCTUnwrap(model.records.first)
+
+        await model.cancel(staleRecord)
+        await model.pause(staleRecord)
+
+        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        XCTAssertFalse(
+            model.pausedDownloadIDs.contains(staleRecord.manifest.downloadID)
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        await model.removeAll()
+    }
+
+    func testGatedPauseRejectsConcurrentContinue() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatContinueSupersedesPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Continue supersedes pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "continue-supersedes-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.continue-supersedes-pause.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+        await model.continueDownload(record)
+        await gate.release()
+        await pauseTask.value
+
+        XCTAssertEqual(model.records.first?.manifest.state, .paused)
+        XCTAssertTrue(
+            model.pausedDownloadIDs.contains(record.manifest.downloadID)
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        XCTAssertNil(model.failure)
+        await model.removeAll()
+    }
+
+    func testGatedContinueRejectsConcurrentCancel() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCancelSupersedesContinue-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Cancel supersedes continue",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "cancel-supersedes-continue",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cancel-supersedes-continue.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        await model.pause(try XCTUnwrap(model.records.first))
+        let pausedRecord = try XCTUnwrap(model.records.first)
+
+        let repairGate = AsyncGate()
+        await service.setDownloadPlanGate(repairGate)
+        let continueTask = Task { @MainActor in
+            await model.continueDownload(pausedRecord)
+        }
+        await repairGate.waitUntilEntered()
+        await model.cancel(pausedRecord)
+        await repairGate.release()
+        await continueTask.value
+
+        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        XCTAssertFalse(
+            model.pausedDownloadIDs.contains(pausedRecord.manifest.downloadID)
+        )
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(descriptors.count, 1)
+        XCTAssertNil(model.failure)
+        await model.removeAll()
+    }
+
     func testLateCancelledTaskCallbackDoesNotFailContinuedDownload()
         async throws
     {
@@ -15859,6 +16456,28 @@ private actor GatedPlaybackFailureDiagnosticRecorder: DiagnosticRecording {
     }
 }
 
+private actor GatedOrderedDownloadDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+    private var recordedEvents: [DiagnosticEvent] = []
+    private var didGate = false
+
+    init(gate: AsyncGate) {
+        self.gate = gate
+    }
+
+    func record(_ event: DiagnosticEvent) async {
+        recordedEvents.append(event)
+        if !didGate {
+            didGate = true
+            await gate.enterAndWait()
+        }
+    }
+
+    func events() -> [DiagnosticEvent] {
+        recordedEvents
+    }
+}
+
 private actor GatedClosePlaybackDiagnosticRecorder: DiagnosticRecording {
     private let gate: AsyncGate
     private var didGate = false
@@ -16073,6 +16692,44 @@ private final class LateTransferDownloadURLProtocol: URLProtocol,
             cacheStoragePolicy: .notAllowed
         )
         client?.urlProtocol(self, didLoad: Data(repeating: 0xCD, count: 3))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class PauseTerminalFailureURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 404,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data())
         client?.urlProtocolDidFinishLoading(self)
     }
 

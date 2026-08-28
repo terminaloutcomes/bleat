@@ -701,9 +701,12 @@ diagnostics retain only the corresponding non-sensitive failure code. Existing
 downloads show status, stored and expected bytes, and the relevant Pause,
 Continue, Cancel, Retry, Repair, Download Full Book, or Remove action there as
 well as in Downloads. Pause retains completed 16 MiB range chunks in durable
-partial files, and Continue starts at that on-disk byte offset after either a
-short pause or an app relaunch. Cancel discards unfinished partial bytes while
-retaining already completed tracks.
+partial files. While Pause or Continue is settling, the transfer control shows
+a stable disabled state instead of exposing the opposite action. Continue
+starts at the on-disk byte offset after either a short pause or an app relaunch.
+Cancel discards unfinished partial bytes while retaining already completed
+tracks. Download diagnostics are emitted outside these transfer-control
+transactions and cannot delay their state changes.
 Automatic cache failures retry only the active window and never appear as a
 full-book repair. Explicit full-book downloads play directly from local files
 without opening a server playback session. Automatic cached windows can also

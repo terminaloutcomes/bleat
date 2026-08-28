@@ -1055,7 +1055,9 @@ Requirements:
 - user Pause persists a paused manifest state, cancels only the current chunk,
   and retains committed partial bytes; Continue resumes from the durable byte
   offset, while Cancel discards unfinished partial bytes and retains completed
-  tracks;
+  tracks; Pause, Continue, and Cancel establish user intent before any
+  suspension point, expose a disabled transition control while settling, and
+  cannot be delayed by diagnostic recording;
 - validate `206 Partial Content`, the complete `Content-Range`, and the expected
   total before appending; retain a strong `ETag` or `Last-Modified` validator
   and send it as `If-Range` on later chunks; reject an ambiguous system-resumed

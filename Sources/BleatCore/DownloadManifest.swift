@@ -70,6 +70,7 @@ public enum DownloadManifestError: Error, Equatable, Sendable {
     )
     case trackNotFinalized(Int)
     case incompleteTrack(Int)
+    case trackAlreadyComplete(Int)
     case invalidAutomaticWindow
     case invalidPurpose
 }
@@ -246,6 +247,9 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             throw .invalidObservedByteLength
         }
         let index = try entryIndex(for: trackIndex)
+        guard entries[index].state != .complete else {
+            throw .trackAlreadyComplete(trackIndex)
+        }
         entries[index].state = .paused
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = observedByteLength > 0 ? .temporary : nil

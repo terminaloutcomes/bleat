@@ -3566,7 +3566,11 @@ private struct BookDetailView: View {
                         await model.downloads.remove(record)
                     }
                 }
-                .disabled(isDownloadedRecordPlaying)
+                .disabled(
+                    isDownloadedRecordPlaying
+                        || model.downloads.isPausing(record)
+                        || model.downloads.isResuming(record)
+                )
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -4251,6 +4255,24 @@ private struct BookDetailView: View {
         @ColourSchemePreference var colourScheme
         if record.manifest.state == .deleting {
             EmptyView()
+        } else if model.downloads.isPausing(record) {
+            Button("Pausing…", systemImage: "pause.fill") {}
+                .disabled(true)
+                .tint(colourScheme.color)
+                .accessibilityIdentifier("book.detail.download.pausing")
+        } else if model.downloads.isResuming(record) {
+            Button("Continuing…", systemImage: "play.fill") {}
+                .disabled(true)
+                .tint(colourScheme.color)
+                .accessibilityIdentifier("book.detail.download.continuing")
+        } else if model.downloads.pauseFailed(record) {
+            Button("Retry", systemImage: "arrow.clockwise") {
+                Task {
+                    await model.downloads.continueDownload(record)
+                }
+            }
+            .tint(colourScheme.color)
+            .accessibilityIdentifier("book.detail.download.pauseRetry")
         } else if model.downloads.pausedDownloadIDs.contains(
             record.manifest.downloadID
         ) {
@@ -4317,6 +4339,15 @@ private struct BookDetailView: View {
     private func downloadStatus(
         _ record: DownloadedBookRecord
     ) -> String {
+        if model.downloads.isPausing(record) {
+            return "Pausing…"
+        }
+        if model.downloads.isResuming(record) {
+            return "Continuing…"
+        }
+        if model.downloads.pauseFailed(record) {
+            return "Pause failed"
+        }
         if model.downloads.pausedDownloadIDs.contains(
             record.manifest.downloadID
         ) {
@@ -4367,6 +4398,15 @@ private struct BookDetailView: View {
     private func downloadStatusIcon(
         _ record: DownloadedBookRecord
     ) -> String {
+        if model.downloads.isPausing(record) {
+            return "pause.circle"
+        }
+        if model.downloads.isResuming(record) {
+            return "play.circle"
+        }
+        if model.downloads.pauseFailed(record) {
+            return "exclamationmark.circle"
+        }
         if model.downloads.pausedDownloadIDs.contains(
             record.manifest.downloadID
         ) {
@@ -5369,7 +5409,10 @@ private struct DownloadStorageView: View {
             visibleRepairDownloadIDs.insert(record.manifest.downloadID)
         }
         .swipeActions {
-            if record.manifest.downloadID != protectedDownloadID {
+            if record.manifest.downloadID != protectedDownloadID,
+                !model.downloads.isPausing(record),
+                !model.downloads.isResuming(record)
+            {
                 Button("Delete", role: .destructive) {
                     Task {
                         await model.downloads.remove(record)
@@ -5386,7 +5429,25 @@ private struct DownloadStorageView: View {
         @ColourSchemePreference var colourScheme
 
         HStack {
-            if model.downloads.pausedDownloadIDs.contains(
+            if model.downloads.isPausing(record) {
+                Button("Pausing…") {}
+                    .disabled(true)
+                    .tint(colourScheme.color)
+                    .accessibilityIdentifier("downloads.pausing")
+            } else if model.downloads.isResuming(record) {
+                Button("Continuing…") {}
+                    .disabled(true)
+                    .tint(colourScheme.color)
+                    .accessibilityIdentifier("downloads.continuing")
+            } else if model.downloads.pauseFailed(record) {
+                Button("Retry") {
+                    Task {
+                        await model.downloads.continueDownload(record)
+                    }
+                }
+                .tint(colourScheme.color)
+                .accessibilityIdentifier("downloads.pauseRetry")
+            } else if model.downloads.pausedDownloadIDs.contains(
                 record.manifest.downloadID
             ) {
                 Button("Continue") {
@@ -5411,6 +5472,10 @@ private struct DownloadStorageView: View {
                     await model.downloads.cancel(record)
                 }
             }
+            .disabled(
+                model.downloads.isPausing(record)
+                    || model.downloads.isResuming(record)
+            )
             .accessibilityIdentifier("downloads.cancel")
         }
     }
@@ -5418,6 +5483,15 @@ private struct DownloadStorageView: View {
     private func downloadStateLabel(
         _ record: DownloadedBookRecord
     ) -> String {
+        if model.downloads.isPausing(record) {
+            return "Pausing…"
+        }
+        if model.downloads.isResuming(record) {
+            return "Continuing…"
+        }
+        if model.downloads.pauseFailed(record) {
+            return "Pause failed"
+        }
         if record.manifest.state == .deleting {
             return "Removing"
         }
