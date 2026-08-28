@@ -37,7 +37,7 @@ server-side request record, and the app's visible final download state.
 | Scenario | Device procedure | Required result | Server-side assertion | Status |
 | --- | --- | --- | --- | --- |
 | Suspend during download | Start a full-book download, wait for one completed range chunk, then background Bleat until iOS later resumes it. | The download continues or resumes; its final state is Complete. | The first resumed request starts at the durable byte offset, and no completed range is requested again. | pending |
-| Terminate and relaunch | Start a full-book download after one committed chunk, then induce a non-user process termination and relaunch Bleat. Do not use the App Switcher force-quit gesture, which cancels background transfers by design. | The persisted record reconciles and reaches Complete; no duplicate transfer is visible. | The resumed range begins at the durable offset and there is only one request for each remaining range. | pending |
+| Terminate and relaunch | Start a full-book download after one committed chunk, then induce a non-user process termination and relaunch Bleat. Do not use the App Switcher force-quit gesture, which cancels background transfers by design. | The persisted record reconciles and reaches Complete; no duplicate transfer is visible. | The resumed range begins at the durable offset and there is only one request for each remaining range. | device passed 2026-08-28; server evidence pending |
 | Offline launch and recovery | Interrupt a non-paused download, launch Bleat while the device network is disabled, then re-enable the network. Repeat with a user-paused download. | The non-paused record resumes after a network-path change; the paused record stays Paused. | Only the non-paused record issues resumed ranges. | pending |
 | Expired download authorization | Make the next range request return 401 after a committed chunk, then allow the replacement request. | Exactly one refresh and replacement occur; the download completes without re-downloading completed bytes. | The replacement retains the rejected request's `Range` and `If-Range`, records `Bearer` as its authorization scheme, and has no token query parameter. | pending |
 
@@ -48,6 +48,16 @@ short redacted evidence note below. Identify the saved server log or screenshot
 artifact by project-relative path. Do not include account names, device IDs,
 token values, request URLs containing bearer-like material, or private local
 paths.
+
+### 2026-08-28 terminate-and-relaunch device result
+
+- A signed physical-iPhone build from commit `0ffc54df` was terminated with
+  `scripts/iphone-terminate-app.sh` during a full-book download.
+- After Bleat was opened again, the persisted partial download automatically
+  resumed and completed without a Repair action, visible duplicate transfer,
+  or progress reset.
+- The server-side range assertion was not captured during this run and remains
+  pending.
 
 ```md
 ### YYYY-MM-DD — scenario name
