@@ -2902,6 +2902,86 @@ final class AppModelTests: XCTestCase {
         return (plan, storage)
     }
 
+    func testRelaunchContinuesAfterActiveTrackCompletedWhileTerminated()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCompletedDuringTermination-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Completed during termination",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let downloadID = DownloadID(rawValue: "terminated-after-track")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        let completedIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: plan.tracks[0]
+        )
+        let completedTrack = root.appendingPathComponent("completed-track")
+        try Data(repeating: 0xAB, count: 4).write(to: completedTrack)
+        _ = try await storage.commitChunk(
+            completedIdentity,
+            temporaryURL: completedTrack,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        )
+        let storedRecords = try await storage.records()
+        let interruptedRecord = try XCTUnwrap(storedRecords.first)
+        XCTAssertEqual(interruptedRecord.manifest.state, .partial)
+
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let telemetry = RecordingRemoteTelemetryDownloadLogger()
+        let relaunched = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            remoteTelemetryDownloadLogger: telemetry,
+            backgroundSessionIdentifier:
+                "bleat.tests.completed-during-termination.\(UUID().uuidString)"
+        )
+
+        await relaunched.start(account: account)
+
+        let descriptors =
+            await relaunched.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+        XCTAssertEqual(descriptors.first?.range.start, 0)
+        XCTAssertEqual(relaunched.records.first?.manifest.state, .downloading)
+        XCTAssertTrue(
+            telemetry.events.contains(where: {
+                $0.stage == .taskScheduled && $0.state == .started
+            })
+        )
+        await relaunched.removeAll()
+    }
+
     func
         testOfflineRelaunchRecoveryResumesInterruptedDownloadFromDurableOffset()
         async throws

@@ -810,12 +810,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         for downloadID in Array(pendingRecoveryDownloadIDs) {
             let stillRecoverable: Bool
             if let record = record(downloadID: downloadID),
-                record.manifest.state == .downloading
-                    || record.manifest.state == .queued
-                    || (record.manifest.state == .failed
-                        && pendingRecoveryTaskKeys.contains(where: {
-                            $0.downloadID == downloadID
-                        })),
+                transferReconciliationIsEligible(record),
                 !pausedDownloadIDs.contains(downloadID),
                 accounts[record.manifest.accountID] != nil {
                 stillRecoverable = true
@@ -872,12 +867,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     ) async -> Int {
         var scheduledDownloadCount = 0
         for record in records
-        where record.manifest.state == .downloading
-            || record.manifest.state == .queued
-            || (record.manifest.state == .failed
-                && pendingRecoveryTaskKeys.contains(where: {
-                    $0.downloadID == record.manifest.downloadID
-                }))
+        where transferReconciliationIsEligible(record)
         {
             let downloadID = record.manifest.downloadID
             if case .interruptedOnly(let accountIDs) = scope {
@@ -1005,6 +995,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         await refresh()
         return scheduledDownloadCount
+    }
+
+    private func transferReconciliationIsEligible(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        switch record.manifest.state {
+        case .queued, .downloading, .partial:
+            return true
+        case .failed:
+            return pendingRecoveryTaskKeys.contains(where: {
+                $0.downloadID == record.manifest.downloadID
+            })
+        case .paused, .complete, .deleting:
+            return false
+        }
     }
 
     private func restoreDeferredRetryState() {
