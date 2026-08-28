@@ -221,6 +221,7 @@ resolution, and temporary directories outside the repository.
   Do not redirect home directories or tool caches into the repository, weaken
   security settings, or modify source and project configuration to work around
   sandbox restrictions.
+- When the user asks to deploy to their phone, run `mise run iphone` directly.
 - If a command reports `Operation not permitted`, `sandbox_apply`, inaccessible
   caches, CoreSimulator connection failures, an unavailable Docker daemon,
   Keychain/signing access failures, or restricted DNS, network, or local-port

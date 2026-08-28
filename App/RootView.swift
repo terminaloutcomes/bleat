@@ -1442,6 +1442,28 @@ private struct SignedInView: View {
             }
         }
         .alert(
+            bookActionPresentation.downloadFailure?.title
+                ?? "Download unavailable",
+            isPresented: Binding(
+                get: {
+                    bookActionPresentation.downloadFailure != nil
+                },
+                set: {
+                    if !$0 {
+                        bookActionPresentation.dismissDownloadFailure()
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                bookActionPresentation.dismissDownloadFailure()
+            }
+        } message: {
+            if let failure = bookActionPresentation.downloadFailure {
+                Text(failure.message)
+            }
+        }
+        .alert(
             model.bookProgressFailure?.title ?? "Progress update failed",
             isPresented: Binding(
                 get: { model.bookProgressFailure != nil },
@@ -1706,7 +1728,6 @@ extension AppRootTab {
 }
 
 private enum BookContextAction: Hashable {
-    case download
     case edit
     case transcribe
 }
@@ -1722,6 +1743,11 @@ extension BookActionAvailability {
 @MainActor
 @Observable
 private final class BookActionContextPresentation {
+    private struct DownloadPreparationKey: Hashable {
+        let accountID: AccountID
+        let itemID: LibraryItemID
+    }
+
     struct Request: Identifiable {
         let id = UUID()
         let account: ServerAccount
@@ -1730,6 +1756,8 @@ private final class BookActionContextPresentation {
     }
 
     var request: Request?
+    private(set) var downloadFailure: AppFailure?
+    private var pendingDownloads: Set<DownloadPreparationKey> = []
 
     var requestBinding: Binding<Request?> {
         Binding(
@@ -1748,6 +1776,47 @@ private final class BookActionContextPresentation {
 
     func dismiss() {
         request = nil
+        downloadFailure = nil
+    }
+
+    func beginDownload(accountID: AccountID, itemID: LibraryItemID) -> Bool {
+        pendingDownloads.insert(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        ).inserted
+    }
+
+    func finishDownload(accountID: AccountID, itemID: LibraryItemID) {
+        pendingDownloads.remove(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        )
+    }
+
+    func isDownloadPending(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Bool {
+        pendingDownloads.contains(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        )
+    }
+
+    func presentDownloadFailure(_ failure: AppFailure) {
+        downloadFailure = failure
+    }
+
+    func dismissDownloadFailure() {
+        downloadFailure = nil
+    }
+}
+
+private func bookActionFailureCause(
+    for access: LibraryItemAccessDecision
+) -> AppFailureCause {
+    switch access {
+    case .allowed: .permissionDenied
+    case .inaccessibleLibrary: .inaccessibleLibrary
+    case .inaccessibleTags: .inaccessibleTags
+    case .explicitContentDenied: .explicitContentDenied
     }
 }
 
@@ -1826,8 +1895,14 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 canStartDownload
             {
                 Button("Download", systemImage: "arrow.down.circle") {
-                    begin(.download)
+                    beginDownload()
                 }
+                .disabled(
+                    presentation.isDownloadPending(
+                        accountID: account.id,
+                        itemID: book.id
+                    )
+                )
                 .accessibilityIdentifier(
                     "book.context.\(book.id.rawValue).download"
                 )
@@ -1869,6 +1944,75 @@ private struct BookActionContextMenuModifier: ViewModifier {
 
     private func begin(_ action: BookContextAction) {
         presentation.present(action: action, account: account, book: book)
+    }
+
+    private func beginDownload() {
+        guard presentation.beginDownload(
+            accountID: account.id,
+            itemID: book.id
+        ) else {
+            return
+        }
+        Task {
+            await prepareDownload()
+        }
+    }
+
+    @MainActor
+    private func prepareDownload() async {
+        defer {
+            presentation.finishDownload(
+                accountID: account.id,
+                itemID: book.id
+            )
+        }
+        let preparation = await model.prepareBookAction(
+            for: book,
+            account: account
+        )
+        guard model.account?.id == account.id else {
+            return
+        }
+        switch preparation {
+        case .failed(let failure):
+            presentation.presentDownloadFailure(failure)
+        case .loaded(let detail):
+            let availability = BookActionAvailability(
+                user: account.user,
+                detail: detail
+            )
+            guard availability.access == .allowed else {
+                presentation.presentDownloadFailure(
+                    AppFailure(
+                        .download,
+                        bookActionFailureCause(for: availability.access)
+                    )
+                )
+                return
+            }
+            guard availability.visibleActions.contains(.download) else {
+                presentation.presentDownloadFailure(
+                    AppFailure(.download, .permissionDenied)
+                )
+                return
+            }
+            if let record = model.downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            ) {
+                if record.manifest.purpose == .automaticCache {
+                    await model.downloads.downloadFullBook(
+                        record,
+                        account: account
+                    )
+                }
+            } else {
+                await model.downloads.download(
+                    detail: detail,
+                    account: account
+                )
+            }
+        }
     }
 }
 
@@ -1928,9 +2072,6 @@ private struct BookActionPreparationView: View {
                     appModel: model,
                     downloads: model.downloads
                 )
-
-            case .download:
-                EmptyView()
             }
         }
     }
@@ -1952,38 +2093,12 @@ private struct BookActionPreparationView: View {
             guard availability.access == .allowed else {
                 preparationFailure = AppFailure(
                     operation(for: request.action),
-                    failureCause(for: availability.access)
+                    bookActionFailureCause(for: availability.access)
                 )
                 isPreparing = false
                 return
             }
             switch request.action {
-            case .download:
-                guard availability.visibleActions.contains(.download) else {
-                    preparationFailure = AppFailure(
-                        .download,
-                        .permissionDenied
-                    )
-                    isPreparing = false
-                    return
-                }
-                if let record = model.downloads.record(
-                    accountID: request.account.id,
-                    itemID: detail.id
-                ) {
-                    if record.manifest.purpose == .automaticCache {
-                        await model.downloads.downloadFullBook(
-                            record,
-                            account: request.account
-                        )
-                    }
-                } else {
-                    await model.downloads.download(
-                        detail: detail,
-                        account: request.account
-                    )
-                }
-                presentation.dismiss()
             case .edit:
                 guard availability.canOpenEditor else {
                     preparationFailure = AppFailure(
@@ -2010,20 +2125,8 @@ private struct BookActionPreparationView: View {
         for action: BookContextAction
     ) -> AppFailureOperation {
         switch action {
-        case .download: .download
         case .edit: .saveMetadata
         case .transcribe: .loadBook
-        }
-    }
-
-    private func failureCause(
-        for access: LibraryItemAccessDecision
-    ) -> AppFailureCause {
-        switch access {
-        case .allowed: .permissionDenied
-        case .inaccessibleLibrary: .inaccessibleLibrary
-        case .inaccessibleTags: .inaccessibleTags
-        case .explicitContentDenied: .explicitContentDenied
         }
     }
 }

@@ -755,6 +755,52 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookContextMenuDownloadRunsInBackground()
+        async throws
+    {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-slow-context-download"
+            ]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let download = app.buttons["Download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        download.tap()
+        XCTAssertTrue(download.waitForNonExistence(timeout: 3))
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "book.context.ui-book.loading"
+            ].exists
+        )
+        XCTAssertFalse(app.staticTexts["Preparing The Test Audiobook"].exists)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let pendingDownload = app.buttons["Download"]
+        XCTAssertTrue(pendingDownload.waitForExistence(timeout: 3))
+        XCTAssertFalse(pendingDownload.isEnabled)
+        app.buttons["Mark Unplayed"].tap()
+        try await Task.sleep(for: .seconds(9))
+
+        tabButton("Downloads", in: app).tap()
+        let removeAll = app.buttons["downloads.removeAll"]
+        XCTAssertTrue(removeAll.waitForExistence(timeout: 3))
+        removeAll.tap()
+        let confirmRemove = app.buttons["Remove Downloads"]
+        XCTAssertTrue(confirmRemove.waitForExistence(timeout: 3))
+        confirmRemove.tap()
+        XCTAssertTrue(
+            app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
     func testBookContextMenuPresentsExistingEditorAndTranscriptionDirectly() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
@@ -805,6 +851,46 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
         )
+    }
+
+    @MainActor
+    func testBookContextMenuDownloadPreparationFailureUsesAlert() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-context-download-failure"
+            ]
+        )
+        tabButton("Search", in: app).tap()
+        let searchField = app.searchFields.firstMatch
+        if !searchField.waitForExistence(timeout: 1) {
+            let presentSearch = app.navigationBars["Search"].buttons["Search"]
+            XCTAssertTrue(presentSearch.waitForExistence(timeout: 3))
+            presentSearch.tap()
+        }
+        searchField.tap()
+        searchField.typeText("Test")
+        let searchBook = app.descendants(matching: .any)[
+            "search.book.ui-search-book"
+        ]
+        XCTAssertTrue(searchBook.waitForExistence(timeout: 3))
+        searchBook.press(forDuration: 1)
+        let download = app.buttons["Download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        download.tap()
+
+        let alert = app.alerts["Server unavailable"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "book.context.ui-search-book.loading"
+            ].exists
+        )
+        XCTAssertFalse(app.staticTexts["Preparing Test Result"].exists)
+        XCTAssertFalse(app.staticTexts["book.detail.title"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        alert.buttons["OK"].firstMatch.tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 3))
     }
 
     @MainActor

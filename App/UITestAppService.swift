@@ -535,6 +535,20 @@
             libraryID: LibraryID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookDetail {
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-slow-context-download"
+            ) {
+                try? await Task.sleep(for: .seconds(8))
+            }
+            if itemID.rawValue == "ui-search-book",
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-context-download-failure"
+                )
+            {
+                throw .bookDetail(
+                    .remote(.authentication(.requestTransportFailed))
+                )
+            }
             let ids = try Self.fixtureIDs()
             return LibraryBookDetail(
                 id: itemID,
