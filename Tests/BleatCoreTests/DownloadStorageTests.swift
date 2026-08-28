@@ -19,6 +19,101 @@ extension DownloadStorageLayout {
 }
 
 final class DownloadStorageTests: XCTestCase {
+    func testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        _ = try await fixture.storage.markDownloading(identity)
+        let retryNotBefore = Date(timeIntervalSince1970: 2_000_000_000)
+        _ = try await fixture.storage.deferRetry(
+            identity,
+            until: retryNotBefore,
+            retryCount: 1
+        )
+
+        let recreated = DownloadStorage(layout: fixture.layout)
+        let deferredRecords = try await recreated.records()
+        let deferredRecord = try XCTUnwrap(deferredRecords.first)
+        XCTAssertEqual(
+            deferredRecord.manifest.entries.first?.retryNotBefore,
+            retryNotBefore
+        )
+        XCTAssertEqual(
+            deferredRecord.manifest.entries.first?.transferRetryCount,
+            1
+        )
+
+        _ = try await recreated.markDownloading(identity)
+        let scheduledRecords = try await recreated.records()
+        let scheduledRecord = try XCTUnwrap(scheduledRecords.first)
+        XCTAssertNil(
+            scheduledRecord.manifest.entries.first?.retryNotBefore
+        )
+        XCTAssertEqual(
+            scheduledRecord.manifest.entries.first?.transferRetryCount,
+            1
+        )
+
+        _ = try await recreated.resetTransferRetryBudget(scheduledRecord)
+        let resetStorage = DownloadStorage(layout: fixture.layout)
+        let resetRecords = try await resetStorage.records()
+        let resetRecord = try XCTUnwrap(resetRecords.first)
+        XCTAssertNil(resetRecord.manifest.entries.first?.retryNotBefore)
+        XCTAssertNil(resetRecord.manifest.entries.first?.transferRetryCount)
+    }
+
+    func testConditionalFailureDoesNotOverwritePauseOrContinueState()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        _ = try await fixture.storage.markDownloading(identity)
+        _ = try await fixture.storage.markPaused(
+            identity,
+            observedByteLength: 0
+        )
+
+        let ignoredFailure = try await fixture.storage
+            .markFailedIfDownloading(identity)
+        let pausedRecords = try await fixture.storage.records()
+        XCTAssertNil(ignoredFailure)
+        XCTAssertEqual(
+            pausedRecords.first?.manifest.state,
+            .paused
+        )
+
+        _ = try await fixture.storage.markDownloading(identity)
+        let failed = try await fixture.storage.markFailedIfDownloading(
+            identity
+        )
+        XCTAssertEqual(failed?.manifest.state, .failed)
+    }
+
     func testAccountIdentityMigrationMovesManifestAndMedia() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -944,6 +1039,14 @@ final class DownloadStorageTests: XCTestCase {
         )
         object["purpose"] = nil
         object["bookFinishedAt"] = nil
+        object["entries"] = try XCTUnwrap(
+            object["entries"] as? [[String: Any]]
+        ).map { entry in
+            var legacyEntry = entry
+            legacyEntry["retryNotBefore"] = nil
+            legacyEntry["transferRetryCount"] = nil
+            return legacyEntry
+        }
 
         let decoded = try JSONDecoder().decode(
             DownloadManifest.self,
@@ -952,6 +1055,11 @@ final class DownloadStorageTests: XCTestCase {
 
         XCTAssertEqual(decoded.purpose, .manual)
         XCTAssertNil(decoded.bookFinishedAt)
+        XCTAssertTrue(
+            decoded.entries.allSatisfy {
+                $0.retryNotBefore == nil && $0.transferRetryCount == nil
+            }
+        )
     }
 
     func testAutomaticWindowValidationPromotionAndLegacyDetection()

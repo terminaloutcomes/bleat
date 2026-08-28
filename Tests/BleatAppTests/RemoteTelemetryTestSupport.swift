@@ -43,3 +43,23 @@ final class RecordingRemoteTelemetryTracer: RemoteTelemetryTracing,
         }
     }
 }
+
+final class RecordingRemoteTelemetryDownloadLogger:
+    RemoteTelemetryDownloadLogging, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var recordedEvents: [RemoteDownloadTransferEvent] = []
+
+    var events: [RemoteDownloadTransferEvent] {
+        lock.withLock { recordedEvents }
+    }
+
+    func recordDownloadEvent(
+        _ event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?
+    ) {
+        lock.withLock {
+            recordedEvents.append(event)
+        }
+    }
+}

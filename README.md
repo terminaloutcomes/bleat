@@ -642,7 +642,20 @@ persists an offline metadata snapshot and byte-exact manifest, and restores
 system-owned tasks after relaunch. An interrupted non-paused transfer that could
 not be restored because Bleat launched offline resumes automatically from its
 durable partial bytes when connectivity returns; user-paused downloads stay
-paused. The Downloads tab shows durable state and
+paused. Unavailable paths show **Waiting for network**, and satisfied-path
+recovery shows **Retrying download**. Bleat does not infer failure from gaps in
+progress callbacks; delegate-reported failures enter its bounded replacement
+flow. HTTP 429 and 503 responses honor valid `Retry-After` delta-seconds or
+HTTP-date values, bounded to one hour, while retaining exponential backoff as
+the minimum delay. Multi-file books transfer one track at a time, resume an
+existing partial track before starting another, and report durable bytes plus
+only the active request's in-flight bytes. If the system resumes within an
+active range but reports only the resumed suffix, Bleat discards the ambiguous
+temporary file and retries the bounded chunk from its durable offset. A failed
+track does not label the
+whole book failed
+while another retained transfer is still active; the failure becomes visible
+only when no track is continuing. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;
@@ -688,9 +701,12 @@ diagnostics retain only the corresponding non-sensitive failure code. Existing
 downloads show status, stored and expected bytes, and the relevant Pause,
 Continue, Cancel, Retry, Repair, Download Full Book, or Remove action there as
 well as in Downloads. Pause retains completed 16 MiB range chunks in durable
-partial files, and Continue starts at that on-disk byte offset after either a
-short pause or an app relaunch. Cancel discards unfinished partial bytes while
-retaining already completed tracks.
+partial files. While Pause or Continue is settling, the transfer control shows
+a stable disabled state instead of exposing the opposite action. Continue
+starts at the on-disk byte offset after either a short pause or an app relaunch.
+Cancel discards unfinished partial bytes while retaining already completed
+tracks. Download diagnostics are emitted outside these transfer-control
+transactions and cannot delay their state changes.
 Automatic cache failures retry only the active window and never appear as a
 full-book repair. Explicit full-book downloads play directly from local files
 without opening a server playback session. Automatic cached windows can also
@@ -770,7 +786,7 @@ can be correlated. Turning the setting off does not affect local Diagnostics. Th
 Diagnostics screen remains available while signed out and when application
 startup is unavailable. On iOS, the
 opted-in runtime batches completed OpenTelemetry spans and reviewed CloudKit
-lifecycle log records away from the main actor, retaining failed span batches
+and download lifecycle log records away from the main actor, retaining failed span batches
 under the bounded persistence policy before authenticated OTLP export. Remote
 telemetry authentication is traced end to end, with challenge, enrolment, and
 token client spans correlated to the matching `bleat-api` server spans through
@@ -836,14 +852,17 @@ cached browsing, and server-offline playback with:
 This runner adds a pinned Caddy HTTPS proxy, builds the real app service,
 creates a throwaway iPhone simulator, installs Caddy's local root certificate,
 and runs separate online and offline XCUITest phases without deleting the
-app's account, cache, or downloaded media between them. Disposable credentials
-are passed only through the generated `.xctestrun` test environment and entered
+app's account, cache, or downloaded media between them. Its one-shot download
+fault returns 401 after a committed range, then verifies exactly one refresh,
+one replacement with the same `Range` and `If-Range`, bearer authorization,
+no request query, and final app download completion. Disposable credentials are
+passed only through the generated `.xctestrun` test environment and entered
 through the app's secure login form; they are never printed. Each invocation
 uses a unique disposable Compose project, derived-data directory, and artifact
 subdirectory, so its cleanup cannot remove another live run's state. The runner
 deletes its generated test configuration, simulator, certificates, containers,
-and volumes when it exits. Redacted Docker logs, screenshots on failure, and
-complete XCTest result bundles are written beneath
+and volumes when it exits. Privacy-safe request evidence, redacted Docker logs,
+screenshots on failure, and complete XCTest result bundles are written beneath
 `TestSupport/ServerHarness/app-live-artifacts/`.
 
 Validate registered `bleat://` routes with a cold signed-in launch and warm
@@ -1005,8 +1024,9 @@ candidate. On AP16, verify:
 - whole-book seeking, chapter/file transitions, and persisted playback speed;
 - background, lock-screen, Control Center, wired/headset, Bluetooth, and
   AirPlay controls, including removed-output pause behavior;
-- download continuation across backgrounding and relaunch, followed by local
-  playback with the server unavailable;
+- the [AC-22 background-download recovery matrix](docs/release-evidence/download-recovery.md), including suspension, termination/relaunch, offline recovery, and a mid-range 401 replacement.
+  Record the required redacted device and server evidence rather than treating a
+  build or Simulator result as completion;
 - Low Data Mode suspends the foreground WebSocket without blocking REST or
   downloaded playback, then reconnects once with a catch-up refresh after Low
   Data Mode is disabled;

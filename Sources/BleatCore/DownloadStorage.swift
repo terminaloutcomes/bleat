@@ -874,6 +874,34 @@ public actor DownloadStorage {
         return record
     }
 
+    public func deferRetry(
+        _ identity: DownloadTaskIdentity,
+        until date: Date,
+        retryCount: Int
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(identity)
+        do {
+            try record.manifest.deferRetry(
+                trackIndex: identity.trackIndex,
+                until: date,
+                retryCount: retryCount
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func resetTransferRetryBudget(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        record.manifest.resetTransferRetryBudget()
+        try persist(record)
+        return record
+    }
+
     public func markComplete(
         _ identity: DownloadTaskIdentity,
         observedByteLength: Int64
@@ -923,6 +951,47 @@ public actor DownloadStorage {
         _ identity: DownloadTaskIdentity
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
         var record = try load(identity)
+        do {
+            try record.manifest.markFailed(
+                trackIndex: identity.trackIndex
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func markFailedIfDownloading(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> DownloadedBookRecord? {
+        var record = try load(identity)
+        guard record.manifest.entries.first(where: {
+            $0.trackIndex == identity.trackIndex
+        })?.state == .downloading else {
+            return nil
+        }
+        do {
+            try record.manifest.markFailed(
+                trackIndex: identity.trackIndex
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
+    public func markFailedIfIncomplete(
+        _ identity: DownloadTaskIdentity
+    ) throws(DownloadStorageError) -> DownloadedBookRecord? {
+        var record = try load(identity)
+        guard let state = record.manifest.entries.first(where: {
+            $0.trackIndex == identity.trackIndex
+        })?.state else {
+            throw .trackNotFound
+        }
+        guard state != .complete else { return nil }
         do {
             try record.manifest.markFailed(
                 trackIndex: identity.trackIndex

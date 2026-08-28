@@ -7,6 +7,8 @@ services:
       - "${BLEAT_HTTPS_ROOT_PORT:-13478}:8443"
       - "${BLEAT_HTTPS_PREFIX_PORT:-13479}:8444"
       - "${BLEAT_OIDC_HTTPS_PORT:-13480}:8445"
+    environment:
+      BLEAT_PREFIX_UPSTREAM: "${BLEAT_PREFIX_UPSTREAM:-audiobookshelf-prefix:80}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

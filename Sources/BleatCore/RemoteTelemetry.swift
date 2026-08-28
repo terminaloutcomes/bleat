@@ -177,6 +177,112 @@ public struct InactiveRemoteTelemetryLogger: RemoteTelemetryLogging {
     ) {}
 }
 
+public protocol RemoteTelemetryDownloadLogging: Sendable {
+    func recordDownloadEvent(
+        _ event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?
+    )
+}
+
+public struct InactiveRemoteTelemetryDownloadLogger:
+    RemoteTelemetryDownloadLogging
+{
+    public init() {}
+
+    public func recordDownloadEvent(
+        _ event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?
+    ) {}
+}
+
+public enum RemoteDownloadTransferStage: String, CaseIterable, Sendable {
+    case taskScheduled = "task_scheduled"
+    case taskCompletion = "task_completion"
+    case responseClassification = "response_classification"
+    case rangeValidation = "range_validation"
+    case chunkPlacement = "chunk_placement"
+    case manifestCommit = "manifest_commit"
+    case networkWait = "network_wait"
+    case primaryFallback = "primary_fallback"
+    case authenticationRefresh = "authentication_refresh"
+    case retryScheduled = "retry_scheduled"
+    case trackCompleted = "track_completed"
+    case transferCompleted = "transfer_completed"
+}
+
+public enum RemoteDownloadTransferState: String, CaseIterable, Sendable {
+    case started
+    case succeeded
+    case waiting
+    case retrying
+    case failed
+    case cancelled
+}
+
+public enum RemoteDownloadRetryDelaySource: String, CaseIterable, Sendable {
+    case exponentialBackoff = "exponential_backoff"
+    case serverRetryAfter = "server_retry_after"
+}
+
+public enum RemoteDownloadFailureCause: String, CaseIterable, Sendable {
+    case offline
+    case connectionLost = "connection_lost"
+    case timedOut = "timed_out"
+    case cannotConnect = "cannot_connect"
+    case dnsLookupFailed = "dns_lookup_failed"
+    case transportOther = "transport_other"
+    case missingResponse = "missing_response"
+    case unexpectedHTTPStatus = "unexpected_http_status"
+    case invalidRange = "invalid_range"
+    case missingContentRange = "missing_content_range"
+    case mismatchedContentRange = "mismatched_content_range"
+    case mismatchedTotalByteLength = "mismatched_total_byte_length"
+    case invalidPartialOffset = "invalid_partial_offset"
+    case partialFileTooLarge = "partial_file_too_large"
+    case byteLengthMismatch = "byte_length_mismatch"
+    case persistenceFailed = "persistence_failed"
+    case authenticationRefreshFailed = "authentication_refresh_failed"
+    case retryExhausted = "retry_exhausted"
+    case unknown
+}
+
+public struct RemoteDownloadTransferEvent: Equatable, Sendable {
+    public let timestamp: Date
+    public let stage: RemoteDownloadTransferStage
+    public let state: RemoteDownloadTransferState
+    public let failureCause: RemoteDownloadFailureCause?
+    public let retryBucket: RemoteTelemetryRetryBucket
+    public let isRetryable: Bool
+    public let retryDelaySeconds: Int?
+    public let retryDelaySource: RemoteDownloadRetryDelaySource?
+    public let httpStatusCode: Int?
+    public let transportErrorCode: Int?
+
+    public init(
+        timestamp: Date = Date(),
+        stage: RemoteDownloadTransferStage,
+        state: RemoteDownloadTransferState,
+        failureCause: RemoteDownloadFailureCause? = nil,
+        retryBucket: RemoteTelemetryRetryBucket = .none,
+        isRetryable: Bool = false,
+        retryDelaySeconds: Int? = nil,
+        retryDelaySource: RemoteDownloadRetryDelaySource? = nil,
+        httpStatusCode: Int? = nil,
+        transportErrorCode: Int? = nil
+    ) {
+        self.timestamp = timestamp
+        self.stage = stage
+        self.state = state
+        self.failureCause = failureCause
+        self.retryBucket = retryBucket
+        self.isRetryable = isRetryable
+        self.retryDelaySeconds = retryDelaySeconds
+        self.retryDelaySource = retryDelaySource
+        self.httpStatusCode = httpStatusCode
+        self.transportErrorCode = transportErrorCode
+    }
+}
+
 public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
     PrivateCloudSyncEventRecording
 {

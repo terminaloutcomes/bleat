@@ -1419,6 +1419,8 @@ final class AppModel {
             InactiveRemoteTelemetryConsentController(),
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer(),
+        remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
+            InactiveRemoteTelemetryDownloadLogger(),
         bookProgressOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void = {
             try await Task.sleep(for: $0)
@@ -1445,7 +1447,8 @@ final class AppModel {
             service: service,
             downloadsStorageRootURL: downloadsStorageRootURL,
             diagnostics: diagnostics,
-            remoteTelemetryTracer: remoteTelemetryTracer
+            remoteTelemetryTracer: remoteTelemetryTracer,
+            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
         )
         self.playback = subsystems.playback
         self.downloads = subsystems.downloads
@@ -1571,7 +1574,8 @@ final class AppModel {
         service: any AppServicing,
         downloadsStorageRootURL: URL?,
         diagnostics: any DiagnosticRecording,
-        remoteTelemetryTracer: any RemoteTelemetryTracing
+        remoteTelemetryTracer: any RemoteTelemetryTracing,
+        remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging
     ) -> (playback: PlaybackModel, downloads: DownloadModel) {
         let playback = PlaybackModel(
             service: service,
@@ -1582,7 +1586,8 @@ final class AppModel {
             service: service,
             storageRootURL: downloadsStorageRootURL,
             diagnostics: diagnostics,
-            remoteTelemetryTracer: remoteTelemetryTracer
+            remoteTelemetryTracer: remoteTelemetryTracer,
+            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
         )
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
@@ -4777,6 +4782,7 @@ final class AppModel {
                     return
                 }
                 networkPathState = state
+                downloads.updateNetworkPathState(state)
                 schedulePendingLocalSessionSync(for: accounts)
                 scheduleDownloadRecovery(for: accounts)
                 await refreshAccountsAfterNetworkChange()

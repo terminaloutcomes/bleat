@@ -192,6 +192,94 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.shutdown()
     }
 
+    func testDownloadLifecycleProducesTypedCorrelatedLogs() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let spanExporter = RecordingSpanExporter()
+        let logExporter = RecordingLogExporter()
+        let tracer = RemoteTelemetryTracer()
+        let logger = RemoteTelemetryLogger()
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory,
+            tracerFacade: tracer,
+            loggerFacade: logger,
+            downstreamExporter: spanExporter,
+            downstreamLogExporter: logExporter
+        )
+        let span = tracer.beginSpan(
+            operation: .downloadTransfer,
+            source: .remote
+        )
+        logger.recordDownloadEvent(
+            RemoteDownloadTransferEvent(
+                stage: .taskScheduled,
+                state: .started
+            ),
+            span: span
+        )
+        logger.recordDownloadEvent(
+            RemoteDownloadTransferEvent(
+                stage: .retryScheduled,
+                state: .retrying,
+                retryBucket: .one,
+                isRetryable: true,
+                retryDelaySeconds: 120,
+                retryDelaySource: .serverRetryAfter
+            ),
+            span: span
+        )
+        logger.recordDownloadEvent(
+            RemoteDownloadTransferEvent(
+                stage: .rangeValidation,
+                state: .failed,
+                failureCause: .mismatchedContentRange
+            ),
+            span: span
+        )
+        span.end(.failed(.invalidResponse))
+        pipeline.flush(timeout: 2)
+
+        let exportedSpan = try XCTUnwrap(spanExporter.recordedSpans.first)
+        let logs = logExporter.recordedLogs
+        XCTAssertEqual(logs.count, 3)
+        for log in logs {
+            let context = try XCTUnwrap(log.spanContext)
+            XCTAssertEqual(context.traceId, exportedSpan.traceId)
+            XCTAssertEqual(context.spanId, exportedSpan.spanId)
+            XCTAssertEqual(
+                log.body,
+                .string("Download transfer lifecycle")
+            )
+        }
+        let retry = logs[1]
+        XCTAssertEqual(
+            retry.attributes["bleat.download.retry_delay_seconds"],
+            .int(120)
+        )
+        XCTAssertEqual(
+            retry.attributes["bleat.download.retry_delay_source"],
+            .string("server_retry_after")
+        )
+        XCTAssertNil(retry.attributes["http.request.header.retry_after"])
+        let failure = try XCTUnwrap(logs.last)
+        XCTAssertEqual(
+            failure.eventName,
+            "bleat.download.transfer.range_validation"
+        )
+        XCTAssertEqual(
+            failure.attributes["bleat.download.stage"],
+            .string("range_validation")
+        )
+        XCTAssertEqual(
+            failure.attributes["bleat.download.failure_code"],
+            .string("mismatched_content_range")
+        )
+        XCTAssertEqual(failure.attributes["bleat.outcome"], .string("failed"))
+        XCTAssertNil(failure.attributes["url.full"])
+        XCTAssertNil(failure.attributes["file.path"])
+    }
+
     func testOutcomeEncodingNeverIncludesRawErrorText() {
         let successful = RemoteTelemetrySpanDescriptor(
             operation: .libraryRefresh,

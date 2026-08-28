@@ -31,9 +31,9 @@ extension RemoteTelemetryDownstreamLogExporter {
     }
 }
 
-/// Stable consent-gated facade for the reviewed CloudKit log schema.
+/// Stable consent-gated facade for reviewed structured log schemas.
 public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
-    @unchecked Sendable
+    RemoteTelemetryDownloadLogging, @unchecked Sendable
 {
     private enum State {
         case disabled
@@ -63,7 +63,7 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
             return buffered
         }
         for event in buffered {
-            Self.emit(event.event, span: event.span, using: logger)
+            event.emit(using: logger)
         }
     }
 
@@ -84,7 +84,7 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
             case .initializing(var buffered):
                 if buffered.count < maximumInitializingLogs {
                     buffered.append(
-                        BufferedRemoteTelemetryLog(event: event, span: span)
+                        .privateCloud(event: event, span: span)
                     )
                     state = .initializing(buffered)
                 }
@@ -96,7 +96,30 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         }
     }
 
-    private static func emit(
+    public func recordDownloadEvent(
+        _ event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?
+    ) {
+        let logger: (any OpenTelemetryApi.Logger)? = lock.withLock {
+            switch state {
+            case .disabled:
+                return nil
+            case .active(let logger):
+                return logger
+            case .initializing(var buffered):
+                if buffered.count < maximumInitializingLogs {
+                    buffered.append(.download(event: event, span: span))
+                    state = .initializing(buffered)
+                }
+                return nil
+            }
+        }
+        if let logger {
+            Self.emit(event, span: span, using: logger)
+        }
+    }
+
+    fileprivate static func emit(
         _ event: PrivateCloudSyncEvent,
         span: RemoteTelemetrySpan?,
         using logger: any OpenTelemetryApi.Logger
@@ -164,11 +187,83 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         }
         builder.emit()
     }
+
+    fileprivate static func emit(
+        _ event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?,
+        using logger: any OpenTelemetryApi.Logger
+    ) {
+        var attributes: [String: AttributeValue] = [
+            "bleat.subsystem": .string(RemoteTelemetrySubsystem.download.rawValue),
+            "bleat.download.stage": .string(event.stage.rawValue),
+            "bleat.outcome": .string(event.state.rawValue),
+            "bleat.retry.bucket": .string(event.retryBucket.rawValue),
+            "bleat.retryable": .bool(event.isRetryable),
+        ]
+        if let failureCause = event.failureCause {
+            attributes["bleat.download.failure_code"] = .string(
+                failureCause.rawValue
+            )
+        }
+        if let retryDelaySeconds = event.retryDelaySeconds {
+            attributes["bleat.download.retry_delay_seconds"] = .int(
+                retryDelaySeconds
+            )
+        }
+        if let retryDelaySource = event.retryDelaySource {
+            attributes["bleat.download.retry_delay_source"] = .string(
+                retryDelaySource.rawValue
+            )
+        }
+        if let httpStatusCode = event.httpStatusCode {
+            attributes["http.response.status_code"] = .int(httpStatusCode)
+        }
+        if let transportErrorCode = event.transportErrorCode {
+            attributes["bleat.download.transport_error_code"] = .int(
+                transportErrorCode
+            )
+        }
+        let severity: Severity = switch event.state {
+        case .failed:
+            .error
+        case .waiting, .retrying, .cancelled:
+            .warn
+        case .started:
+            .debug
+        case .succeeded:
+            .info
+        }
+        let builder = logger.logRecordBuilder()
+            .setTimestamp(event.timestamp)
+            .setSeverity(severity)
+            .setEventName("bleat.download.transfer.\(event.stage.rawValue)")
+            .setBody(.string("Download transfer lifecycle"))
+            .setAttributes(attributes)
+        if let context = span?.spanContext {
+            _ = builder.setSpanContext(context)
+        }
+        builder.emit()
+    }
 }
 
-private struct BufferedRemoteTelemetryLog: Sendable {
-    let event: PrivateCloudSyncEvent
-    let span: RemoteTelemetrySpan?
+private enum BufferedRemoteTelemetryLog: Sendable {
+    case privateCloud(
+        event: PrivateCloudSyncEvent,
+        span: RemoteTelemetrySpan?
+    )
+    case download(
+        event: RemoteDownloadTransferEvent,
+        span: RemoteTelemetrySpan?
+    )
+
+    func emit(using logger: any OpenTelemetryApi.Logger) {
+        switch self {
+        case .privateCloud(let event, let span):
+            RemoteTelemetryLogger.emit(event, span: span, using: logger)
+        case .download(let event, let span):
+            RemoteTelemetryLogger.emit(event, span: span, using: logger)
+        }
+    }
 }
 
 /// A stable application-facing tracer whose active OpenTelemetry tracer may be

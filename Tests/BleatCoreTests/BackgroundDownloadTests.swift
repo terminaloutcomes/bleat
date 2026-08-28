@@ -4,6 +4,47 @@ import XCTest
 @testable import BleatCore
 
 final class BackgroundDownloadTests: XCTestCase {
+    func testFailedTrackDoesNotFailBookWhileAnotherTrackIsDownloading()
+        throws
+    {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "track-0",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                ),
+                DownloadTrackPlan(
+                    index: 1,
+                    inode: "track-1",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00001.mp3"
+                ),
+            ]
+        )
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "download"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan
+        )
+        try manifest.markDownloading(trackIndex: 1)
+
+        try manifest.markFailed(trackIndex: 0)
+
+        XCTAssertEqual(manifest.entries[0].state, .failed)
+        XCTAssertEqual(manifest.entries[1].state, .downloading)
+        XCTAssertEqual(manifest.state, .downloading)
+
+        try manifest.markFailed(trackIndex: 1)
+        XCTAssertEqual(manifest.state, .failed)
+    }
+
     func testRangeChunksBuildBoundedHeadersAndValidateResponses() throws {
         let first = try XCTUnwrap(
             DownloadByteRange.next(
@@ -41,6 +82,16 @@ final class BackgroundDownloadTests: XCTestCase {
                 expectedTotalByteLength: 20
             )
         )
+        XCTAssertThrowsError(
+            try DownloadRangeResponseValidator.validate(
+                statusCode: 206,
+                contentRangeHeader: "bytes 18-19/20",
+                requestedRange: final,
+                expectedTotalByteLength: 20
+            )
+        ) { error in
+            XCTAssertEqual(error as? DownloadRangeError, .mismatchedContentRange)
+        }
         XCTAssertThrowsError(
             try DownloadRangeResponseValidator.validate(
                 statusCode: 200,
