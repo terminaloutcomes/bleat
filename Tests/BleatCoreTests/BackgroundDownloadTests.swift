@@ -4,6 +4,81 @@ import XCTest
 @testable import BleatCore
 
 final class BackgroundDownloadTests: XCTestCase {
+    func testCancelledTrackMakesIncompleteBookDurablyCancelled() throws {
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "item"),
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "track-0",
+                    expectedByteLength: 10,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "download"),
+            accountID: AccountID(rawValue: "account"),
+            plan: plan
+        )
+
+        try manifest.markDownloading(trackIndex: 0)
+        try manifest.markCancelled(trackIndex: 0)
+
+        XCTAssertEqual(manifest.state, .cancelled)
+        XCTAssertEqual(manifest.entries[0].state, .cancelled)
+        XCTAssertNil(manifest.entries[0].observedByteLength)
+    }
+
+    func testRetryQueuesEveryCancelledTrackBeforeBoundedHandoff() throws {
+        let tracks = (0..<3).map { index in
+            DownloadTrackPlan(
+                index: index,
+                inode: "track-\(index)",
+                expectedByteLength: 10,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: String(format: "%05d.mp3", index)
+            )
+        }
+        var manifest = try DownloadManifest(
+            downloadID: DownloadID(rawValue: "download"),
+            accountID: AccountID(rawValue: "account"),
+            plan: DownloadPlan(
+                itemID: LibraryItemID(rawValue: "item"),
+                tracks: tracks
+            )
+        )
+        try manifest.markDownloading(trackIndex: 0)
+        try manifest.markComplete(
+            trackIndex: 0,
+            observedByteLength: 10,
+            placement: .finalized
+        )
+        try manifest.markCancelled(trackIndex: 1)
+        try manifest.markCancelled(trackIndex: 2)
+
+        manifest.prepareCancelledRetry()
+
+        XCTAssertEqual(manifest.state, .queued)
+        XCTAssertEqual(
+            manifest.entries.map(\.state),
+            [.complete, .queued, .queued]
+        )
+
+        try manifest.markDownloading(trackIndex: 1)
+        try manifest.markComplete(
+            trackIndex: 1,
+            observedByteLength: 10,
+            placement: .finalized
+        )
+
+        XCTAssertEqual(manifest.state, .queued)
+        XCTAssertEqual(manifest.entries[2].state, .queued)
+    }
+
     func testFailedTrackDoesNotFailBookWhileAnotherTrackIsDownloading()
         throws
     {

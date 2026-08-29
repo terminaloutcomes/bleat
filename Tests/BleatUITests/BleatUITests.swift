@@ -173,6 +173,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Library"].exists)
         XCTAssertTrue(app.buttons["Search"].exists)
         XCTAssertTrue(app.buttons["Downloads"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
         XCTAssertTrue(app.buttons["Settings"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)["home.account"].exists
@@ -789,6 +790,44 @@ final class BleatUITests: XCTestCase {
         try await Task.sleep(for: .seconds(9))
 
         tabButton("Downloads", in: app).tap()
+        let removeAll = app.buttons["downloads.removeAll"]
+        XCTAssertTrue(removeAll.waitForExistence(timeout: 3))
+        removeAll.tap()
+        let confirmRemove = app.buttons["Remove Downloads"]
+        XCTAssertTrue(confirmRemove.waitForExistence(timeout: 3))
+        confirmRemove.tap()
+        XCTAssertTrue(
+            app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testSeriesDownloadStartsEveryBook() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 3))
+        series.tap()
+
+        let downloadSeries = app.buttons["series.download"]
+        XCTAssertTrue(downloadSeries.waitForExistence(timeout: 3))
+        downloadSeries.tap()
+        let confirm = app.buttons["Download 2 Books"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["Test Series Volume One"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.staticTexts["Test Series Volume Two"]
+                .waitForExistence(timeout: 3)
+        )
+
         let removeAll = app.buttons["downloads.removeAll"]
         XCTAssertTrue(removeAll.waitForExistence(timeout: 3))
         removeAll.tap()

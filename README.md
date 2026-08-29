@@ -490,8 +490,13 @@ are shown as series entries; opening one uses the server's uncollapsed sequence
 order, supports cached pages and pagination, and provides a swipeable cover
 browser. A book's authors and series are separate accessible controls: an
 author opens a named Library filter that can be cleared, while a series opens
-its ordered series detail. Search presents separate Books, Authors, and Series
-groups, with the same destinations.
+its ordered series detail. **Download Series** loads every remaining series
+page, asks for confirmation even if you navigate elsewhere, and hands each book
+to the normal download flow. Another series can be prepared at the same time;
+completed confirmations are shown in order. Existing downloads are retained,
+and Wi-Fi-only downloads remain queued until an allowed network is available.
+Search presents separate Books, Authors, and Series groups, with the same
+destinations.
 
 ## Open a Bleat link
 
@@ -698,15 +703,17 @@ the screen distinguishes missing or forbidden items, expired authentication,
 invalid server responses, local-storage failures, offline cache misses, and
 temporary server failures. Retryable failures include a **Try Again** action;
 diagnostics retain only the corresponding non-sensitive failure code. Existing
-downloads show status, stored and expected bytes, and the relevant Pause,
-Continue, Cancel, Retry, Repair, Download Full Book, or Remove action there as
-well as in Downloads. Pause retains completed 16 MiB range chunks in durable
-partial files. While Pause or Continue is settling, the transfer control shows
-a stable disabled state instead of exposing the opposite action. Continue
-starts at the on-disk byte offset after either a short pause or an app relaunch.
-Cancel discards unfinished partial bytes while retaining already completed
-tracks. Download diagnostics are emitted outside these transfer-control
-transactions and cannot delay their state changes.
+downloads show status plus stored and expected bytes. Their single trailing
+control matches the mini player: active work shows a Stop pictograph, while
+stopped or failed work shows a Download pictograph that resumes from retained
+bytes or retries from the beginning. Stop discards unfinished partial bytes
+while retaining already completed tracks, persists **Stopped**, and never
+restarts through recovery without an explicit user action. Late cleanup from
+the stopped transfer cannot overwrite or delete that action, and restarting
+queues every unfinished track before starting the next one. Queued work is shown as **Waiting to download**,
+separately from **Waiting for network** and **Retrying download**. Download
+diagnostics are emitted outside these transfer-control transactions and cannot
+delay their state changes.
 Automatic cache failures retry only the active window and never appear as a
 full-book repair. Explicit full-book downloads play directly from local files
 without opening a server playback session. Automatic cached windows can also

@@ -1404,6 +1404,48 @@ private struct SignedInView: View {
                 presentation: bookActionPresentation
             )
         }
+        .confirmationDialog(
+            "Download \(model.pendingSeriesDownload?.destination.name ?? "Series")?",
+            isPresented: Binding(
+                get: { model.pendingSeriesDownload != nil },
+                set: { presented in
+                    if !presented, model.pendingSeriesDownload != nil {
+                        model.cancelPendingSeriesDownload()
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let request = model.pendingSeriesDownload {
+                Button("Download \(request.books.count) Books") {
+                    model.confirmPendingSeriesDownload()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                model.cancelPendingSeriesDownload()
+            }
+        } message: {
+            Text(
+                "Existing downloads will be kept. Each book will follow your current download network policy."
+            )
+        }
+        .alert(
+            model.seriesDownloadFailure?.title ?? "Download unavailable",
+            isPresented: Binding(
+                get: { model.seriesDownloadFailure != nil },
+                set: { presented in
+                    if !presented {
+                        model.dismissSeriesDownloadFailure()
+                    }
+                }
+            )
+        ) {
+            Button("OK") { model.dismissSeriesDownloadFailure() }
+        } message: {
+            if let failure = model.seriesDownloadFailure {
+                Text(failure.message)
+            }
+        }
         .alert(
             "Allow Cellular Download?",
             isPresented: Binding(
@@ -1536,10 +1578,11 @@ private struct SignedInView: View {
             }
         }
     #else
+        @ViewBuilder
         private func mobileTabs(containerHeight: CGFloat) -> some View {
-            mobileTabView(containerHeight: containerHeight)
-                .tabViewBottomAccessory {
-                    if model.playback.showsMiniPlayer {
+            if model.playback.showsMiniPlayer {
+                mobileTabView(containerHeight: containerHeight)
+                    .tabViewBottomAccessory {
                         MiniPlayerView(
                             playback: model.playback,
                             containerHeight: containerHeight
@@ -1547,7 +1590,9 @@ private struct SignedInView: View {
                             navigation.showsPlayer = true
                         }
                     }
-                }
+            } else {
+                mobileTabView(containerHeight: containerHeight)
+            }
         }
 
         private func mobileTabView(containerHeight: CGFloat) -> some View {
@@ -3286,6 +3331,41 @@ private struct SeriesDetailView: View {
             .refreshable {
                 await model.refreshSeries(destination)
             }
+            .toolbar {
+                if let account = model.account,
+                    account.user.permissions.download,
+                    case .loaded(let page) = model.seriesBooks,
+                    !page.items.isEmpty
+                {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            model.beginSeriesDownloadPreparation(
+                                destination,
+                                account: account
+                            )
+                        } label: {
+                            if model.isSeriesDownloadActive(
+                                destination,
+                                accountID: account.id
+                            ) {
+                                ProgressView()
+                            } else {
+                                Label(
+                                    "Download Series",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                        }
+                        .disabled(
+                            model.isSeriesDownloadActive(
+                                destination,
+                                accountID: account.id
+                            )
+                        )
+                        .accessibilityIdentifier("series.download")
+                    }
+                }
+            }
     }
 
     @ViewBuilder
@@ -3537,7 +3617,6 @@ private struct BookDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
     @State private var showChapterTranscription = false
-    @State private var showRemoveDownloadConfirmation = false
     @State private var detailsAreExpanded = false
     @State private var chaptersAreExpanded = false
     @State private var pendingChapter: PlaybackChapter?
@@ -3655,29 +3734,6 @@ private struct BookDetailView: View {
                 }
             }
         #endif
-        .confirmationDialog(
-            "Remove Download?",
-            isPresented: $showRemoveDownloadConfirmation,
-            titleVisibility: .visible
-        ) {
-            if let record = downloadedRecord {
-                Button("Remove Download", role: .destructive) {
-                    Task {
-                        await model.downloads.remove(record)
-                    }
-                }
-                .disabled(
-                    isDownloadedRecordPlaying
-                        || model.downloads.isPausing(record)
-                        || model.downloads.isResuming(record)
-                )
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(
-                "This removes the audiobook files stored on this device."
-            )
-        }
         .alert(
             pendingChapter.map { "Go to “\($0.title)”?" }
                 ?? "Go to Chapter?",
@@ -4203,22 +4259,31 @@ private struct BookDetailView: View {
                     {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .top, spacing: 8) {
-                                Image(
-                                    systemName: downloadStatusIcon(record)
-                                )
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(downloadStatus(record))
-                                    Text(downloadBytes(record))
-                                        .foregroundStyle(.secondary)
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(
+                                        systemName: downloadStatusIcon(record)
+                                    )
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(downloadStatus(record))
+                                        Text(downloadBytes(record))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .fixedSize(
+                                        horizontal: true,
+                                        vertical: false
+                                    )
                                 }
-                                .fixedSize(horizontal: true, vertical: false)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityIdentifier(
+                                    "book.detail.downloadStatus"
+                                )
                                 Spacer()
+                                downloadTransferButton(
+                                    record,
+                                    account: account
+                                )
                             }
                             .font(.subheadline)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier(
-                                "book.detail.downloadStatus"
-                            )
 
                             if record.manifest.purpose == .automaticCache
                                 || !model.downloads.isFullBookAvailable(record)
@@ -4230,33 +4295,6 @@ private struct BookDetailView: View {
                                 )
                             }
 
-                            HStack {
-                                downloadControls(record, account: account)
-                                Spacer()
-                                if downloadIsActive(record) {
-                                    Button(
-                                        "Cancel",
-                                        systemImage: "xmark",
-                                        role: .destructive
-                                    ) {
-                                        Task {
-                                            await model.downloads.cancel(record)
-                                        }
-                                    }
-                                } else {
-                                    Button(
-                                        "Remove",
-                                        systemImage: "trash",
-                                        role: .destructive
-                                    ) {
-                                        showRemoveDownloadConfirmation = true
-                                    }
-                                    .disabled(
-                                        record.manifest.state == .deleting
-                                            || isDownloadedRecordPlaying
-                                    ).accessibilityLabel("Remove")
-                                }
-                            }
                         }
                         .padding()
                         .background(
@@ -4287,271 +4325,80 @@ private struct BookDetailView: View {
     }
 
     @ViewBuilder
-    private func downloadControls(
+    private func downloadTransferButton(
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) -> some View {
-        if record.manifest.purpose == .automaticCache,
-            record.manifest.state != .deleting
-        {
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        if downloadIsActive(record) {
             Button {
                 Task {
-                    await model.downloads.downloadFullBook(
-                        record,
-                        account: account
-                    )
+                    await model.downloads.cancel(record)
+                }
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(.title2)
+            }
+            .disabled(snapshot.phase == .cancelling)
+            .accessibilityLabel(
+                snapshot.phase == .cancelling
+                    ? "Stopping download" : "Stop download"
+            )
+            .accessibilityIdentifier("book.detail.download.stop")
+        } else if record.manifest.state != .deleting {
+            Button {
+                Task {
+                    await startDownload(record, account: account)
                 }
             } label: {
                 Image(systemName: "arrow.down.circle")
+                    .font(.title2)
             }
-            .buttonStyle(.borderedProminent)
-            .accessibilityLabel("Download Full Book")
-            .accessibilityIdentifier(
-                "book.detail.download.fullBook"
-            )
-            if model.downloads.automaticCacheState(for: record) == .failed {
-                Button("Retry") {
-                    Task {
-                        await model.downloads.repair(
-                            record,
-                            account: account
-                        )
-                    }
-                }
-            } else if downloadIsActive(record) {
-                automaticPauseControl(record)
-            }
-        } else if [
-            DownloadManifestState.complete,
-            .deleting,
-        ].contains(record.manifest.state) {
-            EmptyView()
-        } else if model.downloads.isContinuingManualDownload(record) {
-            automaticPauseControl(record)
-        } else if [
-            DownloadManifestState.failed,
-            .partial,
-        ].contains(record.manifest.state) {
-            Button(
-                record.manifest.state == .partial ? "Repair" : "Retry"
-            ) {
-                Task {
-                    await model.downloads.repair(
-                        record,
-                        account: account
-                    )
-                }
-            }
-            .buttonStyle(.borderedProminent)
-        } else {
-            automaticPauseControl(record)
+            .accessibilityLabel("Download")
+            .accessibilityIdentifier("book.detail.download.start")
         }
     }
 
-    @ViewBuilder
-    private func automaticPauseControl(
-        _ record: DownloadedBookRecord
-    ) -> some View {
-        @ColourSchemePreference var colourScheme
-        if record.manifest.state == .deleting {
-            EmptyView()
-        } else if model.downloads.isPausing(record) {
-            Button("Pausing…", systemImage: "pause.fill") {}
-                .disabled(true)
-                .tint(colourScheme.color)
-                .accessibilityIdentifier("book.detail.download.pausing")
-        } else if model.downloads.isResuming(record) {
-            Button("Continuing…", systemImage: "play.fill") {}
-                .disabled(true)
-                .tint(colourScheme.color)
-                .accessibilityIdentifier("book.detail.download.continuing")
-        } else if model.downloads.pauseFailed(record) {
-            Button("Retry", systemImage: "arrow.clockwise") {
-                Task {
-                    await model.downloads.continueDownload(record)
-                }
-            }
-            .tint(colourScheme.color)
-            .accessibilityIdentifier("book.detail.download.pauseRetry")
-        } else if model.downloads.pausedDownloadIDs.contains(
-            record.manifest.downloadID
-        ) {
-            Button("Continue", systemImage: "play.fill") {
-                Task {
-                    await model.downloads.continueDownload(record)
-                }
-            }
-            .tint(colourScheme.color)
-            .accessibilityIdentifier("book.detail.download.continue")
+    private func startDownload(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        if snapshot.actions.contains(.continueDownload)
+            || snapshot.phase == .pauseFailed
+        {
+            await model.downloads.continueDownload(record)
+        } else if record.manifest.purpose == .automaticCache,
+            model.downloads.automaticCacheState(for: record) != .failed
+        {
+            await model.downloads.downloadFullBook(record, account: account)
         } else {
-            Button("Pause", systemImage: "pause.fill") {
-                Task {
-                    await model.downloads.pause(record)
-                }
-            }
-            .tint(colourScheme.color)
-            .accessibilityIdentifier("book.detail.download.pause")
+            await model.downloads.repair(record, account: account)
         }
     }
 
     private func downloadIsActive(
         _ record: DownloadedBookRecord
     ) -> Bool {
-        if record.manifest.purpose == .automaticCache {
-            guard
-                let state = model.downloads.automaticCacheState(
-                    for: record
-                )
-            else {
-                return false
-            }
-            return [
-                AutomaticCacheState.queued,
-                .downloading,
-            ].contains(state)
-        }
-        return [
-            DownloadManifestState.queued,
-            .downloading,
-            .paused,
-        ].contains(record.manifest.state)
-            || model.downloads.isContinuingManualDownload(record)
-    }
-
-    private var downloadedRecord: DownloadedBookRecord? {
-        guard let account = model.account else {
-            return nil
-        }
-        return model.downloads.record(
-            accountID: account.id,
-            itemID: book.id
-        )
-    }
-
-    private var isDownloadedRecordPlaying: Bool {
-        guard let record = downloadedRecord else {
-            return false
-        }
-        return model.playback.accountID == record.manifest.accountID
-            && model.playback.itemID == record.manifest.itemID
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        return snapshot.actions.contains(.cancel)
+            || snapshot.phase == .cancelling
     }
 
     private func downloadStatus(
         _ record: DownloadedBookRecord
     ) -> String {
-        if model.downloads.isPausing(record) {
-            return "Pausing…"
-        }
-        if model.downloads.isResuming(record) {
-            return "Continuing…"
-        }
-        if model.downloads.pauseFailed(record) {
-            return "Pause failed"
-        }
-        if model.downloads.pausedDownloadIDs.contains(
-            record.manifest.downloadID
-        ) {
-            return "Paused"
-        }
-        if record.manifest.state == .deleting {
-            return "Removing"
-        }
-        if model.downloads.isWaitingForNetwork(record) {
-            return "Waiting for network"
-        }
-        if model.downloads.isRetrying(record) {
-            return "Retrying download"
-        }
-        if model.downloads.isContinuingManualDownload(record) {
-            return "Downloading"
-        }
-        if let cacheState = model.downloads.automaticCacheState(
-            for: record
-        ) {
-            switch cacheState {
-            case .queued, .downloading:
-                return "Caching"
-            case .cached:
-                return "Cached"
-            case .failed:
-                return "Cache failed"
-            }
-        }
-        switch record.manifest.state {
-        case .queued:
-            return "Queued"
-        case .downloading:
-            return "Downloading"
-        case .paused:
-            return "Paused"
-        case .partial:
-            return "Repair needed"
-        case .complete:
-            return "Downloaded"
-        case .failed:
-            return "Download failed"
-        case .deleting:
-            return "Removing"
-        }
+        downloadControlLabel(
+            model.downloads.controlSnapshot(for: record).phase
+        )
     }
 
     private func downloadStatusIcon(
         _ record: DownloadedBookRecord
     ) -> String {
-        if model.downloads.isPausing(record) {
-            return "pause.circle"
-        }
-        if model.downloads.isResuming(record) {
-            return "play.circle"
-        }
-        if model.downloads.pauseFailed(record) {
-            return "exclamationmark.circle"
-        }
-        if model.downloads.pausedDownloadIDs.contains(
-            record.manifest.downloadID
-        ) {
-            return "pause.circle"
-        }
-        if record.manifest.state == .deleting {
-            return "trash"
-        }
-        if model.downloads.isWaitingForNetwork(record) {
-            return "wifi.exclamationmark"
-        }
-        if model.downloads.isRetrying(record) {
-            return "arrow.clockwise.circle"
-        }
-        if model.downloads.isContinuingManualDownload(record) {
-            return "arrow.down.circle"
-        }
-        if let cacheState = model.downloads.automaticCacheState(
-            for: record
-        ) {
-            switch cacheState {
-            case .queued:
-                return "clock"
-            case .downloading:
-                return "arrow.down.circle"
-            case .cached:
-                return "checkmark.circle.fill"
-            case .failed:
-                return "exclamationmark.circle"
-            }
-        }
-        switch record.manifest.state {
-        case .queued:
-            return "clock"
-        case .downloading:
-            return "arrow.down.circle"
-        case .paused:
-            return "pause.circle"
-        case .partial, .failed:
-            return "exclamationmark.circle"
-        case .complete:
-            return "checkmark.circle.fill"
-        case .deleting:
-            return "trash"
-        }
+        downloadControlIcon(
+            model.downloads.controlSnapshot(for: record).phase
+        )
     }
 
     private func downloadBytes(
@@ -5243,7 +5090,6 @@ private struct DownloadsView: View {
 private struct DownloadStorageView: View {
     @Bindable var model: AppModel
     @State private var showRemoveAllConfirmation = false
-    @State private var visibleRepairDownloadIDs: Set<DownloadID> = []
 
     var body: some View {
         Group {
@@ -5392,12 +5238,13 @@ private struct DownloadStorageView: View {
             HStack {
                 Text(record.detail.title)
                     .font(.headline)
+                Spacer()
                 if record.manifest.purpose == .automaticCache {
-                    Spacer()
                     Label("Automatic", systemImage: "arrow.down.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                downloadTransferButton(record)
             }
             ProgressView(
                 value: model.downloads.progress[
@@ -5406,13 +5253,7 @@ private struct DownloadStorageView: View {
                     ?? (downloadIsComplete(record) ? 1 : 0)
             )
             HStack {
-                Text(
-                    model.downloads.pausedDownloadIDs.contains(
-                        record.manifest.downloadID
-                    )
-                        ? "Paused"
-                        : downloadStateLabel(record)
-                )
+                Text(downloadStateLabel(record))
                 Spacer()
 
                 Text(
@@ -5426,92 +5267,19 @@ private struct DownloadStorageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if record.manifest.purpose == .automaticCache,
-                record.manifest.state != .deleting
+            if downloadCanStart(record), !downloadIsActive(record),
+                model.account?.id != record.manifest.accountID
             {
-                if let account = model.account,
-                    account.id == record.manifest.accountID
-
-                {
-                    if !model.downloads.isFullyDownloaded(for: record) {
-                        Button("Download Full Book") {
-                            Task {
-                                await model.downloads.downloadFullBook(
-                                    record,
-                                    account: account
-                                )
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    if model.downloads.automaticCacheState(
-                        for: record
-                    ) == .failed {
-                        Button("Retry") {
-                            Task {
-                                await model.downloads.repair(
-                                    record,
-                                    account: account
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Text("Account required to download the full book.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if downloadIsActive(record) {
-                    transferControls(record)
-                }
-            } else if repairActionIsEligible(record) {
-                if let account = model.account,
-                    account.id == record.manifest.accountID
-                {
-                    if visibleRepairDownloadIDs.contains(
-                        record.manifest.downloadID
-                    ) {
-                        Button(
-                            record.manifest.state == .partial
-                                ? "Repair" : "Retry"
-                        ) {
-                            Task {
-                                await model.downloads.repair(
-                                    record,
-                                    account: account
-                                )
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                } else {
-                    Text("Account required to retry this download.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if !downloadIsComplete(record) {
-                transferControls(record)
+                Text("Account required to download.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        }
-        .task(id: repairActionIsEligible(record)) {
-            guard repairActionIsEligible(record) else {
-                visibleRepairDownloadIDs.remove(record.manifest.downloadID)
-                return
-            }
-            do {
-                try await Task.sleep(
-                    for: DownloadRepairActionPolicy.visibilityDelay
-                )
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            visibleRepairDownloadIDs.insert(record.manifest.downloadID)
         }
         .swipeActions {
             if record.manifest.downloadID != protectedDownloadID,
-                !model.downloads.isPausing(record),
-                !model.downloads.isResuming(record)
+                model.downloads.controlSnapshot(for: record).actions.contains(
+                    .remove
+                )
             {
                 Button("Delete", role: .destructive) {
                     Task {
@@ -5523,115 +5291,67 @@ private struct DownloadStorageView: View {
     }
 
     @ViewBuilder
-    private func transferControls(
+    private func downloadTransferButton(
         _ record: DownloadedBookRecord
     ) -> some View {
-        @ColourSchemePreference var colourScheme
-
-        HStack {
-            if model.downloads.isPausing(record) {
-                Button("Pausing…") {}
-                    .disabled(true)
-                    .tint(colourScheme.color)
-                    .accessibilityIdentifier("downloads.pausing")
-            } else if model.downloads.isResuming(record) {
-                Button("Continuing…") {}
-                    .disabled(true)
-                    .tint(colourScheme.color)
-                    .accessibilityIdentifier("downloads.continuing")
-            } else if model.downloads.pauseFailed(record) {
-                Button("Retry") {
-                    Task {
-                        await model.downloads.continueDownload(record)
-                    }
-                }
-                .tint(colourScheme.color)
-                .accessibilityIdentifier("downloads.pauseRetry")
-            } else if model.downloads.pausedDownloadIDs.contains(
-                record.manifest.downloadID
-            ) {
-                Button("Continue") {
-                    Task {
-                        await model.downloads.continueDownload(record)
-                    }
-                }
-                .tint(colourScheme.color)
-                .accessibilityIdentifier("downloads.continue")
-            } else {
-                Button("Pause") {
-                    Task {
-                        await model.downloads.pause(record)
-                    }
-                }
-                .tint(colourScheme.color)
-                .accessibilityIdentifier("downloads.pause")
-            }
-            Spacer()
-            Button("Cancel", role: .destructive) {
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        if downloadIsActive(record) {
+            Button {
                 Task {
                     await model.downloads.cancel(record)
                 }
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(.title2)
             }
-            .disabled(
-                model.downloads.isPausing(record)
-                    || model.downloads.isResuming(record)
+            .disabled(snapshot.phase == .cancelling)
+            .accessibilityLabel(
+                snapshot.phase == .cancelling
+                    ? "Stopping download" : "Stop download"
             )
-            .accessibilityIdentifier("downloads.cancel")
+            .accessibilityIdentifier("downloads.stop")
+        } else if downloadCanStart(record),
+            record.manifest.state != .deleting,
+            let account = model.account,
+            account.id == record.manifest.accountID
+        {
+            Button {
+                Task {
+                    await startDownload(record, account: account)
+                }
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title2)
+            }
+            .accessibilityLabel("Download")
+            .accessibilityIdentifier("downloads.start")
+        }
+    }
+
+    private func startDownload(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        if snapshot.actions.contains(.continueDownload)
+            || snapshot.phase == .pauseFailed
+        {
+            await model.downloads.continueDownload(record)
+        } else if record.manifest.purpose == .automaticCache,
+            model.downloads.automaticCacheState(for: record) != .failed
+        {
+            await model.downloads.downloadFullBook(record, account: account)
+        } else {
+            await model.downloads.repair(record, account: account)
         }
     }
 
     private func downloadStateLabel(
         _ record: DownloadedBookRecord
     ) -> String {
-        if model.downloads.isPausing(record) {
-            return "Pausing…"
-        }
-        if model.downloads.isResuming(record) {
-            return "Continuing…"
-        }
-        if model.downloads.pauseFailed(record) {
-            return "Pause failed"
-        }
-        if record.manifest.state == .deleting {
-            return "Removing"
-        }
-        if model.downloads.isWaitingForNetwork(record) {
-            return "Waiting for network"
-        }
-        if model.downloads.isRetrying(record) {
-            return "Retrying download"
-        }
-        if model.downloads.isContinuingManualDownload(record) {
-            return "Downloading"
-        }
-        if let state = model.downloads.automaticCacheState(
-            for: record
-        ) {
-            switch state {
-            case .queued, .downloading:
-                return "Caching"
-            case .cached:
-                return "Cached"
-            case .failed:
-                return "Cache failed"
-            }
-        }
-        switch record.manifest.state {
-        case .queued:
-            return "Queued"
-        case .downloading:
-            return "Downloading"
-        case .paused:
-            return "Paused"
-        case .partial:
-            return "Repair needed"
-        case .complete:
-            return "Downloaded"
-        case .failed:
-            return "Download failed"
-        case .deleting:
-            return "Removing"
-        }
+        downloadControlLabel(
+            model.downloads.controlSnapshot(for: record).phase
+        )
     }
 
     private func downloadIsComplete(
@@ -5645,38 +5365,21 @@ private struct DownloadStorageView: View {
         return model.downloads.isFullBookAvailable(record)
     }
 
-    private func downloadIsActive(
+    private func downloadCanStart(
         _ record: DownloadedBookRecord
     ) -> Bool {
         if record.manifest.purpose == .automaticCache {
-            guard
-                let state = model.downloads.automaticCacheState(
-                    for: record
-                )
-            else {
-                return false
-            }
-            return [
-                AutomaticCacheState.queued,
-                .downloading,
-            ].contains(state)
+            return !model.downloads.isFullyDownloaded(for: record)
         }
-        return [
-            DownloadManifestState.queued,
-            .downloading,
-        ].contains(record.manifest.state)
-            || model.downloads.isContinuingManualDownload(record)
+        return !downloadIsComplete(record)
     }
 
-    private func repairActionIsEligible(
+    private func downloadIsActive(
         _ record: DownloadedBookRecord
     ) -> Bool {
-        DownloadRepairActionPolicy.isEligible(
-            manifestState: record.manifest.state,
-            isWaitingForNetwork: model.downloads.isWaitingForNetwork(record),
-            isRetrying: model.downloads.isRetrying(record),
-            isContinuing: model.downloads.isContinuingManualDownload(record)
-        )
+        let snapshot = model.downloads.controlSnapshot(for: record)
+        return snapshot.actions.contains(.cancel)
+            || snapshot.phase == .cancelling
     }
 
     private func accountLabel(_ accountID: AccountID) -> String {
@@ -5699,19 +5402,67 @@ private struct DownloadStorageView: View {
     }
 }
 
-enum DownloadRepairActionPolicy {
-    static let visibilityDelay = Duration.seconds(1)
+private func downloadControlLabel(_ phase: DownloadControlPhase) -> String {
+    switch phase {
+    case .waitingToDownload:
+        "Waiting to download"
+    case .downloading:
+        "Downloading"
+    case .waitingForNetwork:
+        "Waiting for network"
+    case .retrying:
+        "Retrying download"
+    case .pausing:
+        "Pausing…"
+    case .paused:
+        "Paused"
+    case .resuming:
+        "Continuing…"
+    case .cancelling:
+        "Stopping…"
+    case .cancelled:
+        "Stopped"
+    case .pauseFailed:
+        "Pause failed"
+    case .repairNeeded:
+        "Repair needed"
+    case .failed:
+        "Download failed"
+    case .complete:
+        "Downloaded"
+    case .deleting:
+        "Removing"
+    case .caching:
+        "Caching"
+    case .cached:
+        "Cached"
+    case .cacheFailed:
+        "Cache failed"
+    }
+}
 
-    static func isEligible(
-        manifestState: DownloadManifestState,
-        isWaitingForNetwork: Bool,
-        isRetrying: Bool,
-        isContinuing: Bool
-    ) -> Bool {
-        [DownloadManifestState.failed, .partial].contains(manifestState)
-            && !isWaitingForNetwork
-            && !isRetrying
-            && !isContinuing
+private func downloadControlIcon(_ phase: DownloadControlPhase) -> String {
+    switch phase {
+    case .waitingToDownload:
+        "clock"
+    case .downloading, .caching:
+        "arrow.down.circle"
+    case .waitingForNetwork:
+        "wifi.exclamationmark"
+    case .retrying:
+        "arrow.clockwise.circle"
+    case .pausing, .paused:
+        "pause.circle"
+    case .resuming:
+        "play.circle"
+    case .cancelling, .cancelled:
+        "xmark.circle"
+    case .pauseFailed, .repairNeeded, .failed, .cacheFailed:
+        "exclamationmark.circle"
+    case .complete, .cached:
+        "checkmark.circle.fill"
+    case .deleting:
+        "trash"
     }
 }
 

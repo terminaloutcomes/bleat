@@ -425,6 +425,52 @@ enum BookActionPreparationResult: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum SeriesDownloadPreparationResult: Equatable, Sendable {
+    case loaded([LibraryBookSummary])
+    case failed(AppFailure)
+    case cancelled
+}
+
+struct SeriesDownloadKey: Hashable, Sendable {
+    let accountID: AccountID
+    let libraryID: LibraryID
+    let seriesID: SeriesID
+}
+
+struct SeriesDownloadRequest: Identifiable, Sendable {
+    let id: UUID
+    let key: SeriesDownloadKey
+    let account: ServerAccount
+    let destination: SeriesDestination
+    let books: [LibraryBookSummary]
+}
+
+private enum CoordinatedLibraryPageResult: Sendable {
+    case loaded(LibraryItemsPage)
+    case failed(AppFailure)
+}
+
+private struct CoordinatedLibraryPageKey: Hashable, Sendable {
+    let accountID: AccountID
+    let libraryID: LibraryID
+    let request: LibraryItemsPageRequest
+}
+
+private struct CoordinatedLibraryPageTask {
+    let id: UUID
+    let task: Task<CoordinatedLibraryPageResult, Never>
+}
+
+private struct SeriesDownloadSubmissionTail {
+    let id: UUID
+    let task: Task<Void, Never>
+}
+
+private struct SeriesDownloadFailureEntry {
+    let key: SeriesDownloadKey
+    let failure: AppFailure
+}
+
 enum LibraryPaginationState: Equatable, Sendable {
     case idle
     case loading
@@ -1276,6 +1322,26 @@ final class AppModel {
     @ObservationIgnored
     private var pendingDownloadRecoveryAccounts: [AccountID: ServerAccount] =
         [:]
+    @ObservationIgnored
+    private var coordinatedLibraryPageTasks:
+        [CoordinatedLibraryPageKey: CoordinatedLibraryPageTask] = [:]
+    @ObservationIgnored
+    private var seriesDownloadPreparationTasks:
+        [SeriesDownloadKey: Task<Void, Never>] = [:]
+    @ObservationIgnored
+    private var seriesDownloadSubmissionTasks:
+        [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored
+    private var seriesDownloadSubmissionAccounts: [UUID: AccountID] = [:]
+    @ObservationIgnored
+    private var seriesDownloadSubmissionTails:
+        [AccountID: SeriesDownloadSubmissionTail] = [:]
+    @ObservationIgnored
+    private var seriesDownloadBlockedAccounts: Set<AccountID> = []
+    private var readySeriesDownloads: [SeriesDownloadRequest] = []
+    private var queuedSeriesDownloadFailures:
+        [SeriesDownloadFailureEntry] = []
+    private var presentedSeriesDownloadFailure: SeriesDownloadFailureEntry?
 
     private(set) var phase: AppPhase
     private(set) var launchStage: AppLaunchStage
@@ -1325,6 +1391,11 @@ final class AppModel {
     private(set) var seriesBooks: ResourceState<LibraryItemsPage> = .idle
     private(set) var seriesPaginationState: LibraryPaginationState = .idle
     private(set) var selectedSeries: SeriesDestination?
+    private(set) var activeSeriesDownloads: Set<SeriesDownloadKey> = []
+    private(set) var pendingSeriesDownload: SeriesDownloadRequest?
+    var seriesDownloadFailure: AppFailure? {
+        presentedSeriesDownloadFailure?.failure
+    }
     private(set) var homeShelves: ResourceState<[LibraryBookShelf]> = .idle
     private(set) var homeShelvesRefreshState: ResourceRefreshState = .idle
     private(set) var searchQuery = ""
@@ -2867,25 +2938,33 @@ final class AppModel {
         guard let destination = selectedSeries,
             let account,
             case .loaded(let currentPage) = seriesBooks,
-            currentPage.hasNextPage,
-            seriesPaginationState != .loading
+            currentPage.hasNextPage
         else {
             return
         }
         seriesPaginationState = .loading
         let generation = seriesPageGeneration
+        let request: LibraryItemsPageRequest
         do {
-            let request = try makeLibraryItemsPageRequest(
+            request = try makeLibraryItemsPageRequest(
                 page: currentPage.page + 1,
                 sort: .sequence,
                 filter: LibraryItemFilter(seriesID: destination.id),
                 collapseSeries: false
             )
-            let nextPage = try await service.page(
-                for: account,
-                libraryID: destination.libraryID,
-                request: request
+        } catch let error {
+            seriesPaginationState = .failed(
+                AppFailure(operation: .loadLibraryPage, serviceError: error)
             )
+            return
+        }
+
+        switch await coordinatedLibraryPage(
+            account: account,
+            libraryID: destination.libraryID,
+            request: request
+        ) {
+        case .loaded(let nextPage):
             guard generation == seriesPageGeneration,
                 selectedSeries == destination,
                 case .loaded(let latest) = seriesBooks,
@@ -2906,15 +2985,459 @@ final class AppModel {
                 )
             )
             seriesPaginationState = .idle
-        } catch let error {
+        case .failed(let failure):
             guard generation == seriesPageGeneration,
                 selectedSeries == destination
             else {
                 return
             }
-            seriesPaginationState = .failed(
-                AppFailure(operation: .loadLibraryPage, serviceError: error)
+            seriesPaginationState = .failed(failure)
+        }
+    }
+
+    func loadAllSeriesBooks(
+        _ destination: SeriesDestination,
+        account expectedAccount: ServerAccount,
+        startingAt startingPage: LibraryItemsPage
+    ) async -> SeriesDownloadPreparationResult {
+        guard accounts.contains(where: { $0.id == expectedAccount.id }) else {
+            return .cancelled
+        }
+
+        var accumulated = startingPage
+        while accumulated.hasNextPage {
+            guard !Task.isCancelled,
+                !isResettingLocalData,
+                !seriesDownloadBlockedAccounts.contains(expectedAccount.id),
+                accounts.contains(where: { $0.id == expectedAccount.id })
+            else {
+                return .cancelled
+            }
+
+            let request: LibraryItemsPageRequest
+            do {
+                request = try makeLibraryItemsPageRequest(
+                    page: accumulated.page + 1,
+                    sort: .sequence,
+                    filter: LibraryItemFilter(seriesID: destination.id),
+                    collapseSeries: false
+                )
+            } catch let error {
+                return .failed(
+                    AppFailure(
+                        operation: .loadLibraryPage,
+                        serviceError: error
+                    )
+                )
+            }
+
+            let nextPage: LibraryItemsPage
+            switch await coordinatedLibraryPage(
+                account: expectedAccount,
+                libraryID: destination.libraryID,
+                request: request
+            ) {
+            case .loaded(let page):
+                nextPage = page
+            case .failed(let failure):
+                return .failed(failure)
+            }
+            guard nextPage.page > accumulated.page else {
+                return .failed(
+                    AppFailure(.loadLibraryPage, .invalidServerResponse)
+                )
+            }
+
+            let existingIDs = Set(accumulated.items.map(\.id))
+            let additions = nextPage.items.filter {
+                !existingIDs.contains($0.id)
+            }
+            accumulated = LibraryItemsPage(
+                items: accumulated.items + additions,
+                total: nextPage.total,
+                page: nextPage.page,
+                limit: nextPage.limit
             )
+            publishPreparedSeriesPage(
+                accumulated,
+                destination: destination,
+                accountID: expectedAccount.id
+            )
+        }
+        guard !Task.isCancelled,
+            !isResettingLocalData,
+            !seriesDownloadBlockedAccounts.contains(expectedAccount.id),
+            accounts.contains(where: { $0.id == expectedAccount.id })
+        else {
+            return .cancelled
+        }
+        return .loaded(accumulated.items)
+    }
+
+    @discardableResult
+    func beginSeriesDownloadPreparation(
+        _ destination: SeriesDestination,
+        account: ServerAccount
+    ) -> Bool {
+        let key = SeriesDownloadKey(
+            accountID: account.id,
+            libraryID: destination.libraryID,
+            seriesID: destination.id
+        )
+        guard self.account?.id == account.id,
+            selectedSeries == destination,
+            case .loaded(let page) = seriesBooks,
+            !isResettingLocalData,
+            !seriesDownloadBlockedAccounts.contains(account.id),
+            accountActionStatus != .removing,
+            accounts.contains(where: { $0.id == account.id }),
+            activeSeriesDownloads.insert(key).inserted
+        else {
+            return false
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.loadAllSeriesBooks(
+                destination,
+                account: account,
+                startingAt: page
+            )
+            guard !Task.isCancelled else { return }
+            self.finishSeriesDownloadPreparation(
+                key: key,
+                account: account,
+                destination: destination,
+                result: result
+            )
+        }
+        seriesDownloadPreparationTasks[key] = task
+        return true
+    }
+
+    func isSeriesDownloadActive(
+        _ destination: SeriesDestination,
+        accountID: AccountID
+    ) -> Bool {
+        activeSeriesDownloads.contains(
+            SeriesDownloadKey(
+                accountID: accountID,
+                libraryID: destination.libraryID,
+                seriesID: destination.id
+            )
+        )
+    }
+
+    func confirmPendingSeriesDownload() {
+        guard let request = pendingSeriesDownload,
+            !isResettingLocalData,
+            !seriesDownloadBlockedAccounts.contains(request.account.id),
+            accountActionStatus != .removing
+        else { return }
+        pendingSeriesDownload = nil
+        presentNextSeriesDownload()
+        let predecessor = seriesDownloadSubmissionTails[request.account.id]
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await predecessor?.task.value
+            if !Task.isCancelled {
+                await self.submitSeriesDownload(request)
+            }
+            self.finishSeriesDownloadSubmission(request)
+        }
+        seriesDownloadSubmissionTasks[request.id] = task
+        seriesDownloadSubmissionAccounts[request.id] = request.account.id
+        seriesDownloadSubmissionTails[request.account.id] =
+            SeriesDownloadSubmissionTail(id: request.id, task: task)
+    }
+
+    func cancelPendingSeriesDownload() {
+        guard let request = pendingSeriesDownload else { return }
+        pendingSeriesDownload = nil
+        activeSeriesDownloads.remove(request.key)
+        presentNextSeriesDownload()
+    }
+
+    func dismissSeriesDownloadFailure() {
+        presentedSeriesDownloadFailure = nil
+        presentNextSeriesDownloadFailure()
+    }
+
+    private func coordinatedLibraryPage(
+        account: ServerAccount,
+        libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async -> CoordinatedLibraryPageResult {
+        let key = CoordinatedLibraryPageKey(
+            accountID: account.id,
+            libraryID: libraryID,
+            request: request
+        )
+        let coordinated: CoordinatedLibraryPageTask
+        if let existing = coordinatedLibraryPageTasks[key] {
+            coordinated = existing
+        } else {
+            let id = UUID()
+            let task: Task<CoordinatedLibraryPageResult, Never> = Task {
+                await self.fetchCoordinatedLibraryPage(
+                    account: account,
+                    libraryID: libraryID,
+                    request: request
+                )
+            }
+            coordinated = CoordinatedLibraryPageTask(id: id, task: task)
+            coordinatedLibraryPageTasks[key] = coordinated
+        }
+
+        let result = await coordinated.task.value
+        if coordinatedLibraryPageTasks[key]?.id == coordinated.id {
+            coordinatedLibraryPageTasks[key] = nil
+        }
+        return result
+    }
+
+    private func fetchCoordinatedLibraryPage(
+        account: ServerAccount,
+        libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async -> CoordinatedLibraryPageResult {
+        do {
+            return .loaded(
+                try await service.page(
+                    for: account,
+                    libraryID: libraryID,
+                    request: request
+                )
+            )
+        } catch let error {
+            return .failed(
+                AppFailure(
+                    operation: .loadLibraryPage,
+                    serviceError: error
+                )
+            )
+        }
+    }
+
+    private func publishPreparedSeriesPage(
+        _ page: LibraryItemsPage,
+        destination: SeriesDestination,
+        accountID: AccountID
+    ) {
+        guard account?.id == accountID,
+            selectedSeries == destination,
+            case .loaded(let visiblePage) = seriesBooks,
+            page.page > visiblePage.page
+        else {
+            return
+        }
+        seriesBooks = .loaded(page)
+        seriesPaginationState = .idle
+    }
+
+    private func finishSeriesDownloadPreparation(
+        key: SeriesDownloadKey,
+        account: ServerAccount,
+        destination: SeriesDestination,
+        result: SeriesDownloadPreparationResult
+    ) {
+        seriesDownloadPreparationTasks[key] = nil
+        guard !isResettingLocalData,
+            !seriesDownloadBlockedAccounts.contains(account.id),
+            accounts.contains(where: { $0.id == account.id })
+        else {
+            activeSeriesDownloads.remove(key)
+            return
+        }
+        switch result {
+        case .loaded(let books):
+            readySeriesDownloads.append(
+                SeriesDownloadRequest(
+                    id: UUID(),
+                    key: key,
+                    account: account,
+                    destination: destination,
+                    books: books
+                )
+            )
+            presentNextSeriesDownload()
+        case .failed(let failure):
+            activeSeriesDownloads.remove(key)
+            enqueueSeriesDownloadFailure(failure, key: key)
+        case .cancelled:
+            activeSeriesDownloads.remove(key)
+        }
+    }
+
+    private func presentNextSeriesDownload() {
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self,
+                self.pendingSeriesDownload == nil,
+                !self.readySeriesDownloads.isEmpty
+            else { return }
+            self.pendingSeriesDownload = self.readySeriesDownloads.removeFirst()
+        }
+    }
+
+    private func enqueueSeriesDownloadFailure(
+        _ failure: AppFailure,
+        key: SeriesDownloadKey
+    ) {
+        let entry = SeriesDownloadFailureEntry(key: key, failure: failure)
+        guard presentedSeriesDownloadFailure != nil else {
+            presentedSeriesDownloadFailure = entry
+            return
+        }
+        queuedSeriesDownloadFailures.append(entry)
+    }
+
+    private func presentNextSeriesDownloadFailure() {
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self,
+                self.presentedSeriesDownloadFailure == nil,
+                !self.queuedSeriesDownloadFailures.isEmpty
+            else { return }
+            self.presentedSeriesDownloadFailure =
+                self.queuedSeriesDownloadFailures.removeFirst()
+        }
+    }
+
+    private func finishSeriesDownloadSubmission(
+        _ request: SeriesDownloadRequest
+    ) {
+        seriesDownloadSubmissionTasks[request.id] = nil
+        seriesDownloadSubmissionAccounts[request.id] = nil
+        if seriesDownloadSubmissionTails[request.account.id]?.id == request.id {
+            seriesDownloadSubmissionTails[request.account.id] = nil
+        }
+        activeSeriesDownloads.remove(request.key)
+    }
+
+    private func cancelSeriesDownloads(
+        for accountID: AccountID? = nil
+    ) async {
+        let matches: (SeriesDownloadKey) -> Bool = { key in
+            accountID == nil || key.accountID == accountID
+        }
+        let preparationTasks = seriesDownloadPreparationTasks.filter {
+            matches($0.key)
+        }
+        let submissionIDs = seriesDownloadSubmissionTasks.keys.filter { id in
+            accountID == nil
+                || seriesDownloadSubmissionAccounts[id] == accountID
+        }
+        let submissionTasks = submissionIDs.compactMap {
+            seriesDownloadSubmissionTasks[$0]
+        }
+        let pageTasks = coordinatedLibraryPageTasks.filter {
+            accountID == nil || $0.key.accountID == accountID
+        }
+
+        activeSeriesDownloads = activeSeriesDownloads.filter { !matches($0) }
+        readySeriesDownloads.removeAll { matches($0.key) }
+        if let pendingSeriesDownload, matches(pendingSeriesDownload.key) {
+            self.pendingSeriesDownload = nil
+        }
+        queuedSeriesDownloadFailures.removeAll { matches($0.key) }
+        if let presentedSeriesDownloadFailure,
+            matches(presentedSeriesDownloadFailure.key)
+        {
+            self.presentedSeriesDownloadFailure = nil
+        }
+        presentNextSeriesDownload()
+        presentNextSeriesDownloadFailure()
+
+        preparationTasks.values.forEach { $0.cancel() }
+        submissionTasks.forEach { $0.cancel() }
+        pageTasks.values.forEach { $0.task.cancel() }
+        for task in preparationTasks.values {
+            await task.value
+        }
+        for task in submissionTasks {
+            await task.value
+        }
+        for coordinated in pageTasks.values {
+            _ = await coordinated.task.value
+        }
+
+        for key in preparationTasks.keys {
+            seriesDownloadPreparationTasks[key] = nil
+        }
+        for id in submissionIDs {
+            seriesDownloadSubmissionTasks[id] = nil
+            seriesDownloadSubmissionAccounts[id] = nil
+        }
+        if let accountID {
+            seriesDownloadSubmissionTails[accountID] = nil
+        } else {
+            seriesDownloadSubmissionTails.removeAll()
+        }
+        for key in pageTasks.keys {
+            coordinatedLibraryPageTasks[key] = nil
+        }
+    }
+
+    private func submitSeriesDownload(
+        _ request: SeriesDownloadRequest
+    ) async {
+        for book in request.books {
+            guard !Task.isCancelled,
+                accounts.contains(where: { $0.id == request.account.id })
+            else { return }
+
+            let summaryAvailability = BookActionAvailability(
+                user: request.account.user,
+                summary: book
+            )
+            guard summaryAvailability.visibleActions.contains(.download)
+            else { continue }
+
+            if let record = downloads.record(
+                accountID: request.account.id,
+                itemID: book.id
+            ), record.manifest.purpose != .automaticCache {
+                continue
+            }
+
+            let detail: LibraryBookDetail
+            do {
+                detail = try await service.bookDetail(
+                    for: request.account,
+                    libraryID: book.libraryID,
+                    itemID: book.id
+                )
+            } catch {
+                continue
+            }
+            guard !Task.isCancelled,
+                accounts.contains(where: {
+                    $0.id == request.account.id
+                })
+            else { return }
+            let detailAvailability = BookActionAvailability(
+                user: request.account.user,
+                detail: detail
+            )
+            guard detailAvailability.visibleActions.contains(.download)
+            else { continue }
+            if let record = downloads.record(
+                accountID: request.account.id,
+                itemID: detail.id
+            ) {
+                if record.manifest.purpose == .automaticCache {
+                    await downloads.downloadFullBook(
+                        record,
+                        account: request.account
+                    )
+                }
+            } else {
+                await downloads.download(
+                    detail: detail,
+                    account: request.account
+                )
+            }
         }
     }
 
@@ -4602,6 +5125,7 @@ final class AppModel {
             for account in accounts {
                 transcription.cancel(for: account.id)
             }
+            await cancelSeriesDownloads()
             guard await downloads.removeAllForLocalDataReset() else {
                 let failure = AppFailure(
                     operation: .resetAppData,
@@ -4685,6 +5209,7 @@ final class AppModel {
         await invalidatePlaybackStarts()
         let removingBrowsingAccount = account.id == self.account?.id
         accountActionStatus = .removing
+        seriesDownloadBlockedAccounts.insert(account.id)
         if removingBrowsingAccount {
             await stopLiveUpdatesAndWait()
         } else {
@@ -4694,6 +5219,7 @@ final class AppModel {
             .started(.removeAccount, category: .auth)
         )
         transcription.cancel(for: account.id)
+        await cancelSeriesDownloads(for: account.id)
         if playback.accountID == account.id {
             await playback.stop()
         }
@@ -4747,6 +5273,7 @@ final class AppModel {
                     count: accounts.count
                 )
             )
+            seriesDownloadBlockedAccounts.remove(account.id)
             return true
         } catch let error {
             let failure = AppFailure(
@@ -4764,6 +5291,7 @@ final class AppModel {
                     failureCode: failure.diagnosticFailureCode
                 )
             )
+            seriesDownloadBlockedAccounts.remove(account.id)
             return false
         }
     }

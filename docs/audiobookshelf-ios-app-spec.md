@@ -146,6 +146,14 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can sort and filter without loading the entire library into memory.
 - Collapsed server series open an uncollapsed, server-sequenced series detail;
   author and series navigation always uses the server's opaque identifiers.
+- Download-permitted users can prepare multiple series download operations.
+  Exact in-flight page requests are shared, different series can paginate
+  concurrently, and completed preparations remain available for confirmation
+  after navigation. Bleat retains existing manual downloads, promotes existing
+  automatic caches, and serializes each account's initial per-book handoffs so
+  overlapping series cannot create duplicate work for a shared book. The
+  ordinary per-book storage and network policy remains authoritative. Wi-Fi-only
+  work remains queued until an allowed network is available.
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
 - A long press on any single-book Home, Library, Search, or Series card exposes
@@ -1052,12 +1060,18 @@ Requirements:
   full book, retaining verified files and preflighting only the remainder;
 - Wi-Fi/non-expensive network option;
 - cellular warning for large books;
-- user Pause persists a paused manifest state, cancels only the current chunk,
-  and retains committed partial bytes; Continue resumes from the durable byte
-  offset, while Cancel discards unfinished partial bytes and retains completed
-  tracks; Pause, Continue, and Cancel establish user intent before any
-  suspension point, expose a disabled transition control while settling, and
-  cannot be delayed by diagnostic recording;
+- the download UI exposes one trailing pictograph: Stop for active work and
+  Download for inactive incomplete work; Stop discards unfinished partial bytes
+  and retains completed tracks in a durable internal `cancelled` state, while
+  Download resumes from retained bytes or retries from the beginning; stopped
+  work cannot be restarted by relaunch or network recovery; cleanup from the
+  stopped transfer must atomically verify that the stopped state remains
+  persisted so it cannot override or erase a later explicit restart; restarting
+  atomically converts every unfinished cancelled
+  track to queued before the bounded scheduler starts the next track, so an
+  unscheduled track cannot restore the book-level cancelled state during
+  handoff; Stop and Download establish user intent before any suspension point
+  and cannot be delayed by diagnostic recording;
 - validate `206 Partial Content`, the complete `Content-Range`, and the expected
   total before appending; retain a strong `ETag` or `Last-Modified` validator
   and send it as `If-Range` on later chunks; reject an ambiguous system-resumed
@@ -1088,7 +1102,10 @@ Derive a safe extension from a whitelist of known media types. Reject path trave
 
 ### 10.2 Atomic completion
 
-A downloaded book has a manifest with `queued`, `downloading`, `partial`, `complete`, `failed`, or `deleting` state.
+A downloaded book has a manifest with `queued`, `downloading`, `paused`,
+`cancelled`, `partial`, `complete`, `failed`, or `deleting` state. Presentation
+distinguishes queued work as **Waiting to download** from **Waiting for
+network** and **Retrying download**.
 
 An automatic cache additionally has a window-scoped `queued`, `downloading`,
 `cached`, or `failed` state. It becomes `cached` when every target track is
@@ -2103,7 +2120,6 @@ The 1.0 release is acceptable only when:
 - configurable reverse-proxy/service-token headers;
 - Bonjour discovery;
 - silence skipping, voice boost, and equalizer;
-- series bulk download;
 - offline transcoding format selection;
 - deliberate cross-server edition merging for statistics.
 
