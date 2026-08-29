@@ -1033,10 +1033,13 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app,
             identifier: "settings.account.ui-account",
-            direction: .up
+            direction: .down
         )
         let reauthenticate = app.buttons["settings.account.ui-account"]
-        XCTAssertTrue(reauthenticate.waitForExistence(timeout: 3))
+        guard reauthenticate.waitForExistence(timeout: 3) else {
+            XCTFail("Restored account row did not become visible")
+            return
+        }
         // SwiftUI plain Button labels with trailing images can intercept the
         // default center tap target; tap on the leading edge instead.
         reauthenticate.coordinate(
@@ -1161,10 +1164,15 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app,
             identifier: "settings.account.ui-account",
-            direction: .up
+            direction: .down
         )
         let account = app.buttons["settings.account.ui-account"]
-        XCTAssertTrue(account.waitForExistence(timeout: 3))
+        guard account.waitForExistence(timeout: 3) else {
+            XCTFail(
+                "Restored account row did not become visible after returning from Diagnostics"
+            )
+            return
+        }
         let settingsBar = app.navigationBars["Settings"]
         for _ in 0..<3 where account.frame.minY < settingsBar.frame.maxY {
             app.swipeDown()
@@ -1976,13 +1984,14 @@ final class BleatUITests: XCTestCase {
         app.buttons["Move Playback Here"].tap()
 
         XCTAssertTrue(transcript.exists)
-        let failure = app.staticTexts["transcription.playbackError"]
+        let failureMessage =
+            "Bleat could not reach the Audiobookshelf server."
+        let failure = app.descendants(matching: .any)
+            .matching(identifier: "transcription.playbackError")
+            .matching(NSPredicate(format: "label == %@", failureMessage))
+            .firstMatch
         XCTAssertTrue(failure.waitForExistence(timeout: 3))
-        XCTAssertTrue(
-            failure.label.contains(
-                "Bleat could not reach the Audiobookshelf server."
-            )
-        )
+        XCTAssertEqual(failure.label, failureMessage)
     }
 
     @MainActor
