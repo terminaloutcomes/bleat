@@ -1536,11 +1536,10 @@ private struct SignedInView: View {
             }
         }
     #else
-        @ViewBuilder
         private func mobileTabs(containerHeight: CGFloat) -> some View {
-            if model.playback.showsMiniPlayer {
-                mobileTabView(containerHeight: containerHeight)
-                    .tabViewBottomAccessory {
+            mobileTabView(containerHeight: containerHeight)
+                .tabViewBottomAccessory {
+                    if model.playback.showsMiniPlayer {
                         MiniPlayerView(
                             playback: model.playback,
                             containerHeight: containerHeight
@@ -1548,9 +1547,7 @@ private struct SignedInView: View {
                             navigation.showsPlayer = true
                         }
                     }
-            } else {
-                mobileTabView(containerHeight: containerHeight)
-            }
+                }
         }
 
         private func mobileTabView(containerHeight: CGFloat) -> some View {
