@@ -5406,13 +5406,181 @@ final class AppModelTests: XCTestCase {
         await model.download(detail: second, account: account)
 
         XCTAssertEqual(model.pendingCellularDownload?.detail.id, first.id)
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .progress,
+                detail: first,
+                account: account,
+                currentTime: 0,
+                chapters: [],
+                fileRanges: [
+                    AutomaticDownloadFileRange(
+                        index: 0,
+                        start: 0,
+                        end: first.duration
+                    )
+                ]
+            )
+        )
+        XCTAssertTrue(model.records.isEmpty)
+        let requestsBeforeConfirmation = await service.downloadPlanRequests()
+        XCTAssertEqual(requestsBeforeConfirmation.count, 2)
         model.cancelCellularDownload()
         await Task.yield()
         XCTAssertEqual(model.pendingCellularDownload?.detail.id, second.id)
 
-        await model.removeAll(for: account.id)
+        await model.download(detail: first, account: account)
+        let resetSucceeded = await model.removeAllForLocalDataReset()
+        XCTAssertTrue(resetSucceeded)
         await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
+        model.cancelCellularDownload()
+        await Task.yield()
+        XCTAssertNil(model.pendingCellularDownload)
+
+        await model.download(detail: first, account: account)
+        let confirmation = Task {
+            await model.confirmCellularDownload()
+        }
+        await Task.yield()
+        await model.download(detail: first, account: account)
+        await confirmation.value
+        await Task.yield()
+        XCTAssertNil(model.pendingCellularDownload)
+        _ = await model.removeAllForLocalDataReset()
+    }
+
+    func testConcurrentDownloadTriggersShareOneBookOperation() async throws {
+        guard DownloadModel.supportsNetworkPolicySelection else {
+            return
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatDownloadSingleFlight-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let suite = "DownloadSingleFlightTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "single-flight",
+                title: "Single Flight",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "large",
+                    expectedByteLength:
+                        DownloadModel.largeDownloadThresholdBytes,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let gate = AsyncGate()
+        let authorizedRequest = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://books.example/audio.mp3"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(authorizedRequest)
+        )
+        await service.setDownloadPlanGate(gate)
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.download-single-flight.\(UUID().uuidString)"
+        )
+        model.setNetworkPolicy(.allowCellular)
+
+        let first = Task {
+            await model.download(detail: detail, account: account)
+        }
+        await gate.waitUntilEntered()
+        await model.download(detail: detail, account: account)
+        await gate.release()
+        await first.value
+
+        let requests = await service.downloadPlanRequests()
+        XCTAssertEqual(requests, [detail.id])
+        XCTAssertEqual(model.pendingCellularDownload?.detail.id, detail.id)
+        let initialResetSucceeded = await model.removeAllForLocalDataReset()
+        XCTAssertTrue(initialResetSucceeded)
+
+        let teardownGate = AsyncGate()
+        await service.setDownloadPlanGate(teardownGate)
+        let inFlight = Task {
+            await model.download(detail: detail, account: account)
+        }
+        await teardownGate.waitUntilEntered()
+        let reset = Task { await model.removeAllForLocalDataReset() }
+        await Task.yield()
+        let otherDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "blocked-during-reset",
+                title: "Blocked During Reset",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        await model.download(detail: otherDetail, account: account)
+        await teardownGate.release()
+        await inFlight.value
+        let resetSucceeded = await reset.value
+        XCTAssertTrue(resetSucceeded)
+
+        let requestsAfterReset = await service.downloadPlanRequests()
+        XCTAssertEqual(requestsAfterReset, [detail.id, detail.id])
+        XCTAssertTrue(model.records.isEmpty)
+        XCTAssertNil(model.pendingCellularDownload)
+
+        let automaticGate = AsyncGate()
+        await service.setDownloadPlanGate(automaticGate)
+        let activity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: detail,
+            account: account,
+            currentTime: 0,
+            chapters: [],
+            fileRanges: [
+                AutomaticDownloadFileRange(
+                    index: 0,
+                    start: 0,
+                    end: detail.duration
+                )
+            ]
+        )
+        let automatic = Task {
+            await model.handleAutomaticPlaybackActivity(activity)
+        }
+        await automaticGate.waitUntilEntered()
+        let explicit = Task {
+            await model.download(detail: detail, account: account)
+        }
+        await Task.yield()
+        await automaticGate.release()
+        await automatic.value
+        await explicit.value
+
+        let automaticRecord = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(automaticRecord.manifest.purpose, .automaticCache)
+        XCTAssertEqual(
+            model.pendingCellularDownload?.kind,
+            .promote(automaticRecord.manifest.downloadID)
+        )
+        _ = await model.removeAllForLocalDataReset()
     }
 
     func testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist()
@@ -9200,10 +9368,14 @@ final class AppModelTests: XCTestCase {
             name: "A Series"
         )
         await model.loadSeries(destination)
+        guard case .loaded(let startingPage) = model.seriesBooks else {
+            return XCTFail("Expected the first series page")
+        }
 
         let result = await model.loadAllSeriesBooks(
             destination,
-            account: account
+            account: account,
+            startingAt: startingPage
         )
 
         XCTAssertEqual(result, .loaded(books))
@@ -9252,10 +9424,14 @@ final class AppModelTests: XCTestCase {
             name: "A Series"
         )
         await model.loadSeries(destination)
+        guard case .loaded(let startingPage) = model.seriesBooks else {
+            return XCTFail("Expected the first series page")
+        }
 
         let result = await model.loadAllSeriesBooks(
             destination,
-            account: account
+            account: account,
+            startingAt: startingPage
         )
 
         XCTAssertEqual(
@@ -9270,6 +9446,394 @@ final class AppModelTests: XCTestCase {
                 )
             )
         )
+    }
+
+    func testSeriesPaginationCoalescesAnInFlightPageWithoutBlockingMainActor()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let first = fixtureBook(
+            id: "series-item-1",
+            title: "Volume One",
+            libraryID: library.id
+        )
+        let second = fixtureBook(
+            id: "series-item-2",
+            title: "Volume Two",
+            libraryID: library.id
+        )
+        let pageGate = AsyncGate()
+        let firstPage = LibraryItemsPage(
+            items: [first], total: 2, page: 0, limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            asyncPageProvider: { _, request in
+                guard request.page == 1 else { return .success(firstPage) }
+                await pageGate.enterAndWait()
+                return .success(
+                    LibraryItemsPage(
+                        items: [second], total: 2, page: 1, limit: 1
+                    )
+                )
+            }
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: seriesID,
+            name: "A Series"
+        )
+        await model.loadSeries(destination)
+
+        let loadMore = Task { await model.loadNextSeriesPage() }
+        await pageGate.waitUntilEntered()
+        guard case .loaded(let startingPage) = model.seriesBooks else {
+            return XCTFail("Expected the first series page")
+        }
+        let preparation = Task {
+            await model.loadAllSeriesBooks(
+                destination,
+                account: account,
+                startingAt: startingPage
+            )
+        }
+
+        await Task.yield()
+        let selectionsWhilePending = await service.pageSelections()
+        XCTAssertEqual(
+            selectionsWhilePending.filter { $0.page == 1 }.count,
+            1
+        )
+        await pageGate.release()
+        await loadMore.value
+        let result = await preparation.value
+        let finalSelections = await service.pageSelections()
+        XCTAssertEqual(result, .loaded([first, second]))
+        XCTAssertEqual(
+            finalSelections.filter { $0.page == 1 }.count,
+            1
+        )
+    }
+
+    func testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstSeriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let secondSeriesID = try XCTUnwrap(SeriesID(rawValue: "series-2"))
+        let firstGate = AsyncGate()
+        let secondGate = AsyncGate()
+        let firstBooks = [
+            fixtureBook(
+                id: "series-1-item-1",
+                title: "First One",
+                libraryID: library.id
+            ),
+            fixtureBook(
+                id: "series-1-item-2",
+                title: "First Two",
+                libraryID: library.id
+            ),
+        ]
+        let secondBooks = [
+            fixtureBook(
+                id: "series-2-item-1",
+                title: "Second One",
+                libraryID: library.id
+            ),
+            fixtureBook(
+                id: "series-2-item-2",
+                title: "Second Two",
+                libraryID: library.id
+            ),
+        ]
+        let firstFilter = LibraryItemFilter(seriesID: firstSeriesID)
+        let secondFilter = LibraryItemFilter(seriesID: secondSeriesID)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            asyncPageProvider: { _, request in
+                if request.filter == firstFilter {
+                    if request.page == 0 {
+                        return .success(
+                            LibraryItemsPage(
+                                items: [firstBooks[0]],
+                                total: 2,
+                                page: 0,
+                                limit: 1
+                            )
+                        )
+                    }
+                    await firstGate.enterAndWait()
+                    return .success(
+                        LibraryItemsPage(
+                            items: [firstBooks[1]], total: 2, page: 1, limit: 1
+                        )
+                    )
+                }
+                if request.filter == secondFilter {
+                    if request.page == 0 {
+                        return .success(
+                            LibraryItemsPage(
+                                items: [secondBooks[0]],
+                                total: 2,
+                                page: 0,
+                                limit: 1
+                            )
+                        )
+                    }
+                    await secondGate.enterAndWait()
+                    return .success(
+                        LibraryItemsPage(
+                            items: [secondBooks[1]], total: 2, page: 1, limit: 1
+                        )
+                    )
+                }
+                return .failure(.libraryRepository(.noCachedValue))
+            }
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let firstDestination = SeriesDestination(
+            libraryID: library.id,
+            id: firstSeriesID,
+            name: "First Series"
+        )
+        let secondDestination = SeriesDestination(
+            libraryID: library.id,
+            id: secondSeriesID,
+            name: "Second Series"
+        )
+
+        await model.loadSeries(firstDestination)
+        XCTAssertTrue(
+            model.beginSeriesDownloadPreparation(
+                firstDestination,
+                account: account
+            )
+        )
+        XCTAssertFalse(
+            model.beginSeriesDownloadPreparation(
+                firstDestination,
+                account: account
+            )
+        )
+        await model.loadSeries(secondDestination)
+        XCTAssertTrue(
+            model.beginSeriesDownloadPreparation(
+                secondDestination,
+                account: account
+            )
+        )
+        await firstGate.waitUntilEntered()
+        await secondGate.waitUntilEntered()
+
+        await secondGate.release()
+        let secondWasPresented = await waitUntil(timeout: .seconds(1)) {
+            model.pendingSeriesDownload?.destination == secondDestination
+        }
+        XCTAssertTrue(secondWasPresented)
+        await firstGate.release()
+        await Task.yield()
+        XCTAssertEqual(
+            model.pendingSeriesDownload?.destination,
+            secondDestination
+        )
+
+        model.cancelPendingSeriesDownload()
+        let firstWasPresented = await waitUntil(timeout: .seconds(1)) {
+            model.pendingSeriesDownload?.destination == firstDestination
+        }
+        XCTAssertTrue(firstWasPresented)
+        model.cancelPendingSeriesDownload()
+        XCTAssertNil(model.pendingSeriesDownload)
+        XCTAssertFalse(
+            model.beginSeriesDownloadPreparation(
+                firstDestination,
+                account: account
+            )
+        )
+    }
+
+    func testSeriesPreparationRejectsAResponseThatDoesNotAdvanceThePage()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixtureBook(
+            id: "series-item-1",
+            title: "Volume One",
+            libraryID: library.id
+        )
+        let page = LibraryItemsPage(
+            items: [book], total: 2, page: 0, limit: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            nextPage: .success(page)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
+            name: "A Series"
+        )
+
+        let result = await model.loadAllSeriesBooks(
+            destination,
+            account: account,
+            startingAt: page
+        )
+
+        XCTAssertEqual(
+            result,
+            .failed(AppFailure(.loadLibraryPage, .invalidServerResponse))
+        )
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections.filter {
+                $0.filter == LibraryItemFilter(seriesID: destination.id)
+            }.map(\.page),
+            [1]
+        )
+    }
+
+    func testConfirmedSeriesSerializeSharedBookHandoffPerAccount()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let firstSeriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let secondSeriesID = try XCTUnwrap(SeriesID(rawValue: "series-2"))
+        let sharedBook = fixtureBook(
+            id: "shared-series-item",
+            title: "Shared Volume",
+            libraryID: library.id
+        )
+        let detail = fixtureBookDetail(item: sharedBook)
+        let firstDetailGate = AsyncGate()
+        let secondDetailGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            asyncPageProvider: { _, request in
+                guard request.filter
+                    == LibraryItemFilter(seriesID: firstSeriesID)
+                        || request.filter
+                            == LibraryItemFilter(seriesID: secondSeriesID)
+                else {
+                    return .failure(.libraryRepository(.noCachedValue))
+                }
+                return .success(
+                    LibraryItemsPage(
+                        items: [sharedBook], total: 1, page: 0, limit: 50
+                    )
+                )
+            }
+        )
+        await service.queueBookDetails(
+            [.success(detail), .success(detail)],
+            gates: [firstDetailGate, secondDetailGate]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let firstDestination = SeriesDestination(
+            libraryID: library.id,
+            id: firstSeriesID,
+            name: "First Series"
+        )
+        let secondDestination = SeriesDestination(
+            libraryID: library.id,
+            id: secondSeriesID,
+            name: "Second Series"
+        )
+
+        await model.loadSeries(firstDestination)
+        XCTAssertTrue(
+            model.beginSeriesDownloadPreparation(
+                firstDestination,
+                account: account
+            )
+        )
+        let firstWasPresented = await waitUntil(timeout: .seconds(1)) {
+            model.pendingSeriesDownload?.destination == firstDestination
+        }
+        XCTAssertTrue(firstWasPresented)
+        model.confirmPendingSeriesDownload()
+        await firstDetailGate.waitUntilEntered()
+
+        await model.loadSeries(secondDestination)
+        XCTAssertTrue(
+            model.beginSeriesDownloadPreparation(
+                secondDestination,
+                account: account
+            )
+        )
+        let secondWasPresented = await waitUntil(timeout: .seconds(1)) {
+            model.pendingSeriesDownload?.destination == secondDestination
+        }
+        XCTAssertTrue(secondWasPresented)
+        model.confirmPendingSeriesDownload()
+        await Task.yield()
+        let requestsBeforeRelease = await service.bookDetailRequests()
+        XCTAssertEqual(requestsBeforeRelease.count, 1)
+
+        await firstDetailGate.release()
+        await secondDetailGate.waitUntilEntered()
+        let requestsAfterRelease = await service.bookDetailRequests()
+        XCTAssertEqual(requestsAfterRelease.count, 2)
+        await secondDetailGate.release()
+    }
+
+    func testLocalResetRejectsSeriesWorkStartedAfterCancellationSnapshot()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixtureBook(
+            id: "reset-series-item",
+            title: "Reset Volume",
+            libraryID: library.id
+        )
+        let resetGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(
+                    items: [book], total: 1, page: 0, limit: 50
+                )
+            ),
+            localDataResetGate: resetGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: try XCTUnwrap(SeriesID(rawValue: "reset-series")),
+            name: "Reset Series"
+        )
+        await model.loadSeries(destination)
+
+        let reset = Task { await model.resetLocalData() }
+        await resetGate.waitUntilEntered()
+        XCTAssertFalse(
+            model.beginSeriesDownloadPreparation(
+                destination,
+                account: account
+            )
+        )
+        XCTAssertNil(model.pendingSeriesDownload)
+        await resetGate.release()
+        await reset.value
     }
 
     func testDirectEntityResolutionUsesExpandedFilteredPage() async throws {
@@ -15233,6 +15797,10 @@ private actor TestAppService: AppServicing {
     /// `pagedProvider(request.page)` for every request, including page 0.
     private let pagedProvider:
         (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)?
+    private let asyncPageProvider:
+        (@Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
+            LibraryItemsPage, AppServiceError
+        >)?
     private var homeShelvesResult:
         Result<
             [LibraryBookShelf],
@@ -15286,6 +15854,7 @@ private actor TestAppService: AppServicing {
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
+    private let localDataResetGate: AsyncGate?
     private let searchGate: AsyncGate?
     private let serverEndpointRouterGate: AsyncGate?
     private let privateCloudSyncGate: AsyncGate?
@@ -15445,6 +16014,10 @@ private actor TestAppService: AppServicing {
         pagedProvider:
             (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)? =
             nil,
+        asyncPageProvider:
+            (@Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
+                LibraryItemsPage, AppServiceError
+            >)? = nil,
         homeShelves: Result<[LibraryBookShelf], AppServiceError> = .success(
             []
         ),
@@ -15484,6 +16057,7 @@ private actor TestAppService: AppServicing {
         loginGate: AsyncGate? = nil,
         accountUpdateGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
+        localDataResetGate: AsyncGate? = nil,
         searchGate: AsyncGate? = nil,
         serverEndpointRouterGate: AsyncGate? = nil,
         privateCloudSyncGate: AsyncGate? = nil,
@@ -15528,6 +16102,7 @@ private actor TestAppService: AppServicing {
         firstPageResult = firstPage
         nextPageResult = nextPage
         self.pagedProvider = pagedProvider
+        self.asyncPageProvider = asyncPageProvider
         homeShelvesResult = homeShelves
         searchResult = search.map { LibrarySearchResults(books: $0) }
         bookDetailResult = bookDetail
@@ -15548,6 +16123,7 @@ private actor TestAppService: AppServicing {
         self.loginGate = loginGate
         self.accountUpdateGate = accountUpdateGate
         self.removeGate = removeGate
+        self.localDataResetGate = localDataResetGate
         self.searchGate = searchGate
         self.serverEndpointRouterGate = serverEndpointRouterGate
         self.privateCloudSyncGate = privateCloudSyncGate
@@ -15998,6 +16574,9 @@ private actor TestAppService: AppServicing {
         {
             await browsePageGate.enterAndWait()
         }
+        if let asyncPageProvider {
+            return try value(from: await asyncPageProvider(libraryID, request))
+        }
         if let pagedProvider {
             return try value(from: pagedProvider(request.page))
         }
@@ -16370,6 +16949,9 @@ private actor TestAppService: AppServicing {
 
     func resetLocalData() async throws(AppServiceError) {
         localDataResetRequests += 1
+        if let localDataResetGate {
+            await localDataResetGate.enterAndWait()
+        }
         try value(from: localDataResetResult)
     }
 

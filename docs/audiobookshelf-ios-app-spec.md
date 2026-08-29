@@ -146,11 +146,14 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can sort and filter without loading the entire library into memory.
 - Collapsed server series open an uncollapsed, server-sequenced series detail;
   author and series navigation always uses the server's opaque identifiers.
-- Download-permitted users can confirm one series download operation. Bleat
-  loads every series page, retains existing manual downloads, promotes existing
-  automatic caches, and sends every remaining book through the ordinary
-  per-book storage and network policy. Wi-Fi-only work remains queued until an
-  allowed network is available.
+- Download-permitted users can prepare multiple series download operations.
+  Exact in-flight page requests are shared, different series can paginate
+  concurrently, and completed preparations remain available for confirmation
+  after navigation. Bleat retains existing manual downloads, promotes existing
+  automatic caches, and serializes each account's initial per-book handoffs so
+  overlapping series cannot create duplicate work for a shared book. The
+  ordinary per-book storage and network policy remains authoritative. Wi-Fi-only
+  work remains queued until an allowed network is available.
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
 - A long press on any single-book Home, Library, Search, or Series card exposes

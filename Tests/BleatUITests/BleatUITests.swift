@@ -173,6 +173,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Library"].exists)
         XCTAssertTrue(app.buttons["Search"].exists)
         XCTAssertTrue(app.buttons["Downloads"].exists)
+        XCTAssertFalse(app.buttons["player.mini.open"].exists)
         XCTAssertTrue(app.buttons["Settings"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)["home.account"].exists

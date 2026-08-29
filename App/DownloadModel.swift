@@ -257,6 +257,22 @@ private struct AutomaticDownloadKey: Hashable {
     let itemID: LibraryItemID
 }
 
+private struct DownloadOperationDrainWaiter {
+    let accountID: AccountID?
+    let continuation: CheckedContinuation<Void, Never>
+}
+
+private enum DownloadOperationKind: Equatable {
+    case explicit
+    case cellularConfirmation
+    case automatic
+}
+
+private struct DownloadOperationWaiter {
+    let kind: DownloadOperationKind
+    let continuation: CheckedContinuation<Void, Never>
+}
+
 private struct AutomaticDownloadTaskKey: Hashable {
     let downloadID: DownloadID
     let trackIndex: Int
@@ -579,6 +595,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
     private var queuedCellularDownloads: [PendingCellularDownload] = []
+    private var cellularDownloadInFlightBooks: Set<AutomaticDownloadKey> = []
+    private var downloadOperationsInFlight: Set<AutomaticDownloadKey> = []
+    private var downloadOperationKinds:
+        [AutomaticDownloadKey: DownloadOperationKind] = [:]
+    private var downloadOperationWaiters:
+        [AutomaticDownloadKey: [DownloadOperationWaiter]] = [:]
+    private var downloadOperationDrainWaiters:
+        [DownloadOperationDrainWaiter] = []
+    private var blockedCellularDownloadAccounts: Set<AccountID> = []
+    private var isResettingLocalDownloads = false
 
     var presentedFailure: DownloadModelFailure? {
         Self.presentedFailure(
@@ -1317,6 +1343,28 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         detail: LibraryBookDetail,
         account: ServerAccount
     ) async {
+        let key = AutomaticDownloadKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        guard await acquireDownloadOperation(for: key, kind: .explicit) else {
+            return
+        }
+        defer { releaseDownloadOperation(for: key) }
+        guard !Task.isCancelled,
+            !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(account.id),
+            !hasCellularWork(accountID: account.id, itemID: detail.id)
+        else {
+            return
+        }
+        if let record = record(accountID: account.id, itemID: detail.id) {
+            guard record.manifest.purpose == .automaticCache else {
+                return
+            }
+            await prepareFullBookDownload(record, account: account)
+            return
+        }
         recordDiagnostic(
             .started(.planDownload, category: .download)
         )
@@ -1354,6 +1402,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 itemID: detail.id
             )
             let requirement = try await storage.preflight(plan: plan)
+            guard record(accountID: account.id, itemID: detail.id) == nil,
+                !hasCellularWork(accountID: account.id, itemID: detail.id)
+            else {
+                return
+            }
             switch DownloadNetworkDecision.decide(
                 policy: networkPolicy,
                 expectedBytes: requirement.expectedBytes,
@@ -1496,28 +1549,89 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func confirmCellularDownload() async {
         guard let pending = pendingCellularDownload,
+            !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(pending.account.id),
             let storage
         else {
             return
         }
+        let key = AutomaticDownloadKey(
+            accountID: pending.account.id,
+            itemID: pending.detail.id
+        )
+        guard await acquireDownloadOperation(
+            for: key,
+            kind: .cellularConfirmation
+        ) else {
+            return
+        }
+        defer { releaseDownloadOperation(for: key) }
+        guard !Task.isCancelled,
+            pendingCellularDownload == pending,
+            !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(pending.account.id)
+        else {
+            return
+        }
+        guard cellularDownloadInFlightBooks.insert(key).inserted else {
+            return
+        }
         pendingCellularDownload = nil
         defer {
+            cellularDownloadInFlightBooks.remove(key)
             presentNextCellularDownload()
         }
         failure = nil
         do {
             switch pending.kind {
             case .create:
-                _ = try await storage.preflight(plan: pending.plan)
-                try await schedule(
-                    plan: pending.plan,
-                    detail: pending.detail,
-                    account: pending.account,
-                    storage: storage
-                )
-            case .promote(let downloadID):
-                guard let record = record(downloadID: downloadID) else {
+                if let record = record(
+                    accountID: pending.account.id,
+                    itemID: pending.detail.id
+                ) {
+                    guard record.manifest.purpose == .automaticCache else {
+                        return
+                    }
+                    let tracks = try DownloadRepairPlanner.tracks(
+                        record: record,
+                        plan: pending.plan,
+                        scope: .fullBook
+                    )
+                    _ = try await storage.preflightRemaining(
+                        record: record,
+                        tracks: tracks
+                    )
+                    try await promote(
+                        record,
+                        plan: pending.plan,
+                        tracks: tracks,
+                        account: pending.account,
+                        storage: storage
+                    )
+                } else {
+                    _ = try await storage.preflight(plan: pending.plan)
+                    guard record(
+                        accountID: pending.account.id,
+                        itemID: pending.detail.id
+                    ) == nil else {
+                        return
+                    }
+                    try await schedule(
+                        plan: pending.plan,
+                        detail: pending.detail,
+                        account: pending.account,
+                        storage: storage
+                    )
+                }
+            case .promote:
+                guard let record = record(
+                    accountID: pending.account.id,
+                    itemID: pending.detail.id
+                ) else {
                     throw DownloadStorageError.recordNotFound
+                }
+                guard record.manifest.purpose == .automaticCache else {
+                    return
                 }
                 let tracks = try DownloadRepairPlanner.tracks(
                     record: record,
@@ -1550,11 +1664,41 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private func enqueueCellularDownload(_ pending: PendingCellularDownload) {
+        let key = AutomaticDownloadKey(
+            accountID: pending.account.id,
+            itemID: pending.detail.id
+        )
+        let isSameBook: (PendingCellularDownload) -> Bool = { candidate in
+            candidate.account.id == pending.account.id
+                && candidate.detail.id == pending.detail.id
+        }
+        guard !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(pending.account.id),
+            !cellularDownloadInFlightBooks.contains(key),
+            pendingCellularDownload.map(isSameBook) != true,
+            !queuedCellularDownloads.contains(where: isSameBook)
+        else {
+            return
+        }
         guard pendingCellularDownload != nil else {
             pendingCellularDownload = pending
             return
         }
         queuedCellularDownloads.append(pending)
+    }
+
+    private func hasCellularWork(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Bool {
+        let matches: (PendingCellularDownload) -> Bool = { pending in
+            pending.account.id == accountID && pending.detail.id == itemID
+        }
+        return pendingCellularDownload.map(matches) == true
+            || queuedCellularDownloads.contains(where: matches)
+            || cellularDownloadInFlightBooks.contains(
+                AutomaticDownloadKey(accountID: accountID, itemID: itemID)
+            )
     }
 
     private func presentNextCellularDownload() {
@@ -1574,10 +1718,40 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) async {
-        guard record.manifest.accountID == account.id,
-            record.manifest.purpose == .automaticCache,
-            let storage
+        let key = AutomaticDownloadKey(
+            accountID: account.id,
+            itemID: record.manifest.itemID
+        )
+        guard await acquireDownloadOperation(for: key, kind: .explicit) else {
+            return
+        }
+        defer { releaseDownloadOperation(for: key) }
+        guard !Task.isCancelled,
+            !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(account.id)
         else {
+            return
+        }
+        guard let record = self.record(
+                accountID: account.id,
+                itemID: record.manifest.itemID
+            ),
+            record.manifest.purpose == .automaticCache
+        else {
+            failure = .preparationFailed
+            return
+        }
+        await prepareFullBookDownload(record, account: account)
+    }
+
+    private func prepareFullBookDownload(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        guard !hasCellularWork(
+            accountID: account.id,
+            itemID: record.manifest.itemID
+        ), let storage else {
             failure = .preparationFailed
             return
         }
@@ -1605,6 +1779,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 record: record,
                 tracks: tracks
             )
+            guard !hasCellularWork(
+                accountID: account.id,
+                itemID: record.manifest.itemID
+            ) else {
+                return
+            }
             let fullBookBytes =
                 try DownloadStorageRequirement(plan: plan).expectedBytes
             switch DownloadNetworkDecision.decide(
@@ -1624,8 +1804,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 )
             case .schedule:
+                guard let current = self.record(
+                    accountID: account.id,
+                    itemID: record.manifest.itemID
+                ), current.manifest.purpose == .automaticCache else {
+                    return
+                }
                 try await promote(
-                    record,
+                    current,
                     plan: plan,
                     tracks: tracks,
                     account: account,
@@ -1679,6 +1865,24 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
         guard availability.visibleActions.contains(.download),
             let storage
+        else {
+            return
+        }
+        let key = AutomaticDownloadKey(
+            accountID: activity.account.id,
+            itemID: activity.detail.id
+        )
+        guard await acquireDownloadOperation(for: key, kind: .automatic) else {
+            return
+        }
+        defer { releaseDownloadOperation(for: key) }
+        guard !Task.isCancelled,
+            !isResettingLocalDownloads,
+            !blockedCellularDownloadAccounts.contains(activity.account.id),
+            !hasCellularWork(
+                accountID: activity.account.id,
+                itemID: activity.detail.id
+            )
         else {
             return
         }
@@ -1791,6 +1995,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             } else {
                 _ = try await storage.preflight(tracks: tracks)
+            }
+            guard self.record(
+                accountID: activity.account.id,
+                itemID: activity.detail.id
+            )?.manifest.purpose != .manual else {
+                return
             }
             try await schedule(
                 plan: plan,
@@ -2224,6 +2434,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     /// download remains, because it would otherwise claim to have erased all
     /// local data.
     func removeAllForLocalDataReset() async -> Bool {
+        isResettingLocalDownloads = true
+        defer { isResettingLocalDownloads = false }
+        queuedCellularDownloads.removeAll()
+        pendingCellularDownload = nil
+        await waitForDownloadOperations()
         let removableRecords = records
         for record in removableRecords {
             guard await remove(record, duringTransition: true) else {
@@ -2638,6 +2853,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func removeAll(for accountID: AccountID) async {
+        blockedCellularDownloadAccounts.insert(accountID)
+        defer { blockedCellularDownloadAccounts.remove(accountID) }
         queuedCellularDownloads.removeAll {
             $0.account.id == accountID
         }
@@ -2645,6 +2862,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             pendingCellularDownload = nil
             presentNextCellularDownload()
         }
+        await waitForDownloadOperations(accountID: accountID)
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -2697,6 +2915,82 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         records.first {
             $0.manifest.downloadID == downloadID
         }
+    }
+
+    private func acquireDownloadOperation(
+        for key: AutomaticDownloadKey,
+        kind: DownloadOperationKind
+    ) async -> Bool {
+        guard !downloadOperationsInFlight.insert(key).inserted else {
+            downloadOperationKinds[key] = kind
+            return true
+        }
+        let currentKind = downloadOperationKinds[key]
+        let shouldWait = kind == .cellularConfirmation
+            || (kind == .explicit && currentKind == .automatic)
+        guard shouldWait else {
+            return false
+        }
+        await withCheckedContinuation { continuation in
+            downloadOperationWaiters[key, default: []].append(
+                DownloadOperationWaiter(
+                    kind: kind,
+                    continuation: continuation
+                )
+            )
+        }
+        return true
+    }
+
+    private func releaseDownloadOperation(for key: AutomaticDownloadKey) {
+        if var waiters = downloadOperationWaiters[key], !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            if waiters.isEmpty {
+                downloadOperationWaiters[key] = nil
+            } else {
+                downloadOperationWaiters[key] = waiters
+            }
+            downloadOperationKinds[key] = waiter.kind
+            waiter.continuation.resume()
+            return
+        }
+        downloadOperationsInFlight.remove(key)
+        downloadOperationKinds[key] = nil
+        resumeEligibleDownloadOperationDrainWaiters()
+    }
+
+    private func waitForDownloadOperations(
+        accountID: AccountID? = nil
+    ) async {
+        guard hasDownloadOperation(accountID: accountID) else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            downloadOperationDrainWaiters.append(
+                DownloadOperationDrainWaiter(
+                    accountID: accountID,
+                    continuation: continuation
+                )
+            )
+        }
+    }
+
+    private func hasDownloadOperation(accountID: AccountID?) -> Bool {
+        downloadOperationsInFlight.contains { key in
+            accountID == nil || key.accountID == accountID
+        }
+    }
+
+    private func resumeEligibleDownloadOperationDrainWaiters() {
+        var remaining: [DownloadOperationDrainWaiter] = []
+        for waiter in downloadOperationDrainWaiters {
+            if hasDownloadOperation(accountID: waiter.accountID) {
+                remaining.append(waiter)
+            } else {
+                waiter.continuation.resume()
+            }
+        }
+        downloadOperationDrainWaiters = remaining
     }
 
     private func automaticDownloadIsBlocked(

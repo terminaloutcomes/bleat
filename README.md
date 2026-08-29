@@ -491,10 +491,12 @@ order, supports cached pages and pagination, and provides a swipeable cover
 browser. A book's authors and series are separate accessible controls: an
 author opens a named Library filter that can be cleared, while a series opens
 its ordered series detail. **Download Series** loads every remaining series
-page, asks for confirmation, and starts each book through the normal download
-flow. Existing downloads are retained, and Wi-Fi-only downloads remain queued
-until an allowed network is available. Search presents separate Books,
-Authors, and Series groups, with the same destinations.
+page, asks for confirmation even if you navigate elsewhere, and hands each book
+to the normal download flow. Another series can be prepared at the same time;
+completed confirmations are shown in order. Existing downloads are retained,
+and Wi-Fi-only downloads remain queued until an allowed network is available.
+Search presents separate Books, Authors, and Series groups, with the same
+destinations.
 
 ## Open a Bleat link
 

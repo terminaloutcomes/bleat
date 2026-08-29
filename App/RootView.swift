@@ -1404,6 +1404,48 @@ private struct SignedInView: View {
                 presentation: bookActionPresentation
             )
         }
+        .confirmationDialog(
+            "Download \(model.pendingSeriesDownload?.destination.name ?? "Series")?",
+            isPresented: Binding(
+                get: { model.pendingSeriesDownload != nil },
+                set: { presented in
+                    if !presented, model.pendingSeriesDownload != nil {
+                        model.cancelPendingSeriesDownload()
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let request = model.pendingSeriesDownload {
+                Button("Download \(request.books.count) Books") {
+                    model.confirmPendingSeriesDownload()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                model.cancelPendingSeriesDownload()
+            }
+        } message: {
+            Text(
+                "Existing downloads will be kept. Each book will follow your current download network policy."
+            )
+        }
+        .alert(
+            model.seriesDownloadFailure?.title ?? "Download unavailable",
+            isPresented: Binding(
+                get: { model.seriesDownloadFailure != nil },
+                set: { presented in
+                    if !presented {
+                        model.dismissSeriesDownloadFailure()
+                    }
+                }
+            )
+        ) {
+            Button("OK") { model.dismissSeriesDownloadFailure() }
+        } message: {
+            if let failure = model.seriesDownloadFailure {
+                Text(failure.message)
+            }
+        }
         .alert(
             "Allow Cellular Download?",
             isPresented: Binding(
@@ -1536,10 +1578,11 @@ private struct SignedInView: View {
             }
         }
     #else
+        @ViewBuilder
         private func mobileTabs(containerHeight: CGFloat) -> some View {
-            mobileTabView(containerHeight: containerHeight)
-                .tabViewBottomAccessory {
-                    if model.playback.showsMiniPlayer {
+            if model.playback.showsMiniPlayer {
+                mobileTabView(containerHeight: containerHeight)
+                    .tabViewBottomAccessory {
                         MiniPlayerView(
                             playback: model.playback,
                             containerHeight: containerHeight
@@ -1547,7 +1590,9 @@ private struct SignedInView: View {
                             navigation.showsPlayer = true
                         }
                     }
-                }
+            } else {
+                mobileTabView(containerHeight: containerHeight)
+            }
         }
 
         private func mobileTabView(containerHeight: CGFloat) -> some View {
@@ -3267,11 +3312,6 @@ private struct SeriesSummaryRow: View {
     }
 }
 
-private struct SeriesDownloadRequest: Identifiable {
-    let id = UUID()
-    let books: [LibraryBookSummary]
-}
-
 private struct SeriesDetailView: View {
     @Bindable var model: AppModel
     let destination: SeriesDestination
@@ -3280,10 +3320,6 @@ private struct SeriesDetailView: View {
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverSwipeOffset: CGFloat = 0
-    @State private var pendingDownload: SeriesDownloadRequest?
-    @State private var downloadFailure: AppFailure?
-    @State private var isPreparingDownload = false
-    @State private var isStartingDownload = false
 
     var body: some View {
         content
@@ -3303,9 +3339,15 @@ private struct SeriesDetailView: View {
                 {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            Task { await prepareSeriesDownload(account: account) }
+                            model.beginSeriesDownloadPreparation(
+                                destination,
+                                account: account
+                            )
                         } label: {
-                            if isPreparingDownload || isStartingDownload {
+                            if model.isSeriesDownloadActive(
+                                destination,
+                                accountID: account.id
+                            ) {
                                 ProgressView()
                             } else {
                                 Label(
@@ -3315,47 +3357,13 @@ private struct SeriesDetailView: View {
                             }
                         }
                         .disabled(
-                            isPreparingDownload || isStartingDownload
-                                || model.seriesPaginationState == .loading
+                            model.isSeriesDownloadActive(
+                                destination,
+                                accountID: account.id
+                            )
                         )
                         .accessibilityIdentifier("series.download")
                     }
-                }
-            }
-            .confirmationDialog(
-                "Download \(destination.name)?",
-                isPresented: Binding(
-                    get: { pendingDownload != nil },
-                    set: { if !$0 { pendingDownload = nil } }
-                ),
-                titleVisibility: .visible
-            ) {
-                if let pendingDownload {
-                    Button("Download \(pendingDownload.books.count) Books") {
-                        let request = pendingDownload
-                        self.pendingDownload = nil
-                        Task { await startSeriesDownload(request) }
-                    }
-                }
-                Button("Cancel", role: .cancel) {
-                    pendingDownload = nil
-                }
-            } message: {
-                Text(
-                    "Existing downloads will be kept. Each book will follow your current download network policy."
-                )
-            }
-            .alert(
-                downloadFailure?.title ?? "Download unavailable",
-                isPresented: Binding(
-                    get: { downloadFailure != nil },
-                    set: { if !$0 { downloadFailure = nil } }
-                )
-            ) {
-                Button("OK") { downloadFailure = nil }
-            } message: {
-                if let downloadFailure {
-                    Text(downloadFailure.message)
                 }
             }
     }
@@ -3496,100 +3504,6 @@ private struct SeriesDetailView: View {
             return "Unnumbered"
         }
         return "Book \(sequence)"
-    }
-
-    @MainActor
-    private func prepareSeriesDownload(account: ServerAccount) async {
-        guard !isPreparingDownload, !isStartingDownload else { return }
-        isPreparingDownload = true
-        defer { isPreparingDownload = false }
-
-        switch await model.loadAllSeriesBooks(
-            destination,
-            account: account
-        ) {
-        case .loaded(let books):
-            guard model.account?.id == account.id,
-                model.selectedSeries == destination
-            else { return }
-            pendingDownload = SeriesDownloadRequest(books: books)
-        case .failed(let failure):
-            downloadFailure = failure
-        case .cancelled:
-            return
-        }
-    }
-
-    @MainActor
-    private func startSeriesDownload(_ request: SeriesDownloadRequest) async {
-        guard !isStartingDownload, let account = model.account else { return }
-        isStartingDownload = true
-        defer { isStartingDownload = false }
-
-        var firstFailure: AppFailure?
-        for book in request.books {
-            guard model.account?.id == account.id,
-                model.selectedSeries == destination
-            else { return }
-            let summaryAvailability = BookActionAvailability(
-                user: account.user,
-                summary: book
-            )
-            guard summaryAvailability.visibleActions.contains(.download)
-            else { continue }
-
-            if let record = model.downloads.record(
-                accountID: account.id,
-                itemID: book.id
-            ), record.manifest.purpose != .automaticCache {
-                continue
-            }
-
-            switch await model.prepareBookAction(
-                for: book,
-                account: account
-            ) {
-            case .failed(let failure):
-                firstFailure = firstFailure ?? failure
-                continue
-            case .loaded(let detail):
-                guard model.account?.id == account.id,
-                    model.selectedSeries == destination
-                else { return }
-                let detailAvailability = BookActionAvailability(
-                    user: account.user,
-                    detail: detail
-                )
-                guard detailAvailability.visibleActions.contains(.download)
-                else {
-                    firstFailure = firstFailure
-                        ?? AppFailure(
-                            .download,
-                            bookActionFailureCause(
-                                for: detailAvailability.access
-                            )
-                        )
-                    continue
-                }
-                if let record = model.downloads.record(
-                    accountID: account.id,
-                    itemID: detail.id
-                ) {
-                    if record.manifest.purpose == .automaticCache {
-                        await model.downloads.downloadFullBook(
-                            record,
-                            account: account
-                        )
-                    }
-                } else {
-                    await model.downloads.download(
-                        detail: detail,
-                        account: account
-                    )
-                }
-            }
-        }
-        downloadFailure = firstFailure
     }
 
     private var coverDepthAngle: Double {
