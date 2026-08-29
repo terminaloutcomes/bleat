@@ -2332,16 +2332,26 @@ private struct HomeContent: View {
         shelves: [LibraryBookShelf],
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        ScrollView {
+        // Audiobookshelf conditionally inserts Continue Series between these
+        // shelves, so identify them instead of relying on response positions:
+        // https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/LibraryItem.js#L704-L735
+        let priorityShelfIDs = Set(["continue-listening", "recently-added"])
+        let priorityShelves = shelves.filter {
+            priorityShelfIDs.contains($0.id)
+        }
+        let remainingShelves = shelves.filter {
+            !priorityShelfIDs.contains($0.id)
+        }
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 homeRefreshFailure
-                ForEach(shelves.prefix(2), id: \.id) { shelf in
+                ForEach(priorityShelves, id: \.id) { shelf in
                     shelfContent(shelf)
                 }
                 if !downloadedRecords.isEmpty {
                     downloadedShelf
                 }
-                ForEach(shelves.dropFirst(2), id: \.id) { shelf in
+                ForEach(remainingShelves, id: \.id) { shelf in
                     shelfContent(shelf)
                 }
                 trailing()
@@ -2448,6 +2458,7 @@ private struct HomeContent: View {
             }
             .scrollIndicators(.hidden)
         }
+        .accessibilityIdentifier("home.shelf.\(shelf.id)")
     }
 }
 
