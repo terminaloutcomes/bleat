@@ -425,6 +425,12 @@ enum BookActionPreparationResult: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum SeriesDownloadPreparationResult: Equatable, Sendable {
+    case loaded([LibraryBookSummary])
+    case failed(AppFailure)
+    case cancelled
+}
+
 enum LibraryPaginationState: Equatable, Sendable {
     case idle
     case loading
@@ -2915,6 +2921,44 @@ final class AppModel {
             seriesPaginationState = .failed(
                 AppFailure(operation: .loadLibraryPage, serviceError: error)
             )
+        }
+    }
+
+    func loadAllSeriesBooks(
+        _ destination: SeriesDestination,
+        account expectedAccount: ServerAccount
+    ) async -> SeriesDownloadPreparationResult {
+        guard account?.id == expectedAccount.id,
+            selectedSeries == destination
+        else {
+            return .cancelled
+        }
+
+        while true {
+            guard account?.id == expectedAccount.id,
+                selectedSeries == destination
+            else {
+                return .cancelled
+            }
+            guard case .loaded(let page) = seriesBooks else {
+                if case .failed(let failure) = seriesBooks {
+                    return .failed(failure)
+                }
+                return .cancelled
+            }
+            guard page.hasNextPage else {
+                return .loaded(page.items)
+            }
+
+            await loadNextSeriesPage()
+            guard account?.id == expectedAccount.id,
+                selectedSeries == destination
+            else {
+                return .cancelled
+            }
+            if case .failed(let failure) = seriesPaginationState {
+                return .failed(failure)
+            }
         }
     }
 

@@ -578,6 +578,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var automaticLookaheadCount: Int
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
+    private var queuedCellularDownloads: [PendingCellularDownload] = []
 
     var presentedFailure: DownloadModelFailure? {
         Self.presentedFailure(
@@ -1360,12 +1361,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     Self.largeDownloadThresholdBytes
             ) {
             case .confirmCellular(let expectedBytes):
-                pendingCellularDownload = PendingCellularDownload(
-                    kind: .create,
-                    detail: detail,
-                    account: account,
-                    plan: plan,
-                    expectedBytes: expectedBytes
+                enqueueCellularDownload(
+                    PendingCellularDownload(
+                        kind: .create,
+                        detail: detail,
+                        account: account,
+                        plan: plan,
+                        expectedBytes: expectedBytes
+                    )
                 )
             case .schedule:
                 try await schedule(
@@ -1498,6 +1501,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         pendingCellularDownload = nil
+        defer {
+            presentNextCellularDownload()
+        }
         failure = nil
         do {
             switch pending.kind {
@@ -1540,6 +1546,28 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func cancelCellularDownload() {
         pendingCellularDownload = nil
+        presentNextCellularDownload()
+    }
+
+    private func enqueueCellularDownload(_ pending: PendingCellularDownload) {
+        guard pendingCellularDownload != nil else {
+            pendingCellularDownload = pending
+            return
+        }
+        queuedCellularDownloads.append(pending)
+    }
+
+    private func presentNextCellularDownload() {
+        Task { @MainActor [weak self] in
+            guard let self,
+                self.pendingCellularDownload == nil,
+                !self.queuedCellularDownloads.isEmpty
+            else {
+                return
+            }
+            self.pendingCellularDownload =
+                self.queuedCellularDownloads.removeFirst()
+        }
     }
 
     func downloadFullBook(
@@ -1586,12 +1614,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     Self.largeDownloadThresholdBytes
             ) {
             case .confirmCellular(let expectedBytes):
-                pendingCellularDownload = PendingCellularDownload(
-                    kind: .promote(record.manifest.downloadID),
-                    detail: record.detail,
-                    account: account,
-                    plan: plan,
-                    expectedBytes: expectedBytes
+                enqueueCellularDownload(
+                    PendingCellularDownload(
+                        kind: .promote(record.manifest.downloadID),
+                        detail: record.detail,
+                        account: account,
+                        plan: plan,
+                        expectedBytes: expectedBytes
+                    )
                 )
             case .schedule:
                 try await promote(
@@ -2608,6 +2638,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func removeAll(for accountID: AccountID) async {
+        queuedCellularDownloads.removeAll {
+            $0.account.id == accountID
+        }
+        if pendingCellularDownload?.account.id == accountID {
+            pendingCellularDownload = nil
+            presentNextCellularDownload()
+        }
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,

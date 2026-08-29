@@ -5343,6 +5343,78 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testLargeCellularDownloadsPreserveEveryPendingConfirmation()
+        async throws
+    {
+        guard DownloadModel.supportsNetworkPolicySelection else {
+            return
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCellularConfirmationQueue-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let suite = "CellularConfirmationQueueTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let first = fixtureBookDetail(
+            item: fixtureBook(
+                id: "cellular-first",
+                title: "Cellular First",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let second = fixtureBookDetail(
+            item: fixtureBook(
+                id: "cellular-second",
+                title: "Cellular Second",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let plan = DownloadPlan(
+            itemID: first.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "large",
+                    expectedByteLength:
+                        DownloadModel.largeDownloadThresholdBytes,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan)
+        )
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cellular-confirmation-queue.\(UUID().uuidString)"
+        )
+        model.setNetworkPolicy(.allowCellular)
+
+        await model.download(detail: first, account: account)
+        await model.download(detail: second, account: account)
+
+        XCTAssertEqual(model.pendingCellularDownload?.detail.id, first.id)
+        model.cancelCellularDownload()
+        await Task.yield()
+        XCTAssertEqual(model.pendingCellularDownload?.detail.id, second.id)
+
+        await model.removeAll(for: account.id)
+        await Task.yield()
+        XCTAssertNil(model.pendingCellularDownload)
+    }
+
     func testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist()
         throws
     {
@@ -9090,6 +9162,113 @@ final class AppModelTests: XCTestCase {
                     collapseSeries: false
                 ),
             ]
+        )
+    }
+
+    func testSeriesDownloadPreparationLoadsEveryPage() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let books = (1...3).map { index in
+            fixtureBook(
+                id: "series-item-\(index)",
+                title: "Volume \(index)",
+                libraryID: library.id
+            )
+        }
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            pagedProvider: { page in
+                guard books.indices.contains(page) else {
+                    return .failure(.libraryRepository(.noCachedValue))
+                }
+                return .success(
+                    LibraryItemsPage(
+                        items: [books[page]],
+                        total: books.count,
+                        page: page,
+                        limit: 1
+                    )
+                )
+            }
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
+            name: "A Series"
+        )
+        await model.loadSeries(destination)
+
+        let result = await model.loadAllSeriesBooks(
+            destination,
+            account: account
+        )
+
+        XCTAssertEqual(result, .loaded(books))
+        XCTAssertEqual(
+            model.seriesBooks,
+            .loaded(
+                LibraryItemsPage(
+                    items: books,
+                    total: books.count,
+                    page: 2,
+                    limit: 1
+                )
+            )
+        )
+        let selections = await service.pageSelections()
+        XCTAssertEqual(Array(selections.suffix(3)).map(\.page), [0, 1, 2])
+    }
+
+    func testSeriesDownloadPreparationStopsBeforeConfirmationWhenPagingFails()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let first = fixtureBook(
+            id: "series-item-1",
+            title: "Volume One",
+            libraryID: library.id
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(
+                    items: [first], total: 2, page: 0, limit: 1
+                )
+            ),
+            nextPage: .failure(
+                .libraryRepository(.remote(.unexpectedStatus(503)))
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let destination = SeriesDestination(
+            libraryID: library.id,
+            id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
+            name: "A Series"
+        )
+        await model.loadSeries(destination)
+
+        let result = await model.loadAllSeriesBooks(
+            destination,
+            account: account
+        )
+
+        XCTAssertEqual(
+            result,
+            .failed(AppFailure(.loadLibraryPage, .serverUnavailable))
+        )
+        XCTAssertEqual(
+            model.seriesBooks,
+            .loaded(
+                LibraryItemsPage(
+                    items: [first], total: 2, page: 0, limit: 1
+                )
+            )
         )
     }
 

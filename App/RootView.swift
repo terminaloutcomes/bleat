@@ -3267,6 +3267,11 @@ private struct SeriesSummaryRow: View {
     }
 }
 
+private struct SeriesDownloadRequest: Identifiable {
+    let id = UUID()
+    let books: [LibraryBookSummary]
+}
+
 private struct SeriesDetailView: View {
     @Bindable var model: AppModel
     let destination: SeriesDestination
@@ -3275,6 +3280,10 @@ private struct SeriesDetailView: View {
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverSwipeOffset: CGFloat = 0
+    @State private var pendingDownload: SeriesDownloadRequest?
+    @State private var downloadFailure: AppFailure?
+    @State private var isPreparingDownload = false
+    @State private var isStartingDownload = false
 
     var body: some View {
         content
@@ -3285,6 +3294,69 @@ private struct SeriesDetailView: View {
             }
             .refreshable {
                 await model.refreshSeries(destination)
+            }
+            .toolbar {
+                if let account = model.account,
+                    account.user.permissions.download,
+                    case .loaded(let page) = model.seriesBooks,
+                    !page.items.isEmpty
+                {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Task { await prepareSeriesDownload(account: account) }
+                        } label: {
+                            if isPreparingDownload || isStartingDownload {
+                                ProgressView()
+                            } else {
+                                Label(
+                                    "Download Series",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                        }
+                        .disabled(
+                            isPreparingDownload || isStartingDownload
+                                || model.seriesPaginationState == .loading
+                        )
+                        .accessibilityIdentifier("series.download")
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Download \(destination.name)?",
+                isPresented: Binding(
+                    get: { pendingDownload != nil },
+                    set: { if !$0 { pendingDownload = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                if let pendingDownload {
+                    Button("Download \(pendingDownload.books.count) Books") {
+                        let request = pendingDownload
+                        self.pendingDownload = nil
+                        Task { await startSeriesDownload(request) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDownload = nil
+                }
+            } message: {
+                Text(
+                    "Existing downloads will be kept. Each book will follow your current download network policy."
+                )
+            }
+            .alert(
+                downloadFailure?.title ?? "Download unavailable",
+                isPresented: Binding(
+                    get: { downloadFailure != nil },
+                    set: { if !$0 { downloadFailure = nil } }
+                )
+            ) {
+                Button("OK") { downloadFailure = nil }
+            } message: {
+                if let downloadFailure {
+                    Text(downloadFailure.message)
+                }
             }
     }
 
@@ -3424,6 +3496,100 @@ private struct SeriesDetailView: View {
             return "Unnumbered"
         }
         return "Book \(sequence)"
+    }
+
+    @MainActor
+    private func prepareSeriesDownload(account: ServerAccount) async {
+        guard !isPreparingDownload, !isStartingDownload else { return }
+        isPreparingDownload = true
+        defer { isPreparingDownload = false }
+
+        switch await model.loadAllSeriesBooks(
+            destination,
+            account: account
+        ) {
+        case .loaded(let books):
+            guard model.account?.id == account.id,
+                model.selectedSeries == destination
+            else { return }
+            pendingDownload = SeriesDownloadRequest(books: books)
+        case .failed(let failure):
+            downloadFailure = failure
+        case .cancelled:
+            return
+        }
+    }
+
+    @MainActor
+    private func startSeriesDownload(_ request: SeriesDownloadRequest) async {
+        guard !isStartingDownload, let account = model.account else { return }
+        isStartingDownload = true
+        defer { isStartingDownload = false }
+
+        var firstFailure: AppFailure?
+        for book in request.books {
+            guard model.account?.id == account.id,
+                model.selectedSeries == destination
+            else { return }
+            let summaryAvailability = BookActionAvailability(
+                user: account.user,
+                summary: book
+            )
+            guard summaryAvailability.visibleActions.contains(.download)
+            else { continue }
+
+            if let record = model.downloads.record(
+                accountID: account.id,
+                itemID: book.id
+            ), record.manifest.purpose != .automaticCache {
+                continue
+            }
+
+            switch await model.prepareBookAction(
+                for: book,
+                account: account
+            ) {
+            case .failed(let failure):
+                firstFailure = firstFailure ?? failure
+                continue
+            case .loaded(let detail):
+                guard model.account?.id == account.id,
+                    model.selectedSeries == destination
+                else { return }
+                let detailAvailability = BookActionAvailability(
+                    user: account.user,
+                    detail: detail
+                )
+                guard detailAvailability.visibleActions.contains(.download)
+                else {
+                    firstFailure = firstFailure
+                        ?? AppFailure(
+                            .download,
+                            bookActionFailureCause(
+                                for: detailAvailability.access
+                            )
+                        )
+                    continue
+                }
+                if let record = model.downloads.record(
+                    accountID: account.id,
+                    itemID: detail.id
+                ) {
+                    if record.manifest.purpose == .automaticCache {
+                        await model.downloads.downloadFullBook(
+                            record,
+                            account: account
+                        )
+                    }
+                } else {
+                    await model.downloads.download(
+                        detail: detail,
+                        account: account
+                    )
+                }
+            }
+        }
+        downloadFailure = firstFailure
     }
 
     private var coverDepthAngle: Double {

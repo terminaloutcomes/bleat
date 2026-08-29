@@ -1195,6 +1195,8 @@
             switch itemID.rawValue {
             case "ui-search-book": "The Search Result"
             case "ui-book-two": "The Other Audiobook"
+            case "ui-series-one": "Test Series Volume One"
+            case "ui-series-two": "Test Series Volume Two"
             default: "The Test Audiobook"
             }
         }
