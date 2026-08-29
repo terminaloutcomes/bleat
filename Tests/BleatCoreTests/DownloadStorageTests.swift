@@ -19,6 +19,146 @@ extension DownloadStorageLayout {
 }
 
 final class DownloadStorageTests: XCTestCase {
+    func testCancellationPersistsIntentAndDiscardsPartialBytes()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let secondTrack = DownloadTrackPlan(
+            index: 1,
+            inode: "102",
+            expectedByteLength: 4,
+            mimeType: "audio/mpeg",
+            safeExtension: .mp3,
+            destinationEntry: "00001.mp3"
+        )
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: fixture.plan.tracks + [secondTrack]
+        )
+        let record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: plan,
+            detail: fixture.detail
+        )
+        let completedIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: plan.tracks[0]
+        )
+        let incompleteIdentity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: secondTrack
+        )
+        let completedChunk = fixture.rootURL.appendingPathComponent(
+            "cancel-complete.chunk"
+        )
+        try Data([1, 2, 3, 4]).write(to: completedChunk)
+        _ = try fixture.layout.placeCompleteTestFile(
+            from: completedChunk,
+            identity: completedIdentity
+        )
+        _ = try await fixture.storage.markComplete(
+            completedIdentity,
+            observedByteLength: 4
+        )
+        let chunk = fixture.rootURL.appendingPathComponent(
+            "cancel-partial.chunk"
+        )
+        try Data([1, 2]).write(to: chunk)
+        _ = try fixture.layout.appendChunk(
+            from: chunk,
+            identity: incompleteIdentity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+        _ = try await fixture.storage.markDownloading(
+            incompleteIdentity,
+            observedByteLength: 2,
+            validator: nil
+        )
+
+        _ = try await fixture.storage.cancelIncompleteTracks(in: record)
+
+        let recreated = DownloadStorage(layout: fixture.layout)
+        let recreatedRecords = try await recreated.records()
+        let cancelled = try XCTUnwrap(recreatedRecords.first)
+        let partialByteLength = try await recreated.partialByteLength(
+            incompleteIdentity
+        )
+        XCTAssertEqual(cancelled.manifest.state, .cancelled)
+        XCTAssertEqual(cancelled.manifest.entries[0].state, .complete)
+        XCTAssertEqual(cancelled.manifest.entries[1].state, .cancelled)
+        XCTAssertEqual(partialByteLength, 0)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.layout.destinationURL(
+                    for: completedIdentity
+                ).path
+            )
+        )
+
+        _ = try await recreated.prepareCancelledRetry(cancelled)
+        let retryRecords = try await recreated.records()
+        let retried = try XCTUnwrap(retryRecords.first)
+        XCTAssertEqual(retried.manifest.state, .queued)
+        XCTAssertEqual(
+            retried.manifest.entries.map(\.state),
+            [.complete, .queued]
+        )
+    }
+
+    func testLateCancellationCleanupCannotDiscardRetriedBytes()
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let record = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        _ = try await fixture.storage.cancelIncompleteTracks(in: record)
+        _ = try await fixture.storage.markDownloading(
+            identity,
+            observedByteLength: 0,
+            validator: nil
+        )
+        let retryChunk = fixture.rootURL.appendingPathComponent(
+            "retry-after-cancel.chunk"
+        )
+        try Data([1, 2]).write(to: retryChunk)
+        _ = try fixture.layout.appendChunk(
+            from: retryChunk,
+            identity: identity,
+            expectedOffset: 0,
+            expectedChunkLength: 2
+        )
+
+        let discarded = try await fixture.storage
+            .discardFilesForPersistedCancellation(in: record)
+        let records = try await fixture.storage.records()
+        let current = try XCTUnwrap(records.first)
+        let partialByteLength = try await fixture.storage.partialByteLength(
+            identity
+        )
+
+        XCTAssertFalse(discarded)
+        XCTAssertEqual(current.manifest.state, .downloading)
+        XCTAssertEqual(partialByteLength, 2)
+    }
+
     func testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled()
         async throws
     {

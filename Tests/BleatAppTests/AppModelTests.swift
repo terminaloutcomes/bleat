@@ -359,6 +359,52 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(logger.events.last?.state, .cancelled)
     }
 
+    func testQueuedDownloadIsPresentedAsWaitingToDownload() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatWaitingDownload-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let plan = try DownloadPlan.decodeExpandedItem(
+            from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: plan.itemID.rawValue,
+                title: "Waiting download",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        _ = try await storage.create(
+            downloadID: DownloadID(rawValue: "waiting-download"),
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.waiting-download.\(UUID().uuidString)"
+        )
+
+        await model.start(account: nil)
+
+        let record = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(
+            model.controlSnapshot(for: record),
+            DownloadControlSnapshot(
+                phase: .waitingToDownload,
+                actions: [.pause, .cancel]
+            )
+        )
+        await model.removeAll()
+    }
+
     func testPlayableCoverStateUsesExactAccountAndItemIdentity() {
         let account = AccountID(rawValue: "account-1")
         let otherAccount = AccountID(rawValue: "account-2")
@@ -2475,41 +2521,6 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testRepairActionRequiresStableTerminalPresentation() {
-        XCTAssertTrue(
-            DownloadRepairActionPolicy.isEligible(
-                manifestState: .partial,
-                isWaitingForNetwork: false,
-                isRetrying: false,
-                isContinuing: false
-            )
-        )
-        XCTAssertFalse(
-            DownloadRepairActionPolicy.isEligible(
-                manifestState: .failed,
-                isWaitingForNetwork: false,
-                isRetrying: true,
-                isContinuing: false
-            )
-        )
-        XCTAssertFalse(
-            DownloadRepairActionPolicy.isEligible(
-                manifestState: .partial,
-                isWaitingForNetwork: true,
-                isRetrying: false,
-                isContinuing: false
-            )
-        )
-        XCTAssertFalse(
-            DownloadRepairActionPolicy.isEligible(
-                manifestState: .partial,
-                isWaitingForNetwork: false,
-                isRetrying: false,
-                isContinuing: true
-            )
-        )
-    }
-
     func testAccountRemovalDeletesDownloads()
         async throws
     {
@@ -4112,7 +4123,7 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
-    func testGatedPauseRejectsConcurrentCancel() async throws {
+    func testCancelSupersedesGatedPause() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatCancelSupersedesPause-\(UUID().uuidString)",
@@ -4162,8 +4173,8 @@ final class AppModelTests: XCTestCase {
         await gate.release()
         await pauseTask.value
 
-        XCTAssertEqual(model.records.first?.manifest.state, .paused)
-        XCTAssertTrue(
+        XCTAssertEqual(model.records.first?.manifest.state, .cancelled)
+        XCTAssertFalse(
             model.pausedDownloadIDs.contains(record.manifest.downloadID)
         )
         let descriptors =
@@ -4280,7 +4291,7 @@ final class AppModelTests: XCTestCase {
         await model.cancel(staleRecord)
         await model.pause(staleRecord)
 
-        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        XCTAssertEqual(model.records.first?.manifest.state, .cancelled)
         XCTAssertFalse(
             model.pausedDownloadIDs.contains(staleRecord.manifest.downloadID)
         )
@@ -4351,7 +4362,7 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
-    func testGatedContinueRejectsConcurrentCancel() async throws {
+    func testCancelSupersedesGatedContinue() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatCancelSupersedesContinue-\(UUID().uuidString)",
@@ -4401,13 +4412,13 @@ final class AppModelTests: XCTestCase {
         await repairGate.release()
         await continueTask.value
 
-        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        XCTAssertEqual(model.records.first?.manifest.state, .cancelled)
         XCTAssertFalse(
             model.pausedDownloadIDs.contains(pausedRecord.manifest.downloadID)
         )
         let descriptors =
             await model.scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.count, 1)
+        XCTAssertTrue(descriptors.isEmpty)
         XCTAssertNil(model.failure)
         await model.removeAll()
     }
@@ -4564,7 +4575,7 @@ final class AppModelTests: XCTestCase {
         let oldDescriptor = try XCTUnwrap(initialDescriptors.first)
 
         await model.cancel(try XCTUnwrap(model.records.first))
-        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        XCTAssertEqual(model.records.first?.manifest.state, .cancelled)
 
         let repairGate = AsyncGate()
         await service.setDownloadPlanGate(repairGate)
@@ -4599,7 +4610,7 @@ final class AppModelTests: XCTestCase {
             await model.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(cancelledDescriptors.isEmpty)
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
-        XCTAssertEqual(model.records.first?.manifest.state, .failed)
+        XCTAssertEqual(model.records.first?.manifest.state, .cancelled)
         let cancelledPartialByteLength = try await storage.partialByteLength(
             oldDescriptor.identity
         )
@@ -4611,6 +4622,12 @@ final class AppModelTests: XCTestCase {
             await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(retriedDescriptors.count, 1)
         XCTAssertEqual(retriedDescriptors.first?.range.start, 0)
+        XCTAssertEqual(model.records.first?.manifest.state, .downloading)
+        XCTAssertFalse(
+            model.records.first?.manifest.entries.contains(where: {
+                $0.state == .cancelled
+            }) ?? true
+        )
         lateSession.invalidateAndCancel()
         await model.removeAll()
     }

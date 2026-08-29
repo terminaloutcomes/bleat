@@ -268,6 +268,46 @@ private enum DownloadOperationKind: Equatable {
     case automatic
 }
 
+enum DownloadControlAction: Hashable {
+    case pause
+    case continueDownload
+    case cancel
+    case retry
+    case remove
+}
+
+enum DownloadControlPhase: Equatable {
+    case waitingToDownload
+    case downloading
+    case waitingForNetwork
+    case retrying
+    case pausing
+    case paused
+    case resuming
+    case cancelling
+    case cancelled
+    case pauseFailed
+    case repairNeeded
+    case failed
+    case complete
+    case deleting
+    case caching
+    case cached
+    case cacheFailed
+}
+
+struct DownloadControlSnapshot: Equatable {
+    let phase: DownloadControlPhase
+    let actions: Set<DownloadControlAction>
+}
+
+private enum DownloadControlTransition: Equatable {
+    case pausing(UUID)
+    case resuming(UUID)
+    case cancelling(UUID)
+    case pauseFailed
+}
+
 private struct DownloadOperationWaiter {
     let kind: DownloadOperationKind
     let continuation: CheckedContinuation<Void, Never>
@@ -530,7 +570,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
     private var deletingDownloadIDs: Set<DownloadID> = []
-    private var cancelledDownloadIDs: Set<DownloadID> = []
     private var pendingRecoveryDownloadIDs: Set<DownloadID> = []
     private var pendingRecoveryTaskKeys: Set<AutomaticDownloadTaskKey> = []
     private var transferRetryCounts: [AutomaticDownloadTaskKey: Int] = [:]
@@ -547,11 +586,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var playbackBlockedAutomaticDownloads: Set<AutomaticDownloadKey> =
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
-    private var pausingDownloadIDs: Set<DownloadID> = []
-    private var pauseOperationIDs: [DownloadID: UUID] = [:]
-    private var pauseFailedDownloadIDs: Set<DownloadID> = []
-    private var resumingDownloadIDs: Set<DownloadID> = []
-    private var resumeOperationIDs: [DownloadID: UUID] = [:]
+    private var controlTransitions:
+        [DownloadID: DownloadControlTransition] = [:]
     // Presentation-only: a completed manual track is being handed off to the
     // next track. Never use this transient state for transfer decisions.
     private var continuingManualDownloadIDs: Set<DownloadID> = []
@@ -583,7 +619,20 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     private(set) var records: [DownloadedBookRecord] = []
     private(set) var progress: [DownloadID: Double] = [:]
-    private(set) var pausedDownloadIDs: Set<DownloadID> = []
+    var pausedDownloadIDs: Set<DownloadID> {
+        Set(records.compactMap { record in
+            let downloadID = record.manifest.downloadID
+            if record.manifest.state == .paused,
+                !isResumingDownload(downloadID)
+            {
+                return downloadID
+            }
+            if case .pausing = controlTransitions[downloadID] {
+                return downloadID
+            }
+            return nil
+        })
+    }
     private(set) var failure: DownloadModelFailure? {
         didSet {
             failureDownloadID = nil
@@ -781,12 +830,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ = session
         await refresh()
         restoreDeferredRetryState()
-        pausedDownloadIDs = Set(
-            records.compactMap {
-                $0.manifest.state == .paused
-                    ? $0.manifest.downloadID : nil
-            }
-        )
         await discardInvalidLegacyDownloads()
         let tasks = await session.allTasks
         var currentTasks: [(URLSessionTask, DownloadChunkTaskDescription)] = []
@@ -1078,7 +1121,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return pendingRecoveryTaskKeys.contains(where: {
                 $0.downloadID == record.manifest.downloadID
             })
-        case .paused, .complete, .deleting:
+        case .paused, .cancelled, .complete, .deleting:
             return false
         }
     }
@@ -1238,16 +1281,114 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         continuingManualDownloadIDs.contains(record.manifest.downloadID)
     }
 
-    func isPausing(_ record: DownloadedBookRecord) -> Bool {
-        pausingDownloadIDs.contains(record.manifest.downloadID)
+    private func isResumingDownload(_ downloadID: DownloadID) -> Bool {
+        if case .resuming = controlTransitions[downloadID] {
+            return true
+        }
+        return false
     }
 
-    func isResuming(_ record: DownloadedBookRecord) -> Bool {
-        resumingDownloadIDs.contains(record.manifest.downloadID)
-    }
-
-    func pauseFailed(_ record: DownloadedBookRecord) -> Bool {
-        pauseFailedDownloadIDs.contains(record.manifest.downloadID)
+    func controlSnapshot(
+        for record: DownloadedBookRecord
+    ) -> DownloadControlSnapshot {
+        let downloadID = record.manifest.downloadID
+        if let transition = controlTransitions[downloadID] {
+            return switch transition {
+            case .pausing:
+                DownloadControlSnapshot(phase: .pausing, actions: [.cancel])
+            case .resuming:
+                DownloadControlSnapshot(phase: .resuming, actions: [.cancel])
+            case .cancelling:
+                DownloadControlSnapshot(phase: .cancelling, actions: [])
+            case .pauseFailed:
+                DownloadControlSnapshot(
+                    phase: .pauseFailed,
+                    actions: [.continueDownload, .cancel, .remove]
+                )
+            }
+        }
+        if isWaitingForNetwork(record) {
+            return DownloadControlSnapshot(
+                phase: .waitingForNetwork,
+                actions: [.pause, .cancel]
+            )
+        }
+        if isRetrying(record) {
+            return DownloadControlSnapshot(
+                phase: .retrying,
+                actions: [.pause, .cancel]
+            )
+        }
+        if isContinuingManualDownload(record) {
+            return DownloadControlSnapshot(
+                phase: .downloading,
+                actions: [.pause, .cancel]
+            )
+        }
+        if record.manifest.state == .paused {
+            return DownloadControlSnapshot(
+                phase: .paused,
+                actions: [.continueDownload, .cancel]
+            )
+        }
+        if record.manifest.state == .cancelled {
+            return DownloadControlSnapshot(
+                phase: .cancelled,
+                actions: [.retry, .remove]
+            )
+        }
+        if let automaticState = automaticCacheState(for: record) {
+            return switch automaticState {
+            case .queued, .downloading:
+                DownloadControlSnapshot(
+                    phase: .caching,
+                    actions: [.pause, .cancel]
+                )
+            case .cached:
+                DownloadControlSnapshot(phase: .cached, actions: [.remove])
+            case .failed:
+                DownloadControlSnapshot(
+                    phase: .cacheFailed,
+                    actions: [.retry, .remove]
+                )
+            }
+        }
+        return switch record.manifest.state {
+        case .queued:
+            DownloadControlSnapshot(
+                phase: .waitingToDownload,
+                actions: [.pause, .cancel]
+            )
+        case .downloading:
+            DownloadControlSnapshot(
+                phase: .downloading,
+                actions: [.pause, .cancel]
+            )
+        case .paused:
+            DownloadControlSnapshot(
+                phase: .paused,
+                actions: [.continueDownload, .cancel]
+            )
+        case .cancelled:
+            DownloadControlSnapshot(
+                phase: .cancelled,
+                actions: [.retry, .remove]
+            )
+        case .partial:
+            DownloadControlSnapshot(
+                phase: .repairNeeded,
+                actions: [.retry, .remove]
+            )
+        case .failed:
+            DownloadControlSnapshot(
+                phase: .failed,
+                actions: [.retry, .remove]
+            )
+        case .complete:
+            DownloadControlSnapshot(phase: .complete, actions: [.remove])
+        case .deleting:
+            DownloadControlSnapshot(phase: .deleting, actions: [])
+        }
     }
 
     func updateNetworkPathState(_ state: AppNetworkPathState) {
@@ -2143,7 +2284,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             try? await storage.remove(record)
             progress[record.manifest.downloadID] = nil
             transferredBytesByTrack[record.manifest.downloadID] = nil
-            pausedDownloadIDs.remove(record.manifest.downloadID)
             playbackSuspendedDownloadIDs.remove(
                 record.manifest.downloadID
             )
@@ -2336,8 +2476,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     observedByteLength: committed
                 )
             } else if currentContext.isCancelled {
-                try? await storage.removeTrackFiles(identity)
-                _ = try? await storage.markFailed(identity)
+                await reconcilePersistedCancellation(
+                    for: identity.downloadID,
+                    storage: storage
+                )
             } else if currentContext.isSuperseded {
                 try? await storage.removeTrackFiles(identity)
                 _ = try? await storage.markQueued(identity)
@@ -2368,13 +2510,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         let downloadID = record.manifest.downloadID
         if !duringTransition {
-            guard !pausingDownloadIDs.contains(downloadID),
-                !resumingDownloadIDs.contains(downloadID)
-            else { return false }
+            guard controlTransitions[downloadID] == nil else { return false }
         }
         invalidatePauseOperation(for: downloadID)
         invalidateResumeOperation(for: downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
+        controlTransitions[downloadID] = nil
         failure = nil
         deletingDownloadIDs.insert(downloadID)
         let tasks = await session.allTasks
@@ -2401,7 +2541,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             deferredAutomaticCacheCleanup[downloadID] = nil
             progress[downloadID] = nil
             transferredBytesByTrack[downloadID] = nil
-            pausedDownloadIDs.remove(downloadID)
             pendingRecoveryDownloadIDs.remove(downloadID)
             pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
                 $0.downloadID != downloadID
@@ -2450,13 +2589,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func cancel(_ record: DownloadedBookRecord) async {
         let downloadID = record.manifest.downloadID
-        guard !pausingDownloadIDs.contains(downloadID),
-            !resumingDownloadIDs.contains(downloadID)
+        guard let currentRecord = self.record(downloadID: downloadID),
+            currentRecord.manifest.accountID == record.manifest.accountID,
+            currentRecord.manifest.itemID == record.manifest.itemID,
+            currentRecord.manifest.state != .complete,
+            currentRecord.manifest.state != .deleting,
+            currentRecord.manifest.state != .cancelled
         else { return }
-        invalidatePauseOperation(for: downloadID)
-        invalidateResumeOperation(for: downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
-        cancelledDownloadIDs.insert(downloadID)
+        let operationID = UUID()
+        controlTransitions[downloadID] = .cancelling(operationID)
         recordDiagnostic(
             .started(.cancelDownload, category: .download)
         )
@@ -2465,6 +2606,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingRecoveryTaskKeys = pendingRecoveryTaskKeys.filter {
             $0.downloadID != downloadID
         }
+        let cancellationPersisted: Bool
+        if let storage {
+            do {
+                _ = try await storage.cancelIncompleteTracks(in: currentRecord)
+                cancellationPersisted = true
+            } catch {
+                failure = .transferFailed
+                cancellationPersisted = false
+            }
+        } else {
+            failure = .storageUnavailable
+            cancellationPersisted = false
+        }
+        guard cancellationOperationIsCurrent(operationID, for: downloadID)
+        else { return }
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -2484,27 +2640,29 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             finishTransferSpan(identity, outcome: .cancelled)
         }
-        if let storage {
-            for entry in record.manifest.entries where entry.state != .complete
-            {
-                guard let identity = Self.identity(for: entry, record: record)
-                else { continue }
-                try? await storage.discardPartial(identity)
-                _ = try? await storage.markQueued(identity)
-                _ = try? await storage.markFailed(identity)
-            }
-        }
-        failure = nil
+        guard cancellationOperationIsCurrent(operationID, for: downloadID)
+        else { return }
         transferredBytesByTrack[downloadID] = nil
-        pausedDownloadIDs.remove(downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
         playbackSuspendedDownloadIDs.remove(
             downloadID
         )
         await refresh()
-        recordDiagnostic(
-            .completed(.cancelDownload, category: .download)
-        )
+        guard cancellationOperationIsCurrent(operationID, for: downloadID)
+        else { return }
+        controlTransitions[downloadID] = nil
+        if cancellationPersisted {
+            recordDiagnostic(
+                .completed(.cancelDownload, category: .download)
+            )
+        } else {
+            recordDiagnostic(
+                .failed(
+                    .cancelDownload,
+                    category: .download,
+                    failureCode: .persistenceUnavailable
+                )
+            )
+        }
     }
 
     func pause(_ record: DownloadedBookRecord) async {
@@ -2513,15 +2671,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let downloadID = record.manifest.downloadID
-        guard !cancelledDownloadIDs.contains(downloadID),
-            !pauseFailedDownloadIDs.contains(downloadID),
-            !pausingDownloadIDs.contains(downloadID),
-            !resumingDownloadIDs.contains(downloadID)
+        guard let resolvedRecord = self.record(downloadID: downloadID),
+            resolvedRecord.manifest.accountID == record.manifest.accountID,
+            resolvedRecord.manifest.itemID == record.manifest.itemID,
+            resolvedRecord.manifest.state != .cancelled,
+            controlTransitions[downloadID] == nil
         else { return }
         let pauseOperationID = UUID()
-        pauseOperationIDs[downloadID] = pauseOperationID
-        pausingDownloadIDs.insert(downloadID)
-        pausedDownloadIDs.insert(downloadID)
+        controlTransitions[downloadID] = .pausing(pauseOperationID)
         failure = nil
         recordDiagnostic(
             .started(.pauseDownload, category: .download)
@@ -2557,10 +2714,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         do {
             currentRecord = try await storage.records().first(where: {
                 $0.manifest.downloadID == downloadID
-            }) ?? record
+            }) ?? resolvedRecord
         } catch {
             await markPauseEntriesFailed(
-                record,
+                resolvedRecord,
                 storage: storage,
                 operationID: pauseOperationID
             )
@@ -2622,7 +2779,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard pauseOperationIsCurrent(pauseOperationID, for: downloadID)
         else { return }
         finishPauseOperation(pauseOperationID, for: downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
         recordDiagnostic(
             .completed(.pauseDownload, category: .download)
         )
@@ -2634,14 +2790,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let downloadID = record.manifest.downloadID
-        guard !pausingDownloadIDs.contains(downloadID),
-            !resumingDownloadIDs.contains(downloadID),
-            !cancelledDownloadIDs.contains(downloadID)
+        guard let currentRecord = self.record(downloadID: downloadID),
+            currentRecord.manifest.accountID == record.manifest.accountID,
+            currentRecord.manifest.itemID == record.manifest.itemID,
+            currentRecord.manifest.state == .paused,
+            controlTransitions[downloadID] == nil
         else { return }
-        invalidatePauseOperation(for: downloadID)
         let resumeOperationID = beginResumeOperation(for: downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
-        pausedDownloadIDs.remove(downloadID)
         defer {
             finishResumeOperation(resumeOperationID, for: downloadID)
         }
@@ -2659,16 +2814,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await refresh()
         } else {
             await performRepair(
-                record,
+                currentRecord,
                 account: account,
                 resumeOperationID: resumeOperationID
             )
         }
         guard resumeOperationIsCurrent(resumeOperationID, for: downloadID)
         else { return }
-        if self.record(downloadID: downloadID)?.manifest.state == .paused {
-            pausedDownloadIDs.insert(downloadID)
-        }
         recordDiagnostic(
             .completed(.resumeDownload, category: .download)
         )
@@ -2683,18 +2835,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         account: ServerAccount
     ) async {
         let downloadID = record.manifest.downloadID
-        guard !pausingDownloadIDs.contains(downloadID),
-            !resumingDownloadIDs.contains(downloadID)
+        guard let currentRecord = self.record(downloadID: downloadID),
+            currentRecord.manifest.accountID == record.manifest.accountID,
+            currentRecord.manifest.itemID == record.manifest.itemID,
+            controlTransitions[downloadID] == nil
         else { return }
-        invalidatePauseOperation(for: downloadID)
         let resumeOperationID = beginResumeOperation(for: downloadID)
-        cancelledDownloadIDs.remove(downloadID)
-        pauseFailedDownloadIDs.remove(downloadID)
         defer {
             finishResumeOperation(resumeOperationID, for: downloadID)
         }
         await performRepair(
-            record,
+            currentRecord,
             account: account,
             resumeOperationID: resumeOperationID
         )
@@ -2762,6 +2913,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 resumeOperationID,
                 for: downloadID
             ) else { return }
+            if record.manifest.state == .cancelled {
+                _ = try await storage.prepareCancelledRetry(record)
+                await refresh()
+                guard resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                ) else { return }
+            }
             let scheduledTracks =
                 record.manifest.purpose == .automaticCache
                 ? Array(tracks.prefix(1))
@@ -3414,19 +3573,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         do {
             records = try await storage.records()
-            let persistedPausedDownloadIDs = Set(
-                records.compactMap {
-                    $0.manifest.state == .paused
-                        && !resumingDownloadIDs.contains(
-                            $0.manifest.downloadID
-                        )
-                        ? $0.manifest.downloadID : nil
-                }
-            )
-            pausedDownloadIDs = persistedPausedDownloadIDs.union(
-                pausingDownloadIDs
-            )
             let currentIDs = Set(records.map(\.manifest.downloadID))
+            controlTransitions = controlTransitions.filter {
+                currentIDs.contains($0.key)
+            }
             for downloadID in Array(progress.keys)
             where !currentIDs.contains(downloadID) {
                 progress[downloadID] = nil
@@ -3499,8 +3649,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let finalized
         ):
             if context.isCancelled {
-                try? await storage.removeTrackFiles(identity)
-                _ = try? await storage.markFailed(identity)
+                await reconcilePersistedCancellation(
+                    for: identity.downloadID,
+                    storage: storage
+                )
                 finishTransferSpan(identity, outcome: .cancelled)
                 clearTransferredBytes(for: identity)
                 await refresh()
@@ -3550,8 +3702,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     return
                 }
                 if context.isCancelled {
-                    try? await storage.removeTrackFiles(identity)
-                    _ = try? await storage.markFailed(identity)
+                    await reconcilePersistedCancellation(
+                        for: identity.downloadID,
+                        storage: storage
+                    )
                     finishTransferSpan(identity, outcome: .cancelled)
                     clearTransferredBytes(for: identity)
                     await refresh()
@@ -4319,8 +4473,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     observedByteLength: committed
                 )
             } else if currentContext.isCancelled {
-                try? await storage.removeTrackFiles(identity)
-                _ = try? await storage.markFailed(identity)
+                await reconcilePersistedCancellation(
+                    for: identity.downloadID,
+                    storage: storage
+                )
             } else if currentContext.isSuperseded {
                 try? await storage.removeTrackFiles(identity)
                 _ = try? await storage.markQueued(identity)
@@ -4582,11 +4738,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    private func reconcilePersistedCancellation(
+        for downloadID: DownloadID,
+        storage: DownloadStorage
+    ) async {
+        guard let currentRecord = record(downloadID: downloadID) else {
+            return
+        }
+        do {
+            _ = try await storage.discardFilesForPersistedCancellation(
+                in: currentRecord
+            )
+        } catch {
+            failure = .transferFailed
+        }
+    }
+
     private func pauseOperationIsCurrent(
         _ operationID: UUID,
         for downloadID: DownloadID
     ) -> Bool {
-        pauseOperationIDs[downloadID] == operationID
+        controlTransitions[downloadID] == .pausing(operationID)
     }
 
     private func recordDiagnostic(_ event: DiagnosticEvent) {
@@ -4605,8 +4777,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard pauseOperationIsCurrent(operationID, for: downloadID) else {
             return
         }
-        pauseOperationIDs[downloadID] = nil
-        pausingDownloadIDs.remove(downloadID)
+        controlTransitions[downloadID] = nil
     }
 
     private func failPauseOperation(
@@ -4617,12 +4788,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         guard pauseOperationIsCurrent(operationID, for: downloadID) else {
             return
         }
-        pauseFailedDownloadIDs.insert(downloadID)
-        finishPauseOperation(operationID, for: downloadID)
-        pausedDownloadIDs.remove(downloadID)
+        controlTransitions[downloadID] = .pauseFailed
         presentTransferOperationFailure(error)
         await refresh()
-        pausedDownloadIDs.remove(downloadID)
         recordDiagnostic(
             .failed(
                 .pauseDownload,
@@ -4652,14 +4820,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private func invalidatePauseOperation(for downloadID: DownloadID) {
-        pauseOperationIDs[downloadID] = nil
-        pausingDownloadIDs.remove(downloadID)
+        if case .pausing = controlTransitions[downloadID] {
+            controlTransitions[downloadID] = nil
+        }
     }
 
     private func beginResumeOperation(for downloadID: DownloadID) -> UUID {
         let operationID = UUID()
-        resumeOperationIDs[downloadID] = operationID
-        resumingDownloadIDs.insert(downloadID)
+        controlTransitions[downloadID] = .resuming(operationID)
         return operationID
     }
 
@@ -4667,22 +4835,30 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ operationID: UUID,
         for downloadID: DownloadID
     ) -> Bool {
-        resumeOperationIDs[downloadID] == operationID
-            && !cancelledDownloadIDs.contains(downloadID)
+        controlTransitions[downloadID] == .resuming(operationID)
     }
 
     private func finishResumeOperation(
         _ operationID: UUID,
         for downloadID: DownloadID
     ) {
-        guard resumeOperationIDs[downloadID] == operationID else { return }
-        resumeOperationIDs[downloadID] = nil
-        resumingDownloadIDs.remove(downloadID)
+        guard resumeOperationIsCurrent(operationID, for: downloadID) else {
+            return
+        }
+        controlTransitions[downloadID] = nil
     }
 
     private func invalidateResumeOperation(for downloadID: DownloadID) {
-        resumeOperationIDs[downloadID] = nil
-        resumingDownloadIDs.remove(downloadID)
+        if case .resuming = controlTransitions[downloadID] {
+            controlTransitions[downloadID] = nil
+        }
+    }
+
+    private func cancellationOperationIsCurrent(
+        _ operationID: UUID,
+        for downloadID: DownloadID
+    ) -> Bool {
+        controlTransitions[downloadID] == .cancelling(operationID)
     }
 
     private func updateTransferredBytes(
@@ -4781,6 +4957,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             record.manifest.accountID == identity.accountID,
             record.manifest.itemID == identity.itemID,
             record.manifest.state != .paused,
+            record.manifest.state != .cancelled,
             record.manifest.state != .deleting,
             let entry = record.manifest.entries.first(where: {
                 $0.trackIndex == identity.trackIndex
@@ -4814,9 +4991,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity.trackIndex
             ) == false
         return DownloadTransferContext(
-            isPaused: pausedDownloadIDs.contains(identity.downloadID)
-                || pausingDownloadIDs.contains(identity.downloadID),
-            isCancelled: cancelledDownloadIDs.contains(identity.downloadID),
+            isPaused: pausedDownloadIDs.contains(identity.downloadID),
+            isCancelled: currentRecord?.manifest.state == .cancelled
+                && !isResumingDownload(identity.downloadID)
+                || {
+                    if case .cancelling = controlTransitions[
+                        identity.downloadID
+                    ] {
+                        return true
+                    }
+                    return false
+                }(),
             isDeleting: deletingDownloadIDs.contains(identity.downloadID),
             isSuperseded: supersededTaskDescriptions.contains(taskDescription)
                 || noLongerAutomaticTarget,
@@ -4970,17 +5155,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ identity: DownloadTaskIdentity,
         storage: DownloadStorage
     ) async {
-        guard !resumingDownloadIDs.contains(identity.downloadID) else {
+        guard !isResumingDownload(identity.downloadID) else {
             return
         }
         await refresh()
-        guard !resumingDownloadIDs.contains(identity.downloadID) else {
+        guard !isResumingDownload(identity.downloadID) else {
             return
         }
         let shouldResumeManual =
             !pausedDownloadIDs.contains(identity.downloadID)
-            && !pauseFailedDownloadIDs.contains(identity.downloadID)
-            && !cancelledDownloadIDs.contains(identity.downloadID)
+            && controlTransitions[identity.downloadID] != .pauseFailed
             && {
                 guard let record = record(downloadID: identity.downloadID),
                     record.manifest.purpose == .manual
@@ -4988,7 +5172,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 return switch record.manifest.state {
                 case .queued, .downloading, .partial:
                     true
-                case .paused, .complete, .failed, .deleting:
+                case .paused, .cancelled, .complete, .failed, .deleting:
                     false
                 }
             }()
@@ -5032,9 +5216,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 self?.deletingDownloadIDs.contains(
                     identity.downloadID
                 ) == false,
-                self?.cancelledDownloadIDs.contains(
-                    identity.downloadID
-                ) == false,
+                self?.record(downloadID: identity.downloadID)?.manifest.state
+                    != .cancelled,
                 self?.pausedDownloadIDs.contains(
                     identity.downloadID
                 ) == false,

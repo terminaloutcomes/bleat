@@ -874,6 +874,66 @@ public actor DownloadStorage {
         return record
     }
 
+    /// Persists the user's cancellation before removing unfinished bytes so
+    /// relaunch recovery can never restart work after cancellation was accepted.
+    /// Finalized complete tracks remain available for a later explicit retry.
+    public func cancelIncompleteTracks(
+        in storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        let incompleteEntries = record.manifest.entries.filter {
+            $0.state != .complete
+        }
+        do {
+            for entry in incompleteEntries {
+                try record.manifest.markCancelled(
+                    trackIndex: entry.trackIndex
+                )
+            }
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        for entry in incompleteEntries {
+            guard let identity = try? identity(for: entry, in: record) else {
+                throw .trackNotFound
+            }
+            try discardPartial(identity)
+        }
+        return record
+    }
+
+    /// Removes files delivered by a stale task only while cancellation is
+    /// still the persisted user intent. An explicit retry changes the record
+    /// state first, so late cancellation cleanup cannot cancel new work.
+    @discardableResult
+    public func discardFilesForPersistedCancellation(
+        in storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> Bool {
+        let record = try load(storedRecord)
+        guard record.manifest.state == .cancelled else {
+            return false
+        }
+        for entry in record.manifest.entries where entry.state == .cancelled {
+            guard let identity = try? identity(for: entry, in: record) else {
+                throw .trackNotFound
+            }
+            try removeTrackFiles(identity)
+        }
+        return true
+    }
+
+    /// Converts every unfinished cancelled track back to queued in one
+    /// persisted transition before a bounded Retry schedules its first track.
+    public func prepareCancelledRetry(
+        _ storedRecord: DownloadedBookRecord
+    ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        var record = try load(storedRecord)
+        record.manifest.prepareCancelledRetry()
+        try persist(record)
+        return record
+    }
+
     public func deferRetry(
         _ identity: DownloadTaskIdentity,
         until date: Date,
@@ -1296,6 +1356,21 @@ public actor DownloadStorage {
                         throw .persistenceFailed
                     }
                 }
+                continue
+            }
+            if entry.state == .cancelled {
+                if finalizedLength >= 0 {
+                    do {
+                        try FileManager.default.removeItem(at: destination)
+                    } catch {
+                        throw .persistenceFailed
+                    }
+                }
+                guard let identity = try? identity(for: entry, in: record)
+                else {
+                    throw .invalidStoredRecord
+                }
+                try discardPartial(identity)
                 continue
             }
 

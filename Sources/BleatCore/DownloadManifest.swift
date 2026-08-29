@@ -4,6 +4,7 @@ public enum DownloadManifestState: String, Codable, Sendable {
     case queued
     case downloading
     case paused
+    case cancelled
     case partial
     case complete
     case failed
@@ -14,6 +15,7 @@ public enum DownloadTrackState: String, Codable, Sendable {
     case queued
     case downloading
     case paused
+    case cancelled
     case partial
     case complete
     case failed
@@ -257,6 +259,37 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         entries[index].retryNotBefore = nil
         entries[index].transferRetryCount = nil
         state = .paused
+    }
+
+    public mutating func markCancelled(
+        trackIndex: Int
+    ) throws(DownloadManifestError) {
+        let index = try entryIndex(for: trackIndex)
+        guard entries[index].state != .complete else {
+            throw .trackAlreadyComplete(trackIndex)
+        }
+        entries[index].state = .cancelled
+        entries[index].observedByteLength = nil
+        entries[index].placement = nil
+        entries[index].validator = nil
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
+        updateIncompleteState()
+    }
+
+    public mutating func prepareCancelledRetry() {
+        guard state == .cancelled else {
+            return
+        }
+        for index in entries.indices where entries[index].state == .cancelled {
+            entries[index].state = .queued
+            entries[index].observedByteLength = nil
+            entries[index].placement = nil
+            entries[index].validator = nil
+            entries[index].retryNotBefore = nil
+            entries[index].transferRetryCount = nil
+        }
+        updateIncompleteState()
     }
 
     public mutating func markPartial(
@@ -571,12 +604,18 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
     private mutating func updateIncompleteState() {
         if isCompleteAndFinalized {
             state = .complete
-        } else if entries.allSatisfy({ $0.state == .queued }) {
+        } else if entries.contains(where: { $0.state != .complete }),
+            entries.allSatisfy({
+                $0.state == .complete || $0.state == .queued
+            })
+        {
             state = .queued
         } else if entries.contains(where: { $0.state == .downloading }) {
             state = .downloading
         } else if entries.contains(where: { $0.state == .paused }) {
             state = .paused
+        } else if entries.contains(where: { $0.state == .cancelled }) {
+            state = .cancelled
         } else if entries.contains(where: { $0.state == .failed }) {
             state = .failed
         } else {
