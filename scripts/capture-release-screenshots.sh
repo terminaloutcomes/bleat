@@ -18,6 +18,7 @@ readonly bleat_orientations_raw="${BLEAT_SCREENSHOT_ORIENTATIONS-portrait,landsc
 readonly bleat_locale="${BLEAT_SCREENSHOT_LOCALE:-en_AU}"
 readonly bleat_requested_port="${BLEAT_SCREENSHOT_PORT:-}"
 readonly bleat_device_types_raw="${BLEAT_SCREENSHOT_DEVICES:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB}"
+readonly bleat_record_video="${BLEAT_SCREENSHOT_RECORD_VIDEO:-0}"
 readonly bleat_work_directory="${bleat_output_directory}/work-${bleat_run_id}"
 readonly bleat_media_directory="${bleat_work_directory}/media"
 readonly bleat_derived_data="${bleat_work_directory}/derived-data"
@@ -32,6 +33,8 @@ bleat_harness_started=0
 bleat_cleanup_armed=0
 bleat_xctestrun=""
 bleat_captured_dimensions=""
+bleat_recording_pid=""
+bleat_recording_path=""
 typeset -a bleat_simulators
 typeset -a bleat_result_bundles
 typeset -a bleat_appearances
@@ -68,9 +71,40 @@ bleat_capture_failure_artifacts() {
         >"${failure_directory}/compose.log" || true
 }
 
+bleat_start_screen_recording() {
+    local simulator="$1"
+    local label="$2"
+    local orientation="$3"
+    local appearance="$4"
+    (( bleat_record_video )) || return 0
+
+    mkdir -p "${bleat_output_directory}/recordings"
+    bleat_recording_path="${bleat_output_directory}/recordings/${label}-${orientation}-${appearance}.mp4"
+    xcrun simctl io "${simulator}" recordVideo --codec=h264 --force \
+        "${bleat_recording_path}" &
+    bleat_recording_pid=$!
+}
+
+bleat_stop_screen_recording() {
+    [[ -n "${bleat_recording_pid}" ]] || return 0
+
+    local recording_pid="${bleat_recording_pid}"
+    local recording_path="${bleat_recording_path}"
+    bleat_recording_pid=""
+    bleat_recording_path=""
+    kill -INT "${recording_pid}" >/dev/null 2>&1 || true
+    wait "${recording_pid}" || true
+    [[ -s "${recording_path}" ]]
+}
+
 bleat_cleanup() {
     local exit_code="$1"
     trap - EXIT ZERR HUP INT QUIT TERM
+
+    if ! bleat_stop_screen_recording; then
+        print -u2 -- "Simulator screen recording did not produce a video"
+        (( exit_code == 0 )) && exit_code=1
+    fi
 
     if (( exit_code != 0 )) && (( bleat_harness_started )); then
         bleat_capture_failure_artifacts
@@ -819,11 +853,14 @@ bleat_capture_device() {
 
             local result_bundle="${bleat_output_directory}/results/${label}-${orientation}-${appearance}.xcresult"
             bleat_result_bundles+=("${result_bundle}")
+            bleat_start_screen_recording "${simulator}" "${label}" "${orientation}" "${appearance}"
             xcodebuild -quiet -xctestrun "${bleat_xctestrun}" \
                 -destination "id=${simulator}" -parallel-testing-enabled NO \
                 -resultBundlePath "${result_bundle}" \
                 -only-testing:BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
                 test-without-building
+            bleat_stop_screen_recording \
+                || bleat_fail "Simulator screen recording did not produce a video for ${label} ${orientation} ${appearance}"
             [[ -f "${result_bundle}/Info.plist" ]] \
                 || bleat_fail "Screenshot test did not produce a result bundle for ${label} ${orientation} ${appearance}"
             bleat_validate_test_result \
@@ -873,6 +910,8 @@ bleat_main() {
     bleat_require_prerequisites
     bleat_resolve_appearances
     bleat_resolve_orientations
+    [[ "${bleat_record_video}" == 0 || "${bleat_record_video}" == 1 ]] \
+        || bleat_fail "BLEAT_SCREENSHOT_RECORD_VIDEO must be 0 or 1"
     [[ "${bleat_locale}" == [a-z][a-z]_[A-Z][A-Z] ]] \
         || bleat_fail "BLEAT_SCREENSHOT_LOCALE must use a language_REGION value such as en_AU"
     bleat_resolve_runtime

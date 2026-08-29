@@ -206,6 +206,20 @@ origins configured in the environment:
 ./scripts/archive-beta.sh
 ```
 
+## Release screenshots
+
+The release screenshot journey can optionally record the Simulator screen for
+local inspection:
+
+```sh
+BLEAT_SCREENSHOT_RECORD_VIDEO=1 mise run screenshots
+```
+
+Recordings are disabled by default. When enabled, the harness writes one H.264
+MP4 for each device, orientation, and appearance to
+`.build/release-screenshots/recordings/`. Videos are local developer artifacts
+and are not included in the release screenshot manifest.
+
 ## Evidence requirements
 
 A successful command exit is not sufficient evidence. Confirm that every
