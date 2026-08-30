@@ -15,16 +15,21 @@ readonly bleat_expected_version="$(
         exit
     }' "${bleat_project_configuration}"
 )"
-readonly bleat_expected_build="$(
+readonly bleat_project_build="$(
     awk '$1 == "CURRENT_PROJECT_VERSION:" {
         gsub(/"/, "", $2)
         print $2
         exit
     }' "${bleat_project_configuration}"
 )"
+readonly bleat_expected_build="${BLEAT_BUILD_NUMBER:-${bleat_project_build}}"
 
-if [[ -z "${bleat_expected_version}" || -z "${bleat_expected_build}" ]]; then
+if [[ -z "${bleat_expected_version}" || -z "${bleat_project_build}" ]]; then
     print -u2 "Could not read the app version and build from project.yml"
+    exit 1
+fi
+if [[ ! "${bleat_expected_build}" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
+    print -u2 "BLEAT_BUILD_NUMBER must contain one to three dot-separated integers"
     exit 1
 fi
 
@@ -74,6 +79,7 @@ xcodebuild \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_telemetry_auth_base_url}" \
     BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_telemetry_otlp_endpoint}" \
+    CURRENT_PROJECT_VERSION="${bleat_expected_build}" \
     "${bleat_signing_arguments[@]}" \
     archive
 

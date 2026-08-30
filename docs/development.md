@@ -206,6 +206,24 @@ origins configured in the environment:
 ./scripts/archive-beta.sh
 ```
 
+Upload a signed build that can be installed only by internal App Store Connect
+testers with:
+
+```sh
+mise run testflight:internal
+```
+
+The task uses the Apple account signed into Xcode and the ignored signing and
+production telemetry settings from `.envrc`. It gives the upload a unique UTC
+build number without changing `project.yml`, validates both the Release archive
+and its distribution-signed IPA, and sets `testFlightInternalTestingOnly`, so
+that exact build can never be promoted to external TestFlight testing or the
+App Store. Local archive, dSYM, IPA checksum, redacted delivery logs, export
+options, and upload metadata are retained below
+`.build/testflight-internal/`. A successful upload is only delivery evidence;
+wait for the matching version and build to finish App Store Connect processing
+before treating it as installable.
+
 ## Release screenshots
 
 The release screenshot journey can optionally record the Simulator screen for
