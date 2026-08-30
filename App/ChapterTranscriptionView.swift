@@ -1917,6 +1917,7 @@ struct ChapterTranscriptionView: View {
                 .accessibilityIdentifier(
                     "transcription.chapter.\(chapter.id)"
                 )
+                .buttonStyle(.plain)
                 .disabled(isSelectingChapters && isCached)
             }
         } header: {
