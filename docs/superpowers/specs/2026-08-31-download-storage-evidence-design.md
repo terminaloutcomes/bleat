@@ -38,11 +38,12 @@ download protocol, or introduce production-only performance instrumentation.
 
 ## Test and fixture structure
 
-Create a focused `DownloadStoragePerformanceTests` app-test file rather than
-adding more responsibilities to the already large `AppModelTests.swift`. A
-private fixture in that test file will construct 300 one-byte track plans and
-real app-owned temporary storage. Test-only helpers will seed finalized and
-partial files through the existing storage APIs.
+Keep the focused evidence methods in `AppModelTests.swift`, beside its private
+`TestAppService` and download fixture helpers. Moving that private service into
+a shared test file would create a large unrelated refactor solely to support
+two tests. The new methods will construct 300 one-byte track plans and real
+app-owned temporary storage, and will seed finalized and partial files through
+the existing storage APIs.
 
 The Release `BleatPerformance` scheme will include `BleatAppTests` as well as
 the existing UI performance target. A repository script will run only the new
