@@ -1515,11 +1515,6 @@ final class BleatUITests: XCTestCase {
         let home = app.descendants(matching: .any)["home.shelves"]
         XCTAssertTrue(home.waitForExistence(timeout: 3))
 
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "home.shelf.discover",
-            direction: .up
-        )
         let orderedIdentifiers = home.descendants(matching: .any)
             .allElementsBoundByIndex
             .map(\.identifier)
