@@ -162,6 +162,8 @@ schemes:
     build:
       targets:
         BleatApp: all
+        BleatAppTests:
+          - test
         BleatUITests:
           - test
     run:
@@ -170,4 +172,5 @@ schemes:
       config: Release
       gatherCoverageData: false
       targets:
+        - BleatAppTests
         - BleatUITests
