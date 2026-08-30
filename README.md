@@ -993,7 +993,9 @@ On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
 `SpeechTranscriber` is available and a disabled availability message when it
 is not. The transcription screen supports one explicit chapter or a Select
 mode with Select All and multi-selection. A batch always runs one chapter at a
-time in ascending chapter-index order, regardless of selection order. It reads
+time in ascending chapter-index order, regardless of selection order. Chapters
+with an existing cached transcription remain readable and searchable but are
+excluded from new single-chapter and batch transcription work. Bleat reads
 the verified downloaded files covering every selected chapter, including files
 held by the automatic playback cache, maps chapters across source-file
 boundaries, and displays final segments with whole-book timestamps. Automatic

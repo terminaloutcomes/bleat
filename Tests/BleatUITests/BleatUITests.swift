@@ -2012,6 +2012,40 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testCachedTranscriptionCannotBeQueuedAgain() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        let transcription = app.buttons["book.detail.transcription"]
+        XCTAssertTrue(transcription.waitForExistence(timeout: 3))
+        transcription.tap()
+
+        let startTranscription = app.buttons["transcription.start"]
+        XCTAssertTrue(startTranscription.waitForExistence(timeout: 3))
+        XCTAssertFalse(startTranscription.isEnabled)
+        XCTAssertEqual(startTranscription.label, "Transcribed")
+        let select = app.buttons["transcription.select"]
+        XCTAssertTrue(select.waitForExistence(timeout: 3))
+        XCTAssertFalse(select.isEnabled)
+        XCTAssertFalse(app.buttons["transcription.selectAll"].exists)
+        XCTAssertFalse(app.buttons["transcription.startBatch"].exists)
+    }
+
+    @MainActor
     func testBookTranscriptionLoadsCacheAndSearchesEveryChapterIgnoringCase() {
         let app = launch(
             scenario: "--ui-testing-playback",
@@ -2043,25 +2077,11 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(app.buttons["transcription.chapter.0"].exists)
         XCTAssertTrue(app.buttons["transcription.chapter.1"].exists)
-        XCTAssertTrue(app.buttons["transcription.start"].exists)
         XCTAssertFalse(app.progressIndicators.firstMatch.exists)
         XCTAssertTrue(
             app.staticTexts["Transcribed 2 chapters in 2m 5s."]
                 .waitForExistence(timeout: 3)
         )
-
-        let select = app.buttons["transcription.select"]
-        XCTAssertTrue(select.waitForExistence(timeout: 3))
-        select.tap()
-        let selectAll = app.buttons["transcription.selectAll"]
-        XCTAssertTrue(selectAll.waitForExistence(timeout: 3))
-        let startBatch = app.buttons["transcription.startBatch"]
-        XCTAssertTrue(startBatch.exists)
-        XCTAssertFalse(startBatch.isEnabled)
-        selectAll.tap()
-        XCTAssertTrue(startBatch.isEnabled)
-        select.tap()
-        XCTAssertTrue(app.buttons["transcription.start"].exists)
 
         let segment = app.buttons["transcription.segment.0.0"]
         XCTAssertTrue(segment.waitForExistence(timeout: 3))

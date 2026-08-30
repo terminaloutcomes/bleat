@@ -284,8 +284,11 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - A selected batch transcribes one chapter at a time in ascending chapter-index
   order, not selection order, and continues when I dismiss the transcription
   screen or navigate elsewhere in the running app.
+- A chapter with an existing account- and book-scoped cached transcription is
+  read-only in the selector and excluded from subsequent single-chapter and
+  batch transcription work.
 - Completed transcripts persist locally under the exact account, library item,
-  and chapter identity and replace only that chapter when run again.
+  and chapter identity.
 - The latest batch's typed success, failure, or cancellation result persists
   under the account and library item with start and finish timestamps plus
   monotonic elapsed time. The transcription screen reloads that terminal state

@@ -705,6 +705,23 @@ final class ChapterTranscriptionModel {
         } == true
     }
 
+    func hasLoadedTranscriptCache(
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> Bool {
+        cachedTranscriptsByBook[bookKey] != nil
+    }
+
+    func chaptersNeedingTranscription(
+        _ chapters: [PlaybackChapter],
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> [PlaybackChapter] {
+        guard let cachedTranscripts = cachedTranscriptsByBook[bookKey] else {
+            return chapters
+        }
+        let cachedChapterIDs = Set(cachedTranscripts.map(\.chapterID))
+        return chapters.filter { !cachedChapterIDs.contains($0.id) }
+    }
+
     func transcriptSegments(
         chapterID: Int,
         for bookKey: ChapterTranscriptionBookKey
@@ -756,15 +773,18 @@ final class ChapterTranscriptionModel {
         guard !isWorking else {
             return
         }
+        let bookKey = Self.bookKey(detail: detail, account: account)
         let selectedChapterIDs = Set(selectedChapters.map(\.id))
-        let chapters = ChapterTranscriptionBatchPlanner.orderedChapters(
-            selectedChapterIDs: selectedChapterIDs,
-            from: detail.chapters
+        let chapters = chaptersNeedingTranscription(
+            ChapterTranscriptionBatchPlanner.orderedChapters(
+                selectedChapterIDs: selectedChapterIDs,
+                from: detail.chapters
+            ),
+            for: bookKey
         )
         guard !chapters.isEmpty else {
             return
         }
-        let bookKey = Self.bookKey(detail: detail, account: account)
         let batch = ActiveChapterTranscriptionBatch(
             taskID: UUID(),
             persistenceToken: UUID(),
@@ -1732,7 +1752,12 @@ struct ChapterTranscriptionView: View {
                         }
                         isSelectingChapters.toggle()
                     }
-                    .disabled(model.isWorking || hasSearchQuery)
+                    .disabled(
+                        model.isWorking || hasSearchQuery
+                            || !model.hasLoadedTranscriptCache(for: bookKey)
+                            || (!isSelectingChapters
+                                && chaptersNeedingTranscription.isEmpty)
+                    )
                     .accessibilityIdentifier("transcription.select")
                 }
                 if exportSnapshot.hasSegments {
@@ -1840,8 +1865,13 @@ struct ChapterTranscriptionView: View {
     private var chapterSelector: some View {
         Section {
             ForEach(detail.chapters, id: \.id) { chapter in
+                let isCached = model.isCached(
+                    chapterID: chapter.id,
+                    for: bookKey
+                )
                 Button {
                     if isSelectingChapters {
+                        guard !isCached else { return }
                         if selectedChapterIDs.contains(chapter.id) {
                             selectedChapterIDs.remove(chapter.id)
                         } else {
@@ -1855,10 +1885,7 @@ struct ChapterTranscriptionView: View {
                         Text(chapter.title)
                             .foregroundStyle(.primary)
                         Spacer()
-                        if model.isCached(
-                            chapterID: chapter.id,
-                            for: bookKey
-                        ) {
+                        if isCached {
                             Image(systemName: "text.badge.checkmark")
                                 .accessibilityLabel("Transcribed")
                         }
@@ -1869,7 +1896,7 @@ struct ChapterTranscriptionView: View {
                                 .controlSize(.small)
                                 .accessibilityLabel("Transcribing")
                         }
-                        if isSelectingChapters {
+                        if isSelectingChapters, !isCached {
                             Image(
                                 systemName: selectedChapterIDs.contains(
                                     chapter.id
@@ -1890,6 +1917,7 @@ struct ChapterTranscriptionView: View {
                 .accessibilityIdentifier(
                     "transcription.chapter.\(chapter.id)"
                 )
+                .disabled(isSelectingChapters && isCached)
             }
         } header: {
             HStack {
@@ -1898,11 +1926,13 @@ struct ChapterTranscriptionView: View {
                 if isSelectingChapters {
                     Button("Select All") {
                         selectedChapterIDs = Set(
-                            detail.chapters.map(\.id)
+                            chaptersNeedingTranscription.map(\.id)
                         )
                     }
                     .disabled(
-                        selectedChapterIDs.count == detail.chapters.count
+                        chaptersNeedingTranscription.isEmpty
+                            || selectedUncachedChapterIDs.count
+                                == chaptersNeedingTranscription.count
                     )
                     .accessibilityIdentifier("transcription.selectAll")
                 }
@@ -2171,13 +2201,13 @@ struct ChapterTranscriptionView: View {
                 .background(.bar)
         } else if isSelectingChapters {
             Button(
-                "Transcribe \(chapterCountText(selectedChapterIDs.count))",
+                "Transcribe \(chapterCountText(selectedUncachedChapterIDs.count))",
                 systemImage: "waveform.badge.mic"
             ) {
                 let chapters =
                     ChapterTranscriptionBatchPlanner
                     .orderedChapters(
-                        selectedChapterIDs: selectedChapterIDs,
+                        selectedChapterIDs: selectedUncachedChapterIDs,
                         from: detail.chapters
                     )
                 selectedChapterID = chapters.first?.id
@@ -2189,21 +2219,26 @@ struct ChapterTranscriptionView: View {
                     appModel: appModel
                 )
                 isSelectingChapters = false
+                selectedChapterIDs.removeAll()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedChapterIDs.isEmpty)
+            .disabled(selectedUncachedChapterIDs.isEmpty)
             .padding()
             .frame(maxWidth: .infinity)
             .background(.bar)
             .accessibilityIdentifier("transcription.startBatch")
         } else {
+            let hasLoadedCache = model.hasLoadedTranscriptCache(for: bookKey)
+            let selectedChapterIsCached = model.isCached(
+                chapterID: selectedChapterID ?? Int.min,
+                for: bookKey
+            )
             Button(
-                model.isCached(
-                    chapterID: selectedChapterID ?? Int.min,
-                    for: bookKey
-                )
-                    ? "Transcribe Again"
-                    : "Start Transcription",
+                !hasLoadedCache
+                    ? "Loading Transcriptions"
+                    : selectedChapterIsCached
+                        ? "Transcribed"
+                        : "Start Transcription",
                 systemImage: "waveform.badge.mic"
             ) {
                 guard let chapter = selectedChapter else {
@@ -2218,7 +2253,10 @@ struct ChapterTranscriptionView: View {
                 )
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedChapter == nil)
+            .disabled(
+                selectedChapter == nil || !hasLoadedCache
+                    || selectedChapterIsCached
+            )
             .padding()
             .frame(maxWidth: .infinity)
             .background(.bar)
@@ -2228,6 +2266,19 @@ struct ChapterTranscriptionView: View {
 
     private var selectedChapter: PlaybackChapter? {
         detail.chapters.first { $0.id == selectedChapterID }
+    }
+
+    private var chaptersNeedingTranscription: [PlaybackChapter] {
+        model.chaptersNeedingTranscription(
+            detail.chapters,
+            for: bookKey
+        )
+    }
+
+    private var selectedUncachedChapterIDs: Set<Int> {
+        selectedChapterIDs.intersection(
+            chaptersNeedingTranscription.map(\.id)
+        )
     }
 
     private var bookKey: ChapterTranscriptionBookKey {
