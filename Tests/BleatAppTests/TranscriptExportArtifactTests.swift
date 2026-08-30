@@ -238,6 +238,50 @@ final class TranscriptExportArtifactTests: XCTestCase {
         )
     }
 
+    func testItemProviderKeepsArtifactAliveForReceivingActivity() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sharedItem = try makeSharedItem(root: root)
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: sharedItem.url.path)
+        )
+        let loaded = expectation(description: "file representation loaded")
+        sharedItem.provider.loadFileRepresentation(
+            forTypeIdentifier: UTType.webVTT.identifier
+        ) { url, error in
+            XCTAssertNil(error)
+            XCTAssertNotNil(url)
+            if let url {
+                XCTAssertTrue(
+                    FileManager.default.fileExists(atPath: url.path)
+                )
+            }
+            loaded.fulfill()
+        }
+        wait(for: [loaded], timeout: 3)
+    }
+
+    private func makeSharedItem(
+        root: URL
+    ) throws -> (provider: NSItemProvider, url: URL) {
+        let artifact = try TranscriptExportArtifactWriter(rootURL: root).write(
+            title: "Book",
+            transcripts: [transcript(text: "Shared")],
+            format: .webVTT,
+            isIncomplete: false
+        )
+        return (
+            TranscriptSharePayload(artifact: artifact).itemProvider(),
+            artifact.url
+        )
+    }
+
     private func transcript(
         chapterID: Int = 1,
         text: String

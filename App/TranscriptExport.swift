@@ -276,13 +276,13 @@ struct TranscriptSharePayload: Equatable {
 
     func itemProvider() -> NSItemProvider {
         let provider = NSItemProvider()
-        let fileURL = self.fileURL
+        let artifact = self.artifact
         provider.registerFileRepresentation(
             forTypeIdentifier: contentType.identifier,
             fileOptions: [.openInPlace],
             visibility: .all
         ) { completion in
-            completion(fileURL, false, nil)
+            completion(artifact.url, false, nil)
             return nil
         }
         return provider
