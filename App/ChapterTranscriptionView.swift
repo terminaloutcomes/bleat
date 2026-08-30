@@ -643,6 +643,16 @@ final class ChapterTranscriptionModel {
             .segments.map(TranscriptSegment.init(cached:))
     }
 
+    func transcriptExportSnapshot(
+        for bookKey: ChapterTranscriptionBookKey,
+        expectedChapterIDs: [Int]
+    ) -> ChapterTranscriptExportSnapshot {
+        ChapterTranscriptExportSnapshot(
+            transcripts: cachedTranscriptsByBook[bookKey] ?? [],
+            expectedChapterIDs: expectedChapterIDs
+        )
+    }
+
     func cacheFailure(
         for bookKey: ChapterTranscriptionBookKey
     ) -> ChapterTranscriptCacheViewFailure? {
@@ -1557,6 +1567,9 @@ struct ChapterTranscriptionView: View {
     @State private var searchQuery = ""
     @State private var showDownloadConfirmation = false
     @State private var playbackFailure: AppFailure?
+    @State private var pendingExportFormat: TranscriptExportFormat?
+    @State private var exportArtifact: TranscriptExportArtifact?
+    @State private var exportFailure: TranscriptExportArtifactError?
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1609,6 +1622,31 @@ struct ChapterTranscriptionView: View {
                     .disabled(model.isWorking || hasSearchQuery)
                     .accessibilityIdentifier("transcription.select")
                 }
+                if exportSnapshot.hasSegments {
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Button("WebVTT") {
+                                chooseExportFormat(.webVTT)
+                            }
+                            .accessibilityIdentifier(
+                                "transcription.export.webVTT"
+                            )
+                            Button("SRT") {
+                                chooseExportFormat(.subRip)
+                            }
+                            .accessibilityIdentifier(
+                                "transcription.export.subRip"
+                            )
+                        } label: {
+                            Label(
+                                "Export Transcript",
+                                systemImage: "square.and.arrow.up"
+                            )
+                        }
+                        .disabled(hasSearchQuery)
+                        .accessibilityIdentifier("transcription.export")
+                    }
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 actionBar
@@ -1632,6 +1670,42 @@ struct ChapterTranscriptionView: View {
                     "Transcription uses verified audio stored on this device."
                 )
             }
+            .confirmationDialog(
+                "Export Incomplete Transcript?",
+                isPresented: incompleteExportConfirmation,
+                titleVisibility: .visible
+            ) {
+                if let pendingExportFormat {
+                    Button("Export \(pendingExportFormat.title)") {
+                        export(pendingExportFormat)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingExportFormat = nil
+                }
+            } message: {
+                Text(
+                    "Only \(exportSnapshot.availableChapterCount) of \(exportSnapshot.totalChapterCount) chapters have transcript data. Bleat will export the available transcript."
+                )
+            }
+            .alert(
+                "Export Failed",
+                isPresented: exportFailurePresentation
+            ) {
+                Button("OK") {
+                    exportFailure = nil
+                }
+            } message: {
+                Text(
+                    exportFailure?.localizedDescription
+                        ?? "The transcript could not be exported."
+                )
+            }
+        }
+        .sheet(item: $exportArtifact) { artifact in
+            TranscriptShareSheet(
+                payload: TranscriptSharePayload(artifact: artifact)
+            )
         }
         .accessibilityIdentifier("transcription.view")
         .onAppear {
@@ -2048,6 +2122,66 @@ struct ChapterTranscriptionView: View {
             accountID: account.id,
             itemID: detail.id
         )
+    }
+
+    private var exportSnapshot: ChapterTranscriptExportSnapshot {
+        model.transcriptExportSnapshot(
+            for: bookKey,
+            expectedChapterIDs: detail.chapters.map(\.id)
+        )
+    }
+
+    private var incompleteExportConfirmation: Binding<Bool> {
+        Binding(
+            get: { pendingExportFormat != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingExportFormat = nil
+                }
+            }
+        )
+    }
+
+    private var exportFailurePresentation: Binding<Bool> {
+        Binding(
+            get: { exportFailure != nil },
+            set: { isPresented in
+                if !isPresented {
+                    exportFailure = nil
+                }
+            }
+        )
+    }
+
+    private func chooseExportFormat(_ format: TranscriptExportFormat) {
+        if exportSnapshot.isIncomplete {
+            pendingExportFormat = format
+        } else {
+            export(format)
+        }
+    }
+
+    private func export(_ format: TranscriptExportFormat) {
+        let snapshot = exportSnapshot
+        let title = detail.title
+        pendingExportFormat = nil
+        Task {
+            do {
+                let artifact = try await Task.detached(priority: .utility) {
+                    try TranscriptExportArtifactWriter().write(
+                        title: title,
+                        transcripts: snapshot.transcripts,
+                        format: format,
+                        isIncomplete: snapshot.isIncomplete
+                    )
+                }.value
+                exportArtifact = artifact
+            } catch let failure as TranscriptExportArtifactError {
+                exportFailure = failure
+            } catch {
+                exportFailure = .cannotWriteArtifact
+            }
+        }
     }
 
     private var hasSearchQuery: Bool {

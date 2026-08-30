@@ -1013,6 +1013,13 @@ place; otherwise Bleat prepares the book through the normal downloaded-first
 playback flow. If the audio is not downloaded, the screen asks before
 scheduling the existing audiobook download.
 
+When cached transcript segments exist, the screen can export all currently
+available chapters as WebVTT or SRT using whole-book timestamps and the native
+share sheet. If some book chapters have no cached transcript, Bleat reports the
+available chapter count before generating the partial export. Export runs
+entirely from the local canonical transcript cache, replaces Bleat's previous
+temporary transcript artifact, and does not require the server.
+
 Loaded transcript text is retained in memory while its transcription screen is
 visible or its batch is active. Otherwise it is evicted after five idle minutes
 or immediately when iOS reports memory pressure, and reloads from the durable

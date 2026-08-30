@@ -299,6 +299,14 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   existing downloaded-first preparation flow starts the exact account and book
   at that timestamp. Typed playback failures remain visible without replacing
   the transcript.
+- When canonical transcript segments exist, I can export every currently
+  available chapter as UTF-8 WebVTT or SRT with whole-book timestamps and share
+  the generated file through the native platform share sheet without network
+  access. The export screen identifies incomplete chapter coverage before
+  generating a partial transcript. Bleat derives both formats from canonical
+  cached segments regardless of their eventual local or imported source and
+  replaces prior disposable export artifacts rather than treating them as
+  transcript storage.
 - In-memory transcript text is retained while its screen is visible or its
   batch is active, then evicted after five idle minutes or immediately for
   inactive books when iOS reports memory pressure. Durable records remain.

@@ -688,14 +688,17 @@
             accountID: AccountID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> [CachedChapterTranscript] {
-            guard
-                ProcessInfo.processInfo.arguments.contains(
-                    "--ui-testing-transcription-cache"
-                )
-            else {
+            let arguments = ProcessInfo.processInfo.arguments
+            let hasCompleteCache = arguments.contains(
+                "--ui-testing-transcription-cache"
+            )
+            let hasPartialCache = arguments.contains(
+                "--ui-testing-partial-transcription-cache"
+            )
+            guard hasCompleteCache || hasPartialCache else {
                 return []
             }
-            return [
+            let transcripts = [
                 CachedChapterTranscript(
                     chapterID: 0,
                     chapterTitle: "Chapter One",
@@ -725,6 +728,7 @@
                     ]
                 ),
             ]
+            return hasPartialCache ? [transcripts[0]] : transcripts
         }
 
         func saveCachedChapterTranscript(

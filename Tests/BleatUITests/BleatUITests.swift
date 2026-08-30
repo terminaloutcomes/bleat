@@ -2117,6 +2117,38 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testPartialTranscriptExportExplainsCoverageBeforeSharing() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-partial-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let export = app.buttons["transcription.export"]
+        XCTAssertTrue(export.waitForExistence(timeout: 3))
+        export.tap()
+        let subRip = app.buttons["transcription.export.subRip"]
+        XCTAssertTrue(subRip.waitForExistence(timeout: 3))
+        subRip.tap()
+
+        XCTAssertTrue(
+            app.staticTexts[
+                "Only 1 of 2 chapters have transcript data. Bleat will export the available transcript."
+            ].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["Export SRT"].exists)
+    }
+
+    @MainActor
     func testTranscriptPlaybackFailureKeepsTranscriptVisible() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
