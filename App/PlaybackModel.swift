@@ -337,6 +337,22 @@ private enum CachedStreamingPreparation {
     case failed(AppFailure)
 }
 
+enum CachedContinuationPhase: Equatable {
+    case inactive
+    case preparing
+    case waitingForPreparation
+    case prepared
+    case activating
+    case failed
+}
+
+private struct CachedContinuationOperation: Equatable {
+    let id: UUID
+    let generation: UInt64
+    var requestedTime: Double?
+    var resumePlayback: Bool
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -380,6 +396,7 @@ final class PlaybackModel {
     private var cachedContinuationTimeoutTask: Task<Void, Never>?
     private var awaitingCachedContinuation = false
     private var cachedContinuationShouldResume = true
+    private var cachedContinuationOperation: CachedContinuationOperation?
     private var automaticCachedPlaybackWindow: AutomaticCachedPlaybackWindow?
     private var pausedAt: Date?
     private var resumeAfterInterruption = false
@@ -488,6 +505,25 @@ final class PlaybackModel {
         preparation?.sessionID == nil
             ? .cacheOnly
             : .allowNetwork
+    }
+
+    var cachedContinuationPhase: CachedContinuationPhase {
+        if cachedContinuationOperation != nil {
+            return .activating
+        }
+        switch cachedStreamingPreparation {
+        case .ready:
+            return .prepared
+        case .failed:
+            return .failed
+        case nil:
+            if cachedStreamingPreparationTask != nil {
+                return awaitingCachedContinuation
+                    ? .waitingForPreparation
+                    : .preparing
+            }
+            return .inactive
+        }
     }
 
     var isPlaybackRequested: Bool {
@@ -2072,6 +2108,7 @@ final class PlaybackModel {
         cachedContinuationTimeoutTask = nil
         awaitingCachedContinuation = false
         cachedContinuationShouldResume = true
+        cachedContinuationOperation = nil
     }
 
     private func prepareStreamingContinuation(
@@ -2897,11 +2934,37 @@ final class PlaybackModel {
             return
         }
         guard requestedTime != nil || isPlaybackRequested else { return }
+
+        if var activeOperation = cachedContinuationOperation,
+            activeOperation.generation == operationGeneration
+        {
+            activeOperation.requestedTime =
+                requestedTime ?? activeOperation.requestedTime
+            activeOperation.resumePlayback =
+                activeOperation.resumePlayback || resumePlayback
+            cachedContinuationOperation = activeOperation
+            return
+        }
+        let continuationOperation = CachedContinuationOperation(
+            id: UUID(),
+            generation: operationGeneration,
+            requestedTime: requestedTime,
+            resumePlayback: resumePlayback
+        )
+        cachedContinuationOperation = continuationOperation
+        defer {
+            if cachedContinuationOperation?.id == continuationOperation.id {
+                cachedContinuationOperation = nil
+            }
+        }
+
         let continuationTime = min(
-            max(requestedTime ?? window.endTime, 0),
+            max(continuationOperation.requestedTime ?? window.endTime, 0),
             duration
         )
-        guard requestedTime != nil || continuationTime < duration - 0.001 else {
+        guard continuationOperation.requestedTime != nil
+            || continuationTime < duration - 0.001
+        else {
             playbackEnded()
             return
         }
@@ -2948,9 +3011,12 @@ final class PlaybackModel {
                     try await rebuildQueue(at: continuationTime)
                     automaticCachePinReleaser?(window.pin)
                     guard generation == operationGeneration else { return }
+                    let shouldResume =
+                        cachedContinuationOperation?.resumePlayback
+                            ?? continuationOperation.resumePlayback
                     currentTime = continuationTime
-                    state = resumePlayback ? .ready : .paused
-                    if resumePlayback {
+                    state = shouldResume ? .ready : .paused
+                    if shouldResume {
                         play()
                     }
                     return
@@ -2964,13 +3030,16 @@ final class PlaybackModel {
             }
         }
 
+        let shouldResume = cachedContinuationOperation?.resumePlayback
+            ?? continuationOperation.resumePlayback
+
         switch cachedStreamingPreparation {
         case .ready(let remote):
             await activateStreamingContinuation(
                 remote,
                 at: continuationTime,
                 operationGeneration: operationGeneration,
-                resumePlayback: resumePlayback
+                resumePlayback: shouldResume
             )
         case .failed(let failure):
             guard !cachedStreamingRetryAttempted,
@@ -2987,12 +3056,12 @@ final class PlaybackModel {
             )
             waitForCachedStreamingContinuation(
                 operationGeneration: operationGeneration,
-                resumePlayback: resumePlayback
+                resumePlayback: shouldResume
             )
         case nil:
             waitForCachedStreamingContinuation(
                 operationGeneration: operationGeneration,
-                resumePlayback: resumePlayback
+                resumePlayback: shouldResume
             )
         }
     }
@@ -3055,8 +3124,11 @@ final class PlaybackModel {
             guard generation == operationGeneration else { return }
             releaseAutomaticCachedPlaybackWindow()
             cachedStreamingPreparation = nil
-            state = resumePlayback ? .ready : .paused
-            if resumePlayback {
+            let shouldResume = resumePlayback
+                || cachedContinuationOperation?.resumePlayback == true
+                || isPlaybackRequested
+            state = shouldResume ? .ready : .paused
+            if shouldResume {
                 play()
             }
             await loadBookmarks()
