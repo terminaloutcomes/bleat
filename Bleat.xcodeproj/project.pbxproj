@@ -17,6 +17,7 @@
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */; };
 		297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F16612F5D186DFAED140F6 /* BookCoverView.swift */; };
+		2BA45C8D5605E590C16A7471 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */; };
 		305FC1C033F98F51115F4B9C /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */; };
 		30FC3808C6E7EB0FA36DF71F /* RemoteTelemetryTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */; };
 		315C431973BBE5E53135BE12 /* BonjourTroubleshooterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */; };
@@ -100,6 +101,7 @@
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationCoordinator.swift; sourceTree = "<group>"; };
 		342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotionTests.swift; sourceTree = "<group>"; };
+		3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = wrapper.cfbundle; path = Settings.bundle; sourceTree = "<group>"; };
 		3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotion.swift; sourceTree = "<group>"; };
 		46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
 		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
@@ -282,6 +284,7 @@
 				4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */,
+				3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */,
 				53C7555CCB4D4F3DB0359438 /* TranscriptExport.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
 			);
@@ -423,6 +426,7 @@
 				6DA9F184B2FEFD3166BBB4D5 /* Assets.xcassets in Resources */,
 				01DD46D2990FCB9441F50362 /* Bleat.icon in Resources */,
 				F46108AC1C2239DA623870FD /* PrivacyInfo.xcprivacy in Resources */,
+				2BA45C8D5605E590C16A7471 /* Settings.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

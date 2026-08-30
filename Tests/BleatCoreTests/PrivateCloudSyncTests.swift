@@ -191,7 +191,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         try await source.apply(
             makeSnapshot(
                 previousCommandAction: .previousChapter,
-                nextCommandAction: .nextChapter
+                nextCommandAction: .nextChapter,
+                maximumConcurrentDownloads: 15
             )
         )
 
@@ -206,6 +207,7 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         XCTAssertEqual(restored.previousCommandAction, .previousChapter)
         XCTAssertEqual(restored.nextCommandAction, .nextChapter)
+        XCTAssertEqual(restored.maximumConcurrentDownloads, 15)
     }
 
     func testLegacyConfigurationDefaultsMissingHeadphoneCommands() throws {
@@ -227,6 +229,7 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         XCTAssertEqual(decoded.previousCommandAction, .skipBackward)
         XCTAssertEqual(decoded.nextCommandAction, .skipForward)
+        XCTAssertEqual(decoded.maximumConcurrentDownloads, 5)
     }
 
     func testConfigurationRejectsInvalidHeadphoneCommand() throws {
@@ -1602,7 +1605,8 @@ final class PrivateCloudSyncTests: XCTestCase {
 
     private func makeSnapshot(
         previousCommandAction: HeadphoneCommandAction,
-        nextCommandAction: HeadphoneCommandAction
+        nextCommandAction: HeadphoneCommandAction,
+        maximumConcurrentDownloads: Int = 5
     ) -> CloudConfigurationSnapshot {
         CloudConfigurationSnapshot(
             defaultPlaybackRate: 1,
@@ -1612,6 +1616,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             previousCommandAction: previousCommandAction,
             nextCommandAction: nextCommandAction,
             downloadNetworkPolicy: "wifiOnly",
+            maximumConcurrentDownloads: maximumConcurrentDownloads,
             automaticDownloadLookahead: 5,
             automaticDownloadCleanupPolicy: "afterTwentyFourHours"
         )

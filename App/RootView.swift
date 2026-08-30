@@ -202,6 +202,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { previousPhase, phase in
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
+            if phase == .active {
+                model.downloads.reloadSyncedPreferences()
+            }
             if AppLifecycleCloudSyncPolicy.shouldSynchronize(
                 wasActive: previousPhase == .active,
                 isActive: phase == .active
@@ -378,6 +381,11 @@ private struct CloudConfigurationConflictView: View {
             "Download Network",
             local: networkPolicy(local.downloadNetworkPolicy),
             iCloud: networkPolicy(cloud.downloadNetworkPolicy)
+        )
+        values.appendIfChanged(
+            "Maximum Concurrent Downloads",
+            local: String(local.maximumConcurrentDownloads),
+            iCloud: String(cloud.maximumConcurrentDownloads)
         )
         values.appendIfChanged(
             "Automatic Download Lookahead",
@@ -4676,6 +4684,40 @@ private struct SettingsView: View {
                             "settings.downloads.wifiOnly"
                         )
                     }
+
+                    let maximumPreference =
+                        MaximumConcurrentDownloadsPreference(
+                            model.downloads.maximumConcurrentDownloads
+                        )
+                    Stepper(
+                        label: {
+                            LabeledContent(
+                                "Maximum Concurrent Downloads",
+                                value: String(maximumPreference.value)
+                            )
+                        },
+                        onIncrement: maximumPreference.canIncrement
+                            ? {
+                                model.downloads
+                                    .setMaximumConcurrentDownloads(
+                                        maximumPreference.incremented.value
+                                    )
+                            } : nil,
+                        onDecrement: maximumPreference.canDecrement
+                            ? {
+                                model.downloads
+                                    .setMaximumConcurrentDownloads(
+                                        maximumPreference.decremented.value
+                                    )
+                            } : nil
+                    )
+                    .accessibilityLabel("Maximum Concurrent Downloads")
+                    .accessibilityValue(
+                        String(model.downloads.maximumConcurrentDownloads)
+                    )
+                    .accessibilityIdentifier(
+                        "settings.downloads.maximumConcurrent"
+                    )
 
                     Stepper(
                         "Files Ahead: \(model.downloads.automaticLookaheadCount)",

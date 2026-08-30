@@ -4,6 +4,93 @@ import XCTest
 @testable import BleatCore
 
 final class BackgroundDownloadTests: XCTestCase {
+    func testMaximumConcurrentDownloadsTransitionsAndNormalization() throws {
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference.permittedValues,
+            Array(1...5) + Array(stride(from: 10, through: 100, by: 5))
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(1).decremented.value,
+            1
+        )
+        XCTAssertFalse(MaximumConcurrentDownloadsPreference(1).canDecrement)
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(4).incremented.value,
+            5
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(5).incremented.value,
+            10
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(10).decremented.value,
+            5
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(95).incremented.value,
+            100
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference(100).incremented.value,
+            100
+        )
+        XCTAssertFalse(MaximumConcurrentDownloadsPreference(100).canIncrement)
+
+        let expected = [
+            -10: 1,
+            0: 1,
+            1: 1,
+            6: 5,
+            7: 5,
+            8: 10,
+            12: 10,
+            13: 15,
+            101: 100,
+        ]
+        for (input, normalized) in expected {
+            XCTAssertEqual(
+                MaximumConcurrentDownloadsPreference.normalize(input),
+                normalized
+            )
+        }
+
+        let suite = "MaximumConcurrentDownloadsPreference.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
+            5
+        )
+        defaults.set(
+            "invalid",
+            forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
+            5
+        )
+        XCTAssertEqual(
+            defaults.integer(
+                forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+            ),
+            5
+        )
+        defaults.set(
+            8,
+            forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+        )
+        XCTAssertEqual(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
+            10
+        )
+        XCTAssertEqual(
+            defaults.integer(
+                forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+            ),
+            10
+        )
+    }
+
     func testCancelledTrackMakesIncompleteBookDurablyCancelled() throws {
         let plan = DownloadPlan(
             itemID: LibraryItemID(rawValue: "item"),
@@ -538,7 +625,7 @@ final class BackgroundDownloadTests: XCTestCase {
         )
         XCTAssertEqual(
             bleatBackgroundDownloadMaximumConnectionsPerHost,
-            3
+            100
         )
     }
 

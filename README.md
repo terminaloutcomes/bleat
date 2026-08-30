@@ -642,7 +642,8 @@ before replacing the displayed cached cover.
 
 Accounts with Audiobookshelf's download permission see **Download** on book
 detail. Bleat schedules every original audio file through a stable background
-URL session with bearer headers, limits each host to three concurrent transfers,
+URL session with bearer headers, admits audio transfers through one process-wide
+scheduler,
 persists an offline metadata snapshot and byte-exact manifest, and restores
 system-owned tasks after relaunch. An interrupted non-paused transfer that could
 not be restored because Bleat launched offline resumes automatically from its
@@ -674,6 +675,10 @@ placing tokens in URLs.
 Downloads default to **Wi-Fi Only** in Settings. Turning that off permits
 expensive networks on newly created and replacement requests; books of 100 MB
 or more still require explicit confirmation before Bleat schedules them.
+The process-wide maximum defaults to five concurrent books and is configurable
+under **Settings → Downloads** on every platform. iPhone and iPad also expose
+the same exact permitted values under Bleat in the system Settings app. Values
+from one through five advance by one, then advance by five through 100.
 
 Starting streamed playback also creates an automatic whole-file cache. Bleat
 keeps the current file plus enough following files to cover the next configured

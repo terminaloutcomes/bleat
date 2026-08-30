@@ -34,6 +34,273 @@ extension DownloadStorageLayout {
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testDownloadTransferAdmissionEnforcesAndReconcilesGlobalLimit() throws {
+        for limit in [1, 5, 100] {
+            var admission = DownloadTransferAdmissionController(limit: limit)
+            let admitted = (0..<limit).map { _ in UUID() }
+            for transferID in admitted {
+                XCTAssertTrue(admission.admit(transferID))
+            }
+            XCTAssertFalse(admission.admit(UUID()))
+            XCTAssertEqual(admission.activeTransferIDs.count, limit)
+        }
+
+        let restoredIDs = (0..<5).map { _ in UUID() }
+        let restored = Set(restoredIDs)
+        var admission = DownloadTransferAdmissionController(limit: 5)
+        admission.reconcile(activeTransferIDs: restored)
+        admission.updateLimit(1)
+        XCTAssertEqual(admission.activeTransferIDs, restored)
+        XCTAssertFalse(admission.admit(UUID()))
+        for transferID in restoredIDs.dropLast() {
+            admission.complete(transferID)
+            XCTAssertFalse(admission.admit(UUID()))
+        }
+        admission.complete(try XCTUnwrap(restoredIDs.last))
+        XCTAssertTrue(admission.admit(UUID()))
+
+        admission.updateLimit(5)
+        for _ in 0..<4 {
+            XCTAssertTrue(admission.admit(UUID()))
+        }
+        XCTAssertEqual(admission.activeTransferIDs.count, 5)
+    }
+
+    func testSystemSettingsBundleUsesExactMaximumDownloadValues() throws {
+        let settingsBundle = try XCTUnwrap(
+            Bundle.main.url(
+                forResource: "Settings",
+                withExtension: "bundle"
+            )
+        )
+        let root = settingsBundle.appendingPathComponent("Root.plist")
+        let data = try Data(contentsOf: root)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+            ) as? [String: Any]
+        )
+        let specifiers = try XCTUnwrap(
+            plist["PreferenceSpecifiers"] as? [[String: Any]]
+        )
+        let maximum = try XCTUnwrap(
+            specifiers.first {
+                $0["Key"] as? String
+                    == MaximumConcurrentDownloadsPreference.defaultsKey
+            }
+        )
+
+        XCTAssertEqual(maximum["Type"] as? String, "PSMultiValueSpecifier")
+        XCTAssertEqual(maximum["DefaultValue"] as? Int, 5)
+        XCTAssertEqual(
+            maximum["Values"] as? [Int],
+            MaximumConcurrentDownloadsPreference.permittedValues
+        )
+        XCTAssertEqual(
+            maximum["Titles"] as? [String],
+            MaximumConcurrentDownloadsPreference.permittedValues.map(String.init)
+        )
+    }
+
+    func testDownloadModelQueuesAndAdmitsBooksAtConfiguredMaximum()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "GlobalDownloadAdmission-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let suite = "GlobalDownloadAdmission.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlanProvider: { itemID in
+                .success(
+                    DownloadPlan(
+                        itemID: itemID,
+                        tracks: [
+                            DownloadTrackPlan(
+                                index: 0,
+                                inode: "audio-\(itemID.rawValue)",
+                                expectedByteLength: 1,
+                                mimeType: "audio/mpeg",
+                                safeExtension: .mp3,
+                                destinationEntry: "00000.mp3"
+                            )
+                        ]
+                    )
+                )
+            },
+            authorizedDownloadRequest: .success(
+                URLRequest(
+                    url: try XCTUnwrap(
+                        URL(string: "https://192.0.2.1/audio.mp3")
+                    )
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.global-admission.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        model.setMaximumConcurrentDownloads(1)
+        let details = (0..<3).map { index in
+            fixtureBookDetail(
+                item: fixtureBook(
+                    id: "global-admission-\(index)",
+                    title: "Global Admission \(index)",
+                    libraryID: fixtureLibrary().id
+                )
+            )
+        }
+
+        for detail in details {
+            await model.download(detail: detail, account: account)
+        }
+
+        XCTAssertEqual(model.records.count, 3)
+        var descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(descriptors.count, 1)
+
+        model.setMaximumConcurrentDownloads(5)
+        for _ in 0..<20 where descriptors.count != 3 {
+            try await Task.sleep(for: .milliseconds(100))
+            descriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
+        XCTAssertEqual(descriptors.count, 3)
+
+        model.setMaximumConcurrentDownloads(1)
+        descriptors = await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(descriptors.count, 3)
+        _ = await model.removeAllForLocalDataReset()
+    }
+
+    func testPlaybackSuspensionReleasesCapacityWithoutOverResuming()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "PlaybackSuspensionAdmission-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let suite = "PlaybackSuspensionAdmission.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let automaticDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "automatic-admission",
+                title: "Automatic Admission",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let manualDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "manual-admission",
+                title: "Manual Admission",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlanProvider: { itemID in
+                .success(
+                    DownloadPlan(
+                        itemID: itemID,
+                        tracks: [
+                            DownloadTrackPlan(
+                                index: 0,
+                                inode: "audio-\(itemID.rawValue)",
+                                expectedByteLength: 1,
+                                mimeType: "audio/mpeg",
+                                safeExtension: .mp3,
+                                destinationEntry: "00000.mp3"
+                            )
+                        ]
+                    )
+                )
+            },
+            authorizedDownloadRequest: .success(
+                URLRequest(
+                    url: try XCTUnwrap(
+                        URL(string: "https://192.0.2.1/audio.mp3")
+                    )
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.playback-suspension.\(UUID().uuidString)"
+        )
+        model.setNetworkPolicy(.allowCellular)
+        model.setMaximumConcurrentDownloads(1)
+
+        let automaticActivity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: automaticDetail,
+            account: account,
+            currentTime: 0,
+            chapters: [],
+            fileRanges: [
+                AutomaticDownloadFileRange(
+                    index: 0,
+                    start: 0,
+                    end: automaticDetail.duration
+                )
+            ]
+        )
+        await model.handleAutomaticPlaybackActivity(automaticActivity)
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
+
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .playbackNeedsBandwidth,
+                detail: automaticDetail,
+                account: account,
+                currentTime: 0,
+                chapters: [],
+                fileRanges: automaticActivity.fileRanges
+            )
+        )
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+
+        await model.download(detail: manualDetail, account: account)
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
+        let scheduledDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(scheduledDescriptors.count, 2)
+
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .playbackReleasedBandwidth,
+                detail: automaticDetail,
+                account: account,
+                currentTime: 0,
+                chapters: [],
+                fileRanges: automaticActivity.fileRanges
+            )
+        )
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
+        _ = await model.removeAllForLocalDataReset()
+    }
+
     func testTransferReconciliationStopsLatePauseAndCancelCallbacks() {
         let active = DownloadTransferContext(
             isPaused: false,
@@ -3408,7 +3675,7 @@ final class AppModelTests: XCTestCase {
         )
         let storedRecords = try await storage.records()
         let interruptedRecord = try XCTUnwrap(storedRecords.first)
-        XCTAssertEqual(interruptedRecord.manifest.state, .partial)
+        XCTAssertEqual(interruptedRecord.manifest.state, .queued)
 
         let request = URLRequest(
             url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
@@ -6061,21 +6328,31 @@ final class AppModelTests: XCTestCase {
         let first = DownloadModel(service: service, defaults: defaults)
 
         XCTAssertEqual(first.automaticLookaheadCount, 5)
+        XCTAssertEqual(first.maximumConcurrentDownloads, 5)
         XCTAssertEqual(
             first.automaticCleanupPolicy,
             .afterTwentyFourHours
         )
 
         first.setAutomaticLookaheadCount(9)
+        first.setMaximumConcurrentDownloads(8)
         first.setAutomaticCleanupPolicy(.afterChapter)
         let restored = DownloadModel(service: service, defaults: defaults)
         XCTAssertEqual(restored.automaticLookaheadCount, 9)
+        XCTAssertEqual(restored.maximumConcurrentDownloads, 10)
         XCTAssertEqual(restored.automaticCleanupPolicy, .afterChapter)
 
         restored.setAutomaticLookaheadCount(0)
         XCTAssertEqual(restored.automaticLookaheadCount, 1)
         restored.setAutomaticLookaheadCount(99)
         XCTAssertEqual(restored.automaticLookaheadCount, 20)
+
+        defaults.set(
+            3,
+            forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+        )
+        restored.reloadSyncedPreferences()
+        XCTAssertEqual(restored.maximumConcurrentDownloads, 3)
     }
 
     func testAutomaticDownloadPlannerUsesWholeFilesForChapterWindow()
@@ -16699,6 +16976,8 @@ private actor TestAppService: AppServicing {
     private var playbackResults:
         [Result<AppPlaybackPreparation, AppServiceError>]
     private var downloadPlanResult: Result<DownloadPlan, AppServiceError>?
+    private let downloadPlanProvider:
+        (@Sendable (LibraryItemID) -> Result<DownloadPlan, AppServiceError>)?
     private var downloadPlanGate: AsyncGate?
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
@@ -16903,6 +17182,10 @@ private actor TestAppService: AppServicing {
         playback:
             [Result<AppPlaybackPreparation, AppServiceError>] = [],
         downloadPlan: Result<DownloadPlan, AppServiceError>? = nil,
+        downloadPlanProvider:
+            (@Sendable (LibraryItemID) -> Result<
+                DownloadPlan, AppServiceError
+            >)? = nil,
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
         primaryFallbackURL: URL? = nil,
@@ -16971,6 +17254,7 @@ private actor TestAppService: AppServicing {
         localSessionSyncResult = localSessionSync
         playbackResults = playback
         downloadPlanResult = downloadPlan
+        self.downloadPlanProvider = downloadPlanProvider
         authorizedDownloadRequestResult = authorizedDownloadRequest
         self.primaryFallbackURL = primaryFallbackURL
         removeAccountResult = removeAccount
@@ -17640,6 +17924,9 @@ private actor TestAppService: AppServicing {
         if let downloadPlanGate {
             await downloadPlanGate.enterAndWait()
         }
+        if let downloadPlanProvider {
+            return try value(from: downloadPlanProvider(itemID))
+        }
         if let downloadPlanResult {
             return try value(from: downloadPlanResult)
         }
@@ -18052,6 +18339,7 @@ private func cloudConfigurationSnapshot(
         previousCommandAction: previousCommandAction,
         nextCommandAction: nextCommandAction,
         downloadNetworkPolicy: "wifiOnly",
+        maximumConcurrentDownloads: 5,
         automaticDownloadLookahead: 2,
         automaticDownloadCleanupPolicy: "afterTwentyFourHours"
     )
