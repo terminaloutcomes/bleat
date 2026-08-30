@@ -47,6 +47,15 @@ only a client that existed when that path change began. Simulator regression
 coverage sends duplicate unconstrained and expensive-path updates and requires
 the original single subscription to remain.
 
+A repeat on `c27b5717` no longer produced the visible replacement storm, but
+the connection remained `connecting` for more than a minute. Its trace showed
+one local attempt failing at `socket_receive` after 56.56 seconds, followed by
+a primary attempt authenticating in 0.87 seconds. That confirmed serial
+local-first fallback was still using a pre-path-change reachability assumption.
+The shared endpoint router now prefers the primary server while local
+reachability is unknown after a path change and promotes local only after the
+path probe succeeds.
+
 ## Automated evidence
 
 - `LiveUpdatesTests` covers constrained-network request policy, endpoint and

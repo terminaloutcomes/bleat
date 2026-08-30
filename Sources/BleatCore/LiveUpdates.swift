@@ -72,10 +72,16 @@ public enum AudiobookshelfLiveUpdate: Equatable, Sendable {
 public struct AudiobookshelfLiveServerEndpoint: Equatable, Sendable {
     public let server: NormalizedServerURL
     public let usage: ServerEndpointUsage
+    public let pathGeneration: ServerEndpointPathGeneration?
 
-    public init(server: NormalizedServerURL, usage: ServerEndpointUsage) {
+    public init(
+        server: NormalizedServerURL,
+        usage: ServerEndpointUsage,
+        pathGeneration: ServerEndpointPathGeneration? = nil
+    ) {
         self.server = server
         self.usage = usage
+        self.pathGeneration = pathGeneration
     }
 }
 
@@ -280,9 +286,9 @@ public actor AudiobookshelfLiveEventClient {
         @Sendable (_ rejectedToken: String) async throws -> String
 
     public typealias TransportFailureHandler =
-        @Sendable (_ server: NormalizedServerURL) async -> Void
+        @Sendable (_ endpoint: AudiobookshelfLiveServerEndpoint) async -> Void
     public typealias AuthenticationHandler =
-        @Sendable (_ server: NormalizedServerURL) async -> Void
+        @Sendable (_ endpoint: AudiobookshelfLiveServerEndpoint) async -> Void
 
     private let serverProvider: ServerProvider
     private let tokenProvider: AccessTokenProvider
@@ -457,7 +463,7 @@ public actor AudiobookshelfLiveEventClient {
                 case .initialized:
                     authenticated = true
                     finishAttempt(.authenticated)
-                    await onAuthenticated(server)
+                    await onAuthenticated(endpoint)
                     continuation.yield(.connection(.authenticated))
                 case .authenticationRejected:
                     guard !didRecoverAuthentication else {
@@ -521,7 +527,7 @@ public actor AudiobookshelfLiveEventClient {
                 stage: failureStage
             )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
-            await onTransportFailure(server)
+            await onTransportFailure(endpoint)
         }
         socket.cancel(with: .goingAway, reason: nil)
         if self.socket === socket {

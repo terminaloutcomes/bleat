@@ -46,7 +46,7 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(candidates[0].url, requestURL)
     }
 
-    func testEndpointRouterRetriesLocalAfterNetworkPathChange()
+    func testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange()
         async throws
     {
         let router = ServerEndpointRouter()
@@ -58,14 +58,115 @@ final class HTTPTransportTests: XCTestCase {
         let failedPreferredServer = await router.preferredServer(
             for: primary
         )
-        XCTAssertEqual(failedPreferredServer, primary)
+        XCTAssertEqual(failedPreferredServer.server, primary)
 
-        await router.networkPathDidChange()
+        let pathGeneration = await router.networkPathDidChange()
 
-        let recoveredPreferredServer = await router.preferredServer(
+        let pendingPreferredServer = await router.preferredServer(
             for: primary
         )
-        XCTAssertEqual(recoveredPreferredServer, local)
+        XCTAssertEqual(pendingPreferredServer.server, primary)
+        let pendingAvailability = await router.localAvailability(for: primary)
+        XCTAssertEqual(pendingAvailability, .unknown)
+
+        await router.markLocalAvailable(
+            for: primary,
+            pathGeneration: pathGeneration
+        )
+        await router.finishNetworkPathEvaluation(pathGeneration)
+
+        let recoveredPreferredServer = await router.preferredServer(for: primary)
+        XCTAssertEqual(recoveredPreferredServer.server, local)
+    }
+
+    func testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+
+        let pathGeneration = await router.networkPathDidChange()
+        await router.configure(primary: primary, local: local)
+
+        var selection = await router.preferredServer(for: primary)
+        XCTAssertEqual(selection.server, primary)
+
+        await router.markLocalAvailable(
+            for: primary,
+            pathGeneration: pathGeneration
+        )
+        await router.finishNetworkPathEvaluation(pathGeneration)
+
+        selection = await router.preferredServer(for: primary)
+        XCTAssertEqual(selection.server, local)
+    }
+
+    func testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        let requestURL = try XCTUnwrap(
+            URL(string: "https://books.example/api/libraries")
+        )
+        let candidates = await router.candidates(for: requestURL)
+        let oldCandidate = try XCTUnwrap(candidates.first)
+
+        _ = await router.networkPathDidChange()
+        await router.recordSuccessfulUse(oldCandidate, endpoint: .libraries)
+
+        let selection = await router.preferredServer(for: primary)
+        XCTAssertEqual(selection.server, primary)
+        let availability = await router.localAvailability(for: primary)
+        XCTAssertEqual(availability, .unknown)
+    }
+
+    func testURLOnlyCompletionCannotMutateCurrentPathSelection()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+        let localURL = try XCTUnwrap(
+            URL(string: "https://books.home/audio/file.m4b")
+        )
+
+        let pathGeneration = await router.networkPathDidChange()
+        await router.markLocalAvailable(
+            for: primary,
+            pathGeneration: pathGeneration
+        )
+        await router.finishNetworkPathEvaluation(pathGeneration)
+
+        let reconstructed = await router.candidate(forResolvedURL: localURL)
+        await router.markLocalUnavailable(reconstructed)
+        await router.recordConnection(reconstructed, purpose: .download)
+
+        let selection = await router.preferredServer(for: primary)
+        XCTAssertEqual(selection.server, local)
+        let availability = await router.localAvailability(for: primary)
+        XCTAssertEqual(availability, .available)
+    }
+
+    func testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable()
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example")
+        let local = try NormalizedServerURL("https://books.home")
+        await router.configure(primary: primary, local: local)
+
+        let pathGeneration = await router.networkPathDidChange()
+        await router.finishNetworkPathEvaluation(pathGeneration)
+
+        let selection = await router.preferredServer(for: primary)
+        XCTAssertEqual(selection.server, primary)
+        let availability = await router.localAvailability(for: primary)
+        XCTAssertEqual(availability, .temporarilyUnavailable)
     }
 
     func testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL()
@@ -125,7 +226,7 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertFalse(fallback?.allowsConstrainedNetworkAccess == true)
         XCTAssertFalse(fallback?.allowsExpensiveNetworkAccess == true)
         let availability = await router.localAvailability(for: primary)
-        XCTAssertEqual(availability, .temporarilyUnavailable)
+        XCTAssertEqual(availability, .unknown)
     }
 
     func testSuccessfulLocalUseClearsLocalCooldown() async throws {
@@ -138,7 +239,7 @@ final class HTTPTransportTests: XCTestCase {
         await router.markLocalAvailable(for: primary)
 
         let preferredServer = await router.preferredServer(for: primary)
-        XCTAssertEqual(preferredServer, local)
+        XCTAssertEqual(preferredServer.server, local)
     }
 
     func testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()

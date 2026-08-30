@@ -2556,9 +2556,10 @@ final class PlaybackModel {
                 operationGeneration: operationGeneration
             )
         case .fallbackFromLocal(let failedURL):
-            guard
+            guard let accountID = activeAccount?.id,
                 await service.reportServerTransportFailure(
-                    url: failedURL
+                    url: failedURL,
+                    accountID: accountID
                 )
             else {
                 failPlaybackRecovery()

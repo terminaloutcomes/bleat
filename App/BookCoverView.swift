@@ -219,12 +219,8 @@ actor BookCoverImageLoader {
                     data.count <= maximumResponseBytes,
                     let image = PlatformImageSupport.image(from: data)
                 else {
-                    if candidate.isLocal,
-                        let primary = candidate.primary
-                    {
-                        await endpointRouter?.markLocalUnavailable(
-                            for: primary
-                        )
+                    if candidate.isLocal {
+                        await endpointRouter?.markLocalUnavailable(candidate)
                         continue
                     }
                     return nil
@@ -238,12 +234,8 @@ actor BookCoverImageLoader {
                     image: image
                 )
             } catch {
-                if candidate.isLocal,
-                    let primary = candidate.primary
-                {
-                    await endpointRouter?.markLocalUnavailable(
-                        for: primary
-                    )
+                if candidate.isLocal {
+                    await endpointRouter?.markLocalUnavailable(candidate)
                     continue
                 }
                 return nil
