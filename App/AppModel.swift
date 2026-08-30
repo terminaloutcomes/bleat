@@ -1283,6 +1283,8 @@ final class AppModel {
     @ObservationIgnored
     private var liveUpdatesTask: Task<Void, Never>?
     @ObservationIgnored
+    private var liveUpdateConnectionSpans: [UUID: RemoteTelemetrySpan] = [:]
+    @ObservationIgnored
     private var endpointDiagnosticsTask: Task<Void, Never>?
     @ObservationIgnored
     private var liveRefreshTask: Task<Void, Never>?
@@ -5309,6 +5311,7 @@ final class AppModel {
                 guard !Task.isCancelled else {
                     return
                 }
+                let previousState = networkPathState
                 networkPathState = state
                 downloads.updateNetworkPathState(state)
                 schedulePendingLocalSessionSync(for: accounts)
@@ -5317,18 +5320,24 @@ final class AppModel {
                 guard let account else {
                     continue
                 }
-                if state.allowsRealtimeUpdates {
+                if state.allowsRealtimeUpdates,
+                    !previousState.allowsRealtimeUpdates
+                {
                     startLiveUpdates(for: account)
                     scheduleLiveRefresh(
                         libraryChanged: true,
                         itemIDs: []
                     )
-                } else {
+                } else if !state.allowsRealtimeUpdates,
+                    previousState.allowsRealtimeUpdates
+                {
                     await stopLiveUpdatesAndWait()
-                    if state.isConstrained {
-                        liveUpdateConnectionState =
-                            .suspendedForLowDataMode
-                    }
+                }
+                if state.isConstrained {
+                    liveUpdateConnectionState =
+                        .suspendedForLowDataMode
+                } else if !state.allowsRealtimeUpdates {
+                    liveUpdateConnectionState = .disconnected
                 }
             }
         }
@@ -5450,6 +5459,7 @@ final class AppModel {
             return
         }
         liveUpdatesTask?.cancel()
+        cancelLiveUpdateConnectionSpans()
         let accountID = account.id
         liveUpdatesTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -5458,44 +5468,80 @@ final class AppModel {
                 guard !Task.isCancelled, self.account?.id == accountID else {
                     return
                 }
-                guard case .event(let event) = update else {
-                    if case .connection(let state) = update {
-                        liveUpdateConnectionState = state
+                switch update {
+                case .connection(let state):
+                    liveUpdateConnectionState = state
+                case .connectionAttempt(let attempt):
+                    recordLiveUpdateConnectionAttempt(attempt)
+                case .event(let event):
+                    switch event {
+                    case .libraryChanged:
+                        scheduleLiveRefresh(libraryChanged: true, itemIDs: [])
+                    case .itemsChanged(let change):
+                        guard let selectedLibrary,
+                            change.libraryIDs.contains(selectedLibrary.id)
+                        else {
+                            continue
+                        }
+                        scheduleLiveRefresh(
+                            libraryChanged: false,
+                            itemIDs: change.itemIDs
+                        )
+                    case .playbackProgress(let progress):
+                        bookFinishedStates[progress.itemID] =
+                            progress.isFinished
+                        scheduleLiveRefresh(
+                            libraryChanged: false,
+                            itemIDs: [progress.itemID]
+                        )
                     }
-                    continue
-                }
-                switch event {
-                case .libraryChanged:
-                    scheduleLiveRefresh(libraryChanged: true, itemIDs: [])
-                case .itemsChanged(let change):
-                    guard let selectedLibrary,
-                        change.libraryIDs.contains(selectedLibrary.id)
-                    else {
-                        continue
-                    }
-                    scheduleLiveRefresh(
-                        libraryChanged: false,
-                        itemIDs: change.itemIDs
-                    )
-                case .playbackProgress(let progress):
-                    bookFinishedStates[progress.itemID] = progress.isFinished
-                    scheduleLiveRefresh(
-                        libraryChanged: false,
-                        itemIDs: [progress.itemID]
-                    )
                 }
             }
+        }
+    }
+
+    private func recordLiveUpdateConnectionAttempt(
+        _ attempt: AudiobookshelfLiveConnectionAttempt
+    ) {
+        switch attempt.phase {
+        case .started:
+            liveUpdateConnectionSpans.removeValue(forKey: attempt.id)?
+                .end(.cancelled)
+            liveUpdateConnectionSpans[attempt.id] =
+                remoteTelemetryTracer.beginSpan(
+                    operation: .liveUpdateConnection,
+                    source: attempt.usage == .local
+                        ? .localServer : .primaryServer,
+                    retryBucket: attempt.retryBucket
+                )
+        case .authenticated:
+            liveUpdateConnectionSpans.removeValue(forKey: attempt.id)?
+                .end(.succeeded)
+        case .failed(let failure):
+            liveUpdateConnectionSpans.removeValue(forKey: attempt.id)?
+                .end(.liveUpdateFailed(failure.remoteTelemetryFailure))
+        case .cancelled:
+            liveUpdateConnectionSpans.removeValue(forKey: attempt.id)?
+                .end(.cancelled)
         }
     }
 
     private func stopLiveUpdates() {
         liveUpdatesTask?.cancel()
         liveUpdatesTask = nil
+        cancelLiveUpdateConnectionSpans()
         endpointDiagnosticsTask?.cancel()
         endpointDiagnosticsTask = nil
         liveUpdateConnectionState = .disconnected
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
+    }
+
+    private func cancelLiveUpdateConnectionSpans() {
+        for span in liveUpdateConnectionSpans.values {
+            span.end(.cancelled)
+        }
+        liveUpdateConnectionSpans.removeAll()
     }
 
     private func stopLiveUpdatesAndWait() async {
@@ -5793,5 +5839,55 @@ final class AppModel {
                 < rhs.server.url.absoluteString
         }
         return usernameOrder == .orderedAscending
+    }
+}
+
+extension AudiobookshelfLiveConnectionFailure {
+    fileprivate var remoteTelemetryFailure: RemoteTelemetryLiveUpdateFailure {
+        let category: RemoteTelemetryFailureCategory
+        let code: RemoteTelemetryLiveUpdateFailureCode
+        switch cause {
+        case .invalidSocketURL:
+            category = .invalidResponse
+            code = .invalidSocketURL
+        case .credentialsUnavailable:
+            category = .authentication
+            code = .credentialsUnavailable
+        case .authenticationRejected:
+            category = .authentication
+            code = .authenticationRejected
+        case .transportUnavailable:
+            category = .transport
+            code = .transportUnavailable
+        case .malformedPacket:
+            category = .invalidResponse
+            code = .malformedPacket
+        }
+        return RemoteTelemetryLiveUpdateFailure(
+            category: category,
+            code: code,
+            stage: stage.remoteTelemetryStage
+        )
+    }
+}
+
+extension AudiobookshelfLiveConnectionFailureStage {
+    fileprivate var remoteTelemetryStage: RemoteTelemetryLiveUpdateFailureStage {
+        switch self {
+        case .requestConstruction:
+            .requestConstruction
+        case .credentialRetrieval:
+            .credentialRetrieval
+        case .socketReceive:
+            .socketReceive
+        case .socketSend:
+            .socketSend
+        case .protocolDecoding:
+            .protocolDecoding
+        case .authentication:
+            .authentication
+        case .credentialRecovery:
+            .credentialRecovery
+        }
     }
 }

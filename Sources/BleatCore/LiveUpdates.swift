@@ -65,7 +65,73 @@ public enum AudiobookshelfLiveEvent: Equatable, Sendable {
 
 public enum AudiobookshelfLiveUpdate: Equatable, Sendable {
     case connection(AudiobookshelfLiveConnectionState)
+    case connectionAttempt(AudiobookshelfLiveConnectionAttempt)
     case event(AudiobookshelfLiveEvent)
+}
+
+public struct AudiobookshelfLiveServerEndpoint: Equatable, Sendable {
+    public let server: NormalizedServerURL
+    public let usage: ServerEndpointUsage
+    public let pathGeneration: ServerEndpointPathGeneration?
+
+    public init(
+        server: NormalizedServerURL,
+        usage: ServerEndpointUsage,
+        pathGeneration: ServerEndpointPathGeneration? = nil
+    ) {
+        self.server = server
+        self.usage = usage
+        self.pathGeneration = pathGeneration
+    }
+}
+
+public struct AudiobookshelfLiveConnectionAttempt: Equatable, Sendable {
+    public enum Phase: Equatable, Sendable {
+        case started
+        case authenticated
+        case failed(AudiobookshelfLiveConnectionFailure)
+        case cancelled
+    }
+
+    public let id: UUID
+    public let usage: ServerEndpointUsage
+    public let retryBucket: RemoteTelemetryRetryBucket
+    public let phase: Phase
+
+    public init(
+        id: UUID,
+        usage: ServerEndpointUsage,
+        retryBucket: RemoteTelemetryRetryBucket,
+        phase: Phase
+    ) {
+        self.id = id
+        self.usage = usage
+        self.retryBucket = retryBucket
+        self.phase = phase
+    }
+}
+
+public struct AudiobookshelfLiveConnectionFailure: Equatable, Sendable {
+    public let cause: AudiobookshelfLiveUpdateFailure
+    public let stage: AudiobookshelfLiveConnectionFailureStage
+
+    public init(
+        cause: AudiobookshelfLiveUpdateFailure,
+        stage: AudiobookshelfLiveConnectionFailureStage
+    ) {
+        self.cause = cause
+        self.stage = stage
+    }
+}
+
+public enum AudiobookshelfLiveConnectionFailureStage: Equatable, Sendable {
+    case requestConstruction
+    case credentialRetrieval
+    case socketReceive
+    case socketSend
+    case protocolDecoding
+    case authentication
+    case credentialRecovery
 }
 
 public enum AudiobookshelfSocketPacket: Equatable, Sendable {
@@ -213,16 +279,16 @@ public struct AudiobookshelfSocketCodec: Sendable {
 
 public actor AudiobookshelfLiveEventClient {
     public typealias ServerProvider =
-        @Sendable () async -> NormalizedServerURL
+        @Sendable () async -> AudiobookshelfLiveServerEndpoint
     public typealias AccessTokenProvider =
         @Sendable () async throws -> String
     public typealias AccessTokenRecovery =
         @Sendable (_ rejectedToken: String) async throws -> String
 
     public typealias TransportFailureHandler =
-        @Sendable (_ server: NormalizedServerURL) async -> Void
+        @Sendable (_ endpoint: AudiobookshelfLiveServerEndpoint) async -> Void
     public typealias AuthenticationHandler =
-        @Sendable (_ server: NormalizedServerURL) async -> Void
+        @Sendable (_ endpoint: AudiobookshelfLiveServerEndpoint) async -> Void
 
     private let serverProvider: ServerProvider
     private let tokenProvider: AccessTokenProvider
@@ -277,7 +343,10 @@ public actor AudiobookshelfLiveEventClient {
         var retry = 0
         while !Task.isCancelled {
             continuation.yield(.connection(.connecting))
-            let authenticated = await connectOnce(continuation: continuation)
+            let authenticated = await connectOnce(
+                retryCount: retry,
+                continuation: continuation
+            )
             guard !Task.isCancelled else {
                 break
             }
@@ -295,18 +364,60 @@ public actor AudiobookshelfLiveEventClient {
     }
 
     private func connectOnce(
+        retryCount: Int,
         continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation
     ) async -> Bool {
-        let server = await serverProvider()
+        let endpoint = await serverProvider()
+        let server = endpoint.server
+        let attemptID = UUID()
+        let retryBucket = RemoteTelemetryRetryBucket(retryCount: retryCount)
+        continuation.yield(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: attemptID,
+                    usage: endpoint.usage,
+                    retryBucket: retryBucket,
+                    phase: .started
+                )
+            ))
+        var attemptFinished = false
+
+        func finishAttempt(
+            _ phase: AudiobookshelfLiveConnectionAttempt.Phase
+        ) {
+            guard !attemptFinished else { return }
+            attemptFinished = true
+            continuation.yield(
+                .connectionAttempt(
+                    AudiobookshelfLiveConnectionAttempt(
+                        id: attemptID,
+                        usage: endpoint.usage,
+                        retryBucket: retryBucket,
+                        phase: phase
+                    )
+                ))
+        }
+
         let request: URLRequest
-        let initialToken: String
         do {
             request = try codec.socketRequest(for: server)
-            initialToken = try await tokenProvider()
-        } catch let failure as AudiobookshelfLiveUpdateFailure {
+        } catch let failure {
+            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                cause: failure,
+                stage: .requestConstruction
+            )))
             continuation.yield(.connection(.failed(failure)))
             return false
+        }
+
+        let initialToken: String
+        do {
+            initialToken = try await tokenProvider()
         } catch {
+            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                cause: .credentialsUnavailable,
+                stage: .credentialRetrieval
+            )))
             continuation.yield(.connection(.failed(.credentialsUnavailable)))
             return false
         }
@@ -317,10 +428,13 @@ public actor AudiobookshelfLiveEventClient {
         var token = initialToken
         var didRecoverAuthentication = false
         var authenticated = false
+        var failureStage = AudiobookshelfLiveConnectionFailureStage.socketReceive
 
         do {
             while !Task.isCancelled {
+                failureStage = .socketReceive
                 let message = try await socket.receive()
+                failureStage = .protocolDecoding
                 let text: String
                 switch message {
                 case .string(let value):
@@ -336,19 +450,27 @@ public actor AudiobookshelfLiveEventClient {
                 }
                 switch try codec.decode(text) {
                 case .engineOpen:
+                    failureStage = .socketSend
                     try await socket.send(.string("40"))
                 case .namespaceConnected:
+                    failureStage = .socketSend
                     try await socket.send(.string(
                         codec.authenticationPacket(accessToken: token)
                     ))
                 case .ping(let payload):
+                    failureStage = .socketSend
                     try await socket.send(.string("3" + payload))
                 case .initialized:
                     authenticated = true
-                    await onAuthenticated(server)
+                    finishAttempt(.authenticated)
+                    await onAuthenticated(endpoint)
                     continuation.yield(.connection(.authenticated))
                 case .authenticationRejected:
                     guard !didRecoverAuthentication else {
+                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                            cause: .authenticationRejected,
+                            stage: .authentication
+                        )))
                         continuation.yield(
                             .connection(.failed(.authenticationRejected))
                         )
@@ -357,12 +479,27 @@ public actor AudiobookshelfLiveEventClient {
                     didRecoverAuthentication = true
                     do {
                         token = try await tokenRecovery(token)
+                    } catch {
+                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                            cause: .credentialsUnavailable,
+                            stage: .credentialRecovery
+                        )))
+                        continuation.yield(
+                            .connection(.failed(.credentialsUnavailable))
+                        )
+                        return false
+                    }
+                    do {
                         try await socket.send(.string(
                             codec.authenticationPacket(accessToken: token)
                         ))
                     } catch {
+                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                            cause: .transportUnavailable,
+                            stage: .socketSend
+                        )))
                         continuation.yield(
-                            .connection(.failed(.credentialsUnavailable))
+                            .connection(.failed(.transportUnavailable))
                         )
                         return false
                     }
@@ -376,12 +513,21 @@ public actor AudiobookshelfLiveEventClient {
                 }
             }
         } catch is CancellationError {
+            finishAttempt(.cancelled)
             return authenticated
         } catch let failure as AudiobookshelfLiveUpdateFailure {
+            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                cause: failure,
+                stage: failureStage
+            )))
             continuation.yield(.connection(.failed(failure)))
         } catch {
+            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
+                cause: .transportUnavailable,
+                stage: failureStage
+            )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
-            await onTransportFailure(server)
+            await onTransportFailure(endpoint)
         }
         socket.cancel(with: .goingAway, reason: nil)
         if self.socket === socket {

@@ -4,6 +4,7 @@ import SwiftUI
 struct AppMetadata: Equatable {
     let appName: String
     let version: String
+    let gitCommit: String
     let compileDate: Date?
     let developerName: String
     let bundleIdentifier: String
@@ -19,6 +20,11 @@ struct AppMetadata: Equatable {
         )
         version = Self.value(
             for: "CFBundleShortVersionString",
+            in: infoDictionary,
+            fallback: "Unavailable"
+        )
+        gitCommit = Self.value(
+            for: "BleatGitCommit",
             in: infoDictionary,
             fallback: "Unavailable"
         )

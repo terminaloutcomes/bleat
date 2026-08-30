@@ -384,7 +384,10 @@ protocol AppServicing: Sendable {
         purpose: ServerConnectionPurpose
     ) async
 
-    func reportServerTransportFailure(url: URL) async -> Bool
+    func reportServerTransportFailure(
+        url: URL,
+        accountID: AccountID
+    ) async -> Bool
 
     func primaryFallbackDownloadRequest(
         for failedRequest: URLRequest
@@ -828,7 +831,10 @@ extension AppServicing {
         purpose: ServerConnectionPurpose
     ) async {}
 
-    func reportServerTransportFailure(url: URL) async -> Bool {
+    func reportServerTransportFailure(
+        url: URL,
+        accountID: AccountID
+    ) async -> Bool {
         false
     }
 
@@ -1152,6 +1158,7 @@ actor LiveAppService: AppServicing {
     private var networkProbeGeneration = 0
     private var networkProbeTask: Task<Void, Never>?
     private var networkPathState: AppNetworkPathState = .unknown
+    private var primaryPlaybackMediaAccounts: Set<AccountID> = []
     private var networkPathContinuations:
         [UUID: AsyncStream<AppNetworkPathState>.Continuation] = [:]
     private let searchCoordinator = LibrarySearchCoordinator()
@@ -1342,7 +1349,14 @@ actor LiveAppService: AppServicing {
         let clientToken = UUID()
         let client = AudiobookshelfLiveEventClient(
             serverProvider: {
-                await endpointRouter.preferredServer(for: account.server)
+                let selection = await endpointRouter.preferredServer(
+                    for: account.server
+                )
+                return AudiobookshelfLiveServerEndpoint(
+                    server: selection.server,
+                    usage: selection.usage,
+                    pathGeneration: selection.pathGeneration
+                )
             },
             tokenProvider: {
                 try await coordinator.accessToken(for: account.id)
@@ -1354,26 +1368,27 @@ actor LiveAppService: AppServicing {
                     rejectedAccessToken: rejectedToken
                 )
             },
-            onTransportFailure: { server in
+            onTransportFailure: { endpoint in
                 guard let localServer = account.localServer,
-                    server == localServer
+                    endpoint.server == localServer
                 else {
                     return
                 }
-                await endpointRouter.markLocalUnavailable(
-                    for: account.server
+                guard let pathGeneration = endpoint.pathGeneration else {
+                    return
+                }
+                let candidate = ServerEndpointCandidate(
+                    url: endpoint.server.url,
+                    primary: account.server,
+                    isLocal: true,
+                    pathGeneration: pathGeneration
                 )
+                await endpointRouter.markLocalUnavailable(candidate)
             },
-            onAuthenticated: { server in
-                let isLocal =
-                    account.localServer.map {
-                        server == $0
-                    } ?? false
-                let usage: ServerEndpointUsage =
-                    isLocal ? .local : .primary
+            onAuthenticated: { endpoint in
                 await endpointRouter.recordConnection(
                     primary: account.server,
-                    usage: usage,
+                    usage: endpoint.usage,
                     purpose: .webSocket
                 )
             }
@@ -1429,6 +1444,11 @@ actor LiveAppService: AppServicing {
     }
 
     private func networkPathChanged(_ state: AppNetworkPathState) async {
+        let reconnectClientTokens = Dictionary(
+            uniqueKeysWithValues: liveClients.map { ($0.key, $0.value.token) }
+        )
+        let endpointPathGeneration =
+            await endpointRouter.networkPathDidChange()
         networkPathState = state
         networkProbeGeneration &+= 1
         let generation = networkProbeGeneration
@@ -1444,15 +1464,22 @@ actor LiveAppService: AppServicing {
         }
         networkProbeTask?.cancel()
         networkProbeTask = Task { [weak self] in
-            await self?.probeNetworkEndpoints(generation: generation)
+            await self?.probeNetworkEndpoints(
+                generation: generation,
+                endpointPathGeneration: endpointPathGeneration,
+                reconnectClientTokens: reconnectClientTokens
+            )
         }
     }
 
-    private func probeNetworkEndpoints(generation: Int) async {
+    private func probeNetworkEndpoints(
+        generation: Int,
+        endpointPathGeneration: ServerEndpointPathGeneration,
+        reconnectClientTokens: [AccountID: UUID]
+    ) async {
         guard generation == networkProbeGeneration else {
             return
         }
-        await endpointRouter.networkPathDidChange()
         do {
             let accounts = try await accountStore.accounts()
             for account in accounts {
@@ -1493,7 +1520,8 @@ actor LiveAppService: AppServicing {
                         local: localServer
                     )
                     await endpointRouter.markLocalAvailable(
-                        for: account.server
+                        for: account.server,
+                        pathGeneration: endpointPathGeneration
                     )
                     if promotedValidation {
                         await endpointRouter.recordAuthenticationUse(
@@ -1511,28 +1539,36 @@ actor LiveAppService: AppServicing {
                         return
                     }
                     await endpointRouter.markLocalUnavailable(
-                        for: account.server
+                        for: account.server,
+                        pathGeneration: endpointPathGeneration
                     )
                 }
             }
         } catch {
-            // The next routed request will still perform normal local-first
-            // selection if the account list cannot be read here.
+            // Finishing the evaluation below keeps the primary route selected
+            // when the configured local endpoints could not be enumerated.
         }
         guard generation == networkProbeGeneration,
             !Task.isCancelled
         else {
             return
         }
+        await endpointRouter.finishNetworkPathEvaluation(
+            endpointPathGeneration
+        )
         if networkPathState.allowsRealtimeUpdates {
-            let clients = liveClients.values.map(\.client)
-            for client in clients {
+            for (accountID, token) in reconnectClientTokens {
                 guard generation == networkProbeGeneration,
                     !Task.isCancelled
                 else {
                     return
                 }
-                await client.reconnect()
+                guard let registration = liveClients[accountID],
+                    registration.token == token
+                else {
+                    continue
+                }
+                await registration.client.reconnect()
             }
         }
         if generation == networkProbeGeneration {
@@ -1617,12 +1653,15 @@ actor LiveAppService: AppServicing {
         )
     }
 
-    func reportServerTransportFailure(url: URL) async -> Bool {
+    func reportServerTransportFailure(
+        url: URL,
+        accountID: AccountID
+    ) async -> Bool {
         let candidate = await endpointRouter.candidate(forResolvedURL: url)
-        guard candidate.isLocal, let primary = candidate.primary else {
+        guard candidate.isLocal, candidate.primary != nil else {
             return false
         }
-        await endpointRouter.markLocalUnavailable(for: primary)
+        primaryPlaybackMediaAccounts.insert(accountID)
         return true
     }
 
@@ -2329,9 +2368,14 @@ actor LiveAppService: AppServicing {
         preference: PlaybackPreference,
         deviceInfo: PlaybackDeviceInfo
     ) async throws(AppServiceError) -> AppPlaybackPreparation {
+        let forcePrimaryMedia = primaryPlaybackMediaAccounts.contains(
+            account.id
+        )
+        let playbackCoordinator = forcePrimaryMedia
+            ? authenticationCoordinator : coordinator
         let session: PlaybackSession
         do {
-            session = try await coordinator.openPlaybackSession(
+            session = try await playbackCoordinator.openPlaybackSession(
                 accountID: account.id,
                 server: account.server,
                 itemID: itemID,
@@ -2349,7 +2393,6 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .playbackSession(error)
         }
-
         let source: AppPlaybackSource
         do {
             switch try session.source(for: account.server) {
@@ -2359,7 +2402,9 @@ actor LiveAppService: AppServicing {
                 for track in tracks {
                     appTracks.append(
                         AppPlaybackTrack(
-                            url: await routedServerURL(track.url),
+                            url: forcePrimaryMedia
+                                ? track.url
+                                : await routedServerURL(track.url),
                             startOffset: track.track.startOffset,
                             duration: track.track.duration,
                             title: track.track.title
@@ -2368,7 +2413,7 @@ actor LiveAppService: AppServicing {
                 source = .direct(appTracks)
             case .hls(let url):
                 source = .hls(
-                    await routedServerURL(url)
+                    forcePrimaryMedia ? url : await routedServerURL(url)
                 )
             }
         } catch let error {
@@ -2378,6 +2423,9 @@ actor LiveAppService: AppServicing {
                 sessionID: session.id
             )
             throw .playbackSource(error)
+        }
+        if forcePrimaryMedia {
+            primaryPlaybackMediaAccounts.remove(account.id)
         }
 
         return AppPlaybackPreparation(
@@ -2829,6 +2877,7 @@ actor LiveAppService: AppServicing {
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
+        primaryPlaybackMediaAccounts.remove(account.id)
         await stopLiveUpdates(for: account.id)
         do {
             try await libraryCache.removeAccount(account.id)
@@ -2854,6 +2903,7 @@ actor LiveAppService: AppServicing {
     }
 
     func resetLocalData() async throws(AppServiceError) {
+        primaryPlaybackMediaAccounts.removeAll()
         let activeAccountIDs = Array(liveClients.keys)
         for accountID in activeAccountIDs {
             await stopLiveUpdates(for: accountID)
@@ -2893,6 +2943,7 @@ actor LiveAppService: AppServicing {
         _ account: ServerAccount,
         includeStatistics: Bool
     ) async throws(AppServiceError) {
+        primaryPlaybackMediaAccounts.remove(account.id)
         await stopLiveUpdates(for: account.id)
         do {
             try await libraryCache.removeAccount(account.id)

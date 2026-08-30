@@ -13,6 +13,7 @@ final class RemoteTelemetryTests: XCTestCase {
             [
                 "bleat.app.launch",
                 "bleat.account.connection",
+                "bleat.live_update.connection",
                 "bleat.library.refresh",
                 "bleat.playback.prepare",
                 "bleat.playback.start",
@@ -305,6 +306,28 @@ final class RemoteTelemetryTests: XCTestCase {
                 category.rawValue
             )
         }
+
+        let liveUpdateFailure = RemoteTelemetrySpanDescriptor(
+            operation: .liveUpdateConnection,
+            outcome: .liveUpdateFailed(
+                RemoteTelemetryLiveUpdateFailure(
+                    category: .invalidResponse,
+                    code: .malformedPacket,
+                    stage: .protocolDecoding
+                )
+            ),
+            source: .localServer,
+            retryBucket: .one
+        ).encodedSpan
+        XCTAssertEqual(liveUpdateFailure.attributes, [
+            "bleat.subsystem": "authentication",
+            "bleat.outcome": "failed",
+            "bleat.failure.category": "invalid_response",
+            "bleat.source": "local_server",
+            "bleat.retry.bucket": "one",
+            "bleat.live_update.failure_code": "malformed_packet",
+            "bleat.live_update.stage": "protocol_decoding",
+        ])
     }
 
     func testRetryCountsAreBounded() {

@@ -4,6 +4,56 @@ import XCTest
 @testable import BleatCore
 
 final class LiveUpdatesTests: XCTestCase {
+    func testConnectionAttemptReportsEndpointRoleAndTypedFailure()
+        async throws
+    {
+        let endpoint = AudiobookshelfLiveServerEndpoint(
+            server: try NormalizedServerURL("https://example.test"),
+            usage: .local
+        )
+        let client = AudiobookshelfLiveEventClient(
+            serverProvider: {
+                endpoint
+            },
+            tokenProvider: {
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            },
+            tokenRecovery: { _ in
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            }
+        )
+        let updates = await client.updates()
+        var attempts: [AudiobookshelfLiveConnectionAttempt] = []
+        for await update in updates {
+            guard case .connectionAttempt(let attempt) = update else {
+                continue
+            }
+            attempts.append(attempt)
+            if case .failed = attempt.phase {
+                break
+            }
+        }
+        await client.stop()
+
+        XCTAssertEqual(attempts.count, 2)
+        let started = try XCTUnwrap(attempts.first)
+        let failed = try XCTUnwrap(attempts.last)
+        XCTAssertEqual(started.id, failed.id)
+        XCTAssertEqual(started.usage, .local)
+        XCTAssertEqual(started.retryBucket, .none)
+        XCTAssertEqual(started.phase, .started)
+        XCTAssertEqual(failed.usage, .local)
+        XCTAssertEqual(
+            failed.phase,
+            .failed(
+                AudiobookshelfLiveConnectionFailure(
+                    cause: .credentialsUnavailable,
+                    stage: .credentialRetrieval
+                )
+            )
+        )
+    }
+
     func testSocketRequestDisallowsConstrainedNetworkAccess() throws {
         let request = try AudiobookshelfSocketCodec().socketRequest(
             for: NormalizedServerURL("https://example.test/prefix")

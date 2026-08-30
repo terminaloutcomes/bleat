@@ -447,7 +447,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n";
+			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif ! build_commit=\"$(/usr/bin/git -C \"${SRCROOT}\" rev-parse --short=8 --verify HEAD 2>/dev/null)\"; then\n  echo \"error: Could not determine the Git commit for this build.\" >&2\n  exit 1\nfi\n\nif [ \"${#build_commit}\" -lt 8 ]; then\n  echo \"error: Git returned an invalid short commit for this build.\" >&2\n  exit 1\nfi\n\ncase \"${build_commit}\" in\n  *[!0-9a-fA-F]*)\n    echo \"error: Git returned an invalid short commit for this build.\" >&2\n    exit 1\n    ;;\nesac\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n/usr/libexec/PlistBuddy -c \"Set :BleatGitCommit ${build_commit}\" \"${info_plist}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */ = {

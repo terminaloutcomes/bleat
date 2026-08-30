@@ -501,8 +501,21 @@ Live WebSocket connections use the same endpoint selection and fallback policy.
 They are optional foreground refresh channels: when `NWPath.isConstrained` is
 true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
-starts one connection and one catch-up browse refresh. REST, cover, playback,
-download, and offline behavior do not depend on the socket.
+starts one connection and one catch-up browse refresh. Duplicate path updates
+that do not cross the realtime-allowed boundary do not replace the active
+subscription. A path change immediately makes the primary server preferred
+while local reachability is unknown; the shared endpoint router promotes the
+local server only after its probe succeeds. Endpoint probes reconnect only a
+client that existed when the path changed. REST, cover, playback, download, and
+offline behavior do not depend on the socket. A local playback-media failure
+opens the account-scoped replacement session through the primary transport and
+keeps its media URLs on the primary server without changing shared endpoint
+preference from a generation-less URL callback.
+With diagnostic telemetry enabled, each WebSocket connection attempt emits a
+bounded span containing only its local-or-primary endpoint role, retry bucket,
+elapsed span time, typed outcome category, stable failure code, and rejection
+stage. Server addresses, account data, credentials, and playback routes are
+excluded.
 
 Endpoint URLs must be built relative to the normalized base URL. Never construct API URLs from an origin alone, because that drops an Audiobookshelf path prefix.
 

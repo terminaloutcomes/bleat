@@ -4,6 +4,8 @@
 <dict>
 	<key>BleatBuildDate</key>
 	<string>Unavailable</string>
+	<key>BleatGitCommit</key>
+	<string>Unavailable</string>
 	<key>BleatAppAttestMode</key>
 	<string>$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)</string>
 	<key>BleatCloudKitMode</key>
