@@ -296,6 +296,12 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can search transcript text case-insensitively across every previously
   transcribed chapter of the current book. Query terms may appear in any order,
   but every term must occur within the same transcript segment.
+- A first-row action uses the exact account and book's active playback position,
+  or its saved position when no matching player is active, to select and scroll
+  to the nearest cached transcript segment and highlight it briefly. The action
+  does not mutate playback or fetch from the server. Missing positions, positions
+  outside the book, untranscribed containing chapters, and chapters with no
+  speech remain distinct explanatory states.
 - Tapping a transcript segment or search result opens actions to copy only its
   text or move playback to its whole-book start timestamp. A matching active
   player seeks without changing its playing or paused intent; otherwise the

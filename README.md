@@ -1020,6 +1020,14 @@ place; otherwise Bleat prepares the book through the normal downloaded-first
 playback flow. If the audio is not downloaded, the screen asks before
 scheduling the existing audiobook download.
 
+The first transcription action can jump to the nearest cached transcript
+segment for the current audiobook position. It prefers the exact account and
+book's active player, falls back to that account and book's saved position,
+selects the matching chapter, scrolls the segment into view, and highlights it
+briefly. If the containing chapter has not been transcribed, contains no speech,
+or the position is unavailable or outside the book, the screen explains that
+state without starting playback or network work.
+
 When cached transcript segments exist, the screen can export all currently
 available chapters as WebVTT or SRT using whole-book timestamps and the native
 share sheet. If some book chapters have no cached transcript, Bleat reports the
