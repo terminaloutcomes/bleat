@@ -12554,23 +12554,59 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(outcome, .started(source: .downloaded))
         await preparationGate.waitUntilEntered()
-        let didReachBoundary = await waitUntil(timeout: .seconds(3)) {
-            model.playback.currentTime >= 0.99
-        }
-        XCTAssertTrue(didReachBoundary)
+        let cachedBoundaryReached = expectation(
+            description: "Cached boundary waits for streaming preparation"
+        )
+        Self.fulfill(
+            cachedBoundaryReached,
+            when: model.playback,
+            reaches: .waitingForPreparation
+        )
+        await fulfillment(of: [cachedBoundaryReached], timeout: 3)
+        XCTAssertEqual(
+            model.playback.cachedContinuationPhase,
+            .waitingForPreparation
+        )
+        XCTAssertGreaterThanOrEqual(model.playback.currentTime, 0.99)
 
         model.playback.pause()
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertEqual(
+            model.playback.cachedContinuationPhase,
+            .waitingForPreparation
+        )
+        let preparationCompleted = expectation(
+            description: "Streaming continuation prepared while paused"
+        )
+        Self.fulfill(
+            preparationCompleted,
+            when: model.playback,
+            reaches: .prepared
+        )
         await preparationGate.release()
-        let didPause = await waitUntil(timeout: .seconds(2)) {
-            model.playback.state == .paused
-        }
-        XCTAssertTrue(didPause)
-        model.playback.play()
+        await fulfillment(of: [preparationCompleted], timeout: 2)
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertEqual(
+            model.playback.cachedContinuationPhase,
+            .prepared
+        )
 
-        let didResumeContinuation = await waitUntil(timeout: .seconds(2)) {
-            model.playback.coverLoadPolicy == .allowNetwork
-        }
-        XCTAssertTrue(didResumeContinuation)
+        let continuationFinished = expectation(
+            description: "Prepared continuation activation finished"
+        )
+        Self.fulfill(
+            continuationFinished,
+            when: model.playback,
+            reaches: .inactive
+        )
+        model.playback.play()
+        await fulfillment(of: [continuationFinished], timeout: 2)
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        XCTAssertTrue(
+            model.playback.state == .buffering
+                || model.playback.state == .playing
+        )
+        XCTAssertEqual(model.playback.coverLoadPolicy, .allowNetwork)
         let openRequests = await service.playbackOpenRequests()
         XCTAssertEqual(openRequests.count, 1)
         XCTAssertFalse(isFailed(model.playback.state))
@@ -15612,6 +15648,29 @@ final class AppModelTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(20))
         }
         return condition()
+    }
+
+    private static func fulfill(
+        _ expectation: XCTestExpectation,
+        when playback: PlaybackModel,
+        reaches expectedPhase: CachedContinuationPhase
+    ) {
+        guard playback.cachedContinuationPhase != expectedPhase else {
+            expectation.fulfill()
+            return
+        }
+        withObservationTracking {
+            _ = playback.cachedContinuationPhase
+        } onChange: { [weak playback] in
+            Task { @MainActor in
+                guard let playback else { return }
+                Self.fulfill(
+                    expectation,
+                    when: playback,
+                    reaches: expectedPhase
+                )
+            }
+        }
     }
 
     private func isFailed(_ state: PlaybackState) -> Bool {
