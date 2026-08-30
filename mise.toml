@@ -208,6 +208,15 @@ run = ["./scripts/build-macos.sh"]
 description = "Create and validate the Release archive"
 run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
+[tasks."test:testflight-packaging"]
+description = "Validate the internal TestFlight export configuration"
+run = "./scripts/test-testflight-export-options.sh"
+
+[tasks."testflight:internal"]
+description = "Archive and upload a uniquely numbered TestFlight Internal Only build"
+depends = ["test:testflight-packaging"]
+run = "./scripts/upload-testflight-internal.sh"
+
 [tasks."devices:status"]
 description = "List signing identities and connected Apple devices"
 run = [
