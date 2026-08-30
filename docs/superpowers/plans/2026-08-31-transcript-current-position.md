@@ -200,4 +200,3 @@ Run `git status --short`, `git diff --check`, inspect `git log origin/main..HEAD
 - [ ] **Step 5: Push and create the PR**
 
 Push `yaleman/issue-49-current-position`, create a PR targeting `main` with `Closes #49`, exact validation evidence, and the requested scope. Update the Codex conversation title so it begins with both Issue #49 and the resulting PR number.
-

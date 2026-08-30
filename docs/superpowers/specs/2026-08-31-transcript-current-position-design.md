@@ -93,4 +93,3 @@ UI coverage will verify that the action is prominent, scrolls to and briefly
 highlights the expected cached segment, and explains an untranscribed current
 position without selecting unrelated transcript text. Documentation and
 requirements traceability will record the implemented behavior and evidence.
-
