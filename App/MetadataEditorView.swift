@@ -69,6 +69,19 @@ struct MetadataEditorView: View {
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("metadata.error")
+                        if case .metadataSavedCoverFailed =
+                            model.bookEditSaveState
+                        {
+                            Button("Retry Cover Upload") {
+                                Task {
+                                    await model.retryBookCoverUpload()
+                                }
+                            }
+                            .disabled(isBusy)
+                            .accessibilityIdentifier(
+                                "metadata.retryCoverUpload"
+                            )
+                        }
                     }
                 }
                 if case .failed(let failure) = model.bookDeletionState {
@@ -168,7 +181,11 @@ struct MetadataEditorView: View {
                 case .saved:
                     model.resetBookEditSaveState()
                     dismiss()
-                case .metadataSavedCoverFailed(let latest, _):
+                case .coverSaved(let latest):
+                    baseline = latest
+                    pendingCover = .unchanged
+                    model.resetBookEditSaveState()
+                case .metadataSavedCoverFailed(_, let latest, _, _):
                     baseline = latest
                 case .idle, .saving, .stale, .failed:
                     break
@@ -231,9 +248,9 @@ struct MetadataEditorView: View {
     private var editFailure: AppFailure? {
         switch model.bookEditSaveState {
         case .failed(let failure),
-            .metadataSavedCoverFailed(_, let failure):
+            .metadataSavedCoverFailed(_, _, _, let failure):
             failure
-        case .idle, .saving, .stale, .saved:
+        case .idle, .saving, .stale, .saved, .coverSaved:
             nil
         }
     }
