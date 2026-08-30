@@ -207,7 +207,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   `testPlayableCoverPresentsTypedPermissionDenial`,
   `testPlayableCoversAppearOnEverySingleBookBrowseSurface`,
   `testBookEditorOwnsCoverAndServerDeletionControls`,
-  `testCoreJourneyAtLargestDynamicType`, and
+  `BleatDynamicTypeUITests`, and
   `testSeriesCoverBrowserDisablesDepthMotionWhenRequested`.
 - `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload` quick-plays the
   remote Home cover before Book Detail, completes a full download, and

@@ -2193,57 +2193,6 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testCoreJourneyAtLargestDynamicType() {
-        let app = launch(
-            scenario: "--ui-testing-signed-in",
-            additionalArguments: [
-                "-UIPreferredContentSizeCategoryName",
-                "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
-            ]
-        )
-
-        XCTAssertTrue(
-            app.otherElements["app.signedIn"].waitForExistence(
-                timeout: 3
-            )
-        )
-        let library = tabButton("Library", in: app)
-        XCTAssertTrue(library.exists)
-        library.tap()
-        XCTAssertTrue(
-            app.staticTexts["The Test Audiobook"].waitForExistence(
-                timeout: 3
-            )
-        )
-        let quickPlay = app.buttons["library.book.ui-book.play"]
-        XCTAssertTrue(quickPlay.waitForExistence(timeout: 3))
-        XCTAssertTrue(quickPlay.isHittable)
-        XCTAssertEqual(quickPlay.frame.width, 44, accuracy: 0.5)
-        XCTAssertEqual(quickPlay.frame.height, 44, accuracy: 0.5)
-        app.staticTexts["The Test Audiobook"].tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["book.detail.title"]
-                .waitForExistence(timeout: 3)
-        )
-        XCTAssertTrue(
-            app.buttons["book.detail.play"].waitForExistence(timeout: 3)
-        )
-        for identifier in [
-            "book.detail.author.0",
-            "book.detail.author.1",
-            "book.detail.series.0",
-            "book.detail.series.1",
-        ] {
-            Self.scrollUntilHittable(
-                app: app,
-                identifier: identifier,
-                direction: .down
-            )
-            XCTAssertTrue(app.buttons[identifier].isHittable)
-        }
-    }
-
-    @MainActor
     func testSeriesCoverBrowserDisablesDepthMotionWhenRequested() {
         let app = launch(
             scenario: "--ui-testing-signed-in",

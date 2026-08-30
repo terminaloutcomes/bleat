@@ -220,6 +220,21 @@ MP4 for each device, orientation, and appearance to
 `.build/release-screenshots/recordings/`. Videos are local developer artifacts
 and are not included in the release screenshot manifest.
 
+## Accessibility UI audits
+
+Run the largest Dynamic Type journeys on the release-audit iPhone and iPad
+Simulators with:
+
+```sh
+mise run test:dynamic-type
+```
+
+The audit exercises login, Home, Library, Search, Book Detail, Downloads,
+mini-player, Now Playing, and Settings with the system content-size category set
+to Accessibility Extra Extra Extra Large. It fails when an essential audited
+element is outside the application window or cannot be reached and operated.
+The result bundles are written beneath `.build/dynamic-type-ui-results/`.
+
 ## Evidence requirements
 
 A successful command exit is not sufficient evidence. Confirm that every

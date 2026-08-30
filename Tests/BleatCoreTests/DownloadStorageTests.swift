@@ -1096,7 +1096,9 @@ final class DownloadStorageTests: XCTestCase {
                     60
                 )
                 XCTAssertEqual(record.manifest.entries[1].duration, 60)
-                XCTAssertEqual(record.manifest.state, .partial)
+                // A complete cached track plus queued missing work is
+                // actionable download work, so the aggregate remains queued.
+                XCTAssertEqual(record.manifest.state, .queued)
                 XCTAssertFalse(record.manifest.isFullBookComplete)
                 XCTAssertEqual(
                     record.manifest.automaticCacheState,
@@ -1152,7 +1154,7 @@ final class DownloadStorageTests: XCTestCase {
             from: record,
             trackIndexes: [0]
         )
-        XCTAssertEqual(record.manifest.state, .partial)
+        XCTAssertEqual(record.manifest.state, .queued)
         XCTAssertEqual(record.manifest.entries[0].state, .queued)
         XCTAssertEqual(record.manifest.entries[1].state, .complete)
         XCTAssertEqual(record.manifest.storedByteLength, 2)
