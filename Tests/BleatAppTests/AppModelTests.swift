@@ -7135,6 +7135,26 @@ final class AppModelTests: XCTestCase {
         hasSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertTrue(hasSubscriber)
 
+        await service.emitNetworkPathUpdate()
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: true
+            )
+        )
+        for _ in 0..<100 {
+            if model.networkPathState.isExpensive {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 0)
+        hasSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(hasSubscriber)
+
         await model.playback.startDownloaded(
             detail: playbackFixture.detail,
             trackURLs: [playbackFixture.audioURL],
@@ -7177,6 +7197,24 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.state, playbackState)
         XCTAssertEqual(model.playback.currentChapterIndex, playbackChapter)
         XCTAssertFalse(model.playback.isPlaybackRequested)
+
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .unavailable,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        for _ in 0..<100 {
+            if model.liveUpdateConnectionState == .disconnected {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.liveUpdateConnectionState, .disconnected)
+        lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 1)
 
         let constrainedRESTBaseline = await service.libraryRequestCount()
         await model.refreshLibraries()

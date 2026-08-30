@@ -501,8 +501,11 @@ Live WebSocket connections use the same endpoint selection and fallback policy.
 They are optional foreground refresh channels: when `NWPath.isConstrained` is
 true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
-starts one connection and one catch-up browse refresh. REST, cover, playback,
-download, and offline behavior do not depend on the socket.
+starts one connection and one catch-up browse refresh. Duplicate path updates
+that do not cross the realtime-allowed boundary do not replace the active
+subscription. Endpoint probes reconnect only a client that existed when the
+path changed. REST, cover, playback, download, and offline behavior do not
+depend on the socket.
 With diagnostic telemetry enabled, each WebSocket connection attempt emits a
 bounded span containing only its local-or-primary endpoint role, retry bucket,
 elapsed span time, typed outcome category, stable failure code, and rejection

@@ -29,6 +29,24 @@ only `local_server` or `primary_server` source, bounded retry bucket, elapsed
 span time, typed outcome category, stable failure code, and rejection stage.
 Hostname, URL, account, token, and playback route remain excluded.
 
+## Instrumented reconnect investigation
+
+The signed physical-device build from commit `9113ad66` emitted the reviewed
+connection spans during a second cellular Low Data Mode recovery. The bounded
+reconnect window contained 15 attempts in approximately 21 seconds: an
+8.2-second local attempt was cancelled, then several local and primary attempts
+were cancelled or failed at `socket_receive` before two primary attempts
+authenticated. Every failed attempt reported `transport_unavailable`; no
+endpoint value was collected.
+
+This evidence identified two replacement paths rather than an ordinary single
+client retry sequence. The app now starts or stops its subscription only when
+the path crosses the realtime-allowed boundary, does not replace the
+subscription for duplicate path states, and lets an endpoint probe reconnect
+only a client that existed when that path change began. Simulator regression
+coverage sends duplicate unconstrained and expensive-path updates and requires
+the original single subscription to remain.
+
 ## Automated evidence
 
 - `LiveUpdatesTests` covers constrained-network request policy, endpoint and

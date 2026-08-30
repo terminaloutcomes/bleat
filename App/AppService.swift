@@ -1437,6 +1437,9 @@ actor LiveAppService: AppServicing {
     }
 
     private func networkPathChanged(_ state: AppNetworkPathState) async {
+        let reconnectClientTokens = Dictionary(
+            uniqueKeysWithValues: liveClients.map { ($0.key, $0.value.token) }
+        )
         networkPathState = state
         networkProbeGeneration &+= 1
         let generation = networkProbeGeneration
@@ -1452,11 +1455,17 @@ actor LiveAppService: AppServicing {
         }
         networkProbeTask?.cancel()
         networkProbeTask = Task { [weak self] in
-            await self?.probeNetworkEndpoints(generation: generation)
+            await self?.probeNetworkEndpoints(
+                generation: generation,
+                reconnectClientTokens: reconnectClientTokens
+            )
         }
     }
 
-    private func probeNetworkEndpoints(generation: Int) async {
+    private func probeNetworkEndpoints(
+        generation: Int,
+        reconnectClientTokens: [AccountID: UUID]
+    ) async {
         guard generation == networkProbeGeneration else {
             return
         }
@@ -1533,14 +1542,18 @@ actor LiveAppService: AppServicing {
             return
         }
         if networkPathState.allowsRealtimeUpdates {
-            let clients = liveClients.values.map(\.client)
-            for client in clients {
+            for (accountID, token) in reconnectClientTokens {
                 guard generation == networkProbeGeneration,
                     !Task.isCancelled
                 else {
                     return
                 }
-                await client.reconnect()
+                guard let registration = liveClients[accountID],
+                    registration.token == token
+                else {
+                    continue
+                }
+                await registration.client.reconnect()
             }
         }
         if generation == networkProbeGeneration {

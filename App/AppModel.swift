@@ -5311,6 +5311,7 @@ final class AppModel {
                 guard !Task.isCancelled else {
                     return
                 }
+                let previousState = networkPathState
                 networkPathState = state
                 downloads.updateNetworkPathState(state)
                 schedulePendingLocalSessionSync(for: accounts)
@@ -5319,18 +5320,24 @@ final class AppModel {
                 guard let account else {
                     continue
                 }
-                if state.allowsRealtimeUpdates {
+                if state.allowsRealtimeUpdates,
+                    !previousState.allowsRealtimeUpdates
+                {
                     startLiveUpdates(for: account)
                     scheduleLiveRefresh(
                         libraryChanged: true,
                         itemIDs: []
                     )
-                } else {
+                } else if !state.allowsRealtimeUpdates,
+                    previousState.allowsRealtimeUpdates
+                {
                     await stopLiveUpdatesAndWait()
-                    if state.isConstrained {
-                        liveUpdateConnectionState =
-                            .suspendedForLowDataMode
-                    }
+                }
+                if state.isConstrained {
+                    liveUpdateConnectionState =
+                        .suspendedForLowDataMode
+                } else if !state.allowsRealtimeUpdates {
+                    liveUpdateConnectionState = .disconnected
                 }
             }
         }
