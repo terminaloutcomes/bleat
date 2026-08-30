@@ -2181,9 +2181,9 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testTranscriptGoToCurrentPositionHighlightsActiveSegment() {
+    func testTranscriptGoToCurrentPositionHighlightsSavedSegment() {
         let app = launch(
-            scenario: "--ui-testing-playback",
+            scenario: "--ui-testing-signed-in",
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
@@ -2195,10 +2195,6 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
         app.staticTexts["The Test Audiobook"].tap()
-        app.buttons["book.detail.play"].tap()
-        XCTAssertTrue(
-            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
-        )
         app.buttons["book.detail.actions"].tap()
         app.buttons["book.detail.transcription"].tap()
 
@@ -2216,7 +2212,7 @@ final class BleatUITests: XCTestCase {
     @MainActor
     func testTranscriptGoToCurrentPositionExplainsUntranscribedChapter() {
         let app = launch(
-            scenario: "--ui-testing-playback",
+            scenario: "--ui-testing-signed-in",
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
@@ -2229,10 +2225,6 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
         app.staticTexts["The Test Audiobook"].tap()
-        app.buttons["book.detail.play"].tap()
-        XCTAssertTrue(
-            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
-        )
         app.buttons["book.detail.actions"].tap()
         app.buttons["book.detail.transcription"].tap()
         app.buttons["transcription.goToCurrentPosition"].tap()

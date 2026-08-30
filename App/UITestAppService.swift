@@ -93,8 +93,22 @@
         private var homeShelfRequests = 0
         private var libraryRequests = 0
 
+        @MainActor
         static func current() -> UITestAppService? {
             let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains(
+                "--ui-testing-transcription-position"
+            ) {
+                do {
+                    try PlaybackPositionStore.shared.save(
+                        1_810,
+                        accountID: AccountID(rawValue: "ui-account"),
+                        itemID: LibraryItemID(rawValue: "ui-book")
+                    )
+                } catch {
+                    return UITestAppService(scenario: .unavailableStartup)
+                }
+            }
             if arguments.contains(
                 UITestScenarioStorage.clearDeepLinkReceiptArgument
             ) {
@@ -828,11 +842,7 @@
                 itemID: itemID,
                 title: title,
                 duration: 3_600,
-                currentTime: usesLongChapterList
-                    ? 2_710
-                    : ProcessInfo.processInfo.arguments.contains(
-                        "--ui-testing-transcription-position"
-                    ) ? 1_810 : 0,
+                currentTime: usesLongChapterList ? 2_710 : 0,
                 chapters: chapters,
                 source: .direct([
                     AppPlaybackTrack(
