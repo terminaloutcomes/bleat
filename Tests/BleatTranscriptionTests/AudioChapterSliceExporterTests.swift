@@ -26,6 +26,18 @@
                 / outputFile.processingFormat.sampleRate
             #expect(duration > 0.45)
             #expect(duration < 0.55)
+
+            let input = try SpeechChapterTranscriber.inputMetadata(
+                audioFile: outputFile,
+                fileURL: outputURL
+            )
+            #expect(input.durationMilliseconds > 450)
+            #expect(input.durationMilliseconds < 550)
+            #expect(input.byteCount > 0)
+            #expect(input.container == .m4a)
+            #expect(input.codec == .aac)
+            #expect(input.sampleRateHz == 44_100)
+            #expect(input.channelCount == 2)
         }
 
         @Test("rejects a chapter start beyond the file")

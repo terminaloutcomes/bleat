@@ -392,6 +392,77 @@ struct PreparedChapterTranscriptionAudio: Sendable {
     let cachePin: AutomaticCachePin?
 }
 
+struct ChapterTelemetryInputAccumulator {
+    private var durationMilliseconds: Int64 = 0
+    private var byteCount: Int64 = 0
+    private var sliceCount = 0
+    private var codec: RemoteTelemetryTranscriptionAudioCodec?
+    private var sampleRateHz: Int?
+    private var channelCount: Int?
+    private var hasMixedSampleRates = false
+    private var hasMixedChannelCounts = false
+    private var isValid = true
+
+    mutating func append(_ input: ChapterTranscriptionInput) {
+        let duration = durationMilliseconds.addingReportingOverflow(
+            input.durationMilliseconds
+        )
+        let bytes = byteCount.addingReportingOverflow(input.byteCount)
+        guard !duration.overflow, !bytes.overflow else {
+            isValid = false
+            return
+        }
+        durationMilliseconds = duration.partialValue
+        byteCount = bytes.partialValue
+        sliceCount += 1
+
+        let nextCodec = RemoteTelemetryTranscriptionAudioCodec(input.codec)
+        if let codec, codec != nextCodec {
+            self.codec = .mixed
+        } else if codec == nil {
+            codec = nextCodec
+        }
+        if let sampleRateHz, sampleRateHz != input.sampleRateHz {
+            hasMixedSampleRates = true
+        } else if sampleRateHz == nil {
+            sampleRateHz = input.sampleRateHz
+        }
+        if let channelCount, channelCount != input.channelCount {
+            hasMixedChannelCounts = true
+        } else if channelCount == nil {
+            channelCount = input.channelCount
+        }
+    }
+
+    var telemetryInput: RemoteTelemetryTranscriptionInput? {
+        guard isValid, let codec else { return nil }
+        return RemoteTelemetryTranscriptionInput(
+            durationMilliseconds: durationMilliseconds,
+            byteCount: byteCount,
+            sliceCount: sliceCount,
+            container: .m4a,
+            codec: codec,
+            sampleRateHz: hasMixedSampleRates ? nil : sampleRateHz,
+            channelCount: hasMixedChannelCounts ? nil : channelCount
+        )
+    }
+}
+
+extension RemoteTelemetryTranscriptionAudioCodec {
+    fileprivate init(_ codec: ChapterTranscriptionAudioCodec) {
+        switch codec {
+        case .aac:
+            self = .aac
+        case .alac:
+            self = .alac
+        case .linearPCM:
+            self = .linearPCM
+        case .other:
+            self = .other
+        }
+    }
+}
+
 enum ChapterTranscriptionAudioLoadFailure: Error, Equatable, Sendable {
     case audioNotDownloaded
     case localAudioUnavailable
@@ -868,42 +939,84 @@ final class ChapterTranscriptionModel {
                 }
 
                 var transcript: [TranscriptSegment] = []
-                for (sliceIndex, slice) in slices.enumerated() {
-                    try Task.checkCancellation()
-                    guard
-                        let track = audio.tracks.first(where: {
-                            $0.timeline.trackIndex == slice.trackIndex
-                        })
-                    else {
-                        await fail(
-                            taskID: taskID,
-                            bookKey: bookKey,
-                            chapterID: chapter.id,
-                            failure: .localAudioUnavailable
-                        )
-                        return
-                    }
-                    state = .transcribing(
-                        progress: progress,
-                        completedSlices: sliceIndex,
-                        totalSlices: slices.count
+                let chapterSpan = remoteTelemetrySpan.map {
+                    remoteTelemetryTracer.beginChildSpan(
+                        operation: .transcriptionChapter,
+                        parent: $0
                     )
-                    let segments = try await transcriber.transcribe(
-                        ChapterTranscriptionRequest(
-                            audioFileURL: track.url,
-                            locale: .current,
-                            audioStartSeconds: slice.audioStartSeconds,
-                            audioDurationSeconds: slice.durationSeconds,
-                            chapterStartSeconds:
-                                slice.wholeBookStartSeconds
-                        )
-                    )
-                    try Task.checkCancellation()
-                    guard activeTaskID == taskID else {
-                        return
-                    }
-                    transcript.append(contentsOf: segments)
                 }
+                var telemetryInput = ChapterTelemetryInputAccumulator()
+                do {
+                    for (sliceIndex, slice) in slices.enumerated() {
+                        try Task.checkCancellation()
+                        guard
+                            let track = audio.tracks.first(where: {
+                                $0.timeline.trackIndex == slice.trackIndex
+                            })
+                        else {
+                            chapterSpan?.end(
+                                .failed(.media),
+                                transcriptionInput:
+                                    telemetryInput.telemetryInput
+                            )
+                            await fail(
+                                taskID: taskID,
+                                bookKey: bookKey,
+                                chapterID: chapter.id,
+                                failure: .localAudioUnavailable
+                            )
+                            return
+                        }
+                        state = .transcribing(
+                            progress: progress,
+                            completedSlices: sliceIndex,
+                            totalSlices: slices.count
+                        )
+                        let result = try await transcriber.transcribe(
+                            ChapterTranscriptionRequest(
+                                audioFileURL: track.url,
+                                locale: .current,
+                                audioStartSeconds: slice.audioStartSeconds,
+                                audioDurationSeconds: slice.durationSeconds,
+                                chapterStartSeconds:
+                                    slice.wholeBookStartSeconds
+                            )
+                        )
+                        telemetryInput.append(result.input)
+                        try Task.checkCancellation()
+                        guard activeTaskID == taskID else {
+                            chapterSpan?.end(
+                                .cancelled,
+                                transcriptionInput:
+                                    telemetryInput.telemetryInput
+                            )
+                            return
+                        }
+                        transcript.append(contentsOf: result.segments)
+                    }
+                } catch is CancellationError {
+                    chapterSpan?.end(
+                        .cancelled,
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw CancellationError()
+                } catch let failure as ChapterTranscriptionFailure {
+                    chapterSpan?.end(
+                        .failed(failure.remoteTelemetryFailureCategory),
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw failure
+                } catch {
+                    chapterSpan?.end(
+                        .failed(.media),
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw error
+                }
+                chapterSpan?.end(
+                    .succeeded,
+                    transcriptionInput: telemetryInput.telemetryInput
+                )
                 let sortedTranscript = transcript.sorted {
                     ($0.startMilliseconds, $0.endMilliseconds)
                         < ($1.startMilliseconds, $1.endMilliseconds)

@@ -1362,7 +1362,9 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
-    func testTranscriptionLifecycleEmitsOneContentFreeSpan() async throws {
+    func testTranscriptionLifecycleEmitsContentFreeBatchAndChapterSpans()
+        async throws
+    {
         let account = try fixtureAccount()
         let chapter = PlaybackChapter(
             id: 1,
@@ -1411,11 +1413,65 @@ final class AppModelTests: XCTestCase {
                     source: .downloaded,
                     retryBucket: .none,
                     outcome: .succeeded
-                )
+                ),
+                RecordedRemoteTelemetrySpan(
+                    operation: .transcriptionChapter,
+                    source: nil,
+                    retryBucket: .none,
+                    outcome: .succeeded,
+                    transcriptionInput: RemoteTelemetryTranscriptionInput(
+                        durationMilliseconds: 20_000,
+                        byteCount: 4_096,
+                        sliceCount: 1,
+                        container: .m4a,
+                        codec: .aac,
+                        sampleRateHz: 44_100,
+                        channelCount: 2
+                    ),
+                ),
             ]
         )
         XCTAssertFalse(
             String(describing: tracer.spans).contains("Private")
+        )
+    }
+
+    func testChapterTelemetryAggregatesMixedSliceFormatsWithoutIdentity()
+        throws
+    {
+        var accumulator = ChapterTelemetryInputAccumulator()
+        accumulator.append(
+            ChapterTranscriptionInput(
+                durationMilliseconds: 10_000,
+                byteCount: 1_000,
+                container: .m4a,
+                codec: .aac,
+                sampleRateHz: 44_100,
+                channelCount: 2
+            )
+        )
+        accumulator.append(
+            ChapterTranscriptionInput(
+                durationMilliseconds: 20_000,
+                byteCount: 2_000,
+                container: .m4a,
+                codec: .alac,
+                sampleRateHz: 48_000,
+                channelCount: 1
+            )
+        )
+
+        XCTAssertEqual(
+            accumulator.telemetryInput,
+            RemoteTelemetryTranscriptionInput(
+                durationMilliseconds: 30_000,
+                byteCount: 3_000,
+                sliceCount: 2,
+                container: .m4a,
+                codec: .mixed,
+                sampleRateHz: nil,
+                channelCount: nil
+            )
         )
     }
 
@@ -17866,13 +17922,24 @@ private final class SystemResumedSuffixDownloadURLProtocol: URLProtocol,
 private struct TestChapterTranscriber: ChapterTranscribing {
     let gate: AsyncGate?
     let segments: [TranscriptSegment]
+    var input = ChapterTranscriptionInput(
+        durationMilliseconds: 20_000,
+        byteCount: 4_096,
+        container: .m4a,
+        codec: .aac,
+        sampleRateHz: 44_100,
+        channelCount: 2
+    )
 
     func transcribe(
         _ request: ChapterTranscriptionRequest
-    ) async throws -> [TranscriptSegment] {
+    ) async throws -> ChapterTranscriptionResult {
         if let gate {
             await gate.enterAndWait()
         }
-        return segments
+        return ChapterTranscriptionResult(
+            segments: segments,
+            input: input
+        )
     }
 }

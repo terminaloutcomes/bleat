@@ -1702,15 +1702,21 @@ version and build, typed Apple platform, and numeric operating-system version.
 The hardware model is excluded. The reviewed span
 names are app launch, account connection, library refresh, playback preparation,
 playback start, download transfer, playback progress synchronization, and
-transcription, plus private CloudKit synchronization. Telemetry authentication
+transcription batch and chapter processing, plus private CloudKit
+synchronization. Telemetry authentication
 is one parent span, with challenge, enrolment, and token HTTP client spans as
 children. Each client span propagates W3C trace context so the matching
 `bleat-api` server span is part of the same trace. Span attributes are limited to a subsystem derived from the span
 name, typed success/cancellation/failure outcome, privacy-safe failure category,
 optional downloaded/streamed/offline/remote/cache source, and a retry bucket of
 none, one, two, or three-or-more. Duration comes from span timing and is not an
-application-supplied attribute. Application code must not receive an arbitrary
-span-name or attribute-dictionary API.
+application-supplied attribute. A transcription chapter child span may also
+contain the analyzer input's duration in milliseconds, byte count, slice count,
+M4A container, bounded codec category, sample rate, and channel count. Chapters
+whose slices disagree on codec use `mixed`; mixed sample rates or channel counts
+omit that numeric attribute. Audiobook, chapter, account, file, and path identity
+remain excluded. Application code must not receive an arbitrary span-name or
+attribute-dictionary API.
 
 The reviewed log schema is limited to private CloudKit and download-transfer
 lifecycle events. Event names and static bodies are closed. CloudKit attributes

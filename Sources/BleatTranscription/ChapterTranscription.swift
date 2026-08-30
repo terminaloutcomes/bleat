@@ -38,10 +38,59 @@ public struct TranscriptSegment: Equatable, Sendable {
     }
 }
 
+public enum ChapterTranscriptionAudioContainer: String, Sendable {
+    case m4a
+}
+
+public enum ChapterTranscriptionAudioCodec: String, Sendable {
+    case aac
+    case alac
+    case linearPCM = "linear_pcm"
+    case other
+}
+
+public struct ChapterTranscriptionInput: Equatable, Sendable {
+    public let durationMilliseconds: Int64
+    public let byteCount: Int64
+    public let container: ChapterTranscriptionAudioContainer
+    public let codec: ChapterTranscriptionAudioCodec
+    public let sampleRateHz: Int
+    public let channelCount: Int
+
+    public init(
+        durationMilliseconds: Int64,
+        byteCount: Int64,
+        container: ChapterTranscriptionAudioContainer,
+        codec: ChapterTranscriptionAudioCodec,
+        sampleRateHz: Int,
+        channelCount: Int
+    ) {
+        self.durationMilliseconds = durationMilliseconds
+        self.byteCount = byteCount
+        self.container = container
+        self.codec = codec
+        self.sampleRateHz = sampleRateHz
+        self.channelCount = channelCount
+    }
+}
+
+public struct ChapterTranscriptionResult: Equatable, Sendable {
+    public let segments: [TranscriptSegment]
+    public let input: ChapterTranscriptionInput
+
+    public init(
+        segments: [TranscriptSegment],
+        input: ChapterTranscriptionInput
+    ) {
+        self.segments = segments
+        self.input = input
+    }
+}
+
 public protocol ChapterTranscribing: Sendable {
     func transcribe(
         _ request: ChapterTranscriptionRequest
-    ) async throws -> [TranscriptSegment]
+    ) async throws -> ChapterTranscriptionResult
 }
 
 public struct ChapterTranscriptionDiagnostic: Equatable, Sendable {

@@ -800,6 +800,11 @@ token client spans correlated to the matching `bleat-api` server spans through
 W3C trace context. Remote OpenTelemetry export is out of scope on native macOS:
 that build does not create
 App Attest keys, request telemetry tokens, retain export batches, or send OTLP.
+Transcription batches include content-free child spans for each chapter. Their
+span duration measures processing time, while reviewed attributes report the
+analyzer input duration, byte count, slice count, M4A container, bounded codec
+category, sample rate, and channel count without including book or chapter
+identity, filenames, paths, or transcript text.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path

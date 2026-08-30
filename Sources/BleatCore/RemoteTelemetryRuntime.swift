@@ -378,7 +378,12 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
                 buffered.append(pending)
                 state = .initializing(buffered)
                 return RemoteTelemetrySpan(
-                    endAction: { outcome in pending.end(outcome) },
+                    transcriptionEndAction: { outcome, transcriptionInput in
+                        pending.end(
+                            outcome,
+                            transcriptionInput: transcriptionInput
+                        )
+                    },
                     contextProvider: { pending.spanContext }
                 )
             }
@@ -402,12 +407,13 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
         let span = builder.startSpan()
         let box = OpenTelemetrySpanBox(span: span)
         return RemoteTelemetrySpan(
-            endAction: { outcome in
+            transcriptionEndAction: { outcome, transcriptionInput in
                 let descriptor = RemoteTelemetrySpanDescriptor(
                     operation: operation,
                     outcome: outcome,
                     source: source,
-                    retryBucket: retryBucket
+                    retryBucket: retryBucket,
+                    transcriptionInput: transcriptionInput
                 )
                 box.end(descriptor.encodedSpan, at: Date())
             },
@@ -419,6 +425,7 @@ public final class RemoteTelemetryTracer: RemoteTelemetryTracing,
 private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
     private struct Completion {
         let outcome: RemoteTelemetryOutcome
+        let transcriptionInput: RemoteTelemetryTranscriptionInput?
         let endedAt: Date
     }
 
@@ -446,10 +453,17 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
         self.parent = parent
     }
 
-    func end(_ outcome: RemoteTelemetryOutcome) {
+    func end(
+        _ outcome: RemoteTelemetryOutcome,
+        transcriptionInput: RemoteTelemetryTranscriptionInput?
+    ) {
         let action: (OpenTelemetrySpanBox, Completion)? = lock.withLock {
             guard completion == nil, !discarded else { return nil }
-            let completion = Completion(outcome: outcome, endedAt: Date())
+            let completion = Completion(
+                outcome: outcome,
+                transcriptionInput: transcriptionInput,
+                endedAt: Date()
+            )
             self.completion = completion
             return materialized.map { ($0, completion) }
         }
@@ -497,7 +511,8 @@ private final class BufferedRemoteTelemetrySpan: @unchecked Sendable {
                 operation: operation,
                 outcome: completion.outcome,
                 source: source,
-                retryBucket: retryBucket
+                retryBucket: retryBucket,
+                transcriptionInput: completion.transcriptionInput
             ).encodedSpan,
             at: completion.endedAt
         )
@@ -1021,8 +1036,10 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
         let logProcessor = BatchLogRecordProcessor(
             logRecordExporter: logExporter
         )
+        // A failed transcription chapter is the largest reviewed schema:
+        // four lifecycle attributes plus seven input measurements.
         let limits = SpanLimits()
-            .settingAttributeCountLimit(8)
+            .settingAttributeCountLimit(11)
             .settingEventCountLimit(0)
             .settingLinkCountLimit(0)
         provider = TracerProviderSdk(
