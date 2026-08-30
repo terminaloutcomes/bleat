@@ -126,6 +126,128 @@ struct ChapterTranscriptionBookKey: Hashable, Sendable {
     let itemID: LibraryItemID
 }
 
+struct ChapterTranscriptNavigationTarget: Hashable, Sendable, Identifiable {
+    let chapterID: Int
+    let segmentIndex: Int
+    let startMilliseconds: Int64
+    let endMilliseconds: Int64
+
+    var id: Self { self }
+}
+
+enum ChapterTranscriptPositionResolution: Equatable, Sendable {
+    case target(ChapterTranscriptNavigationTarget)
+    case invalidPosition
+    case chapterNotTranscribed(chapterID: Int)
+    case noSpeechDetected(chapterID: Int)
+}
+
+enum ChapterTranscriptPositionResolver {
+    private struct Candidate {
+        let target: ChapterTranscriptNavigationTarget
+        let distanceMilliseconds: Double
+        let chapterOrder: Int
+    }
+
+    static func resolve(
+        position: Double,
+        chapters: [PlaybackChapter],
+        transcripts: [CachedChapterTranscript]
+    ) -> ChapterTranscriptPositionResolution {
+        guard position.isFinite,
+            position >= 0,
+            position <= Double(Int64.max) / 1_000
+        else {
+            return .invalidPosition
+        }
+        let orderedChapters = chapters.sorted {
+            ($0.start, $0.end, $0.id) < ($1.start, $1.end, $1.id)
+        }
+        guard
+            let containingChapter = orderedChapters.first(where: {
+                $0.start.isFinite
+                    && $0.end.isFinite
+                    && $0.start >= 0
+                    && $0.end > $0.start
+                    && $0.start <= position
+                    && position < $0.end
+            })
+        else {
+            return .invalidPosition
+        }
+        guard
+            let containingTranscript = transcripts.first(where: {
+                $0.chapterID == containingChapter.id
+            })
+        else {
+            return .chapterNotTranscribed(chapterID: containingChapter.id)
+        }
+        guard !containingTranscript.segments.isEmpty else {
+            return .noSpeechDetected(chapterID: containingChapter.id)
+        }
+
+        let positionMilliseconds = position * 1_000
+        var chapterOrder: [Int: Int] = [:]
+        for (index, chapter) in orderedChapters.enumerated()
+            where chapterOrder[chapter.id] == nil
+        {
+            chapterOrder[chapter.id] = index
+        }
+        let candidates: [Candidate] = transcripts.flatMap {
+            transcript -> [Candidate] in
+            transcript.segments.enumerated().compactMap {
+                index, segment -> Candidate? in
+                guard segment.startMilliseconds >= 0,
+                    segment.endMilliseconds > segment.startMilliseconds,
+                    let order = chapterOrder[transcript.chapterID]
+                else {
+                    return nil
+                }
+                let start = Double(segment.startMilliseconds)
+                let end = Double(segment.endMilliseconds)
+                let distance: Double
+                if positionMilliseconds < start {
+                    distance = start - positionMilliseconds
+                } else if positionMilliseconds > end {
+                    distance = positionMilliseconds - end
+                } else {
+                    distance = 0
+                }
+                return Candidate(
+                    target: ChapterTranscriptNavigationTarget(
+                        chapterID: transcript.chapterID,
+                        segmentIndex: index,
+                        startMilliseconds: segment.startMilliseconds,
+                        endMilliseconds: segment.endMilliseconds
+                    ),
+                    distanceMilliseconds: distance,
+                    chapterOrder: order
+                )
+            }
+        }
+        guard
+            let target = candidates.min(by: { lhs, rhs in
+                (
+                    lhs.distanceMilliseconds,
+                    lhs.chapterOrder,
+                    lhs.target.startMilliseconds,
+                    lhs.target.endMilliseconds,
+                    lhs.target.segmentIndex
+                ) < (
+                    rhs.distanceMilliseconds,
+                    rhs.chapterOrder,
+                    rhs.target.startMilliseconds,
+                    rhs.target.endMilliseconds,
+                    rhs.target.segmentIndex
+                )
+            })?.target
+        else {
+            return .noSpeechDetected(chapterID: containingChapter.id)
+        }
+        return .target(target)
+    }
+}
+
 enum ChapterTranscriptionBatchPlanner {
     static func orderedChapters(
         selectedChapterIDs: Set<Int>,
@@ -760,6 +882,19 @@ final class ChapterTranscriptionModel {
         CachedChapterTranscriptSearch.matches(
             query: query,
             in: cachedTranscriptsByBook[bookKey] ?? []
+        )
+    }
+
+    func resolveTranscriptPosition(
+        _ position: Double,
+        detail: LibraryBookDetail,
+        account: ServerAccount
+    ) -> ChapterTranscriptPositionResolution {
+        let bookKey = Self.bookKey(detail: detail, account: account)
+        return ChapterTranscriptPositionResolver.resolve(
+            position: position,
+            chapters: detail.chapters,
+            transcripts: cachedTranscriptsByBook[bookKey] ?? []
         )
     }
 

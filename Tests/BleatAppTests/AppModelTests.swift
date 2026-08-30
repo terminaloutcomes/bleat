@@ -665,6 +665,213 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testTranscriptPositionResolverRejectsInvalidOrUncoveredPosition() {
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 10, title: "One")
+        ]
+
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: .nan,
+                chapters: chapters,
+                transcripts: []
+            ),
+            .invalidPosition
+        )
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: -1,
+                chapters: chapters,
+                transcripts: []
+            ),
+            .invalidPosition
+        )
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 10,
+                chapters: chapters,
+                transcripts: []
+            ),
+            .invalidPosition
+        )
+    }
+
+    func testTranscriptPositionResolverRequiresContainingChapterTranscript() {
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 10, title: "One"),
+            PlaybackChapter(id: 2, start: 10, end: 20, title: "Two"),
+        ]
+        let unrelatedTranscript = fixtureTranscript(
+            chapter: chapters[1],
+            segments: [
+                CachedTranscriptSegment(
+                    startMilliseconds: 10_000,
+                    endMilliseconds: 11_000,
+                    text: "Unrelated"
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 5,
+                chapters: chapters,
+                transcripts: [unrelatedTranscript]
+            ),
+            .chapterNotTranscribed(chapterID: 1)
+        )
+    }
+
+    func testTranscriptPositionResolverReportsNoSpeechInContainingChapter() {
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 10,
+            title: "One"
+        )
+
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 5,
+                chapters: [chapter],
+                transcripts: [fixtureTranscript(chapter: chapter, segments: [])]
+            ),
+            .noSpeechDetected(chapterID: 1)
+        )
+    }
+
+    func testTranscriptPositionResolverChoosesNearestAcrossChapterBoundary() {
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 10, title: "One"),
+            PlaybackChapter(id: 2, start: 10, end: 20, title: "Two"),
+        ]
+        let transcripts = [
+            fixtureTranscript(
+                chapter: chapters[0],
+                segments: [
+                    CachedTranscriptSegment(
+                        startMilliseconds: 9_000,
+                        endMilliseconds: 9_800,
+                        text: "Before"
+                    )
+                ]
+            ),
+            fixtureTranscript(
+                chapter: chapters[1],
+                segments: [
+                    CachedTranscriptSegment(
+                        startMilliseconds: 10_000,
+                        endMilliseconds: 11_000,
+                        text: "After"
+                    )
+                ]
+            ),
+        ]
+
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 9.5,
+                chapters: chapters,
+                transcripts: transcripts
+            ),
+            .target(
+                ChapterTranscriptNavigationTarget(
+                    chapterID: 1,
+                    segmentIndex: 0,
+                    startMilliseconds: 9_000,
+                    endMilliseconds: 9_800
+                )
+            )
+        )
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 9.95,
+                chapters: chapters,
+                transcripts: transcripts
+            ),
+            .target(
+                ChapterTranscriptNavigationTarget(
+                    chapterID: 2,
+                    segmentIndex: 0,
+                    startMilliseconds: 10_000,
+                    endMilliseconds: 11_000
+                )
+            )
+        )
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 9.9,
+                chapters: chapters,
+                transcripts: transcripts
+            ),
+            .target(
+                ChapterTranscriptNavigationTarget(
+                    chapterID: 1,
+                    segmentIndex: 0,
+                    startMilliseconds: 9_000,
+                    endMilliseconds: 9_800
+                )
+            )
+        )
+    }
+
+    func testTranscriptPositionResolutionUsesOnlyRequestedBookCache()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let otherAccount = try fixtureAccount(accountID: "other-account")
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 10,
+            title: "One"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "scoped-transcript",
+                title: "Scoped",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "Scoped")
+            ])
+        )
+        let appModel = AppModel(service: service)
+        await appModel.transcription.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        XCTAssertEqual(
+            appModel.transcription.resolveTranscriptPosition(
+                0.5,
+                detail: detail,
+                account: account
+            ),
+            .target(
+                ChapterTranscriptNavigationTarget(
+                    chapterID: 1,
+                    segmentIndex: 0,
+                    startMilliseconds: 0,
+                    endMilliseconds: 1_000
+                )
+            )
+        )
+        XCTAssertEqual(
+            appModel.transcription.resolveTranscriptPosition(
+                0.5,
+                detail: detail,
+                account: otherAccount
+            ),
+            .chapterNotTranscribed(chapterID: 1)
+        )
+    }
+
     func testChapterTranscriptionViewUsesAppOwnedCoordinator() throws {
         let appModel = AppModel(
             service: TestAppService(activeAccount: .success(nil))
@@ -15701,6 +15908,20 @@ final class AppModelTests: XCTestCase {
                     text: text
                 )
             ]
+        )
+    }
+
+    private func fixtureTranscript(
+        chapter: PlaybackChapter,
+        segments: [CachedTranscriptSegment]
+    ) -> CachedChapterTranscript {
+        CachedChapterTranscript(
+            chapterID: chapter.id,
+            chapterTitle: chapter.title,
+            chapterStartMilliseconds: Int64(chapter.start * 1_000),
+            chapterEndMilliseconds: Int64(chapter.end * 1_000),
+            localeIdentifier: "en_AU",
+            segments: segments
         )
     }
 
