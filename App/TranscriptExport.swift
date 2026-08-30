@@ -277,12 +277,23 @@ struct TranscriptSharePayload: Equatable {
     func itemProvider() -> NSItemProvider {
         let provider = NSItemProvider()
         let artifact = self.artifact
-        provider.registerFileRepresentation(
+        provider.suggestedName = artifact.url.lastPathComponent
+        let result: Result<Data, any Error>
+        do {
+            result = .success(try Data(contentsOf: artifact.url))
+        } catch {
+            result = .failure(error)
+        }
+        provider.registerDataRepresentation(
             forTypeIdentifier: contentType.identifier,
-            fileOptions: [.openInPlace],
             visibility: .all
         ) { completion in
-            completion(artifact.url, false, nil)
+            switch result {
+            case .success(let data):
+                completion(data, nil)
+            case .failure(let error):
+                completion(nil, error)
+            }
             return nil
         }
         return provider

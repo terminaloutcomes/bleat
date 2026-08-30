@@ -2165,7 +2165,19 @@ final class BleatUITests: XCTestCase {
                 "Only 1 of 2 chapters have transcript data. Bleat will export the available transcript."
             ].waitForExistence(timeout: 3)
         )
-        XCTAssertTrue(app.buttons["Export SRT"].exists)
+        let confirmExport = app.buttons["Export SRT"]
+        XCTAssertTrue(confirmExport.exists)
+        confirmExport.tap()
+
+        let saveToFiles = app.cells["Save to Files"]
+        XCTAssertTrue(saveToFiles.waitForExistence(timeout: 3))
+        saveToFiles.tap()
+        let files = XCUIApplication(
+            bundleIdentifier: "com.apple.DocumentManagerUICore.SaveToFiles"
+        )
+        XCTAssertTrue(
+            files.navigationBars.firstMatch.waitForExistence(timeout: 3)
+        )
     }
 
     @MainActor

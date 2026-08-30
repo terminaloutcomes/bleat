@@ -230,15 +230,10 @@ final class TranscriptExportArtifactTests: XCTestCase {
             payload.itemProvider().registeredTypeIdentifiers,
             [UTType.subRip.identifier]
         )
-        XCTAssertTrue(
-            payload.itemProvider().hasRepresentationConforming(
-                toTypeIdentifier: UTType.subRip.identifier,
-                fileOptions: .openInPlace
-            )
-        )
+        XCTAssertEqual(payload.itemProvider().suggestedName, "Book.srt")
     }
 
-    func testItemProviderKeepsArtifactAliveForReceivingActivity() throws {
+    func testItemProviderCopiesDataForReceivingActivity() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 UUID().uuidString,
@@ -248,20 +243,19 @@ final class TranscriptExportArtifactTests: XCTestCase {
 
         let sharedItem = try makeSharedItem(root: root)
 
-        XCTAssertTrue(
-            FileManager.default.fileExists(atPath: sharedItem.url.path)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: sharedItem.url.path),
+            "The provider must not depend on the disposable source artifact."
         )
-        let loaded = expectation(description: "file representation loaded")
-        sharedItem.provider.loadFileRepresentation(
+        let loaded = expectation(description: "data representation loaded")
+        sharedItem.provider.loadDataRepresentation(
             forTypeIdentifier: UTType.webVTT.identifier
-        ) { url, error in
+        ) { data, error in
             XCTAssertNil(error)
-            XCTAssertNotNil(url)
-            if let url {
-                XCTAssertTrue(
-                    FileManager.default.fileExists(atPath: url.path)
-                )
-            }
+            XCTAssertEqual(
+                data.flatMap { String(data: $0, encoding: .utf8) },
+                "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nShared\n"
+            )
             loaded.fulfill()
         }
         wait(for: [loaded], timeout: 3)
