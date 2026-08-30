@@ -6,6 +6,7 @@ struct RecordedRemoteTelemetrySpan: Equatable {
     let source: RemoteTelemetrySource?
     let retryBucket: RemoteTelemetryRetryBucket
     var outcome: RemoteTelemetryOutcome?
+    var transcriptionInput: RemoteTelemetryTranscriptionInput? = nil
 }
 
 final class RecordingRemoteTelemetryTracer: RemoteTelemetryTracing,
@@ -36,9 +37,10 @@ final class RecordingRemoteTelemetryTracer: RemoteTelemetryTracing,
                 outcome: nil
             )
         }
-        return RemoteTelemetrySpan { [weak self] outcome in
+        return RemoteTelemetrySpan { [weak self] outcome, transcriptionInput in
             self?.lock.withLock {
                 self?.records[id]?.outcome = outcome
+                self?.records[id]?.transcriptionInput = transcriptionInput
             }
         }
     }

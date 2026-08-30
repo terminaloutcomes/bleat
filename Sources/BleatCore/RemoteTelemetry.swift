@@ -43,13 +43,30 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
     @TaskLocal static var current: RemoteTelemetrySpan?
 
     private let lock = NSLock()
-    private var endAction: (@Sendable (RemoteTelemetryOutcome) -> Void)?
+    private var endAction:
+        (
+            @Sendable (
+                RemoteTelemetryOutcome,
+                RemoteTelemetryTranscriptionInput?
+            ) -> Void
+        )?
     private let contextProvider: @Sendable () -> SpanContext?
 
     public init(
         endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void
     ) {
-        self.endAction = endAction
+        self.endAction = { outcome, _ in endAction(outcome) }
+        contextProvider = { nil }
+    }
+
+    public init(
+        transcriptionEndAction:
+            @escaping @Sendable (
+                RemoteTelemetryOutcome,
+                RemoteTelemetryTranscriptionInput?
+            ) -> Void
+    ) {
+        endAction = transcriptionEndAction
         contextProvider = { nil }
     }
 
@@ -57,17 +74,36 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
         endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void,
         contextProvider: @escaping @Sendable () -> SpanContext?
     ) {
-        self.endAction = endAction
+        self.endAction = { outcome, _ in endAction(outcome) }
+        self.contextProvider = contextProvider
+    }
+
+    init(
+        transcriptionEndAction:
+            @escaping @Sendable (
+                RemoteTelemetryOutcome,
+                RemoteTelemetryTranscriptionInput?
+            ) -> Void,
+        contextProvider: @escaping @Sendable () -> SpanContext?
+    ) {
+        endAction = transcriptionEndAction
         self.contextProvider = contextProvider
     }
 
     public func end(_ outcome: RemoteTelemetryOutcome) {
+        end(outcome, transcriptionInput: nil)
+    }
+
+    public func end(
+        _ outcome: RemoteTelemetryOutcome,
+        transcriptionInput: RemoteTelemetryTranscriptionInput?
+    ) {
         let action = lock.withLock {
             let action = endAction
             endAction = nil
             return action
         }
-        action?(outcome)
+        action?(outcome, transcriptionInput)
     }
 
     var spanContext: SpanContext? { contextProvider() }
@@ -122,6 +158,7 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
     case downloadTransfer = "bleat.download.transfer"
     case playbackProgressSync = "bleat.playback.progress_sync"
     case transcription = "bleat.transcription.run"
+    case transcriptionChapter = "bleat.transcription.chapter"
     case privateCloudSync = "bleat.cloudkit.sync"
     case telemetryAuthentication = "bleat.telemetry.authentication"
     case telemetryChallenge = "bleat.telemetry.challenge"
@@ -142,7 +179,7 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
             .download
         case .playbackProgressSync, .privateCloudSync:
             .synchronization
-        case .transcription:
+        case .transcription, .transcriptionChapter:
             .transcription
         case .telemetryAuthentication, .telemetryChallenge,
             .telemetryEnrolment, .telemetryToken:
@@ -464,23 +501,73 @@ public enum RemoteTelemetryRetryBucket: String, CaseIterable, Sendable {
     }
 }
 
+public enum RemoteTelemetryTranscriptionAudioContainer: String, Sendable {
+    case m4a
+}
+
+public enum RemoteTelemetryTranscriptionAudioCodec: String, Sendable {
+    case aac
+    case alac
+    case linearPCM = "linear_pcm"
+    case other
+    case mixed
+}
+
+/// Reviewed, content-free measurements for one chapter's analyzer input.
+public struct RemoteTelemetryTranscriptionInput: Equatable, Sendable {
+    public let durationMilliseconds: Int64
+    public let byteCount: Int64
+    public let sliceCount: Int
+    public let container: RemoteTelemetryTranscriptionAudioContainer
+    public let codec: RemoteTelemetryTranscriptionAudioCodec
+    public let sampleRateHz: Int?
+    public let channelCount: Int?
+
+    public init?(
+        durationMilliseconds: Int64,
+        byteCount: Int64,
+        sliceCount: Int,
+        container: RemoteTelemetryTranscriptionAudioContainer,
+        codec: RemoteTelemetryTranscriptionAudioCodec,
+        sampleRateHz: Int?,
+        channelCount: Int?
+    ) {
+        guard durationMilliseconds > 0, byteCount >= 0, sliceCount > 0,
+            sampleRateHz.map({ $0 > 0 }) != false,
+            channelCount.map({ $0 > 0 }) != false
+        else {
+            return nil
+        }
+        self.durationMilliseconds = durationMilliseconds
+        self.byteCount = byteCount
+        self.sliceCount = sliceCount
+        self.container = container
+        self.codec = codec
+        self.sampleRateHz = sampleRateHz
+        self.channelCount = channelCount
+    }
+}
+
 /// A reviewed remote span description with no arbitrary name or attribute API.
 public struct RemoteTelemetrySpanDescriptor: Equatable, Sendable {
     public let operation: RemoteTelemetryOperation
     public let outcome: RemoteTelemetryOutcome
     public let source: RemoteTelemetrySource?
     public let retryBucket: RemoteTelemetryRetryBucket
+    public let transcriptionInput: RemoteTelemetryTranscriptionInput?
 
     public init(
         operation: RemoteTelemetryOperation,
         outcome: RemoteTelemetryOutcome,
         source: RemoteTelemetrySource? = nil,
-        retryBucket: RemoteTelemetryRetryBucket = .none
+        retryBucket: RemoteTelemetryRetryBucket = .none,
+        transcriptionInput: RemoteTelemetryTranscriptionInput? = nil
     ) {
         self.operation = operation
         self.outcome = outcome
         self.source = source
         self.retryBucket = retryBucket
+        self.transcriptionInput = transcriptionInput
     }
 
     /// OpenTelemetry records elapsed time from the span clock. Duration is not
@@ -504,6 +591,26 @@ public struct RemoteTelemetrySpanDescriptor: Equatable, Sendable {
             attributes["bleat.live_update.stage"] = failure.stage.rawValue
         case .succeeded, .cancelled:
             break
+        }
+        if operation == .transcriptionChapter, let transcriptionInput {
+            attributes["bleat.transcription.input.duration_ms"] =
+                String(transcriptionInput.durationMilliseconds)
+            attributes["bleat.transcription.input.bytes"] =
+                String(transcriptionInput.byteCount)
+            attributes["bleat.transcription.input.slice_count"] =
+                String(transcriptionInput.sliceCount)
+            attributes["bleat.transcription.audio.container"] =
+                transcriptionInput.container.rawValue
+            attributes["bleat.transcription.audio.codec"] =
+                transcriptionInput.codec.rawValue
+            if let sampleRateHz = transcriptionInput.sampleRateHz {
+                attributes["bleat.transcription.audio.sample_rate_hz"] =
+                    String(sampleRateHz)
+            }
+            if let channelCount = transcriptionInput.channelCount {
+                attributes["bleat.transcription.audio.channels"] =
+                    String(channelCount)
+            }
         }
         return RemoteTelemetryEncodedSpan(
             name: operation.rawValue,

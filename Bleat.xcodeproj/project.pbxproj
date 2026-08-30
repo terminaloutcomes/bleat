@@ -12,6 +12,7 @@
 		071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B26309512E738CF21FDF57 /* BleatApp.swift */; };
 		08F4E3D28EE81E46CAD79563 /* ProcessMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077086F35259DE8E90E3E355 /* ProcessMemory.swift */; };
 		0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */; };
+		138D289F4F5D702F55D7DE96 /* TranscriptExportArtifactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C15F87E4D5AC759E0750BF /* TranscriptExportArtifactTests.swift */; };
 		153A3AFC9C2B0600F93DC211 /* LegacyDiagnosticLogCleanup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */; };
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */; };
@@ -39,6 +40,7 @@
 		77EE2020CDB865FDB391F7FD /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */; };
 		789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */; };
 		7DA9590A2267DF4B5A0E9C91 /* NearbyServerDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 555C0318F83AFD25BAE18A54 /* NearbyServerDiscovery.swift */; };
+		7F1D692BCC73087052B9A47C /* TranscriptExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53C7555CCB4D4F3DB0359438 /* TranscriptExport.swift */; };
 		80533611A5DD9C389699D1F3 /* BleatLandscapeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB52CFBE45885EE53571F8FD /* BleatLandscapeUITests.swift */; };
 		8054CFBF4601C6122146E21E /* AppNavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */; };
 		818AF28EBFB119999506CACA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73719E4CDB73EE2DD988C5E3 /* AppModel.swift */; };
@@ -108,7 +110,9 @@
 		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttester.swift; sourceTree = "<group>"; };
 		523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTroubleshooterView.swift; sourceTree = "<group>"; };
+		52C15F87E4D5AC759E0750BF /* TranscriptExportArtifactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptExportArtifactTests.swift; sourceTree = "<group>"; };
 		53087763F622BC88D662C472 /* BleatDynamicTypeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatDynamicTypeUITests.swift; sourceTree = "<group>"; };
+		53C7555CCB4D4F3DB0359438 /* TranscriptExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptExport.swift; sourceTree = "<group>"; };
 		543E50567C1D837B42834F5F /* AppMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMetadataTests.swift; sourceTree = "<group>"; };
 		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		555C0318F83AFD25BAE18A54 /* NearbyServerDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyServerDiscovery.swift; sourceTree = "<group>"; };
@@ -189,6 +193,7 @@
 				C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */,
 				B4BDB7A0751EDD75B657A7F7 /* RemoteTelemetryTestSupport.swift */,
 				342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */,
+				52C15F87E4D5AC759E0750BF /* TranscriptExportArtifactTests.swift */,
 			);
 			path = BleatAppTests;
 			sourceTree = "<group>";
@@ -277,6 +282,7 @@
 				4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */,
 				E0639281D9850EC68335644F /* RootView.swift */,
 				3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */,
+				53C7555CCB4D4F3DB0359438 /* TranscriptExport.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
 			);
 			path = App;
@@ -485,6 +491,7 @@
 				5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */,
 				30FC3808C6E7EB0FA36DF71F /* RemoteTelemetryTestSupport.swift in Sources */,
 				FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */,
+				138D289F4F5D702F55D7DE96 /* TranscriptExportArtifactTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -536,6 +543,7 @@
 				B6C10C962CA72B7128D294C9 /* RemoteTelemetryConsent.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */,
+				7F1D692BCC73087052B9A47C /* TranscriptExport.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

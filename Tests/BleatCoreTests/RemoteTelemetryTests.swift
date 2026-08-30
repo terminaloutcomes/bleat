@@ -20,6 +20,7 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.download.transfer",
                 "bleat.playback.progress_sync",
                 "bleat.transcription.run",
+                "bleat.transcription.chapter",
                 "bleat.cloudkit.sync",
                 "bleat.telemetry.authentication",
                 "bleat.telemetry.challenge",
@@ -107,6 +108,89 @@ final class RemoteTelemetryTests: XCTestCase {
             XCTAssertEqual(child.traceId, parent.traceId)
             XCTAssertEqual(child.parentSpanId, parent.spanId)
         }
+    }
+
+    func testBufferedChapterSpanExportsMeasurementsUnderBatchParent()
+        throws
+    {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let exporter = RecordingSpanExporter()
+        let tracer = RemoteTelemetryTracer()
+        tracer.prepareForActivation()
+        let input = try XCTUnwrap(
+            RemoteTelemetryTranscriptionInput(
+                durationMilliseconds: 12_345,
+                byteCount: 67_890,
+                sliceCount: 1,
+                container: .m4a,
+                codec: .aac,
+                sampleRateHz: 44_100,
+                channelCount: 2
+            )
+        )
+
+        let batch = tracer.beginSpan(
+            operation: .transcription,
+            source: .downloaded
+        )
+        tracer.beginChildSpan(
+            operation: .transcriptionChapter,
+            parent: batch
+        ).end(.succeeded, transcriptionInput: input)
+        batch.end(.succeeded)
+
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory,
+            tracerFacade: tracer,
+            downstreamExporter: exporter
+        )
+        defer {
+            pipeline.deactivate()
+            pipeline.purge()
+            pipeline.shutdown()
+        }
+        pipeline.flush(timeout: 2)
+
+        let spans = exporter.recordedSpans
+        let batchSpan = try XCTUnwrap(
+            spans.first { $0.name == "bleat.transcription.run" }
+        )
+        let chapterSpan = try XCTUnwrap(
+            spans.first { $0.name == "bleat.transcription.chapter" }
+        )
+        XCTAssertEqual(chapterSpan.traceId, batchSpan.traceId)
+        XCTAssertEqual(chapterSpan.parentSpanId, batchSpan.spanId)
+        XCTAssertEqual(
+            Set(chapterSpan.attributes.keys),
+            [
+                "bleat.subsystem",
+                "bleat.outcome",
+                "bleat.retry.bucket",
+                "bleat.transcription.input.duration_ms",
+                "bleat.transcription.input.bytes",
+                "bleat.transcription.input.slice_count",
+                "bleat.transcription.audio.container",
+                "bleat.transcription.audio.codec",
+                "bleat.transcription.audio.sample_rate_hz",
+                "bleat.transcription.audio.channels",
+            ]
+        )
+        XCTAssertEqual(
+            chapterSpan.attributes[
+                "bleat.transcription.input.duration_ms"
+            ],
+            .string("12345")
+        )
+        XCTAssertEqual(
+            chapterSpan.attributes["bleat.transcription.input.bytes"],
+            .string("67890")
+        )
+        XCTAssertEqual(
+            chapterSpan.attributes["bleat.transcription.audio.codec"],
+            .string("aac")
+        )
     }
 
     func testCloudKitLifecycleProducesReviewedLogsAndSpan() async throws {
@@ -328,6 +412,44 @@ final class RemoteTelemetryTests: XCTestCase {
             "bleat.live_update.failure_code": "malformed_packet",
             "bleat.live_update.stage": "protocol_decoding",
         ])
+    }
+
+    func testChapterTranscriptionSpanEncodesReviewedInputMeasurements()
+        throws
+    {
+        let input = try XCTUnwrap(
+            RemoteTelemetryTranscriptionInput(
+                durationMilliseconds: 65_432,
+                byteCount: 1_234_567,
+                sliceCount: 2,
+                container: .m4a,
+                codec: .aac,
+                sampleRateHz: 48_000,
+                channelCount: 2
+            )
+        )
+        let encoded = RemoteTelemetrySpanDescriptor(
+            operation: .transcriptionChapter,
+            outcome: .succeeded,
+            transcriptionInput: input
+        ).encodedSpan
+
+        XCTAssertEqual(encoded.name, "bleat.transcription.chapter")
+        XCTAssertEqual(
+            encoded.attributes,
+            [
+                "bleat.subsystem": "transcription",
+                "bleat.outcome": "succeeded",
+                "bleat.retry.bucket": "none",
+                "bleat.transcription.input.duration_ms": "65432",
+                "bleat.transcription.input.bytes": "1234567",
+                "bleat.transcription.input.slice_count": "2",
+                "bleat.transcription.audio.container": "m4a",
+                "bleat.transcription.audio.codec": "aac",
+                "bleat.transcription.audio.sample_rate_hz": "48000",
+                "bleat.transcription.audio.channels": "2",
+            ]
+        )
     }
 
     func testRetryCountsAreBounded() {

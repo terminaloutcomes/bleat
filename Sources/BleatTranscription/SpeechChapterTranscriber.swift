@@ -8,7 +8,7 @@
 
         public func transcribe(
             _ request: ChapterTranscriptionRequest
-        ) async throws -> [TranscriptSegment] {
+        ) async throws -> ChapterTranscriptionResult {
             guard request.chapterStartSeconds.isFinite,
                 request.chapterStartSeconds >= 0
             else {
@@ -33,7 +33,7 @@
         @available(macOS 26.0, iOS 26.0, visionOS 26.0, *)
         private func transcribeUsingSpeechTranscriber(
             _ request: ChapterTranscriptionRequest
-        ) async throws -> [TranscriptSegment] {
+        ) async throws -> ChapterTranscriptionResult {
             guard SpeechTranscriber.isAvailable else {
                 throw ChapterTranscriptionFailure.unavailableOnDevice
             }
@@ -84,8 +84,13 @@
             }
 
             let audioFile: AVAudioFile
+            let input: ChapterTranscriptionInput
             do {
                 audioFile = try AVAudioFile(forReading: chapterAudioURL)
+                input = try Self.inputMetadata(
+                    audioFile: audioFile,
+                    fileURL: chapterAudioURL
+                )
             } catch {
                 throw ChapterTranscriptionFailure.audioFileUnreadable(
                     request.audioFileURL.lastPathComponent
@@ -138,10 +143,13 @@
 
             do {
                 let segments = try await resultsTask.value
-                return segments.sorted {
-                    ($0.startMilliseconds, $0.endMilliseconds)
-                        < ($1.startMilliseconds, $1.endMilliseconds)
-                }
+                return ChapterTranscriptionResult(
+                    segments: segments.sorted {
+                        ($0.startMilliseconds, $0.endMilliseconds)
+                            < ($1.startMilliseconds, $1.endMilliseconds)
+                    },
+                    input: input
+                )
             } catch is CancellationError {
                 await analyzer.cancelAndFinishNow()
                 throw CancellationError()
@@ -150,6 +158,60 @@
                 throw ChapterTranscriptionFailure.resultStreamFailed(
                     ChapterTranscriptionDiagnostic(error)
                 )
+            }
+        }
+
+        static func inputMetadata(
+            audioFile: AVAudioFile,
+            fileURL: URL
+        ) throws -> ChapterTranscriptionInput {
+            let format = audioFile.fileFormat
+            let sampleRate = format.sampleRate
+            let channelCount = Int(format.channelCount)
+            let frameCount = audioFile.length
+            let byteCount = try fileURL.resourceValues(
+                forKeys: [.fileSizeKey]
+            ).fileSize
+            guard sampleRate.isFinite, sampleRate > 0, channelCount > 0,
+                frameCount > 0, let byteCount, byteCount >= 0,
+                let formatID = format.settings[AVFormatIDKey] as? UInt32
+            else {
+                throw ChapterTranscriptionFailure.audioFileUnreadable(
+                    fileURL.lastPathComponent
+                )
+            }
+            let durationMilliseconds = Int64(
+                (Double(frameCount) / sampleRate * 1_000).rounded()
+            )
+            guard durationMilliseconds > 0 else {
+                throw ChapterTranscriptionFailure.audioFileUnreadable(
+                    fileURL.lastPathComponent
+                )
+            }
+            return ChapterTranscriptionInput(
+                durationMilliseconds: durationMilliseconds,
+                byteCount: Int64(byteCount),
+                container: .m4a,
+                codec: codec(formatID: formatID),
+                sampleRateHz: Int(sampleRate.rounded()),
+                channelCount: channelCount
+            )
+        }
+
+        private static func codec(
+            formatID: AudioFormatID
+        ) -> ChapterTranscriptionAudioCodec {
+            switch formatID {
+            case kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_HE,
+                kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD,
+                kAudioFormatMPEG4AAC_ELD:
+                .aac
+            case kAudioFormatAppleLossless:
+                .alac
+            case kAudioFormatLinearPCM:
+                .linearPCM
+            default:
+                .other
             }
         }
 

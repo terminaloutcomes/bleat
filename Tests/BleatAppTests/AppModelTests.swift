@@ -684,6 +684,140 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(view.model === appModel.transcription)
     }
 
+    func testTranscriptionBatchSkipsChaptersWithCachedTranscripts()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let cachedChapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "Already Transcribed"
+        )
+        let pendingChapter = PlaybackChapter(
+            id: 2,
+            start: 20,
+            end: 40,
+            title: "Needs Transcription"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-skip-cached",
+                title: "Skip Cached",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [cachedChapter, pendingChapter]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(
+                    chapter: cachedChapter,
+                    text: "existing transcript"
+                )
+            ])
+        )
+        let recorder = ChapterTranscriptionRequestRecorder()
+        let coordinator = makeTranscriptionModel(requestRecorder: recorder)
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+        XCTAssertTrue(coordinator.hasLoadedTranscriptCache(for: bookKey))
+        XCTAssertEqual(
+            coordinator.chaptersNeedingTranscription(
+                detail.chapters,
+                for: bookKey
+            ).map(\.id),
+            [pendingChapter.id]
+        )
+
+        coordinator.start(
+            chapters: detail.chapters,
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+
+        let loadedTerminalState = await waitForTranscriptionTerminalState(
+            in: coordinator,
+            bookKey: bookKey
+        )
+        let terminalState = try XCTUnwrap(loadedTerminalState)
+        XCTAssertEqual(terminalState.selectedChapterIDs, [pendingChapter.id])
+        XCTAssertEqual(terminalState.completedChapterIDs, [pendingChapter.id])
+        let requests = await recorder.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.chapterStartSeconds, 20)
+        XCTAssertEqual(
+            coordinator.searchResults(
+                query: "existing transcript",
+                for: bookKey
+            ).count,
+            1
+        )
+    }
+
+    func testTranscriptionBatchDoesNotStartWhenEveryChapterIsCached()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0,
+            end: 20,
+            title: "Already Transcribed"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcription-all-cached",
+                title: "All Cached",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "existing")
+            ])
+        )
+        let recorder = ChapterTranscriptionRequestRecorder()
+        let coordinator = makeTranscriptionModel(requestRecorder: recorder)
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+
+        XCTAssertFalse(coordinator.isWorking)
+        let requests = await recorder.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testChapterTranscriptionFailuresMapToTypedPersistentFailures() {
         XCTAssertEqual(
             ChapterTranscriptionViewFailure.audioNotDownloaded
@@ -1014,11 +1148,17 @@ final class AppModelTests: XCTestCase {
         async throws
     {
         let account = try fixtureAccount()
-        let chapter = PlaybackChapter(
+        let firstChapter = PlaybackChapter(
             id: 13,
             start: 0,
             end: 20,
             title: "Chapter Thirteen"
+        )
+        let replacementChapter = PlaybackChapter(
+            id: 14,
+            start: 20,
+            end: 40,
+            title: "Chapter Fourteen"
         )
         let detail = fixtureBookDetail(
             item: fixtureBook(
@@ -1026,7 +1166,7 @@ final class AppModelTests: XCTestCase {
                 title: "Terminal Save Race",
                 libraryID: fixtureLibrary().id
             ),
-            chapters: [chapter]
+            chapters: [firstChapter, replacementChapter]
         )
         let firstSaveGate = AsyncGate()
         let service = TestAppService(
@@ -1048,7 +1188,7 @@ final class AppModelTests: XCTestCase {
         )
 
         coordinator.start(
-            chapters: [chapter],
+            chapters: [firstChapter],
             detail: detail,
             account: account,
             downloads: appModel.downloads,
@@ -1060,7 +1200,7 @@ final class AppModelTests: XCTestCase {
         )
 
         coordinator.start(
-            chapters: [chapter],
+            chapters: [replacementChapter],
             detail: detail,
             account: account,
             downloads: appModel.downloads,
@@ -1362,7 +1502,9 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
-    func testTranscriptionLifecycleEmitsOneContentFreeSpan() async throws {
+    func testTranscriptionLifecycleEmitsContentFreeBatchAndChapterSpans()
+        async throws
+    {
         let account = try fixtureAccount()
         let chapter = PlaybackChapter(
             id: 1,
@@ -1411,11 +1553,65 @@ final class AppModelTests: XCTestCase {
                     source: .downloaded,
                     retryBucket: .none,
                     outcome: .succeeded
-                )
+                ),
+                RecordedRemoteTelemetrySpan(
+                    operation: .transcriptionChapter,
+                    source: nil,
+                    retryBucket: .none,
+                    outcome: .succeeded,
+                    transcriptionInput: RemoteTelemetryTranscriptionInput(
+                        durationMilliseconds: 20_000,
+                        byteCount: 4_096,
+                        sliceCount: 1,
+                        container: .m4a,
+                        codec: .aac,
+                        sampleRateHz: 44_100,
+                        channelCount: 2
+                    ),
+                ),
             ]
         )
         XCTAssertFalse(
             String(describing: tracer.spans).contains("Private")
+        )
+    }
+
+    func testChapterTelemetryAggregatesMixedSliceFormatsWithoutIdentity()
+        throws
+    {
+        var accumulator = ChapterTelemetryInputAccumulator()
+        accumulator.append(
+            ChapterTranscriptionInput(
+                durationMilliseconds: 10_000,
+                byteCount: 1_000,
+                container: .m4a,
+                codec: .aac,
+                sampleRateHz: 44_100,
+                channelCount: 2
+            )
+        )
+        accumulator.append(
+            ChapterTranscriptionInput(
+                durationMilliseconds: 20_000,
+                byteCount: 2_000,
+                container: .m4a,
+                codec: .alac,
+                sampleRateHz: 48_000,
+                channelCount: 1
+            )
+        )
+
+        XCTAssertEqual(
+            accumulator.telemetryInput,
+            RemoteTelemetryTranscriptionInput(
+                durationMilliseconds: 30_000,
+                byteCount: 3_000,
+                sliceCount: 2,
+                container: .m4a,
+                codec: .mixed,
+                sampleRateHz: nil,
+                channelCount: nil
+            )
         )
     }
 
@@ -1512,7 +1708,8 @@ final class AppModelTests: XCTestCase {
                             endMilliseconds: 2_000,
                             text: "cached chapter"
                         )
-                    ]
+                    ],
+                    requestRecorder: nil
                 )
             }
         )
@@ -15378,6 +15575,7 @@ final class AppModelTests: XCTestCase {
             )
         ],
         transcriberGate: AsyncGate? = nil,
+        requestRecorder: ChapterTranscriptionRequestRecorder? = nil,
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer()
     ) -> ChapterTranscriptionModel {
@@ -15402,7 +15600,8 @@ final class AppModelTests: XCTestCase {
             transcriberFactory: {
                 TestChapterTranscriber(
                     gate: transcriberGate,
-                    segments: segments
+                    segments: segments,
+                    requestRecorder: requestRecorder
                 )
             },
             remoteTelemetryTracer: remoteTelemetryTracer
@@ -17863,16 +18062,41 @@ private final class SystemResumedSuffixDownloadURLProtocol: URLProtocol,
     override func stopLoading() {}
 }
 
+private actor ChapterTranscriptionRequestRecorder {
+    private var requests: [ChapterTranscriptionRequest] = []
+
+    func record(_ request: ChapterTranscriptionRequest) {
+        requests.append(request)
+    }
+
+    func recordedRequests() -> [ChapterTranscriptionRequest] {
+        requests
+    }
+}
+
 private struct TestChapterTranscriber: ChapterTranscribing {
     let gate: AsyncGate?
     let segments: [TranscriptSegment]
+    let requestRecorder: ChapterTranscriptionRequestRecorder?
+    var input = ChapterTranscriptionInput(
+        durationMilliseconds: 20_000,
+        byteCount: 4_096,
+        container: .m4a,
+        codec: .aac,
+        sampleRateHz: 44_100,
+        channelCount: 2
+    )
 
     func transcribe(
         _ request: ChapterTranscriptionRequest
-    ) async throws -> [TranscriptSegment] {
+    ) async throws -> ChapterTranscriptionResult {
+        await requestRecorder?.record(request)
         if let gate {
             await gate.enterAndWait()
         }
-        return segments
+        return ChapterTranscriptionResult(
+            segments: segments,
+            input: input
+        )
     }
 }

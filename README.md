@@ -800,6 +800,11 @@ token client spans correlated to the matching `bleat-api` server spans through
 W3C trace context. Remote OpenTelemetry export is out of scope on native macOS:
 that build does not create
 App Attest keys, request telemetry tokens, retain export batches, or send OTLP.
+Transcription batches include content-free child spans for each chapter. Their
+span duration measures processing time, while reviewed attributes report the
+analyzer input duration, byte count, slice count, M4A container, bounded codec
+category, sample rate, and channel count without including book or chapter
+identity, filenames, paths, or transcript text.
 
 Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path
@@ -988,7 +993,9 @@ On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
 `SpeechTranscriber` is available and a disabled availability message when it
 is not. The transcription screen supports one explicit chapter or a Select
 mode with Select All and multi-selection. A batch always runs one chapter at a
-time in ascending chapter-index order, regardless of selection order. It reads
+time in ascending chapter-index order, regardless of selection order. Chapters
+with an existing cached transcription remain readable and searchable but are
+excluded from new single-chapter and batch transcription work. Bleat reads
 the verified downloaded files covering every selected chapter, including files
 held by the automatic playback cache, maps chapters across source-file
 boundaries, and displays final segments with whole-book timestamps. Automatic
@@ -1012,6 +1019,13 @@ book's playback to its whole-book start timestamp. Existing playback seeks in
 place; otherwise Bleat prepares the book through the normal downloaded-first
 playback flow. If the audio is not downloaded, the screen asks before
 scheduling the existing audiobook download.
+
+When cached transcript segments exist, the screen can export all currently
+available chapters as WebVTT or SRT using whole-book timestamps and the native
+share sheet. If some book chapters have no cached transcript, Bleat reports the
+available chapter count before generating the partial export. Export runs
+entirely from the local canonical transcript cache, replaces Bleat's previous
+temporary transcript artifact, and does not require the server.
 
 Loaded transcript text is retained in memory while its transcription screen is
 visible or its batch is active. Otherwise it is evicted after five idle minutes

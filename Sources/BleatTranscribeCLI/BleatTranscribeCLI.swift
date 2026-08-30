@@ -17,7 +17,7 @@ struct BleatTranscribeCLI {
             }
 
             writeError("Preparing SpeechTranscriber and language assets…")
-            let segments = try await SpeechChapterTranscriber().transcribe(
+            let result = try await SpeechChapterTranscriber().transcribe(
                 ChapterTranscriptionRequest(
                     audioFileURL: configuration.audioFileURL,
                     locale: configuration.locale,
@@ -25,10 +25,12 @@ struct BleatTranscribeCLI {
                 )
             )
 
-            for segment in segments {
+            for segment in result.segments {
                 print(CLIOutput.transcriptLine(for: segment))
             }
-            writeError("Completed with \(segments.count) final segment(s).")
+            writeError(
+                "Completed with \(result.segments.count) final segment(s)."
+            )
         } catch CLIConfigurationFailure.helpRequested {
             print(CLIConfiguration.usage)
         } catch {

@@ -392,6 +392,77 @@ struct PreparedChapterTranscriptionAudio: Sendable {
     let cachePin: AutomaticCachePin?
 }
 
+struct ChapterTelemetryInputAccumulator {
+    private var durationMilliseconds: Int64 = 0
+    private var byteCount: Int64 = 0
+    private var sliceCount = 0
+    private var codec: RemoteTelemetryTranscriptionAudioCodec?
+    private var sampleRateHz: Int?
+    private var channelCount: Int?
+    private var hasMixedSampleRates = false
+    private var hasMixedChannelCounts = false
+    private var isValid = true
+
+    mutating func append(_ input: ChapterTranscriptionInput) {
+        let duration = durationMilliseconds.addingReportingOverflow(
+            input.durationMilliseconds
+        )
+        let bytes = byteCount.addingReportingOverflow(input.byteCount)
+        guard !duration.overflow, !bytes.overflow else {
+            isValid = false
+            return
+        }
+        durationMilliseconds = duration.partialValue
+        byteCount = bytes.partialValue
+        sliceCount += 1
+
+        let nextCodec = RemoteTelemetryTranscriptionAudioCodec(input.codec)
+        if let codec, codec != nextCodec {
+            self.codec = .mixed
+        } else if codec == nil {
+            codec = nextCodec
+        }
+        if let sampleRateHz, sampleRateHz != input.sampleRateHz {
+            hasMixedSampleRates = true
+        } else if sampleRateHz == nil {
+            sampleRateHz = input.sampleRateHz
+        }
+        if let channelCount, channelCount != input.channelCount {
+            hasMixedChannelCounts = true
+        } else if channelCount == nil {
+            channelCount = input.channelCount
+        }
+    }
+
+    var telemetryInput: RemoteTelemetryTranscriptionInput? {
+        guard isValid, let codec else { return nil }
+        return RemoteTelemetryTranscriptionInput(
+            durationMilliseconds: durationMilliseconds,
+            byteCount: byteCount,
+            sliceCount: sliceCount,
+            container: .m4a,
+            codec: codec,
+            sampleRateHz: hasMixedSampleRates ? nil : sampleRateHz,
+            channelCount: hasMixedChannelCounts ? nil : channelCount
+        )
+    }
+}
+
+extension RemoteTelemetryTranscriptionAudioCodec {
+    fileprivate init(_ codec: ChapterTranscriptionAudioCodec) {
+        switch codec {
+        case .aac:
+            self = .aac
+        case .alac:
+            self = .alac
+        case .linearPCM:
+            self = .linearPCM
+        case .other:
+            self = .other
+        }
+    }
+}
+
 enum ChapterTranscriptionAudioLoadFailure: Error, Equatable, Sendable {
     case audioNotDownloaded
     case localAudioUnavailable
@@ -634,6 +705,23 @@ final class ChapterTranscriptionModel {
         } == true
     }
 
+    func hasLoadedTranscriptCache(
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> Bool {
+        cachedTranscriptsByBook[bookKey] != nil
+    }
+
+    func chaptersNeedingTranscription(
+        _ chapters: [PlaybackChapter],
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> [PlaybackChapter] {
+        guard let cachedTranscripts = cachedTranscriptsByBook[bookKey] else {
+            return chapters
+        }
+        let cachedChapterIDs = Set(cachedTranscripts.map(\.chapterID))
+        return chapters.filter { !cachedChapterIDs.contains($0.id) }
+    }
+
     func transcriptSegments(
         chapterID: Int,
         for bookKey: ChapterTranscriptionBookKey
@@ -641,6 +729,16 @@ final class ChapterTranscriptionModel {
         cachedTranscriptsByBook[bookKey]?
             .first { $0.chapterID == chapterID }?
             .segments.map(TranscriptSegment.init(cached:))
+    }
+
+    func transcriptExportSnapshot(
+        for bookKey: ChapterTranscriptionBookKey,
+        expectedChapterIDs: [Int]
+    ) -> ChapterTranscriptExportSnapshot {
+        ChapterTranscriptExportSnapshot(
+            transcripts: cachedTranscriptsByBook[bookKey] ?? [],
+            expectedChapterIDs: expectedChapterIDs
+        )
     }
 
     func cacheFailure(
@@ -675,15 +773,18 @@ final class ChapterTranscriptionModel {
         guard !isWorking else {
             return
         }
+        let bookKey = Self.bookKey(detail: detail, account: account)
         let selectedChapterIDs = Set(selectedChapters.map(\.id))
-        let chapters = ChapterTranscriptionBatchPlanner.orderedChapters(
-            selectedChapterIDs: selectedChapterIDs,
-            from: detail.chapters
+        let chapters = chaptersNeedingTranscription(
+            ChapterTranscriptionBatchPlanner.orderedChapters(
+                selectedChapterIDs: selectedChapterIDs,
+                from: detail.chapters
+            ),
+            for: bookKey
         )
         guard !chapters.isEmpty else {
             return
         }
-        let bookKey = Self.bookKey(detail: detail, account: account)
         let batch = ActiveChapterTranscriptionBatch(
             taskID: UUID(),
             persistenceToken: UUID(),
@@ -858,42 +959,84 @@ final class ChapterTranscriptionModel {
                 }
 
                 var transcript: [TranscriptSegment] = []
-                for (sliceIndex, slice) in slices.enumerated() {
-                    try Task.checkCancellation()
-                    guard
-                        let track = audio.tracks.first(where: {
-                            $0.timeline.trackIndex == slice.trackIndex
-                        })
-                    else {
-                        await fail(
-                            taskID: taskID,
-                            bookKey: bookKey,
-                            chapterID: chapter.id,
-                            failure: .localAudioUnavailable
-                        )
-                        return
-                    }
-                    state = .transcribing(
-                        progress: progress,
-                        completedSlices: sliceIndex,
-                        totalSlices: slices.count
+                let chapterSpan = remoteTelemetrySpan.map {
+                    remoteTelemetryTracer.beginChildSpan(
+                        operation: .transcriptionChapter,
+                        parent: $0
                     )
-                    let segments = try await transcriber.transcribe(
-                        ChapterTranscriptionRequest(
-                            audioFileURL: track.url,
-                            locale: .current,
-                            audioStartSeconds: slice.audioStartSeconds,
-                            audioDurationSeconds: slice.durationSeconds,
-                            chapterStartSeconds:
-                                slice.wholeBookStartSeconds
-                        )
-                    )
-                    try Task.checkCancellation()
-                    guard activeTaskID == taskID else {
-                        return
-                    }
-                    transcript.append(contentsOf: segments)
                 }
+                var telemetryInput = ChapterTelemetryInputAccumulator()
+                do {
+                    for (sliceIndex, slice) in slices.enumerated() {
+                        try Task.checkCancellation()
+                        guard
+                            let track = audio.tracks.first(where: {
+                                $0.timeline.trackIndex == slice.trackIndex
+                            })
+                        else {
+                            chapterSpan?.end(
+                                .failed(.media),
+                                transcriptionInput:
+                                    telemetryInput.telemetryInput
+                            )
+                            await fail(
+                                taskID: taskID,
+                                bookKey: bookKey,
+                                chapterID: chapter.id,
+                                failure: .localAudioUnavailable
+                            )
+                            return
+                        }
+                        state = .transcribing(
+                            progress: progress,
+                            completedSlices: sliceIndex,
+                            totalSlices: slices.count
+                        )
+                        let result = try await transcriber.transcribe(
+                            ChapterTranscriptionRequest(
+                                audioFileURL: track.url,
+                                locale: .current,
+                                audioStartSeconds: slice.audioStartSeconds,
+                                audioDurationSeconds: slice.durationSeconds,
+                                chapterStartSeconds:
+                                    slice.wholeBookStartSeconds
+                            )
+                        )
+                        telemetryInput.append(result.input)
+                        try Task.checkCancellation()
+                        guard activeTaskID == taskID else {
+                            chapterSpan?.end(
+                                .cancelled,
+                                transcriptionInput:
+                                    telemetryInput.telemetryInput
+                            )
+                            return
+                        }
+                        transcript.append(contentsOf: result.segments)
+                    }
+                } catch is CancellationError {
+                    chapterSpan?.end(
+                        .cancelled,
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw CancellationError()
+                } catch let failure as ChapterTranscriptionFailure {
+                    chapterSpan?.end(
+                        .failed(failure.remoteTelemetryFailureCategory),
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw failure
+                } catch {
+                    chapterSpan?.end(
+                        .failed(.media),
+                        transcriptionInput: telemetryInput.telemetryInput
+                    )
+                    throw error
+                }
+                chapterSpan?.end(
+                    .succeeded,
+                    transcriptionInput: telemetryInput.telemetryInput
+                )
                 let sortedTranscript = transcript.sorted {
                     ($0.startMilliseconds, $0.endMilliseconds)
                         < ($1.startMilliseconds, $1.endMilliseconds)
@@ -1557,6 +1700,9 @@ struct ChapterTranscriptionView: View {
     @State private var searchQuery = ""
     @State private var showDownloadConfirmation = false
     @State private var playbackFailure: AppFailure?
+    @State private var pendingExportFormat: TranscriptExportFormat?
+    @State private var exportArtifact: TranscriptExportArtifact?
+    @State private var exportFailure: TranscriptExportArtifactError?
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1606,8 +1752,38 @@ struct ChapterTranscriptionView: View {
                         }
                         isSelectingChapters.toggle()
                     }
-                    .disabled(model.isWorking || hasSearchQuery)
+                    .disabled(
+                        model.isWorking || hasSearchQuery
+                            || !model.hasLoadedTranscriptCache(for: bookKey)
+                            || (!isSelectingChapters
+                                && chaptersNeedingTranscription.isEmpty)
+                    )
                     .accessibilityIdentifier("transcription.select")
+                }
+                if exportSnapshot.hasSegments {
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Button("WebVTT") {
+                                chooseExportFormat(.webVTT)
+                            }
+                            .accessibilityIdentifier(
+                                "transcription.export.webVTT"
+                            )
+                            Button("SRT") {
+                                chooseExportFormat(.subRip)
+                            }
+                            .accessibilityIdentifier(
+                                "transcription.export.subRip"
+                            )
+                        } label: {
+                            Label(
+                                "Export Transcript",
+                                systemImage: "square.and.arrow.up"
+                            )
+                        }
+                        .disabled(hasSearchQuery)
+                        .accessibilityIdentifier("transcription.export")
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -1632,6 +1808,42 @@ struct ChapterTranscriptionView: View {
                     "Transcription uses verified audio stored on this device."
                 )
             }
+            .confirmationDialog(
+                "Export Incomplete Transcript?",
+                isPresented: incompleteExportConfirmation,
+                titleVisibility: .visible
+            ) {
+                if let pendingExportFormat {
+                    Button("Export \(pendingExportFormat.title)") {
+                        export(pendingExportFormat)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingExportFormat = nil
+                }
+            } message: {
+                Text(
+                    "Only \(exportSnapshot.availableChapterCount) of \(exportSnapshot.totalChapterCount) chapters have transcript data. Bleat will export the available transcript."
+                )
+            }
+            .alert(
+                "Export Failed",
+                isPresented: exportFailurePresentation
+            ) {
+                Button("OK") {
+                    exportFailure = nil
+                }
+            } message: {
+                Text(
+                    exportFailure?.localizedDescription
+                        ?? "The transcript could not be exported."
+                )
+            }
+        }
+        .sheet(item: $exportArtifact) { artifact in
+            TranscriptShareSheet(
+                payload: TranscriptSharePayload(artifact: artifact)
+            )
         }
         .accessibilityIdentifier("transcription.view")
         .onAppear {
@@ -1653,8 +1865,13 @@ struct ChapterTranscriptionView: View {
     private var chapterSelector: some View {
         Section {
             ForEach(detail.chapters, id: \.id) { chapter in
+                let isCached = model.isCached(
+                    chapterID: chapter.id,
+                    for: bookKey
+                )
                 Button {
                     if isSelectingChapters {
+                        guard !isCached else { return }
                         if selectedChapterIDs.contains(chapter.id) {
                             selectedChapterIDs.remove(chapter.id)
                         } else {
@@ -1668,10 +1885,7 @@ struct ChapterTranscriptionView: View {
                         Text(chapter.title)
                             .foregroundStyle(.primary)
                         Spacer()
-                        if model.isCached(
-                            chapterID: chapter.id,
-                            for: bookKey
-                        ) {
+                        if isCached {
                             Image(systemName: "text.badge.checkmark")
                                 .accessibilityLabel("Transcribed")
                         }
@@ -1682,7 +1896,7 @@ struct ChapterTranscriptionView: View {
                                 .controlSize(.small)
                                 .accessibilityLabel("Transcribing")
                         }
-                        if isSelectingChapters {
+                        if isSelectingChapters, !isCached {
                             Image(
                                 systemName: selectedChapterIDs.contains(
                                     chapter.id
@@ -1703,6 +1917,8 @@ struct ChapterTranscriptionView: View {
                 .accessibilityIdentifier(
                     "transcription.chapter.\(chapter.id)"
                 )
+                .buttonStyle(.plain)
+                .disabled(isSelectingChapters && isCached)
             }
         } header: {
             HStack {
@@ -1711,11 +1927,13 @@ struct ChapterTranscriptionView: View {
                 if isSelectingChapters {
                     Button("Select All") {
                         selectedChapterIDs = Set(
-                            detail.chapters.map(\.id)
+                            chaptersNeedingTranscription.map(\.id)
                         )
                     }
                     .disabled(
-                        selectedChapterIDs.count == detail.chapters.count
+                        chaptersNeedingTranscription.isEmpty
+                            || selectedUncachedChapterIDs.count
+                                == chaptersNeedingTranscription.count
                     )
                     .accessibilityIdentifier("transcription.selectAll")
                 }
@@ -1984,13 +2202,13 @@ struct ChapterTranscriptionView: View {
                 .background(.bar)
         } else if isSelectingChapters {
             Button(
-                "Transcribe \(chapterCountText(selectedChapterIDs.count))",
+                "Transcribe \(chapterCountText(selectedUncachedChapterIDs.count))",
                 systemImage: "waveform.badge.mic"
             ) {
                 let chapters =
                     ChapterTranscriptionBatchPlanner
                     .orderedChapters(
-                        selectedChapterIDs: selectedChapterIDs,
+                        selectedChapterIDs: selectedUncachedChapterIDs,
                         from: detail.chapters
                     )
                 selectedChapterID = chapters.first?.id
@@ -2002,21 +2220,26 @@ struct ChapterTranscriptionView: View {
                     appModel: appModel
                 )
                 isSelectingChapters = false
+                selectedChapterIDs.removeAll()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedChapterIDs.isEmpty)
+            .disabled(selectedUncachedChapterIDs.isEmpty)
             .padding()
             .frame(maxWidth: .infinity)
             .background(.bar)
             .accessibilityIdentifier("transcription.startBatch")
         } else {
+            let hasLoadedCache = model.hasLoadedTranscriptCache(for: bookKey)
+            let selectedChapterIsCached = model.isCached(
+                chapterID: selectedChapterID ?? Int.min,
+                for: bookKey
+            )
             Button(
-                model.isCached(
-                    chapterID: selectedChapterID ?? Int.min,
-                    for: bookKey
-                )
-                    ? "Transcribe Again"
-                    : "Start Transcription",
+                !hasLoadedCache
+                    ? "Loading Transcriptions"
+                    : selectedChapterIsCached
+                        ? "Transcribed"
+                        : "Start Transcription",
                 systemImage: "waveform.badge.mic"
             ) {
                 guard let chapter = selectedChapter else {
@@ -2031,7 +2254,10 @@ struct ChapterTranscriptionView: View {
                 )
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedChapter == nil)
+            .disabled(
+                selectedChapter == nil || !hasLoadedCache
+                    || selectedChapterIsCached
+            )
             .padding()
             .frame(maxWidth: .infinity)
             .background(.bar)
@@ -2043,11 +2269,84 @@ struct ChapterTranscriptionView: View {
         detail.chapters.first { $0.id == selectedChapterID }
     }
 
+    private var chaptersNeedingTranscription: [PlaybackChapter] {
+        model.chaptersNeedingTranscription(
+            detail.chapters,
+            for: bookKey
+        )
+    }
+
+    private var selectedUncachedChapterIDs: Set<Int> {
+        selectedChapterIDs.intersection(
+            chaptersNeedingTranscription.map(\.id)
+        )
+    }
+
     private var bookKey: ChapterTranscriptionBookKey {
         ChapterTranscriptionBookKey(
             accountID: account.id,
             itemID: detail.id
         )
+    }
+
+    private var exportSnapshot: ChapterTranscriptExportSnapshot {
+        model.transcriptExportSnapshot(
+            for: bookKey,
+            expectedChapterIDs: detail.chapters.map(\.id)
+        )
+    }
+
+    private var incompleteExportConfirmation: Binding<Bool> {
+        Binding(
+            get: { pendingExportFormat != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingExportFormat = nil
+                }
+            }
+        )
+    }
+
+    private var exportFailurePresentation: Binding<Bool> {
+        Binding(
+            get: { exportFailure != nil },
+            set: { isPresented in
+                if !isPresented {
+                    exportFailure = nil
+                }
+            }
+        )
+    }
+
+    private func chooseExportFormat(_ format: TranscriptExportFormat) {
+        if exportSnapshot.isIncomplete {
+            pendingExportFormat = format
+        } else {
+            export(format)
+        }
+    }
+
+    private func export(_ format: TranscriptExportFormat) {
+        let snapshot = exportSnapshot
+        let title = detail.title
+        pendingExportFormat = nil
+        Task {
+            do {
+                let artifact = try await Task.detached(priority: .utility) {
+                    try TranscriptExportArtifactWriter().write(
+                        title: title,
+                        transcripts: snapshot.transcripts,
+                        format: format,
+                        isIncomplete: snapshot.isIncomplete
+                    )
+                }.value
+                exportArtifact = artifact
+            } catch let failure as TranscriptExportArtifactError {
+                exportFailure = failure
+            } catch {
+                exportFailure = .cannotWriteArtifact
+            }
+        }
     }
 
     private var hasSearchQuery: Bool {

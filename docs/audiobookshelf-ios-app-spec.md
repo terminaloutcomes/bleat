@@ -284,8 +284,11 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - A selected batch transcribes one chapter at a time in ascending chapter-index
   order, not selection order, and continues when I dismiss the transcription
   screen or navigate elsewhere in the running app.
+- A chapter with an existing account- and book-scoped cached transcription is
+  read-only in the selector and excluded from subsequent single-chapter and
+  batch transcription work.
 - Completed transcripts persist locally under the exact account, library item,
-  and chapter identity and replace only that chapter when run again.
+  and chapter identity.
 - The latest batch's typed success, failure, or cancellation result persists
   under the account and library item with start and finish timestamps plus
   monotonic elapsed time. The transcription screen reloads that terminal state
@@ -299,6 +302,14 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   existing downloaded-first preparation flow starts the exact account and book
   at that timestamp. Typed playback failures remain visible without replacing
   the transcript.
+- When canonical transcript segments exist, I can export every currently
+  available chapter as UTF-8 WebVTT or SRT with whole-book timestamps and share
+  the generated file through the native platform share sheet without network
+  access. The export screen identifies incomplete chapter coverage before
+  generating a partial transcript. Bleat derives both formats from canonical
+  cached segments regardless of their eventual local or imported source and
+  replaces prior disposable export artifacts rather than treating them as
+  transcript storage.
 - In-memory transcript text is retained while its screen is visible or its
   batch is active, then evicted after five idle minutes or immediately for
   inactive books when iOS reports memory pressure. Durable records remain.
@@ -1694,15 +1705,21 @@ version and build, typed Apple platform, and numeric operating-system version.
 The hardware model is excluded. The reviewed span
 names are app launch, account connection, library refresh, playback preparation,
 playback start, download transfer, playback progress synchronization, and
-transcription, plus private CloudKit synchronization. Telemetry authentication
+transcription batch and chapter processing, plus private CloudKit
+synchronization. Telemetry authentication
 is one parent span, with challenge, enrolment, and token HTTP client spans as
 children. Each client span propagates W3C trace context so the matching
 `bleat-api` server span is part of the same trace. Span attributes are limited to a subsystem derived from the span
 name, typed success/cancellation/failure outcome, privacy-safe failure category,
 optional downloaded/streamed/offline/remote/cache source, and a retry bucket of
 none, one, two, or three-or-more. Duration comes from span timing and is not an
-application-supplied attribute. Application code must not receive an arbitrary
-span-name or attribute-dictionary API.
+application-supplied attribute. A transcription chapter child span may also
+contain the analyzer input's duration in milliseconds, byte count, slice count,
+M4A container, bounded codec category, sample rate, and channel count. Chapters
+whose slices disagree on codec use `mixed`; mixed sample rates or channel counts
+omit that numeric attribute. Audiobook, chapter, account, file, and path identity
+remain excluded. Application code must not receive an arbitrary span-name or
+attribute-dictionary API.
 
 The reviewed log schema is limited to private CloudKit and download-transfer
 lifecycle events. Event names and static bodies are closed. CloudKit attributes
