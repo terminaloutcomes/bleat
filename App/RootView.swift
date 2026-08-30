@@ -2334,7 +2334,7 @@ private struct HomeContent: View {
     ) -> some View {
         // Audiobookshelf conditionally inserts Continue Series between these
         // shelves, so identify them instead of relying on response positions:
-        // https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/LibraryItem.js#L704-L735
+        // https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/models/LibraryItem.js#L330-L418
         let priorityShelfIDs = Set(["continue-listening", "recently-added"])
         let priorityShelves = shelves.filter {
             priorityShelfIDs.contains($0.id)
