@@ -728,7 +728,12 @@
                     ]
                 ),
             ]
-            return hasPartialCache ? [transcripts[0]] : transcripts
+            let omitsCurrentChapter = arguments.contains(
+                "--ui-testing-transcription-current-chapter-untranscribed"
+            )
+            return hasPartialCache || omitsCurrentChapter
+                ? [transcripts[0]]
+                : transcripts
         }
 
         func saveCachedChapterTranscript(
@@ -823,7 +828,11 @@
                 itemID: itemID,
                 title: title,
                 duration: 3_600,
-                currentTime: usesLongChapterList ? 2_710 : 0,
+                currentTime: usesLongChapterList
+                    ? 2_710
+                    : ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-transcription-position"
+                    ) ? 1_810 : 0,
                 chapters: chapters,
                 source: .direct([
                     AppPlaybackTrack(

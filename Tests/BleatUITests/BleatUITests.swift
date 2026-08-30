@@ -2181,6 +2181,74 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testTranscriptGoToCurrentPositionHighlightsActiveSegment() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-position",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.play"].tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+        )
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let action = app.buttons["transcription.goToCurrentPosition"]
+        XCTAssertTrue(action.waitForExistence(timeout: 3))
+        XCTAssertTrue(action.isHittable)
+        action.tap()
+
+        let highlight = app.buttons["transcription.currentPositionHighlight"]
+        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        XCTAssertTrue(highlight.label.contains("Another DOOMSDAY mention"))
+        XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testTranscriptGoToCurrentPositionExplainsUntranscribedChapter() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-position",
+                "--ui-testing-transcription-current-chapter-untranscribed",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.play"].tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+        )
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+        app.buttons["transcription.goToCurrentPosition"].tap()
+
+        let message = app.staticTexts["transcription.currentPositionMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            message.label,
+            "Chapter Two has not been transcribed."
+        )
+        XCTAssertFalse(
+            app.buttons["transcription.currentPositionHighlight"].exists
+        )
+    }
+
+    @MainActor
     func testTranscriptPlaybackFailureKeepsTranscriptVisible() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
