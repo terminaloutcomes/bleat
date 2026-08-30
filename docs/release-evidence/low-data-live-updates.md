@@ -1,0 +1,44 @@
+# Low Data Mode live-update device evidence
+
+This document records physical-device evidence for
+[GitHub issue #11](https://github.com/terminaloutcomes/bleat/issues/11).
+Automated coverage proves the constrained-path lifecycle and local-player
+boundary; this record covers real `NWPath.isConstrained` transitions.
+
+## 2026-08-30 physical iPhone result
+
+- App: Bleat 0.1.3 build 2, commit `63219944`.
+- Device: iPhone17,1 running iOS 26.6.1.
+- Network: cellular, with the configured validated local endpoint unavailable.
+- Enabling Low Data Mode before a refresh changed Diagnostics to
+  **Suspended — Low Data Mode**. A pull-to-refresh still completed normally.
+- Disabling Low Data Mode returned Diagnostics to **Authenticated**.
+- During downloaded playback, enabling Low Data Mode suspended the WebSocket
+  while the same book continued without an item, chapter, rate, timeline, or
+  play/pause-intent change. Home and Library remained usable.
+- Disabling Low Data Mode again returned Diagnostics to **Authenticated** and
+  preserved the active player's state.
+- The user accepted all four transition results as passed.
+
+The final reconnect visibly spent time trying the unavailable local endpoint
+before authenticating through the primary endpoint. The installed build did
+not emit a privacy-safe trace that could distinguish those attempts, so no
+server address or server-side log was retained. The follow-up implementation
+adds one consent-gated `bleat.live_update.connection` span per attempt with
+only `local_server` or `primary_server` source, bounded retry bucket, elapsed
+span time, typed outcome category, stable failure code, and rejection stage.
+Hostname, URL, account, token, and playback route remain excluded.
+
+## Automated evidence
+
+- `LiveUpdatesTests` covers constrained-network request policy, endpoint and
+  token handling, protocol decoding, and typed endpoint-role attempt events.
+- `RemoteTelemetryTests` verifies the closed span-name and attribute allowlist.
+- `AppModelTests.testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome`
+  verifies a local transport failure followed by a primary success produces
+  two bounded spans without endpoint values.
+- `AppModelTests.testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST`
+  covers suspension, REST independence, downloaded-player stability, one
+  reconnect, and one catch-up refresh.
+- `AppModelTests.testLiveProgressUpdatesFinishedStateImmediately` proves a
+  progress event cannot mutate active-player state.

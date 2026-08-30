@@ -50,6 +50,10 @@ allowlist. Account identifiers, installation identifiers, audiobook content,
 credentials, server addresses, searches, transcripts, filesystem paths, and
 media URLs are excluded. The Collector validates the bearer token but does not
 copy its opaque subject into exported telemetry.
+WebSocket connection spans distinguish only `local_server` from
+`primary_server`, a bounded retry bucket, elapsed span time, typed outcome
+category, stable failure code, and rejection stage; they do not include either
+endpoint value.
 
 Other Diagnostic Data is declared linked because authentication-service server
 spans may retain the resolved client network address and a bounded user-agent.

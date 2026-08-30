@@ -115,6 +115,7 @@ public struct InactiveRemoteTelemetryTracer: RemoteTelemetryTracing {
 public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
     case appLaunch = "bleat.app.launch"
     case accountConnection = "bleat.account.connection"
+    case liveUpdateConnection = "bleat.live_update.connection"
     case libraryRefresh = "bleat.library.refresh"
     case playbackPreparation = "bleat.playback.prepare"
     case playbackStart = "bleat.playback.start"
@@ -131,7 +132,7 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
         switch self {
         case .appLaunch:
             .app
-        case .accountConnection:
+        case .accountConnection, .liveUpdateConnection:
             .authentication
         case .libraryRefresh:
             .library
@@ -392,6 +393,45 @@ public enum RemoteTelemetryOutcome: Equatable, Sendable {
     case succeeded
     case cancelled
     case failed(RemoteTelemetryFailureCategory)
+    case liveUpdateFailed(RemoteTelemetryLiveUpdateFailure)
+}
+
+public struct RemoteTelemetryLiveUpdateFailure: Equatable, Sendable {
+    public let category: RemoteTelemetryFailureCategory
+    public let code: RemoteTelemetryLiveUpdateFailureCode
+    public let stage: RemoteTelemetryLiveUpdateFailureStage
+
+    public init(
+        category: RemoteTelemetryFailureCategory,
+        code: RemoteTelemetryLiveUpdateFailureCode,
+        stage: RemoteTelemetryLiveUpdateFailureStage
+    ) {
+        self.category = category
+        self.code = code
+        self.stage = stage
+    }
+}
+
+public enum RemoteTelemetryLiveUpdateFailureCode: String, CaseIterable,
+    Sendable
+{
+    case invalidSocketURL = "invalid_socket_url"
+    case credentialsUnavailable = "credentials_unavailable"
+    case authenticationRejected = "authentication_rejected"
+    case transportUnavailable = "transport_unavailable"
+    case malformedPacket = "malformed_packet"
+}
+
+public enum RemoteTelemetryLiveUpdateFailureStage: String, CaseIterable,
+    Sendable
+{
+    case requestConstruction = "request_construction"
+    case credentialRetrieval = "credential_retrieval"
+    case socketReceive = "socket_receive"
+    case socketSend = "socket_send"
+    case protocolDecoding = "protocol_decoding"
+    case authentication = "authentication"
+    case credentialRecovery = "credential_recovery"
 }
 
 public enum RemoteTelemetrySource: String, CaseIterable, Sendable {
@@ -400,6 +440,8 @@ public enum RemoteTelemetrySource: String, CaseIterable, Sendable {
     case offline
     case remote
     case cache
+    case localServer = "local_server"
+    case primaryServer = "primary_server"
 }
 
 public enum RemoteTelemetryRetryBucket: String, CaseIterable, Sendable {
@@ -452,8 +494,16 @@ public struct RemoteTelemetrySpanDescriptor: Equatable, Sendable {
         if let source {
             attributes["bleat.source"] = source.rawValue
         }
-        if case .failed(let category) = outcome {
+        switch outcome {
+        case .failed(let category):
             attributes["bleat.failure.category"] = category.rawValue
+        case .liveUpdateFailed(let failure):
+            attributes["bleat.failure.category"] = failure.category.rawValue
+            attributes["bleat.live_update.failure_code"] =
+                failure.code.rawValue
+            attributes["bleat.live_update.stage"] = failure.stage.rawValue
+        case .succeeded, .cancelled:
+            break
         }
         return RemoteTelemetryEncodedSpan(
             name: operation.rawValue,
@@ -469,7 +519,7 @@ extension RemoteTelemetryOutcome {
             "succeeded"
         case .cancelled:
             "cancelled"
-        case .failed:
+        case .failed, .liveUpdateFailed:
             "failed"
         }
     }

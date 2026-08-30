@@ -6937,6 +6937,139 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let tracer = RecordingRemoteTelemetryTracer()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([fixtureLibrary()])
+        )
+        let model = AppModel(
+            service: service,
+            remoteTelemetryTracer: tracer
+        )
+        await model.start()
+        for _ in 0..<100 {
+            if await service.networkPathObserverCount() == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            if await service.hasLiveUpdatesSubscriber() {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let baseline = tracer.spans.count
+        let localAttemptID = UUID()
+        let primaryAttemptID = UUID()
+
+        await service.emitLiveUpdate(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: localAttemptID,
+                    usage: .local,
+                    retryBucket: .none,
+                    phase: .started
+                )
+            ))
+        await service.emitLiveUpdate(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: localAttemptID,
+                    usage: .local,
+                    retryBucket: .none,
+                    phase: .failed(
+                        AudiobookshelfLiveConnectionFailure(
+                            cause: .transportUnavailable,
+                            stage: .socketReceive
+                        )
+                    )
+                )
+            ))
+        await service.emitLiveUpdate(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: primaryAttemptID,
+                    usage: .primary,
+                    retryBucket: .one,
+                    phase: .started
+                )
+            ))
+        await service.emitLiveUpdate(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: primaryAttemptID,
+                    usage: .primary,
+                    retryBucket: .one,
+                    phase: .authenticated
+                )
+            ))
+        for _ in 0..<100 {
+            let attempts = Array(tracer.spans.dropFirst(baseline))
+            if attempts.count == 2,
+                attempts.allSatisfy({ $0.outcome != nil })
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(
+            Array(tracer.spans.dropFirst(baseline)),
+            [
+                RecordedRemoteTelemetrySpan(
+                    operation: .liveUpdateConnection,
+                    source: .localServer,
+                    retryBucket: .none,
+                    outcome: .liveUpdateFailed(
+                        RemoteTelemetryLiveUpdateFailure(
+                            category: .transport,
+                            code: .transportUnavailable,
+                            stage: .socketReceive
+                        )
+                    )
+                ),
+                RecordedRemoteTelemetrySpan(
+                    operation: .liveUpdateConnection,
+                    source: .primaryServer,
+                    retryBucket: .one,
+                    outcome: .succeeded
+                ),
+            ]
+        )
+
+        let pendingAttemptID = UUID()
+        await service.emitLiveUpdate(
+            .connectionAttempt(
+                AudiobookshelfLiveConnectionAttempt(
+                    id: pendingAttemptID,
+                    usage: .local,
+                    retryBucket: .two,
+                    phase: .started
+                )
+            ))
+        for _ in 0..<100 {
+            if tracer.spans.count == baseline + 3 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        model.setLiveUpdatesActive(true)
+        for _ in 0..<100 {
+            if tracer.spans.last?.outcome == .cancelled {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(tracer.spans.last?.outcome, .cancelled)
+    }
+
     func testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST()
         async throws
     {

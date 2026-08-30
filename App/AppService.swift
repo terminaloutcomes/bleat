@@ -1342,7 +1342,15 @@ actor LiveAppService: AppServicing {
         let clientToken = UUID()
         let client = AudiobookshelfLiveEventClient(
             serverProvider: {
-                await endpointRouter.preferredServer(for: account.server)
+                let server = await endpointRouter.preferredServer(
+                    for: account.server
+                )
+                let usage: ServerEndpointUsage =
+                    server == account.localServer ? .local : .primary
+                return AudiobookshelfLiveServerEndpoint(
+                    server: server,
+                    usage: usage
+                )
             },
             tokenProvider: {
                 try await coordinator.accessToken(for: account.id)
