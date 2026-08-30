@@ -567,7 +567,7 @@ Playable-cover verification is provided by
 `testPlayableCoverPresentsTypedPermissionDenial`,
 `testPlayableCoversAppearOnEverySingleBookBrowseSurface`,
 `testBookEditorOwnsCoverAndServerDeletionControls`,
-`testCoreJourneyAtLargestDynamicType`, and
+`BleatDynamicTypeUITests`, and
 `testSeriesCoverBrowserDisablesDepthMotionWhenRequested`. The disposable live
 journeys `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload` and
 `testLiveOfflineCachedDownloadAndLocalProgress` cover remote and completed
