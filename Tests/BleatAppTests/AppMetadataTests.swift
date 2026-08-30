@@ -10,6 +10,7 @@ final class AppMetadataTests: XCTestCase {
                 "CFBundleDisplayName": "Bleat",
                 "CFBundleShortVersionString": "1.2.3",
                 "BleatBuildDate": "2026-08-03T12:34:56Z",
+                "BleatGitCommit": "0123456789abcdef",
                 "BleatDeveloperName": "James Hodgkinson",
             ],
             bundleIdentifier: "com.example.bleat"
@@ -17,6 +18,7 @@ final class AppMetadataTests: XCTestCase {
 
         XCTAssertEqual(metadata.appName, "Bleat")
         XCTAssertEqual(metadata.version, "1.2.3")
+        XCTAssertEqual(metadata.gitCommit, "0123456789abcdef")
         XCTAssertEqual(
             metadata.compileDate,
             ISO8601DateFormatter().date(from: "2026-08-03T12:34:56Z")
@@ -33,6 +35,7 @@ final class AppMetadataTests: XCTestCase {
 
         XCTAssertEqual(metadata.appName, "Bleat")
         XCTAssertEqual(metadata.version, "Unavailable")
+        XCTAssertEqual(metadata.gitCommit, "Unavailable")
         XCTAssertNil(metadata.compileDate)
         XCTAssertEqual(metadata.developerName, "Unavailable")
         XCTAssertEqual(metadata.bundleIdentifier, "Unavailable")

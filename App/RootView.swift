@@ -1243,19 +1243,18 @@ private struct AccountEditorView: View {
 
 private struct DiagnosticsView: View {
     @Bindable var model: AppModel
-
-    private var appVersion: String {
-        Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "Unknown"
-    }
+    private let metadata = AppMetadata()
 
     var body: some View {
         List {
             Section("App") {
                 LabeledContent(
                     "Version",
-                    value: appVersion
+                    value: metadata.version
+                )
+                LabeledContent(
+                    "Git Commit",
+                    value: metadata.gitCommit
                 )
                 LabeledContent(
                     "Operating System",
