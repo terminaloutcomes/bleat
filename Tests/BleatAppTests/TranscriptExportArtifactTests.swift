@@ -213,7 +213,7 @@ final class TranscriptExportArtifactTests: XCTestCase {
         XCTAssertFalse(complete.isIncomplete)
     }
 
-    func testSharePayloadContainsOnlyGeneratedFileURLAndType() {
+    func testSharePayloadProvidesTypedFileRepresentation() {
         let url = URL(fileURLWithPath: "/tmp/Book.srt")
         let artifact = TranscriptExportArtifact(
             url: url,
@@ -226,6 +226,16 @@ final class TranscriptExportArtifactTests: XCTestCase {
 
         XCTAssertEqual(payload.fileURL, url)
         XCTAssertEqual(payload.contentType, .subRip)
+        XCTAssertEqual(
+            payload.itemProvider().registeredTypeIdentifiers,
+            [UTType.subRip.identifier]
+        )
+        XCTAssertTrue(
+            payload.itemProvider().hasRepresentationConforming(
+                toTypeIdentifier: UTType.subRip.identifier,
+                fileOptions: .openInPlace
+            )
+        )
     }
 
     private func transcript(

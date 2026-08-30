@@ -273,6 +273,20 @@ struct TranscriptSharePayload: Equatable {
     init(artifact: TranscriptExportArtifact) {
         self.artifact = artifact
     }
+
+    func itemProvider() -> NSItemProvider {
+        let provider = NSItemProvider()
+        let fileURL = self.fileURL
+        provider.registerFileRepresentation(
+            forTypeIdentifier: contentType.identifier,
+            fileOptions: [.openInPlace],
+            visibility: .all
+        ) { completion in
+            completion(fileURL, false, nil)
+            return nil
+        }
+        return provider
+    }
 }
 
 #if os(iOS)
@@ -280,9 +294,11 @@ struct TranscriptSharePayload: Equatable {
         let payload: TranscriptSharePayload
 
         func makeUIViewController(context: Context) -> UIActivityViewController {
-            UIActivityViewController(
-                activityItems: [payload.fileURL],
-                applicationActivities: nil
+            let configuration = UIActivityItemsConfiguration(
+                itemProviders: [payload.itemProvider()]
+            )
+            return UIActivityViewController(
+                activityItemsConfiguration: configuration
             )
         }
 
@@ -316,6 +332,7 @@ struct TranscriptSharePayload: Equatable {
             private let onDismiss: @MainActor () -> Void
             private var picker: NSSharingServicePicker?
             private var payload: TranscriptSharePayload?
+            private var itemProvider: NSItemProvider?
 
             init(dismiss: DismissAction) {
                 onDismiss = { dismiss() }
@@ -331,9 +348,11 @@ struct TranscriptSharePayload: Equatable {
                     guard let self, let view else {
                         return
                     }
-                    let picker = NSSharingServicePicker(items: [payload.fileURL])
+                    let itemProvider = payload.itemProvider()
+                    let picker = NSSharingServicePicker(items: [itemProvider])
                     picker.delegate = self
                     self.picker = picker
+                    self.itemProvider = itemProvider
                     picker.show(
                         relativeTo: view.bounds,
                         of: view,
@@ -375,6 +394,7 @@ struct TranscriptSharePayload: Equatable {
 
             private func finishSharing() {
                 payload = nil
+                itemProvider = nil
                 picker = nil
                 onDismiss()
             }
