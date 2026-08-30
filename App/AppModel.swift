@@ -367,7 +367,13 @@ enum BookEditSaveState: Equatable, Sendable {
     case saving
     case stale(LibraryBookDetail)
     case saved
-    case metadataSavedCoverFailed(LibraryBookDetail, AppFailure)
+    case coverSaved(LibraryBookDetail)
+    case metadataSavedCoverFailed(
+        AccountID,
+        LibraryBookDetail,
+        coverJPEGData: Data,
+        AppFailure
+    )
     case failed(AppFailure)
 }
 
@@ -1335,6 +1341,8 @@ final class AppModel {
         [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored
     private var seriesDownloadSubmissionAccounts: [UUID: AccountID] = [:]
+    @ObservationIgnored
+    private var bookCoverRetryOperationID: UUID?
     @ObservationIgnored
     private var seriesDownloadSubmissionTails:
         [AccountID: SeriesDownloadSubmissionTail] = [:]
@@ -3654,6 +3662,7 @@ final class AppModel {
         guard bookEditSaveState != .saving else {
             return
         }
+        bookCoverRetryOperationID = nil
         bookEditSaveState = .saving
         do {
             switch try await service.saveMetadata(
@@ -3680,7 +3689,9 @@ final class AppModel {
                     bookEditSaveState = .saved
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
+                        account.id,
                         detail,
+                        coverJPEGData: coverJPEGData,
                         AppFailure(
                             operation: .replaceCover, serviceError: error)
                     )
@@ -3695,7 +3706,62 @@ final class AppModel {
         }
     }
 
+    func retryBookCoverUpload() async {
+        guard let account else {
+            bookEditSaveState = .failed(
+                AppFailure(.replaceCover, .authenticationRequired)
+            )
+            return
+        }
+        guard
+            case .metadataSavedCoverFailed(
+                let originatingAccountID,
+                let detail,
+                let coverJPEGData,
+                _
+            ) = bookEditSaveState,
+            account.id == originatingAccountID
+        else {
+            return
+        }
+        let operationID = UUID()
+        bookCoverRetryOperationID = operationID
+        bookEditSaveState = .saving
+        do {
+            let updated = try await service.replaceCover(
+                for: account,
+                detail: detail,
+                jpegData: coverJPEGData
+            )
+            guard bookCoverRetryOperationID == operationID,
+                self.account?.id == originatingAccountID,
+                bookEditSaveState == .saving
+            else {
+                return
+            }
+            bookCoverRetryOperationID = nil
+            selectedBookID = updated.id
+            bookDetail = .loaded(updated)
+            bookEditSaveState = .coverSaved(updated)
+        } catch let error {
+            guard bookCoverRetryOperationID == operationID,
+                self.account?.id == originatingAccountID,
+                bookEditSaveState == .saving
+            else {
+                return
+            }
+            bookCoverRetryOperationID = nil
+            bookEditSaveState = .metadataSavedCoverFailed(
+                originatingAccountID,
+                detail,
+                coverJPEGData: coverJPEGData,
+                AppFailure(operation: .replaceCover, serviceError: error)
+            )
+        }
+    }
+
     func resetBookEditSaveState() {
+        bookCoverRetryOperationID = nil
         bookEditSaveState = .idle
     }
 
@@ -5710,7 +5776,7 @@ final class AppModel {
         selectedBookID = nil
         bookDetail = .idle
         bookBookmarks = .idle
-        bookEditSaveState = .idle
+        resetBookEditSaveState()
         bookDeletionState = .idle
     }
 

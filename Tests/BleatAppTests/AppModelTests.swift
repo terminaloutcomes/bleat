@@ -10547,6 +10547,7 @@ final class AppModelTests: XCTestCase {
         let library = fixtureLibrary()
         let page = fixturePage(libraryID: library.id)
         let detail = fixtureBookDetail(item: page.items[0])
+        let jpegData = Data([1])
         let service = TestAppService(
             activeAccount: .success(account),
             libraries: .success([library]),
@@ -10563,17 +10564,83 @@ final class AppModelTests: XCTestCase {
         await model.saveBookEdits(
             draft: BookMetadataDraft(detail: detail),
             baseline: detail,
-            coverJPEGData: Data([1])
+            coverJPEGData: jpegData
         )
 
         XCTAssertEqual(
             model.bookEditSaveState,
             .metadataSavedCoverFailed(
+                account.id,
                 detail,
+                coverJPEGData: jpegData,
                 AppFailure(.replaceCover, .invalidInput)
             )
         )
         XCTAssertEqual(model.bookDetail, .loaded(detail))
+        let coverRequests = await service.coverReplacementRequests()
+        XCTAssertEqual(
+            coverRequests,
+            [
+                CoverReplacementRequest(
+                    accountID: account.id,
+                    detail: detail,
+                    jpegData: jpegData
+                )
+            ]
+        )
+
+        await service.setCoverReplacement(.success(detail))
+        await model.retryBookCoverUpload()
+
+        XCTAssertEqual(model.bookEditSaveState, .coverSaved(detail))
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        let retryRequests = await service.coverReplacementRequests()
+        XCTAssertEqual(retryRequests.count, 2)
+        XCTAssertEqual(retryRequests[0], retryRequests[1])
+        let metadataRequests = await service.metadataSaveRequests()
+        XCTAssertEqual(metadataRequests.count, 1)
+    }
+
+    func testCoverRetryCannotPublishAfterAccountSwitch() async throws {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let detail = fixtureBookDetail(item: page.items[0])
+        let gate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            libraries: .success([library]),
+            firstPage: .success(page),
+            bookDetail: .success(detail),
+            metadataSave: .success(.saved(detail)),
+            coverReplacement: .failure(.coverUpdate(.uploadRejected))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.saveBookEdits(
+            draft: BookMetadataDraft(detail: detail),
+            baseline: detail,
+            coverJPEGData: Data([1])
+        )
+        await service.setCoverReplacement(.success(detail))
+        await service.setCoverReplacementGate(gate)
+
+        let retry = Task { await model.retryBookCoverUpload() }
+        await gate.waitUntilEntered()
+        await model.switchAccount(to: second)
+        await gate.release()
+        await retry.value
+
+        XCTAssertEqual(model.account, second)
+        XCTAssertEqual(model.bookDetail, .idle)
+        XCTAssertEqual(model.bookEditSaveState, .idle)
     }
 
     func testBookDeletionForwardsModeAndRefreshesLibrary()
@@ -16021,6 +16088,7 @@ private actor TestAppService: AppServicing {
         Result<AppMetadataSaveOutcome, AppServiceError>?
     private var coverReplacementResult:
         Result<LibraryBookDetail, AppServiceError>?
+    private var coverReplacementGate: AsyncGate?
     private var bookDeletionResult:
         Result<AppBookDeletionOutcome, AppServiceError>
     private var progressUpdateResult: Result<Void, AppServiceError>
@@ -17009,6 +17077,9 @@ private actor TestAppService: AppServicing {
                 jpegData: jpegData
             )
         )
+        if let coverReplacementGate {
+            await coverReplacementGate.enterAndWait()
+        }
         if let coverReplacementResult {
             return try value(from: coverReplacementResult)
         }
@@ -17301,6 +17372,16 @@ private actor TestAppService: AppServicing {
 
     func coverReplacementRequests() -> [CoverReplacementRequest] {
         recordedCoverReplacementRequests
+    }
+
+    func setCoverReplacement(
+        _ result: Result<LibraryBookDetail, AppServiceError>
+    ) {
+        coverReplacementResult = result
+    }
+
+    func setCoverReplacementGate(_ gate: AsyncGate?) {
+        coverReplacementGate = gate
     }
 
     func bookDeletionRequests() -> [BookDeletionRequest] {

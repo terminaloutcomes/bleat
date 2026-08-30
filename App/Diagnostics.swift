@@ -37,9 +37,9 @@ extension AppModel {
     private var bookEditFailure: AppFailure? {
         switch bookEditSaveState {
         case .failed(let failure),
-            .metadataSavedCoverFailed(_, let failure):
+            .metadataSavedCoverFailed(_, _, _, let failure):
             failure
-        case .idle, .saving, .stale, .saved:
+        case .idle, .saving, .stale, .saved, .coverSaved:
             nil
         }
     }
