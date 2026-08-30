@@ -6710,6 +6710,82 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testTranscriptNavigationPositionUsesSavedPositionWithoutMatchingPlayback()
+        throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let positionStore = PlaybackPositionStore(defaults: fixture.defaults)
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        try positionStore.save(
+            42,
+            accountID: fixture.accountID,
+            itemID: fixture.detail.id
+        )
+
+        XCTAssertEqual(
+            playback.transcriptNavigationPosition(
+                accountID: fixture.accountID,
+                itemID: fixture.detail.id
+            ),
+            .saved(42)
+        )
+        XCTAssertNil(
+            playback.transcriptNavigationPosition(
+                accountID: fixture.accountID,
+                itemID: LibraryItemID(rawValue: "missing")
+            )
+        )
+    }
+
+    func testTranscriptNavigationPositionUsesOnlyExactActiveBookBeforeSaved()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let positionStore = PlaybackPositionStore(defaults: fixture.defaults)
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation()
+        )
+        let otherAccountID = AccountID(rawValue: "other-account")
+        let otherItemID = LibraryItemID(rawValue: "other-item")
+        try positionStore.save(
+            42,
+            accountID: fixture.accountID,
+            itemID: fixture.detail.id
+        )
+        try positionStore.save(
+            84,
+            accountID: otherAccountID,
+            itemID: otherItemID
+        )
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil,
+            initialTime: 0.5
+        )
+
+        XCTAssertEqual(
+            playback.transcriptNavigationPosition(
+                accountID: fixture.accountID,
+                itemID: fixture.detail.id
+            ),
+            .active(0.5)
+        )
+        XCTAssertEqual(
+            playback.transcriptNavigationPosition(
+                accountID: otherAccountID,
+                itemID: otherItemID
+            ),
+            .saved(84)
+        )
+        await playback.stop()
+    }
+
     func testCacheOnlyCoverLoadDoesNotFetchOnCacheMiss() async throws {
         let url = try XCTUnwrap(
             URL(string: "https://books.example/cover?ts=3")

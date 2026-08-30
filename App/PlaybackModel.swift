@@ -16,6 +16,18 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum PlaybackTranscriptNavigationPosition: Equatable, Sendable {
+    case active(Double)
+    case saved(Double)
+
+    var wholeBookTime: Double {
+        switch self {
+        case .active(let time), .saved(let time):
+            time
+        }
+    }
+}
+
 extension PlaybackState {
     fileprivate var diagnosticState: DiagnosticState {
         switch self {
@@ -495,6 +507,17 @@ final class PlaybackModel {
         preparation != nil
             && self.accountID == accountID
             && self.itemID == itemID
+    }
+
+    func transcriptNavigationPosition(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> PlaybackTranscriptNavigationPosition? {
+        if isPrepared(accountID: accountID, itemID: itemID) {
+            return .active(currentTime)
+        }
+        return positionStore.position(accountID: accountID, itemID: itemID)
+            .map(PlaybackTranscriptNavigationPosition.saved)
     }
 
     var isPlaying: Bool {
