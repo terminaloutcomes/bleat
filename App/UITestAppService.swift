@@ -16,6 +16,36 @@
         case launching = "--ui-testing-launching"
         case unavailableStartup = "--ui-testing-unavailable-startup"
         case largeLibrary = "--ui-testing-large-library"
+        case homeLoading = "--ui-testing-home-loading"
+        case homeEmpty = "--ui-testing-home-empty"
+        case homeDownloadLoading = "--ui-testing-home-download-loading"
+        case homeDownloadUnavailable =
+            "--ui-testing-home-download-unavailable"
+        case homeRefreshFailure = "--ui-testing-home-refresh-failure"
+        case homeShelfOrder = "--ui-testing-home-shelf-order"
+
+        var isSignedIn: Bool {
+            switch self {
+            case .signedIn, .refresh, .emptyLibraryRefreshFailure,
+                .limitedPermissions, .playback, .largeLibrary, .homeLoading,
+                .homeEmpty, .homeDownloadLoading, .homeDownloadUnavailable,
+                .homeRefreshFailure, .homeShelfOrder:
+                true
+            case .signedOut, .openID, .rejectLogin, .submissionProgress,
+                .launching, .unavailableStartup:
+                false
+            }
+        }
+
+        var hasCompletedDownload: Bool {
+            switch self {
+            case .homeDownloadLoading, .homeDownloadUnavailable,
+                .homeShelfOrder:
+                true
+            default:
+                false
+            }
+        }
     }
 
     private enum UITestScenarioStorage {
@@ -58,6 +88,7 @@
 
         private let scenario: UITestScenario
         private let accountResult: Result<ServerAccount, AppServiceError>
+        let downloadsStorageRootURL: URL?
         private var firstPageRequests = 0
         private var homeShelfRequests = 0
         private var libraryRequests = 0
@@ -138,22 +169,20 @@
                     "--ui-testing-playback-denied"
                 )
             )
+            downloadsStorageRootURL =
+                scenario.hasCompletedDownload
+                ? try? Self.makeCompletedDownloadFixture()
+                : nil
+        }
+
+        private var isSignedInScenario: Bool {
+            scenario.isSignedIn
         }
 
         func accounts()
             async throws(AppServiceError) -> [ServerAccount]
         {
-            guard
-                [
-                    .signedIn,
-                    .refresh,
-                    .emptyLibraryRefreshFailure,
-                    .limitedPermissions,
-                    .playback,
-                    .largeLibrary,
-                ]
-                .contains(scenario)
-            else {
+            guard isSignedInScenario else {
                 return []
             }
             return [try account()]
@@ -166,17 +195,7 @@
                 try? await Task.sleep(for: .seconds(5))
                 return nil
             }
-            guard
-                [
-                    .signedIn,
-                    .refresh,
-                    .emptyLibraryRefreshFailure,
-                    .limitedPermissions,
-                    .playback,
-                    .largeLibrary,
-                ]
-                .contains(scenario)
-            else {
+            guard isSignedInScenario else {
                 return nil
             }
             return try account()
@@ -418,6 +437,19 @@
         ) async throws(AppServiceError) -> [LibraryBookShelf] {
             let ids = try Self.fixtureIDs()
             homeShelfRequests += 1
+            if scenario == .homeLoading
+                || scenario == .homeDownloadLoading
+            {
+                try? await Task.sleep(for: .seconds(10))
+            }
+            if scenario == .homeDownloadUnavailable
+                || (scenario == .homeRefreshFailure && homeShelfRequests >= 2)
+            {
+                throw .libraryRepository(.remote(.unexpectedStatus(503)))
+            }
+            if scenario == .homeEmpty {
+                return []
+            }
             if scenario == .refresh, homeShelfRequests >= 2 {
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -462,14 +494,40 @@
                     collapsedSeries: collapsedSeries
                 )
             )
-            return [
+            let continueListening = LibraryBookShelf(
+                id: "continue-listening",
+                label: "Continue Listening",
+                labelLocalizationKey: nil,
+                items: items,
+                total: items.count
+            )
+            guard scenario == .homeShelfOrder else {
+                return [continueListening]
+            }
+            func shelf(_ id: String, _ label: String) -> LibraryBookShelf {
                 LibraryBookShelf(
-                    id: "continue-listening",
-                    label: "Continue Listening",
+                    id: id,
+                    label: label,
                     labelLocalizationKey: nil,
-                    items: items,
-                    total: items.count
+                    items: [
+                        Self.book(
+                            id: "ui-\(id)",
+                            title: "The \(label) Audiobook",
+                            libraryID: libraryID,
+                            ids: ids
+                        )
+                    ],
+                    total: 1
                 )
+            }
+            // The pinned server can place Continue Series before Recently
+            // Added. This fixture proves Home identifies the two priority
+            // shelves by their stable IDs instead of by response position.
+            return [
+                continueListening,
+                shelf("continue-series", "Continue Series"),
+                shelf("recently-added", "Recently Added"),
+                shelf("discover", "Discover"),
             ]
         }
 
@@ -1147,6 +1205,128 @@
                 return value
             }
             return 10_000
+        }
+
+        private static func makeCompletedDownloadFixture() throws -> URL {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatUITestDownloads-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            let layout = try DownloadStorageLayout(rootURL: root)
+            let accountID = AccountID(rawValue: "ui-account")
+            let itemID = LibraryItemID(rawValue: "ui-downloaded")
+            let audio = silentWaveFixture()
+            let track = DownloadTrackPlan(
+                index: 0,
+                inode: "ui-downloaded-track",
+                expectedByteLength: Int64(audio.count),
+                mimeType: "audio/wav",
+                safeExtension: .wav,
+                destinationEntry: "00000.wav",
+                startOffset: 0,
+                duration: 5
+            )
+            let plan = DownloadPlan(itemID: itemID, tracks: [track])
+            var manifest = try DownloadManifest(
+                downloadID: DownloadID(rawValue: "ui-downloaded-download"),
+                accountID: accountID,
+                plan: plan
+            )
+            try manifest.markComplete(
+                trackIndex: 0,
+                observedByteLength: Int64(audio.count),
+                placement: .finalized
+            )
+            try manifest.finish()
+            let record = DownloadedBookRecord(
+                manifest: manifest,
+                detail: try completedDownloadDetail(itemID: itemID)
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: manifest.downloadID,
+                accountID: accountID,
+                itemID: itemID,
+                track: track
+            )
+            let directory = layout.bookDirectory(
+                accountID: accountID,
+                itemID: itemID
+            )
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            try audio.write(
+                to: layout.destinationURL(for: identity),
+                options: .atomic
+            )
+            try JSONEncoder().encode(record).write(
+                to: layout.recordURL(accountID: accountID, itemID: itemID),
+                options: .atomic
+            )
+            return root
+        }
+
+        private static func silentWaveFixture() -> Data {
+            // Five seconds keeps playback active long enough for UI readiness
+            // assertions to observe the playing state deterministically.
+            var data = Data([
+                82, 73, 70, 70, 164, 56, 1, 0,
+                87, 65, 86, 69, 102, 109, 116, 32,
+                16, 0, 0, 0, 1, 0, 1, 0,
+                64, 31, 0, 0, 128, 62, 0, 0,
+                2, 0, 16, 0, 100, 97, 116, 97,
+                128, 56, 1, 0,
+            ])
+            data.append(Data(count: 80_000))
+            return data
+        }
+
+        private static func completedDownloadDetail(
+            itemID: LibraryItemID
+        ) throws -> LibraryBookDetail {
+            let ids = try fixtureIDs()
+            return LibraryBookDetail(
+                id: itemID,
+                libraryID: LibraryID(rawValue: "ui-library"),
+                bookID: BookID(rawValue: "ui-downloaded-book"),
+                title: "The Downloaded Audiobook",
+                subtitle: nil,
+                authors: [
+                    LibraryBookContributor(
+                        id: ids.primaryAuthor,
+                        name: "Test Author"
+                    )
+                ],
+                narrators: ["Test Narrator"],
+                series: [],
+                genres: ["Fiction"],
+                tags: [],
+                publishedYear: "2026",
+                publishedDate: nil,
+                publisher: nil,
+                descriptionPlain: "A deterministic downloaded audiobook.",
+                isbn: nil,
+                asin: nil,
+                language: "English",
+                duration: 5,
+                trackCount: 1,
+                audioFileCount: 1,
+                chapters: [
+                    PlaybackChapter(
+                        id: 0,
+                        start: 0,
+                        end: 5,
+                        title: "Downloaded Chapter"
+                    )
+                ],
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false,
+                progress: nil
+            )
         }
 
         private static func makeAccount(

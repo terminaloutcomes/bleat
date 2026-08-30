@@ -1463,6 +1463,107 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testHomeLoadingAndEmptyStatesUsePresentationIdentifiers() {
+        let loadingApp = launch(scenario: "--ui-testing-home-loading")
+        XCTAssertTrue(
+            loadingApp.descendants(matching: .any)["home.loading"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            loadingApp.descendants(matching: .any)["home.empty"].exists
+        )
+        loadingApp.terminate()
+
+        let emptyApp = launch(scenario: "--ui-testing-home-empty")
+        XCTAssertTrue(
+            emptyApp.descendants(matching: .any)["home.empty"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            emptyApp.descendants(matching: .any)["home.loading"].exists
+        )
+        XCTAssertFalse(
+            emptyApp.descendants(matching: .any)["home.error"].exists
+        )
+    }
+
+    @MainActor
+    func testCompletedDownloadPlaysWhileHomeLoadsOrIsUnavailable() {
+        let loadingApp = launch(
+            scenario: "--ui-testing-home-download-loading"
+        )
+        XCTAssertTrue(
+            loadingApp.descendants(matching: .any)["home.loading"]
+                .waitForExistence(timeout: 3)
+        )
+        assertDownloadedHomeBookPlays(in: loadingApp)
+        loadingApp.terminate()
+
+        let unavailableApp = launch(
+            scenario: "--ui-testing-home-download-unavailable"
+        )
+        XCTAssertTrue(
+            unavailableApp.descendants(matching: .any)["home.error"]
+                .waitForExistence(timeout: 3)
+        )
+        assertDownloadedHomeBookPlays(in: unavailableApp)
+    }
+
+    @MainActor
+    func testHomeShelfOrderUsesPriorityShelfIdentities() {
+        let app = launch(scenario: "--ui-testing-home-shelf-order")
+        let home = app.descendants(matching: .any)["home.shelves"]
+        XCTAssertTrue(home.waitForExistence(timeout: 3))
+
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "home.shelf.discover",
+            direction: .up
+        )
+        let orderedIdentifiers = home.descendants(matching: .any)
+            .allElementsBoundByIndex
+            .map(\.identifier)
+            .filter {
+                $0 == "home.downloaded" || $0.hasPrefix("home.shelf.")
+            }
+            .reduce(into: [String]()) { identifiers, identifier in
+                if identifiers.last != identifier {
+                    identifiers.append(identifier)
+                }
+            }
+        XCTAssertEqual(
+            orderedIdentifiers,
+            [
+                "home.shelf.continue-listening",
+                "home.shelf.recently-added",
+                "home.downloaded",
+                "home.shelf.continue-series",
+                "home.shelf.discover",
+            ]
+        )
+    }
+
+    @MainActor
+    func testFailedHomeRefreshKeepsExistingShelvesMounted() {
+        let app = launch(scenario: "--ui-testing-home-refresh-failure")
+        let home = app.descendants(matching: .any)["home.shelves"]
+        let existingShelf = app.descendants(matching: .any)[
+            "home.shelf.continue-listening"
+        ]
+        XCTAssertTrue(home.waitForExistence(timeout: 3))
+        XCTAssertTrue(existingShelf.waitForExistence(timeout: 3))
+
+        pullToRefresh(home)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.refreshError"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(existingShelf.exists)
+        XCTAssertTrue(app.staticTexts["The Test Audiobook"].exists)
+    }
+
+    @MainActor
     func testEmptyLibraryShowsRefreshFailureWithoutReplacingEmptyState() {
         let app = launch(
             scenario: "--ui-testing-empty-library-refresh-failure"
@@ -1487,6 +1588,30 @@ final class BleatUITests: XCTestCase {
                 .waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.staticTexts["No audiobook libraries"].exists)
+    }
+
+    @MainActor
+    private func assertDownloadedHomeBookPlays(in app: XCUIApplication) {
+        let shelf = app.descendants(matching: .any)["home.downloaded"]
+        let play = app.buttons["home.downloaded.ui-downloaded.play"]
+        XCTAssertTrue(shelf.waitForExistence(timeout: 3))
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        XCTAssertTrue(play.isEnabled)
+        play.tap()
+        let miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 10))
+        let playbackReady = expectation(
+            for: NSPredicate(format: "label == %@", "Pause"),
+            evaluatedWith: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackReady], timeout: 3),
+            .completed
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["player.preparing"]
+                .waitForNonExistence(timeout: 3)
+        )
     }
 
     @MainActor

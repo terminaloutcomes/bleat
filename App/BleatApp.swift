@@ -57,6 +57,8 @@ final class AppBootstrap {
                     nearbyServerDiscovery:
                         UnavailableNearbyServerDiscovery(),
                     bootstrapError: UITestAppService.bootstrapError,
+                    downloadsStorageRootURL:
+                        testService.downloadsStorageRootURL,
                     diagnostics: diagnostics,
                     remoteTelemetryConsentController: remoteTelemetry,
                     remoteTelemetryTracer: remoteTelemetry.tracer,
