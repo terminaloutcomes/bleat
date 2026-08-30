@@ -1598,8 +1598,19 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(play.waitForExistence(timeout: 3))
         XCTAssertTrue(play.isEnabled)
         play.tap()
+        let miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 10))
+        let playbackReady = expectation(
+            for: NSPredicate(format: "label == %@", "Pause"),
+            evaluatedWith: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackReady], timeout: 3),
+            .completed
+        )
         XCTAssertTrue(
-            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+            app.descendants(matching: .any)["player.preparing"]
+                .waitForNonExistence(timeout: 3)
         )
     }
 

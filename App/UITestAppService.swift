@@ -1225,7 +1225,7 @@
                 safeExtension: .wav,
                 destinationEntry: "00000.wav",
                 startOffset: 0,
-                duration: 0.1
+                duration: 5
             )
             let plan = DownloadPlan(itemID: itemID, tracks: [track])
             var manifest = try DownloadManifest(
@@ -1269,15 +1269,17 @@
         }
 
         private static func silentWaveFixture() -> Data {
+            // Five seconds keeps playback active long enough for UI readiness
+            // assertions to observe the playing state deterministically.
             var data = Data([
-                82, 73, 70, 70, 100, 6, 0, 0,
+                82, 73, 70, 70, 164, 56, 1, 0,
                 87, 65, 86, 69, 102, 109, 116, 32,
                 16, 0, 0, 0, 1, 0, 1, 0,
                 64, 31, 0, 0, 128, 62, 0, 0,
                 2, 0, 16, 0, 100, 97, 116, 97,
-                64, 6, 0, 0,
+                128, 56, 1, 0,
             ])
-            data.append(Data(count: 1_600))
+            data.append(Data(count: 80_000))
             return data
         }
 
@@ -1308,14 +1310,14 @@
                 isbn: nil,
                 asin: nil,
                 language: "English",
-                duration: 0.1,
+                duration: 5,
                 trackCount: 1,
                 audioFileCount: 1,
                 chapters: [
                     PlaybackChapter(
                         id: 0,
                         start: 0,
-                        end: 0.1,
+                        end: 5,
                         title: "Downloaded Chapter"
                     )
                 ],
