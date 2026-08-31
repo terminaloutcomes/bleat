@@ -15975,6 +15975,99 @@ final class AppModelTests: XCTestCase {
             coordinator.disconnect()
         }
 
+        func testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork()
+            async throws
+        {
+            let imageData = try XCTUnwrap(
+                UIGraphicsImageRenderer(
+                    size: CGSize(width: 2, height: 2)
+                ).image { context in
+                    UIColor.systemGreen.setFill()
+                    context.fill(
+                        CGRect(x: 0, y: 0, width: 2, height: 2)
+                    )
+                }.pngData()
+            )
+            let fetcher = TestBookCoverFetcher(data: imageData)
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    try await fetcher.fetch(request)
+                }
+            )
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let secondLibrary = LibrarySummary(
+                id: LibraryID(rawValue: "library-2"),
+                name: "Second Library",
+                mediaType: .book
+            )
+            let model = AppModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([library, secondLibrary]),
+                    firstPage: .success(
+                        fixturePage(libraryID: library.id)
+                    ),
+                    homeShelves: .success(
+                        fixtureShelves(libraryID: library.id)
+                    )
+                )
+            )
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(
+                model: model,
+                coverLoader: loader
+            )
+            coordinator.connect(presenter)
+
+            let root = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate
+            )
+            let home = try XCTUnwrap(
+                root.templates[0] as? CPListTemplate
+            )
+            let item = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            await waitForCoverRequests(fetcher, count: 1)
+            for _ in 0..<100 {
+                if item.image?.size == CGSize(width: 2, height: 2) {
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertEqual(
+                item.image?.size,
+                CGSize(width: 2, height: 2)
+            )
+
+            coordinator.refreshTemplates()
+
+            let refreshedItem = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            XCTAssertTrue(refreshedItem === item)
+            XCTAssertEqual(
+                refreshedItem.image?.size,
+                CGSize(width: 2, height: 2)
+            )
+
+            await model.selectLibrary(secondLibrary)
+            coordinator.refreshTemplates()
+
+            let replacementItem = try XCTUnwrap(
+                home.sections.first?.items.first as? CPListItem
+            )
+            XCTAssertFalse(replacementItem === item)
+            XCTAssertEqual(
+                replacementItem.image?.size,
+                CGSize(width: 2, height: 2)
+            )
+            coordinator.disconnect()
+        }
+
         func testCarPlayFailedPlaybackStartsOnceAndDoesNotPushNowPlaying()
             async throws
         {
