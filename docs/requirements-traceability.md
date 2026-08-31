@@ -143,6 +143,44 @@ by `APP-OIDC-001` and [GitHub issue #2](https://github.com/terminaloutcomes/blea
 | PERSISTENCE-MIGRATION-001 | 13, 16, 17 | Every shipped SwiftData schema migrates to the current schema through versioned fixtures, with upgrade, backup/restore, account-removal, and app-data-reset journeys | `Sources/BleatCore/BleatPersistenceSchemaHistory.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/RootView.swift`, [GitHub issue #47](https://github.com/terminaloutcomes/bleat/issues/47) | `PersistenceMigrationTests.testReleasedStoreFixturesOpenWithCurrentCatalog` exercises the released 0.1.1, 0.1.2, and 0.1.3 store inventories using redacted two-account fixtures; `TokenVaultTests.testDeleteAllCredentialsRemovesEveryAccountAndCredentialKind` covers account-wide credential deletion; `AppModelTests.testResetLocalDataClearsRealStorageAndSurvivesRelaunch` and `testRemovingOneOfTwoRealAccountsSurvivesRelaunch` exercise the real SwiftData, Keychain, and download stores across two-account reset/removal and model/service reconstruction; reset failure tests cover typed terminal states; `BleatUITests.testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch` confirms the destructive UI journey and relaunch. Backup/restore and signed-device lifecycle evidence remain required. | in-progress |
 | PERFORMANCE-001 | 19 | Browsing, search, and cache behavior remain responsive with 10,000 books without main-actor bulk work, with launch, memory, energy, and storage results recorded | [GitHub issue #46](https://github.com/terminaloutcomes/bleat/issues/46), `App/LibraryPageMerger.swift`, `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift`, `Tests/BleatAppTests/AppModelTests.swift` (`testTenKBooksLoadNextBooksPagePerformance`), `Tests/BleatUITests/BleatPerformanceUITests.swift`, `Tests/BleatCoreLiveTests/LibraryRepositoryLiveTests.swift`, `docs/release-evidence/performance-baseline.md`, [GitHub issue #95](https://github.com/terminaloutcomes/bleat/issues/95) | Host cache, off-main AppModel paging, Release Simulator launch/browsing/search with memory snapshots, and live 10k paged-load/cache fallback verified; #95 separately tracks physical-device energy evidence | implemented |
 
+## Issue #151 download storage evidence
+
+`scripts/test-download-performance.sh` runs the two app-hosted Issue #151 tests
+under the Release `BleatPerformance` scheme and rejects zero, missing, extra, or
+failed test cases after inspecting `.build/download-performance.xcresult`.
+The recorded run used an arm64 iPhone 17 Pro Simulator on iOS 26.5 (23F77),
+the fixture account reported Audiobookshelf 2.36.0, and both selected tests
+passed:
+
+- `testDownloadPreflightRejectsInsufficientCapacityBeforeScheduling` used a
+  valid plan larger than the Simulator volume. The app presented the typed
+  required-versus-available capacity failure before creating its storage root,
+  manifest, partial media, or background transfer descriptor.
+- `testThreeHundredTrackDownloadRepairAndPublicationStayResponsive`
+  finalized 300 one-byte manual tracks, removed track 173, reconstructed
+  `DownloadStorage` and `DownloadModel` as a relaunch would, and observed a
+  Partial manifest. Repair preserved the checked healthy track byte-for-byte
+  and scheduled only track 173. The replacement transfer completed through the
+  app's URL-session delegate path, finalized the replacement bytes, and restored
+  a healthy Complete manifest. A changed expected length produced the typed
+  `repairPlanChanged` rejection before scheduling mixed-plan work.
+- The same test created a 300-track automatic cache with active window
+  148...152, corrupted track 150, retained cache-specific Failed presentation,
+  and repaired only track 150 through the delegate path rather than presenting
+  or repairing the whole book. Its active-window state returned to Cached.
+- Planning took 0.000173 seconds against a 1-second threshold; filesystem
+  reconciliation took 0.149818 seconds and observable-state publication took
+  0.304834 seconds against separate 5-second thresholds. Independent
+  main-actor probes recorded maximum scheduling gaps of 0.000176, 0.000148,
+  and 0.024079 seconds for planning, reconciliation, and publication,
+  respectively, each below the 1-second responsiveness threshold. The full
+  300-track test completed in 3.798 seconds.
+
+This evidence covers storage pressure, repair/corruption, automatic-cache
+scope, and high-track-count responsiveness. It does not broaden or replace the
+physical-device suspension, termination, token-refresh, and connectivity-loss
+evidence recorded separately for AC-22 and issue #33.
+
 ## Telemetry integration lifecycle matrix
 
 The repository-supported entry point for the current automated matrix is

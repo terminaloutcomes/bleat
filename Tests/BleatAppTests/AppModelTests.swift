@@ -3200,6 +3200,421 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testDownloadPreflightRejectsInsufficientCapacityBeforeScheduling()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatIssue151Capacity-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "issue-151-capacity",
+                title: "Capacity preflight",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "oversized",
+                    expectedByteLength: Int64.max / 2,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.issue-151-capacity.\(UUID().uuidString)"
+        )
+
+        await model.download(detail: detail, account: account)
+
+        guard case .insufficientStorage(
+            let requiredBytes,
+            let availableBytes
+        ) = model.failure else {
+            XCTFail("Expected a typed insufficient-storage failure")
+            return
+        }
+        XCTAssertGreaterThan(requiredBytes, availableBytes)
+        XCTAssertTrue(model.records.isEmpty)
+        let descriptors = await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+        await model.removeAll()
+    }
+
+    func testThreeHundredTrackDownloadRepairAndPublicationStayResponsive()
+        async throws
+    {
+        let trackCount = 300
+        let damagedTrackIndex = 173
+        let automaticDamagedTrackIndex = 150
+        let planningThreshold = 1.0
+        let reconciliationThreshold = 5.0
+        let publicationThreshold = 5.0
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatIssue151Performance-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let libraryID = fixtureLibrary().id
+        let tracks = issue151Tracks(count: trackCount)
+        let plan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "issue-151-manual"),
+            tracks: tracks
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: plan.itemID.rawValue,
+                title: "Issue 151 manual fixture",
+                libraryID: libraryID,
+                trackCount: trackCount
+            )
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let downloadID = DownloadID(rawValue: "issue-151-manual")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        for track in tracks {
+            try await completeIssue151Track(
+                track,
+                downloadID: downloadID,
+                accountID: account.id,
+                itemID: detail.id,
+                root: root,
+                layout: layout,
+                storage: storage
+            )
+        }
+        let healthyIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[10]
+        )
+        let healthyURL = layout.destinationURL(for: healthyIdentity)
+        let healthyBytes = try Data(contentsOf: healthyURL)
+        let damagedIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[damagedTrackIndex]
+        )
+        try FileManager.default.removeItem(
+            at: layout.destinationURL(for: damagedIdentity)
+        )
+
+        let automaticPlan = DownloadPlan(
+            itemID: LibraryItemID(rawValue: "issue-151-automatic"),
+            tracks: tracks
+        )
+        let automaticDetail = fixtureBookDetail(
+            item: fixtureBook(
+                id: automaticPlan.itemID.rawValue,
+                title: "Issue 151 automatic fixture",
+                libraryID: libraryID,
+                trackCount: trackCount
+            )
+        )
+        let automaticDownloadID = DownloadID(
+            rawValue: "issue-151-automatic"
+        )
+        let automaticWindow = Set(148...152)
+        _ = try await storage.create(
+            downloadID: automaticDownloadID,
+            accountID: account.id,
+            plan: automaticPlan,
+            detail: automaticDetail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: automaticWindow
+        )
+        for trackIndex in automaticWindow.sorted() {
+            try await completeIssue151Track(
+                tracks[trackIndex],
+                downloadID: automaticDownloadID,
+                accountID: account.id,
+                itemID: automaticDetail.id,
+                root: root,
+                layout: layout,
+                storage: storage
+            )
+        }
+        let automaticDamagedIdentity = try DownloadTaskIdentity(
+            downloadID: automaticDownloadID,
+            accountID: account.id,
+            itemID: automaticDetail.id,
+            track: tracks[automaticDamagedTrackIndex]
+        )
+        try Data().write(
+            to: layout.destinationURL(for: automaticDamagedIdentity)
+        )
+
+        let reconciliation = try await measureIssue151Stage {
+            try await DownloadStorage(layout: layout).records()
+        }
+        let records = reconciliation.value
+        let reconciled = try XCTUnwrap(
+            records.first { $0.manifest.downloadID == downloadID }
+        )
+        let automaticReconciled = try XCTUnwrap(
+            records.first {
+                $0.manifest.downloadID == automaticDownloadID
+            }
+        )
+
+        let planning = try await measureIssue151Stage {
+            let repairTracks = try DownloadRepairPlanner.tracks(
+                record: reconciled,
+                plan: plan
+            )
+            let automaticRepairTracks = try DownloadRepairPlanner.tracks(
+                record: automaticReconciled,
+                plan: automaticPlan
+            )
+            return (repairTracks, automaticRepairTracks)
+        }
+        let (repairTracks, automaticRepairTracks) = planning.value
+
+        var changedTracks = tracks
+        changedTracks[damagedTrackIndex] = DownloadTrackPlan(
+            index: damagedTrackIndex,
+            inode: "changed-\(damagedTrackIndex)",
+            expectedByteLength: 2,
+            mimeType: "audio/mpeg",
+            safeExtension: .mp3,
+            destinationEntry: String(
+                format: "%05d.mp3",
+                damagedTrackIndex
+            )
+        )
+        XCTAssertThrowsError(
+            try DownloadRepairPlanner.tracks(
+                record: reconciled,
+                plan: DownloadPlan(
+                    itemID: plan.itemID,
+                    tracks: changedTracks
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? DownloadModelFailure,
+                .repairPlanChanged
+            )
+        }
+
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(
+                .downloadPlan(.unexpectedStatus(503))
+            ),
+            authorizedDownloadRequest: .success(
+                URLRequest(
+                    url: try XCTUnwrap(
+                        URL(string: "https://192.0.2.1/issue-151")
+                    )
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.issue-151-performance.\(UUID().uuidString)"
+        )
+        XCTAssertEqual(
+            model.controlSnapshot(for: reconciled).phase,
+            .repairNeeded
+        )
+        XCTAssertEqual(
+            model.controlSnapshot(for: automaticReconciled).phase,
+            .cacheFailed
+        )
+        let publication = await measureIssue151Stage {
+            await model.start(account: account)
+        }
+
+        let published = try XCTUnwrap(
+            model.record(accountID: account.id, itemID: detail.id)
+        )
+        let automaticPublished = try XCTUnwrap(
+            model.record(
+                accountID: account.id,
+                itemID: automaticDetail.id
+            )
+        )
+        XCTAssertEqual(reconciled.manifest.state, .partial)
+        XCTAssertEqual(repairTracks.map(\.index), [damagedTrackIndex])
+        XCTAssertEqual(
+            automaticReconciled.manifest.automaticCacheState,
+            .failed
+        )
+        XCTAssertEqual(
+            automaticRepairTracks.map(\.index),
+            [automaticDamagedTrackIndex]
+        )
+        XCTAssertEqual(published.manifest.entries.count, trackCount)
+        XCTAssertEqual(
+            published.manifest.state,
+            .partial
+        )
+        XCTAssertEqual(
+            automaticPublished.manifest.automaticCacheState,
+            .failed
+        )
+        XCTAssertEqual(try Data(contentsOf: healthyURL), healthyBytes)
+
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        await service.setDownloadPlan(.success(plan))
+        await model.repair(published, account: account)
+        var scheduled = await model.scheduledTransferDescriptorsForTesting()
+        let manualDescriptors = scheduled.filter {
+            $0.identity.itemID == detail.id
+        }
+        XCTAssertEqual(
+            manualDescriptors.map(\.identity.trackIndex),
+            [damagedTrackIndex]
+        )
+        try await completeIssue151RepairTransfer(
+            try XCTUnwrap(manualDescriptors.first),
+            model: model
+        ) {
+            model.record(accountID: account.id, itemID: detail.id)?
+                .manifest.state == .complete
+        }
+        await service.setDownloadPlan(.success(automaticPlan))
+        await model.repair(automaticPublished, account: account)
+        scheduled = await model.scheduledTransferDescriptorsForTesting()
+        let automaticDescriptors = scheduled.filter {
+            $0.identity.itemID == automaticDetail.id
+        }
+        XCTAssertEqual(
+            automaticDescriptors.map(\.identity.trackIndex),
+            [automaticDamagedTrackIndex]
+        )
+        try await completeIssue151RepairTransfer(
+            try XCTUnwrap(automaticDescriptors.first),
+            model: model
+        ) {
+            model.record(
+                accountID: account.id,
+                itemID: automaticDetail.id
+            )?.manifest.automaticCacheState == .cached
+        }
+        let repairedRecords = try await DownloadStorage(layout: layout).records()
+        let repaired = try XCTUnwrap(
+            repairedRecords.first { $0.manifest.downloadID == downloadID }
+        )
+        let automaticRepaired = try XCTUnwrap(
+            repairedRecords.first {
+                $0.manifest.downloadID == automaticDownloadID
+            }
+        )
+        let repairedEntry = try XCTUnwrap(
+            repaired.manifest.entries.first {
+                $0.trackIndex == damagedTrackIndex
+            }
+        )
+        let automaticRepairedEntry = try XCTUnwrap(
+            automaticRepaired.manifest.entries.first {
+                $0.trackIndex == automaticDamagedTrackIndex
+            }
+        )
+        XCTAssertEqual(repaired.manifest.state, .complete)
+        XCTAssertEqual(repairedEntry.state, .complete)
+        XCTAssertEqual(repairedEntry.placement, .finalized)
+        XCTAssertEqual(
+            automaticRepaired.manifest.automaticCacheState,
+            .cached
+        )
+        XCTAssertEqual(automaticRepairedEntry.state, .complete)
+        XCTAssertEqual(automaticRepairedEntry.placement, .finalized)
+        XCTAssertEqual(
+            try Data(contentsOf: layout.destinationURL(for: damagedIdentity)),
+            Data([0xA5])
+        )
+        XCTAssertEqual(
+            try Data(
+                contentsOf: layout.destinationURL(
+                    for: automaticDamagedIdentity
+                )
+            ),
+            Data([0xA5])
+        )
+        XCTAssertEqual(try Data(contentsOf: healthyURL), healthyBytes)
+        XCTAssertLessThan(planning.elapsedSeconds, planningThreshold)
+        XCTAssertLessThan(
+            reconciliation.elapsedSeconds,
+            reconciliationThreshold
+        )
+        XCTAssertLessThan(
+            publication.elapsedSeconds,
+            publicationThreshold
+        )
+        XCTAssertGreaterThan(planning.heartbeatCount, 0)
+        XCTAssertLessThan(planning.maximumMainActorGap, 1.0)
+        XCTAssertGreaterThan(reconciliation.heartbeatCount, 0)
+        XCTAssertLessThan(reconciliation.maximumMainActorGap, 1.0)
+        XCTAssertGreaterThan(publication.heartbeatCount, 0)
+        XCTAssertLessThan(publication.maximumMainActorGap, 1.0)
+
+        let summary = """
+            Download performance evidence: Issue #151
+            fixture.trackCount: \(trackCount)
+            fixture.trackBytes: 1
+            planning.seconds: \(String(format: "%.6f", planning.elapsedSeconds))
+            planning.threshold.seconds: \(planningThreshold)
+            planning.mainActor.maxGap.seconds: \(String(format: "%.6f", planning.maximumMainActorGap))
+            planning.mainActor.heartbeatCount: \(planning.heartbeatCount)
+            reconciliation.seconds: \(String(format: "%.6f", reconciliation.elapsedSeconds))
+            reconciliation.threshold.seconds: \(reconciliationThreshold)
+            reconciliation.mainActor.maxGap.seconds: \(String(format: "%.6f", reconciliation.maximumMainActorGap))
+            reconciliation.mainActor.heartbeatCount: \(reconciliation.heartbeatCount)
+            publication.seconds: \(String(format: "%.6f", publication.elapsedSeconds))
+            publication.threshold.seconds: \(publicationThreshold)
+            publication.mainActor.maxGap.seconds: \(String(format: "%.6f", publication.maximumMainActorGap))
+            publication.mainActor.heartbeatCount: \(publication.heartbeatCount)
+            manual.damagedTrack: \(damagedTrackIndex)
+            automatic.damagedTrack: \(automaticDamagedTrackIndex)
+            repair.replacementTransfersCompleted: 2
+            """
+        print(
+            "download-perf-summary "
+                + summary.replacingOccurrences(of: "\n", with: " | ")
+        )
+        let attachment = XCTAttachment(string: summary)
+        attachment.name = "issue-151-download-performance.txt"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        await model.removeAll()
+    }
+
     func testManualTrackAdvancesOnlyAfterActiveTrackFinalizes() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
@@ -15836,6 +16251,131 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    private func issue151Tracks(count: Int) -> [DownloadTrackPlan] {
+        (0..<count).map { index in
+            DownloadTrackPlan(
+                index: index,
+                inode: "issue-151-\(index)",
+                expectedByteLength: 1,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: String(format: "%05d.mp3", index),
+                startOffset: Double(index),
+                duration: 1
+            )
+        }
+    }
+
+    private struct Issue151StageMeasurement<Value> {
+        let value: Value
+        let elapsedSeconds: Double
+        let heartbeatCount: Int
+        let maximumMainActorGap: Double
+    }
+
+    private func measureIssue151Stage<Value>(
+        _ operation: @MainActor () async throws -> Value
+    ) async rethrows -> Issue151StageMeasurement<Value> {
+        var heartbeatCount = 0
+        var maximumMainActorGap = 0.0
+        var previousHeartbeat = ProcessInfo.processInfo.systemUptime
+        let heartbeat = Task { @MainActor in
+            while !Task.isCancelled {
+                let now = ProcessInfo.processInfo.systemUptime
+                maximumMainActorGap = max(
+                    maximumMainActorGap,
+                    now - previousHeartbeat
+                )
+                previousHeartbeat = now
+                heartbeatCount += 1
+                await Task.yield()
+            }
+        }
+        await Task.yield()
+        heartbeatCount = 0
+        maximumMainActorGap = 0
+        previousHeartbeat = ProcessInfo.processInfo.systemUptime
+        let start = previousHeartbeat
+        do {
+            let value = try await operation()
+            let elapsedSeconds =
+                ProcessInfo.processInfo.systemUptime - start
+            await Task.yield()
+            heartbeat.cancel()
+            await heartbeat.value
+            return Issue151StageMeasurement(
+                value: value,
+                elapsedSeconds: elapsedSeconds,
+                heartbeatCount: heartbeatCount,
+                maximumMainActorGap: maximumMainActorGap
+            )
+        } catch {
+            heartbeat.cancel()
+            await heartbeat.value
+            throw error
+        }
+    }
+
+    private func completeIssue151RepairTransfer(
+        _ descriptor: DownloadChunkTaskDescription,
+        model: DownloadModel,
+        until completed: @MainActor () -> Bool
+    ) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Issue151RepairURLProtocol.self]
+        let session = URLSession(
+            configuration: configuration,
+            delegate: model,
+            delegateQueue: nil
+        )
+        defer { session.invalidateAndCancel() }
+        let request = URLRequest(
+            url: try XCTUnwrap(
+                URL(string: "https://192.0.2.1/issue-151-repair")
+            )
+        )
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try descriptor.encode()
+        task.resume()
+        for _ in 0..<500 {
+            if completed(), task.state == .completed {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(completed())
+        XCTAssertEqual(task.state, .completed)
+    }
+
+    private func completeIssue151Track(
+        _ track: DownloadTrackPlan,
+        downloadID: DownloadID,
+        accountID: AccountID,
+        itemID: LibraryItemID,
+        root: URL,
+        layout: DownloadStorageLayout,
+        storage: DownloadStorage
+    ) async throws {
+        let identity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: accountID,
+            itemID: itemID,
+            track: track
+        )
+        let staged = root.appendingPathComponent(
+            "staged-\(downloadID.rawValue)-\(track.index)"
+        )
+        try Data([UInt8(track.index % 256)]).write(to: staged)
+        let observed = try layout.placeCompleteTestFile(
+            from: staged,
+            identity: identity
+        )
+        _ = try await storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+    }
+
     private struct LocalDataLifecycleFixture {
         let rootURL: URL
         let storeURL: URL
@@ -18500,6 +19040,44 @@ private actor RetryDelayGate {
             continuation.resume()
         }
     }
+}
+
+private final class Issue151RepairURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 206,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Range": "bytes 0-0/1"]
+            )
+        else {
+            client?.urlProtocol(
+                self,
+                didFailWithError: URLError(.badServerResponse)
+            )
+            return
+        }
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: Data([0xA5]))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private final class RetryAfterDownloadURLProtocol: URLProtocol,

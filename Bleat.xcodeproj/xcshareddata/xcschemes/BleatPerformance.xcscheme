@@ -29,6 +29,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "EA02B362BC0C97508C61A505"
+               BuildableName = "BleatAppTests.xctest"
+               BlueprintName = "BleatAppTests"
+               ReferencedContainer = "container:Bleat.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "45D306A60FA716FBBEF22F80"
                BuildableName = "BleatUITests.xctest"
                BlueprintName = "BleatUITests"
@@ -53,6 +67,17 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "EA02B362BC0C97508C61A505"
+               BuildableName = "BleatAppTests.xctest"
+               BlueprintName = "BleatAppTests"
+               ReferencedContainer = "container:Bleat.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">
