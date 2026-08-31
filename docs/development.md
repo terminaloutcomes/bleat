@@ -293,6 +293,22 @@ screenshots beneath `.build/accessibility-ui-results/screenshots/` for visual
 clipping, overlap, emphasis, and colour-only checks. The disposable Simulators
 are deleted on exit.
 
+Run the VoiceOver semantic journeys with:
+
+```sh
+mise run test:voiceover
+```
+
+The harness creates disposable iPhone and iPad Simulators and exercises login,
+Home, Library, Search, Book Detail, Downloads, Settings, mini-player, Now
+Playing, chapters, and the destructive local-data confirmation. It verifies
+the labels and values VoiceOver receives for actions, titles, selected state,
+chapter state, playback time, and playback speed, plus Apple's sufficient
+description and trait audits on each journey. The result bundles are written
+beneath `.build/voiceover-ui-results/`. This deterministic gate validates the
+accessibility tree; spoken output and gesture operation still require the
+manual VoiceOver audit tracked in issue #39.
+
 ## Evidence requirements
 
 A successful command exit is not sufficient evidence. Confirm that every

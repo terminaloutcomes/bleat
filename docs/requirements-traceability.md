@@ -242,7 +242,7 @@ other rows map section 22 release criteria.
 | AC-25 | Concurrent progress never silently overwrites two changed positions | `APP-OFFLINE-POSITION-001` | verified |
 | AC-26 | Metadata editing uses best-effort stale-draft handling without claiming atomic conflict prevention | `APP-METADATA-001` | verified |
 | AC-27 | Account removal leaves no credential or cross-account cache record | `APP-ACCOUNT-001`, `ACCOUNT-003` | verified |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The remaining accessibility audits are tracked by [VoiceOver #39](https://github.com/terminaloutcomes/bleat/issues/39), [Reduce Motion #41](https://github.com/terminaloutcomes/bleat/issues/41), and [iPad keyboard #40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
+| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The remaining accessibility audits are tracked by [Reduce Motion #41](https://github.com/terminaloutcomes/bleat/issues/41) and [iPad keyboard #40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
 | AC-29 | Server deletion is permission-gated, distinguishes both deletion modes, and stops matching playback first | `APP-BOOK-DELETE-001` | verified |
 
 ## Largest Dynamic Type audit
@@ -294,3 +294,23 @@ font-weight-only distinction was found in the audited journeys.
 | iPhone 17 Pro Simulator | Bold Text | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
 | iPad Pro 13-inch (M5) Simulator | Increase Contrast | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
 | iPad Pro 13-inch (M5) Simulator | Bold Text | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
+
+## VoiceOver semantic audit
+
+The 2026-08-31 automated audit exercised login, Home, Library, Search, Book
+Detail, Downloads, Settings, mini-player, Now Playing, and chapter selection.
+It verified the accessibility-tree reading order for login, selected tab and
+chapter states, action-and-title labels, elapsed and remaining playback time,
+playback speed, and explicit destructive confirmation and cancellation. Each
+screen also passed Apple's sufficient-description and trait audits after the
+system keyboard was dismissed so OS-owned prediction cells were outside the
+application audit boundary.
+
+| Device | OS/build | Toolchain | Journey result |
+| --- | --- | --- | --- |
+| iPhone 17 Pro Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatVoiceOverUITests` journeys |
+| iPad Pro 13-inch (M5) Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatVoiceOverUITests` journeys |
+
+This automated result validates the accessibility information VoiceOver
+receives, not spoken output or VoiceOver gesture operation. Issue #39 remains
+open until the manual iPhone and iPad audit records those results.
