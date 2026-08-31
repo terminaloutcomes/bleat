@@ -26,6 +26,14 @@ case "${BLEAT_APP_ATTEST_MODE:-}" in
     ;;
 esac
 
+case "${BLEAT_CARPLAY_MODE:-}" in
+  enabled | disabled) ;;
+  *)
+    echo "BLEAT_CARPLAY_MODE must be enabled or disabled" >&2
+    exit 2
+    ;;
+esac
+
 telemetry_url_scheme=""
 telemetry_url_host=""
 

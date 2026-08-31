@@ -1015,8 +1015,11 @@ cover views, and account/item generation checks. Concurrent requests for the
 same account and cache-busted URL are deduplicated. Late results must not
 replace artwork or templates for a newer account, library, search, or playback
 item.
-The CarPlay entitlement requires Apple's approval and matching provisioning;
-the repository intentionally omits it until approval. See Apple's
+The CarPlay entitlement requires Apple's approval and matching provisioning.
+The request is pending, and `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to
+`disabled` for every workflow; Personal Team and macOS builds force it off.
+After approval, a paid-team iOS build may opt in explicitly, while an enabled
+signed build without matching provisioning must fail. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
 Entitlement enablement and CarPlay Simulator/vehicle validation are tracked in

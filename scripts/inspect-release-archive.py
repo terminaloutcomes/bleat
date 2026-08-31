@@ -41,6 +41,8 @@ RELEVANT_PACKAGES = {
     "swift-crypto",
 }
 
+CARPLAY_ENTITLEMENT = "com.apple.developer.carplay-audio"
+
 
 def load_plist(path: Path) -> dict:
     try:
@@ -51,6 +53,27 @@ def load_plist(path: Path) -> dict:
     if not isinstance(value, dict):
         raise InspectionFailure(f"property list root is not a dictionary: {path}")
     return value
+
+
+def load_plist_text(payload: str, description: str) -> dict:
+    try:
+        value = plistlib.loads(payload.encode())
+    except plistlib.InvalidFileException as error:
+        raise InspectionFailure(f"invalid {description} property list") from error
+    if not isinstance(value, dict):
+        raise InspectionFailure(f"{description} property list is not a dictionary")
+    return value
+
+
+def inspect_carplay_entitlement(
+    entitlements: dict, *, mode: str, source: str, profile_values: bool = False
+) -> None:
+    value = entitlements.get(CARPLAY_ENTITLEMENT)
+    if mode == "enabled":
+        if value is not True:
+            raise InspectionFailure(f"{source} does not enable CarPlay audio")
+    elif not profile_values and CARPLAY_ENTITLEMENT in entitlements:
+        raise InspectionFailure(f"{source} unexpectedly contains CarPlay audio")
 
 
 def inspect_privacy_manifest(manifest: dict) -> None:
@@ -162,13 +185,15 @@ def inspect_linkage(app: Path, archive: Path) -> dict[str, str]:
     }
 
 
-def inspect_archive(archive: Path, package_resolution: Path) -> None:
+def inspect_archive(archive: Path, package_resolution: Path, carplay_mode: str) -> None:
     app = archive / "Products/Applications/Bleat.app"
     info = load_plist(app / "Info.plist")
     if info.get("ITSAppUsesNonExemptEncryption") is not False:
         raise InspectionFailure(
             "archive must declare that it uses only exempt encryption"
         )
+    if info.get("BleatCarPlayMode") != carplay_mode:
+        raise InspectionFailure("archive CarPlay mode does not match the requested mode")
 
     app_manifest = app / "PrivacyInfo.xcprivacy"
     inspect_privacy_manifest(load_plist(app_manifest))
@@ -197,6 +222,31 @@ def inspect_archive(archive: Path, package_resolution: Path) -> None:
     )
     if signing_identity:
         run_checked(["codesign", "--verify", "--deep", "--strict", str(app)])
+        signed_entitlements = load_plist_text(
+            run_checked(["codesign", "-d", "--entitlements", ":-", str(app)]),
+            "signed entitlements",
+        )
+        inspect_carplay_entitlement(
+            signed_entitlements,
+            mode=carplay_mode,
+            source="signed application",
+        )
+        embedded_profile = app / "embedded.mobileprovision"
+        if not embedded_profile.is_file():
+            raise InspectionFailure("signed iOS archive has no provisioning profile")
+        profile = load_plist_text(
+            run_checked(["security", "cms", "-D", "-i", str(embedded_profile)]),
+            "embedded provisioning profile",
+        )
+        profile_entitlements = profile.get("Entitlements")
+        if not isinstance(profile_entitlements, dict):
+            raise InspectionFailure("embedded profile has no entitlements")
+        inspect_carplay_entitlement(
+            profile_entitlements,
+            mode=carplay_mode,
+            source="embedded profile",
+            profile_values=True,
+        )
     packages = resolved_packages(package_resolution)
     linkage = inspect_linkage(app, archive)
 
@@ -229,6 +279,9 @@ def inspect_archive(archive: Path, package_resolution: Path) -> None:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--archive", required=True, type=Path)
+    parser.add_argument(
+        "--carplay-mode", required=True, choices=("enabled", "disabled")
+    )
     parser.add_argument("--package-resolution", required=True, type=Path)
     return parser.parse_args()
 
@@ -236,7 +289,9 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
-        inspect_archive(arguments.archive, arguments.package_resolution)
+        inspect_archive(
+            arguments.archive, arguments.package_resolution, arguments.carplay_mode
+        )
     except InspectionFailure as error:
         print(f"Release archive inspection failed: {error}", file=sys.stderr)
         return 1

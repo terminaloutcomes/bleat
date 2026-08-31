@@ -77,7 +77,7 @@ mise run macos:test
 `BUILD_WITHOUT_PAID_DEVELOPER` accepts exactly `YES` or `NO` and defaults to
 `NO`. Set it to `YES` for a Personal Team build: it overrides the individual
 capability settings, removes both CloudKit and App Attest from signing, and
-retains the Keychain entitlement.
+forces CarPlay off while retaining the Keychain entitlement.
 
 When the global setting is `NO`, the individual settings remain available:
 
@@ -85,11 +85,28 @@ When the global setting is `NO`, the individual settings remain available:
   synchronization.
 - `BLEAT_APP_ATTEST_MODE=enabled|disabled` controls App Attest signing and
   whether the system App Attest telemetry attester is available.
+- `BLEAT_CARPLAY_MODE=enabled|disabled` controls the managed CarPlay Audio App
+  signing entitlement. It does not remove the implemented scene from the
+  compiled application.
 
-Both individual settings default to `enabled` for paid-team, beta, and
-distribution builds. Unsupported values fail the build. The selected effective
-modes are embedded in `Info.plist`, and Xcode selects the matching entitlement
-file from all four CloudKit/App Attest combinations.
+CloudKit and App Attest default to `enabled`; CarPlay defaults to `disabled`
+for every build workflow. Unsupported values fail the build. The selected
+effective modes are embedded in `Info.plist`, and Xcode selects the exact
+CloudKit, App Attest, and CarPlay entitlement combination. macOS and Personal
+Team builds force the effective CarPlay mode to `disabled`.
+
+Apple's managed entitlement and a matching profile are required before an
+enabled build can sign. After approval, opt in explicitly for any supported
+build, for example:
+
+```sh
+BLEAT_CARPLAY_MODE=enabled mise run iphone
+BLEAT_CARPLAY_MODE=enabled mise run testflight:internal
+```
+
+Before approval, an enabled signed build is expected to fail provisioning.
+Release, TestFlight, Simulator, and device workflows remain disabled unless the
+flag is supplied; the GitHub release archive pins it to `disabled` explicitly.
 
 The physical-device workflows use paid capabilities by default:
 
@@ -205,6 +222,10 @@ origins configured in the environment:
 ```sh
 ./scripts/archive-beta.sh
 ```
+
+The archive defaults to `BLEAT_CARPLAY_MODE=disabled`. An explicit enabled
+archive is supported only after the App ID and provisioning profile authorize
+the managed CarPlay Audio App entitlement.
 
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:

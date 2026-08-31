@@ -76,6 +76,7 @@ xcodebuild \
     -archivePath "${bleat_archive_path}" \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_telemetry_auth_base_url}" \
     BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_telemetry_otlp_endpoint}" \
@@ -106,5 +107,6 @@ fi
 
 python3 "${bleat_script_dir}/inspect-release-archive.py" \
     --archive "${bleat_archive_path}" \
+    --carplay-mode "${BLEAT_CARPLAY_MODE:-disabled}" \
     --package-resolution \
     "${bleat_repository_root}/Bleat.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
