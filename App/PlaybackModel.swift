@@ -1604,8 +1604,10 @@ final class PlaybackModel {
         updateNowPlaying()
     }
 
-    func cycleFeaturedPlaybackRate() -> PlaybackRemoteCommandOutcome {
-        nowPlayingCoordinator.cyclePlaybackRate()
+    func stepFeaturedPlaybackRate(
+        _ step: PlaybackRateStep
+    ) -> PlaybackRemoteCommandOutcome {
+        nowPlayingCoordinator.stepPlaybackRate(step)
     }
 
     func setResumeRewind(_ value: ResumeRewind) {

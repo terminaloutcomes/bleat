@@ -49,7 +49,7 @@ These decisions keep the first release bounded:
 | Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
 | Podcasts and ebooks | Out of scope for 1.0 |
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
-| CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, search, and verified complete downloads; account and download management remain phone-only. Managed entitlement enablement and real-environment validation are deferred until after 1.0 |
+| CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, and verified complete downloads; account and download management remain phone-only. Managed entitlement enablement and real-environment validation are deferred until after 1.0 |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
 | Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design, and [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks the remaining implementation; it is not an MVP or 1.0 release requirement |
@@ -169,8 +169,8 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   presentation. Download, Edit, and Transcribe retain their modal preparation
   path. No context action navigates or activates the separate cover playback
   control. Collapsed-series entries remain navigation-only.
-- In CarPlay I can browse Home shelves, choose an audiobook library, page and
-  search its books, and play verified whole-book downloads.
+- In CarPlay I can browse Home shelves, choose and page an audiobook library,
+  and play verified whole-book downloads.
 
 ### 4.3 Playback
 
@@ -998,8 +998,14 @@ signed-in root is a three-tab interface:
 - Home presents personalized shelves in server order followed by verified
   completed downloads;
 - Library presents the active audiobook library, explicit bounded pagination,
-  search, and a chooser for that account's audiobook libraries;
+  and a chooser for that account's audiobook libraries;
 - Downloads presents verified whole-book-complete records only.
+
+CarPlay's
+[`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate)
+is restricted to navigation applications and is not an allowed template for an
+audio-entitled scene. Bleat must not expose or push it from the CarPlay audio
+interface.
 
 CarPlay uses the phone's active account and shared library selection. Account
 switching, authentication, bookmark editing, sleep timers, Stop, and download
@@ -1013,8 +1019,7 @@ CarPlay list and Now Playing artwork use bounded token-free cover routes,
 placeholders, an account-scoped bounded memory/disk cache shared with phone
 cover views, and account/item generation checks. Concurrent requests for the
 same account and cache-busted URL are deduplicated. Late results must not
-replace artwork or templates for a newer account, library, search, or playback
-item.
+replace artwork or templates for a newer account, library, or playback item.
 The CarPlay entitlement requires Apple's approval and matching provisioning.
 The request is pending, and `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to
 `disabled` for every workflow; Personal Team and macOS builds force it off.
