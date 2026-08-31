@@ -1,5 +1,8 @@
 # Repository Guide
 
+If `.envrc` is missing and you are building or doing any code work, 
+stop and request it to be present before continuing.
+
 ## Project state and sources of truth
 
 Bleat is an implemented native Audiobookshelf client for iPhone and iPad. The

@@ -588,6 +588,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let backgroundSessionIdentifier: String
     private let transferRetrySleep:
         @Sendable (Duration) async throws -> Void
+    private let replacementTaskStartCheckpoint: @Sendable () async -> Void
     private let pauseOperationCheckpoint: @Sendable () async -> Void
     private let pauseManifestCommit:
         @Sendable (DownloadStorage, DownloadTaskIdentity, Int64) async throws
@@ -800,6 +801,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             @escaping @Sendable (Duration) async throws -> Void = {
                 try await Task.sleep(for: $0)
             },
+        replacementTaskStartCheckpoint:
+            @escaping @Sendable () async -> Void = {},
         pauseOperationCheckpoint:
             @escaping @Sendable () async -> Void = {},
         pauseManifestCommit:
@@ -822,6 +825,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.remoteTelemetryDownloadLogger = remoteTelemetryDownloadLogger
         self.backgroundSessionIdentifier = backgroundSessionIdentifier
         self.transferRetrySleep = transferRetrySleep
+        self.replacementTaskStartCheckpoint = replacementTaskStartCheckpoint
         self.pauseOperationCheckpoint = pauseOperationCheckpoint
         self.pauseManifestCommit = pauseManifestCommit
         self.defaults = defaults
@@ -4691,6 +4695,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             retryCount: retryCount
         )
         clearTransferredBytes(for: identity)
+        await replacementTaskStartCheckpoint()
         if let record = record(downloadID: identity.downloadID),
             automaticDownloadIsBlocked(record)
         {

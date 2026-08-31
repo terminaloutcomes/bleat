@@ -5821,12 +5821,16 @@ final class AppModelTests: XCTestCase {
             downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
             authorizedDownloadRequest: .success(request)
         )
+        let replacementGate = AsyncGate()
         let model = DownloadModel(
             service: service,
             storageRootURL: root,
             backgroundSessionIdentifier:
                 "bleat.tests.system-resumed-suffix.\(UUID().uuidString)",
-            transferRetrySleep: { _ in }
+            transferRetrySleep: { _ in },
+            replacementTaskStartCheckpoint: {
+                await replacementGate.enterAndWait()
+            }
         )
         await model.start(account: account)
         model.updateNetworkPathState(
@@ -5912,6 +5916,7 @@ final class AppModelTests: XCTestCase {
         )
         resumedSession.invalidateAndCancel()
         await model.removeAll()
+        await replacementGate.release()
     }
 
     func testOfflineRelaunchDoesNotRetryPermanentPlanFailure() async throws {
