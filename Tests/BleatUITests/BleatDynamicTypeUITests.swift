@@ -105,10 +105,10 @@ final class BleatDynamicTypeUITests: XCTestCase {
             app.buttons["settings.resetLocalData.confirm"].firstMatch,
             in: app
         )
-        let dismissRegion = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label == %@", "dismiss popup")
-        ).firstMatch
-        assertUsable(dismissRegion, in: app).tap()
+        assertUsable(
+            app.buttons["settings.resetLocalData.cancel"].firstMatch,
+            in: app
+        ).tap()
         XCTAssertTrue(
             app.buttons["settings.resetLocalData.confirm"].firstMatch
                 .waitForNonExistence(timeout: 5)

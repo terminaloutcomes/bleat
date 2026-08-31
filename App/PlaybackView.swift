@@ -149,6 +149,13 @@ private struct PlaybackScrubberView: View {
             .disabled(playback.state == .preparing)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
+            .accessibilityLabel("Playback Position")
+            .accessibilityValue(
+                playbackTime(chapterWindow.elapsed(at: scrubTime))
+                    + " elapsed, "
+                    + playbackTime(chapterWindow.remaining(at: scrubTime))
+                    + " remaining"
+            )
             .accessibilityIdentifier("player.position")
             // .sliderThumbVisibility(Visibility.hidden)
             .sliderThumbVisibility(.hidden)
@@ -291,6 +298,11 @@ struct MiniPlayerView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(
+                    "Open Now Playing, \(playback.title)"
+                        + (playback.author.isEmpty
+                            ? "" : " by \(playback.author)")
+                )
                 .accessibilityValue(
                     playback.currentChapter?.title ?? "No current chapter"
                 )
@@ -1066,6 +1078,8 @@ private struct PlaybackRateMenu: View, @MainActor Equatable {
                 .frame(minWidth: 72, minHeight: 44)
                 .contentShape(Rectangle())
         }
+        .accessibilityLabel("Playback Speed")
+        .accessibilityValue(formatRate(rate))
         .accessibilityIdentifier("player.rate")
     }
 

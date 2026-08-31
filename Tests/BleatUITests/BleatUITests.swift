@@ -2015,7 +2015,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(increasedRate.exists)
         XCTAssertTrue(increasedRate.isHittable)
         increasedRate.tap()
-        XCTAssertEqual(rateMenu.label, "1.25×")
+        XCTAssertEqual(rateMenu.label, "Playback Speed")
+        XCTAssertEqual(rateMenu.value as? String, "1.25×")
     }
 
     @MainActor

@@ -659,6 +659,7 @@ private struct NativeLoginView: View {
                             .focused($focusedField, equals: .username)
                             .submitLabel(.next)
                             .onSubmit { focusedField = .password }
+                            .accessibilityLabel("Username")
                             .accessibilityIdentifier("login.username")
                             .disabled(pendingRestoredAccount != nil)
                         if isPasswordVisible {
@@ -667,6 +668,7 @@ private struct NativeLoginView: View {
                                 .focused($focusedField, equals: .password)
                                 .submitLabel(.done)
                                 .onSubmit { focusedField = nil }
+                                .accessibilityLabel("Password")
                                 .accessibilityIdentifier("login.password")
                         } else {
                             SecureField("Password", text: $password)
@@ -674,6 +676,7 @@ private struct NativeLoginView: View {
                                 .focused($focusedField, equals: .password)
                                 .submitLabel(.done)
                                 .onSubmit { focusedField = nil }
+                                .accessibilityLabel("Password")
                                 .accessibilityIdentifier("login.password")
 
                         }
@@ -4334,6 +4337,9 @@ private struct BookDetailView: View {
                             && model.playback.accountID == account.id
                             && model.playback.itemID == detail.id
                     )
+                    .accessibilityLabel(
+                        "\(primaryAction.label) \(detail.title)"
+                    )
                     .accessibilityIdentifier("book.detail.play")
                 }
             case .inaccessibleLibrary:
@@ -4425,6 +4431,7 @@ private struct BookDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityLabel("Download \(detail.title)")
                     .accessibilityIdentifier("book.detail.download")
                 }
             }
@@ -5056,10 +5063,9 @@ private struct SettingsView: View {
                     "Your statistics, accounts, preferences, and credentials remain on this device."
                 )
             }
-            .confirmationDialog(
+            .alert(
                 "Reset All Local Data?",
-                isPresented: $showResetLocalDataConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetLocalDataConfirmation
             ) {
                 Button("Reset All Local Data", role: .destructive) {
                     Task {
