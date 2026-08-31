@@ -530,6 +530,38 @@ private actor OrderedDownloadDiagnosticEmitter {
     }
 }
 
+struct DownloadTransferAdmissionController: Equatable {
+    private(set) var limit: Int
+    private(set) var activeTransferIDs: Set<UUID> = []
+
+    init(limit: Int) {
+        self.limit = MaximumConcurrentDownloadsPreference.normalize(limit)
+    }
+
+    mutating func updateLimit(_ limit: Int) {
+        self.limit = MaximumConcurrentDownloadsPreference.normalize(limit)
+    }
+
+    mutating func reconcile(activeTransferIDs: Set<UUID>) {
+        self.activeTransferIDs = activeTransferIDs
+    }
+
+    mutating func admit(_ transferID: UUID) -> Bool {
+        if activeTransferIDs.contains(transferID) {
+            return true
+        }
+        guard activeTransferIDs.count < limit else {
+            return false
+        }
+        activeTransferIDs.insert(transferID)
+        return true
+    }
+
+    mutating func complete(_ transferID: UUID) {
+        activeTransferIDs.remove(transferID)
+    }
+}
+
 @MainActor
 @Observable
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
@@ -566,6 +598,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         "bleat.downloads.automaticLookahead.v1"
     private let automaticCleanupPolicyKey =
         "bleat.downloads.automaticCleanupPolicy.v1"
+    private var transferAdmission: DownloadTransferAdmissionController
+    private var isDrainingConcurrencyQueue = false
     private nonisolated let layout: DownloadStorageLayout?
     private let storage: DownloadStorage?
     private var accounts: [AccountID: ServerAccount] = [:]
@@ -640,6 +674,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
     private var failureDownloadID: DownloadID?
     private(set) var networkPolicy: DownloadNetworkPolicy
+    private(set) var maximumConcurrentDownloads: Int
     private(set) var automaticLookaheadCount: Int
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
@@ -791,6 +826,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.pauseManifestCommit = pauseManifestCommit
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
+        let loadedMaximumConcurrentDownloads =
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value
+        maximumConcurrentDownloads = loadedMaximumConcurrentDownloads
+        transferAdmission = DownloadTransferAdmissionController(
+            limit: loadedMaximumConcurrentDownloads
+        )
         automaticLookaheadCount = Self.normalizedLookaheadCount(
             defaults.object(forKey: automaticLookaheadKey) == nil
                 ? 5
@@ -873,6 +914,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             beginTransferSpan(identity, purpose: purpose)
             return true
         }
+        transferAdmission.reconcile(
+            activeTransferIDs: Set(
+                currentTasks.compactMap { task, descriptor in
+                    guard task.state == .running else { return nil }
+                    return descriptor.transferID
+                }
+            )
+        )
         let activeTaskKeys = Set(
             currentTasks.map { _, descriptor in
                 return AutomaticDownloadTaskKey(descriptor.identity)
@@ -885,10 +934,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 storage: storage
             )
         }
-        for (task, _) in currentTasks {
-            if task.state == .suspended {
-                task.resume()
-            }
+        for (task, descriptor) in currentTasks {
+            _ = resumeIfAdmitted(task, descriptor: descriptor)
         }
         await cleanupExpiredAutomaticDownloads()
         scheduleAutomaticCleanup()
@@ -1238,6 +1285,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
         }
         return descriptors.sorted { $0.key < $1.key }.map(\.descriptor)
+    }
+
+    var activeTransferAdmissionCountForTesting: Int {
+        transferAdmission.activeTransferIDs.count
     }
 
     func scheduledTransferRequestsForTesting() async -> [URLRequest] {
@@ -1607,6 +1658,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         defaults.set(policy.rawValue, forKey: networkPolicyKey)
     }
 
+    func setMaximumConcurrentDownloads(_ value: Int) {
+        let normalized = MaximumConcurrentDownloadsPreference.normalize(value)
+        maximumConcurrentDownloads = normalized
+        transferAdmission.updateLimit(normalized)
+        defaults.set(
+            normalized,
+            forKey: MaximumConcurrentDownloadsPreference.defaultsKey
+        )
+        scheduleConcurrencyQueueDrain()
+    }
+
     func setAutomaticLookaheadCount(_ count: Int) {
         automaticLookaheadCount = Self.normalizedLookaheadCount(count)
         defaults.set(
@@ -1627,6 +1689,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func reloadSyncedPreferences() {
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
+        let storedMaximum =
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value
+        maximumConcurrentDownloads = storedMaximum
+        transferAdmission.updateLimit(storedMaximum)
         automaticLookaheadCount = Self.normalizedLookaheadCount(
             defaults.object(forKey: automaticLookaheadKey) == nil
                 ? 5
@@ -1636,7 +1702,76 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             defaults.string(forKey: automaticCleanupPolicyKey)
             .flatMap(AutomaticDownloadCleanupPolicy.init(rawValue:))
             ?? .afterTwentyFourHours
+        scheduleConcurrencyQueueDrain()
         scheduleAutomaticCleanup()
+    }
+
+    private func scheduleConcurrencyQueueDrain() {
+        Task { @MainActor [weak self] in
+            await self?.drainConcurrencyQueue()
+        }
+    }
+
+    private func drainConcurrencyQueue() async {
+        guard !isDrainingConcurrencyQueue else { return }
+        isDrainingConcurrencyQueue = true
+        defer { isDrainingConcurrencyQueue = false }
+        await resumeAdmissibleSuspendedTasks()
+        guard transferAdmission.activeTransferIDs.count
+            < maximumConcurrentDownloads,
+            let storage
+        else { return }
+        _ = await reconcileTransfers(
+            scope: .allRecords,
+            activeTaskKeys: await activeTransferTaskKeys(),
+            storage: storage
+        )
+    }
+
+    private func resumeAdmissibleSuspendedTasks() async {
+        var candidates: [(URLSessionTask, DownloadChunkTaskDescription)] = []
+        for task in await session.allTasks where task.state == .suspended {
+            guard let description = task.taskDescription,
+                !supersededTaskDescriptions.contains(description),
+                !isInvalidatedTask(description),
+                let descriptor = try? DownloadChunkTaskDescription.decode(
+                    description
+                ),
+                await taskDescriptorIsCurrent(descriptor, storage: storage)
+            else { continue }
+            candidates.append((task, descriptor))
+        }
+        candidates.sort {
+            $0.1.identity.downloadID.rawValue
+                < $1.1.identity.downloadID.rawValue
+        }
+        for (task, descriptor) in candidates {
+            guard resumeIfAdmitted(task, descriptor: descriptor) else {
+                if transferAdmission.activeTransferIDs.count
+                    >= maximumConcurrentDownloads
+                {
+                    return
+                }
+                continue
+            }
+        }
+    }
+
+    @discardableResult
+    private func resumeIfAdmitted(
+        _ task: URLSessionTask,
+        descriptor: DownloadChunkTaskDescription
+    ) -> Bool {
+        guard task.state == .suspended,
+            let record = record(downloadID: descriptor.identity.downloadID),
+            record.manifest.state != .paused,
+            !pausedDownloadIDs.contains(descriptor.identity.downloadID),
+            !automaticDownloadIsBlocked(record),
+            transferAdmission.admit(descriptor.transferID)
+        else { return false }
+        task.resume()
+        playbackSuspendedDownloadIDs.remove(descriptor.identity.downloadID)
+        return true
     }
 
     private static func loadNetworkPolicy(
@@ -2373,7 +2508,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             )
         }
-        let scheduledTracks = Array(
+        let candidateTracks = Array(
             candidates.sorted { left, right in
                 if left.pending != right.pending {
                     return left.pending
@@ -2388,29 +2523,33 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .prefix(Self.maximumConcurrentTracksPerDownload)
             .map(\.track)
         )
-        for track in scheduledTracks {
+        var scheduledTracks: [DownloadTrackPlan] = []
+        for track in candidateTracks {
             let identity = try DownloadTaskIdentity(
                 downloadID: resolvedDownloadID,
                 accountID: account.id,
                 itemID: detail.id,
                 track: track
             )
-            try await scheduleChunk(
+            if try await scheduleChunk(
                 identity: identity,
                 account: account,
                 purpose: purpose,
                 storage: storage
-            )
+            ) {
+                scheduledTracks.append(track)
+            }
         }
         return scheduledTracks
     }
 
+    @discardableResult
     private func scheduleChunk(
         identity: DownloadTaskIdentity,
         account: ServerAccount,
         purpose: DownloadPurpose,
         storage: DownloadStorage
-    ) async throws {
+    ) async throws -> Bool {
         let committed = try await storage.partialByteLength(identity)
         guard
             let range = try DownloadByteRange.next(
@@ -2419,12 +2558,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 chunkByteLength: Self.rangeChunkByteLength
             )
         else {
-            return
+            return false
         }
         let validator = record(downloadID: identity.downloadID)?
             .manifest.entries.first(where: {
                 $0.trackIndex == identity.trackIndex
             })?.validator
+        let taskDescription = DownloadChunkTaskDescription(
+            identity: identity,
+            range: range,
+            validator: validator
+        )
+        guard transferAdmission.admit(taskDescription.transferID) else {
+            return false
+        }
+        var retainedAdmission = false
+        defer {
+            if !retainedAdmission {
+                transferAdmission.complete(taskDescription.transferID)
+                scheduleConcurrencyQueueDrain()
+            }
+        }
         var request = try await service.authorizedDownloadRequest(
             for: account,
             identity: identity
@@ -2437,15 +2591,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         if purpose == .automaticCache {
             request.networkServiceType = .background
         }
-        let taskDescription = try DownloadChunkTaskDescription(
-            identity: identity,
-            range: range,
-            validator: validator
-        ).encode()
+        let encodedTaskDescription = try taskDescription.encode()
         let task = session.downloadTask(
             with: networkPolicy.applying(to: request)
         )
-        task.taskDescription = taskDescription
+        task.taskDescription = encodedTaskDescription
         task.priority =
             purpose == .automaticCache
             ? URLSessionTask.lowPriority : URLSessionTask.defaultPriority
@@ -2462,7 +2612,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
         let currentContext = transferContext(
             for: identity,
-            taskDescription: taskDescription
+            taskDescription: encodedTaskDescription
         )
         guard !currentContext.isPaused,
             !currentContext.isCancelled,
@@ -2484,7 +2634,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 try? await storage.removeTrackFiles(identity)
                 _ = try? await storage.markQueued(identity)
             }
-            return
+            return false
         }
         let key = AutomaticDownloadKey(
             accountID: identity.accountID,
@@ -2496,7 +2646,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             task.resume()
+            retainedAdmission = true
         }
+        return true
     }
 
     @discardableResult
@@ -3184,32 +3336,37 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let tasks = await session.allTasks
+        var releasedCapacity = false
         for task in tasks {
             guard let description = task.taskDescription,
-                let identity =
-                    try? DownloadTaskIdentity
-                    .decodeTaskDescription(description),
-                automaticDownloadIDs.contains(identity.downloadID)
+                let descriptor = try? DownloadChunkTaskDescription.decode(
+                    description
+                ),
+                automaticDownloadIDs.contains(
+                    descriptor.identity.downloadID
+                )
             else {
                 continue
             }
             if blocked {
                 if task.state == .running {
                     task.suspend()
-                    playbackSuspendedDownloadIDs.insert(
-                        identity.downloadID
-                    )
                 }
+                transferAdmission.complete(descriptor.transferID)
+                releasedCapacity = true
+                playbackSuspendedDownloadIDs.insert(
+                    descriptor.identity.downloadID
+                )
             } else if playbackSuspendedDownloadIDs.contains(
-                identity.downloadID
-            ) && !pausedDownloadIDs.contains(identity.downloadID) {
-                task.resume()
+                descriptor.identity.downloadID
+            ) && !pausedDownloadIDs.contains(
+                descriptor.identity.downloadID
+            ) {
+                _ = resumeIfAdmitted(task, descriptor: descriptor)
             }
         }
-        if !blocked {
-            playbackSuspendedDownloadIDs.subtract(
-                automaticDownloadIDs
-            )
+        if releasedCapacity || !blocked {
+            scheduleConcurrencyQueueDrain()
         }
     }
 
@@ -3594,6 +3751,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         taskDescription: String,
         outcome: DownloadTransferOutcome
     ) async {
+        let descriptor = try? DownloadChunkTaskDescription.decode(
+            taskDescription
+        )
+        if let descriptor {
+            transferAdmission.complete(descriptor.transferID)
+        }
+        defer {
+            if descriptor != nil {
+                scheduleConcurrencyQueueDrain()
+            }
+        }
         guard let storage else {
             failure = .storageUnavailable
             return
@@ -4429,6 +4597,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         identity: DownloadTaskIdentity,
         retryCount: Int
     ) async -> Bool {
+        guard
+            let descriptor = try? DownloadChunkTaskDescription.decode(
+                taskDescription
+            ),
+            transferAdmission.admit(descriptor.transferID)
+        else { return false }
+        var retainedAdmission = false
+        defer {
+            if !retainedAdmission {
+                transferAdmission.complete(descriptor.transferID)
+                scheduleConcurrencyQueueDrain()
+            }
+        }
         let initialContext = transferContext(
             for: identity,
             taskDescription: taskDescription
@@ -4516,6 +4697,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
             replacementTask.resume()
+            retainedAdmission = true
         }
         return true
     }

@@ -1071,7 +1071,12 @@ Each task description or persisted mapping identifies:
 
 Requirements:
 
-- at most three concurrent audio-file downloads by default;
+- one process-wide audio-transfer scheduler, configurable in the app and in
+  iOS/iPadOS system Settings, with a default of five concurrent books and the
+  exact permitted values 1 through 5 followed by multiples of 5 through 100;
+- lowering the configured maximum preserves active ranges and blocks new or
+  replacement ranges until capacity is available, while raising it immediately
+  admits eligible durable queued work;
 - per-book queueing;
 - playback-driven automatic caching of whole files: use source-file timing to
   cover the current and configured following chapter window, otherwise retain

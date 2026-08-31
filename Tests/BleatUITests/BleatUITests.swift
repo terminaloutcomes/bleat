@@ -1051,9 +1051,32 @@ final class BleatUITests: XCTestCase {
             ))
         tabButton("Settings", in: app).tap()
 
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.downloads.wifiOnly",
+            direction: .up
+        )
         let wifiOnly = app.switches["settings.downloads.wifiOnly"]
         XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
         XCTAssertEqual(wifiOnly.value as? String, "1")
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.downloads.maximumConcurrent",
+            direction: .up
+        )
+        let maximumConcurrent =
+            app.steppers["settings.downloads.maximumConcurrent"]
+        XCTAssertTrue(maximumConcurrent.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            maximumConcurrent.label,
+            "Maximum Concurrent Downloads"
+        )
+        XCTAssertEqual(maximumConcurrent.value as? String, "5")
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.downloads.filesAhead",
+            direction: .up
+        )
         let filesAhead = app.steppers["settings.downloads.filesAhead"]
         XCTAssertTrue(filesAhead.waitForExistence(timeout: 3))
         XCTAssertTrue(filesAhead.label.contains("Files Ahead: 5"))

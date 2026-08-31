@@ -499,6 +499,7 @@ public struct CloudConfigurationSnapshot:
     public let previousCommandAction: HeadphoneCommandAction
     public let nextCommandAction: HeadphoneCommandAction
     public let downloadNetworkPolicy: String
+    public let maximumConcurrentDownloads: Int
     public let automaticDownloadLookahead: Int
     public let automaticDownloadCleanupPolicy: String
 
@@ -510,6 +511,7 @@ public struct CloudConfigurationSnapshot:
         previousCommandAction: HeadphoneCommandAction,
         nextCommandAction: HeadphoneCommandAction,
         downloadNetworkPolicy: String,
+        maximumConcurrentDownloads: Int,
         automaticDownloadLookahead: Int,
         automaticDownloadCleanupPolicy: String
     ) {
@@ -520,6 +522,10 @@ public struct CloudConfigurationSnapshot:
         self.previousCommandAction = previousCommandAction
         self.nextCommandAction = nextCommandAction
         self.downloadNetworkPolicy = downloadNetworkPolicy
+        self.maximumConcurrentDownloads =
+            MaximumConcurrentDownloadsPreference.normalize(
+                maximumConcurrentDownloads
+            )
         self.automaticDownloadLookahead = automaticDownloadLookahead
         self.automaticDownloadCleanupPolicy =
             automaticDownloadCleanupPolicy
@@ -533,6 +539,7 @@ public struct CloudConfigurationSnapshot:
         case previousCommandAction
         case nextCommandAction
         case downloadNetworkPolicy
+        case maximumConcurrentDownloads
         case automaticDownloadLookahead
         case automaticDownloadCleanupPolicy
     }
@@ -569,6 +576,13 @@ public struct CloudConfigurationSnapshot:
             String.self,
             forKey: .downloadNetworkPolicy
         )
+        maximumConcurrentDownloads =
+            MaximumConcurrentDownloadsPreference.normalize(
+                try container.decodeIfPresent(
+                    Int.self,
+                    forKey: .maximumConcurrentDownloads
+                ) ?? MaximumConcurrentDownloadsPreference.defaultValue
+            )
         automaticDownloadLookahead = try container.decode(
             Int.self,
             forKey: .automaticDownloadLookahead
@@ -596,6 +610,8 @@ public actor CloudConfigurationStore {
             "bleat.playback.nextCommandAction.v1"
         static let downloadNetworkPolicy =
             "bleat.downloads.networkPolicy.v1"
+        static let maximumConcurrentDownloads =
+            MaximumConcurrentDownloadsPreference.defaultsKey
         static let automaticDownloadLookahead =
             "bleat.downloads.automaticLookahead.v1"
         static let automaticDownloadCleanupPolicy =
@@ -649,6 +665,10 @@ public actor CloudConfigurationStore {
             downloadNetworkPolicy: defaults.string(
                 forKey: Key.downloadNetworkPolicy
             ) ?? "wifiOnly",
+            maximumConcurrentDownloads:
+                MaximumConcurrentDownloadsPreference.load(
+                    from: defaults
+                ).value,
             automaticDownloadLookahead: defaults.object(
                 forKey: Key.automaticDownloadLookahead
             ) == nil
@@ -713,6 +733,12 @@ public actor CloudConfigurationStore {
         defaults.set(
             snapshot.downloadNetworkPolicy,
             forKey: Key.downloadNetworkPolicy
+        )
+        defaults.set(
+            MaximumConcurrentDownloadsPreference.normalize(
+                snapshot.maximumConcurrentDownloads
+            ),
+            forKey: Key.maximumConcurrentDownloads
         )
         defaults.set(
             snapshot.automaticDownloadLookahead,

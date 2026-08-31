@@ -3,7 +3,71 @@ import Foundation
 public let bleatBackgroundDownloadSessionIdentifier =
     "app.bleat.background-downloads.v1"
 
-public let bleatBackgroundDownloadMaximumConnectionsPerHost = 3
+public let bleatBackgroundDownloadMaximumConnectionsPerHost = 100
+
+public struct MaximumConcurrentDownloadsPreference: Equatable, Sendable {
+    public static let defaultsKey =
+        "bleat.downloads.maximumConcurrentDownloads.v1"
+    public static let defaultValue = 5
+    public static let permittedValues =
+        Array(1...5) + Array(stride(from: 10, through: 100, by: 5))
+
+    public let value: Int
+
+    public init(_ value: Int) {
+        self.value = Self.normalize(value)
+    }
+
+    public static func load(from defaults: UserDefaults) -> Self {
+        guard let stored = defaults.object(forKey: defaultsKey) else {
+            return Self(defaultValue)
+        }
+        guard !(stored is Bool), let value = stored as? Int else {
+            defaults.set(defaultValue, forKey: defaultsKey)
+            return Self(defaultValue)
+        }
+        let preference = Self(value)
+        if preference.value != value {
+            defaults.set(preference.value, forKey: defaultsKey)
+        }
+        return preference
+    }
+
+    /// Selects the nearest permitted value after clamping to 1...100.
+    /// If two values are equally near, the lower value wins.
+    public static func normalize(_ value: Int) -> Int {
+        let clamped = min(max(value, 1), 100)
+        return permittedValues.min { left, right in
+            let leftDistance = abs(left - clamped)
+            let rightDistance = abs(right - clamped)
+            return leftDistance == rightDistance
+                ? left < right
+                : leftDistance < rightDistance
+        } ?? defaultValue
+    }
+
+    public var incremented: Self {
+        guard let index = Self.permittedValues.firstIndex(of: value),
+            index + 1 < Self.permittedValues.count
+        else { return self }
+        return Self(Self.permittedValues[index + 1])
+    }
+
+    public var decremented: Self {
+        guard let index = Self.permittedValues.firstIndex(of: value),
+            index > Self.permittedValues.startIndex
+        else { return self }
+        return Self(Self.permittedValues[index - 1])
+    }
+
+    public var canIncrement: Bool {
+        value < (Self.permittedValues.last ?? value)
+    }
+
+    public var canDecrement: Bool {
+        value > (Self.permittedValues.first ?? value)
+    }
+}
 
 public enum SafeAudioExtension: String, Codable, CaseIterable, Sendable {
     case aac
