@@ -129,10 +129,16 @@ final class AppBootstrap {
 #if os(iOS)
 @MainActor
 final class BleatAppDelegate: NSObject, UIApplicationDelegate {
+    static weak var current: BleatAppDelegate?
     static var backgroundDownloadCompletion: (() -> Void)?
     let bootstrap = AppBootstrap()
     var model: AppModel { bootstrap.model }
     lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
+
+    override init() {
+        super.init()
+        Self.current = self
+    }
 
     func application(
         _ application: UIApplication,

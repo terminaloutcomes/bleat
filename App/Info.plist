@@ -10,6 +10,8 @@
 	<string>$(BLEAT_EFFECTIVE_APP_ATTEST_MODE)</string>
 	<key>BleatCloudKitMode</key>
 	<string>$(BLEAT_EFFECTIVE_CLOUDKIT_MODE)</string>
+	<key>BleatCarPlayMode</key>
+	<string>$(BLEAT_EFFECTIVE_CARPLAY_MODE)</string>
 	<key>BleatDeveloperName</key>
 	<string>$(BLEAT_DEVELOPER_NAME)</string>
 	<key>BleatTelemetryAttesterMode</key>

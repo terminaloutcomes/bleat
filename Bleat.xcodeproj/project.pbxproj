@@ -96,6 +96,7 @@
 		0DEE8F15C405EA47B0AEBDCA /* LibraryPageMerger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPageMerger.swift; sourceTree = "<group>"; };
 		10759FAD9A628F0F553DB7B1 /* AudioChapterSliceExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChapterSliceExporterTests.swift; sourceTree = "<group>"; };
 		12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBrowseModels.swift; sourceTree = "<group>"; };
+		132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDiagnosticLogCleanup.swift; sourceTree = "<group>"; };
 		20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionView.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -106,6 +107,7 @@
 		46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
 		481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.disabled.entitlements; sourceTree = "<group>"; };
 		492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
+		49FA3C11FE0D67C9A25BDB82 /* Bleat.cloudkit-enabled.app-attest-enabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-enabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsent.swift; sourceTree = "<group>"; };
 		4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSecretLeakageTests.swift; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 		549E0D50852D5C5F631FB04D /* BleatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		555C0318F83AFD25BAE18A54 /* NearbyServerDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyServerDiscovery.swift; sourceTree = "<group>"; };
 		62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainEntitlementTests.swift; sourceTree = "<group>"; };
+		6A7F79188F133EA3CC40DC41 /* Bleat.cloudkit-disabled.app-attest-disabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-disabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadModel.swift; sourceTree = "<group>"; };
 		70E1797402B69FE6551AC02B /* BleatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatUITests.swift; sourceTree = "<group>"; };
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -134,6 +137,7 @@
 		A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.enabled.entitlements; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttesterTests.swift; sourceTree = "<group>"; };
+		AE0DE6DBF9374F5CC3336E34 /* Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		B2BC7735A08B9D198087831D /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		B458AC215D720282F4321F56 /* Bleat.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Bleat.icon; sourceTree = "<group>"; };
@@ -250,9 +254,13 @@
 				32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
 				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
+				6A7F79188F133EA3CC40DC41 /* Bleat.cloudkit-disabled.app-attest-disabled.carplay-enabled.entitlements */,
 				B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */,
+				132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */,
 				81F0EDAD38A8432D9D34BAB3 /* Bleat.cloudkit-disabled.app-attest-enabled.entitlements */,
+				AE0DE6DBF9374F5CC3336E34 /* Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements */,
 				4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */,
+				49FA3C11FE0D67C9A25BDB82 /* Bleat.cloudkit-enabled.app-attest-enabled.carplay-enabled.entitlements */,
 				81E92F3B7112D982A4EC5916 /* Bleat.cloudkit-enabled.app-attest-enabled.entitlements */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
 				481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */,
@@ -471,7 +479,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\ncase \"${BUILD_WITHOUT_PAID_DEVELOPER:-}\" in\n  YES | NO) ;;\n  *)\n    echo \"BUILD_WITHOUT_PAID_DEVELOPER must be YES or NO\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_CLOUDKIT_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_CLOUDKIT_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_APP_ATTEST_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_APP_ATTEST_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ntelemetry_url_scheme=\"\"\ntelemetry_url_host=\"\"\n\nparse_telemetry_url() {\n  local value=\"$1\"\n  local requires_origin=\"$2\"\n  local remainder authority path port\n\n  telemetry_url_scheme=\"\"\n  telemetry_url_host=\"\"\n  case \"${value}\" in\n    https://*) telemetry_url_scheme=\"https\"; remainder=\"${value#https://}\" ;;\n    http://*) telemetry_url_scheme=\"http\"; remainder=\"${value#http://}\" ;;\n    *) return 1 ;;\n  esac\n  [[ \"${remainder}\" != *[@\\?\\#]* ]] || return 1\n\n  if [[ \"${remainder}\" == */* ]]; then\n    authority=\"${remainder%%/*}\"\n    path=\"/${remainder#*/}\"\n  else\n    authority=\"${remainder}\"\n    path=\"\"\n  fi\n  [[ -n \"${authority}\" ]] || return 1\n  if [[ \"${requires_origin}\" == true && -n \"${path}\" && \"${path}\" != / ]]; then\n    return 1\n  fi\n\n  if [[ \"${authority}\" =~ ^\\[([0-9A-Fa-f:.]+)\\](:([0-9]+))?$ ]]; then\n    telemetry_url_host=\"${BASH_REMATCH[1]}\"\n    port=\"${BASH_REMATCH[3]:-}\"\n  elif [[ \"${authority}\" =~ ^([A-Za-z0-9.-]+)(:([0-9]+))?$ ]]; then\n    telemetry_url_host=\"$(printf '%s\\n' \"${BASH_REMATCH[1]}\" | tr '[:upper:]' '[:lower:]')\"\n    port=\"${BASH_REMATCH[3]:-}\"\n  else\n    return 1\n  fi\n  if [[ -n \"${port}\" && ( 10#${port} < 1 || 10#${port} > 65535 ) ]]; then\n    return 1\n  fi\n}\n\ncase \"${PLATFORM_NAME:-}\" in\n  iphoneos | iphonesimulator)\n    if ! parse_telemetry_url \"${BLEAT_TELEMETRY_AUTH_BASE_URL:-}\" false; then\n      echo \"BLEAT_TELEMETRY_AUTH_BASE_URL must be a valid telemetry base URL\" >&2\n      exit 2\n    fi\n    case \"${telemetry_url_scheme}\" in\n      https) ;;\n      http)\n        if [[ \"${CONFIGURATION:-}\" != Debug || ( \"${telemetry_url_host}\" != localhost && \"${telemetry_url_host}\" != 127.0.0.1 && \"${telemetry_url_host}\" != ::1 ) ]]; then\n          echo \"BLEAT_TELEMETRY_AUTH_BASE_URL must be HTTPS or Debug loopback HTTP\" >&2\n          exit 2\n        fi\n        ;;\n      *) exit 2 ;;\n    esac\n\n    if ! parse_telemetry_url \"${BLEAT_TELEMETRY_OTLP_ENDPOINT:-}\" true \\\n      || [[ \"${telemetry_url_scheme}\" != https ]]; then\n      echo \"BLEAT_TELEMETRY_OTLP_ENDPOINT must be a valid HTTPS origin for iOS builds\" >&2\n      exit 2\n    fi\n    ;;\nesac\n";
+			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\ncase \"${BUILD_WITHOUT_PAID_DEVELOPER:-}\" in\n  YES | NO) ;;\n  *)\n    echo \"BUILD_WITHOUT_PAID_DEVELOPER must be YES or NO\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_CLOUDKIT_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_CLOUDKIT_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_APP_ATTEST_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_APP_ATTEST_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"${BLEAT_CARPLAY_MODE:-}\" in\n  enabled | disabled) ;;\n  *)\n    echo \"BLEAT_CARPLAY_MODE must be enabled or disabled\" >&2\n    exit 2\n    ;;\nesac\n\ntelemetry_url_scheme=\"\"\ntelemetry_url_host=\"\"\n\nparse_telemetry_url() {\n  local value=\"$1\"\n  local requires_origin=\"$2\"\n  local remainder authority path port\n\n  telemetry_url_scheme=\"\"\n  telemetry_url_host=\"\"\n  case \"${value}\" in\n    https://*) telemetry_url_scheme=\"https\"; remainder=\"${value#https://}\" ;;\n    http://*) telemetry_url_scheme=\"http\"; remainder=\"${value#http://}\" ;;\n    *) return 1 ;;\n  esac\n  [[ \"${remainder}\" != *[@\\?\\#]* ]] || return 1\n\n  if [[ \"${remainder}\" == */* ]]; then\n    authority=\"${remainder%%/*}\"\n    path=\"/${remainder#*/}\"\n  else\n    authority=\"${remainder}\"\n    path=\"\"\n  fi\n  [[ -n \"${authority}\" ]] || return 1\n  if [[ \"${requires_origin}\" == true && -n \"${path}\" && \"${path}\" != / ]]; then\n    return 1\n  fi\n\n  if [[ \"${authority}\" =~ ^\\[([0-9A-Fa-f:.]+)\\](:([0-9]+))?$ ]]; then\n    telemetry_url_host=\"${BASH_REMATCH[1]}\"\n    port=\"${BASH_REMATCH[3]:-}\"\n  elif [[ \"${authority}\" =~ ^([A-Za-z0-9.-]+)(:([0-9]+))?$ ]]; then\n    telemetry_url_host=\"$(printf '%s\\n' \"${BASH_REMATCH[1]}\" | tr '[:upper:]' '[:lower:]')\"\n    port=\"${BASH_REMATCH[3]:-}\"\n  else\n    return 1\n  fi\n  if [[ -n \"${port}\" && ( 10#${port} < 1 || 10#${port} > 65535 ) ]]; then\n    return 1\n  fi\n}\n\ncase \"${PLATFORM_NAME:-}\" in\n  iphoneos | iphonesimulator)\n    if ! parse_telemetry_url \"${BLEAT_TELEMETRY_AUTH_BASE_URL:-}\" false; then\n      echo \"BLEAT_TELEMETRY_AUTH_BASE_URL must be a valid telemetry base URL\" >&2\n      exit 2\n    fi\n    case \"${telemetry_url_scheme}\" in\n      https) ;;\n      http)\n        if [[ \"${CONFIGURATION:-}\" != Debug || ( \"${telemetry_url_host}\" != localhost && \"${telemetry_url_host}\" != 127.0.0.1 && \"${telemetry_url_host}\" != ::1 ) ]]; then\n          echo \"BLEAT_TELEMETRY_AUTH_BASE_URL must be HTTPS or Debug loopback HTTP\" >&2\n          exit 2\n        fi\n        ;;\n      *) exit 2 ;;\n    esac\n\n    if ! parse_telemetry_url \"${BLEAT_TELEMETRY_OTLP_ENDPOINT:-}\" true \\\n      || [[ \"${telemetry_url_scheme}\" != https ]]; then\n      echo \"BLEAT_TELEMETRY_OTLP_ENDPOINT must be a valid HTTPS origin for iOS builds\" >&2\n      exit 2\n    fi\n    ;;\nesac\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -722,19 +730,26 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BLEAT_APP_ATTEST_ENVIRONMENT = development;
 				BLEAT_APP_ATTEST_MODE = enabled;
+				BLEAT_CARPLAY_MODE = disabled;
+				BLEAT_CARPLAY_disabled_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				BLEAT_CARPLAY_enabled_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).carplay-enabled.entitlements";
 				BLEAT_CLOUDKIT_MODE = enabled;
 				BLEAT_DEVELOPER_NAME = "James Hodgkinson";
 				BLEAT_EFFECTIVE_APP_ATTEST_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_APP_ATTEST_MODE)";
+				BLEAT_EFFECTIVE_CARPLAY_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CARPLAY_MODE)";
+				"BLEAT_EFFECTIVE_CARPLAY_MODE[sdk=macosx*]" = disabled;
 				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_CARPLAY_MODE = "$(BLEAT_CARPLAY_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
 				BLEAT_PAID_DEVELOPER_YES_APP_ATTEST_MODE = disabled;
+				BLEAT_PAID_DEVELOPER_YES_CARPLAY_MODE = disabled;
 				BLEAT_PAID_DEVELOPER_YES_CLOUDKIT_MODE = disabled;
 				BLEAT_TELEMETRY_ATTESTER_MODE = "app-attest";
 				BLEAT_TELEMETRY_AUTH_BASE_URL = "";
 				BLEAT_TELEMETRY_OTLP_ENDPOINT = "";
 				BUILD_WITHOUT_PAID_DEVELOPER = NO;
-				CODE_SIGN_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 2;
@@ -787,19 +802,26 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BLEAT_APP_ATTEST_ENVIRONMENT = production;
 				BLEAT_APP_ATTEST_MODE = enabled;
+				BLEAT_CARPLAY_MODE = disabled;
+				BLEAT_CARPLAY_disabled_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				BLEAT_CARPLAY_enabled_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).carplay-enabled.entitlements";
 				BLEAT_CLOUDKIT_MODE = enabled;
 				BLEAT_DEVELOPER_NAME = "James Hodgkinson";
 				BLEAT_EFFECTIVE_APP_ATTEST_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_APP_ATTEST_MODE)";
+				BLEAT_EFFECTIVE_CARPLAY_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CARPLAY_MODE)";
+				"BLEAT_EFFECTIVE_CARPLAY_MODE[sdk=macosx*]" = disabled;
 				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
+				BLEAT_PAID_DEVELOPER_NO_CARPLAY_MODE = "$(BLEAT_CARPLAY_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
 				BLEAT_PAID_DEVELOPER_YES_APP_ATTEST_MODE = disabled;
+				BLEAT_PAID_DEVELOPER_YES_CARPLAY_MODE = disabled;
 				BLEAT_PAID_DEVELOPER_YES_CLOUDKIT_MODE = disabled;
 				BLEAT_TELEMETRY_ATTESTER_MODE = "app-attest";
 				BLEAT_TELEMETRY_AUTH_BASE_URL = "";
 				BLEAT_TELEMETRY_OTLP_ENDPOINT = "";
 				BUILD_WITHOUT_PAID_DEVELOPER = NO;
-				CODE_SIGN_ENTITLEMENTS = "App/Bleat.cloudkit-$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).app-attest-$(BLEAT_EFFECTIVE_APP_ATTEST_MODE).entitlements";
+				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 2;

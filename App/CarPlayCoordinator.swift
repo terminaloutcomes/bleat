@@ -74,6 +74,37 @@
 
     @MainActor
     final class CarPlayCoordinator: NSObject, CPSearchTemplateDelegate {
+        private struct AccountPresentation: Equatable, Sendable {
+            let id: AccountID
+            let server: NormalizedServerURL
+        }
+
+        private struct PlaybackPresentation: Equatable, Sendable {
+            let itemID: LibraryItemID?
+            let accountID: AccountID?
+        }
+
+        private struct DownloadPresentation: Equatable, Sendable {
+            let downloadID: DownloadID
+            let accountID: AccountID
+            let itemID: LibraryItemID
+            let title: String
+            let author: String
+            let updatedAtMilliseconds: Int64
+            let server: NormalizedServerURL?
+        }
+
+        private struct TemplatePresentation: Equatable, Sendable {
+            let phase: AppPhase
+            let account: AccountPresentation?
+            let selectedLibraryID: LibraryID?
+            let homeShelves: ResourceState<[LibraryBookShelf]>
+            let books: ResourceState<LibraryItemsPage>
+            let libraryPaginationState: LibraryPaginationState
+            let downloads: [DownloadPresentation]
+            let playback: PlaybackPresentation
+        }
+
         private enum RootContext: Equatable {
             case signedIn(AccountID)
             case signedOut
@@ -91,7 +122,9 @@
         private var searchTemplate: CPSearchTemplate?
         private var searchResultsByItem:
             [ObjectIdentifier: LibraryBookSummary] = [:]
+        private let artworkCache = NSCache<NSString, UIImage>()
         private var artworkTasks: [Task<Void, Never>] = []
+        private var renderedPresentation: TemplatePresentation?
         private var presentationGeneration: UInt64 = 0
         private var searchGeneration: UInt64 = 0
         private var searchTask: Task<Void, Never>?
@@ -103,6 +136,7 @@
             self.model = model
             self.coverLoader = coverLoader
             super.init()
+            artworkCache.countLimit = 256
         }
 
         func connect(_ presenter: any CarPlayPresenting) {
@@ -138,13 +172,23 @@
             tabTemplate = nil
             searchTemplate = nil
             searchResultsByItem = [:]
+            renderedPresentation = nil
         }
 
         func refreshTemplates() {
             guard presenter != nil else {
                 return
             }
-            switch model.phase {
+            let presentation = makeTemplatePresentation()
+            guard renderedPresentation != presentation else {
+                return
+            }
+            renderedPresentation = presentation
+            for task in artworkTasks {
+                task.cancel()
+            }
+            artworkTasks = []
+            switch presentation.phase {
             case .launching:
                 showUnavailableRoot(
                     title: "Loading Bleat",
@@ -153,7 +197,7 @@
                     context: .unavailable
                 )
             case .signedIn:
-                guard let account = model.account else {
+                guard presentation.account != nil else {
                     showUnavailableRoot(
                         title: "Account unavailable",
                         detail: "Open Bleat on iPhone.",
@@ -162,7 +206,7 @@
                     )
                     return
                 }
-                showSignedInRoot(accountID: account.id)
+                showSignedInRoot(presentation)
             case .signedOut:
                 showSignedOutRoot()
             case .unavailable(let failure):
@@ -241,7 +285,12 @@
             }
         }
 
-        private func showSignedInRoot(accountID: AccountID) {
+        private func showSignedInRoot(
+            _ presentation: TemplatePresentation
+        ) {
+            guard let account = presentation.account else {
+                return
+            }
             if homeTemplate == nil {
                 homeTemplate = makeTabTemplate(
                     title: "Home",
@@ -266,14 +315,16 @@
                 home: homeTemplate,
                 library: libraryTemplate
             )
-            updateHomeTemplate(homeTemplate)
-            updateLibraryTemplate(libraryTemplate)
+            updateHomeTemplate(homeTemplate, presentation: presentation)
+            updateLibraryTemplate(libraryTemplate, presentation: presentation)
             updateDownloadsTemplate(
                 downloadsTemplate,
-                accountID: accountID
+                downloads: presentation.downloads,
+                playback: presentation.playback,
+                signedOut: false
             )
 
-            let context = RootContext.signedIn(accountID)
+            let context = RootContext.signedIn(account.id)
             guard rootContext != context || tabTemplate == nil else {
                 return
             }
@@ -297,7 +348,13 @@
                     systemImage: "arrow.down.circle"
                 )
             downloadsTemplate = template
-            updateDownloadsTemplate(template, accountID: nil)
+            let presentation = makeTemplatePresentation(accountID: nil)
+            updateDownloadsTemplate(
+                template,
+                downloads: presentation.downloads,
+                playback: presentation.playback,
+                signedOut: true
+            )
             guard rootContext != .signedOut else {
                 return
             }
@@ -352,8 +409,11 @@
             }
         }
 
-        private func updateHomeTemplate(_ template: CPListTemplate) {
-            switch homeState {
+        private func updateHomeTemplate(
+            _ template: CPListTemplate,
+            presentation: TemplatePresentation
+        ) {
+            switch homeState(for: presentation) {
             case .loading:
                 template.updateSections([])
                 template.emptyViewTitleVariants = ["Loading Home"]
@@ -381,19 +441,25 @@
                 var sections = shelves.map { shelf in
                     CPListSection(
                         items: shelf.items.map {
-                            makeBookItem(book: $0)
+                            makeBookItem(
+                                book: $0,
+                                account: presentation.account,
+                                playback: presentation.playback
+                            )
                         },
                         header: shelf.label,
                         sectionIndexTitle: nil
                     )
                 }
-                let downloads = availableDownloads(
-                    accountID: model.account?.id
-                )
-                if !downloads.isEmpty {
+                if !presentation.downloads.isEmpty {
                     sections.append(
                         CPListSection(
-                            items: downloads.map(makeDownloadItem),
+                            items: presentation.downloads.map {
+                                makeDownloadItem(
+                                    $0,
+                                    playback: presentation.playback
+                                )
+                            },
                             header: "Downloaded",
                             sectionIndexTitle: nil
                         )
@@ -403,8 +469,11 @@
             }
         }
 
-        private func updateLibraryTemplate(_ template: CPListTemplate) {
-            switch libraryState {
+        private func updateLibraryTemplate(
+            _ template: CPListTemplate,
+            presentation: TemplatePresentation
+        ) {
+            switch libraryState(for: presentation) {
             case .loading:
                 template.updateSections([])
                 template.emptyViewTitleVariants = ["Loading Library"]
@@ -432,16 +501,22 @@
                 template.emptyViewSubtitleVariants = []
                 let hasTrailingAction =
                     page.hasNextPage
-                    || model.libraryPaginationState != .idle
+                    || presentation.libraryPaginationState != .idle
                 let maximum = max(
                     CPListTemplate.maximumItemCount
                         - (hasTrailingAction ? 1 : 0),
                     1
                 )
                 var items = page.items.prefix(maximum).map {
-                    makeBookItem(book: $0)
+                    makeBookItem(
+                        book: $0,
+                        account: presentation.account,
+                        playback: presentation.playback
+                    )
                 }
-                if case .failed(let failure) = model.libraryPaginationState {
+                if case .failed(let failure) =
+                    presentation.libraryPaginationState
+                {
                     let retry = CPListItem(
                         text: "Load More Failed",
                         detailText: failure.message
@@ -456,12 +531,12 @@
                 } else if page.hasNextPage {
                     let more = CPListItem(
                         text:
-                            model.libraryPaginationState == .loading
+                            presentation.libraryPaginationState == .loading
                             ? "Loading More…" : "Load More",
                         detailText: nil
                     )
                     more.isEnabled =
-                        model.libraryPaginationState != .loading
+                        presentation.libraryPaginationState != .loading
                     more.handler = { [weak self] _, completion in
                         Task { @MainActor [weak self] in
                             await self?.perform(.loadMore)
@@ -482,15 +557,16 @@
 
         private func updateDownloadsTemplate(
             _ template: CPListTemplate,
-            accountID: AccountID?
+            downloads: [DownloadPresentation],
+            playback: PlaybackPresentation,
+            signedOut: Bool
         ) {
-            let downloads = availableDownloads(accountID: accountID)
             template.showsSpinnerWhileEmpty = false
             if downloads.isEmpty {
                 template.updateSections([])
                 template.emptyViewTitleVariants = ["No downloads"]
                 template.emptyViewSubtitleVariants =
-                    model.phase == .signedOut
+                    signedOut
                     ? ["Open Bleat on iPhone to sign in."]
                     : []
             } else {
@@ -498,7 +574,9 @@
                 template.emptyViewSubtitleVariants = []
                 template.updateSections([
                     CPListSection(
-                        items: downloads.map(makeDownloadItem),
+                        items: downloads.map {
+                            makeDownloadItem($0, playback: playback)
+                        },
                         header: nil,
                         sectionIndexTitle: nil
                     )
@@ -506,34 +584,30 @@
             }
         }
 
-        private var homeState: CarPlayContentState<[LibraryBookShelf]> {
-            switch model.homeShelves {
+        private func homeState(
+            for presentation: TemplatePresentation
+        ) -> CarPlayContentState<[LibraryBookShelf]> {
+            switch presentation.homeShelves {
             case .idle, .loading:
-                let downloads = availableDownloads(
-                    accountID: model.account?.id
-                )
-                return downloads.isEmpty
+                return presentation.downloads.isEmpty
                     ? .loading
                     : .loaded([])
             case .loaded(let shelves):
-                let hasDownloads = !availableDownloads(
-                    accountID: model.account?.id
-                ).isEmpty
+                let hasDownloads = !presentation.downloads.isEmpty
                 return shelves.isEmpty && !hasDownloads
                     ? .empty
                     : .loaded(shelves)
             case .failed(let failure):
-                let downloads = availableDownloads(
-                    accountID: model.account?.id
-                )
-                return downloads.isEmpty
+                return presentation.downloads.isEmpty
                     ? .failed(failure)
                     : .loaded([])
             }
         }
 
-        private var libraryState: CarPlayContentState<LibraryItemsPage> {
-            switch model.books {
+        private func libraryState(
+            for presentation: TemplatePresentation
+        ) -> CarPlayContentState<LibraryItemsPage> {
+            switch presentation.books {
             case .idle, .loading:
                 return .loading
             case .loaded(let page):
@@ -543,9 +617,36 @@
             }
         }
 
-        private func availableDownloads(
+        private func makeTemplatePresentation() -> TemplatePresentation {
+            makeTemplatePresentation(accountID: model.account?.id)
+        }
+
+        private func makeTemplatePresentation(
             accountID: AccountID?
-        ) -> [DownloadedBookRecord] {
+        ) -> TemplatePresentation {
+            let account = model.account.map {
+                AccountPresentation(id: $0.id, server: $0.server)
+            }
+            return TemplatePresentation(
+                phase: model.phase,
+                account: account,
+                selectedLibraryID: model.selectedLibrary?.id,
+                homeShelves: model.homeShelves,
+                books: model.books,
+                libraryPaginationState: model.libraryPaginationState,
+                downloads: availableDownloadPresentations(
+                    accountID: accountID
+                ),
+                playback: PlaybackPresentation(
+                    itemID: model.playback.itemID,
+                    accountID: model.playback.accountID
+                )
+            )
+        }
+
+        private func availableDownloadPresentations(
+            accountID: AccountID?
+        ) -> [DownloadPresentation] {
             model.downloads.records
                 .filter { record in
                     (accountID == nil
@@ -557,19 +658,49 @@
                         $1.detail.title
                     ) == .orderedAscending
                 }
+                .map { record in
+                    let author = record.detail.authors
+                        .map(\.name)
+                        .joined(separator: ", ")
+                    let server = model.accounts.first {
+                        $0.id == record.manifest.accountID
+                    }?.server
+                    return DownloadPresentation(
+                        downloadID: record.manifest.downloadID,
+                        accountID: record.manifest.accountID,
+                        itemID: record.detail.id,
+                        title: record.detail.title,
+                        author: author,
+                        updatedAtMilliseconds:
+                            record.detail.updatedAtMilliseconds,
+                        server: server
+                    )
+                }
         }
 
         private func makeBookItem(
-            book: LibraryBookSummary
+            book: LibraryBookSummary,
+            account: AccountPresentation?,
+            playback: PlaybackPresentation
         ) -> CPListItem {
+            let coverURL = BookCoverURL.make(
+                server: account?.server,
+                itemID: book.id,
+                updatedAtMilliseconds: book.updatedAtMilliseconds,
+                width: 240,
+                height: 240
+            )
             let item = CPListItem(
                 text: book.title,
                 detailText: book.authorName,
-                image: UIImage(systemName: "book.closed.fill")
+                image: initialArtwork(
+                    accountID: account?.id,
+                    url: coverURL
+                )
             )
             item.isPlaying =
-                model.playback.itemID == book.id
-                && model.playback.accountID == model.account?.id
+                playback.itemID == book.id
+                && playback.accountID == account?.id
             item.handler = { [weak self] _, completion in
                 Task { @MainActor [weak self] in
                     await self?.perform(.playBook(book))
@@ -578,55 +709,48 @@
             }
             loadArtwork(
                 for: item,
-                accountID: model.account?.id,
-                url: BookCoverURL.make(
-                    server: model.account?.server,
-                    itemID: book.id,
-                    updatedAtMilliseconds: book.updatedAtMilliseconds,
-                    width: 240,
-                    height: 240
-                )
+                accountID: account?.id,
+                url: coverURL
             )
             return item
         }
 
         private func makeDownloadItem(
-            _ record: DownloadedBookRecord
+            _ download: DownloadPresentation,
+            playback: PlaybackPresentation
         ) -> CPListItem {
-            let author = record.detail.authors
-                .map(\.name)
-                .joined(separator: ", ")
+            let coverURL = BookCoverURL.make(
+                server: download.server,
+                itemID: download.itemID,
+                updatedAtMilliseconds: download.updatedAtMilliseconds,
+                width: 240,
+                height: 240
+            )
             let item = CPListItem(
-                text: record.detail.title,
-                detailText: author.isEmpty ? "Downloaded" : author,
-                image: UIImage(systemName: "book.closed.fill")
+                text: download.title,
+                detailText:
+                    download.author.isEmpty
+                    ? "Downloaded" : download.author,
+                image: initialArtwork(
+                    accountID: download.accountID,
+                    url: coverURL
+                )
             )
             item.isPlaying =
-                model.playback.itemID == record.detail.id
-                && model.playback.accountID
-                    == record.manifest.accountID
+                playback.itemID == download.itemID
+                && playback.accountID == download.accountID
             item.handler = { [weak self] _, completion in
                 Task { @MainActor [weak self] in
                     await self?.perform(
-                        .playDownload(record.manifest.downloadID)
+                        .playDownload(download.downloadID)
                     )
                     completion()
                 }
             }
-            let server = model.accounts.first {
-                $0.id == record.manifest.accountID
-            }?.server
             loadArtwork(
                 for: item,
-                accountID: record.manifest.accountID,
-                url: BookCoverURL.make(
-                    server: server,
-                    itemID: record.detail.id,
-                    updatedAtMilliseconds:
-                        record.detail.updatedAtMilliseconds,
-                    width: 240,
-                    height: 240
-                )
+                accountID: download.accountID,
+                url: coverURL
             )
             return item
         }
@@ -634,22 +758,27 @@
         private func makeSearchResultItem(
             book: LibraryBookSummary
         ) -> CPListItem {
+            let accountID = model.account?.id
+            let coverURL = BookCoverURL.make(
+                server: model.account?.server,
+                itemID: book.id,
+                updatedAtMilliseconds: book.updatedAtMilliseconds,
+                width: 240,
+                height: 240
+            )
             let item = CPListItem(
                 text: book.title,
                 detailText: book.authorName,
-                image: UIImage(systemName: "book.closed.fill")
+                image: initialArtwork(
+                    accountID: accountID,
+                    url: coverURL
+                )
             )
             searchResultsByItem[ObjectIdentifier(item)] = book
             loadArtwork(
                 for: item,
-                accountID: model.account?.id,
-                url: BookCoverURL.make(
-                    server: model.account?.server,
-                    itemID: book.id,
-                    updatedAtMilliseconds: book.updatedAtMilliseconds,
-                    width: 240,
-                    height: 240
-                )
+                accountID: accountID,
+                url: coverURL
             )
             return item
         }
@@ -868,7 +997,6 @@
                 _ = model.homeShelves
                 _ = model.books
                 _ = model.libraryPaginationState
-                _ = model.searchResults
                 _ = model.downloads.records
                 _ = model.playback.itemID
                 _ = model.playback.accountID
@@ -920,6 +1048,14 @@
             guard let url else {
                 return
             }
+            let cacheKey = artworkCacheKey(
+                accountID: accountID,
+                url: url
+            )
+            if let image = artworkCache.object(forKey: cacheKey) {
+                item.setImage(image)
+                return
+            }
             let generation = presentationGeneration
             let task = Task { @MainActor [weak self, weak item] in
                 guard let self,
@@ -934,9 +1070,33 @@
                 else {
                     return
                 }
+                artworkCache.setObject(image, forKey: cacheKey)
                 item.setImage(image)
             }
             artworkTasks.append(task)
+        }
+
+        private func initialArtwork(
+            accountID: AccountID?,
+            url: URL?
+        ) -> UIImage? {
+            guard let url else {
+                return UIImage(systemName: "book.closed.fill")
+            }
+            let cacheKey = artworkCacheKey(
+                accountID: accountID,
+                url: url
+            )
+            return artworkCache.object(forKey: cacheKey)
+                ?? UIImage(systemName: "book.closed.fill")
+        }
+
+        private func artworkCacheKey(
+            accountID: AccountID?,
+            url: URL
+        ) -> NSString {
+            let account = accountID?.rawValue ?? "anonymous"
+            return "\(account)\u{0}\(url.absoluteString)" as NSString
         }
     }
 
@@ -951,10 +1111,7 @@
             let presenter = CarPlayInterfacePresenter(
                 interfaceController: interfaceController
             )
-            guard
-                let appDelegate =
-                    UIApplication.shared.delegate as? BleatAppDelegate
-            else {
+            guard let appDelegate = BleatAppDelegate.current else {
                 let template = CPListTemplate(
                     title: "Bleat",
                     sections: []
@@ -971,10 +1128,7 @@
             didDisconnectInterfaceController interfaceController:
                 CPInterfaceController
         ) {
-            guard
-                let appDelegate =
-                    UIApplication.shared.delegate as? BleatAppDelegate
-            else {
+            guard let appDelegate = BleatAppDelegate.current else {
                 return
             }
             appDelegate.carPlayCoordinator.disconnect()

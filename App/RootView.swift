@@ -944,6 +944,7 @@ private struct NativeLoginView: View {
 private struct OfflineDownloadsSheet: View {
     @Bindable var model: AppModel
     @State private var showPlayer = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -952,7 +953,8 @@ private struct OfflineDownloadsSheet: View {
                     if model.playback.showsMiniPlayer {
                         MiniPlayerView(
                             playback: model.playback,
-                            containerHeight: geometry.size.height
+                            containerHeight: geometry.size.height,
+                            foreground: miniPlayerForeground
                         ) {
                             showPlayer = true
                         }
@@ -962,6 +964,10 @@ private struct OfflineDownloadsSheet: View {
         .sheet(isPresented: $showPlayer) {
             NowPlaying(playback: model.playback)
         }
+    }
+
+    private var miniPlayerForeground: Color {
+        colorScheme == .light ? .black : .white
     }
 }
 
@@ -1388,6 +1394,7 @@ private struct SignedInView: View {
     @State private var playbackFailure: AppFailure?
     @State private var bookActionPresentation =
         BookActionContextPresentation()
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -1587,17 +1594,35 @@ private struct SignedInView: View {
     #else
         @ViewBuilder
         private func mobileTabs(containerHeight: CGFloat) -> some View {
-            mobileTabView(containerHeight: containerHeight)
-                .tabViewBottomAccessory {
-                    if model.playback.showsMiniPlayer {
-                        MiniPlayerView(
-                            playback: model.playback,
-                            containerHeight: containerHeight
-                        ) {
-                            navigation.showsPlayer = true
-                        }
+            if #available(iOS 26.1, *) {
+                mobileTabView(containerHeight: containerHeight)
+                    .tabViewBottomAccessory(
+                        isEnabled: model.playback.showsMiniPlayer
+                    ) {
+                        miniPlayerAccessory(containerHeight: containerHeight)
                     }
-                }
+            } else if model.playback.showsMiniPlayer {
+                mobileTabView(containerHeight: containerHeight)
+                    .tabViewBottomAccessory {
+                        miniPlayerAccessory(containerHeight: containerHeight)
+                    }
+            } else {
+                mobileTabView(containerHeight: containerHeight)
+            }
+        }
+
+        private func miniPlayerAccessory(containerHeight: CGFloat) -> some View {
+            MiniPlayerView(
+                playback: model.playback,
+                containerHeight: containerHeight,
+                foreground: miniPlayerForeground
+            ) {
+                navigation.showsPlayer = true
+            }
+        }
+
+        private var miniPlayerForeground: Color {
+            colorScheme == .light ? .black : .white
         }
 
         private func mobileTabView(containerHeight: CGFloat) -> some View {

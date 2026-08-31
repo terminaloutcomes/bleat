@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 
 @MainActor
@@ -401,6 +402,50 @@ final class BleatUITests: XCTestCase {
                 )
             ).firstMatch.exists
         )
+    }
+
+    @MainActor
+    func testMiniPlayerUsesNativeLightAccessoryContrast() throws {
+        let app = launch(scenario: "--ui-testing-playback")
+        let play = app.buttons["home.book.ui-book.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.descendants(matching: .any)["player.mini"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        app.swipeUp()
+        app.swipeUp()
+
+        let screenshot = app.screenshot()
+        let miniPlayerImage = try crop(
+            screenshot.image,
+            to: miniPlayer.frame,
+            in: app.frame
+        )
+        let attachment = XCTAttachment(image: miniPlayerImage)
+        attachment.name = "mini-player-light-mode-contrast"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCTAssertGreaterThan(
+            try averageLuminance(of: miniPlayerImage),
+            0.65,
+            "The mini-player must retain the native light accessory material"
+        )
+        XCTAssertGreaterThan(
+            try darkPixelFraction(of: miniPlayerImage),
+            0.01,
+            "The native light accessory must contain visible dark foreground"
+        )
+    }
+
+    @MainActor
+    func testMiniPlayerIsAbsentBeforePlayback() {
+        let app = launch(scenario: "--ui-testing-playback")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["player.mini"].exists)
     }
 
     @MainActor
@@ -2443,6 +2488,67 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    private func averageLuminance(of image: UIImage) throws -> Double {
+        let samples = try luminanceSamples(of: image)
+        return samples.reduce(0, +) / Double(samples.count)
+    }
+
+    private func darkPixelFraction(of image: UIImage) throws -> Double {
+        let samples = try luminanceSamples(of: image)
+        let darkCount = samples.count(where: { $0 < 0.35 })
+        return Double(darkCount) / Double(samples.count)
+    }
+
+    private func luminanceSamples(of image: UIImage) throws -> [Double] {
+        let width = 64
+        let height = 16
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard
+            let context = CGContext(
+                data: &pixels,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ),
+            let source = image.cgImage
+        else {
+            throw XCTSkip("Could not render the mini-player screenshot")
+        }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        return stride(from: 0, to: pixels.count, by: 4).map { index in
+            let red = Double(pixels[index]) / 255
+            let green = Double(pixels[index + 1]) / 255
+            let blue = Double(pixels[index + 2]) / 255
+            return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        }
+    }
+
+    private func crop(
+        _ image: UIImage,
+        to elementFrame: CGRect,
+        in applicationFrame: CGRect
+    ) throws -> UIImage {
+        guard let source = image.cgImage else {
+            throw XCTSkip("Could not read the application screenshot")
+        }
+        let scaleX = CGFloat(source.width) / applicationFrame.width
+        let scaleY = CGFloat(source.height) / applicationFrame.height
+        let cropRect = CGRect(
+            x: (elementFrame.minX - applicationFrame.minX) * scaleX,
+            y: (elementFrame.minY - applicationFrame.minY) * scaleY,
+            width: elementFrame.width * scaleX,
+            height: elementFrame.height * scaleY
+        ).integral
+        guard let cropped = source.cropping(to: cropRect) else {
+            throw XCTSkip("Could not crop the mini-player from the screenshot")
+        }
+        return UIImage(cgImage: cropped)
     }
 
     @MainActor

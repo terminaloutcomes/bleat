@@ -66,6 +66,7 @@ BLEAT_ARCHIVE_PATH="${bleat_archive_path}" \
 BLEAT_BUILD_NUMBER="${bleat_build_number}" \
 BUILD_WITHOUT_PAID_DEVELOPER=NO \
 BLEAT_APP_ATTEST_MODE=enabled \
+BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
 BLEAT_CLOUDKIT_MODE=enabled \
 "${bleat_script_dir}/archive-beta.sh"
 
@@ -101,7 +102,8 @@ python3 "${bleat_script_dir}/inspect-testflight-ipa.py" \
     --team "${bleat_development_team}" \
     --bundle-id "${bleat_bundle_id}" \
     --version "${bleat_version}" \
-    --build "${bleat_build_number}"
+    --build "${bleat_build_number}" \
+    --carplay-mode "${BLEAT_CARPLAY_MODE:-disabled}"
 readonly bleat_ipa_sha256="$(shasum -a 256 "${bleat_exported_ipa}" | awk '{print $1}')"
 print "${bleat_ipa_sha256}  export/${bleat_exported_ipa:t}" \
     > "${bleat_output_directory}/SHA256SUMS"

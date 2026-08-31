@@ -25,6 +25,7 @@ xcodebuild \
     -scheme Bleat \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -derivedDataPath .build/xcode-derived
 
@@ -38,6 +39,7 @@ xcodebuild \
     -derivedDataPath .build/xcode-derived \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     build
 
@@ -50,6 +52,7 @@ xcodebuild \
     -derivedDataPath .build/xcode-derived \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     -only-testing:BleatAppTests \
@@ -64,6 +67,7 @@ xcodebuild \
     -derivedDataPath .build/xcode-derived \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     -parallel-testing-enabled YES \

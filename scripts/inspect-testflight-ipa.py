@@ -14,6 +14,9 @@ class InspectionFailure(Exception):
     pass
 
 
+CARPLAY_ENTITLEMENT = "com.apple.developer.carplay-audio"
+
+
 def load_plist_bytes(payload: bytes, description: str) -> dict:
     try:
         value = plistlib.loads(payload)
@@ -80,8 +83,25 @@ def require_entitlements(
         raise InspectionFailure(f"{source} Keychain group does not match")
 
 
+def require_carplay_entitlement(
+    entitlements: dict, *, mode: str, source: str, profile_values: bool = False
+) -> None:
+    value = entitlements.get(CARPLAY_ENTITLEMENT)
+    if mode == "enabled":
+        if value is not True:
+            raise InspectionFailure(f"{source} does not enable CarPlay audio")
+    elif not profile_values and CARPLAY_ENTITLEMENT in entitlements:
+        raise InspectionFailure(f"{source} unexpectedly contains CarPlay audio")
+
+
 def inspect_ipa(
-    ipa: Path, *, team: str, bundle_identifier: str, version: str, build: str
+    ipa: Path,
+    *,
+    team: str,
+    bundle_identifier: str,
+    version: str,
+    build: str,
+    carplay_mode: str,
 ) -> None:
     application_identifier = f"{team}.{bundle_identifier}"
     with tempfile.TemporaryDirectory(prefix="bleat-testflight-ipa.") as directory:
@@ -103,6 +123,8 @@ def inspect_ipa(
             raise InspectionFailure("IPA marketing version does not match")
         if info.get("CFBundleVersion") != build:
             raise InspectionFailure("IPA build number does not match")
+        if info.get("BleatCarPlayMode") != carplay_mode:
+            raise InspectionFailure("IPA CarPlay mode does not match")
 
         run_checked(["codesign", "--verify", "--deep", "--strict", str(app)])
         signed_entitlements = load_plist_bytes(
@@ -112,6 +134,11 @@ def inspect_ipa(
         require_entitlements(
             signed_entitlements,
             application_identifier=application_identifier,
+            source="signed application",
+        )
+        require_carplay_entitlement(
+            signed_entitlements,
+            mode=carplay_mode,
             source="signed application",
         )
 
@@ -135,6 +162,12 @@ def inspect_ipa(
         require_entitlements(
             profile_entitlements,
             application_identifier=application_identifier,
+            source="embedded profile",
+            profile_values=True,
+        )
+        require_carplay_entitlement(
+            profile_entitlements,
+            mode=carplay_mode,
             source="embedded profile",
             profile_values=True,
         )
@@ -166,6 +199,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--bundle-id", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--build", required=True)
+    parser.add_argument(
+        "--carplay-mode", required=True, choices=("enabled", "disabled")
+    )
     return parser.parse_args()
 
 
@@ -178,6 +214,7 @@ def main() -> int:
             bundle_identifier=arguments.bundle_id,
             version=arguments.version,
             build=arguments.build,
+            carplay_mode=arguments.carplay_mode,
         )
     except InspectionFailure as error:
         print(f"TestFlight IPA inspection failed: {error}", file=sys.stderr)
