@@ -393,6 +393,24 @@ public actor ChapterTranscriptCache {
         try saveContext()
     }
 
+    public func containsData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) throws(ChapterTranscriptCacheError) -> Bool {
+        try validate(accountID: accountID, itemID: itemID)
+        let hasTranscript = try records().contains {
+            $0.accountID == accountID.rawValue
+                && $0.libraryItemID == itemID.rawValue
+        }
+        if hasTranscript {
+            return true
+        }
+        return try taskRecords().contains {
+            $0.accountID == accountID.rawValue
+                && $0.libraryItemID == itemID.rawValue
+        }
+    }
+
     public func removeAccount(
         _ accountID: AccountID
     ) throws(ChapterTranscriptCacheError) {

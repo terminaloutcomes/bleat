@@ -309,6 +309,29 @@ extension AppFailure {
     }
 }
 
+extension AppServiceError {
+    var transcriptCacheDiagnosticFailureCode: DiagnosticFailureCode {
+        guard case .transcriptCache(let error) = self else {
+            return AppFailure(
+                operation: .loadBook,
+                serviceError: self
+            ).diagnosticFailureCode
+        }
+        return switch error {
+        case .invalidAccountID: .transcriptCacheInvalidAccountID
+        case .invalidItemID: .transcriptCacheInvalidItemID
+        case .invalidTranscript: .transcriptCacheInvalidTranscript
+        case .invalidStoredTranscript:
+            .transcriptCacheInvalidStoredTranscript
+        case .invalidTaskState: .transcriptCacheInvalidTaskState
+        case .invalidStoredTaskState:
+            .transcriptCacheInvalidStoredTaskState
+        case .encodingFailed: .transcriptCacheEncodingFailed
+        case .persistenceFailed: .transcriptCachePersistenceFailed
+        }
+    }
+}
+
 extension PrivateCloudSyncError {
     fileprivate var diagnosticFailureCode: DiagnosticFailureCode {
         switch self {

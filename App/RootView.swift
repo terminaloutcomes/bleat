@@ -3711,6 +3711,7 @@ private struct BookDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
     @State private var showChapterTranscription = false
+    @State private var showTranscriptDeletionConfirmation = false
     @State private var detailsAreExpanded = false
     @State private var chaptersAreExpanded = false
     @State private var pendingChapter: PlaybackChapter?
@@ -3739,6 +3740,18 @@ private struct BookDetailView: View {
         .iOSInlineNavigationTitle()
         .task(id: book.id.rawValue) {
             await model.loadBookDetail(book)
+        }
+        .task(id: transcriptPresenceTaskID) {
+            guard let detail = loadedDetail,
+                let account = model.account
+            else {
+                return
+            }
+            await model.transcription.refreshLocalDataPresence(
+                detail: detail,
+                account: account,
+                appModel: model
+            )
         }
         .toolbar {
             if let detail = loadedDetail {
@@ -3792,6 +3805,23 @@ private struct BookDetailView: View {
                                 .accessibilityIdentifier(
                                     "book.detail.transcription"
                                 )
+
+                                if hasLocalTranscriptData(detail) {
+                                    Button(
+                                        "Delete Transcript Data",
+                                        systemImage: "trash",
+                                        role: .destructive
+                                    ) {
+                                        showTranscriptDeletionConfirmation =
+                                            true
+                                    }
+                                    .disabled(
+                                        isDeletingTranscriptData(detail)
+                                    )
+                                    .accessibilityIdentifier(
+                                        "book.detail.deleteTranscript"
+                                    )
+                                }
                             #endif
                         } label: {
                             Image(systemName: "ellipsis")
@@ -3832,6 +3862,64 @@ private struct BookDetailView: View {
                 }
             }
         #endif
+        .confirmationDialog(
+            "Delete Transcript Data?",
+            isPresented: $showTranscriptDeletionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Transcript Data", role: .destructive) {
+                guard let detail = loadedDetail,
+                    let account = model.account
+                else {
+                    return
+                }
+                Task {
+                    await model.transcription.deleteLocalData(
+                        detail: detail,
+                        account: account,
+                        appModel: model
+                    )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This deletes the local transcript and transcription history for this audiobook. Downloaded audio, bookmarks, and playback position are not affected."
+            )
+        }
+        .alert(
+            transcriptDeletionFailure?.title ?? "Transcript Data Not Deleted",
+            isPresented: transcriptDeletionFailurePresentation
+        ) {
+            Button("OK") {
+                if let bookKey = transcriptBookKey {
+                    model.transcription.dismissDeletionFailure(for: bookKey)
+                }
+            }
+        } message: {
+            Text(
+                transcriptDeletionFailure?.message
+                    ?? "Bleat could not delete the local transcript data."
+            )
+        }
+        .alert(
+            transcriptPresenceFailure?.title
+                ?? "Transcript Data Status Unavailable",
+            isPresented: transcriptPresenceFailurePresentation
+        ) {
+            Button("OK") {
+                if let bookKey = transcriptBookKey {
+                    model.transcription.dismissLocalDataPresenceFailure(
+                        for: bookKey
+                    )
+                }
+            }
+        } message: {
+            Text(
+                transcriptPresenceFailure?.message
+                    ?? "Bleat could not check the local transcript data."
+            )
+        }
         .alert(
             pendingChapter.map { "Go to “\($0.title)”?" }
                 ?? "Go to Chapter?",
@@ -3942,6 +4030,110 @@ private struct BookDetailView: View {
         transcriptionMenuIsAvailable
             ? "Transcribe Audiobook"
             : "Transcription unavailable on this device"
+    }
+
+    private var transcriptBookKey: ChapterTranscriptionBookKey? {
+        guard let detail = loadedDetail,
+            let account = model.account
+        else {
+            return nil
+        }
+        return ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+    }
+
+    private var transcriptPresenceTaskID: String? {
+        transcriptBookKey.map {
+            "\($0.accountID.rawValue):\($0.itemID.rawValue)"
+        }
+    }
+
+    private func hasLocalTranscriptData(
+        _ detail: LibraryBookDetail
+    ) -> Bool {
+        guard let account = model.account else {
+            return false
+        }
+        return model.transcription.hasLocalData(
+            for: ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        )
+    }
+
+    private func isDeletingTranscriptData(
+        _ detail: LibraryBookDetail
+    ) -> Bool {
+        guard let account = model.account else {
+            return false
+        }
+        return model.transcription.deletionState(
+            for: ChapterTranscriptionBookKey(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        ) == .deleting
+    }
+
+    private var transcriptDeletionFailurePresentation: Binding<Bool> {
+        Binding(
+            get: {
+                guard let bookKey = transcriptBookKey else {
+                    return false
+                }
+                if case .failed = model.transcription.deletionState(
+                    for: bookKey
+                ) {
+                    return true
+                }
+                return false
+            },
+            set: { isPresented in
+                guard !isPresented, let bookKey = transcriptBookKey else {
+                    return
+                }
+                model.transcription.dismissDeletionFailure(for: bookKey)
+            }
+        )
+    }
+
+    private var transcriptDeletionFailure:
+        ChapterTranscriptLocalDataFailure?
+    {
+        guard let bookKey = transcriptBookKey,
+            case .failed(let failure) = model.transcription.deletionState(
+                for: bookKey
+            )
+        else {
+            return nil
+        }
+        return failure
+    }
+
+    private var transcriptPresenceFailure:
+        ChapterTranscriptLocalDataFailure?
+    {
+        guard let bookKey = transcriptBookKey else {
+            return nil
+        }
+        return model.transcription.localDataPresenceFailure(for: bookKey)
+    }
+
+    private var transcriptPresenceFailurePresentation: Binding<Bool> {
+        Binding(
+            get: { transcriptPresenceFailure != nil },
+            set: { isPresented in
+                guard !isPresented, let bookKey = transcriptBookKey else {
+                    return
+                }
+                model.transcription.dismissLocalDataPresenceFailure(
+                    for: bookKey
+                )
+            }
+        )
     }
 
     private func detailContent(

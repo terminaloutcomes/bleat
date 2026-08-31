@@ -514,6 +514,16 @@ protocol AppServicing: Sendable {
         itemID: LibraryItemID
     ) async throws(AppServiceError)
 
+    func hasCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> Bool
+
+    func deleteCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError)
+
     func openPlayback(
         for account: ServerAccount,
         itemID: LibraryItemID,
@@ -884,6 +894,18 @@ extension AppServicing {
 
     func saveCachedChapterTranscriptionTaskState(
         _ state: CachedChapterTranscriptionTaskState,
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {}
+
+    func hasCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> Bool {
+        false
+    }
+
+    func deleteCachedChapterTranscriptData(
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) {}
@@ -2750,6 +2772,34 @@ actor LiveAppService: AppServicing {
         do {
             try await transcriptCache.saveTaskState(
                 state,
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
+        }
+    }
+
+    func hasCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> Bool {
+        do {
+            return try await transcriptCache.containsData(
+                accountID: accountID,
+                itemID: itemID
+            )
+        } catch let error {
+            throw .transcriptCache(error)
+        }
+    }
+
+    func deleteCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await transcriptCache.removeBook(
                 accountID: accountID,
                 itemID: itemID
             )

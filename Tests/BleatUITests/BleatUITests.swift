@@ -2130,6 +2130,69 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testTranscriptScreenDeletesLocalTranscriptAfterConfirmation() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let delete = app.buttons["transcription.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+        let confirmation = app.sheets.buttons["Delete Transcript Data"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.tap()
+
+        let start = app.buttons["transcription.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 3))
+        XCTAssertTrue(start.isEnabled)
+        XCTAssertEqual(start.label, "Start Transcription")
+        XCTAssertFalse(app.otherElements["transcription.terminalState"].exists)
+        XCTAssertFalse(delete.exists)
+    }
+
+    @MainActor
+    func testBookDetailDeletesTranscriptWithoutRemovingTranscriptionAction() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        let delete = app.buttons["book.detail.deleteTranscript"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+        let confirmation = app.sheets.buttons["Delete Transcript Data"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.tap()
+
+        actions.tap()
+        XCTAssertTrue(app.buttons["book.detail.transcription"].exists)
+        XCTAssertFalse(
+            app.buttons["book.detail.deleteTranscript"].exists
+        )
+    }
+
+    @MainActor
     func testBookTranscriptionLoadsCacheAndSearchesEveryChapterIgnoringCase() {
         let app = launch(
             scenario: "--ui-testing-playback",

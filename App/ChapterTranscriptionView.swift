@@ -514,6 +514,57 @@ enum ChapterTranscriptCacheViewFailure: Equatable, Sendable {
     }
 }
 
+enum ChapterTranscriptLocalDataStage: Equatable, Sendable {
+    case presenceInspection
+    case deletion
+}
+
+struct ChapterTranscriptLocalDataFailure: Equatable, Sendable {
+    let stage: ChapterTranscriptLocalDataStage
+    let cause: AppServiceError
+
+    var title: String {
+        switch stage {
+        case .presenceInspection: "Transcript Data Status Unavailable"
+        case .deletion: "Transcript Data Not Deleted"
+        }
+    }
+
+    var message: String {
+        let action = switch stage {
+        case .presenceInspection: "check"
+        case .deletion: "delete"
+        }
+        guard case .transcriptCache(let error) = cause else {
+            return "Bleat could not \(action) the local transcript data because of an unexpected application error."
+        }
+        return switch error {
+        case .invalidAccountID:
+            "Bleat could not \(action) the local transcript data because its saved account identity is invalid."
+        case .invalidItemID:
+            "Bleat could not \(action) the local transcript data because its saved audiobook identity is invalid."
+        case .invalidTranscript:
+            "Bleat could not \(action) the local transcript data because a transcript is invalid."
+        case .invalidStoredTranscript:
+            "Bleat could not \(action) the local transcript data because the saved transcript is invalid."
+        case .invalidTaskState:
+            "Bleat could not \(action) the local transcript data because its transcription history is invalid."
+        case .invalidStoredTaskState:
+            "Bleat could not \(action) the local transcript data because the saved transcription history is invalid."
+        case .encodingFailed:
+            "Bleat could not \(action) the local transcript data because it could not be encoded."
+        case .persistenceFailed:
+            "Bleat could not \(action) the local transcript data because the local transcript store is unavailable."
+        }
+    }
+}
+
+enum ChapterTranscriptDeletionState: Equatable, Sendable {
+    case idle
+    case deleting
+    case failed(ChapterTranscriptLocalDataFailure)
+}
+
 private struct ActiveChapterTranscriptionBatch {
     let taskID: UUID
     let persistenceToken: UUID
@@ -635,8 +686,18 @@ final class ChapterTranscriptionModel {
     private(set) var terminalStatesByBook:
         [ChapterTranscriptionBookKey: CachedChapterTranscriptionTaskState] =
             [:]
+    private var localDataPresenceByBook:
+        [ChapterTranscriptionBookKey: Bool] = [:]
+    private var localDataPresenceFailuresByBook:
+        [ChapterTranscriptionBookKey: ChapterTranscriptLocalDataFailure] = [:]
+    private var deletionStatesByBook:
+        [ChapterTranscriptionBookKey: ChapterTranscriptDeletionState] = [:]
     @ObservationIgnored
     private var transcriptionTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var transcriptionTasks:
+        [UUID: (bookKey: ChapterTranscriptionBookKey, task: Task<Void, Never>)] =
+            [:]
     @ObservationIgnored
     private var activeTaskID: UUID?
     @ObservationIgnored
@@ -652,6 +713,8 @@ final class ChapterTranscriptionModel {
     private var bookRevisions: [ChapterTranscriptionBookKey: UInt64] = [:]
     @ObservationIgnored
     private var loadTokens: [ChapterTranscriptionBookKey: UUID] = [:]
+    @ObservationIgnored
+    private var presenceTokens: [ChapterTranscriptionBookKey: UUID] = [:]
     @ObservationIgnored
     private var viewRetentionCounts: [ChapterTranscriptionBookKey: Int] = [:]
     @ObservationIgnored
@@ -738,6 +801,9 @@ final class ChapterTranscriptionModel {
                     current: cachedTranscriptsByBook[bookKey] ?? []
                 )
             }
+            localDataPresenceByBook[bookKey] =
+                cachedTranscriptsByBook[bookKey]?.isEmpty == false
+                || terminalStatesByBook[bookKey] != nil
             scheduleExpiryIfInactive(for: bookKey)
             if cacheFailures[bookKey] == .loadFailed {
                 cacheFailures[bookKey] = nil
@@ -769,6 +835,9 @@ final class ChapterTranscriptionModel {
             }
             terminalStatesByBook[bookKey] =
                 terminalStatesByBook[bookKey] ?? loaded
+            localDataPresenceByBook[bookKey] =
+                cachedTranscriptsByBook[bookKey]?.isEmpty == false
+                || terminalStatesByBook[bookKey] != nil
             if cacheFailures[bookKey] == .taskStateLoadFailed {
                 cacheFailures[bookKey] = nil
             }
@@ -895,6 +964,138 @@ final class ChapterTranscriptionModel {
         terminalStatesByBook[bookKey]
     }
 
+    func hasLocalData(for bookKey: ChapterTranscriptionBookKey) -> Bool {
+        localDataPresenceByBook[bookKey] == true
+    }
+
+    func deletionState(
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> ChapterTranscriptDeletionState {
+        deletionStatesByBook[bookKey] ?? .idle
+    }
+
+    func localDataPresenceFailure(
+        for bookKey: ChapterTranscriptionBookKey
+    ) -> ChapterTranscriptLocalDataFailure? {
+        localDataPresenceFailuresByBook[bookKey]
+    }
+
+    func refreshLocalDataPresence(
+        detail: LibraryBookDetail,
+        account: ServerAccount,
+        appModel: AppModel
+    ) async {
+        let bookKey = Self.bookKey(detail: detail, account: account)
+        let token = UUID()
+        let startingRevision = revision(for: bookKey)
+        presenceTokens[bookKey] = token
+        defer {
+            if presenceTokens[bookKey] == token {
+                presenceTokens[bookKey] = nil
+            }
+        }
+        do {
+            let containsData =
+                try await appModel.hasCachedChapterTranscriptData(
+                    for: account,
+                    itemID: detail.id
+                )
+            guard presenceTokens[bookKey] == token,
+                revision(for: bookKey) == startingRevision
+            else {
+                return
+            }
+            localDataPresenceByBook[bookKey] = containsData
+            localDataPresenceFailuresByBook[bookKey] = nil
+        } catch let error {
+            guard presenceTokens[bookKey] == token,
+                revision(for: bookKey) == startingRevision
+            else {
+                return
+            }
+            localDataPresenceFailuresByBook[bookKey] =
+                ChapterTranscriptLocalDataFailure(
+                    stage: .presenceInspection,
+                    cause: error
+                )
+        }
+    }
+
+    @discardableResult
+    func deleteLocalData(
+        detail: LibraryBookDetail,
+        account: ServerAccount,
+        appModel: AppModel
+    ) async -> Bool {
+        let bookKey = Self.bookKey(detail: detail, account: account)
+        guard deletionState(for: bookKey) != .deleting else {
+            return false
+        }
+        deletionStatesByBook[bookKey] = .deleting
+        invalidateTerminalPersistence { $0.bookKey == bookKey }
+        invalidateBook(bookKey)
+
+        let tasks = transcriptionTasks.values.compactMap {
+            $0.bookKey == bookKey ? $0.task : nil
+        }
+        if activeBatch?.bookKey == bookKey {
+            state = .cancelling(
+                bookKey: bookKey,
+                chapterID: state.currentChapterID
+            )
+            cancelWithoutPersisting()
+        }
+        for task in tasks {
+            task.cancel()
+        }
+        for task in tasks {
+            await task.value
+        }
+
+        do {
+            try await appModel.deleteCachedChapterTranscriptData(
+                for: account,
+                itemID: detail.id
+            )
+            cachedTranscriptsByBook[bookKey] = []
+            terminalStatesByBook[bookKey] = nil
+            localDataPresenceByBook[bookKey] = false
+            localDataPresenceFailuresByBook[bookKey] = nil
+            cacheExpiryDeadlines[bookKey] = nil
+            cacheFailures[bookKey] = nil
+            deletionStatesByBook[bookKey] = .idle
+            if state.bookKey == bookKey {
+                state = .ready
+            }
+            markMutated(bookKey)
+            return true
+        } catch let error {
+            deletionStatesByBook[bookKey] = .failed(
+                ChapterTranscriptLocalDataFailure(
+                    stage: .deletion,
+                    cause: error
+                )
+            )
+            if state.bookKey == bookKey {
+                state = .ready
+            }
+            return false
+        }
+    }
+
+    func dismissDeletionFailure(for bookKey: ChapterTranscriptionBookKey) {
+        guard case .failed = deletionState(for: bookKey) else {
+            return
+        }
+        deletionStatesByBook[bookKey] = .idle
+    }
+
+    func dismissLocalDataPresenceFailure(
+        for bookKey: ChapterTranscriptionBookKey
+    ) {
+        localDataPresenceFailuresByBook[bookKey] = nil
+    }
+
     func searchResults(
         query: String,
         for bookKey: ChapterTranscriptionBookKey
@@ -925,10 +1126,12 @@ final class ChapterTranscriptionModel {
         downloads: DownloadModel,
         appModel: AppModel
     ) {
-        guard !isWorking else {
+        let bookKey = Self.bookKey(detail: detail, account: account)
+        guard !isWorking,
+            deletionState(for: bookKey) != .deleting
+        else {
             return
         }
-        let bookKey = Self.bookKey(detail: detail, account: account)
         let selectedChapterIDs = Set(selectedChapters.map(\.id))
         let chapters = chaptersNeedingTranscription(
             ChapterTranscriptionBatchPlanner.orderedChapters(
@@ -969,7 +1172,7 @@ final class ChapterTranscriptionModel {
             bookKey: bookKey,
             totalChapters: chapters.count
         )
-        transcriptionTask = Task(priority: .utility) { [weak self] in
+        let task = Task(priority: .utility) { [weak self] in
             guard let self else {
                 return
             }
@@ -982,7 +1185,10 @@ final class ChapterTranscriptionModel {
                 downloads: downloads,
                 appModel: appModel
             )
+            self.transcriptionTaskDidFinish(taskID)
         }
+        transcriptionTask = task
+        transcriptionTasks[taskID] = (bookKey, task)
     }
 
     func cancel() {
@@ -1028,6 +1234,16 @@ final class ChapterTranscriptionModel {
         terminalStatesByBook = terminalStatesByBook.filter {
             $0.key.accountID != accountID
         }
+        localDataPresenceByBook = localDataPresenceByBook.filter {
+            $0.key.accountID != accountID
+        }
+        localDataPresenceFailuresByBook =
+            localDataPresenceFailuresByBook.filter {
+                $0.key.accountID != accountID
+            }
+        deletionStatesByBook = deletionStatesByBook.filter {
+            $0.key.accountID != accountID
+        }
     }
 
     func cancel(for bookKey: ChapterTranscriptionBookKey) {
@@ -1044,6 +1260,9 @@ final class ChapterTranscriptionModel {
         cacheExpiryDeadlines[bookKey] = nil
         cacheFailures[bookKey] = nil
         terminalStatesByBook[bookKey] = nil
+        localDataPresenceByBook[bookKey] = nil
+        localDataPresenceFailuresByBook[bookKey] = nil
+        deletionStatesByBook[bookKey] = nil
     }
 
     private func runBatch(
@@ -1275,6 +1494,7 @@ final class ChapterTranscriptionModel {
                 failure: nil
             )
             terminalStatesByBook[bookKey] = terminalState
+            localDataPresenceByBook[bookKey] = true
             markMutated(bookKey)
             remoteTelemetrySpan?.end(.succeeded)
             remoteTelemetrySpan = nil
@@ -1338,6 +1558,7 @@ final class ChapterTranscriptionModel {
                 < ($1.chapterStartMilliseconds, $1.chapterID)
         }
         cachedTranscriptsByBook[bookKey] = transcripts
+        localDataPresenceByBook[bookKey] = true
         cacheFailures[bookKey] = nil
         markMutated(bookKey)
         scheduleExpiryIfInactive(for: bookKey)
@@ -1371,28 +1592,16 @@ final class ChapterTranscriptionModel {
             failure: failure.cachedTaskFailure
         )
         terminalStatesByBook[bookKey] = terminalState
+        localDataPresenceByBook[bookKey] = true
         markMutated(bookKey)
         remoteTelemetrySpan?.end(failure.remoteTelemetryOutcome)
         remoteTelemetrySpan = nil
         finishTask(taskID)
-        if outcome == .cancelled {
-            Task { [weak self, weak appModel] in
-                guard let self, let appModel else {
-                    return
-                }
-                await self.persist(
-                    terminalState,
-                    batch: batch,
-                    appModel: appModel
-                )
-            }
-        } else {
-            await persist(
-                terminalState,
-                batch: batch,
-                appModel: appModel
-            )
-        }
+        await persist(
+            terminalState,
+            batch: batch,
+            appModel: appModel
+        )
     }
 
     private func finishTask(_ taskID: UUID) {
@@ -1410,6 +1619,10 @@ final class ChapterTranscriptionModel {
         if let bookKey {
             scheduleExpiryIfInactive(for: bookKey)
         }
+    }
+
+    private func transcriptionTaskDidFinish(_ taskID: UUID) {
+        transcriptionTasks[taskID] = nil
     }
 
     private func cancelWithoutPersisting() {
@@ -1458,6 +1671,7 @@ final class ChapterTranscriptionModel {
 
     private func invalidateBook(_ bookKey: ChapterTranscriptionBookKey) {
         loadTokens[bookKey] = nil
+        presenceTokens[bookKey] = nil
         markMutated(bookKey)
     }
 
@@ -1466,7 +1680,10 @@ final class ChapterTranscriptionModel {
     ) {
         let bookKeys = Set(bookRevisions.keys)
             .union(loadTokens.keys)
+            .union(presenceTokens.keys)
             .union(cachedTranscriptsByBook.keys)
+            .union(localDataPresenceFailuresByBook.keys)
+            .union(deletionStatesByBook.keys)
             .union(viewRetentionCounts.keys)
             .union(cacheExpiryDeadlines.keys)
             .filter(predicate)
@@ -1858,6 +2075,7 @@ struct ChapterTranscriptionView: View {
     @State private var pendingExportFormat: TranscriptExportFormat?
     @State private var exportArtifact: TranscriptExportArtifact?
     @State private var exportFailure: TranscriptExportArtifactError?
+    @State private var showTranscriptDeletionConfirmation = false
     @State private var currentPositionMessage:
         ChapterTranscriptNavigationMessage?
     @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
@@ -1947,6 +2165,21 @@ struct ChapterTranscriptionView: View {
                             .accessibilityIdentifier("transcription.export")
                         }
                     }
+                    if model.hasLocalData(for: bookKey) {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(
+                                "Delete Transcript Data",
+                                systemImage: "trash",
+                                role: .destructive
+                            ) {
+                                showTranscriptDeletionConfirmation = true
+                            }
+                            .disabled(isDeletingTranscript)
+                            .accessibilityIdentifier(
+                                "transcription.delete"
+                            )
+                        }
+                    }
                 }
                 .safeAreaInset(edge: .bottom) {
                     actionBar
@@ -2017,6 +2250,33 @@ struct ChapterTranscriptionView: View {
                 Text(
                     exportFailure?.localizedDescription
                         ?? "The transcript could not be exported."
+                )
+            }
+            .confirmationDialog(
+                "Delete Transcript Data?",
+                isPresented: $showTranscriptDeletionConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Transcript Data", role: .destructive) {
+                    deleteTranscriptData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "This deletes the local transcript and transcription history for this audiobook. Downloaded audio, bookmarks, and playback position are not affected."
+                )
+            }
+            .alert(
+                deletionFailure?.title ?? "Transcript Data Not Deleted",
+                isPresented: deletionFailurePresentation
+            ) {
+                Button("OK") {
+                    model.dismissDeletionFailure(for: bookKey)
+                }
+            } message: {
+                Text(
+                    deletionFailure?.message
+                        ?? "Bleat could not delete the local transcript data."
                 )
             }
         }
@@ -2184,7 +2444,11 @@ struct ChapterTranscriptionView: View {
 
     @ViewBuilder
     private var transcriptionStatusContent: some View {
-        if model.isWorking, !model.isWorking(for: bookKey) {
+        if isDeletingTranscript {
+            Section {
+                ProgressView("Deleting transcript data")
+            }
+        } else if model.isWorking, !model.isWorking(for: bookKey) {
             Section {
                 Label(
                     "Another audiobook is being transcribed.",
@@ -2405,6 +2669,13 @@ struct ChapterTranscriptionView: View {
     private var actionBar: some View {
         if hasSearchQuery {
             EmptyView()
+        } else if isDeletingTranscript {
+            Button("Deleting Transcript Data…") {}
+                .buttonStyle(.borderedProminent)
+                .disabled(true)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(.bar)
         } else if model.isCancelling(for: bookKey) {
             Button("Cancelling…") {}
                 .buttonStyle(.borderedProminent)
@@ -2543,6 +2814,55 @@ struct ChapterTranscriptionView: View {
                 }
             }
         )
+    }
+
+    private var deletionFailurePresentation: Binding<Bool> {
+        Binding(
+            get: {
+                if case .failed = model.deletionState(for: bookKey) {
+                    return true
+                }
+                return false
+            },
+            set: { isPresented in
+                if !isPresented {
+                    model.dismissDeletionFailure(for: bookKey)
+                }
+            }
+        )
+    }
+
+    private var deletionFailure: ChapterTranscriptLocalDataFailure? {
+        guard case .failed(let failure) = model.deletionState(for: bookKey)
+        else {
+            return nil
+        }
+        return failure
+    }
+
+    private var isDeletingTranscript: Bool {
+        model.deletionState(for: bookKey) == .deleting
+    }
+
+    private func deleteTranscriptData() {
+        Task {
+            let deleted = await model.deleteLocalData(
+                detail: detail,
+                account: account,
+                appModel: appModel
+            )
+            guard deleted else {
+                return
+            }
+            searchQuery = ""
+            selectedChapterIDs.removeAll()
+            isSelectingChapters = false
+            currentPositionMessage = nil
+            highlightedTarget = nil
+            pendingExportFormat = nil
+            exportArtifact = nil
+            exportFailure = nil
+        }
     }
 
     private func chooseExportFormat(_ format: TranscriptExportFormat) {
