@@ -1811,6 +1811,285 @@ final class AppModelTests: XCTestCase {
             coordinator.isCached(chapterID: chapter.id, for: bookKey))
     }
 
+    func testTranscriptDeletionClearsLoadedTranscriptAndTaskState()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 6,
+            start: 0,
+            end: 20,
+            title: "Chapter Six"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcript-delete",
+                title: "Delete Transcript",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let taskState = fixtureTranscriptionTaskState(
+            chapterIDs: [chapter.id],
+            completedChapterIDs: [chapter.id],
+            outcome: .succeeded,
+            failure: nil
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "remove me")
+            ]),
+            transcriptDataPresence: .success(true),
+            transcriptionTaskStateLoad: .success(taskState)
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+        XCTAssertTrue(coordinator.hasLocalData(for: bookKey))
+
+        let deleted = await coordinator.deleteLocalData(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        let deletionRequests = await service.transcriptDeletionRequests()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(deletionRequests, [bookKey])
+        XCTAssertFalse(coordinator.hasLocalData(for: bookKey))
+        XCTAssertFalse(
+            coordinator.isCached(chapterID: chapter.id, for: bookKey)
+        )
+        XCTAssertNil(coordinator.terminalState(for: bookKey))
+        XCTAssertEqual(coordinator.deletionState(for: bookKey), .idle)
+    }
+
+    func testTranscriptDeletionWaitsForLateTranscriptSave() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 7,
+            start: 0,
+            end: 20,
+            title: "Chapter Seven"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcript-delete-race",
+                title: "Delete Race",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let saveGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptSaveGate: saveGate
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        coordinator.start(
+            chapters: [chapter],
+            detail: detail,
+            account: account,
+            downloads: appModel.downloads,
+            appModel: appModel
+        )
+        await saveGate.waitUntilEntered()
+
+        let deletion = Task { @MainActor in
+            await coordinator.deleteLocalData(
+                detail: detail,
+                account: account,
+                appModel: appModel
+            )
+        }
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+        let requestsWhileSaveBlocked =
+            await service.transcriptDeletionRequests()
+        XCTAssertTrue(requestsWhileSaveBlocked.isEmpty)
+
+        await saveGate.release()
+        let deleted = await deletion.value
+        let persistenceEvents =
+            await service.recordedTranscriptPersistenceEvents()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(
+            persistenceEvents,
+            [.transcriptSaved(bookKey), .deleted(bookKey)]
+        )
+        XCTAssertFalse(coordinator.hasLocalData(for: bookKey))
+        XCTAssertFalse(
+            coordinator.isCached(chapterID: chapter.id, for: bookKey)
+        )
+    }
+
+    func testTranscriptDeletionFailureKeepsLoadedData() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 8,
+            start: 0,
+            end: 20,
+            title: "Chapter Eight"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcript-delete-failure",
+                title: "Delete Failure",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        let failure = AppServiceError.transcriptCache(.persistenceFailed)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "keep me")
+            ]),
+            transcriptDataPresence: .success(true),
+            transcriptDeletion: .failure(failure)
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        let deleted = await coordinator.deleteLocalData(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        XCTAssertFalse(deleted)
+        XCTAssertTrue(coordinator.hasLocalData(for: bookKey))
+        XCTAssertTrue(
+            coordinator.isCached(chapterID: chapter.id, for: bookKey)
+        )
+        XCTAssertEqual(coordinator.deletionState(for: bookKey), .failed(failure))
+    }
+
+    func testTranscriptDeletionPreservesDownloadAndActivePlayback()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "TranscriptDeletionPlayback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(
+            id: 9,
+            start: 0,
+            end: 1,
+            title: "Chapter Nine"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcript-delete-playback",
+                title: "Keep Playback",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: [chapter]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "remove only this")
+            ]),
+            transcriptDataPresence: .success(true)
+        )
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("transcript-delete-playback"),
+            transcription: coordinator
+        )
+        await appModel.start()
+        let playbackOutcome = await appModel.startPlayback(
+            detail: detail,
+            account: account,
+            position: .absoluteTime(0.5)
+        )
+        appModel.playback.pause()
+        let playbackPositionBeforeDeletion = appModel.playback.currentTime
+        let downloadBeforeDeletion = appModel.downloads.record(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        await coordinator.loadCachedTranscripts(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        let deleted = await coordinator.deleteLocalData(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        XCTAssertEqual(playbackOutcome, .started(source: .downloaded))
+        XCTAssertTrue(deleted)
+        XCTAssertTrue(appModel.playback.hasActiveBook)
+        XCTAssertEqual(appModel.playback.accountID, account.id)
+        XCTAssertEqual(appModel.playback.itemID, detail.id)
+        XCTAssertEqual(
+            appModel.playback.currentTime,
+            playbackPositionBeforeDeletion,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            appModel.downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            ),
+            downloadBeforeDeletion
+        )
+        await appModel.playback.stop()
+    }
+
     func testTranscriptCacheExpiresOnlyAfterFiveIdleMinutes() async throws {
         let account = try fixtureAccount()
         let chapter = PlaybackChapter(
@@ -17693,6 +17972,12 @@ private struct LocalSessionSyncRequest: Equatable, Sendable {
     let deviceInfo: PlaybackDeviceInfo
 }
 
+private enum TranscriptPersistenceEvent: Equatable {
+    case transcriptSaved(ChapterTranscriptionBookKey)
+    case taskStateSaved(ChapterTranscriptionBookKey)
+    case deleted(ChapterTranscriptionBookKey)
+}
+
 private actor TestAppService: AppServicing {
     private var accountsResult: Result<[ServerAccount], AppServiceError>?
     private var activeAccountResult:
@@ -17808,6 +18093,9 @@ private actor TestAppService: AppServicing {
     private let transcriptLoadResult:
         Result<[CachedChapterTranscript], AppServiceError>
     private let transcriptSaveResult: Result<Void, AppServiceError>
+    private let transcriptDataPresenceResult: Result<Bool, AppServiceError>
+    private let transcriptDeletionResult: Result<Void, AppServiceError>
+    private let transcriptDeletionGate: AsyncGate?
     private let transcriptionTaskStateLoadResult:
         Result<CachedChapterTranscriptionTaskState?, AppServiceError>
     private let firstTranscriptionTaskStateSaveGate: AsyncGate?
@@ -17860,6 +18148,11 @@ private actor TestAppService: AppServicing {
     private var recordedRemovedAccounts: [ServerAccount] = []
     private var localDataResetRequests = 0
     private var recordedSavedTranscripts: [CachedChapterTranscript] = []
+    private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> = []
+    private var recordedTranscriptDeletionRequests:
+        [ChapterTranscriptionBookKey] = []
+    private var transcriptPersistenceEvents:
+        [TranscriptPersistenceEvent] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
     private var privateCloudCancellationRequests = 0
     private var recordedPrivateCloudSyncSettingRequests:
@@ -18015,6 +18308,11 @@ private actor TestAppService: AppServicing {
         transcriptLoad:
             Result<[CachedChapterTranscript], AppServiceError> = .success([]),
         transcriptSave: Result<Void, AppServiceError> = .success(()),
+        transcriptDataPresence: Result<Bool, AppServiceError> = .success(
+            false
+        ),
+        transcriptDeletion: Result<Void, AppServiceError> = .success(()),
+        transcriptDeletionGate: AsyncGate? = nil,
         transcriptionTaskStateLoad:
             Result<CachedChapterTranscriptionTaskState?, AppServiceError> =
             .success(nil),
@@ -18081,6 +18379,9 @@ private actor TestAppService: AppServicing {
         self.transcriptSaveGate = transcriptSaveGate
         transcriptLoadResult = transcriptLoad
         transcriptSaveResult = transcriptSave
+        transcriptDataPresenceResult = transcriptDataPresence
+        transcriptDeletionResult = transcriptDeletion
+        self.transcriptDeletionGate = transcriptDeletionGate
         transcriptionTaskStateLoadResult = transcriptionTaskStateLoad
         self.firstTranscriptionTaskStateSaveGate =
             firstTranscriptionTaskStateSaveGate
@@ -18107,6 +18408,13 @@ private actor TestAppService: AppServicing {
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: accountID,
+            itemID: itemID
+        )
+        guard !deletedTranscriptBooks.contains(bookKey) else {
+            return []
+        }
         let result = transcriptLoadResult
         if let transcriptLoadGate {
             await transcriptLoadGate.enterAndWait()
@@ -18124,13 +18432,28 @@ private actor TestAppService: AppServicing {
         }
         try value(from: transcriptSaveResult)
         recordedSavedTranscripts.append(transcript)
+        transcriptPersistenceEvents.append(
+            .transcriptSaved(
+                ChapterTranscriptionBookKey(
+                    accountID: accountID,
+                    itemID: itemID
+                )
+            )
+        )
     }
 
     func cachedChapterTranscriptionTaskState(
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> CachedChapterTranscriptionTaskState? {
-        try value(from: transcriptionTaskStateLoadResult)
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: accountID,
+            itemID: itemID
+        )
+        guard !deletedTranscriptBooks.contains(bookKey) else {
+            return nil
+        }
+        return try value(from: transcriptionTaskStateLoadResult)
     }
 
     func saveCachedChapterTranscriptionTaskState(
@@ -18150,6 +18473,55 @@ private actor TestAppService: AppServicing {
             try value(from: transcriptionTaskStateSaveResults[attempt])
         }
         recordedTranscriptionTaskStates.append(state)
+        transcriptPersistenceEvents.append(
+            .taskStateSaved(
+                ChapterTranscriptionBookKey(
+                    accountID: accountID,
+                    itemID: itemID
+                )
+            )
+        )
+    }
+
+    func hasCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) -> Bool {
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: accountID,
+            itemID: itemID
+        )
+        guard !deletedTranscriptBooks.contains(bookKey) else {
+            return false
+        }
+        return try value(from: transcriptDataPresenceResult)
+    }
+
+    func deleteCachedChapterTranscriptData(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        if let transcriptDeletionGate {
+            await transcriptDeletionGate.enterAndWait()
+        }
+        try value(from: transcriptDeletionResult)
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: accountID,
+            itemID: itemID
+        )
+        recordedTranscriptDeletionRequests.append(bookKey)
+        deletedTranscriptBooks.insert(bookKey)
+        transcriptPersistenceEvents.append(.deleted(bookKey))
+    }
+
+    func transcriptDeletionRequests() -> [ChapterTranscriptionBookKey] {
+        recordedTranscriptDeletionRequests
+    }
+
+    func recordedTranscriptPersistenceEvents()
+        -> [TranscriptPersistenceEvent]
+    {
+        transcriptPersistenceEvents
     }
 
     func transcriptionTaskStateSaveAttemptCount() -> Int {

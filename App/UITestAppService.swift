@@ -92,6 +92,8 @@
         private var firstPageRequests = 0
         private var homeShelfRequests = 0
         private var libraryRequests = 0
+        private var deletedTranscriptBooks:
+            Set<ChapterTranscriptionBookKey> = []
 
         @MainActor
         static func current() -> UITestAppService? {
@@ -708,6 +710,13 @@
             accountID: AccountID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> [CachedChapterTranscript] {
+            let bookKey = ChapterTranscriptionBookKey(
+                accountID: accountID,
+                itemID: itemID
+            )
+            guard !deletedTranscriptBooks.contains(bookKey) else {
+                return []
+            }
             let arguments = ProcessInfo.processInfo.arguments
             if arguments.contains(
                 "--ui-testing-slow-transcription-cache"
@@ -773,6 +782,13 @@
         ) async throws(AppServiceError)
             -> CachedChapterTranscriptionTaskState?
         {
+            let bookKey = ChapterTranscriptionBookKey(
+                accountID: accountID,
+                itemID: itemID
+            )
+            guard !deletedTranscriptBooks.contains(bookKey) else {
+                return nil
+            }
             guard
                 ProcessInfo.processInfo.arguments.contains(
                     "--ui-testing-transcription-cache"
@@ -801,6 +817,36 @@
             accountID: AccountID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) {}
+
+        func hasCachedChapterTranscriptData(
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) -> Bool {
+            let bookKey = ChapterTranscriptionBookKey(
+                accountID: accountID,
+                itemID: itemID
+            )
+            guard !deletedTranscriptBooks.contains(bookKey) else {
+                return false
+            }
+            let arguments = ProcessInfo.processInfo.arguments
+            return arguments.contains("--ui-testing-transcription-cache")
+                || arguments.contains(
+                    "--ui-testing-partial-transcription-cache"
+                )
+        }
+
+        func deleteCachedChapterTranscriptData(
+            accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) {
+            deletedTranscriptBooks.insert(
+                ChapterTranscriptionBookKey(
+                    accountID: accountID,
+                    itemID: itemID
+                )
+            )
+        }
 
         func openPlayback(
             for account: ServerAccount,

@@ -319,6 +319,11 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - In-memory transcript text is retained while its screen is visible or its
   batch is active, then evicted after five idle minutes or immediately for
   inactive books when iOS reports memory pressure. Durable records remain.
+- I can explicitly delete the current audiobook's local transcript segments
+  and latest transcription task state after destructive confirmation from the
+  transcription screen or Book Detail. Deletion is scoped to the exact account
+  and book, cancels and awaits matching transcription work before purging, and
+  does not remove downloaded audio, bookmarks, or playback state.
 - Removing an account or deleting the book removes its cached transcripts and
   terminal transcription task state.
 - Explicit cancellation, account removal, or book deletion stops the relevant

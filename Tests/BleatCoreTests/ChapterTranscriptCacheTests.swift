@@ -257,6 +257,81 @@ final class ChapterTranscriptCacheTests: XCTestCase {
         XCTAssertNil(removedTaskState)
     }
 
+    func testRemovingBookDeletesTranscriptAndTaskStateOnlyForExactScope()
+        async throws
+    {
+        let fixture = try ChapterTranscriptCacheFixture()
+        let accountA = AccountID(rawValue: "account-a")
+        let accountB = AccountID(rawValue: "account-b")
+        let bookA = LibraryItemID(rawValue: "book-a")
+        let bookB = LibraryItemID(rawValue: "book-b")
+        let scopes = [
+            (accountA, bookA, "deleted"),
+            (accountA, bookB, "other book"),
+            (accountB, bookA, "other account"),
+        ]
+        for (accountID, itemID, text) in scopes {
+            try await fixture.cache.save(
+                Self.transcript(chapterID: 1, text: text),
+                accountID: accountID,
+                itemID: itemID
+            )
+            try await fixture.cache.saveTaskState(
+                Self.taskState(
+                    outcome: .succeeded,
+                    finishedAt: Date(timeIntervalSince1970: 200)
+                ),
+                accountID: accountID,
+                itemID: itemID
+            )
+        }
+
+        let containedBeforeDeletion = try await fixture.cache.containsData(
+            accountID: accountA,
+            itemID: bookA
+        )
+        XCTAssertTrue(containedBeforeDeletion)
+        try await fixture.cache.removeBook(
+            accountID: accountA,
+            itemID: bookA
+        )
+
+        let relaunched = ChapterTranscriptCache(
+            modelContainer: fixture.container
+        )
+        let containedAfterDeletion = try await relaunched.containsData(
+            accountID: accountA,
+            itemID: bookA
+        )
+        let deletedTranscripts = try await relaunched.transcripts(
+            accountID: accountA,
+            itemID: bookA
+        )
+        let deletedTaskState = try await relaunched.taskState(
+            accountID: accountA,
+            itemID: bookA
+        )
+        let otherBookTranscripts = try await relaunched.transcripts(
+            accountID: accountA,
+            itemID: bookB
+        )
+        let otherAccountTranscripts = try await relaunched.transcripts(
+            accountID: accountB,
+            itemID: bookA
+        )
+        XCTAssertFalse(containedAfterDeletion)
+        XCTAssertTrue(deletedTranscripts.isEmpty)
+        XCTAssertNil(deletedTaskState)
+        XCTAssertEqual(
+            otherBookTranscripts.first?.segments.first?.text,
+            "other book"
+        )
+        XCTAssertEqual(
+            otherAccountTranscripts.first?.segments.first?.text,
+            "other account"
+        )
+    }
+
     func testRejectsInvalidTranscript() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let invalid = CachedChapterTranscript(

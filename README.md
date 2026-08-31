@@ -1049,8 +1049,14 @@ visible or its batch is active. Otherwise it is evicted after five idle minutes
 or immediately when iOS reports memory pressure, and reloads from the durable
 local cache when needed.
 
+Local transcript data can be deleted independently from the transcription
+screen or Book Detail after destructive confirmation. Bleat cancels and awaits
+matching transcription work before removing the exact account and audiobook's
+transcript segments and latest task result. Downloaded audio, bookmarks, and
+playback state remain unchanged.
+
 This is the chapter-level capability slice of GitHub issue #5. Partial-result
-resume and independent transcript deletion are tracked as follow-up work.
+resume remains tracked as follow-up work.
 
 ## Manual device beta checks
 
