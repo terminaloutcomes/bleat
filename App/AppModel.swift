@@ -2005,6 +2005,7 @@ final class AppModel {
         if self.account?.id == account.id {
             await invalidatePlaybackStarts()
         }
+        await cancelPrivateCloudSynchronization()
         loginStatus = .submitting(.checkingServer)
         do {
             let outcome = try await service.updateAccount(
@@ -2143,6 +2144,7 @@ final class AppModel {
             return
         }
         await invalidatePlaybackStarts()
+        await cancelPrivateCloudSynchronization()
         accountActionStatus = .switching
         await stopLiveUpdatesAndWait()
         await diagnostics.record(

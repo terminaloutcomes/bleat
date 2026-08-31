@@ -562,6 +562,63 @@ struct DownloadTransferAdmissionController: Equatable {
     }
 }
 
+private final class DownloadSessionDelegateProxy: NSObject,
+    URLSessionDownloadDelegate,
+    @unchecked Sendable
+{
+    weak var owner: DownloadModel?
+
+    init(owner: DownloadModel) {
+        self.owner = owner
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        owner?.urlSession(
+            session,
+            downloadTask: downloadTask,
+            didFinishDownloadingTo: location
+        )
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: (any Error)?
+    ) {
+        owner?.urlSession(
+            session,
+            task: task,
+            didCompleteWithError: error
+        )
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        owner?.urlSession(
+            session,
+            downloadTask: downloadTask,
+            didWriteData: bytesWritten,
+            totalBytesWritten: totalBytesWritten,
+            totalBytesExpectedToWrite: totalBytesExpectedToWrite
+        )
+    }
+
+    func urlSessionDidFinishEvents(
+        forBackgroundURLSession session: URLSession
+    ) {
+        owner?.urlSessionDidFinishEvents(forBackgroundURLSession: session)
+    }
+}
+
 @MainActor
 @Observable
 final class DownloadModel: NSObject, URLSessionDownloadDelegate {
@@ -637,6 +694,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var networkPathState: AppNetworkPathState = .unknown
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
+    private lazy var sessionDelegate = DownloadSessionDelegateProxy(owner: self)
+    @ObservationIgnored
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(
             withIdentifier: backgroundSessionIdentifier
@@ -647,7 +706,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         configuration.waitsForConnectivity = true
         return URLSession(
             configuration: configuration,
-            delegate: self,
+            delegate: sessionDelegate,
             delegateQueue: nil
         )
     }()

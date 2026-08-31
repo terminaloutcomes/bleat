@@ -40,6 +40,59 @@ final class KeychainEntitlementTests: XCTestCase {
         XCTAssertNil(deletedCredentials)
     }
 
+    func testApplicationHostKeepsRotatingTokensDeviceOnly()
+        async throws
+    {
+        let suffix = UUID().uuidString
+        let tokenService =
+            "com.terminaloutcomes.bleat.app-tests.session.\(suffix)"
+        let nativeLoginService =
+            "com.terminaloutcomes.bleat.app-tests.native-login.\(suffix)"
+        let store = TokenVault(
+            tokenService: tokenService,
+            nativeLoginService: nativeLoginService,
+            legacyService: nil,
+            synchronizesNativeLogin: true
+        )
+        let accountID = AccountID(rawValue: "keychain-device-only")
+        let tokens = try AuthenticationTokens(
+            accessToken: "test-access",
+            refreshToken: "test-refresh"
+        )
+        let nativeLogin = try NativeLoginCredentials(
+            userID: UserID(rawValue: "test-user"),
+            username: "reader",
+            password: "test-password"
+        )
+        addTeardownBlock {
+            try await store.deleteCredentials(for: accountID)
+        }
+
+        try await store.save(
+            tokens,
+            nativeLogin: nativeLogin,
+            for: accountID
+        )
+
+        XCTAssertTrue(
+            try hasKeychainItem(
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false,
+                accessibility:
+                    kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            )
+        )
+        XCTAssertTrue(
+            try hasKeychainItem(
+                service: nativeLoginService,
+                accountID: accountID,
+                synchronizable: true,
+                accessibility: kSecAttrAccessibleAfterFirstUnlock
+            )
+        )
+    }
+
     func testApplicationHostPersistsDeviceOnlyTelemetryEnrollment()
         async throws
     {
@@ -83,6 +136,33 @@ final class KeychainEntitlementTests: XCTestCase {
                 error as? TelemetryEnrollmentVaultError,
                 .missingEntitlement
             )
+        }
+    }
+
+    private func hasKeychainItem(
+        service: String,
+        accountID: AccountID,
+        synchronizable: Bool,
+        accessibility: CFString
+    ) throws -> Bool {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: accountID.rawValue,
+            kSecAttrSynchronizable:
+                synchronizable ? kCFBooleanTrue as Any : kCFBooleanFalse as Any,
+            kSecAttrAccessible: accessibility,
+            kSecMatchLimit: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            return true
+        case errSecItemNotFound:
+            return false
+        default:
+            throw TokenVaultError.unexpectedStatus(status)
         }
     }
 }
