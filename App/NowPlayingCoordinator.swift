@@ -101,6 +101,13 @@ struct NowPlayingSnapshot: Equatable, Sendable {
         return information
     }
 
+    var systemPlaybackState: MPNowPlayingPlaybackState {
+        guard isPlaybackAvailable else {
+            return .stopped
+        }
+        return isPlaybackRequested ? .playing : .paused
+    }
+
     private var externalContentIdentifier: String {
         if let accountID {
             return "\(accountID.rawValue):\(itemID.rawValue)"
@@ -132,6 +139,7 @@ private struct NowPlayingArtworkIdentity: Equatable {
 @MainActor
 protocol NowPlayingInfoPublishing: AnyObject {
     var nowPlayingInfo: [String: Any]? { get set }
+    var playbackState: MPNowPlayingPlaybackState { get set }
 }
 
 extension MPNowPlayingInfoCenter: NowPlayingInfoPublishing {}
@@ -194,6 +202,7 @@ final class NowPlayingCoordinator {
         latestSnapshot = snapshot
         updateCommandAvailability(snapshot)
         infoCenter.nowPlayingInfo = snapshot.information(artwork: artwork)
+        infoCenter.playbackState = snapshot.systemPlaybackState
 
         guard nextArtworkIdentity != artworkIdentity else {
             return
@@ -240,6 +249,7 @@ final class NowPlayingCoordinator {
         artwork = nil
         latestSnapshot = nil
         infoCenter.nowPlayingInfo = nil
+        infoCenter.playbackState = .stopped
         updateCommandAvailability(nil)
     }
 

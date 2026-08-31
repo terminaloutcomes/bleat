@@ -15613,6 +15613,48 @@ final class AppModelTests: XCTestCase {
             information[MPNowPlayingInfoPropertyPlaybackRate] as? Float,
             1.25
         )
+        XCTAssertEqual(snapshot.systemPlaybackState, .playing)
+    }
+
+    func testNowPlayingCoordinatorPublishesSystemPlaybackStateFromIntent() {
+        let infoPublisher = TestNowPlayingInfoPublisher()
+        let coordinator = NowPlayingCoordinator(
+            infoCenter: infoPublisher,
+            registersRemoteCommands: false
+        )
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                isPlaybackRequested: true
+            )
+        )
+        XCTAssertEqual(infoPublisher.playbackState, .playing)
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                isPlaying: false,
+                isPlaybackRequested: false
+            )
+        )
+        XCTAssertEqual(infoPublisher.playbackState, .paused)
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                isPlaying: false,
+                isPlaybackRequested: false,
+                isPlaybackAvailable: false
+            )
+        )
+        XCTAssertEqual(infoPublisher.playbackState, .stopped)
+
+        coordinator.clear()
+        XCTAssertEqual(infoPublisher.playbackState, .stopped)
     }
 
     #if os(iOS)
@@ -15777,6 +15819,16 @@ final class AppModelTests: XCTestCase {
     }
 
     #if canImport(CarPlay) && !os(macOS)
+        func testCarPlaySceneUsesAppDelegateAdaptorBridgeUnderSwiftUIRuntime()
+            throws
+        {
+            XCTAssertFalse(
+                UIApplication.shared.delegate is BleatAppDelegate
+            )
+            let appDelegate = try XCTUnwrap(BleatAppDelegate.current)
+            XCTAssertTrue(appDelegate.model === appDelegate.bootstrap.model)
+        }
+
         func testCarPlayLoadingEmptyAndTypedFailureRoots() async throws {
             let loadingModel = AppModel(
                 service: TestAppService(activeAccount: .success(nil))
@@ -17235,7 +17287,10 @@ private struct TestSendableArtwork: @unchecked Sendable {
 
 private func nowPlayingSnapshot(
     accountID: AccountID?,
-    coverURL: URL?
+    coverURL: URL?,
+    isPlaying: Bool = true,
+    isPlaybackRequested: Bool = true,
+    isPlaybackAvailable: Bool = true
 ) -> NowPlayingSnapshot {
     NowPlayingSnapshot(
         accountID: accountID,
@@ -17248,9 +17303,9 @@ private func nowPlayingSnapshot(
         currentTime: 0,
         duration: 100,
         rate: 1,
-        isPlaying: true,
-        isPlaybackRequested: true,
-        isPlaybackAvailable: true,
+        isPlaying: isPlaying,
+        isPlaybackRequested: isPlaybackRequested,
+        isPlaybackAvailable: isPlaybackAvailable,
         canPerformPreviousCommand: false,
         canPerformNextCommand: false,
         currentChapterIndex: nil,
@@ -17293,6 +17348,7 @@ private final class TestNowPlayingInfoPublisher:
     NowPlayingInfoPublishing
 {
     var nowPlayingInfo: [String: Any]?
+    var playbackState: MPNowPlayingPlaybackState = .unknown
 }
 
 private actor TestBookCoverFetcher {

@@ -951,10 +951,7 @@
             let presenter = CarPlayInterfacePresenter(
                 interfaceController: interfaceController
             )
-            guard
-                let appDelegate =
-                    UIApplication.shared.delegate as? BleatAppDelegate
-            else {
+            guard let appDelegate = BleatAppDelegate.current else {
                 let template = CPListTemplate(
                     title: "Bleat",
                     sections: []
@@ -971,10 +968,7 @@
             didDisconnectInterfaceController interfaceController:
                 CPInterfaceController
         ) {
-            guard
-                let appDelegate =
-                    UIApplication.shared.delegate as? BleatAppDelegate
-            else {
+            guard let appDelegate = BleatAppDelegate.current else {
                 return
             }
             appDelegate.carPlayCoordinator.disconnect()
