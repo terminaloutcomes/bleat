@@ -1562,6 +1562,21 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testHomeShelfCardsStayTopAlignedAcrossTitleHeights() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let twoLineTitleCard = app.buttons["home.book.ui-book"]
+        let oneLineTitleCard = app.buttons["home.book.ui-home-series"]
+
+        XCTAssertTrue(twoLineTitleCard.waitForExistence(timeout: 3))
+        XCTAssertTrue(oneLineTitleCard.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            twoLineTitleCard.frame.minY,
+            oneLineTitleCard.frame.minY,
+            accuracy: 1
+        )
+    }
+
+    @MainActor
     func testFailedHomeRefreshKeepsExistingShelvesMounted() {
         let app = launch(scenario: "--ui-testing-home-refresh-failure")
         let home = app.descendants(matching: .any)["home.shelves"]
