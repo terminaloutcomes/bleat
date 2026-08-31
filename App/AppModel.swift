@@ -1490,6 +1490,8 @@ final class AppModel {
         nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
         bootstrapError: AppBootstrapError? = nil,
         downloadsStorageRootURL: URL? = nil,
+        downloadsBackgroundSessionIdentifier: String =
+            bleatBackgroundDownloadSessionIdentifier,
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
         initialLaunchStage: AppLaunchStage? = nil,
@@ -1527,6 +1529,8 @@ final class AppModel {
         let subsystems = Self.makePlaybackAndDownloads(
             service: service,
             downloadsStorageRootURL: downloadsStorageRootURL,
+            downloadsBackgroundSessionIdentifier:
+                downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
@@ -1654,6 +1658,7 @@ final class AppModel {
     private static func makePlaybackAndDownloads(
         service: any AppServicing,
         downloadsStorageRootURL: URL?,
+        downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging
@@ -1668,7 +1673,9 @@ final class AppModel {
             storageRootURL: downloadsStorageRootURL,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer,
-            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
+            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
+            backgroundSessionIdentifier:
+                downloadsBackgroundSessionIdentifier
         )
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)

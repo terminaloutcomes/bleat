@@ -301,6 +301,10 @@ final class AppModelTests: XCTestCase {
         _ = await model.removeAllForLocalDataReset()
     }
 
+    private func backgroundSessionIdentifier(_ purpose: String) -> String {
+        "bleat.tests.\(purpose).\(UUID().uuidString)"
+    }
+
     func testTransferReconciliationStopsLatePauseAndCancelCallbacks() {
         let active = DownloadTransferContext(
             isPaused: false,
@@ -598,7 +602,9 @@ final class AppModelTests: XCTestCase {
             service: service,
             storageRootURL: root,
             remoteTelemetryTracer: tracer,
-            remoteTelemetryDownloadLogger: logger
+            remoteTelemetryDownloadLogger: logger,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("telemetry-download")
         )
 
         await downloads.download(detail: detail, account: account)
@@ -2236,7 +2242,9 @@ final class AppModelTests: XCTestCase {
         let downloads = DownloadModel(
             service: service,
             defaults: defaults,
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("transcription-pin")
         )
         let appModel = AppModel(
             service: service,
@@ -3691,7 +3699,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("account-removal")
         )
         await model.start()
         XCTAssertEqual(model.downloads.records.count, 1)
@@ -3743,7 +3753,9 @@ final class AppModelTests: XCTestCase {
                 accounts: .success([account]),
                 activeAccount: .success(account)
             ),
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("unknown-account-cleanup")
         )
         await model.start()
 
@@ -3815,7 +3827,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(nil)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("protected-removal")
         )
         await model.start(account: nil)
 
@@ -3895,7 +3909,9 @@ final class AppModelTests: XCTestCase {
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(nil)),
             defaults: defaults,
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("automatic-cleanup")
         )
 
         await model.start(account: nil)
@@ -3990,7 +4006,9 @@ final class AppModelTests: XCTestCase {
 
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(nil)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("legacy-automatic-cleanup")
         )
         await model.start(account: nil)
 
@@ -4090,6 +4108,8 @@ final class AppModelTests: XCTestCase {
         )
         let storedRecords = try await storage.records()
         let interruptedRecord = try XCTUnwrap(storedRecords.first)
+        // A finalized track plus untouched queued tracks remains actionable
+        // queued work. Partial is reserved for interrupted or damaged bytes.
         XCTAssertEqual(interruptedRecord.manifest.state, .queued)
 
         let request = URLRequest(
@@ -4194,8 +4214,9 @@ final class AppModelTests: XCTestCase {
             await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
-        XCTAssertEqual(descriptors[0].range.length, 3)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
+        XCTAssertEqual(descriptor.range.length, 3)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
         XCTAssertEqual(requests.map(\.trackIndex), [1])
@@ -4936,7 +4957,12 @@ final class AppModelTests: XCTestCase {
                 .downloadPlan(.authenticatedRequest(.requestTransportFailed))
             )
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("paused-network-recovery")
+        )
 
         await model.start(account: account)
 
@@ -5914,7 +5940,12 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404)))
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("permanent-recovery-failure")
+        )
 
         await model.start(account: account)
         await model.recoverAfterNetworkChange(for: [account])
@@ -5956,7 +5987,12 @@ final class AppModelTests: XCTestCase {
             ),
             authorizedDownloadRequest: .success(authorizedRequest)
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let sessionIdentifier = backgroundSessionIdentifier("stale-recovery")
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier: sessionIdentifier
+        )
         await model.start(account: account)
         XCTAssertEqual(
             model.pendingRecoveryDownloadIDsForTesting,
@@ -5970,7 +6006,7 @@ final class AppModelTests: XCTestCase {
             track: plan.tracks[1]
         )
         let staleConfiguration = URLSessionConfiguration.background(
-            withIdentifier: bleatBackgroundDownloadSessionIdentifier
+            withIdentifier: sessionIdentifier
         )
         let staleSession = URLSession(configuration: staleConfiguration)
         let staleTask = staleSession.downloadTask(with: authorizedRequest)
@@ -5985,7 +6021,8 @@ final class AppModelTests: XCTestCase {
 
         let descriptors = await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
         XCTAssertEqual(requests.map(\.trackIndex), [1])
@@ -6025,7 +6062,12 @@ final class AppModelTests: XCTestCase {
             ),
             authorizedDownloadRequest: .success(authorizedRequest)
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("recovery-deduplication")
+        )
         await model.start(account: account)
 
         await service.setDownloadPlan(.success(plan))
@@ -6092,7 +6134,12 @@ final class AppModelTests: XCTestCase {
             ),
             authorizedDownloadRequest: .success(authorizedRequest)
         )
-        let model = DownloadModel(service: service, storageRootURL: root)
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("account-scoped-recovery")
+        )
         await model.start(account: firstAccount)
         await model.start(account: secondAccount)
 
@@ -6155,7 +6202,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("network-path-recovery")
         )
 
         await model.start()
@@ -6183,7 +6232,8 @@ final class AppModelTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
         await model.downloads.removeAll()
     }
 
@@ -8091,7 +8141,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("local-session-network-retry")
         )
 
         await model.start()
@@ -8497,7 +8549,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("local-session-upload")
         )
         let launchFinished = expectation(
             description: "Launch does not await local session upload"
@@ -13244,7 +13298,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("complete-download-playback")
         )
         await model.start()
 
@@ -13314,7 +13370,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("cached-window-playback")
         )
         await model.start()
         let started = expectation(
@@ -13369,7 +13427,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("verified-automatic-cache")
         )
         await model.start(account: account)
         let record = try XCTUnwrap(model.records.first)
@@ -13429,7 +13489,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("single-file-cache-timing")
         )
         await model.start(account: account)
         let record = try XCTUnwrap(model.records.first)
@@ -13474,7 +13536,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("multi-file-cache-timing")
         )
         await model.start(account: account)
         let stored = try XCTUnwrap(model.records.first)
@@ -13548,7 +13612,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("cached-session-close")
         )
         await model.start()
         let first = await model.startPlayback(
@@ -13623,7 +13689,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("cached-seek")
         )
         await model.start()
         let outcome = await model.startPlayback(
@@ -13695,7 +13763,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("cached-boundary-retry")
         )
         await model.start()
         let outcome = await model.startPlayback(
@@ -13761,7 +13831,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("cached-boundary-resume")
         )
         await model.start()
         let outcome = await model.startPlayback(
@@ -13853,7 +13925,9 @@ final class AppModelTests: XCTestCase {
         )
         let downloads = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
-            storageRootURL: root
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                backgroundSessionIdentifier("superseded-cache-pin")
         )
         await downloads.start(account: account)
         let record = try XCTUnwrap(downloads.records.first)
@@ -14606,7 +14680,9 @@ final class AppModelTests: XCTestCase {
             )
             let model = AppModel(
                 service: service,
-                downloadsStorageRootURL: root
+                downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("incomplete-cached-window")
             )
             await model.start()
 
@@ -14679,7 +14755,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("offline-automatic-cache")
         )
         await model.start()
         let record = try XCTUnwrap(
@@ -14771,6 +14849,8 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("broken-complete-download"),
             diagnostics: diagnostics
         )
         await model.start()
@@ -14850,6 +14930,8 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("stale-broken-download"),
             diagnostics: diagnostics
         )
         await model.start()
@@ -15058,7 +15140,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: root
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("failed-cloud-reset")
         )
         await model.start()
         XCTAssertEqual(model.downloads.records.count, 1)
@@ -15095,7 +15179,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: fixture.downloadsURL
+            downloadsStorageRootURL: fixture.downloadsURL,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("local-reset")
         )
         await model.start()
         XCTAssertEqual(model.accounts.count, 2)
@@ -15114,7 +15200,9 @@ final class AppModelTests: XCTestCase {
         )
         let relaunchedModel = AppModel(
             service: relaunchedService,
-            downloadsStorageRootURL: fixture.downloadsURL
+            downloadsStorageRootURL: fixture.downloadsURL,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("local-reset-relaunch")
         )
         await relaunchedModel.start()
 
@@ -15148,7 +15236,9 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(
             service: service,
-            downloadsStorageRootURL: fixture.downloadsURL
+            downloadsStorageRootURL: fixture.downloadsURL,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("account-removal-storage")
         )
         await model.start()
         let retainedAccount = fixture.accounts[0]
@@ -15166,7 +15256,9 @@ final class AppModelTests: XCTestCase {
         )
         let relaunchedModel = AppModel(
             service: relaunchedService,
-            downloadsStorageRootURL: fixture.downloadsURL
+            downloadsStorageRootURL: fixture.downloadsURL,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("account-removal-relaunch")
         )
         await relaunchedModel.start()
 
@@ -16178,7 +16270,9 @@ final class AppModelTests: XCTestCase {
             )
             let onlineModel = AppModel(
                 service: onlineService,
-                downloadsStorageRootURL: root
+                downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("carplay-complete-download")
             )
             await onlineModel.start()
             let onlinePresenter = TestCarPlayPresenter()
