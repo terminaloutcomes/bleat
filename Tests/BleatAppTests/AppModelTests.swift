@@ -14794,6 +14794,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.01)
         let detailRequests = await service.bookDetailRequests()
         XCTAssertTrue(detailRequests.isEmpty)
         let playbackRequests = await service.playbackOpenRequests()
