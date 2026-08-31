@@ -1504,6 +1504,7 @@ final class AppModel {
             InactiveRemoteTelemetryTracer(),
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
+        playbackPositionStore: PlaybackPositionStore = .shared,
         bookProgressOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void = {
             try await Task.sleep(for: $0)
@@ -1532,6 +1533,7 @@ final class AppModel {
             downloadsBackgroundSessionIdentifier:
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
+            playbackPositionStore: playbackPositionStore,
             remoteTelemetryTracer: remoteTelemetryTracer,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
         )
@@ -1660,11 +1662,13 @@ final class AppModel {
         downloadsStorageRootURL: URL?,
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
+        playbackPositionStore: PlaybackPositionStore,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging
     ) -> (playback: PlaybackModel, downloads: DownloadModel) {
         let playback = PlaybackModel(
             service: service,
+            positionStore: playbackPositionStore,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
