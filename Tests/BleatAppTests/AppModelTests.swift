@@ -4090,6 +4090,8 @@ final class AppModelTests: XCTestCase {
         )
         let storedRecords = try await storage.records()
         let interruptedRecord = try XCTUnwrap(storedRecords.first)
+        // A finalized track plus untouched queued tracks remains actionable
+        // queued work. Partial is reserved for interrupted or damaged bytes.
         XCTAssertEqual(interruptedRecord.manifest.state, .queued)
 
         let request = URLRequest(
@@ -4194,8 +4196,9 @@ final class AppModelTests: XCTestCase {
             await model
             .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
-        XCTAssertEqual(descriptors[0].range.length, 3)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
+        XCTAssertEqual(descriptor.range.length, 3)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
         XCTAssertEqual(requests.map(\.trackIndex), [1])
@@ -5985,7 +5988,8 @@ final class AppModelTests: XCTestCase {
 
         let descriptors = await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
         XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
         let requests = await service.authorizedDownloadRequestIdentities()
         XCTAssertEqual(requests.map(\.trackIndex), [1])
@@ -6183,7 +6187,8 @@ final class AppModelTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        XCTAssertEqual(descriptors[0].range.start, 5)
+        let descriptor = try XCTUnwrap(descriptors.first)
+        XCTAssertEqual(descriptor.range.start, 5)
         await model.downloads.removeAll()
     }
 

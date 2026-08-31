@@ -2489,6 +2489,17 @@ final class BleatUITests: XCTestCase {
 final class BleatLiveUITests: XCTestCase {
     @MainActor
     func testLiveOnlineLoginPlaybackAndDownload() async throws {
+        #if os(macOS)
+            // Native macOS intentionally does not construct the remote
+            // telemetry runtime. This broad iOS journey enables telemetry for
+            // the Release secret-leakage scan; signed macOS authentication,
+            // Keychain persistence, and relaunch have separate app-hosted and
+            // manual validation, so running this journey there would claim
+            // coverage for a deliberately unsupported surface.
+            throw XCTSkip(
+                "Remote telemetry and this Release leakage journey are iOS-only"
+            )
+        #endif
         let environment = try await liveEnvironment()
         var app = XCUIApplication()
         app.launch()
