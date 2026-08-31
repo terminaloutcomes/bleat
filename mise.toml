@@ -183,6 +183,10 @@ run = ["./scripts/test-landscape-ui.sh"]
 description = "Run the largest Dynamic Type UI audit on iPhone and iPad simulators"
 run = ["./scripts/test-dynamic-type-ui.sh"]
 
+[tasks."test:accessibility"]
+description = "Run Bold Text, Increase Contrast, and interaction-target UI audits"
+run = ["./scripts/test-accessibility-ui.sh"]
+
 [tasks."test:deep-links"]
 description = "Validate cold and warm bleat URL routing on a disposable iOS Simulator"
 run = ["./scripts/test-deep-links.sh"]

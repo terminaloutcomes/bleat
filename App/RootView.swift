@@ -71,6 +71,8 @@ struct RootView: View {
     @State private var deepLinkInbox = AppDeepLinkInbox.shared
     @State private var isShowingDiagnostics = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.legibilityWeight) private var legibilityWeight
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
@@ -109,12 +111,35 @@ struct RootView: View {
         }
         #if DEBUG || BLEAT_UI_TESTING
             .overlay(alignment: .topTrailing) {
-                if !model.perfMemoryLabel.isEmpty {
-                    Text(model.perfMemoryLabel)
-                    .accessibilityIdentifier("perf.memory")
-                    .font(.caption2)
-                    .opacity(0)
+                VStack {
+                    if !model.perfMemoryLabel.isEmpty {
+                        Text(model.perfMemoryLabel)
+                        .accessibilityIdentifier("perf.memory")
+                    }
+                    #if os(iOS)
+                        if ProcessInfo.processInfo.arguments.contains(
+                            "--ui-testing-accessibility-audit"
+                        ) {
+                            Text(
+                                legibilityWeight == .bold
+                                    ? "enabled" : "disabled"
+                            )
+                            .accessibilityIdentifier(
+                                "accessibility.boldText"
+                            )
+                            Text(
+                                colorSchemeContrast == .increased
+                                    ? "enabled" : "disabled"
+                            )
+                            .accessibilityIdentifier(
+                                "accessibility.increaseContrast"
+                            )
+                        }
+                    #endif
                 }
+                .font(.caption2)
+                .opacity(0)
+                .allowsHitTesting(false)
             }
         #endif
         .task {
@@ -2654,6 +2679,8 @@ private struct LibraryView: View {
                             model.librarySort.label,
                             systemImage: "arrow.up.arrow.down"
                         )
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("library.sort")
 
@@ -2668,6 +2695,8 @@ private struct LibraryView: View {
                             systemName: model.librarySortDescending
                                 ? "arrow.down" : "arrow.up"
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityLabel(
                         model.librarySortDescending
@@ -2716,6 +2745,8 @@ private struct LibraryView: View {
                             model.libraryBrowseFilter.label,
                             systemImage: "line.3.horizontal.decrease.circle"
                         )
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("library.filter")
                 }
@@ -3162,6 +3193,12 @@ private struct SearchView: View {
                                         .foregroundStyle(.primary)
                                 }
                                 .buttonStyle(.plain)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 44,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
                                 .accessibilityLabel(
                                     "Show books by \(author.name)"
                                 )
@@ -3197,6 +3234,12 @@ private struct SearchView: View {
                                         .foregroundStyle(.primary)
                                 }
                                 .buttonStyle(.plain)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 44,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
                                 .accessibilityLabel(
                                     "Open \(series.name) series"
                                 )
@@ -3207,6 +3250,13 @@ private struct SearchView: View {
                         } header: {
                             searchResultSectionHeader("Series")
                         }
+                    }
+                    if isSearchFocused {
+                        Color.clear
+                            .frame(height: 160)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .accessibilityHidden(true)
                     }
                 }
                 .scrollDismissesKeyboard(.immediately)
@@ -3742,7 +3792,11 @@ private struct BookDetailView: View {
                             #endif
                         } label: {
                             Image(systemName: "ellipsis")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                         .accessibilityLabel("Book Actions")
                         .accessibilityIdentifier("book.detail.actions")
                     }
@@ -3939,6 +3993,12 @@ private struct BookDetailView: View {
                                         )
                                 }
                                 .buttonStyle(.plain)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 44,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
                                 .font(.headline)
                                 .accessibilityLabel(
                                     "Show books by \(author.name)"
@@ -3972,6 +4032,12 @@ private struct BookDetailView: View {
                                         )
                                 }
                                 .buttonStyle(.plain)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 44,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .accessibilityLabel(
@@ -4260,7 +4326,7 @@ private struct BookDetailView: View {
                             primaryAction.label,
                             systemImage: primaryAction.systemImage
                         )
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(
@@ -4356,7 +4422,7 @@ private struct BookDetailView: View {
                             "Download",
                             systemImage: "arrow.down.circle"
                         )
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("book.detail.download")
@@ -4656,6 +4722,8 @@ private struct SettingsView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                         .disabled(model.accountActionStatus == .switching)
                         .accessibilityIdentifier(
                             "settings.account.\(account.id.rawValue)"
@@ -4926,6 +4994,7 @@ private struct SettingsView: View {
                 }
 
             }
+            .accessibilityIdentifier("settings.form")
             .navigationTitle("Settings")
             .navigationDestination(for: DeepLinkSettingsDestination.self) {
                 destination in

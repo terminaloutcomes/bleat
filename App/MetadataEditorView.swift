@@ -120,6 +120,8 @@ struct MetadataEditorView: View {
                         Button("Save") {
                             save(overwrite: false)
                         }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                         .disabled(isBusy || pendingCover == .processing)
                         .accessibilityIdentifier("metadata.save")
                     }

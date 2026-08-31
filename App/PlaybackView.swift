@@ -147,6 +147,8 @@ private struct PlaybackScrubberView: View {
                 }
             }
             .disabled(playback.state == .preparing)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityIdentifier("player.position")
             // .sliderThumbVisibility(Visibility.hidden)
             .sliderThumbVisibility(.hidden)
@@ -281,7 +283,12 @@ struct MiniPlayerView: View {
                                 .lineLimit(1)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: 44,
+                        alignment: .leading
+                    )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityValue(
@@ -309,6 +316,8 @@ struct MiniPlayerView: View {
                                 : "play.fill"
                         )
                         .font(.title2)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityLabel(
                         playback.isPlaybackRequested ? "Pause" : "Play"
@@ -483,6 +492,8 @@ struct NowPlaying: View {
                         } label: {
                             Image(systemName: "backward.end.fill")
                                 .font(.title2)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .disabled(
                             playback.state == .preparing
@@ -501,6 +512,8 @@ struct NowPlaying: View {
                                     "gobackward.\(playback.skipBackwardInterval.rawValue)"
                             )
                             .font(.title)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                         }
                         .disabled(playback.state == .preparing)
                         .accessibilityLabel(
@@ -545,6 +558,8 @@ struct NowPlaying: View {
                                     "goforward.\(playback.skipForwardInterval.rawValue)"
                             )
                             .font(.title)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                         }
                         .disabled(playback.state == .preparing)
                         .accessibilityLabel(
@@ -559,6 +574,8 @@ struct NowPlaying: View {
                         } label: {
                             Image(systemName: "forward.end.fill")
                                 .font(.title2)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .disabled(
                             playback.state == .preparing
@@ -568,7 +585,7 @@ struct NowPlaying: View {
                         .accessibilityIdentifier("player.nextChapter")
                     }
 
-                    HStack(spacing: 24) {
+                    HStack(spacing: 8) {
                         PlaybackRateMenu(
                             sourceID: ObjectIdentifier(playback),
                             rate: playback.rate
@@ -630,11 +647,11 @@ struct NowPlaying: View {
                                     )
                                 }
                             } label: {
-                                Label(
-                                    "Audio Files",
-                                    systemImage: "waveform"
-                                )
+                                Image(systemName: "waveform")
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
                             }
+                            .accessibilityLabel("Audio Files")
                             .accessibilityIdentifier("player.audioFiles")
                         }
 
@@ -815,6 +832,8 @@ private struct PlaybackChaptersPicker: View, @MainActor Equatable {
             isPresented = true
         } label: {
             Image(systemName: "list.bullet")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("Chapters")
         .accessibilityIdentifier("player.chapters")
@@ -866,6 +885,8 @@ private struct PlaybackChapterPickerSheet: View {
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("player.chapter.\(index)")
                         .accessibilityAddTraits(
                             index == currentChapterIndex
@@ -934,6 +955,8 @@ private struct PlaybackSleepTimerMenu: View, @MainActor Equatable {
             }
         } label: {
             Image(systemName: hasTimer ? "moon.zzz.fill" : "moon.zzz")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(hasTimer ? "Timer Set" : "Sleep Timer")
         .accessibilityIdentifier("player.sleepTimer")
@@ -1000,6 +1023,8 @@ private struct PlaybackBookmarksMenu: View, @MainActor Equatable {
             }
         } label: {
             Image(systemName: "bookmark")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("Bookmarks")
         .disabled(state == .loading || state == .saving)
@@ -1038,7 +1063,8 @@ private struct PlaybackRateMenu: View, @MainActor Equatable {
         } label: {
             Text(formatRate(rate))
                 .font(.headline)
-                .frame(minWidth: 72)
+                .frame(minWidth: 72, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityIdentifier("player.rate")
     }

@@ -274,6 +274,25 @@ to Accessibility Extra Extra Extra Large. It fails when an essential audited
 element is outside the application window or cannot be reached and operated.
 The result bundles are written beneath `.build/dynamic-type-ui-results/`.
 
+Run the Bold Text, Increase Contrast, and minimum interaction-target journeys
+with:
+
+```sh
+mise run test:accessibility
+```
+
+The harness creates disposable iPhone and iPad Simulators, enables Bold Text and
+Increase Contrast separately, and verifies the effective setting inside the
+running app. Each pass exercises login, primary browsing, Book Detail, the book
+editor, Downloads, Settings, Search, mini-player, Now Playing, chapters, and
+bookmarks. App-owned controls are measured against the 44-point target, while
+native controls are verified through their system-provided visible and hittable
+regions. The four verified result bundles are written beneath
+`.build/accessibility-ui-results/`. Each pass also retains 12 named review
+screenshots beneath `.build/accessibility-ui-results/screenshots/` for visual
+clipping, overlap, emphasis, and colour-only checks. The disposable Simulators
+are deleted on exit.
+
 ## Evidence requirements
 
 A successful command exit is not sufficient evidence. Confirm that every
