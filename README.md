@@ -593,13 +593,13 @@ playback and closes its server session before credentials are deleted.
 The CarPlay audio scene shares the phone's active account, selected audiobook
 library, downloads, and process-wide player. Its Home, Library, and Downloads
 tabs provide personalized shelves, a library chooser, explicit pagination,
-debounced search, and verified whole-book offline playback. Selecting a book
-prefers a verified complete download, otherwise prepares one streaming
+and verified whole-book offline playback. Selecting a book prefers a verified
+complete download, otherwise prepares one streaming
 session, then opens the system Now Playing template. Play/pause, configured
 skip intervals, whole-book seeking, chapter navigation, and a featured-speed
-cycle are available in-car. Sign-in, account switching, bookmark editing,
-sleep timers, Stop, and download management remain on the phone. Signed-out
-users can play retained verified downloads.
+decrease/current/increase control are available in-car. Sign-in, account
+switching, bookmark editing, sleep timers, Stop, and download management remain
+on the phone. Signed-out users can play retained verified downloads.
 The full player includes 5, 10, 15, 30, 45, 60, 90, and 120-minute sleep
 timers plus an end-of-current-chapter option. Settings also configures an
 optional 5, 10, 15, or 30-second rewind when resuming after a pause longer than

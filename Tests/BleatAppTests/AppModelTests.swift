@@ -15624,7 +15624,13 @@ final class AppModelTests: XCTestCase {
             125
         )
         XCTAssertEqual(
-            information[MPNowPlayingInfoPropertyPlaybackRate] as? Float,
+            information[MPNowPlayingInfoPropertyPlaybackRate] as? Double,
+            1.25
+        )
+        XCTAssertEqual(
+            information[
+                MPNowPlayingInfoPropertyDefaultPlaybackRate
+            ] as? Double,
             1.25
         )
         XCTAssertEqual(snapshot.systemPlaybackState, .playing)
@@ -15754,7 +15760,7 @@ final class AppModelTests: XCTestCase {
         }
     #endif
 
-    func testFeaturedPlaybackRateCyclesAndRemoteFailuresAreTyped() {
+    func testFeaturedPlaybackRateStepsAndRemoteFailuresAreTyped() {
         let coordinator = NowPlayingCoordinator(
             registersRemoteCommands: false
         )
@@ -15786,11 +15792,38 @@ final class AppModelTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            coordinator.cyclePlaybackRate(),
-            .accepted
-        )
+        XCTAssertEqual(coordinator.stepPlaybackRate(.increase), .accepted)
         XCTAssertEqual(receivedCommand, .setRate(1.25))
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                rate: 1.35
+            )
+        )
+        XCTAssertEqual(coordinator.stepPlaybackRate(.decrease), .accepted)
+        XCTAssertEqual(receivedCommand, .setRate(1.25))
+        XCTAssertEqual(coordinator.stepPlaybackRate(.increase), .accepted)
+        XCTAssertEqual(receivedCommand, .setRate(1.5))
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                rate: 0.5
+            )
+        )
+        XCTAssertEqual(coordinator.stepPlaybackRate(.decrease), .unavailable)
+
+        coordinator.publish(
+            nowPlayingSnapshot(
+                accountID: nil,
+                coverURL: nil,
+                rate: 3
+            )
+        )
+        XCTAssertEqual(coordinator.stepPlaybackRate(.increase), .unavailable)
         coordinator.clear()
 
         let playback = PlaybackModel(
@@ -15984,8 +16017,18 @@ final class AppModelTests: XCTestCase {
             let home = try XCTUnwrap(
                 root.templates[0] as? CPListTemplate
             )
+            let libraryTemplate = try XCTUnwrap(
+                root.templates[1] as? CPListTemplate
+            )
             XCTAssertEqual(home.sections.first?.header, "Continue Listening")
             XCTAssertEqual(home.sections.first?.items.count, 1)
+            XCTAssertEqual(
+                libraryTemplate.headerGridButtons?.map(\.titleVariants),
+                [["Libraries"]]
+            )
+            XCTAssertTrue(home.trailingNavigationBarButtons.isEmpty)
+            XCTAssertTrue(libraryTemplate.leadingNavigationBarButtons.isEmpty)
+            XCTAssertTrue(libraryTemplate.trailingNavigationBarButtons.isEmpty)
             coordinator.disconnect()
         }
 
@@ -16260,61 +16303,6 @@ final class AppModelTests: XCTestCase {
                 presenter.root as? CPTabBarTemplate
             )
             XCTAssertFalse(firstRoot === secondRoot)
-            coordinator.disconnect()
-        }
-
-        func testCarPlaySearchSuppressesSupersededResult() async throws {
-            let account = try fixtureAccount()
-            let library = fixtureLibrary()
-            let result = fixtureBook(
-                id: "search-item",
-                title: "Current Result",
-                libraryID: library.id
-            )
-            let gate = AsyncGate()
-            let service = TestAppService(
-                activeAccount: .success(account),
-                libraries: .success([library]),
-                firstPage: .success(
-                    fixturePage(libraryID: library.id)
-                ),
-                search: .success([result]),
-                searchGate: gate
-            )
-            let model = AppModel(service: service)
-            await model.start()
-            let coordinator = CarPlayCoordinator(model: model)
-            let presenter = TestCarPlayPresenter()
-            coordinator.connect(presenter)
-            var firstResult: [CPListItem]?
-            var secondResult: [CPListItem]?
-            let first = expectation(description: "Old search completed")
-            let second = expectation(description: "New search completed")
-
-            coordinator.searchTemplate(
-                CPSearchTemplate(),
-                updatedSearchText: "old"
-            ) {
-                firstResult = $0
-                first.fulfill()
-            }
-            try await Task.sleep(for: .milliseconds(350))
-            await gate.waitUntilEntered()
-            coordinator.searchTemplate(
-                CPSearchTemplate(),
-                updatedSearchText: "new"
-            ) {
-                secondResult = $0
-                second.fulfill()
-            }
-            try await Task.sleep(for: .milliseconds(350))
-            await gate.release()
-            await fulfillment(of: [first, second], timeout: 2)
-
-            XCTAssertEqual(firstResult?.count, 0)
-            XCTAssertEqual(secondResult?.map(\.text), ["Current Result"])
-            let requests = await service.searchRequests()
-            XCTAssertEqual(requests.map(\.query), ["old", "new"])
             coordinator.disconnect()
         }
 
@@ -17395,6 +17383,7 @@ private struct TestSendableArtwork: @unchecked Sendable {
 private func nowPlayingSnapshot(
     accountID: AccountID?,
     coverURL: URL?,
+    rate: Float = 1,
     isPlaying: Bool = true,
     isPlaybackRequested: Bool = true,
     isPlaybackAvailable: Bool = true
@@ -17409,7 +17398,7 @@ private func nowPlayingSnapshot(
         coverLoadPolicy: .allowNetwork,
         currentTime: 0,
         duration: 100,
-        rate: 1,
+        rate: rate,
         isPlaying: isPlaying,
         isPlaybackRequested: isPlaybackRequested,
         isPlaybackAvailable: isPlaybackAvailable,

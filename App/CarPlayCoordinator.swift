@@ -73,7 +73,7 @@
     }
 
     @MainActor
-    final class CarPlayCoordinator: NSObject, CPSearchTemplateDelegate {
+    final class CarPlayCoordinator: NSObject {
         private struct AccountPresentation: Equatable, Sendable {
             let id: AccountID
             let server: NormalizedServerURL
@@ -119,15 +119,10 @@
         private var libraryTemplate: CPListTemplate?
         private var downloadsTemplate: CPListTemplate?
         private var tabTemplate: CPTabBarTemplate?
-        private var searchTemplate: CPSearchTemplate?
-        private var searchResultsByItem:
-            [ObjectIdentifier: LibraryBookSummary] = [:]
         private let artworkCache = NSCache<NSString, UIImage>()
         private var artworkTasks: [Task<Void, Never>] = []
         private var renderedPresentation: TemplatePresentation?
         private var presentationGeneration: UInt64 = 0
-        private var searchGeneration: UInt64 = 0
-        private var searchTask: Task<Void, Never>?
 
         init(
             model: AppModel,
@@ -157,9 +152,6 @@
 
         func disconnect() {
             presentationGeneration &+= 1
-            searchGeneration &+= 1
-            searchTask?.cancel()
-            searchTask = nil
             for task in artworkTasks {
                 task.cancel()
             }
@@ -170,8 +162,6 @@
             libraryTemplate = nil
             downloadsTemplate = nil
             tabTemplate = nil
-            searchTemplate = nil
-            searchResultsByItem = [:]
             renderedPresentation = nil
         }
 
@@ -219,72 +209,6 @@
             }
         }
 
-        func searchTemplate(
-            _ searchTemplate: CPSearchTemplate,
-            updatedSearchText searchText: String,
-            completionHandler:
-                @escaping ([CPListItem]) -> Void
-        ) {
-            searchGeneration &+= 1
-            let generation = searchGeneration
-            searchTask?.cancel()
-            searchResultsByItem = [:]
-            let normalized = searchText.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-            guard !normalized.isEmpty else {
-                completionHandler([])
-                return
-            }
-            let accountID = model.account?.id
-            let libraryID = model.selectedLibrary?.id
-            searchTask = Task { @MainActor [weak self] in
-                guard let self else {
-                    completionHandler([])
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled,
-                    generation == searchGeneration
-                else {
-                    completionHandler([])
-                    return
-                }
-                await model.search(query: normalized)
-                guard !Task.isCancelled,
-                    generation == searchGeneration,
-                    model.account?.id == accountID,
-                    model.selectedLibrary?.id == libraryID,
-                    case .loaded(let books) = model.searchResults
-                else {
-                    completionHandler([])
-                    return
-                }
-                let items = books.books.map {
-                    makeSearchResultItem(book: $0)
-                }
-                completionHandler(items)
-            }
-        }
-
-        func searchTemplate(
-            _ searchTemplate: CPSearchTemplate,
-            selectedResult item: CPListItem,
-            completionHandler: @escaping () -> Void
-        ) {
-            guard
-                let book =
-                    searchResultsByItem[ObjectIdentifier(item)]
-            else {
-                completionHandler()
-                return
-            }
-            Task { @MainActor [weak self] in
-                await self?.perform(.playBook(book))
-                completionHandler()
-            }
-        }
-
         private func showSignedInRoot(
             _ presentation: TemplatePresentation
         ) {
@@ -311,12 +235,9 @@
             else {
                 return
             }
-            configureNavigationButtons(
-                home: homeTemplate,
-                library: libraryTemplate
-            )
             updateHomeTemplate(homeTemplate, presentation: presentation)
             updateLibraryTemplate(libraryTemplate, presentation: presentation)
+            configureLibraryHeaderButtons(libraryTemplate)
             updateDownloadsTemplate(
                 downloadsTemplate,
                 downloads: presentation.downloads,
@@ -386,27 +307,23 @@
             return template
         }
 
-        private func configureNavigationButtons(
-            home: CPListTemplate,
-            library: CPListTemplate
+        private func configureLibraryHeaderButtons(
+            _ library: CPListTemplate
         ) {
-            home.trailingNavigationBarButtons = [makeLibrariesButton()]
-            let searchButton = CPBarButton(title: "Search") {
-                [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.showSearch()
-                }
+            guard let librariesImage = UIImage(systemName: "books.vertical")
+            else {
+                library.headerGridButtons = nil
+                return
             }
-            library.leadingNavigationBarButtons = [makeLibrariesButton()]
-            library.trailingNavigationBarButtons = [searchButton]
-        }
-
-        private func makeLibrariesButton() -> CPBarButton {
-            CPBarButton(title: "Libraries") { [weak self] _ in
+            let librariesButton = CPGridButton(
+                titleVariants: ["Libraries"],
+                image: librariesImage
+            ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.showLibraryPicker()
                 }
             }
+            library.headerGridButtons = [librariesButton]
         }
 
         private func updateHomeTemplate(
@@ -755,34 +672,6 @@
             return item
         }
 
-        private func makeSearchResultItem(
-            book: LibraryBookSummary
-        ) -> CPListItem {
-            let accountID = model.account?.id
-            let coverURL = BookCoverURL.make(
-                server: model.account?.server,
-                itemID: book.id,
-                updatedAtMilliseconds: book.updatedAtMilliseconds,
-                width: 240,
-                height: 240
-            )
-            let item = CPListItem(
-                text: book.title,
-                detailText: book.authorName,
-                image: initialArtwork(
-                    accountID: accountID,
-                    url: coverURL
-                )
-            )
-            searchResultsByItem[ObjectIdentifier(item)] = book
-            loadArtwork(
-                for: item,
-                accountID: accountID,
-                url: coverURL
-            )
-            return item
-        }
-
         private func failureSection(
             _ failure: AppFailure,
             retry: CarPlayAction?
@@ -842,13 +731,6 @@
                     )
                 ]
             )
-            presenter?.push(template)
-        }
-
-        private func showSearch() {
-            let template = CPSearchTemplate()
-            template.delegate = self
-            searchTemplate = template
             presenter?.push(template)
         }
 
@@ -972,16 +854,44 @@
         }
 
         private func configureNowPlayingTemplate() {
-            let rateButton = CPNowPlayingPlaybackRateButton {
-                [weak self] _ in
+            let rateButton = CPNowPlayingPlaybackRateButton(handler: nil)
+            let playbackAvailable = model.playback.hasActiveBook
+            rateButton.isEnabled = playbackAvailable
+            guard let decreaseImage = UIImage(systemName: "minus"),
+                let increaseImage = UIImage(systemName: "plus"),
+                let minimumRate = PlaybackPreferencesStore.featuredRates.first,
+                let maximumRate = PlaybackPreferencesStore.featuredRates.last
+            else {
+                CPNowPlayingTemplate.shared.updateNowPlayingButtons([
+                    rateButton
+                ])
+                return
+            }
+            let decreaseButton = CPNowPlayingImageButton(
+                image: decreaseImage
+            ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     _ = self?.model.playback
-                        .cycleFeaturedPlaybackRate()
+                        .stepFeaturedPlaybackRate(.decrease)
                 }
             }
-            rateButton.isEnabled = model.playback.hasActiveBook
+            let increaseButton = CPNowPlayingImageButton(
+                image: increaseImage
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    _ = self?.model.playback
+                        .stepFeaturedPlaybackRate(.increase)
+                }
+            }
+            let rate = model.playback.rate
+            decreaseButton.isEnabled = playbackAvailable
+                && rate > minimumRate + 0.001
+            increaseButton.isEnabled = playbackAvailable
+                && rate < maximumRate - 0.001
             CPNowPlayingTemplate.shared.updateNowPlayingButtons([
-                rateButton
+                decreaseButton,
+                rateButton,
+                increaseButton,
             ])
         }
 
@@ -1001,6 +911,7 @@
                 _ = model.playback.itemID
                 _ = model.playback.accountID
                 _ = model.playback.state
+                _ = model.playback.rate
             } onChange: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self, presenter != nil else {

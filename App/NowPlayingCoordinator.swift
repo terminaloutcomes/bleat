@@ -16,6 +16,11 @@ enum PlaybackRemoteCommand: Equatable, Sendable {
     case setRate(Float)
 }
 
+enum PlaybackRateStep: Equatable, Sendable {
+    case decrease
+    case increase
+}
+
 extension HeadphoneCommandAction {
     var remoteCommand: PlaybackRemoteCommand {
         switch self {
@@ -74,8 +79,9 @@ struct NowPlayingSnapshot: Equatable, Sendable {
             MPMediaItemPropertyMediaType: MPMediaType.audioBook.rawValue,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: rate,
+            MPNowPlayingInfoPropertyPlaybackRate:
+                isPlaying ? Double(rate) : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(rate),
             MPNowPlayingInfoPropertyMediaType:
                 MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyExternalContentIdentifier:
@@ -253,17 +259,27 @@ final class NowPlayingCoordinator {
         updateCommandAvailability(nil)
     }
 
-    func cyclePlaybackRate() -> PlaybackRemoteCommandOutcome {
+    func stepPlaybackRate(
+        _ step: PlaybackRateStep
+    ) -> PlaybackRemoteCommandOutcome {
         guard let snapshot = latestSnapshot,
             snapshot.isPlaybackAvailable
         else {
             return .unavailable
         }
-        let nextRate =
+        let nextRate: Float? = switch step {
+        case .decrease:
+            PlaybackPreferencesStore.featuredRates.last {
+                $0 < snapshot.rate - 0.001
+            }
+        case .increase:
             PlaybackPreferencesStore.featuredRates.first {
                 $0 > snapshot.rate + 0.001
             }
-            ?? PlaybackPreferencesStore.featuredRates[0]
+        }
+        guard let nextRate else {
+            return .unavailable
+        }
         return commandHandler?(.setRate(nextRate)) ?? .unavailable
     }
 
