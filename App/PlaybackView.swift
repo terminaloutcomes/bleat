@@ -254,6 +254,7 @@ private struct PlaybackScrubberView: View {
 struct MiniPlayerView: View {
     @Bindable var playback: PlaybackModel
     let containerHeight: CGFloat
+    var foreground: Color = .white
     let showPlayer: () -> Void
     @State private var isDismissing = false
 
@@ -267,13 +268,13 @@ struct MiniPlayerView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(playback.title)
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(foreground)
                             .lineLimit(1)
                         if !playback.author.isEmpty {
                             Text(playback.author)
                                 .font(.caption)
                                 .foregroundStyle(
-                                    .white.opacity(
+                                    foreground.opacity(
                                         MiniPlayerContrast.secondaryTextOpacity
                                     )
                                 )
@@ -314,24 +315,12 @@ struct MiniPlayerView: View {
                     )
                     .accessibilityIdentifier("player.mini.toggle")
                     .simultaneousGesture(miniPlayerGesture)
-                    .tint(.white)
+                    .tint(foreground)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            #if os(iOS)
-                .glassEffect(
-                    .regular.tint(
-                        Color.black.opacity(
-                            MiniPlayerContrast.backgroundOpacity
-                        )
-                    ),
-                    in: RoundedRectangle(
-                        cornerRadius: miniPlayerRoundingRadius,
-                        style: .continuous
-                    )
-                )
-            #else
+            #if os(macOS)
                 .background(
                     Color.black.opacity(MiniPlayerContrast.backgroundOpacity),
                     in: RoundedRectangle(

@@ -405,7 +405,7 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testMiniPlayerSurfaceMaintainsLightModeContrast() throws {
+    func testMiniPlayerUsesNativeLightAccessoryContrast() throws {
         let app = launch(scenario: "--ui-testing-playback")
         let play = app.buttons["home.book.ui-book.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 3))
@@ -427,11 +427,25 @@ final class BleatUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        XCTAssertLessThan(
+        XCTAssertGreaterThan(
             try averageLuminance(of: miniPlayerImage),
-            0.45,
-            "The composited mini-player must remain dark enough for white text"
+            0.65,
+            "The mini-player must retain the native light accessory material"
         )
+        XCTAssertGreaterThan(
+            try darkPixelFraction(of: miniPlayerImage),
+            0.01,
+            "The native light accessory must contain visible dark foreground"
+        )
+    }
+
+    @MainActor
+    func testMiniPlayerIsAbsentBeforePlayback() {
+        let app = launch(scenario: "--ui-testing-playback")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["player.mini"].exists)
     }
 
     @MainActor
@@ -2477,6 +2491,17 @@ final class BleatUITests: XCTestCase {
     }
 
     private func averageLuminance(of image: UIImage) throws -> Double {
+        let samples = try luminanceSamples(of: image)
+        return samples.reduce(0, +) / Double(samples.count)
+    }
+
+    private func darkPixelFraction(of image: UIImage) throws -> Double {
+        let samples = try luminanceSamples(of: image)
+        let darkCount = samples.count(where: { $0 < 0.35 })
+        return Double(darkCount) / Double(samples.count)
+    }
+
+    private func luminanceSamples(of image: UIImage) throws -> [Double] {
         let width = 64
         let height = 16
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -2496,14 +2521,12 @@ final class BleatUITests: XCTestCase {
         }
         context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        var total = 0.0
-        for index in stride(from: 0, to: pixels.count, by: 4) {
+        return stride(from: 0, to: pixels.count, by: 4).map { index in
             let red = Double(pixels[index]) / 255
             let green = Double(pixels[index + 1]) / 255
             let blue = Double(pixels[index + 2]) / 255
-            total += (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+            return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
         }
-        return total / Double(width * height)
     }
 
     private func crop(
