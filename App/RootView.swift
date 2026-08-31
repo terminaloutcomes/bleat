@@ -2408,7 +2408,7 @@ private struct HomeContent: View {
                 .font(.title2.bold())
                 .padding(.horizontal)
             ScrollView(.horizontal) {
-                LazyHStack(spacing: 12) {
+                LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(
                         downloadedRecords,
                         id: \.manifest.downloadID
@@ -2442,7 +2442,7 @@ private struct HomeContent: View {
                 .font(.title2.bold())
                 .padding(.horizontal)
             ScrollView(.horizontal) {
-                LazyHStack(spacing: 12) {
+                LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(shelf.items, id: \.id.rawValue) { book in
                         if let account = model.account {
                             ShelfBookCard(
