@@ -80,6 +80,24 @@ final class PlaybackPositionStore {
         defaults.set(data, forKey: storageKey)
     }
 
+    func remove(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) throws(PlaybackPositionStoreError) {
+        var positions = storedPositions()
+        positions.removeValue(
+            forKey: key(accountID: accountID, itemID: itemID)
+        )
+        guard !positions.isEmpty else {
+            defaults.removeObject(forKey: storageKey)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(positions) else {
+            throw .persistenceFailed
+        }
+        defaults.set(data, forKey: storageKey)
+    }
+
     func migrateAccountIdentity(
         from legacyID: AccountID,
         to canonicalID: AccountID

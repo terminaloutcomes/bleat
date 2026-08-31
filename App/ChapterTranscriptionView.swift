@@ -126,6 +126,148 @@ struct ChapterTranscriptionBookKey: Hashable, Sendable {
     let itemID: LibraryItemID
 }
 
+struct ChapterTranscriptNavigationTarget: Hashable, Sendable, Identifiable {
+    let chapterID: Int
+    let segmentIndex: Int
+    let startMilliseconds: Int64
+    let endMilliseconds: Int64
+
+    var id: Self { self }
+}
+
+enum ChapterTranscriptPositionResolution: Equatable, Sendable {
+    case target(ChapterTranscriptNavigationTarget)
+    case invalidPosition
+    case chapterNotTranscribed(chapterID: Int)
+    case noSpeechDetected(chapterID: Int)
+}
+
+enum ChapterTranscriptNavigationMessage: Equatable, Sendable {
+    case noPosition
+    case invalidPosition
+    case chapterNotTranscribed(title: String)
+    case noSpeechDetected(title: String)
+
+    var text: String {
+        switch self {
+        case .noPosition:
+            "No playback position is available for this audiobook."
+        case .invalidPosition:
+            "The playback position is outside this audiobook."
+        case .chapterNotTranscribed(let title):
+            "\(title) has not been transcribed."
+        case .noSpeechDetected(let title):
+            "No speech was detected in \(title)."
+        }
+    }
+}
+
+enum ChapterTranscriptPositionResolver {
+    private struct Candidate {
+        let target: ChapterTranscriptNavigationTarget
+        let distanceMilliseconds: Double
+        let chapterOrder: Int
+    }
+
+    static func resolve(
+        position: Double,
+        chapters: [PlaybackChapter],
+        transcripts: [CachedChapterTranscript]
+    ) -> ChapterTranscriptPositionResolution {
+        guard position.isFinite,
+            position >= 0,
+            position <= Double(Int64.max) / 1_000
+        else {
+            return .invalidPosition
+        }
+        let orderedChapters = chapters.sorted {
+            ($0.start, $0.end, $0.id) < ($1.start, $1.end, $1.id)
+        }
+        guard
+            let containingChapter = orderedChapters.first(where: {
+                $0.start.isFinite
+                    && $0.end.isFinite
+                    && $0.start >= 0
+                    && $0.end > $0.start
+                    && $0.start <= position
+                    && position < $0.end
+            })
+        else {
+            return .invalidPosition
+        }
+        guard
+            let containingTranscript = transcripts.first(where: {
+                $0.chapterID == containingChapter.id
+            })
+        else {
+            return .chapterNotTranscribed(chapterID: containingChapter.id)
+        }
+        guard !containingTranscript.segments.isEmpty else {
+            return .noSpeechDetected(chapterID: containingChapter.id)
+        }
+
+        let positionMilliseconds = position * 1_000
+        var chapterOrder: [Int: Int] = [:]
+        for (index, chapter) in orderedChapters.enumerated()
+            where chapterOrder[chapter.id] == nil
+        {
+            chapterOrder[chapter.id] = index
+        }
+        let candidates: [Candidate] = transcripts.flatMap {
+            transcript -> [Candidate] in
+            transcript.segments.enumerated().compactMap {
+                index, segment -> Candidate? in
+                guard segment.startMilliseconds >= 0,
+                    segment.endMilliseconds >= segment.startMilliseconds,
+                    let order = chapterOrder[transcript.chapterID]
+                else {
+                    return nil
+                }
+                let start = Double(segment.startMilliseconds)
+                let end = Double(segment.endMilliseconds)
+                let distance: Double
+                if positionMilliseconds < start {
+                    distance = start - positionMilliseconds
+                } else if positionMilliseconds > end {
+                    distance = positionMilliseconds - end
+                } else {
+                    distance = 0
+                }
+                return Candidate(
+                    target: ChapterTranscriptNavigationTarget(
+                        chapterID: transcript.chapterID,
+                        segmentIndex: index,
+                        startMilliseconds: segment.startMilliseconds,
+                        endMilliseconds: segment.endMilliseconds
+                    ),
+                    distanceMilliseconds: distance,
+                    chapterOrder: order
+                )
+            }
+        }
+        guard
+            let target = candidates.min(by: { lhs, rhs in
+                (
+                    lhs.distanceMilliseconds,
+                    lhs.chapterOrder,
+                    lhs.target.startMilliseconds,
+                    lhs.target.endMilliseconds,
+                    lhs.target.segmentIndex
+                ) < (
+                    rhs.distanceMilliseconds,
+                    rhs.chapterOrder,
+                    rhs.target.startMilliseconds,
+                    rhs.target.endMilliseconds,
+                    rhs.target.segmentIndex
+                )
+            })?.target
+        else {
+            return .noSpeechDetected(chapterID: containingChapter.id)
+        }
+        return .target(target)
+    }
+}
+
 enum ChapterTranscriptionBatchPlanner {
     static func orderedChapters(
         selectedChapterIDs: Set<Int>,
@@ -760,6 +902,19 @@ final class ChapterTranscriptionModel {
         CachedChapterTranscriptSearch.matches(
             query: query,
             in: cachedTranscriptsByBook[bookKey] ?? []
+        )
+    }
+
+    func resolveTranscriptPosition(
+        _ position: Double,
+        detail: LibraryBookDetail,
+        account: ServerAccount
+    ) -> ChapterTranscriptPositionResolution {
+        let bookKey = Self.bookKey(detail: detail, account: account)
+        return ChapterTranscriptPositionResolver.resolve(
+            position: position,
+            chapters: detail.chapters,
+            transcripts: cachedTranscriptsByBook[bookKey] ?? []
         )
     }
 
@@ -1703,6 +1858,9 @@ struct ChapterTranscriptionView: View {
     @State private var pendingExportFormat: TranscriptExportFormat?
     @State private var exportArtifact: TranscriptExportArtifact?
     @State private var exportFailure: TranscriptExportArtifactError?
+    @State private var currentPositionMessage:
+        ChapterTranscriptNavigationMessage?
+    @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1721,92 +1879,114 @@ struct ChapterTranscriptionView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if hasSearchQuery {
-                    playbackFailureContent
-                    searchContent
-                } else {
-                    chapterSelector
-                    cacheFailureContent
-                    transcriptionStatusContent
-                    playbackFailureContent
-                    selectedTranscriptContent
-                }
-            }
-            .navigationTitle("Transcription")
-            .iOSInlineNavigationTitle()
-            .searchable(
-                text: $searchQuery,
-                prompt: "Search Transcriptions"
-            )
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
+            ScrollViewReader { scrollProxy in
+                List {
+                    if model.hasLoadedTranscriptCache(for: bookKey) {
+                        currentPositionContent
+                    }
+                    if hasSearchQuery {
+                        playbackFailureContent
+                        searchContent
+                    } else {
+                        chapterSelector
+                        cacheFailureContent
+                        transcriptionStatusContent
+                        playbackFailureContent
+                        selectedTranscriptContent
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(isSelectingChapters ? "Cancel" : "Select") {
-                        if isSelectingChapters {
-                            selectedChapterIDs.removeAll()
-                        }
-                        isSelectingChapters.toggle()
-                    }
-                    .disabled(
-                        model.isWorking || hasSearchQuery
-                            || !model.hasLoadedTranscriptCache(for: bookKey)
-                            || (!isSelectingChapters
-                                && chaptersNeedingTranscription.isEmpty)
-                    )
-                    .accessibilityIdentifier("transcription.select")
-                }
-                if exportSnapshot.hasSegments {
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button("WebVTT") {
-                                chooseExportFormat(.webVTT)
-                            }
-                            .accessibilityIdentifier(
-                                "transcription.export.webVTT"
-                            )
-                            Button("SRT") {
-                                chooseExportFormat(.subRip)
-                            }
-                            .accessibilityIdentifier(
-                                "transcription.export.subRip"
-                            )
-                        } label: {
-                            Label(
-                                "Export Transcript",
-                                systemImage: "square.and.arrow.up"
-                            )
-                        }
-                        .disabled(hasSearchQuery)
-                        .accessibilityIdentifier("transcription.export")
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                actionBar
-            }
-            .confirmationDialog(
-                "Download Audiobook?",
-                isPresented: $showDownloadConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Download Audiobook") {
-                    Task {
-                        await downloads.download(
-                            detail: detail,
-                            account: account
-                        )
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(
-                    "Transcription uses verified audio stored on this device."
+                .navigationTitle("Transcription")
+                .iOSInlineNavigationTitle()
+                .searchable(
+                    text: $searchQuery,
+                    prompt: "Search Transcriptions"
                 )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(isSelectingChapters ? "Cancel" : "Select") {
+                            if isSelectingChapters {
+                                selectedChapterIDs.removeAll()
+                            }
+                            isSelectingChapters.toggle()
+                        }
+                        .disabled(
+                            model.isWorking || hasSearchQuery
+                                || !model.hasLoadedTranscriptCache(for: bookKey)
+                                || (!isSelectingChapters
+                                    && chaptersNeedingTranscription.isEmpty)
+                        )
+                        .accessibilityIdentifier("transcription.select")
+                    }
+                    if exportSnapshot.hasSegments {
+                        ToolbarItem(placement: .primaryAction) {
+                            Menu {
+                                Button("WebVTT") {
+                                    chooseExportFormat(.webVTT)
+                                }
+                                .accessibilityIdentifier(
+                                    "transcription.export.webVTT"
+                                )
+                                Button("SRT") {
+                                    chooseExportFormat(.subRip)
+                                }
+                                .accessibilityIdentifier(
+                                    "transcription.export.subRip"
+                                )
+                            } label: {
+                                Label(
+                                    "Export Transcript",
+                                    systemImage: "square.and.arrow.up"
+                                )
+                            }
+                            .disabled(hasSearchQuery)
+                            .accessibilityIdentifier("transcription.export")
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    actionBar
+                }
+                .confirmationDialog(
+                    "Download Audiobook?",
+                    isPresented: $showDownloadConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Download Audiobook") {
+                        Task {
+                            await downloads.download(
+                                detail: detail,
+                                account: account
+                            )
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(
+                        "Transcription uses verified audio stored on this device."
+                    )
+                }
+                .task(id: highlightedTarget) {
+                    guard let target = highlightedTarget else {
+                        return
+                    }
+                    await Task.yield()
+                    withAnimation {
+                        scrollProxy.scrollTo(target, anchor: .center)
+                    }
+                    do {
+                        try await Task.sleep(for: .seconds(2))
+                    } catch {
+                        return
+                    }
+                    if highlightedTarget == target {
+                        highlightedTarget = nil
+                    }
+                }
             }
             .confirmationDialog(
                 "Export Incomplete Transcript?",
@@ -2140,6 +2320,24 @@ struct ChapterTranscriptionView: View {
     }
 
     @ViewBuilder
+    private var currentPositionContent: some View {
+        Section {
+            Button("Go to current position", systemImage: "scope") {
+                goToCurrentPosition()
+            }
+            .accessibilityIdentifier("transcription.goToCurrentPosition")
+
+            if let currentPositionMessage {
+                Text(currentPositionMessage.text)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier(
+                        "transcription.currentPositionMessage"
+                    )
+            }
+        }
+    }
+
+    @ViewBuilder
     private var selectedTranscriptContent: some View {
         if let selectedChapterID,
             let segments = model.transcriptSegments(
@@ -2155,22 +2353,51 @@ struct ChapterTranscriptionView: View {
                         Array(segments.enumerated()),
                         id: \.offset
                     ) { index, segment in
-                        transcriptSegmentMenu(
+                        let target = ChapterTranscriptNavigationTarget(
+                            chapterID: selectedChapterID,
+                            segmentIndex: index,
+                            startMilliseconds: segment.startMilliseconds,
+                            endMilliseconds: segment.endMilliseconds
+                        )
+                        transcriptSegmentRow(
                             segment: segment,
+                            target: target,
                             identifier:
                                 "transcription.segment.\(selectedChapterID).\(index)"
-                        ) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(timestamp(segment.startMilliseconds))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                Text(segment.text)
-                                    .foregroundStyle(.primary)
-                            }
-                        }
+                        )
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptSegmentRow(
+        segment: TranscriptSegment,
+        target: ChapterTranscriptNavigationTarget,
+        identifier: String
+    ) -> some View {
+        let isHighlighted = highlightedTarget == target
+        let row = transcriptSegmentMenu(
+            segment: segment,
+            identifier: isHighlighted
+                ? "transcription.currentPositionHighlight"
+                : identifier
+        ) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(timestamp(segment.startMilliseconds))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Text(segment.text)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .id(target)
+
+        if isHighlighted {
+            row.listRowBackground(Color.accentColor.opacity(0.2))
+        } else {
+            row
         }
     }
 
@@ -2351,6 +2578,45 @@ struct ChapterTranscriptionView: View {
 
     private var hasSearchQuery: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func goToCurrentPosition() {
+        currentPositionMessage = nil
+        highlightedTarget = nil
+        guard
+            let position = appModel.playback.transcriptNavigationPosition(
+                accountID: account.id,
+                itemID: detail.id
+            )
+        else {
+            currentPositionMessage = .noPosition
+            return
+        }
+        switch model.resolveTranscriptPosition(
+            position.wholeBookTime,
+            detail: detail,
+            account: account
+        ) {
+        case .target(let target):
+            searchQuery = ""
+            selectedChapterID = target.chapterID
+            highlightedTarget = target
+        case .invalidPosition:
+            currentPositionMessage = .invalidPosition
+        case .chapterNotTranscribed(let chapterID):
+            currentPositionMessage = .chapterNotTranscribed(
+                title: chapterTitle(chapterID)
+            )
+        case .noSpeechDetected(let chapterID):
+            currentPositionMessage = .noSpeechDetected(
+                title: chapterTitle(chapterID)
+            )
+        }
+    }
+
+    private func chapterTitle(_ chapterID: Int) -> String {
+        detail.chapters.first(where: { $0.id == chapterID })?.title
+            ?? "This chapter"
     }
 
     private func transcriptSegmentMenu<Label: View>(

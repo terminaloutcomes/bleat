@@ -93,8 +93,32 @@
         private var homeShelfRequests = 0
         private var libraryRequests = 0
 
+        @MainActor
         static func current() -> UITestAppService? {
             let arguments = ProcessInfo.processInfo.arguments
+            let explicitScenario =
+                arguments
+                .compactMap(UITestScenario.init(rawValue:))
+                .first
+            if explicitScenario != nil {
+                do {
+                    try PlaybackPositionStore.shared.remove(
+                        accountID: AccountID(rawValue: "ui-account"),
+                        itemID: LibraryItemID(rawValue: "ui-book")
+                    )
+                    if arguments.contains(
+                        "--ui-testing-transcription-position"
+                    ) {
+                        try PlaybackPositionStore.shared.save(
+                            1_810,
+                            accountID: AccountID(rawValue: "ui-account"),
+                            itemID: LibraryItemID(rawValue: "ui-book")
+                        )
+                    }
+                } catch {
+                    return UITestAppService(scenario: .unavailableStartup)
+                }
+            }
             if arguments.contains(
                 UITestScenarioStorage.clearDeepLinkReceiptArgument
             ) {
@@ -131,11 +155,7 @@
                 )
                 return UITestAppService(scenario: .signedOut)
             }
-            if let scenario =
-                arguments
-                .compactMap(UITestScenario.init(rawValue:))
-                .first
-            {
+            if let scenario = explicitScenario {
                 if arguments.contains(
                     UITestScenarioStorage.persistLocalDataResetArgument
                 ), UserDefaults.standard.bool(
@@ -689,6 +709,11 @@
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> [CachedChapterTranscript] {
             let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains(
+                "--ui-testing-slow-transcription-cache"
+            ) {
+                try? await Task.sleep(for: .seconds(5))
+            }
             let hasCompleteCache = arguments.contains(
                 "--ui-testing-transcription-cache"
             )
@@ -728,7 +753,12 @@
                     ]
                 ),
             ]
-            return hasPartialCache ? [transcripts[0]] : transcripts
+            let omitsCurrentChapter = arguments.contains(
+                "--ui-testing-transcription-current-chapter-untranscribed"
+            )
+            return hasPartialCache || omitsCurrentChapter
+                ? [transcripts[0]]
+                : transcripts
         }
 
         func saveCachedChapterTranscript(
