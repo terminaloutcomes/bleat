@@ -2207,6 +2207,64 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(highlight.waitForExistence(timeout: 3))
         XCTAssertTrue(highlight.label.contains("Another DOOMSDAY mention"))
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
+
+        app.terminate()
+        let relaunched = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+            ]
+        )
+        XCTAssertTrue(
+            relaunched.otherElements["app.signedIn"].waitForExistence(
+                timeout: 3
+            )
+        )
+        relaunched.staticTexts["The Test Audiobook"].tap()
+        relaunched.buttons["book.detail.actions"].tap()
+        relaunched.buttons["book.detail.transcription"].tap()
+        let relaunchedAction = relaunched.buttons[
+            "transcription.goToCurrentPosition"
+        ]
+        XCTAssertTrue(relaunchedAction.waitForExistence(timeout: 3))
+        relaunchedAction.tap()
+        let message = relaunched.staticTexts[
+            "transcription.currentPositionMessage"
+        ]
+        XCTAssertTrue(message.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            message.label,
+            "No playback position is available for this audiobook."
+        )
+    }
+
+    @MainActor
+    func testTranscriptCurrentPositionWaitsForCacheLoad() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-slow-transcription-cache",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        XCTAssertTrue(
+            app.otherElements["transcription.view"].waitForExistence(
+                timeout: 3
+            )
+        )
+        let action = app.buttons["transcription.goToCurrentPosition"]
+        XCTAssertFalse(action.exists)
+        XCTAssertTrue(action.waitForExistence(timeout: 7))
     }
 
     @MainActor

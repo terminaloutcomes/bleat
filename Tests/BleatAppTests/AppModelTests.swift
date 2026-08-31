@@ -740,6 +740,51 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testTranscriptPositionResolverIncludesZeroDurationSegment() {
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 10, title: "One"),
+            PlaybackChapter(id: 2, start: 10, end: 20, title: "Two"),
+        ]
+        let transcripts = [
+            fixtureTranscript(
+                chapter: chapters[0],
+                segments: [
+                    CachedTranscriptSegment(
+                        startMilliseconds: 5_000,
+                        endMilliseconds: 5_000,
+                        text: "Point in time"
+                    )
+                ]
+            ),
+            fixtureTranscript(
+                chapter: chapters[1],
+                segments: [
+                    CachedTranscriptSegment(
+                        startMilliseconds: 10_000,
+                        endMilliseconds: 11_000,
+                        text: "Other chapter"
+                    )
+                ]
+            ),
+        ]
+
+        XCTAssertEqual(
+            ChapterTranscriptPositionResolver.resolve(
+                position: 5,
+                chapters: chapters,
+                transcripts: transcripts
+            ),
+            .target(
+                ChapterTranscriptNavigationTarget(
+                    chapterID: 1,
+                    segmentIndex: 0,
+                    startMilliseconds: 5_000,
+                    endMilliseconds: 5_000
+                )
+            )
+        )
+    }
+
     func testTranscriptPositionResolverChoosesNearestAcrossChapterBoundary() {
         let chapters = [
             PlaybackChapter(id: 1, start: 0, end: 10, title: "One"),

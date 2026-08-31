@@ -218,7 +218,7 @@ enum ChapterTranscriptPositionResolver {
             transcript.segments.enumerated().compactMap {
                 index, segment -> Candidate? in
                 guard segment.startMilliseconds >= 0,
-                    segment.endMilliseconds > segment.startMilliseconds,
+                    segment.endMilliseconds >= segment.startMilliseconds,
                     let order = chapterOrder[transcript.chapterID]
                 else {
                     return nil
@@ -1881,7 +1881,9 @@ struct ChapterTranscriptionView: View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 List {
-                    currentPositionContent
+                    if model.hasLoadedTranscriptCache(for: bookKey) {
+                        currentPositionContent
+                    }
                     if hasSearchQuery {
                         playbackFailureContent
                         searchContent
@@ -2357,29 +2359,45 @@ struct ChapterTranscriptionView: View {
                             startMilliseconds: segment.startMilliseconds,
                             endMilliseconds: segment.endMilliseconds
                         )
-                        transcriptSegmentMenu(
+                        transcriptSegmentRow(
                             segment: segment,
-                            identifier: highlightedTarget == target
-                                ? "transcription.currentPositionHighlight"
-                                : "transcription.segment.\(selectedChapterID).\(index)"
-                        ) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(timestamp(segment.startMilliseconds))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                Text(segment.text)
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                        .id(target)
-                        .listRowBackground(
-                            highlightedTarget == target
-                                ? Color.accentColor.opacity(0.2)
-                                : Color.clear
+                            target: target,
+                            identifier:
+                                "transcription.segment.\(selectedChapterID).\(index)"
                         )
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptSegmentRow(
+        segment: TranscriptSegment,
+        target: ChapterTranscriptNavigationTarget,
+        identifier: String
+    ) -> some View {
+        let isHighlighted = highlightedTarget == target
+        let row = transcriptSegmentMenu(
+            segment: segment,
+            identifier: isHighlighted
+                ? "transcription.currentPositionHighlight"
+                : identifier
+        ) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(timestamp(segment.startMilliseconds))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Text(segment.text)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .id(target)
+
+        if isHighlighted {
+            row.listRowBackground(Color.accentColor.opacity(0.2))
+        } else {
+            row
         }
     }
 

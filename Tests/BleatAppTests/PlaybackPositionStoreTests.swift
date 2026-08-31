@@ -71,6 +71,48 @@ final class PlaybackPositionStoreTests: XCTestCase {
         )
     }
 
+    func testRemoveDeletesOnlyRequestedPositionAndPersists() throws {
+        let suite = "PlaybackPositionStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let removedAccountID = AccountID(rawValue: "removed")
+        let retainedAccountID = AccountID(rawValue: "retained")
+        let itemID = LibraryItemID(rawValue: "same-item")
+        try store.save(
+            42,
+            accountID: removedAccountID,
+            itemID: itemID
+        )
+        try store.save(
+            9,
+            accountID: retainedAccountID,
+            itemID: itemID
+        )
+
+        try store.remove(
+            accountID: removedAccountID,
+            itemID: itemID
+        )
+
+        let relaunched = PlaybackPositionStore(defaults: defaults)
+        XCTAssertNil(
+            relaunched.position(
+                accountID: removedAccountID,
+                itemID: itemID
+            )
+        )
+        XCTAssertEqual(
+            relaunched.position(
+                accountID: retainedAccountID,
+                itemID: itemID
+            ),
+            9
+        )
+    }
+
     func testReconcilerDetectsBothChangedAndAdoptsSingleChange() {
         let baseline = progress(time: 10, updatedAt: 100)
         let remote = progress(time: 30, updatedAt: 200)
