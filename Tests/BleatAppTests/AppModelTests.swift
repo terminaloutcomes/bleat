@@ -14755,6 +14755,12 @@ final class AppModelTests: XCTestCase {
             detail: persistedDetail,
             purpose: .automaticCache
         )
+        let positionStore = PlaybackPositionStore(defaults: fixture.defaults)
+        try positionStore.save(
+            0.25,
+            accountID: account.id,
+            itemID: persistedDetail.id
+        )
         let canonicalDetail = fixtureBookDetail(
             item: fixtureBook(
                 id: persistedDetail.id.rawValue,
@@ -14771,7 +14777,8 @@ final class AppModelTests: XCTestCase {
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("offline-automatic-cache")
+                backgroundSessionIdentifier("offline-automatic-cache"),
+            playbackPositionStore: positionStore
         )
         await model.start()
         let record = try XCTUnwrap(
@@ -14787,6 +14794,7 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.01)
         let detailRequests = await service.bookDetailRequests()
         XCTAssertTrue(detailRequests.isEmpty)
         let playbackRequests = await service.playbackOpenRequests()
