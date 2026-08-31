@@ -1489,20 +1489,42 @@ final class AppModel {
         for account: ServerAccount,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> Bool {
-        try await service.hasCachedChapterTranscriptData(
-            accountID: account.id,
-            itemID: itemID
-        )
+        do {
+            return try await service.hasCachedChapterTranscriptData(
+                accountID: account.id,
+                itemID: itemID
+            )
+        } catch let error {
+            await diagnostics.record(
+                .failed(
+                    .inspectTranscriptCache,
+                    category: .app,
+                    failureCode: error.transcriptCacheDiagnosticFailureCode
+                )
+            )
+            throw error
+        }
     }
 
     func deleteCachedChapterTranscriptData(
         for account: ServerAccount,
         itemID: LibraryItemID
     ) async throws(AppServiceError) {
-        try await service.deleteCachedChapterTranscriptData(
-            accountID: account.id,
-            itemID: itemID
-        )
+        do {
+            try await service.deleteCachedChapterTranscriptData(
+                accountID: account.id,
+                itemID: itemID
+            )
+        } catch let error {
+            await diagnostics.record(
+                .failed(
+                    .deleteTranscriptCache,
+                    category: .app,
+                    failureCode: error.transcriptCacheDiagnosticFailureCode
+                )
+            )
+            throw error
+        }
     }
 
     init(

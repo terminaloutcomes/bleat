@@ -3888,7 +3888,7 @@ private struct BookDetailView: View {
             )
         }
         .alert(
-            "Transcript Data Not Deleted",
+            transcriptDeletionFailure?.title ?? "Transcript Data Not Deleted",
             isPresented: transcriptDeletionFailurePresentation
         ) {
             Button("OK") {
@@ -3898,7 +3898,26 @@ private struct BookDetailView: View {
             }
         } message: {
             Text(
-                "Bleat could not delete the transcript data from local storage."
+                transcriptDeletionFailure?.message
+                    ?? "Bleat could not delete the local transcript data."
+            )
+        }
+        .alert(
+            transcriptPresenceFailure?.title
+                ?? "Transcript Data Status Unavailable",
+            isPresented: transcriptPresenceFailurePresentation
+        ) {
+            Button("OK") {
+                if let bookKey = transcriptBookKey {
+                    model.transcription.dismissLocalDataPresenceFailure(
+                        for: bookKey
+                    )
+                }
+            }
+        } message: {
+            Text(
+                transcriptPresenceFailure?.message
+                    ?? "Bleat could not check the local transcript data."
             )
         }
         .alert(
@@ -4077,6 +4096,42 @@ private struct BookDetailView: View {
                     return
                 }
                 model.transcription.dismissDeletionFailure(for: bookKey)
+            }
+        )
+    }
+
+    private var transcriptDeletionFailure:
+        ChapterTranscriptLocalDataFailure?
+    {
+        guard let bookKey = transcriptBookKey,
+            case .failed(let failure) = model.transcription.deletionState(
+                for: bookKey
+            )
+        else {
+            return nil
+        }
+        return failure
+    }
+
+    private var transcriptPresenceFailure:
+        ChapterTranscriptLocalDataFailure?
+    {
+        guard let bookKey = transcriptBookKey else {
+            return nil
+        }
+        return model.transcription.localDataPresenceFailure(for: bookKey)
+    }
+
+    private var transcriptPresenceFailurePresentation: Binding<Bool> {
+        Binding(
+            get: { transcriptPresenceFailure != nil },
+            set: { isPresented in
+                guard !isPresented, let bookKey = transcriptBookKey else {
+                    return
+                }
+                model.transcription.dismissLocalDataPresenceFailure(
+                    for: bookKey
+                )
             }
         )
     }

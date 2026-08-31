@@ -48,6 +48,8 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case search
     case loadBook = "load_book"
     case loadBookmarks = "load_bookmarks"
+    case inspectTranscriptCache = "inspect_transcript_cache"
+    case deleteTranscriptCache = "delete_transcript_cache"
     case saveMetadata = "save_metadata"
     case replaceCover = "replace_cover"
     case openPlayback = "open_playback"
@@ -137,6 +139,20 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case bookDeletionDenied = "book_deletion_denied"
     case bookDeletionUnavailable = "book_deletion_unavailable"
     case bookmarkUnavailable = "bookmark_unavailable"
+    case transcriptCacheInvalidAccountID =
+        "transcript_cache_invalid_account_id"
+    case transcriptCacheInvalidItemID = "transcript_cache_invalid_item_id"
+    case transcriptCacheInvalidTranscript =
+        "transcript_cache_invalid_transcript"
+    case transcriptCacheInvalidStoredTranscript =
+        "transcript_cache_invalid_stored_transcript"
+    case transcriptCacheInvalidTaskState =
+        "transcript_cache_invalid_task_state"
+    case transcriptCacheInvalidStoredTaskState =
+        "transcript_cache_invalid_stored_task_state"
+    case transcriptCacheEncodingFailed = "transcript_cache_encoding_failed"
+    case transcriptCachePersistenceFailed =
+        "transcript_cache_persistence_failed"
     case accountRemovalFailed = "account_removal_failed"
     case requestCancelled = "request_cancelled"
     case requestTimedOut = "request_timed_out"

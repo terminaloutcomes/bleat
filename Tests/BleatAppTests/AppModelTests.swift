@@ -1969,9 +1969,11 @@ final class AppModelTests: XCTestCase {
             transcriptDataPresence: .success(true),
             transcriptDeletion: .failure(failure)
         )
+        let diagnostics = AppDiagnosticRecorderSpy()
         let coordinator = makeTranscriptionModel()
         let appModel = AppModel(
             service: service,
+            diagnostics: diagnostics,
             transcription: coordinator
         )
         let bookKey = ChapterTranscriptionBookKey(
@@ -1995,7 +1997,104 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(
             coordinator.isCached(chapterID: chapter.id, for: bookKey)
         )
-        XCTAssertEqual(coordinator.deletionState(for: bookKey), .failed(failure))
+        let presentationFailure = ChapterTranscriptLocalDataFailure(
+            stage: .deletion,
+            cause: failure
+        )
+        XCTAssertEqual(
+            coordinator.deletionState(for: bookKey),
+            .failed(presentationFailure)
+        )
+        XCTAssertEqual(
+            presentationFailure.message,
+            "Bleat could not delete the local transcript data because the local transcript store is unavailable."
+        )
+        let events = await diagnostics.events()
+        XCTAssertTrue(
+            events.contains(
+                .failed(
+                    .deleteTranscriptCache,
+                    category: .app,
+                    failureCode: .transcriptCachePersistenceFailed
+                )
+            )
+        )
+        XCTAssertEqual(
+            DiagnosticOperation.deleteTranscriptCache.rawValue,
+            "delete_transcript_cache"
+        )
+        XCTAssertEqual(
+            DiagnosticFailureCode.transcriptCachePersistenceFailed.rawValue,
+            "transcript_cache_persistence_failed"
+        )
+    }
+
+    func testTranscriptPresenceFailurePreservesCauseAndDiagnosticStage()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "transcript-presence-failure",
+                title: "Presence Failure",
+                libraryID: fixtureLibrary().id
+            ),
+            chapters: []
+        )
+        let failure = AppServiceError.transcriptCache(
+            .invalidStoredTaskState
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptDataPresence: .failure(failure)
+        )
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(
+            service: service,
+            diagnostics: diagnostics,
+            transcription: coordinator
+        )
+        let bookKey = ChapterTranscriptionBookKey(
+            accountID: account.id,
+            itemID: detail.id
+        )
+
+        await coordinator.refreshLocalDataPresence(
+            detail: detail,
+            account: account,
+            appModel: appModel
+        )
+
+        let presentationFailure = try XCTUnwrap(
+            coordinator.localDataPresenceFailure(for: bookKey)
+        )
+        XCTAssertEqual(presentationFailure.stage, .presenceInspection)
+        XCTAssertEqual(presentationFailure.cause, failure)
+        XCTAssertEqual(
+            presentationFailure.message,
+            "Bleat could not check the local transcript data because the saved transcription history is invalid."
+        )
+        XCTAssertNil(coordinator.cacheFailure(for: bookKey))
+        let events = await diagnostics.events()
+        XCTAssertTrue(
+            events.contains(
+                .failed(
+                    .inspectTranscriptCache,
+                    category: .app,
+                    failureCode: .transcriptCacheInvalidStoredTaskState
+                )
+            )
+        )
+        XCTAssertEqual(
+            DiagnosticOperation.inspectTranscriptCache.rawValue,
+            "inspect_transcript_cache"
+        )
+        XCTAssertEqual(
+            DiagnosticFailureCode.transcriptCacheInvalidStoredTaskState
+                .rawValue,
+            "transcript_cache_invalid_stored_task_state"
+        )
     }
 
     func testTranscriptDeletionPreservesDownloadAndActivePlayback()
