@@ -6033,6 +6033,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requests.map(\.trackIndex), [1])
         staleSession.invalidateAndCancel()
         await model.removeAll()
+
+        var remainingDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        for _ in 0..<200 where !remainingDescriptors.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+            remainingDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
+        XCTAssertTrue(remainingDescriptors.isEmpty)
     }
 
     func testRepeatedNetworkRecoveryDoesNotDuplicateTransfers() async throws {
