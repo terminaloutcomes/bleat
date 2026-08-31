@@ -848,6 +848,39 @@
                         title: "Chapter Two"
                     ),
                 ]
+            let playbackTracks = [
+                AppPlaybackTrack(
+                    url: URL(
+                        fileURLWithPath: "/tmp/bleat-ui-test-audio.m4b"
+                    ),
+                    startOffset: 0,
+                    duration: 3_600,
+                    title: title
+                )
+            ]
+            let tracks =
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-multi-file-playback"
+                )
+                ? [
+                    AppPlaybackTrack(
+                        url: URL(
+                            fileURLWithPath: "/tmp/bleat-ui-test-audio-1.m4b"
+                        ),
+                        startOffset: 0,
+                        duration: 1_800,
+                        title: "Part One"
+                    ),
+                    AppPlaybackTrack(
+                        url: URL(
+                            fileURLWithPath: "/tmp/bleat-ui-test-audio-2.m4b"
+                        ),
+                        startOffset: 1_800,
+                        duration: 1_800,
+                        title: "Part Two"
+                    ),
+                ]
+                : playbackTracks
             return AppPlaybackPreparation(
                 sessionID: nil,
                 itemID: itemID,
@@ -855,16 +888,7 @@
                 duration: 3_600,
                 currentTime: usesLongChapterList ? 2_710 : 0,
                 chapters: chapters,
-                source: .direct([
-                    AppPlaybackTrack(
-                        url: URL(
-                            fileURLWithPath: "/tmp/bleat-ui-test-audio.m4b"
-                        ),
-                        startOffset: 0,
-                        duration: 3_600,
-                        title: title
-                    )
-                ])
+                source: .direct(tracks)
             )
         }
 

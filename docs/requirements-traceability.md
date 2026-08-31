@@ -242,7 +242,7 @@ other rows map section 22 release criteria.
 | AC-25 | Concurrent progress never silently overwrites two changed positions | `APP-OFFLINE-POSITION-001` | verified |
 | AC-26 | Metadata editing uses best-effort stale-draft handling without claiming atomic conflict prevention | `APP-METADATA-001` | verified |
 | AC-27 | Account removal leaves no credential or cross-account cache record | `APP-ACCOUNT-001`, `ACCOUNT-003` | verified |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The remaining accessibility audits are tracked by [VoiceOver #39](https://github.com/terminaloutcomes/bleat/issues/39), [Bold Text #44](https://github.com/terminaloutcomes/bleat/issues/44), [Increase Contrast #43](https://github.com/terminaloutcomes/bleat/issues/43), [Reduce Motion #41](https://github.com/terminaloutcomes/bleat/issues/41), [iPad keyboard #40](https://github.com/terminaloutcomes/bleat/issues/40), and [44-point targets #45](https://github.com/terminaloutcomes/bleat/issues/45) | implemented |
+| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The remaining accessibility audits are tracked by [VoiceOver #39](https://github.com/terminaloutcomes/bleat/issues/39), [Reduce Motion #41](https://github.com/terminaloutcomes/bleat/issues/41), and [iPad keyboard #40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
 | AC-29 | Server deletion is permission-gated, distinguishes both deletion modes, and stops matching playback first | `APP-BOOK-DELETE-001` | verified |
 
 ## Largest Dynamic Type audit
@@ -259,3 +259,38 @@ controls clipping, overlapping, disappearing, or becoming unreachable.
 | --- | --- | --- | --- |
 | iPhone 17 Pro Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatDynamicTypeUITests` journeys |
 | iPad Pro 13-inch (M5) Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatDynamicTypeUITests` journeys |
+
+## Bold Text, Increase Contrast, and interaction-target audit
+
+The 2026-08-31 audit used disposable iPhone and iPad Simulators. The harness
+enabled Bold Text and Increase Contrast separately, and the running app exposed
+the effective SwiftUI legibility-weight and colour-scheme-contrast states to the
+UI test boundary so a pass could not silently run with the requested setting
+disabled. `mise run test:accessibility` exercised login, Home, Library, Search,
+Book Detail, Downloads, the book editor, Settings, mini-player, Now Playing,
+chapter selection, and bookmark creation in each setting.
+
+The interaction-target audit measured app-owned navigation, browsing, author,
+series, playback, download, mini-player, transport, menu, and chapter-row
+controls. Nominal 44-point frames allow a half-point UI-test rendering tolerance;
+native tab, navigation, toolbar, search, form, and menu controls
+were instead verified through their system-provided visible and hittable regions.
+The audit found and corrected undersized Library controls, Book Detail links and
+actions, editor confirmation, mini-player actions, Now Playing transport and
+auxiliary controls, and chapter rows. The playback journey uses a multi-file
+fixture to keep the conditional audio-file menu in the measured auxiliary row.
+It also verified that the mini-player actions do not overlap each other or the
+native tab controls.
+
+All 48 retained screenshots were visually reviewed on 2026-08-31. Required text
+remained readable without blocking clipping or overlap in Bold Text. Increase
+Contrast retained non-colour cues for selection and emphasis, including icons,
+checkmarks, control shapes, and text labels. No colour-only state or
+font-weight-only distinction was found in the audited journeys.
+
+| Device | Setting | OS/build | Toolchain | Journey result |
+| --- | --- | --- | --- | --- |
+| iPhone 17 Pro Simulator | Increase Contrast | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
+| iPhone 17 Pro Simulator | Bold Text | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
+| iPad Pro 13-inch (M5) Simulator | Increase Contrast | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
+| iPad Pro 13-inch (M5) Simulator | Bold Text | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
