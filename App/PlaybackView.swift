@@ -319,13 +319,27 @@ struct MiniPlayerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(
-                Color.black.opacity(MiniPlayerContrast.backgroundOpacity),
-                in: RoundedRectangle(
-                    cornerRadius: miniPlayerRoundingRadius,
-                    style: .continuous
+            #if os(iOS)
+                .glassEffect(
+                    .regular.tint(
+                        Color.black.opacity(
+                            MiniPlayerContrast.backgroundOpacity
+                        )
+                    ),
+                    in: RoundedRectangle(
+                        cornerRadius: miniPlayerRoundingRadius,
+                        style: .continuous
+                    )
                 )
-            )
+            #else
+                .background(
+                    Color.black.opacity(MiniPlayerContrast.backgroundOpacity),
+                    in: RoundedRectangle(
+                        cornerRadius: miniPlayerRoundingRadius,
+                        style: .continuous
+                    )
+                )
+            #endif
             .shadow(
                 color: .black.opacity(0.12),
                 radius: miniPlayerRoundingRadius,

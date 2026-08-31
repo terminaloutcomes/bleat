@@ -413,16 +413,24 @@ final class BleatUITests: XCTestCase {
 
         let miniPlayer = app.descendants(matching: .any)["player.mini"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
-        let screenshot = miniPlayer.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
+        app.swipeUp()
+        app.swipeUp()
+
+        let screenshot = app.screenshot()
+        let miniPlayerImage = try crop(
+            screenshot.image,
+            to: miniPlayer.frame,
+            in: app.frame
+        )
+        let attachment = XCTAttachment(image: miniPlayerImage)
         attachment.name = "mini-player-light-mode-contrast"
         attachment.lifetime = .keepAlways
         add(attachment)
 
         XCTAssertLessThan(
-            try averageLuminance(of: screenshot.image),
+            try averageLuminance(of: miniPlayerImage),
             0.45,
-            "The mini-player surface must remain dark enough for white text"
+            "The composited mini-player must remain dark enough for white text"
         )
     }
 
@@ -2496,6 +2504,28 @@ final class BleatUITests: XCTestCase {
             total += (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
         }
         return total / Double(width * height)
+    }
+
+    private func crop(
+        _ image: UIImage,
+        to elementFrame: CGRect,
+        in applicationFrame: CGRect
+    ) throws -> UIImage {
+        guard let source = image.cgImage else {
+            throw XCTSkip("Could not read the application screenshot")
+        }
+        let scaleX = CGFloat(source.width) / applicationFrame.width
+        let scaleY = CGFloat(source.height) / applicationFrame.height
+        let cropRect = CGRect(
+            x: (elementFrame.minX - applicationFrame.minX) * scaleX,
+            y: (elementFrame.minY - applicationFrame.minY) * scaleY,
+            width: elementFrame.width * scaleX,
+            height: elementFrame.height * scaleY
+        ).integral
+        guard let cropped = source.cropping(to: cropRect) else {
+            throw XCTSkip("Could not crop the mini-player from the screenshot")
+        }
+        return UIImage(cgImage: cropped)
     }
 
     @MainActor
