@@ -4,8 +4,9 @@
 
 Apple's managed CarPlay Audio App entitlement has been requested and is
 pending. `BLEAT_CARPLAY_MODE` defaults to `disabled`, and no entitlement,
-provisioning, CarPlay Simulator, or vehicle result is recorded as complete in
-this document yet.
+provisioning, or vehicle result is recorded as complete in this document yet.
+Initial CarPlay Simulator observations are recorded below, but the required
+journey matrix is not complete.
 
 Issue [#24](https://github.com/terminaloutcomes/bleat/issues/24) remains open
 until every section below has dated evidence.
@@ -34,6 +35,20 @@ contents, or other signing material.
 
 Record the date, application version/build, Xcode version, Simulator runtime,
 and result for each journey.
+
+### 2026-08-31 initial Simulator observations
+
+- Bleat 0.1.3 (2), Xcode 26.6 (17F113), and the iOS 26.5 Simulator runtime.
+- An explicitly enabled build rendered the signed-in account's Home shelves,
+  tabs, artwork, and audiobook metadata after the CarPlay app was refreshed.
+- Starting playback on the phone presented the matching audiobook in CarPlay
+  Now Playing. Automated coverage verifies that the system playback state is
+  published from playback intent, but the CarPlay transport presentation still
+  needs a manual follow-up result after that correction.
+- After restarting the phone app, the CarPlay Simulator retained the prior
+  scene until the tester returned to the CarPlay launcher and reopened Bleat.
+  Treat that launcher round trip as part of Simulator restart/reconnect
+  journeys; it is not evidence that a vehicle reconnect has passed.
 
 ## Physical vehicle or head unit
 

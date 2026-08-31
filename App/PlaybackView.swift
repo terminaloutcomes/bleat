@@ -115,6 +115,11 @@ enum MiniPlayerSwipeDecision: Equatable {
     }
 }
 
+enum MiniPlayerContrast {
+    static let backgroundOpacity = 0.85
+    static let secondaryTextOpacity = 0.85
+}
+
 private struct PlaybackScrubberView: View {
     @Bindable var playback: PlaybackModel
     @State private var scrubTime: Double = 0
@@ -252,7 +257,6 @@ struct MiniPlayerView: View {
     let showPlayer: () -> Void
     @State private var isDismissing = false
 
-    @ColourSchemePreference private var colourScheme
     var miniPlayerRoundingRadius: CGFloat = 8
 
     var body: some View {
@@ -263,11 +267,16 @@ struct MiniPlayerView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(playback.title)
                             .font(.headline)
+                            .foregroundStyle(.white)
                             .lineLimit(1)
                         if !playback.author.isEmpty {
                             Text(playback.author)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(
+                                    .white.opacity(
+                                        MiniPlayerContrast.secondaryTextOpacity
+                                    )
+                                )
                                 .lineLimit(1)
                         }
                     }
@@ -304,12 +313,19 @@ struct MiniPlayerView: View {
                         playback.isPlaybackRequested ? "Pause" : "Play"
                     )
                     .accessibilityIdentifier("player.mini.toggle")
-                    .simultaneousGesture(miniPlayerGesture).tint(
-                        colourScheme.color)
+                    .simultaneousGesture(miniPlayerGesture)
+                    .tint(.white)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .background(
+                Color.black.opacity(MiniPlayerContrast.backgroundOpacity),
+                in: RoundedRectangle(
+                    cornerRadius: miniPlayerRoundingRadius,
+                    style: .continuous
+                )
+            )
             .shadow(
                 color: .black.opacity(0.12),
                 radius: miniPlayerRoundingRadius,

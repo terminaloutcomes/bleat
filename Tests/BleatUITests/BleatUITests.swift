@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 
 @MainActor
@@ -400,6 +401,28 @@ final class BleatUITests: XCTestCase {
                     "Pause The Test Audiobook"
                 )
             ).firstMatch.exists
+        )
+    }
+
+    @MainActor
+    func testMiniPlayerSurfaceMaintainsLightModeContrast() throws {
+        let app = launch(scenario: "--ui-testing-playback")
+        let play = app.buttons["home.book.ui-book.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let miniPlayer = app.descendants(matching: .any)["player.mini"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        let screenshot = miniPlayer.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "mini-player-light-mode-contrast"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCTAssertLessThan(
+            try averageLuminance(of: screenshot.image),
+            0.45,
+            "The mini-player surface must remain dark enough for white text"
         )
     }
 
@@ -2443,6 +2466,36 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    private func averageLuminance(of image: UIImage) throws -> Double {
+        let width = 64
+        let height = 16
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard
+            let context = CGContext(
+                data: &pixels,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ),
+            let source = image.cgImage
+        else {
+            throw XCTSkip("Could not render the mini-player screenshot")
+        }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var total = 0.0
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let red = Double(pixels[index]) / 255
+            let green = Double(pixels[index + 1]) / 255
+            let blue = Double(pixels[index + 2]) / 255
+            total += (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        }
+        return total / Double(width * height)
     }
 
     @MainActor
