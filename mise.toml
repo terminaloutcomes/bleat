@@ -201,7 +201,7 @@ run = ["./scripts/test-deep-links.sh"]
 
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
-depends = ["site-check"]
+depends = ["site-check", "swift-fmt"]
 run = [
   { task = "security:validate" },
   { task = "api:validate" },
