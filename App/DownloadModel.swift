@@ -2820,6 +2820,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         } catch let modelFailure as DownloadModelFailure {
             failure = modelFailure
             return .failed(modelFailure)
+        } catch let storageError as DownloadStorageError {
+            let modelFailure = storageFailure(storageError)
+            failure = modelFailure
+            return .failed(modelFailure)
         } catch {
             failure = .transferFailed
             return .failed(.transferFailed)
