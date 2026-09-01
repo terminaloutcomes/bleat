@@ -4620,7 +4620,12 @@ final class AppModel {
             itemID: itemID
         )
         await acquireBookMediaOperation(for: mediaOperationKey)
-        defer { releaseBookMediaOperation(for: mediaOperationKey) }
+        var holdsBookMediaOperation = true
+        defer {
+            if holdsBookMediaOperation {
+                releaseBookMediaOperation(for: mediaOperationKey)
+            }
+        }
         guard playbackStartGeneration == generation else {
             return .superseded
         }
@@ -4783,6 +4788,9 @@ final class AppModel {
                 )
             }
         }
+
+        holdsBookMediaOperation = false
+        releaseBookMediaOperation(for: mediaOperationKey)
 
         let detail: LibraryBookDetail
         switch request.book {
