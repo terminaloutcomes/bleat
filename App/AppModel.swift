@@ -1226,8 +1226,10 @@ extension PrivateCloudSyncFailure {
             }
         case .persistenceFailed:
             .localStorage
-        case .cancelled, .disabled, .invalidRecord, .nonPrivateDatabase,
-            .engineUnavailable, .unexpected:
+        case .nonPrivateDatabase:
+            .sourceBug
+        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+            .unexpected:
             .unknown
         }
     }

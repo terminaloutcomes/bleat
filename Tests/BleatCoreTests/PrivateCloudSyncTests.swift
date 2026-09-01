@@ -34,6 +34,11 @@ final class PrivateCloudSyncTests: XCTestCase {
             event.failureCode,
             .privateCloudNonPrivateDatabase
         )
+        XCTAssertEqual(
+            PrivateCloudSyncError.nonPrivateDatabase
+                .remoteTelemetryFailureCategory,
+            .sourceBug
+        )
     }
 
     func testCloudKitFailurePreservesExactCodeRetryAndPartialCodes() {

@@ -394,8 +394,10 @@ extension PrivateCloudSyncError {
             }
         case .persistenceFailed:
             .localStorage
-        case .cancelled, .disabled, .invalidRecord, .nonPrivateDatabase,
-            .engineUnavailable, .unexpected:
+        case .nonPrivateDatabase:
+            .sourceBug
+        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+            .unexpected:
             .unknown
         }
     }
@@ -423,6 +425,7 @@ public enum RemoteTelemetryFailureCategory: String, CaseIterable, Sendable {
     case localStorage = "local_storage"
     case media
     case unsupported
+    case sourceBug = "source_bug"
     case unknown
 }
 
