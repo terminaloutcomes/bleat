@@ -158,10 +158,14 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Cached summaries and downloaded-book details remain available offline.
 - A long press on any single-book Home, Library, Search, or Series card exposes
   one native menu backed by the existing Book Detail actions: exactly one of
-  Mark Played or Mark Unplayed, permitted Download and Edit actions, and the
-  platform's transcription availability. Played-state changes dismiss the menu
-  normally and run through an account- and item-scoped asynchronous coordinator
-  with a 30-second logical deadline. The coordinator loads canonical detail,
+  Mark Played or Mark Unplayed, permitted Download and Edit actions, a
+  destructive Remove Download action when account-scoped local media exists,
+  and the platform's transcription availability. Remove Download deletes only
+  the matching local record and its finalized, partial, and staging files; it is
+  disabled while that account and book are playing. Played-state changes
+  dismiss the menu normally and run through an account- and item-scoped
+  asynchronous coordinator with a 30-second logical deadline. The coordinator
+  loads canonical detail,
   re-checks item access, leaves local state unchanged until the progress PATCH
   returns HTTP 200, commits locally, and schedules detail, Home, Library, and
   Search reconciliation separately. Preparation or mutation failure presents
@@ -253,6 +257,9 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   chapter, when the book finishes, or 24 hours after the book finishes.
 - I can promote an automatic cache to a full-book download without downloading
   its verified files again.
+- I can remove a manual download or automatic cache from a book's Home or
+  Library context menu without changing the server item or its metadata. The
+  action cannot remove media used by matching active playback.
 - The app checks available storage before starting and never leaves a completed book pointing at partial files.
 - I can play downloaded books while the server is unavailable or the account needs reauthentication.
 - A whole-book-complete download prepares from its persisted detail, verified local files, and account/item-scoped local position. Play, pause, seek, skip, chapter navigation, rate changes, resume, stop, backgrounding, and bookmark edits persist local state without opening a playback session, fetching progress, bookmarks, authentication, or artwork, or uploading progress.

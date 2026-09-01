@@ -669,9 +669,12 @@ only when no track is continuing. The Downloads tab shows durable state and
 supports book-scoped deletion. Its storage section shows the total number of
 books, device storage used, and books ready offline. Confirmed bulk removal
 cancels matching transfers but preserves the currently playing download;
-Settings links to the same management screen and storage total. Before
-scheduling, Bleat requires the expected audio bytes plus the larger of 10% or
-256 MB to be available. Downloads are grouped by saved account and show stored
+Settings links to the same management screen and storage total.
+Home and Library book context menus also expose **Remove Download** for a
+matching manual download or automatic cache and disable it while that account
+and book are playing. Removal affects only local state and media files.
+Before scheduling, Bleat requires the expected audio bytes plus the larger of
+10% or 256 MB to be available. Downloads are grouped by saved account and show stored
 versus expected bytes for each book and the stored total for that account.
 Startup removes local records that have no saved owning account. A 401 transfer
 response is replaced using the native account's rotating refresh token without

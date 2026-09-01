@@ -1859,6 +1859,7 @@ private final class BookActionContextPresentation {
     var request: Request?
     private(set) var downloadFailure: AppFailure?
     private var pendingDownloads: Set<DownloadPreparationKey> = []
+    private var pendingRemovals: Set<DownloadPreparationKey> = []
 
     var requestBinding: Binding<Request?> {
         Binding(
@@ -1897,6 +1898,27 @@ private final class BookActionContextPresentation {
         itemID: LibraryItemID
     ) -> Bool {
         pendingDownloads.contains(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        )
+    }
+
+    func beginRemoval(accountID: AccountID, itemID: LibraryItemID) -> Bool {
+        pendingRemovals.insert(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        ).inserted
+    }
+
+    func finishRemoval(accountID: AccountID, itemID: LibraryItemID) {
+        pendingRemovals.remove(
+            DownloadPreparationKey(accountID: accountID, itemID: itemID)
+        )
+    }
+
+    func isRemovalPending(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Bool {
+        pendingRemovals.contains(
             DownloadPreparationKey(accountID: accountID, itemID: itemID)
         )
     }
@@ -2029,18 +2051,42 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 "book.context.\(book.id.rawValue).transcribe"
             )
         }
+
+        if let record = localDownloadRecord {
+            Button(
+                "Remove Download",
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                beginRemoval(record)
+            }
+            .disabled(
+                isDownloadProtected
+                    || presentation.isRemovalPending(
+                        accountID: account.id,
+                        itemID: book.id
+                    )
+            )
+            .accessibilityIdentifier(
+                "book.context.\(book.id.rawValue).removeDownload"
+            )
+        }
     }
 
     private var canStartDownload: Bool {
-        guard
-            let record = model.downloads.record(
-                accountID: account.id,
-                itemID: book.id
-            )
-        else {
+        guard let record = localDownloadRecord else {
             return true
         }
         return record.manifest.purpose == .automaticCache
+    }
+
+    private var localDownloadRecord: DownloadedBookRecord? {
+        model.downloads.record(accountID: account.id, itemID: book.id)
+    }
+
+    private var isDownloadProtected: Bool {
+        model.playback.accountID == account.id
+            && model.playback.itemID == book.id
     }
 
     private func begin(_ action: BookContextAction) {
@@ -2058,6 +2104,34 @@ private struct BookActionContextMenuModifier: ViewModifier {
         }
         Task {
             await prepareDownload()
+        }
+    }
+
+    private func beginRemoval(_ record: DownloadedBookRecord) {
+        guard
+            !isDownloadProtected,
+            presentation.beginRemoval(
+                accountID: account.id,
+                itemID: book.id
+            )
+        else {
+            return
+        }
+        Task {
+            defer {
+                presentation.finishRemoval(
+                    accountID: account.id,
+                    itemID: book.id
+                )
+            }
+            guard
+                !isDownloadProtected,
+                let current = localDownloadRecord,
+                current.manifest.downloadID == record.manifest.downloadID
+            else {
+                return
+            }
+            await model.downloads.remove(current)
         }
     }
 

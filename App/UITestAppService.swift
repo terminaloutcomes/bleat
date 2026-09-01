@@ -23,13 +23,16 @@
             "--ui-testing-home-download-unavailable"
         case homeRefreshFailure = "--ui-testing-home-refresh-failure"
         case homeShelfOrder = "--ui-testing-home-shelf-order"
+        case contextDownloadRemoval =
+            "--ui-testing-context-download-removal"
 
         var isSignedIn: Bool {
             switch self {
             case .signedIn, .refresh, .emptyLibraryRefreshFailure,
                 .limitedPermissions, .playback, .largeLibrary, .homeLoading,
                 .homeEmpty, .homeDownloadLoading, .homeDownloadUnavailable,
-                .homeRefreshFailure, .homeShelfOrder:
+                .homeRefreshFailure, .homeShelfOrder,
+                .contextDownloadRemoval:
                 true
             case .signedOut, .openID, .rejectLogin, .submissionProgress,
                 .launching, .unavailableStartup:
@@ -40,7 +43,7 @@
         var hasCompletedDownload: Bool {
             switch self {
             case .homeDownloadLoading, .homeDownloadUnavailable,
-                .homeShelfOrder:
+                .homeShelfOrder, .contextDownloadRemoval:
                 true
             default:
                 false
@@ -195,7 +198,11 @@
             )
             downloadsStorageRootURL =
                 scenario.hasCompletedDownload
-                ? try? Self.makeCompletedDownloadFixture()
+                ? try? Self.makeCompletedDownloadFixture(
+                    itemID: scenario == .contextDownloadRemoval
+                        ? LibraryItemID(rawValue: "ui-book")
+                        : LibraryItemID(rawValue: "ui-downloaded")
+                )
                 : nil
         }
 
@@ -1315,7 +1322,9 @@
             return 10_000
         }
 
-        private static func makeCompletedDownloadFixture() throws -> URL {
+        private static func makeCompletedDownloadFixture(
+            itemID: LibraryItemID
+        ) throws -> URL {
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
                     "BleatUITestDownloads-\(UUID().uuidString)",
@@ -1323,7 +1332,6 @@
                 )
             let layout = try DownloadStorageLayout(rootURL: root)
             let accountID = AccountID(rawValue: "ui-account")
-            let itemID = LibraryItemID(rawValue: "ui-downloaded")
             let audio = silentWaveFixture()
             let track = DownloadTrackPlan(
                 index: 0,

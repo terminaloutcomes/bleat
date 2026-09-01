@@ -847,6 +847,82 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookContextMenuRemovesLocalDownloadFromHome() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal"
+        )
+        let downloadedPlay = app.buttons["home.downloaded.ui-book.play"]
+        XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 3))
+        downloadedPlay.tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+        )
+
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let remove = app.buttons[
+            "book.context.ui-book.removeDownload"
+        ]
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertFalse(remove.isEnabled)
+        app.buttons["Mark Unplayed"].tap()
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 3))
+
+        let miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        let start = miniToggle.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80))
+        )
+        XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 3))
+        let removableHomeBook = app.descendants(matching: .any)[
+            "home.book.ui-book"
+        ]
+        XCTAssertTrue(removableHomeBook.waitForExistence(timeout: 3))
+        removableHomeBook.press(forDuration: 1)
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertTrue(remove.isEnabled)
+        remove.tap()
+
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testBookContextMenuRemovesLocalDownloadFromLibrary() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal"
+        )
+        tabButton("Library", in: app).tap()
+        let libraryBook = app.descendants(matching: .any)[
+            "library.book.ui-book"
+        ]
+        XCTAssertTrue(libraryBook.waitForExistence(timeout: 3))
+        libraryBook.press(forDuration: 1)
+        let remove = app.buttons[
+            "book.context.ui-book.removeDownload"
+        ]
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertTrue(remove.isEnabled)
+        remove.tap()
+
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["No Downloads"].waitForExistence(timeout: 3)
+        )
+        tabButton("Library", in: app).tap()
+        libraryBook.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Download"].waitForExistence(timeout: 3))
+        XCTAssertFalse(remove.exists)
+    }
+
+    @MainActor
     func testSeriesDownloadStartsEveryBook() {
         let app = launch(scenario: "--ui-testing-signed-in")
         let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
