@@ -5668,6 +5668,63 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    func testRemovalReportsAnInFlightControlTransition() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRemovalDuringPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Removal during pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "removal-during-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.removal-during-pause.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+
+        let result = await model.remove(record)
+
+        XCTAssertEqual(result, .controlTransitionInProgress)
+        XCTAssertNotNil(
+            model.record(accountID: account.id, itemID: detail.id)
+        )
+        await gate.release()
+        await pauseTask.value
+        await model.removeAll()
+    }
+
     func testCancelSupersedesGatedPause() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(

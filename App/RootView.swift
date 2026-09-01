@@ -2132,7 +2132,8 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 )
             }
             switch await model.removeDownload(record) {
-            case .removed, .unavailable, .playbackProtected:
+            case .removed, .unavailable, .playbackProtected,
+                .controlTransitionInProgress:
                 break
             case .failed(let failure):
                 presentation.presentRemovalFailure(failure)

@@ -276,6 +276,12 @@ enum DownloadControlAction: Hashable {
     case remove
 }
 
+enum DownloadRemovalResult: Equatable, Sendable {
+    case removed
+    case controlTransitionInProgress
+    case failed(DownloadModelFailure)
+}
+
 enum DownloadControlPhase: Equatable {
     case waitingToDownload
     case downloading
@@ -2755,14 +2761,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     func remove(
         _ record: DownloadedBookRecord,
         duringTransition: Bool = false
-    ) async -> Bool {
+    ) async -> DownloadRemovalResult {
         guard let storage else {
             failure = .storageUnavailable
-            return false
+            return .failed(.storageUnavailable)
         }
         let downloadID = record.manifest.downloadID
         if !duringTransition {
-            guard controlTransitions[downloadID] == nil else { return false }
+            guard controlTransitions[downloadID] == nil else {
+                return .controlTransitionInProgress
+            }
         }
         invalidatePauseOperation(for: downloadID)
         invalidateResumeOperation(for: downloadID)
@@ -2803,13 +2811,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 downloadID
             )
             await refresh()
-            return true
+            return .removed
         } catch let modelFailure as DownloadModelFailure {
             failure = modelFailure
-            return false
+            return .failed(modelFailure)
         } catch {
             failure = .transferFailed
-            return false
+            return .failed(.transferFailed)
         }
     }
 
@@ -2836,7 +2844,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await waitForDownloadOperations()
         let removableRecords = records
         for record in removableRecords {
-            guard await remove(record, duringTransition: true) else {
+            let result = await remove(
+                record,
+                duringTransition: true
+            )
+            guard case .removed = result else {
                 return false
             }
         }

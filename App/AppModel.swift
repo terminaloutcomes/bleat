@@ -143,6 +143,7 @@ enum DownloadRemovalOutcome: Equatable, Sendable {
     case removed
     case unavailable
     case playbackProtected
+    case controlTransitionInProgress
     case failed(DownloadModelFailure)
 }
 
@@ -3902,8 +3903,11 @@ final class AppModel {
             )
             let localDownloadCleanupFailed: Bool
             if let localRecord {
-                localDownloadCleanupFailed =
-                    !(await downloads.remove(localRecord))
+                if case .removed = await downloads.remove(localRecord) {
+                    localDownloadCleanupFailed = false
+                } else {
+                    localDownloadCleanupFailed = true
+                }
             } else {
                 localDownloadCleanupFailed = false
             }
@@ -4890,10 +4894,14 @@ final class AppModel {
         else {
             return .playbackProtected
         }
-        guard await downloads.remove(current) else {
-            return .failed(downloads.failure ?? .transferFailed)
+        switch await downloads.remove(current) {
+        case .removed:
+            return .removed
+        case .controlTransitionInProgress:
+            return .controlTransitionInProgress
+        case .failed(let failure):
+            return .failed(failure)
         }
-        return .removed
     }
 
     private func acquireBookMediaOperation(
