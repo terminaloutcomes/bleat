@@ -649,6 +649,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let pauseManifestCommit:
         @Sendable (DownloadStorage, DownloadTaskIdentity, Int64) async throws
             -> Void
+    private let removalStorageCheckpoint:
+        @MainActor @Sendable () async throws -> Void
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
     private let automaticLookaheadKey =
@@ -880,7 +882,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     identity,
                     observedByteLength: committed
                 )
-            }
+            },
+        removalStorageCheckpoint:
+            @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
         diagnosticEmitter = OrderedDownloadDiagnosticEmitter(
@@ -893,6 +897,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.replacementTaskStartCheckpoint = replacementTaskStartCheckpoint
         self.pauseOperationCheckpoint = pauseOperationCheckpoint
         self.pauseManifestCommit = pauseManifestCommit
+        self.removalStorageCheckpoint = removalStorageCheckpoint
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         let loadedMaximumConcurrentDownloads =
@@ -2783,6 +2788,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             finishTransferSpan(identity, outcome: .cancelled)
         }
         do {
+            try await removalStorageCheckpoint()
             try await storage.remove(record)
             automaticCachePins[downloadID] = nil
             deferredAutomaticCacheCleanup[downloadID] = nil
@@ -2798,6 +2804,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             )
             await refresh()
             return true
+        } catch let modelFailure as DownloadModelFailure {
+            failure = modelFailure
+            return false
         } catch {
             failure = .transferFailed
             return false

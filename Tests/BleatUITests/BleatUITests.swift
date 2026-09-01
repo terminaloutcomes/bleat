@@ -923,6 +923,63 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testContextDownloadAndRemovalAreMutuallyExclusive() async throws {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal",
+            additionalArguments: [
+                "--ui-testing-automatic-context-download",
+                "--ui-testing-slow-context-download",
+            ]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let download = app.buttons["Download"]
+        let remove = app.buttons[
+            "book.context.ui-book.removeDownload"
+        ]
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        download.tap()
+
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertFalse(download.isEnabled)
+        XCTAssertFalse(remove.isEnabled)
+        app.buttons["Mark Unplayed"].tap()
+        try await Task.sleep(for: .seconds(9))
+    }
+
+    @MainActor
+    func testContextDownloadRemovalFailureUsesOriginatingAlert() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal-failure"
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        let remove = app.buttons[
+            "book.context.ui-book.removeDownload"
+        ]
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        remove.tap()
+
+        XCTAssertTrue(
+            app.staticTexts[
+                "Bleat could not access downloaded media storage."
+            ].waitForExistence(timeout: 3)
+        )
+        app.buttons["OK"].tap()
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["The Downloaded Audiobook"]
+                .waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
     func testSeriesDownloadStartsEveryBook() {
         let app = launch(scenario: "--ui-testing-signed-in")
         let homeBook = app.descendants(matching: .any)["home.book.ui-book"]

@@ -25,6 +25,8 @@
         case homeShelfOrder = "--ui-testing-home-shelf-order"
         case contextDownloadRemoval =
             "--ui-testing-context-download-removal"
+        case contextDownloadRemovalFailure =
+            "--ui-testing-context-download-removal-failure"
 
         var isSignedIn: Bool {
             switch self {
@@ -32,7 +34,7 @@
                 .limitedPermissions, .playback, .largeLibrary, .homeLoading,
                 .homeEmpty, .homeDownloadLoading, .homeDownloadUnavailable,
                 .homeRefreshFailure, .homeShelfOrder,
-                .contextDownloadRemoval:
+                .contextDownloadRemoval, .contextDownloadRemovalFailure:
                 true
             case .signedOut, .openID, .rejectLogin, .submissionProgress,
                 .launching, .unavailableStartup:
@@ -43,7 +45,8 @@
         var hasCompletedDownload: Bool {
             switch self {
             case .homeDownloadLoading, .homeDownloadUnavailable,
-                .homeShelfOrder, .contextDownloadRemoval:
+                .homeShelfOrder, .contextDownloadRemoval,
+                .contextDownloadRemovalFailure:
                 true
             default:
                 false
@@ -87,6 +90,12 @@
             ProcessInfo.processInfo.arguments.contains(
                 UITestScenario.unavailableStartup.rawValue
             ) ? .persistenceUnavailable : nil
+        }
+
+        static var downloadRemovalFailure: DownloadModelFailure? {
+            ProcessInfo.processInfo.arguments.contains(
+                UITestScenario.contextDownloadRemovalFailure.rawValue
+            ) ? .storageUnavailable : nil
         }
 
         private let scenario: UITestScenario
@@ -190,6 +199,9 @@
 
         private init(scenario: UITestScenario) {
             self.scenario = scenario
+            let isContextDownloadRemoval =
+                scenario == .contextDownloadRemoval
+                || scenario == .contextDownloadRemovalFailure
             accountResult = Self.makeAccount(
                 hasManagementPermissions: scenario != .limitedPermissions,
                 deniesPlayback: ProcessInfo.processInfo.arguments.contains(
@@ -199,9 +211,12 @@
             downloadsStorageRootURL =
                 scenario.hasCompletedDownload
                 ? try? Self.makeCompletedDownloadFixture(
-                    itemID: scenario == .contextDownloadRemoval
+                    itemID: isContextDownloadRemoval
                         ? LibraryItemID(rawValue: "ui-book")
-                        : LibraryItemID(rawValue: "ui-downloaded")
+                        : LibraryItemID(rawValue: "ui-downloaded"),
+                    purpose: ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-automatic-context-download"
+                    ) ? .automaticCache : .manual
                 )
                 : nil
         }
@@ -1323,7 +1338,8 @@
         }
 
         private static func makeCompletedDownloadFixture(
-            itemID: LibraryItemID
+            itemID: LibraryItemID,
+            purpose: DownloadPurpose
         ) throws -> URL {
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
@@ -1347,7 +1363,10 @@
             var manifest = try DownloadManifest(
                 downloadID: DownloadID(rawValue: "ui-downloaded-download"),
                 accountID: accountID,
-                plan: plan
+                plan: plan,
+                purpose: purpose,
+                automaticTargetTrackIndexes:
+                    purpose == .automaticCache ? [track.index] : nil
             )
             try manifest.markComplete(
                 trackIndex: 0,

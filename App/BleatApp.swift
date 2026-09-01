@@ -66,7 +66,14 @@ final class AppBootstrap {
                     diagnostics: diagnostics,
                     remoteTelemetryConsentController: remoteTelemetry,
                     remoteTelemetryTracer: remoteTelemetry.tracer,
-                    remoteTelemetryDownloadLogger: remoteTelemetry.logger
+                    remoteTelemetryDownloadLogger: remoteTelemetry.logger,
+                    downloadRemovalStorageCheckpoint: {
+                        if let failure =
+                            UITestAppService.downloadRemovalFailure
+                        {
+                            throw failure
+                        }
+                    }
                 )
                 if UITestAppService.opensSettingsAtLaunch {
                     AppDeepLinkInbox.shared.openSettings()

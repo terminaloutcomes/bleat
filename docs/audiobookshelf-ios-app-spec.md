@@ -157,12 +157,13 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Book details show title, subtitle, authors, narrators, series and sequence, cover, description, duration, chapters, file/download state, and listening progress.
 - Cached summaries and downloaded-book details remain available offline.
 - A long press on any single-book Home, Library, Search, or Series card exposes
-  one native menu backed by the existing Book Detail actions: exactly one of
-  Mark Played or Mark Unplayed, permitted Download and Edit actions, a
-  destructive Remove Download action when account-scoped local media exists,
-  and the platform's transcription availability. Remove Download deletes only
-  the matching local record and its finalized, partial, and staging files; it is
-  disabled while that account and book are playing. Played-state changes
+  one native menu. When server access permits, it contains exactly one of Mark
+  Played or Mark Unplayed, permitted Download and Edit actions, and the
+  platform's transcription availability. A destructive Remove Download action
+  remains available for account-scoped local media even when server access is
+  unavailable. Remove Download deletes only the matching local record and its
+  finalized, partial, and staging files; it is disabled while that account and
+  book are playing or preparing playback. Played-state changes
   dismiss the menu normally and run through an account- and item-scoped
   asynchronous coordinator with a 30-second logical deadline. The coordinator
   loads canonical detail,

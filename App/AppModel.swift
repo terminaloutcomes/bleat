@@ -139,6 +139,18 @@ struct PlaybackStartTarget: Equatable, Sendable {
     let itemID: LibraryItemID
 }
 
+enum DownloadRemovalOutcome: Equatable, Sendable {
+    case removed
+    case unavailable
+    case playbackProtected
+    case failed(DownloadModelFailure)
+}
+
+private struct BookMediaOperationKey: Hashable {
+    let accountID: AccountID
+    let itemID: LibraryItemID
+}
+
 private enum PlaybackStartBook: Sendable {
     case summary(LibraryBookSummary)
     case detail(LibraryBookDetail)
@@ -1295,6 +1307,11 @@ final class AppModel {
     @ObservationIgnored
     private var playbackStartInvalidationTask: Task<Void, Never>?
     @ObservationIgnored
+    private var bookMediaOperationsInFlight: Set<BookMediaOperationKey> = []
+    @ObservationIgnored
+    private var bookMediaOperationWaiters:
+        [BookMediaOperationKey: [CheckedContinuation<Void, Never>]] = [:]
+    @ObservationIgnored
     private var liveUpdatesTask: Task<Void, Never>?
     @ObservationIgnored
     private var liveUpdateConnectionSpans: [UUID: RemoteTelemetrySpan] = [:]
@@ -1557,7 +1574,9 @@ final class AppModel {
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
             {
                 try await Task.sleep(for: $0)
-            }
+            },
+        downloadRemovalStorageCheckpoint:
+            @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -1584,7 +1603,9 @@ final class AppModel {
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
             remoteTelemetryTracer: remoteTelemetryTracer,
-            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger
+            remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
+            downloadRemovalStorageCheckpoint:
+                downloadRemovalStorageCheckpoint
         )
         self.playback = subsystems.playback
         self.downloads = subsystems.downloads
@@ -1713,7 +1734,9 @@ final class AppModel {
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
-        remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging
+        remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging,
+        downloadRemovalStorageCheckpoint:
+            @escaping @MainActor @Sendable () async throws -> Void
     ) -> (playback: PlaybackModel, downloads: DownloadModel) {
         let playback = PlaybackModel(
             service: service,
@@ -1728,7 +1751,8 @@ final class AppModel {
             remoteTelemetryTracer: remoteTelemetryTracer,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
             backgroundSessionIdentifier:
-                downloadsBackgroundSessionIdentifier
+                downloadsBackgroundSessionIdentifier,
+            removalStorageCheckpoint: downloadRemovalStorageCheckpoint
         )
         playback.setAutomaticDownloadHandler { [weak downloads] activity in
             await downloads?.handleAutomaticPlaybackActivity(activity)
@@ -4591,6 +4615,15 @@ final class AppModel {
 
         let itemID = request.book.itemID
         let libraryID = request.book.libraryID
+        let mediaOperationKey = BookMediaOperationKey(
+            accountID: savedAccount.id,
+            itemID: itemID
+        )
+        await acquireBookMediaOperation(for: mediaOperationKey)
+        defer { releaseBookMediaOperation(for: mediaOperationKey) }
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
         if playback.isPrepared(
             accountID: savedAccount.id,
             itemID: itemID
@@ -4822,6 +4855,58 @@ final class AppModel {
             accountID: savedAccount.id,
             itemID: itemID
         )
+    }
+
+    func removeDownload(
+        _ record: DownloadedBookRecord
+    ) async -> DownloadRemovalOutcome {
+        let accountID = record.manifest.accountID
+        let itemID = record.manifest.itemID
+        let key = BookMediaOperationKey(
+            accountID: accountID,
+            itemID: itemID
+        )
+        await acquireBookMediaOperation(for: key)
+        defer { releaseBookMediaOperation(for: key) }
+
+        guard
+            let current = downloads.record(
+                accountID: accountID,
+                itemID: itemID
+            ),
+            current.manifest.downloadID == record.manifest.downloadID
+        else {
+            return .unavailable
+        }
+        guard playback.accountID != accountID || playback.itemID != itemID
+        else {
+            return .playbackProtected
+        }
+        guard await downloads.remove(current) else {
+            return .failed(downloads.failure ?? .transferFailed)
+        }
+        return .removed
+    }
+
+    private func acquireBookMediaOperation(
+        for key: BookMediaOperationKey
+    ) async {
+        guard !bookMediaOperationsInFlight.insert(key).inserted else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            bookMediaOperationWaiters[key, default: []].append(continuation)
+        }
+    }
+
+    private func releaseBookMediaOperation(for key: BookMediaOperationKey) {
+        if var waiters = bookMediaOperationWaiters[key], !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            bookMediaOperationWaiters[key] = waiters.isEmpty ? nil : waiters
+            waiter.resume()
+            return
+        }
+        bookMediaOperationsInFlight.remove(key)
     }
 
     private func validateSuppliedPlaybackIdentity(
