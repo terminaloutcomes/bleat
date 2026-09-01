@@ -2789,9 +2789,9 @@ public final class PrivateCloudSyncCoordinator:
         }
 
         try await perform(.disable) {
-            let engine = try configuredEngine()
-            await engine.cancelOperations()
             if deleteCloudData {
+                let engine = try configuredEngine()
+                await engine.cancelOperations()
                 do {
                     try await perform(.deleteCloudData) {
                         engine.state.add(
@@ -2804,6 +2804,11 @@ public final class PrivateCloudSyncCoordinator:
                 } catch let failure as PrivateCloudSyncFailure {
                     throw failure.cause
                 }
+            } else {
+                // Local opt-out must remain available when a source or
+                // entitlement bug prevented the CloudKit engine from being
+                // created. No database access is needed to retain cloud data.
+                await engine?.cancelOperations()
             }
             defaults.set(false, forKey: enabledKey)
         }

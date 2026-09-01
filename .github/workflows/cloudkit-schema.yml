@@ -6,14 +6,16 @@ on:
       - main
     paths:
       - CloudKit/**
-      - Sources/BleatCore/PrivateCloudSync.swift
+      - App/**/*.swift
+      - Sources/**/*.swift
       - scripts/validate-cloudkit-schema.py
       - scripts/test-cloudkit-schema-validator.py
       - .github/workflows/cloudkit-schema.yml
   pull_request:
     paths:
       - CloudKit/**
-      - Sources/BleatCore/PrivateCloudSync.swift
+      - App/**/*.swift
+      - Sources/**/*.swift
       - scripts/validate-cloudkit-schema.py
       - scripts/test-cloudkit-schema-validator.py
       - .github/workflows/cloudkit-schema.yml
