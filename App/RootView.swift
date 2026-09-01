@@ -1836,11 +1836,13 @@ private enum BookContextAction: Hashable {
 private enum BookActionContextFailure: Equatable {
     case action(AppFailure)
     case removal(DownloadModelFailure)
+    case removalControlTransitionInProgress
 
     var title: String {
         switch self {
         case .action(let failure): failure.title
         case .removal: "Download removal failed"
+        case .removalControlTransitionInProgress: "Download is busy"
         }
     }
 
@@ -1848,6 +1850,8 @@ private enum BookActionContextFailure: Equatable {
         switch self {
         case .action(let failure): failure.message
         case .removal(let failure): failure.message
+        case .removalControlTransitionInProgress:
+            "Wait for the current download action to finish, then try again."
         }
     }
 }
@@ -1932,6 +1936,10 @@ private final class BookActionContextPresentation {
 
     func presentRemovalFailure(_ failure: DownloadModelFailure) {
         self.failure = .removal(failure)
+    }
+
+    func presentRemovalControlTransitionInProgress() {
+        failure = .removalControlTransitionInProgress
     }
 
     func dismissFailure() {
@@ -2069,6 +2077,7 @@ private struct BookActionContextMenuModifier: ViewModifier {
             }
             .disabled(
                 isDownloadProtected
+                    || removalControlTransitionIsActive(record)
                     || presentation.isDownloadOperationPending(
                         accountID: account.id,
                         itemID: book.id
@@ -2096,6 +2105,17 @@ private struct BookActionContextMenuModifier: ViewModifier {
             && model.playback.itemID == book.id
     }
 
+    private func removalControlTransitionIsActive(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        switch model.downloads.controlSnapshot(for: record).phase {
+        case .pausing, .resuming, .cancelling:
+            true
+        default:
+            false
+        }
+    }
+
     private func begin(_ action: BookContextAction) {
         presentation.present(action: action, account: account, book: book)
     }
@@ -2117,6 +2137,7 @@ private struct BookActionContextMenuModifier: ViewModifier {
     private func beginRemoval(_ record: DownloadedBookRecord) {
         guard
             !isDownloadProtected,
+            !removalControlTransitionIsActive(record),
             presentation.beginDownloadOperation(
                 accountID: account.id,
                 itemID: book.id
@@ -2132,10 +2153,17 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 )
             }
             switch await model.removeDownload(record) {
-            case .removed, .unavailable, .playbackProtected,
-                .controlTransitionInProgress:
+            case .removed, .unavailable, .playbackProtected:
                 break
+            case .controlTransitionInProgress:
+                guard model.account?.id == account.id else {
+                    return
+                }
+                presentation.presentRemovalControlTransitionInProgress()
             case .failed(let failure):
+                guard model.account?.id == account.id else {
+                    return
+                }
                 presentation.presentRemovalFailure(failure)
             }
         }

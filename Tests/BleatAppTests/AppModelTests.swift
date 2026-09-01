@@ -5588,6 +5588,10 @@ final class AppModelTests: XCTestCase {
         let relaunchedDescriptors =
             await relaunchedModel.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(relaunchedDescriptors.isEmpty)
+
+        let removalResult = await model.remove(record)
+        XCTAssertEqual(removalResult, .removed)
+        XCTAssertTrue(model.records.isEmpty)
         await relaunchedModel.removeAll()
     }
 

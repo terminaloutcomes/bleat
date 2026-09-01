@@ -2767,9 +2767,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return .failed(.storageUnavailable)
         }
         let downloadID = record.manifest.downloadID
-        if !duringTransition {
-            guard controlTransitions[downloadID] == nil else {
+        if !duringTransition,
+            let transition = controlTransitions[downloadID]
+        {
+            switch transition {
+            case .pausing, .resuming, .cancelling:
                 return .controlTransitionInProgress
+            case .pauseFailed:
+                break
             }
         }
         invalidatePauseOperation(for: downloadID)
