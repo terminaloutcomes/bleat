@@ -105,8 +105,8 @@ extension TelemetryTokenAvailability {
     }
 }
 
-private extension TelemetryTokenAvailabilityFailure {
-    var diagnosticsLabel: String {
+extension TelemetryTokenAvailabilityFailure {
+    fileprivate var diagnosticsLabel: String {
         switch self {
         case .unsupportedPlatform:
             "Unsupported platform"

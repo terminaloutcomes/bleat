@@ -1,6 +1,7 @@
 import BleatCore
-@testable import Bleat
 import XCTest
+
+@testable import Bleat
 
 @MainActor
 final class DeepLinkTests: XCTestCase {

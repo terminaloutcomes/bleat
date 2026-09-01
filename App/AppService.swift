@@ -1042,10 +1042,11 @@ actor LiveAppService: AppServicing {
     private let credentialStore: TokenVault
     private let coordinator: Coordinator
     private let authenticationCoordinator: Coordinator
-    private let openIDAuthenticationCoordinator: AuthCoordinator<
-        URLSessionOpenIDTransport,
-        TokenVault
-    >
+    private let openIDAuthenticationCoordinator:
+        AuthCoordinator<
+            URLSessionOpenIDTransport,
+            TokenVault
+        >
     private let openIDBrowserProvider:
         @MainActor @Sendable () -> any OpenIDBrowserSession
     private let accountStore: AccountStore
@@ -1126,8 +1127,10 @@ actor LiveAppService: AppServicing {
     ) async throws(AppServiceError) -> ServerAccount? {
         let savedLogin: NativeLoginCredentials
         do {
-            guard let credentials = try await credentialStore
-                .nativeLoginCredentials(for: account.id),
+            guard
+                let credentials =
+                    try await credentialStore
+                    .nativeLoginCredentials(for: account.id),
                 credentials.userID == account.user.id
             else {
                 return nil
@@ -1194,7 +1197,8 @@ actor LiveAppService: AppServicing {
         modelContainer suppliedModelContainer: ModelContainer? = nil,
         credentialStore suppliedCredentialStore: TokenVault? = nil,
         privateCloudAvailable suppliedPrivateCloudAvailable: Bool? = nil,
-        openIDBrowserProvider: @escaping @MainActor @Sendable ()
+        openIDBrowserProvider:
+            @escaping @MainActor @Sendable ()
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
         let schema = Schema(
@@ -1328,7 +1332,8 @@ actor LiveAppService: AppServicing {
         await progress(.signingIn)
         let browser = await openIDBrowserProvider()
         do {
-            let account = try await openIDAuthenticationCoordinator
+            let account =
+                try await openIDAuthenticationCoordinator
                 .loginWithOpenIDAndPersistAccount(
                     accountID: AccountID(
                         rawValue: UUID().uuidString.lowercased()
@@ -1525,7 +1530,8 @@ actor LiveAppService: AppServicing {
                     }
                     let promotedValidation = !account.localServerValidated
                     if promotedValidation {
-                        _ = try await authenticationCoordinator
+                        _ =
+                            try await authenticationCoordinator
                             .validateSavedNativeLogin(
                                 accountID: account.id,
                                 server: localServer,
@@ -1932,14 +1938,16 @@ actor LiveAppService: AppServicing {
                 }
                 await progress(.verifyingLocalCredentials)
                 if password.isEmpty {
-                    _ = try await authenticationCoordinator
+                    _ =
+                        try await authenticationCoordinator
                         .validateSavedNativeLogin(
                             accountID: account.id,
                             server: local,
                             expectedUserID: account.user.id
                         )
                 } else {
-                    _ = try await authenticationCoordinator
+                    _ =
+                        try await authenticationCoordinator
                         .validateLocalLogin(
                             accountID: account.id,
                             server: local,
@@ -2198,7 +2206,8 @@ actor LiveAppService: AppServicing {
         await progress(.signingIn)
         let browser = await openIDBrowserProvider()
         do {
-            let authenticated = try await openIDAuthenticationCoordinator
+            let authenticated =
+                try await openIDAuthenticationCoordinator
                 .loginWithOpenIDAndPersistAccount(
                     accountID: account.id,
                     discoveredServer: discoveredServer,
@@ -2393,7 +2402,8 @@ actor LiveAppService: AppServicing {
         let forcePrimaryMedia = primaryPlaybackMediaAccounts.contains(
             account.id
         )
-        let playbackCoordinator = forcePrimaryMedia
+        let playbackCoordinator =
+            forcePrimaryMedia
             ? authenticationCoordinator : coordinator
         let session: PlaybackSession
         do {
@@ -3012,7 +3022,8 @@ actor LiveAppService: AppServicing {
         let logoutResult: LogoutResult
         do {
             if privateCloudSync?.isEnabled == true {
-                logoutResult = try await coordinator
+                logoutResult =
+                    try await coordinator
                     .removePersistedAccountFromDevice(
                         accountID: account.id,
                         accountStore: accountStore
@@ -3159,7 +3170,8 @@ actor LiveAppService: AppServicing {
         }
         do {
             try await privateCloudSync.synchronize()
-            return await privateCloudSync
+            return
+                await privateCloudSync
                 .pendingServerConfigurationChanges()
         } catch let error {
             throw .privateCloud(error)

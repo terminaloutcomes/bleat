@@ -26,8 +26,10 @@ final class PersistenceModelCatalogTests: XCTestCase {
             missing.isEmpty && extra.isEmpty,
             "Catalog and declared @Model types differ. "
                 + "Register new models in BleatPersistenceModelCatalog."
-                + (missing.isEmpty ? "" : "\nMissing: \(missing.joined(separator: ", "))")
-                + (extra.isEmpty ? "" : "\nExtra: \(extra.joined(separator: ", "))")
+                + (missing.isEmpty
+                    ? "" : "\nMissing: \(missing.joined(separator: ", "))")
+                + (extra.isEmpty
+                    ? "" : "\nExtra: \(extra.joined(separator: ", "))")
         )
     }
 
@@ -70,7 +72,9 @@ final class PersistenceModelCatalogTests: XCTestCase {
             .appendingPathComponent("BleatCore")
     }
 
-    private static func declaredModelNames(in directory: URL) throws -> Set<String> {
+    private static func declaredModelNames(in directory: URL) throws -> Set<
+        String
+    > {
         let files = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
@@ -104,8 +108,10 @@ final class PersistenceModelCatalogTests: XCTestCase {
                         of: declarationPattern,
                         options: .regularExpression
                     ) {
-                        let remainder = followingLine[keywordRange.upperBound...]
-                            .drop(while: { $0 == " " })
+                        let remainder = followingLine[
+                            keywordRange.upperBound...
+                        ]
+                        .drop(while: { $0 == " " })
                         if let nameEnd = remainder.firstIndex(where: {
                             $0 == " " || $0 == "{" || $0 == ":" || $0 == "<"
                         }) {

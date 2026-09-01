@@ -217,35 +217,34 @@ public actor LibraryCache {
         }
         let retainedIDs = Set(libraries.map(\.id.rawValue))
         for record in accountRecords
-            where !retainedIDs.contains(record.libraryID)
-        {
+        where !retainedIDs.contains(record.libraryID) {
             modelContext.delete(record)
         }
         let pages = try pageRecords()
         for page in pages
-            where page.accountID == accountID.rawValue
-                && !retainedIDs.contains(page.libraryID)
+        where page.accountID == accountID.rawValue
+            && !retainedIDs.contains(page.libraryID)
         {
             modelContext.delete(page)
         }
         let searches = try searchRecords()
         for search in searches
-            where search.accountID == accountID.rawValue
-                && !retainedIDs.contains(search.libraryID)
+        where search.accountID == accountID.rawValue
+            && !retainedIDs.contains(search.libraryID)
         {
             modelContext.delete(search)
         }
         let homes = try homeRecords()
         for home in homes
-            where home.accountID == accountID.rawValue
-                && !retainedIDs.contains(home.libraryID)
+        where home.accountID == accountID.rawValue
+            && !retainedIDs.contains(home.libraryID)
         {
             modelContext.delete(home)
         }
         let details = try detailRecords()
         for detail in details
-            where detail.accountID == accountID.rawValue
-                && !retainedIDs.contains(detail.libraryID)
+        where detail.accountID == accountID.rawValue
+            && !retainedIDs.contains(detail.libraryID)
         {
             modelContext.delete(detail)
         }
@@ -263,14 +262,15 @@ public actor LibraryCache {
                 record.payload = payload
                 record.refreshedAt = refreshedAt
             } else {
-                modelContext.insert(CachedLibraryRecord(
-                    cacheKey: key,
-                    accountID: accountID.rawValue,
-                    libraryID: library.id.rawValue,
-                    position: position,
-                    payload: payload,
-                    refreshedAt: refreshedAt
-                ))
+                modelContext.insert(
+                    CachedLibraryRecord(
+                        cacheKey: key,
+                        accountID: accountID.rawValue,
+                        libraryID: library.id.rawValue,
+                        position: position,
+                        payload: payload,
+                        refreshedAt: refreshedAt
+                    ))
             }
         }
         if let collection = collections.first(where: {
@@ -278,10 +278,11 @@ public actor LibraryCache {
         }) {
             collection.refreshedAt = refreshedAt
         } else {
-            modelContext.insert(CachedLibraryCollectionRecord(
-                accountID: accountID.rawValue,
-                refreshedAt: refreshedAt
-            ))
+            modelContext.insert(
+                CachedLibraryCollectionRecord(
+                    accountID: accountID.rawValue,
+                    refreshedAt: refreshedAt
+                ))
         }
         try save()
     }
@@ -292,9 +293,11 @@ public actor LibraryCache {
         guard !accountID.rawValue.isEmpty else {
             throw .invalidAccountID
         }
-        guard let collection = try collectionRecords().first(where: {
-            $0.accountID == accountID.rawValue
-        }) else {
+        guard
+            let collection = try collectionRecords().first(where: {
+                $0.accountID == accountID.rawValue
+            })
+        else {
             return nil
         }
         let records = try libraryRecords()
@@ -315,7 +318,7 @@ public actor LibraryCache {
                 )
             }
             guard library.id.rawValue == record.libraryID,
-                  library.isValidForStorage
+                library.isValidForStorage
             else {
                 throw .invalidStoredLibrary(
                     LibraryID(rawValue: record.libraryID)
@@ -342,10 +345,12 @@ public actor LibraryCache {
         guard !libraryID.rawValue.isEmpty else {
             throw .invalidLibraryID
         }
-        guard page.isValidForStorage(
-            request: request,
-            libraryID: libraryID
-        ) else {
+        guard
+            page.isValidForStorage(
+                request: request,
+                libraryID: libraryID
+            )
+        else {
             throw .invalidPage
         }
         let key = Self.pageKey(
@@ -359,13 +364,14 @@ public actor LibraryCache {
             record.payload = payload
             record.refreshedAt = refreshedAt
         } else {
-            modelContext.insert(CachedLibraryPageRecord(
-                cacheKey: key,
-                accountID: accountID.rawValue,
-                libraryID: libraryID.rawValue,
-                payload: payload,
-                refreshedAt: refreshedAt
-            ))
+            modelContext.insert(
+                CachedLibraryPageRecord(
+                    cacheKey: key,
+                    accountID: accountID.rawValue,
+                    libraryID: libraryID.rawValue,
+                    payload: payload,
+                    refreshedAt: refreshedAt
+                ))
         }
         try save()
     }
@@ -386,9 +392,11 @@ public actor LibraryCache {
             libraryID: libraryID,
             request: request
         )
-        guard let record = try pageRecords().first(where: {
-            $0.cacheKey == key
-        }) else {
+        guard
+            let record = try pageRecords().first(where: {
+                $0.cacheKey == key
+            })
+        else {
             return nil
         }
         let page: LibraryItemsPage
@@ -400,10 +408,12 @@ public actor LibraryCache {
         } catch {
             throw .invalidStoredPage
         }
-        guard page.isValidForStorage(
-            request: request,
-            libraryID: libraryID
-        ) else {
+        guard
+            page.isValidForStorage(
+                request: request,
+                libraryID: libraryID
+            )
+        else {
             throw .invalidStoredPage
         }
         return CachedLibraryPageSnapshot(
@@ -426,11 +436,11 @@ public actor LibraryCache {
             throw .invalidLibraryID
         }
         guard results.books.count <= request.limit,
-              results.authors.count <= request.limit,
-              results.series.count <= request.limit,
-              results.books.allSatisfy({
-                  $0.isValidForStorage(in: libraryID)
-              })
+            results.authors.count <= request.limit,
+            results.series.count <= request.limit,
+            results.books.allSatisfy({
+                $0.isValidForStorage(in: libraryID)
+            })
         else {
             throw .invalidSearchResults
         }
@@ -445,13 +455,14 @@ public actor LibraryCache {
             record.payload = payload
             record.refreshedAt = refreshedAt
         } else {
-            modelContext.insert(CachedLibrarySearchRecord(
-                cacheKey: key,
-                accountID: accountID.rawValue,
-                libraryID: libraryID.rawValue,
-                payload: payload,
-                refreshedAt: refreshedAt
-            ))
+            modelContext.insert(
+                CachedLibrarySearchRecord(
+                    cacheKey: key,
+                    accountID: accountID.rawValue,
+                    libraryID: libraryID.rawValue,
+                    payload: payload,
+                    refreshedAt: refreshedAt
+                ))
         }
         try save()
     }
@@ -488,9 +499,11 @@ public actor LibraryCache {
             libraryID: libraryID,
             request: request
         )
-        guard let record = try searchRecords().first(where: {
-            $0.cacheKey == key
-        }) else {
+        guard
+            let record = try searchRecords().first(where: {
+                $0.cacheKey == key
+            })
+        else {
             return nil
         }
         let results: LibrarySearchResults
@@ -512,11 +525,11 @@ public actor LibraryCache {
             }
         }
         guard results.books.count <= request.limit,
-              results.authors.count <= request.limit,
-              results.series.count <= request.limit,
-              results.books.allSatisfy({
-                  $0.isValidForStorage(in: libraryID)
-              })
+            results.authors.count <= request.limit,
+            results.series.count <= request.limit,
+            results.books.allSatisfy({
+                $0.isValidForStorage(in: libraryID)
+            })
         else {
             throw .invalidStoredSearchResults
         }
@@ -540,13 +553,15 @@ public actor LibraryCache {
             throw .invalidLibraryID
         }
         var seenShelfIDs: Set<String> = []
-        guard shelves.allSatisfy({
-            seenShelfIDs.insert($0.id).inserted
-                && $0.isValidForStorage(
-                    request: request,
-                    libraryID: libraryID
-                )
-        }) else {
+        guard
+            shelves.allSatisfy({
+                seenShelfIDs.insert($0.id).inserted
+                    && $0.isValidForStorage(
+                        request: request,
+                        libraryID: libraryID
+                    )
+            })
+        else {
             throw .invalidHomeShelves
         }
         let key = Self.homeKey(
@@ -560,13 +575,14 @@ public actor LibraryCache {
             record.payload = payload
             record.refreshedAt = refreshedAt
         } else {
-            modelContext.insert(CachedLibraryHomeRecord(
-                cacheKey: key,
-                accountID: accountID.rawValue,
-                libraryID: libraryID.rawValue,
-                payload: payload,
-                refreshedAt: refreshedAt
-            ))
+            modelContext.insert(
+                CachedLibraryHomeRecord(
+                    cacheKey: key,
+                    accountID: accountID.rawValue,
+                    libraryID: libraryID.rawValue,
+                    payload: payload,
+                    refreshedAt: refreshedAt
+                ))
         }
         try save()
     }
@@ -587,9 +603,11 @@ public actor LibraryCache {
             libraryID: libraryID,
             request: request
         )
-        guard let record = try homeRecords().first(where: {
-            $0.cacheKey == key
-        }) else {
+        guard
+            let record = try homeRecords().first(where: {
+                $0.cacheKey == key
+            })
+        else {
             return nil
         }
         let shelves: [LibraryBookShelf]
@@ -602,13 +620,15 @@ public actor LibraryCache {
             throw .invalidStoredHomeShelves
         }
         var seenShelfIDs: Set<String> = []
-        guard shelves.allSatisfy({
-            seenShelfIDs.insert($0.id).inserted
-                && $0.isValidForStorage(
-                    request: request,
-                    libraryID: libraryID
-                )
-        }) else {
+        guard
+            shelves.allSatisfy({
+                seenShelfIDs.insert($0.id).inserted
+                    && $0.isValidForStorage(
+                        request: request,
+                        libraryID: libraryID
+                    )
+            })
+        else {
             throw .invalidStoredHomeShelves
         }
         return CachedLibraryHomeSnapshot(
@@ -632,10 +652,12 @@ public actor LibraryCache {
         guard !detail.libraryID.rawValue.isEmpty else {
             throw .invalidLibraryID
         }
-        guard detail.isValidForStorage(
-            in: detail.libraryID,
-            for: userID
-        ) else {
+        guard
+            detail.isValidForStorage(
+                in: detail.libraryID,
+                for: userID
+            )
+        else {
             throw .invalidBookDetail
         }
         let key = Self.detailKey(
@@ -650,15 +672,16 @@ public actor LibraryCache {
             record.payload = payload
             record.refreshedAt = refreshedAt
         } else {
-            modelContext.insert(CachedLibraryBookDetailRecord(
-                cacheKey: key,
-                accountID: accountID.rawValue,
-                userID: userID.rawValue,
-                libraryID: detail.libraryID.rawValue,
-                libraryItemID: detail.id.rawValue,
-                payload: payload,
-                refreshedAt: refreshedAt
-            ))
+            modelContext.insert(
+                CachedLibraryBookDetailRecord(
+                    cacheKey: key,
+                    accountID: accountID.rawValue,
+                    userID: userID.rawValue,
+                    libraryID: detail.libraryID.rawValue,
+                    libraryItemID: detail.id.rawValue,
+                    payload: payload,
+                    refreshedAt: refreshedAt
+                ))
         }
         try save()
     }
@@ -687,9 +710,11 @@ public actor LibraryCache {
             libraryID: libraryID,
             itemID: itemID
         )
-        guard let record = try detailRecords().first(where: {
-            $0.cacheKey == key
-        }) else {
+        guard
+            let record = try detailRecords().first(where: {
+                $0.cacheKey == key
+            })
+        else {
             return nil
         }
         let detail: LibraryBookDetail
@@ -702,12 +727,12 @@ public actor LibraryCache {
             throw .invalidStoredBookDetail
         }
         guard detail.id == itemID,
-              detail.libraryID == libraryID,
-              record.accountID == accountID.rawValue,
-              record.userID == userID.rawValue,
-              record.libraryID == libraryID.rawValue,
-              record.libraryItemID == itemID.rawValue,
-              detail.isValidForStorage(in: libraryID, for: userID)
+            detail.libraryID == libraryID,
+            record.accountID == accountID.rawValue,
+            record.userID == userID.rawValue,
+            record.libraryID == libraryID.rawValue,
+            record.libraryItemID == itemID.rawValue,
+            detail.isValidForStorage(in: libraryID, for: userID)
         else {
             throw .invalidStoredBookDetail
         }
@@ -728,26 +753,26 @@ public actor LibraryCache {
             throw .invalidLibraryID
         }
         for record in try pageRecords()
-            where record.accountID == accountID.rawValue
-                && record.libraryID == libraryID.rawValue
+        where record.accountID == accountID.rawValue
+            && record.libraryID == libraryID.rawValue
         {
             modelContext.delete(record)
         }
         for record in try searchRecords()
-            where record.accountID == accountID.rawValue
-                && record.libraryID == libraryID.rawValue
+        where record.accountID == accountID.rawValue
+            && record.libraryID == libraryID.rawValue
         {
             modelContext.delete(record)
         }
         for record in try homeRecords()
-            where record.accountID == accountID.rawValue
-                && record.libraryID == libraryID.rawValue
+        where record.accountID == accountID.rawValue
+            && record.libraryID == libraryID.rawValue
         {
             modelContext.delete(record)
         }
         for record in try detailRecords()
-            where record.accountID == accountID.rawValue
-                && record.libraryID == libraryID.rawValue
+        where record.accountID == accountID.rawValue
+            && record.libraryID == libraryID.rawValue
         {
             modelContext.delete(record)
         }
@@ -761,33 +786,27 @@ public actor LibraryCache {
             throw .invalidAccountID
         }
         for record in try libraryRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         for record in try collectionRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         for record in try pageRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         for record in try searchRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         for record in try homeRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         for record in try detailRecords()
-            where record.accountID == accountID.rawValue
-        {
+        where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
         try save()

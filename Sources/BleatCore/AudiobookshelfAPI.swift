@@ -66,9 +66,9 @@ public actor AudiobookshelfAPI<
         do {
             libraries = try result.value.libraries.map { library in
                 guard !library.id.rawValue.isEmpty,
-                      !library.name.trimmingCharacters(
-                          in: .whitespacesAndNewlines
-                      ).isEmpty
+                    !library.name.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty
                 else {
                     throw AudiobookshelfAPIError.invalidLibrary
                 }
@@ -105,9 +105,9 @@ public actor AudiobookshelfAPI<
                 as: LibraryItemsPageDTO.self
             )
         guard result.value.total >= 0,
-              result.value.page == request.page,
-              result.value.limit == request.limit,
-              result.value.results.count <= request.limit
+            result.value.page == request.page,
+            result.value.limit == request.limit,
+            result.value.results.count <= request.limit
         else {
             throw .invalidPage
         }
@@ -145,8 +145,8 @@ public actor AudiobookshelfAPI<
                 as: LibrarySearchResponseDTO.self
             )
         guard result.value.book.count <= request.limit,
-              result.value.authors.count <= request.limit,
-              result.value.series.count <= request.limit
+            result.value.authors.count <= request.limit,
+            result.value.series.count <= request.limit
         else {
             throw .invalidSearchResults
         }
@@ -201,22 +201,22 @@ public actor AudiobookshelfAPI<
                 continue
             }
             guard entities.count <= request.limit,
-                  shelf.total >= entities.count,
-                  !shelf.id.trimmingCharacters(
-                      in: .whitespacesAndNewlines
-                  ).isEmpty,
-                  shelf.id.rangeOfCharacter(
-                      from: .controlCharacters
-                  ) == nil,
-                  !shelf.label.trimmingCharacters(
-                      in: .whitespacesAndNewlines
-                  ).isEmpty,
-                  shelf.label.rangeOfCharacter(
-                      from: .controlCharacters
-                  ) == nil,
-                  shelf.labelLocalizationKey?.rangeOfCharacter(
-                      from: .controlCharacters
-                  ) == nil
+                shelf.total >= entities.count,
+                !shelf.id.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty,
+                shelf.id.rangeOfCharacter(
+                    from: .controlCharacters
+                ) == nil,
+                !shelf.label.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty,
+                shelf.label.rangeOfCharacter(
+                    from: .controlCharacters
+                ) == nil,
+                shelf.labelLocalizationKey?.rangeOfCharacter(
+                    from: .controlCharacters
+                ) == nil
             else {
                 throw .invalidPersonalizedShelves
             }
@@ -252,13 +252,14 @@ public actor AudiobookshelfAPI<
                     return left.id.rawValue < right.id.rawValue
                 }
             }
-            shelves.append(LibraryBookShelf(
-                id: shelf.id,
-                label: shelf.label,
-                labelLocalizationKey: shelf.labelLocalizationKey,
-                items: items,
-                total: shelf.total
-            ))
+            shelves.append(
+                LibraryBookShelf(
+                    id: shelf.id,
+                    label: shelf.label,
+                    labelLocalizationKey: shelf.labelLocalizationKey,
+                    items: items,
+                    total: shelf.total
+                ))
         }
         return AudiobookshelfAPIResult(
             value: shelves,
@@ -284,9 +285,8 @@ public actor AudiobookshelfAPI<
                 }
             }
 
-            var results: [
-                Result<(LibraryItemID, Int64), AudiobookshelfAPIError>
-            ] = []
+            var results:
+                [Result<(LibraryItemID, Int64), AudiobookshelfAPIError>] = []
             results.reserveCapacity(itemIDs.count)
             for await result in group {
                 if case .failure = result {
@@ -301,10 +301,12 @@ public actor AudiobookshelfAPI<
         updates.reserveCapacity(itemIDs.count)
         for result in results {
             let (itemID, lastUpdate) = try result.get()
-            guard updates.updateValue(
-                lastUpdate,
-                forKey: itemID
-            ) == nil else {
+            guard
+                updates.updateValue(
+                    lastUpdate,
+                    forKey: itemID
+                ) == nil
+            else {
                 throw AudiobookshelfAPIError.invalidPersonalizedShelves
             }
         }
@@ -323,10 +325,10 @@ public actor AudiobookshelfAPI<
                 as: LibraryBookProgressDTO.self
             )
         guard let progress = result.value.domainValue(),
-              progress.userID == userID,
-              progress.libraryItemID == itemID,
-              !progress.isFinished,
-              !progress.hideFromContinueListening
+            progress.userID == userID,
+            progress.libraryItemID == itemID,
+            !progress.isFinished,
+            !progress.hideFromContinueListening
         else {
             throw .invalidPersonalizedShelves
         }
@@ -415,7 +417,7 @@ public actor AudiobookshelfAPI<
         guard !Task.isCancelled else {
             throw .cancelled
         }
-        guard (200 ..< 300).contains(response.statusCode) else {
+        guard (200..<300).contains(response.statusCode) else {
             throw .unexpectedStatus(response.statusCode)
         }
 
@@ -465,7 +467,7 @@ private enum LibraryMediaTypeDTO: Decodable, Sendable {
             .book
         case .podcast:
             .podcast
-        case let .unknown(value):
+        case .unknown(let value):
             .unknown(value)
         }
     }
@@ -495,14 +497,16 @@ private struct LibrarySearchResponseDTO: Decodable, Sendable {
             [LibrarySearchBookMatchDTO].self,
             forKey: .book
         )
-        authors = try values.decodeIfPresent(
-            [LibrarySearchAuthorMatchDTO].self,
-            forKey: .authors
-        ) ?? []
-        series = try values.decodeIfPresent(
-            [LibrarySearchSeriesMatchDTO].self,
-            forKey: .series
-        ) ?? []
+        authors =
+            try values.decodeIfPresent(
+                [LibrarySearchAuthorMatchDTO].self,
+                forKey: .authors
+            ) ?? []
+        series =
+            try values.decodeIfPresent(
+                [LibrarySearchSeriesMatchDTO].self,
+                forKey: .series
+            ) ?? []
     }
 }
 
@@ -514,9 +518,11 @@ private struct LibrarySearchAuthorMatchDTO: Decodable, Sendable {
     let id: AuthorID
     let name: String
 
-    func domainValue() throws(AudiobookshelfAPIError) -> LibrarySearchAuthorMatch {
+    func domainValue() throws(AudiobookshelfAPIError)
+        -> LibrarySearchAuthorMatch
+    {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              name.rangeOfCharacter(from: .controlCharacters) == nil
+            name.rangeOfCharacter(from: .controlCharacters) == nil
         else {
             throw .invalidSearchResults
         }
@@ -548,9 +554,11 @@ private struct LibrarySearchSeriesMatchDTO: Decodable, Sendable {
         }
     }
 
-    func domainValue() throws(AudiobookshelfAPIError) -> LibrarySearchSeriesMatch {
+    func domainValue() throws(AudiobookshelfAPIError)
+        -> LibrarySearchSeriesMatch
+    {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              name.rangeOfCharacter(from: .controlCharacters) == nil
+            name.rangeOfCharacter(from: .controlCharacters) == nil
         else {
             throw .invalidSearchResults
         }
@@ -641,32 +649,32 @@ private struct LibraryItemDTO: Decodable, Sendable {
         expectedLibraryID: LibraryID
     ) throws(AudiobookshelfAPIError) -> LibraryBookSummary {
         guard !id.rawValue.isEmpty,
-              libraryID == expectedLibraryID,
-              mediaType == "book",
-              Self.isValidDisplayString(media.metadata.title),
-              Self.isValidOptionalDisplayString(media.metadata.subtitle),
-              Self.isValidOptionalDisplayString(media.metadata.authorName),
-              Self.isValidOptionalDisplayString(media.metadata.narratorName),
-              Self.isValidOptionalDisplayString(media.metadata.seriesName),
-              Self.isValidOptionalDisplayString(media.metadata.publisher),
-              Self.isValidOptionalDisplayString(
-                  media.metadata.publishedYear
-              ),
-              (media.metadata.authors ?? []).allSatisfy({
-                  Self.isValidDisplayString($0.name)
-              }),
-              (media.metadata.series ?? []).allSatisfy({
-                  Self.isValidDisplayString($0.name)
-                      && Self.isValidOptionalDisplayString($0.sequence)
-              }),
-              media.metadata.genres.allSatisfy(Self.isValidDisplayString),
-              (media.tags ?? []).allSatisfy(Self.isValidDisplayString),
-              media.duration.isFinite,
-              media.duration >= 0,
-              media.numTracks >= 0,
-              media.numChapters >= 0,
-              addedAt >= 0,
-              updatedAt >= 0
+            libraryID == expectedLibraryID,
+            mediaType == "book",
+            Self.isValidDisplayString(media.metadata.title),
+            Self.isValidOptionalDisplayString(media.metadata.subtitle),
+            Self.isValidOptionalDisplayString(media.metadata.authorName),
+            Self.isValidOptionalDisplayString(media.metadata.narratorName),
+            Self.isValidOptionalDisplayString(media.metadata.seriesName),
+            Self.isValidOptionalDisplayString(media.metadata.publisher),
+            Self.isValidOptionalDisplayString(
+                media.metadata.publishedYear
+            ),
+            (media.metadata.authors ?? []).allSatisfy({
+                Self.isValidDisplayString($0.name)
+            }),
+            (media.metadata.series ?? []).allSatisfy({
+                Self.isValidDisplayString($0.name)
+                    && Self.isValidOptionalDisplayString($0.sequence)
+            }),
+            media.metadata.genres.allSatisfy(Self.isValidDisplayString),
+            (media.tags ?? []).allSatisfy(Self.isValidDisplayString),
+            media.duration.isFinite,
+            media.duration >= 0,
+            media.numTracks >= 0,
+            media.numChapters >= 0,
+            addedAt >= 0,
+            updatedAt >= 0
         else {
             throw .invalidLibraryItem
         }
@@ -697,9 +705,9 @@ private struct LibraryItemDTO: Decodable, Sendable {
 
     private static func nonEmpty(_ value: String?) -> String? {
         guard let value,
-              !value.trimmingCharacters(
-                  in: .whitespacesAndNewlines
-              ).isEmpty
+            !value.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty
         else {
             return nil
         }
@@ -779,7 +787,7 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
             forKey: .authors
         )
         if values.contains(.series),
-           try !values.decodeNil(forKey: .series)
+            try !values.decodeNil(forKey: .series)
         {
             if let seriesList = try? values.decode(
                 [LibraryBookSeries].self,
@@ -791,7 +799,7 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
                     try values.decode(
                         LibraryBookSeries.self,
                         forKey: .series
-                    ),
+                    )
                 ]
             }
         } else {
@@ -830,10 +838,11 @@ private struct LibraryCollapsedSeriesDTO: Decodable, Sendable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(SeriesID.self, forKey: .id)
         name = try values.decode(String.self, forKey: .name)
-        libraryItemIDs = try values.decodeIfPresent(
-            [LibraryItemID].self,
-            forKey: .libraryItemIDs
-        ) ?? []
+        libraryItemIDs =
+            try values.decodeIfPresent(
+                [LibraryItemID].self,
+                forKey: .libraryItemIDs
+            ) ?? []
         numBooks = try values.decode(Int.self, forKey: .numBooks)
         if let values = try? values.decode(
             [String].self,
@@ -850,15 +859,16 @@ private struct LibraryCollapsedSeriesDTO: Decodable, Sendable {
         }
     }
 
-    func domainValue() throws(AudiobookshelfAPIError) -> LibraryCollapsedSeries {
+    func domainValue() throws(AudiobookshelfAPIError) -> LibraryCollapsedSeries
+    {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              name.rangeOfCharacter(from: .controlCharacters) == nil,
-              numBooks >= 1,
-              libraryItemIDs.count <= numBooks,
-              libraryItemIDs.allSatisfy({ !$0.rawValue.isEmpty }),
-              sequenceList?.allSatisfy({
-                  $0.rangeOfCharacter(from: .controlCharacters) == nil
-              }) ?? true
+            name.rangeOfCharacter(from: .controlCharacters) == nil,
+            numBooks >= 1,
+            libraryItemIDs.count <= numBooks,
+            libraryItemIDs.allSatisfy({ !$0.rawValue.isEmpty }),
+            sequenceList?.allSatisfy({
+                $0.rangeOfCharacter(from: .controlCharacters) == nil
+            }) ?? true
         else {
             throw .invalidLibraryItem
         }
@@ -897,11 +907,11 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
         expectedUserID: UserID
     ) throws(AudiobookshelfAPIError) -> LibraryBookDetail {
         guard id == expectedItemID,
-              libraryID == expectedLibraryID,
-              mediaType == "book",
-              media.libraryItemID == expectedItemID,
-              !media.id.rawValue.isEmpty,
-              media.numChapters == media.chapters.count
+            libraryID == expectedLibraryID,
+            mediaType == "book",
+            media.libraryItemID == expectedItemID,
+            !media.id.rawValue.isEmpty,
+            media.numChapters == media.chapters.count
         else {
             throw .invalidBookDetail
         }
@@ -951,10 +961,12 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
             isAbridged: media.metadata.abridged,
             progress: progress
         )
-        guard detail.isValidForStorage(
-            in: expectedLibraryID,
-            for: expectedUserID
-        ) else {
+        guard
+            detail.isValidForStorage(
+                in: expectedLibraryID,
+                for: expectedUserID
+            )
+        else {
             throw .invalidBookDetail
         }
         return detail
@@ -962,9 +974,9 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
 
     private static func nonEmpty(_ value: String?) -> String? {
         guard let value,
-              !value.trimmingCharacters(
-                  in: .whitespacesAndNewlines
-              ).isEmpty
+            !value.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty
         else {
             return nil
         }
@@ -1059,10 +1071,10 @@ struct LibraryBookProgressDTO: Decodable, Sendable {
         expectedUserID: UserID
     ) throws(AudiobookshelfAPIError) -> LibraryBookProgress {
         guard let progress = domainValue(),
-              libraryItemID == expectedItemID,
-              mediaItemID == expectedBookID,
-              userID == expectedUserID,
-              progress.libraryItemID == expectedItemID
+            libraryItemID == expectedItemID,
+            mediaItemID == expectedBookID,
+            userID == expectedUserID,
+            progress.libraryItemID == expectedItemID
         else {
             throw .invalidBookDetail
         }
@@ -1071,20 +1083,20 @@ struct LibraryBookProgressDTO: Decodable, Sendable {
 
     func domainValue() -> LibraryBookProgress? {
         guard !id.isEmpty,
-              !userID.rawValue.isEmpty,
-              !libraryItemID.rawValue.isEmpty,
-              episodeID == nil,
-              !mediaItemID.rawValue.isEmpty,
-              mediaItemType == "book",
-              duration.isFinite,
-              duration >= 0,
-              progress.isFinite,
-              (0 ... 1).contains(progress),
-              currentTime.isFinite,
-              currentTime >= 0,
-              lastUpdate >= 0,
-              startedAt >= 0,
-              (finishedAt ?? 0) >= 0
+            !userID.rawValue.isEmpty,
+            !libraryItemID.rawValue.isEmpty,
+            episodeID == nil,
+            !mediaItemID.rawValue.isEmpty,
+            mediaItemType == "book",
+            duration.isFinite,
+            duration >= 0,
+            progress.isFinite,
+            (0...1).contains(progress),
+            currentTime.isFinite,
+            currentTime >= 0,
+            lastUpdate >= 0,
+            startedAt >= 0,
+            (finishedAt ?? 0) >= 0
         else {
             return nil
         }

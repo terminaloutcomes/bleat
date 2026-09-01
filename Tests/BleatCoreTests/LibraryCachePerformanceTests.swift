@@ -47,14 +47,16 @@ enum LibraryBookSummaryGenerator {
             narratorName: index % 3 == 0 ? "Narrator \(index % 7)" : nil,
             seriesName: seriesName,
             authors: [
-                LibraryBookContributor(id: authorID, name: authorName),
+                LibraryBookContributor(id: authorID, name: authorName)
             ],
             series: seriesName.map { name in
-                [LibraryBookSeries(
-                    id: seriesID,
-                    name: name,
-                    sequence: "\(index % 20)"
-                )]
+                [
+                    LibraryBookSeries(
+                        id: seriesID,
+                        name: name,
+                        sequence: "\(index % 20)"
+                    )
+                ]
             } ?? [],
             collapsedSeries: nil,
             genres: genres,
@@ -113,19 +115,20 @@ enum LibraryCachePerformanceFixture {
         let container = try ModelContainer(
             for: schema,
             configurations: [
-                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true),
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             ]
         )
         return (container, LibraryCache(modelContainer: container))
     }
 
-    static func onDisk(directory: URL) throws -> (ModelContainer, LibraryCache) {
+    static func onDisk(directory: URL) throws -> (ModelContainer, LibraryCache)
+    {
         let schema = makeSchema()
         let storeURL = directory.appendingPathComponent("bleat-perf.sqlite")
         let container = try ModelContainer(
             for: schema,
             configurations: [
-                ModelConfiguration(schema: schema, url: storeURL),
+                ModelConfiguration(schema: schema, url: storeURL)
             ]
         )
         return (container, LibraryCache(modelContainer: container))
@@ -145,9 +148,11 @@ enum LibraryCachePerformanceFixture {
 final class LibraryCachePerformanceTests: XCTestCase {
     static let totalBooks = 10_000
     static let pageLimit = 50
-    static let pageCount = totalBooks / pageLimit // 200
+    static let pageCount = totalBooks / pageLimit  // 200
 
-    private static func makeRequest(pageIndex: Int) throws -> LibraryItemsPageRequest {
+    private static func makeRequest(pageIndex: Int) throws
+        -> LibraryItemsPageRequest
+    {
         try LibraryItemsPageRequest(
             page: pageIndex,
             limit: pageLimit,
@@ -374,7 +379,8 @@ final class LibraryCachePerformanceTests: XCTestCase {
         let shmBytes = fileBytes(at: shmURL)
         let totalBytes = mainBytes + walBytes + shmBytes
 
-        XCTAssertGreaterThan(mainBytes, 0, "SQLite store file must exist after 10k-book seed")
+        XCTAssertGreaterThan(
+            mainBytes, 0, "SQLite store file must exist after 10k-book seed")
         print(
             "perf-summary cache.storage.10kBooks.sqliteBytes=\(mainBytes)"
         )
@@ -410,8 +416,9 @@ actor ReadsCompletionProbe {
 // MARK: - File helper
 
 private func fileBytes(at url: URL) -> Int64 {
-    guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-          let size = attrs[.size] as? NSNumber
+    guard
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+        let size = attrs[.size] as? NSNumber
     else {
         return 0
     }

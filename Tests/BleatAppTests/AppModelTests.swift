@@ -34,7 +34,8 @@ extension DownloadStorageLayout {
 
 @MainActor
 final class AppModelTests: XCTestCase {
-    func testDownloadTransferAdmissionEnforcesAndReconcilesGlobalLimit() throws {
+    func testDownloadTransferAdmissionEnforcesAndReconcilesGlobalLimit() throws
+    {
         for limit in [1, 5, 100] {
             var admission = DownloadTransferAdmissionController(limit: limit)
             let admitted = (0..<limit).map { _ in UUID() }
@@ -100,17 +101,19 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(
             maximum["Titles"] as? [String],
-            MaximumConcurrentDownloadsPreference.permittedValues.map(String.init)
+            MaximumConcurrentDownloadsPreference.permittedValues.map(
+                String.init)
         )
     }
 
     func testDownloadModelQueuesAndAdmitsBooksAtConfiguredMaximum()
         async throws
     {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "GlobalDownloadAdmission-\(UUID().uuidString)",
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "GlobalDownloadAdmission-\(UUID().uuidString)",
+                isDirectory: true
+            )
         let suite = "GlobalDownloadAdmission.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer {
@@ -190,10 +193,11 @@ final class AppModelTests: XCTestCase {
     func testPlaybackSuspensionReleasesCapacityWithoutOverResuming()
         async throws
     {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "PlaybackSuspensionAdmission-\(UUID().uuidString)",
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "PlaybackSuspensionAdmission-\(UUID().uuidString)",
+                isDirectory: true
+            )
         let suite = "PlaybackSuspensionAdmission.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer {
@@ -3628,10 +3632,12 @@ final class AppModelTests: XCTestCase {
 
         await model.download(detail: detail, account: account)
 
-        guard case .insufficientStorage(
-            let requiredBytes,
-            let availableBytes
-        ) = model.failure else {
+        guard
+            case .insufficientStorage(
+                let requiredBytes,
+                let availableBytes
+            ) = model.failure
+        else {
             XCTFail("Expected a typed insufficient-storage failure")
             return
         }
@@ -3913,7 +3919,8 @@ final class AppModelTests: XCTestCase {
                 itemID: automaticDetail.id
             )?.manifest.automaticCacheState == .cached
         }
-        let repairedRecords = try await DownloadStorage(layout: layout).records()
+        let repairedRecords = try await DownloadStorage(layout: layout)
+            .records()
         let repaired = try XCTUnwrap(
             repairedRecords.first { $0.manifest.downloadID == downloadID }
         )
@@ -4859,9 +4866,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(fallbackRequests.count, 2)
         XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
         XCTAssertEqual(
-            Set(fallbackRequests.compactMap {
-                $0.value(forHTTPHeaderField: "Range")
-            }),
+            Set(
+                fallbackRequests.compactMap {
+                    $0.value(forHTTPHeaderField: "Range")
+                }),
             ["bytes=0-3", "bytes=5-7"]
         )
         XCTAssertTrue(
@@ -5432,7 +5440,8 @@ final class AppModelTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
 
-        XCTAssertTrue(model.pausedDownloadIDs.contains(record.manifest.downloadID))
+        XCTAssertTrue(
+            model.pausedDownloadIDs.contains(record.manifest.downloadID))
         XCTAssertNil(model.failure)
         XCTAssertNotEqual(model.records.first?.manifest.state, .failed)
 
@@ -5548,7 +5557,8 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.failure, .storageUnavailable)
         XCTAssertEqual(model.records.first?.manifest.state, .failed)
-        XCTAssertEqual(model.records.first?.manifest.entries[1].state, .complete)
+        XCTAssertEqual(
+            model.records.first?.manifest.entries[1].state, .complete)
         XCTAssertEqual(
             model.records.first?.manifest.entries[1].placement,
             .finalized
@@ -8096,7 +8106,8 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testTranscriptNavigationPositionUsesSavedPositionWithoutMatchingPlayback()
+    func
+        testTranscriptNavigationPositionUsesSavedPositionWithoutMatchingPlayback()
         throws
     {
         let fixture = try playbackRecoveryFixture()
@@ -11576,8 +11587,9 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             libraries: .success([library]),
             asyncPageProvider: { _, request in
-                guard request.filter
-                    == LibraryItemFilter(seriesID: firstSeriesID)
+                guard
+                    request.filter
+                        == LibraryItemFilter(seriesID: firstSeriesID)
                         || request.filter
                             == LibraryItemFilter(seriesID: secondSeriesID)
                 else {
@@ -12402,7 +12414,8 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testSetFinishedCommitsProgressAfterCanonicalPreparation() async throws {
+    func testSetFinishedCommitsProgressAfterCanonicalPreparation() async throws
+    {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
         let item = fixturePage(libraryID: library.id).items[0]
@@ -12705,7 +12718,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.bookProgressFailure, failure)
 
         model.dismissBookProgressFailure()
-        XCTAssertEqual(model.bookProgressFailures.map(\.itemID), [secondItem.id])
+        XCTAssertEqual(
+            model.bookProgressFailures.map(\.itemID), [secondItem.id])
         XCTAssertNil(model.bookProgressFailure)
 
         let secondWasPresented = await waitUntil(timeout: .seconds(1)) {
@@ -13217,7 +13231,8 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    func testBookProgressReconciliationPreservesConfirmedProgressWhenRefreshOmitsIt()
+    func
+        testBookProgressReconciliationPreservesConfirmedProgressWhenRefreshOmitsIt()
         throws
     {
         let account = try fixtureAccount()
@@ -13239,7 +13254,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(reconciled.progress, confirmed)
     }
 
-    func testBookProgressReconciliationRejectsNonAdvancingProgressAndAcceptsNewerServerProgress()
+    func
+        testBookProgressReconciliationRejectsNonAdvancingProgressAndAcceptsNewerServerProgress()
         throws
     {
         let account = try fixtureAccount()
@@ -15478,17 +15494,20 @@ final class AppModelTests: XCTestCase {
         await model.start()
 
         await model.resetLocalData()
-        let synchronizationRequestsAfterReset = await service
+        let synchronizationRequestsAfterReset =
+            await service
             .privateCloudSynchronizationRequestCount()
         await model.synchronizePrivateCloud()
 
         XCTAssertFalse(model.privateCloudSyncEnabled)
         XCTAssertEqual(model.privateCloudState, .disabled)
-        let syncSettingRequests = await service.privateCloudSyncSettingRequests()
+        let syncSettingRequests =
+            await service.privateCloudSyncSettingRequests()
         XCTAssertEqual(syncSettingRequests.count, 1)
         XCTAssertEqual(syncSettingRequests.first?.enabled, false)
         XCTAssertEqual(syncSettingRequests.first?.deleteCloudData, false)
-        let synchronizationRequestCount = await service
+        let synchronizationRequestCount =
+            await service
             .privateCloudSynchronizationRequestCount()
         XCTAssertEqual(
             synchronizationRequestCount,
@@ -15613,7 +15632,8 @@ final class AppModelTests: XCTestCase {
             let credentials = try await relaunchedVault.credentials(
                 for: account.id
             )
-            let nativeLogin = try await relaunchedVault
+            let nativeLogin =
+                try await relaunchedVault
                 .nativeLoginCredentials(
                     for: account.id
                 )
@@ -15672,14 +15692,16 @@ final class AppModelTests: XCTestCase {
         let retainedCredentials = try await relaunchedVault.credentials(
             for: retainedAccount.id
         )
-        let retainedNativeLogin = try await relaunchedVault
+        let retainedNativeLogin =
+            try await relaunchedVault
             .nativeLoginCredentials(
                 for: retainedAccount.id
             )
         let removedCredentials = try await relaunchedVault.credentials(
             for: removedAccount.id
         )
-        let removedNativeLogin = try await relaunchedVault
+        let removedNativeLogin =
+            try await relaunchedVault
             .nativeLoginCredentials(
                 for: removedAccount.id
             )
@@ -17081,7 +17103,8 @@ final class AppModelTests: XCTestCase {
             downloadsURL: downloadsURL,
             modelContainer: modelContainer,
             accounts: accounts,
-            tokenService: "com.terminaloutcomes.Bleat.tests.tokens.\(serviceSuffix)",
+            tokenService:
+                "com.terminaloutcomes.Bleat.tests.tokens.\(serviceSuffix)",
             nativeLoginService:
                 "com.terminaloutcomes.Bleat.tests.login.\(serviceSuffix)",
             legacyService:
@@ -18108,9 +18131,11 @@ private actor TestAppService: AppServicing {
     private let pagedProvider:
         (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)?
     private let asyncPageProvider:
-        (@Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
-            LibraryItemsPage, AppServiceError
-        >)?
+        (
+            @Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
+                LibraryItemsPage, AppServiceError
+            >
+        )?
     private var homeShelvesResult:
         Result<
             [LibraryBookShelf],
@@ -18162,8 +18187,7 @@ private actor TestAppService: AppServicing {
     private let primaryFallbackURL: URL?
     private var removeAccountResult: Result<Void, AppServiceError>
     private var localDataResetResult: Result<Void, AppServiceError>
-    private var privateCloudSyncSettingResult:
-        Result<Void, AppServiceError>
+    private var privateCloudSyncSettingResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -18250,8 +18274,7 @@ private actor TestAppService: AppServicing {
     private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> = []
     private var recordedTranscriptDeletionRequests:
         [ChapterTranscriptionBookKey] = []
-    private var transcriptPersistenceEvents:
-        [TranscriptPersistenceEvent] = []
+    private var transcriptPersistenceEvents: [TranscriptPersistenceEvent] = []
     private var recordedForcedCloudAccounts: [ServerAccount] = []
     private var privateCloudCancellationRequests = 0
     private var recordedPrivateCloudSyncSettingRequests:
@@ -18336,9 +18359,11 @@ private actor TestAppService: AppServicing {
             (@Sendable (Int) -> Result<LibraryItemsPage, AppServiceError>)? =
             nil,
         asyncPageProvider:
-            (@Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
-                LibraryItemsPage, AppServiceError
-            >)? = nil,
+            (
+                @Sendable (LibraryID, LibraryItemsPageRequest) async -> Result<
+                    LibraryItemsPage, AppServiceError
+                >
+            )? = nil,
         homeShelves: Result<[LibraryBookShelf], AppServiceError> = .success(
             []
         ),
@@ -18369,9 +18394,11 @@ private actor TestAppService: AppServicing {
             [Result<AppPlaybackPreparation, AppServiceError>] = [],
         downloadPlan: Result<DownloadPlan, AppServiceError>? = nil,
         downloadPlanProvider:
-            (@Sendable (LibraryItemID) -> Result<
-                DownloadPlan, AppServiceError
-            >)? = nil,
+            (
+                @Sendable (LibraryItemID) -> Result<
+                    DownloadPlan, AppServiceError
+                >
+            )? = nil,
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
         primaryFallbackURL: URL? = nil,
@@ -19774,7 +19801,8 @@ private final class Issue151RepairURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
@@ -19812,7 +19840,8 @@ private final class RetryAfterDownloadURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
@@ -19850,7 +19879,8 @@ private final class ExpiringRetryAfterDownloadURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
@@ -19888,7 +19918,8 @@ private final class LateTransferDownloadURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
@@ -19926,7 +19957,8 @@ private final class PauseTerminalFailureURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
@@ -19964,7 +19996,8 @@ private final class SystemResumedSuffixDownloadURLProtocol: URLProtocol,
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 

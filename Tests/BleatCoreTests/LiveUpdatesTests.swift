@@ -103,28 +103,30 @@ final class LiveUpdatesTests: XCTestCase {
             try codec.decode(
                 #"42["item_updated",{"id":"item","libraryId":"library","unknown":true}]"#
             ),
-            .event(.itemsChanged(
-                AudiobookshelfLiveItemChange(
-                    libraryIDs: [LibraryID(rawValue: "library")],
-                    itemIDs: [LibraryItemID(rawValue: "item")]
-                )
-            ))
+            .event(
+                .itemsChanged(
+                    AudiobookshelfLiveItemChange(
+                        libraryIDs: [LibraryID(rawValue: "library")],
+                        itemIDs: [LibraryItemID(rawValue: "item")]
+                    )
+                ))
         )
         XCTAssertEqual(
             try codec.decode(
                 #"42["user_item_progress_updated",{"sessionId":"session","deviceDescription":"Other Phone","data":{"libraryItemId":"item","duration":100,"currentTime":25,"isFinished":false,"lastUpdate":123,"unknown":true}}]"#
             ),
-            .event(.playbackProgress(
-                AudiobookshelfLivePlaybackProgress(
-                    itemID: LibraryItemID(rawValue: "item"),
-                    sessionID: PlaybackSessionID(rawValue: "session"),
-                    deviceDescription: "Other Phone",
-                    currentTime: 25,
-                    duration: 100,
-                    isFinished: false,
-                    lastUpdateMilliseconds: 123
-                )
-            ))
+            .event(
+                .playbackProgress(
+                    AudiobookshelfLivePlaybackProgress(
+                        itemID: LibraryItemID(rawValue: "item"),
+                        sessionID: PlaybackSessionID(rawValue: "session"),
+                        deviceDescription: "Other Phone",
+                        currentTime: 25,
+                        duration: 100,
+                        isFinished: false,
+                        lastUpdateMilliseconds: 123
+                    )
+                ))
         )
     }
 

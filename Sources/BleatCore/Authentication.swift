@@ -182,9 +182,11 @@ public actor AuthCoordinator<
         }
         let tokens: AuthenticationTokens
         do {
-            guard let stored = try await credentialStore.credentials(
-                for: accountID
-            ) else {
+            guard
+                let stored = try await credentialStore.credentials(
+                    for: accountID
+                )
+            else {
                 throw LocalAuthenticationError.tokenValidationFailed
             }
             tokens = stored
@@ -228,10 +230,11 @@ public actor AuthCoordinator<
         } catch LocalAuthenticationError.tokenValidationFailed {
             let savedLogin: NativeLoginCredentials
             do {
-                guard let credentials =
-                    try await credentialStore.nativeLoginCredentials(
-                        for: accountID
-                    ),
+                guard
+                    let credentials =
+                        try await credentialStore.nativeLoginCredentials(
+                            for: accountID
+                        ),
                     credentials.userID == expectedUserID
                 else {
                     throw LocalAuthenticationError.tokenValidationFailed
@@ -259,8 +262,10 @@ public actor AuthCoordinator<
     ) async throws -> AuthenticatedAccount {
         let savedLogin: NativeLoginCredentials
         do {
-            guard let credentials = try await credentialStore
-                .nativeLoginCredentials(for: accountID),
+            guard
+                let credentials =
+                    try await credentialStore
+                    .nativeLoginCredentials(for: accountID),
                 credentials.userID == expectedUserID
             else {
                 throw LocalAuthenticationError.tokenValidationFailed

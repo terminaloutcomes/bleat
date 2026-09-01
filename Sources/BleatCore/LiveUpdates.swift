@@ -150,10 +150,12 @@ public struct AudiobookshelfSocketCodec: Sendable {
     public func socketURL(
         for server: NormalizedServerURL
     ) throws(AudiobookshelfLiveUpdateFailure) -> URL {
-        guard var components = URLComponents(
-            url: server.url,
-            resolvingAgainstBaseURL: false
-        ) else {
+        guard
+            var components = URLComponents(
+                url: server.url,
+                resolvingAgainstBaseURL: false
+            )
+        else {
             throw .invalidSocketURL
         }
         components.scheme = "wss"
@@ -176,10 +178,11 @@ public struct AudiobookshelfSocketCodec: Sendable {
         let data = try? JSONSerialization.data(
             withJSONObject: ["auth", accessToken]
         )
-        return "42" + String(
-            decoding: data ?? Data("[]".utf8),
-            as: UTF8.self
-        )
+        return "42"
+            + String(
+                decoding: data ?? Data("[]".utf8),
+                as: UTF8.self
+            )
     }
 
     public func socketRequest(
@@ -226,9 +229,10 @@ public struct AudiobookshelfSocketCodec: Sendable {
             guard !payload.id.isEmpty else {
                 throw .malformedPacket
             }
-            return .event(.libraryChanged(
-                LibraryID(rawValue: payload.id)
-            ))
+            return .event(
+                .libraryChanged(
+                    LibraryID(rawValue: payload.id)
+                ))
         case .itemAdded, .itemUpdated, .itemRemoved:
             let payload: ItemPayload = try payload(values)
             return .event(.itemsChanged(try itemChange([payload])))
@@ -267,12 +271,14 @@ public struct AudiobookshelfSocketCodec: Sendable {
             throw .malformedPacket
         }
         return AudiobookshelfLiveItemChange(
-            libraryIDs: Set(payloads.map {
-                LibraryID(rawValue: $0.libraryId)
-            }),
-            itemIDs: Set(payloads.map {
-                LibraryItemID(rawValue: $0.id)
-            })
+            libraryIDs: Set(
+                payloads.map {
+                    LibraryID(rawValue: $0.libraryId)
+                }),
+            itemIDs: Set(
+                payloads.map {
+                    LibraryItemID(rawValue: $0.id)
+                })
         )
     }
 }
@@ -402,10 +408,12 @@ public actor AudiobookshelfLiveEventClient {
         do {
             request = try codec.socketRequest(for: server)
         } catch let failure {
-            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                cause: failure,
-                stage: .requestConstruction
-            )))
+            finishAttempt(
+                .failed(
+                    AudiobookshelfLiveConnectionFailure(
+                        cause: failure,
+                        stage: .requestConstruction
+                    )))
             continuation.yield(.connection(.failed(failure)))
             return false
         }
@@ -414,10 +422,12 @@ public actor AudiobookshelfLiveEventClient {
         do {
             initialToken = try await tokenProvider()
         } catch {
-            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                cause: .credentialsUnavailable,
-                stage: .credentialRetrieval
-            )))
+            finishAttempt(
+                .failed(
+                    AudiobookshelfLiveConnectionFailure(
+                        cause: .credentialsUnavailable,
+                        stage: .credentialRetrieval
+                    )))
             continuation.yield(.connection(.failed(.credentialsUnavailable)))
             return false
         }
@@ -428,7 +438,8 @@ public actor AudiobookshelfLiveEventClient {
         var token = initialToken
         var didRecoverAuthentication = false
         var authenticated = false
-        var failureStage = AudiobookshelfLiveConnectionFailureStage.socketReceive
+        var failureStage = AudiobookshelfLiveConnectionFailureStage
+            .socketReceive
 
         do {
             while !Task.isCancelled {
@@ -454,9 +465,10 @@ public actor AudiobookshelfLiveEventClient {
                     try await socket.send(.string("40"))
                 case .namespaceConnected:
                     failureStage = .socketSend
-                    try await socket.send(.string(
-                        codec.authenticationPacket(accessToken: token)
-                    ))
+                    try await socket.send(
+                        .string(
+                            codec.authenticationPacket(accessToken: token)
+                        ))
                 case .ping(let payload):
                     failureStage = .socketSend
                     try await socket.send(.string("3" + payload))
@@ -467,10 +479,12 @@ public actor AudiobookshelfLiveEventClient {
                     continuation.yield(.connection(.authenticated))
                 case .authenticationRejected:
                     guard !didRecoverAuthentication else {
-                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                            cause: .authenticationRejected,
-                            stage: .authentication
-                        )))
+                        finishAttempt(
+                            .failed(
+                                AudiobookshelfLiveConnectionFailure(
+                                    cause: .authenticationRejected,
+                                    stage: .authentication
+                                )))
                         continuation.yield(
                             .connection(.failed(.authenticationRejected))
                         )
@@ -480,24 +494,29 @@ public actor AudiobookshelfLiveEventClient {
                     do {
                         token = try await tokenRecovery(token)
                     } catch {
-                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                            cause: .credentialsUnavailable,
-                            stage: .credentialRecovery
-                        )))
+                        finishAttempt(
+                            .failed(
+                                AudiobookshelfLiveConnectionFailure(
+                                    cause: .credentialsUnavailable,
+                                    stage: .credentialRecovery
+                                )))
                         continuation.yield(
                             .connection(.failed(.credentialsUnavailable))
                         )
                         return false
                     }
                     do {
-                        try await socket.send(.string(
-                            codec.authenticationPacket(accessToken: token)
-                        ))
+                        try await socket.send(
+                            .string(
+                                codec.authenticationPacket(accessToken: token)
+                            ))
                     } catch {
-                        finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                            cause: .transportUnavailable,
-                            stage: .socketSend
-                        )))
+                        finishAttempt(
+                            .failed(
+                                AudiobookshelfLiveConnectionFailure(
+                                    cause: .transportUnavailable,
+                                    stage: .socketSend
+                                )))
                         continuation.yield(
                             .connection(.failed(.transportUnavailable))
                         )
@@ -516,16 +535,20 @@ public actor AudiobookshelfLiveEventClient {
             finishAttempt(.cancelled)
             return authenticated
         } catch let failure as AudiobookshelfLiveUpdateFailure {
-            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                cause: failure,
-                stage: failureStage
-            )))
+            finishAttempt(
+                .failed(
+                    AudiobookshelfLiveConnectionFailure(
+                        cause: failure,
+                        stage: failureStage
+                    )))
             continuation.yield(.connection(.failed(failure)))
         } catch {
-            finishAttempt(.failed(AudiobookshelfLiveConnectionFailure(
-                cause: .transportUnavailable,
-                stage: failureStage
-            )))
+            finishAttempt(
+                .failed(
+                    AudiobookshelfLiveConnectionFailure(
+                        cause: .transportUnavailable,
+                        stage: failureStage
+                    )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
             await onTransportFailure(endpoint)
         }

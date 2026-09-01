@@ -36,7 +36,7 @@ public struct NormalizedServerURL: Hashable, Sendable {
         components.fragment = nil
 
         if components.percentEncodedPath.count > 1,
-           components.percentEncodedPath.hasSuffix("/")
+            components.percentEncodedPath.hasSuffix("/")
         {
             components.percentEncodedPath.removeLast()
         }

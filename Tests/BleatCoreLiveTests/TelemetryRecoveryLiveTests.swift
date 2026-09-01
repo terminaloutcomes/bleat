@@ -7,7 +7,8 @@
     @testable import BleatCore
 
     final class TelemetryRecoveryLiveTests: XCTestCase {
-        func testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment()
+        func
+            testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment()
             async throws
         {
             let environment = try RecoveryEnvironment.current()
@@ -64,7 +65,8 @@
                 using: originalTracer,
                 cacheURL: storageURL.appendingPathComponent("library.cache")
             )
-            XCTAssertEqual(normalRefresh.cachedItemIdentifiers, ["offline-book"])
+            XCTAssertEqual(
+                normalRefresh.cachedItemIdentifiers, ["offline-book"])
             XCTAssertLessThan(
                 normalRefresh.telemetryDuration,
                 .milliseconds(100)
@@ -75,7 +77,8 @@
             let retainedBytes = try retainedFiles.reduce(into: 0) {
                 total,
                 fileURL in
-                total += try fileURL.resourceValues(forKeys: [.fileSizeKey])
+                total +=
+                    try fileURL.resourceValues(forKeys: [.fileSizeKey])
                     .fileSize ?? 0
             }
             XCTAssertLessThanOrEqual(
@@ -168,7 +171,8 @@
                 using: tracer,
                 cacheURL: storageURL.appendingPathComponent("library.cache")
             )
-            XCTAssertEqual(normalRefresh.cachedItemIdentifiers, ["offline-book"])
+            XCTAssertEqual(
+                normalRefresh.cachedItemIdentifiers, ["offline-book"])
             XCTAssertLessThan(
                 normalRefresh.telemetryDuration,
                 .milliseconds(100)
@@ -476,9 +480,10 @@
             self.downstream = downstream
         }
 
-        func attestationChallenge() async throws(
-            TelemetryAuthenticationTransportError
-        ) -> TelemetryChallenge {
+        func attestationChallenge()
+            async throws(TelemetryAuthenticationTransportError)
+            -> TelemetryChallenge
+        {
             try await downstream.attestationChallenge()
         }
 

@@ -207,12 +207,12 @@ final class AppNavigationCoordinator {
         case .downloads:
             selectedTab = .downloads
             downloadsPath = NavigationPath()
-        case let .search(query, scope, _):
+        case .search(let query, let scope, _):
             selectedTab = .search
             searchPath = NavigationPath()
             searchQuery = query
             searchScope = scope
-        case let .author(id, target):
+        case .author(let id, let target):
             guard let libraryID = target.libraryID ?? model.selectedLibrary?.id
             else {
                 return .unavailable
@@ -232,7 +232,7 @@ final class AppNavigationCoordinator {
             guard isCurrentRouteGeneration(generation) else {
                 return .superseded
             }
-        case let .series(id, target):
+        case .series(let id, let target):
             guard let libraryID = target.libraryID ?? model.selectedLibrary?.id
             else {
                 return .unavailable
@@ -250,7 +250,7 @@ final class AppNavigationCoordinator {
                 libraryID: libraryID,
                 from: .library
             )
-        case let .book(id, target):
+        case .book(let id, let target):
             guard let libraryID = target.libraryID ?? model.selectedLibrary?.id
             else {
                 return .unavailable
@@ -263,7 +263,7 @@ final class AppNavigationCoordinator {
             selectedTab = .library
             libraryPath = NavigationPath()
             libraryPath.append(book)
-        case let .settings(destination):
+        case .settings(let destination):
             selectedTab = .settings
             settingsPath = NavigationPath()
             if destination != .root {
@@ -311,7 +311,7 @@ final class AppNavigationCoordinator {
         routeGeneration: UInt64? = nil
     ) async {
         guard case .loaded(let libraries) = model.libraries,
-              let library = libraries.first(where: { $0.id == libraryID })
+            let library = libraries.first(where: { $0.id == libraryID })
         else {
             return
         }
@@ -372,24 +372,27 @@ final class AppNavigationCoordinator {
     ) async -> Bool {
         let target: DeepLinkScope?
         switch route {
-        case let .search(_, _, routeTarget), let .book(_, routeTarget),
-            let .author(_, routeTarget), let .series(_, routeTarget):
+        case .search(_, _, let routeTarget), .book(_, let routeTarget),
+            .author(_, let routeTarget), .series(_, let routeTarget):
             target = routeTarget
         case .home, .library, .downloads, .settings(_), .nowPlaying:
             target = nil
         }
         guard let target else { return true }
         if let accountID = target.accountID,
-           model.account?.id != accountID
+            model.account?.id != accountID
         {
             guard isCurrentRouteGeneration(generation) else { return false }
-            guard let account = model.accounts.first(where: { $0.id == accountID }) else {
+            guard
+                let account = model.accounts.first(where: { $0.id == accountID }
+                )
+            else {
                 return false
             }
             await model.switchAccount(to: account)
             guard isCurrentRouteGeneration(generation),
-                  model.account?.id == accountID,
-                  model.isNavigationReady
+                model.account?.id == accountID,
+                model.isNavigationReady
             else {
                 return false
             }
@@ -397,7 +400,7 @@ final class AppNavigationCoordinator {
         if let libraryID = target.libraryID {
             guard isCurrentRouteGeneration(generation) else { return false }
             guard case .loaded(let libraries) = model.libraries,
-                  let library = libraries.first(where: { $0.id == libraryID })
+                let library = libraries.first(where: { $0.id == libraryID })
             else {
                 return false
             }
@@ -425,7 +428,7 @@ final class AppNavigationCoordinator {
         guard model.account?.id == account.id else { return }
 
         if let library = context.library,
-           model.selectedLibrary?.id != library.id
+            model.selectedLibrary?.id != library.id
         {
             await model.selectLibrary(library)
         }
@@ -454,9 +457,10 @@ enum UITestDeepLinkReceipt {
     }
 
     static func record(route: DeepLinkRoute, outcome: Outcome) {
-        let revision = UserDefaults.standard.integer(
-            forKey: "bleatUITestDeepLinkReceiptRevision"
-        ) + 1
+        let revision =
+            UserDefaults.standard.integer(
+                forKey: "bleatUITestDeepLinkReceiptRevision"
+            ) + 1
         UserDefaults.standard.set(
             revision,
             forKey: "bleatUITestDeepLinkReceiptRevision"

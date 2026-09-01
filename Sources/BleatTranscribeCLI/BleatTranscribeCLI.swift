@@ -8,9 +8,11 @@ struct BleatTranscribeCLI {
             let configuration = try CLIConfiguration.parse(
                 arguments: Array(CommandLine.arguments.dropFirst())
             )
-            guard FileManager.default.fileExists(
-                atPath: configuration.audioFileURL.path
-            ) else {
+            guard
+                FileManager.default.fileExists(
+                    atPath: configuration.audioFileURL.path
+                )
+            else {
                 throw ChapterTranscriptionFailure.audioFileUnreadable(
                     configuration.audioFileURL.lastPathComponent
                 )

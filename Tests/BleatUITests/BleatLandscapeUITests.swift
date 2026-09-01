@@ -1,5 +1,5 @@
-import XCTest
 import UIKit
+import XCTest
 
 final class BleatLandscapeUITests: XCTestCase {
     override func setUp() {
@@ -47,7 +47,8 @@ final class BleatLandscapeUITests: XCTestCase {
         }
         assertUsable(search, in: app).tap()
         search.typeText("Test")
-        assertVisible(app.descendants(matching: .any)["search.results"], in: app)
+        assertVisible(
+            app.descendants(matching: .any)["search.results"], in: app)
         assertUsable(app.buttons["search.done"], in: app).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
     }
@@ -149,7 +150,9 @@ final class BleatLandscapeUITests: XCTestCase {
     }
 
     @MainActor
-    private func rotate(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
+    private func rotate(
+        _ orientation: UIDeviceOrientation, in app: XCUIApplication
+    ) {
         XCUIDevice.shared.orientation = orientation
         waitForOrientation(orientation, in: app)
     }
@@ -159,7 +162,8 @@ final class BleatLandscapeUITests: XCTestCase {
         _ orientation: UIDeviceOrientation,
         in app: XCUIApplication
     ) {
-        let expectsLandscape = orientation == .landscapeLeft
+        let expectsLandscape =
+            orientation == .landscapeLeft
             || orientation == .landscapeRight
         let geometryMatches = expectation(
             for: NSPredicate { object, _ in
@@ -189,7 +193,8 @@ final class BleatLandscapeUITests: XCTestCase {
         _ element: XCUIElement,
         in app: XCUIApplication
     ) -> XCUIElement {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing \(element)")
+        XCTAssertTrue(
+            element.waitForExistence(timeout: 10), "Missing \(element)")
         assertWithinWindow(element, in: app)
         XCTAssertTrue(
             element.isHittable,
@@ -199,13 +204,17 @@ final class BleatLandscapeUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertVisible(_ element: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing \(element)")
+    private func assertVisible(_ element: XCUIElement, in app: XCUIApplication)
+    {
+        XCTAssertTrue(
+            element.waitForExistence(timeout: 10), "Missing \(element)")
         assertWithinWindow(element, in: app)
     }
 
     @MainActor
-    private func assertWithinWindow(_ element: XCUIElement, in app: XCUIApplication) {
+    private func assertWithinWindow(
+        _ element: XCUIElement, in app: XCUIApplication
+    ) {
         XCTAssertFalse(element.frame.isEmpty, "Empty frame for \(element)")
         XCTAssertTrue(
             app.frame.contains(element.frame),
@@ -219,7 +228,9 @@ final class BleatLandscapeUITests: XCTestCase {
         in container: XCUIElement,
         app: XCUIApplication
     ) {
-        XCTAssertTrue(container.waitForExistence(timeout: 5), "Missing scroll container \(container)")
+        XCTAssertTrue(
+            container.waitForExistence(timeout: 5),
+            "Missing scroll container \(container)")
         for _ in 0..<20 {
             let elementExists = element.exists
             if elementExists,
@@ -228,7 +239,8 @@ final class BleatLandscapeUITests: XCTestCase {
             {
                 return
             }
-            let scrollsTowardTop = !elementExists
+            let scrollsTowardTop =
+                !elementExists
                 || element.frame.midY >= app.frame.midY
             let start = container.coordinate(
                 withNormalizedOffset: CGVector(
@@ -244,6 +256,7 @@ final class BleatLandscapeUITests: XCTestCase {
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTFail("Could not scroll to hittable element \(element) in \(container)")
+        XCTFail(
+            "Could not scroll to hittable element \(element) in \(container)")
     }
 }

@@ -14,7 +14,8 @@ final class LegacyDiagnosticLogCleanupTests: XCTestCase {
             "BleatDiagnostics",
             isDirectory: true
         )
-        let legacyLogURL = legacyDirectory.appendingPathComponent("recent.jsonl")
+        let legacyLogURL = legacyDirectory.appendingPathComponent(
+            "recent.jsonl")
         defer {
             try? fileManager.removeItem(at: root)
         }
@@ -52,7 +53,8 @@ final class LegacyDiagnosticLogCleanupTests: XCTestCase {
             "BleatDiagnostics",
             isDirectory: true
         )
-        let legacyLogURL = legacyDirectory.appendingPathComponent("recent.jsonl")
+        let legacyLogURL = legacyDirectory.appendingPathComponent(
+            "recent.jsonl")
         defer {
             try? fileManager.removeItem(at: root)
         }

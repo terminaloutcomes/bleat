@@ -197,7 +197,7 @@ final class AuthenticationTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.validateLocalLogin(
                 accountID: AccountID(rawValue: "edited-account"),
                 server: NormalizedServerURL("https://local.example"),
@@ -426,7 +426,7 @@ final class AuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await client.login(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -489,7 +489,7 @@ final class AuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await client.login(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -515,7 +515,7 @@ final class AuthenticationTests: XCTestCase {
             credentialStore: emptyAccountStore
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await emptyAccountClient.login(
                 accountID: AccountID(rawValue: ""),
                 server: NormalizedServerURL("https://example.com"),
@@ -551,7 +551,7 @@ final class AuthenticationTests: XCTestCase {
             credentialStore: failingStore
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await client.login(
                 accountID: AccountID(rawValue: "account"),
                 server: NormalizedServerURL("https://example.com"),
@@ -592,7 +592,7 @@ final class AuthenticationTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await client.login(
                 accountID: AccountID(rawValue: "account"),
                 server: NormalizedServerURL("https://example.com"),

@@ -157,7 +157,7 @@ final class ServerDiscoveryTests: XCTestCase {
         )
         let client = ServerDiscoveryClient(transport: transport)
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await client.discover(
                 NormalizedServerURL("https://example.com")
             )
@@ -235,7 +235,7 @@ final class ServerDiscoveryTests: XCTestCase {
             )
             let client = ServerDiscoveryClient(transport: transport)
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await client.discover(
                     NormalizedServerURL("https://example.com")
                 )
@@ -263,7 +263,7 @@ final class ServerDiscoveryTests: XCTestCase {
         )
         let client = ServerDiscoveryClient(transport: transport)
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await client.discover(
                 NormalizedServerURL("https://example.com")
             )
@@ -313,7 +313,7 @@ final class ServerDiscoveryTests: XCTestCase {
             )
             let client = ServerDiscoveryClient(transport: transport)
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await client.discover(
                     NormalizedServerURL("https://example.com")
                 )

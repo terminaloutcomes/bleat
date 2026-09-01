@@ -1622,7 +1622,7 @@ private actor APIScriptTransport: HTTPTransport {
         try Task.checkCancellation()
         requests.append(request)
         if delayProgressResponses,
-           request.url?.path.contains("/api/me/progress/") == true
+            request.url?.path.contains("/api/me/progress/") == true
         {
             progressRequestsInFlight += 1
             maximumProgressRequestsInFlight = max(
@@ -1635,8 +1635,8 @@ private actor APIScriptTransport: HTTPTransport {
             try await Task.sleep(for: .milliseconds(20))
         }
         if let path = request.url?.path,
-           var pathResponses = responsesByPath[path],
-           !pathResponses.isEmpty
+            var pathResponses = responsesByPath[path],
+            !pathResponses.isEmpty
         {
             let response = pathResponses.removeFirst()
             responsesByPath[path] = pathResponses

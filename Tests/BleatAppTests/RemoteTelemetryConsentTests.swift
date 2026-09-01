@@ -600,7 +600,9 @@ private final class DeferredTelemetryAvailabilityController:
         }
     }
 
-    func completeAvailabilityRequest(with availability: TelemetryTokenAvailability) {
+    func completeAvailabilityRequest(
+        with availability: TelemetryTokenAvailability
+    ) {
         let continuation = availabilityContinuation
         availabilityContinuation = nil
         continuation?.resume(returning: availability)

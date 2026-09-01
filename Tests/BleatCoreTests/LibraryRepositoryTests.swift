@@ -220,7 +220,9 @@ final class LibraryRepositoryTests: XCTestCase {
         let items = Self.page(request: pageRequest).items
         let correlationID = APICorrelationID()
         let online = RepositoryRemote(
-            searches: [.success(LibrarySearchResults(books: items), correlationID)]
+            searches: [
+                .success(LibrarySearchResults(books: items), correlationID)
+            ]
         )
         let repository = LibraryRepository(
             accountID: accountID,
@@ -516,7 +518,7 @@ final class LibraryRepositoryTests: XCTestCase {
                     .success(
                         [invalidLibrary],
                         APICorrelationID()
-                    ),
+                    )
                 ]
             ),
             cache: fixture.cache
@@ -531,18 +533,20 @@ final class LibraryRepositoryTests: XCTestCase {
         }
 
         let context = ModelContext(fixture.container)
-        context.insert(CachedLibraryCollectionRecord(
-            accountID: "corrupt",
-            refreshedAt: Date()
-        ))
-        context.insert(CachedLibraryRecord(
-            cacheKey: "corrupt",
-            accountID: "corrupt",
-            libraryID: "library",
-            position: 0,
-            payload: Data("not-json".utf8),
-            refreshedAt: Date()
-        ))
+        context.insert(
+            CachedLibraryCollectionRecord(
+                accountID: "corrupt",
+                refreshedAt: Date()
+            ))
+        context.insert(
+            CachedLibraryRecord(
+                cacheKey: "corrupt",
+                accountID: "corrupt",
+                libraryID: "library",
+                position: 0,
+                payload: Data("not-json".utf8),
+                refreshedAt: Date()
+            ))
         try context.save()
         let remoteError = AudiobookshelfAPIError.unexpectedStatus(503)
         let corruptRepository = LibraryRepository(
@@ -600,7 +604,7 @@ final class LibraryRepositoryTests: XCTestCase {
                     updatedAtMilliseconds: 2,
                     isExplicit: false,
                     isAbridged: false
-                ),
+                )
             ],
             total: 3,
             page: request.page,
@@ -623,7 +627,7 @@ final class LibraryRepositoryTests: XCTestCase {
                     )
                 ).items,
                 total: 3
-            ),
+            )
         ]
     }
 
@@ -640,7 +644,7 @@ final class LibraryRepositoryTests: XCTestCase {
                 LibraryBookContributor(
                     id: AuthorID(rawValue: "author")!,
                     name: "Author"
-                ),
+                )
             ],
             narrators: ["Narrator"],
             series: [],
@@ -662,7 +666,7 @@ final class LibraryRepositoryTests: XCTestCase {
                     start: 0,
                     end: 60,
                     title: "Chapter"
-                ),
+                )
             ],
             addedAtMilliseconds: 1,
             updatedAtMilliseconds: 2,
@@ -694,15 +698,9 @@ private enum RepositoryRemoteStep<Value: Sendable>: Sendable {
 private actor RepositoryRemote: LibraryRemoteDataSource {
     private var librarySteps: [RepositoryRemoteStep<[LibrarySummary]>]
     private var pageSteps: [RepositoryRemoteStep<LibraryItemsPage>]
-    private var searchSteps: [
-        RepositoryRemoteStep<LibrarySearchResults>
-    ]
-    private var homeSteps: [
-        RepositoryRemoteStep<[LibraryBookShelf]>
-    ]
-    private var detailSteps: [
-        RepositoryRemoteStep<LibraryBookDetail>
-    ]
+    private var searchSteps: [RepositoryRemoteStep<LibrarySearchResults>]
+    private var homeSteps: [RepositoryRemoteStep<[LibraryBookShelf]>]
+    private var detailSteps: [RepositoryRemoteStep<LibraryBookDetail>]
     private var libraryCallCount = 0
     private var pageCallCount = 0
     private var searchCallCount = 0
@@ -713,12 +711,8 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         libraries: [RepositoryRemoteStep<[LibrarySummary]>] = [],
         pages: [RepositoryRemoteStep<LibraryItemsPage>] = [],
         searches: [RepositoryRemoteStep<LibrarySearchResults>] = [],
-        homes: [
-            RepositoryRemoteStep<[LibraryBookShelf]>
-        ] = [],
-        details: [
-            RepositoryRemoteStep<LibraryBookDetail>
-        ] = []
+        homes: [RepositoryRemoteStep<[LibraryBookShelf]>] = [],
+        details: [RepositoryRemoteStep<LibraryBookDetail>] = []
     ) {
         librarySteps = libraries
         pageSteps = pages
@@ -805,12 +799,12 @@ private actor RepositoryRemote: LibraryRemoteDataSource {
         -> AudiobookshelfAPIResult<Value>
     {
         switch step {
-        case let .success(value, correlationID):
+        case .success(let value, let correlationID):
             AudiobookshelfAPIResult(
                 value: value,
                 correlationID: correlationID
             )
-        case let .failure(error):
+        case .failure(let error):
             throw error
         }
     }
@@ -835,7 +829,7 @@ private struct LibraryRepositoryFixture {
                 ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
-                ),
+                )
             ]
         )
         cache = LibraryCache(modelContainer: container)

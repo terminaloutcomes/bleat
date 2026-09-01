@@ -215,7 +215,8 @@ final class BleatDynamicTypeUITests: XCTestCase {
         _ element: XCUIElement,
         in app: XCUIApplication
     ) -> XCUIElement {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing \(element)")
+        XCTAssertTrue(
+            element.waitForExistence(timeout: 10), "Missing \(element)")
         assertWithinWindow(element, in: app)
         XCTAssertTrue(
             element.isHittable,
@@ -225,13 +226,17 @@ final class BleatDynamicTypeUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertVisible(_ element: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing \(element)")
+    private func assertVisible(_ element: XCUIElement, in app: XCUIApplication)
+    {
+        XCTAssertTrue(
+            element.waitForExistence(timeout: 10), "Missing \(element)")
         assertWithinWindow(element, in: app)
     }
 
     @MainActor
-    private func assertWithinWindow(_ element: XCUIElement, in app: XCUIApplication) {
+    private func assertWithinWindow(
+        _ element: XCUIElement, in app: XCUIApplication
+    ) {
         XCTAssertFalse(element.frame.isEmpty, "Empty frame for \(element)")
         XCTAssertTrue(
             app.frame.contains(element.frame),
@@ -256,7 +261,8 @@ final class BleatDynamicTypeUITests: XCTestCase {
             {
                 return
             }
-            let scrollsTowardTop = !element.exists
+            let scrollsTowardTop =
+                !element.exists
                 || element.frame.midY >= app.frame.midY
             let start = container.coordinate(
                 withNormalizedOffset: CGVector(
@@ -272,6 +278,7 @@ final class BleatDynamicTypeUITests: XCTestCase {
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTFail("Could not scroll to hittable element \(element) in \(container)")
+        XCTFail(
+            "Could not scroll to hittable element \(element) in \(container)")
     }
 }

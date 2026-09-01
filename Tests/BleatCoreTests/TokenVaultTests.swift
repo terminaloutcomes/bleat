@@ -91,10 +91,12 @@ final class TokenVaultTests: XCTestCase {
         #else
             let suffix = UUID().uuidString
             let store = TokenVault(
-                tokenService: "com.terminaloutcomes.bleat.tests.token.\(suffix)",
+                tokenService:
+                    "com.terminaloutcomes.bleat.tests.token.\(suffix)",
                 nativeLoginService:
                     "com.terminaloutcomes.bleat.tests.login.\(suffix)",
-                legacyService: "com.terminaloutcomes.bleat.tests.legacy.\(suffix)",
+                legacyService:
+                    "com.terminaloutcomes.bleat.tests.legacy.\(suffix)",
                 synchronizesNativeLogin: false
             )
             let firstAccount = AccountID(rawValue: "first")
@@ -132,7 +134,8 @@ final class TokenVaultTests: XCTestCase {
         #endif
     }
 
-    func testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled()
+    func
+        testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled()
         async throws
     {
         #if targetEnvironment(simulator)
@@ -141,7 +144,8 @@ final class TokenVaultTests: XCTestCase {
             )
         #else
             let suffix = UUID().uuidString
-            let tokenService = "com.terminaloutcomes.bleat.tests.token.\(suffix)"
+            let tokenService =
+                "com.terminaloutcomes.bleat.tests.token.\(suffix)"
             let nativeLoginService =
                 "com.terminaloutcomes.bleat.tests.login.\(suffix)"
             let enabledStore = TokenVault(
@@ -180,7 +184,8 @@ final class TokenVaultTests: XCTestCase {
             }
             try await disabledStore.deleteAllCredentials()
 
-            let remainingLogin = try await enabledStore
+            let remainingLogin =
+                try await enabledStore
                 .nativeLoginCredentials(for: account)
             XCTAssertNil(remainingLogin)
         #endif
@@ -196,7 +201,8 @@ final class TokenVaultTests: XCTestCase {
         #else
             let suffix = UUID().uuidString
             let store = TokenVault(
-                tokenService: "com.terminaloutcomes.bleat.tests.token.\(suffix)",
+                tokenService:
+                    "com.terminaloutcomes.bleat.tests.token.\(suffix)",
                 nativeLoginService:
                     "com.terminaloutcomes.bleat.tests.login.\(suffix)",
                 legacyService: nil,
@@ -257,7 +263,7 @@ final class TokenVaultTests: XCTestCase {
         )
         let emptyAccount = AccountID(rawValue: "")
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await store.credentials(for: emptyAccount)
         ) { error in
             XCTAssertEqual(
@@ -265,7 +271,7 @@ final class TokenVaultTests: XCTestCase {
                 .invalidAccountID
             )
         }
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await store.save(
                 AuthenticationTokens(
                     accessToken: "access",
@@ -279,7 +285,7 @@ final class TokenVaultTests: XCTestCase {
                 .invalidAccountID
             )
         }
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await store.deleteCredentials(for: emptyAccount)
         ) { error in
             XCTAssertEqual(
@@ -292,7 +298,7 @@ final class TokenVaultTests: XCTestCase {
     func testRejectsEmptyService() async throws {
         let store = TokenVault(service: "")
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await store.credentials(
                 for: AccountID(rawValue: "account")
             )
@@ -329,7 +335,7 @@ final class TokenVaultTests: XCTestCase {
             }
 
             let store = TokenVault(service: service)
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await store.credentials(for: accountID)
             ) { error in
                 XCTAssertEqual(

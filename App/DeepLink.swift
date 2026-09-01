@@ -24,7 +24,8 @@ enum DeepLinkRoute: Hashable, Sendable {
     case home
     case library
     case downloads
-    case search(query: String, scope: DeepLinkSearchScope, target: DeepLinkScope)
+    case search(
+        query: String, scope: DeepLinkSearchScope, target: DeepLinkScope)
     case book(id: LibraryItemID, target: DeepLinkScope)
     case author(id: AuthorID, target: DeepLinkScope)
     case series(id: SeriesID, target: DeepLinkScope)
@@ -38,13 +39,15 @@ enum DeepLinkParseError: Error, Equatable, Sendable {
 
 enum DeepLinkParser {
     static func parse(_ url: URL) throws(DeepLinkParseError) -> DeepLinkRoute {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              components.scheme?.lowercased() == "bleat",
-              components.user == nil,
-              components.password == nil,
-              components.port == nil,
-              components.fragment == nil,
-              let host = components.host?.lowercased()
+        guard
+            let components = URLComponents(
+                url: url, resolvingAgainstBaseURL: false),
+            components.scheme?.lowercased() == "bleat",
+            components.user == nil,
+            components.password == nil,
+            components.port == nil,
+            components.fragment == nil,
+            let host = components.host?.lowercased()
         else {
             throw .invalidURL
         }
@@ -101,8 +104,8 @@ enum DeepLinkParser {
             default: throw .invalidURL
             }
             guard let value = query.removeValue(forKey: "q"),
-                  let search = valid(value, maximumLength: 256),
-                  query.keys.allSatisfy({ $0 == "account" || $0 == "library" })
+                let search = valid(value, maximumLength: 256),
+                query.keys.allSatisfy({ $0 == "account" || $0 == "library" })
             else { throw .invalidURL }
             return .search(
                 query: search,
@@ -111,18 +114,22 @@ enum DeepLinkParser {
             )
         case "book", "author", "series":
             guard path.count == 1,
-                  let raw = valid(path[0], maximumLength: 512),
-                  query.keys.allSatisfy({ $0 == "account" || $0 == "library" })
+                let raw = valid(path[0], maximumLength: 512),
+                query.keys.allSatisfy({ $0 == "account" || $0 == "library" })
             else { throw .invalidURL }
             let target = try scopeValues(query)
             switch host {
             case "book":
                 return .book(id: LibraryItemID(rawValue: raw), target: target)
             case "author":
-                guard let id = AuthorID(rawValue: raw) else { throw .invalidURL }
+                guard let id = AuthorID(rawValue: raw) else {
+                    throw .invalidURL
+                }
                 return .author(id: id, target: target)
             default:
-                guard let id = SeriesID(rawValue: raw) else { throw .invalidURL }
+                guard let id = SeriesID(rawValue: raw) else {
+                    throw .invalidURL
+                }
                 return .series(id: id, target: target)
             }
         default:
@@ -145,7 +152,7 @@ enum DeepLinkParser {
         var values: [String: String] = [:]
         for item in items {
             guard let value = item.value,
-                  values[item.name] == nil
+                values[item.name] == nil
             else { throw .invalidURL }
             values[item.name] = value
         }
@@ -178,9 +185,9 @@ enum DeepLinkParser {
 
     private static func valid(_ value: String, maximumLength: Int) -> String? {
         guard !value.isEmpty,
-              value == value.trimmingCharacters(in: .whitespacesAndNewlines),
-              value.count <= maximumLength,
-              value.rangeOfCharacter(from: .controlCharacters) == nil
+            value == value.trimmingCharacters(in: .whitespacesAndNewlines),
+            value.count <= maximumLength,
+            value.rangeOfCharacter(from: .controlCharacters) == nil
         else { return nil }
         return value
     }
@@ -200,7 +207,7 @@ enum DeepLinkFormatter {
             components.host = "downloads"
         case .nowPlaying:
             components.host = "now-playing"
-        case let .settings(destination):
+        case .settings(let destination):
             components.host = "settings"
             switch destination {
             case .root:
@@ -212,7 +219,7 @@ enum DeepLinkFormatter {
             case .about:
                 components.path = "/about"
             }
-        case let .search(query, scope, target):
+        case .search(let query, let scope, let target):
             components.host = "search"
             switch scope {
             case .all:
@@ -228,19 +235,19 @@ enum DeepLinkFormatter {
                 base: [URLQueryItem(name: "q", value: query)],
                 target: target
             )
-        case let .book(id, target):
+        case .book(let id, let target):
             components.host = "book"
             guard setPathComponent(id.rawValue, on: &components) else {
                 return nil
             }
             components.queryItems = queryItems(base: [], target: target)
-        case let .author(id, target):
+        case .author(let id, let target):
             components.host = "author"
             guard setPathComponent(id.rawValue, on: &components) else {
                 return nil
             }
             components.queryItems = queryItems(base: [], target: target)
-        case let .series(id, target):
+        case .series(let id, let target):
             components.host = "series"
             guard setPathComponent(id.rawValue, on: &components) else {
                 return nil
@@ -256,10 +263,12 @@ enum DeepLinkFormatter {
     ) -> [URLQueryItem] {
         var items = base
         if let accountID = target.accountID {
-            items.append(URLQueryItem(name: "account", value: accountID.rawValue))
+            items.append(
+                URLQueryItem(name: "account", value: accountID.rawValue))
         }
         if let libraryID = target.libraryID {
-            items.append(URLQueryItem(name: "library", value: libraryID.rawValue))
+            items.append(
+                URLQueryItem(name: "library", value: libraryID.rawValue))
         }
         return items
     }
@@ -271,9 +280,11 @@ enum DeepLinkFormatter {
         let allowed = CharacterSet.urlPathAllowed.subtracting(
             CharacterSet(charactersIn: "/")
         )
-        guard let encoded = value.addingPercentEncoding(
-            withAllowedCharacters: allowed
-        ) else {
+        guard
+            let encoded = value.addingPercentEncoding(
+                withAllowedCharacters: allowed
+            )
+        else {
             return false
         }
         components.percentEncodedPath = "/\(encoded)"

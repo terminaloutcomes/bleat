@@ -109,7 +109,8 @@ final class PlaybackPositionStore {
             guard let value = positions.removeValue(forKey: key) else {
                 continue
             }
-            let migratedKey = canonicalPrefix
+            let migratedKey =
+                canonicalPrefix
                 + key.dropFirst(legacyPrefix.count)
             positions[migratedKey] = max(positions[migratedKey] ?? 0, value)
         }

@@ -41,12 +41,17 @@ final class TranscriptExportTests: XCTestCase {
                 transcript(
                     chapterID: 2,
                     chapterStartMilliseconds: 7_200_000,
-                    segments: [segment(start: 7_200_100, end: 7_201_999, text: "Second")]
+                    segments: [
+                        segment(
+                            start: 7_200_100, end: 7_201_999, text: "Second")
+                    ]
                 ),
                 transcript(
                     chapterID: 1,
                     chapterStartMilliseconds: 0,
-                    segments: [segment(start: 999, end: 1_001, text: "First --> cue")]
+                    segments: [
+                        segment(start: 999, end: 1_001, text: "First --> cue")
+                    ]
                 ),
             ],
             format: .subRip
@@ -86,7 +91,9 @@ final class TranscriptExportTests: XCTestCase {
             transcript(
                 chapterID: 1,
                 chapterStartMilliseconds: 0,
-                segments: [segment(start: 0, end: 500, text: "Shared semantics")]
+                segments: [
+                    segment(start: 0, end: 500, text: "Shared semantics")
+                ]
             )
         ]
 
@@ -108,13 +115,18 @@ final class TranscriptExportTests: XCTestCase {
                 transcript(
                     chapterID: 2,
                     chapterStartMilliseconds: 10_000,
-                    segments: [segment(start: 10_000, end: 11_000, text: "Available chapter")]
+                    segments: [
+                        segment(
+                            start: 10_000, end: 11_000,
+                            text: "Available chapter")
+                    ]
                 )
             ],
             format: .subRip
         )
 
-        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("Available chapter"))
+        XCTAssertTrue(
+            String(decoding: data, as: UTF8.self).contains("Available chapter"))
     }
 
     func testCueTextCannotTerminateItsOwnCueWithBlankLines() throws {
@@ -162,7 +174,9 @@ final class TranscriptExportTests: XCTestCase {
                     transcript(
                         chapterID: 1,
                         chapterStartMilliseconds: 0,
-                        segments: [segment(start: 2_000, end: 1_000, text: "Invalid")]
+                        segments: [
+                            segment(start: 2_000, end: 1_000, text: "Invalid")
+                        ]
                     )
                 ],
                 format: .subRip
@@ -177,7 +191,9 @@ final class TranscriptExportTests: XCTestCase {
                     transcript(
                         chapterID: 1,
                         chapterStartMilliseconds: 0,
-                        segments: [segment(start: 1_000, end: 1_000, text: "Zero")]
+                        segments: [
+                            segment(start: 1_000, end: 1_000, text: "Zero")
+                        ]
                     )
                 ],
                 format: .webVTT

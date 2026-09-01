@@ -55,7 +55,8 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
                 throw TelemetryURLProtocolError.unexpectedRoute
             }
             recorder.append(request.materializingBody())
-            let status = request.url?.path.hasSuffix("/token") == true ? 200 : 201
+            let status =
+                request.url?.path.hasSuffix("/token") == true ? 200 : 201
             return (
                 HTTPURLResponse(
                     url: request.url ?? URL(fileURLWithPath: "/"),
@@ -166,7 +167,8 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
                     headerFields: nil
                 )!,
                 Data(
-                    #"{"error":{"code":"authentication_rejected","message":"sensitive server detail"}}"#.utf8
+                    #"{"error":{"code":"authentication_rejected","message":"sensitive server detail"}}"#
+                        .utf8
                 )
             )
         }
@@ -193,7 +195,9 @@ private final class TelemetryURLProtocolRecorder: @unchecked Sendable {
     private var values: [URLRequest] = []
 
     var requests: [URLRequest] { lock.withLock { values } }
-    func append(_ request: URLRequest) { lock.withLock { values.append(request) } }
+    func append(_ request: URLRequest) {
+        lock.withLock { values.append(request) }
+    }
 }
 
 private final class TelemetryURLProtocolStub: URLProtocol, @unchecked Sendable {
@@ -206,19 +210,23 @@ private final class TelemetryURLProtocolStub: URLProtocol, @unchecked Sendable {
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    {
         request
     }
 
     override func startLoading() {
         let handler = Self.lock.withLock { Self.handler }
         guard let handler else {
-            client?.urlProtocol(self, didFailWithError: TelemetryURLProtocolError.missingHandler)
+            client?.urlProtocol(
+                self, didFailWithError: TelemetryURLProtocolError.missingHandler
+            )
             return
         }
         do {
             let (response, data) = try handler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(
+                self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
         } catch {
@@ -234,8 +242,8 @@ private enum TelemetryURLProtocolError: Error {
     case unexpectedRoute
 }
 
-private extension URLRequest {
-    func materializingBody() -> URLRequest {
+extension URLRequest {
+    fileprivate func materializingBody() -> URLRequest {
         guard httpBody == nil, let stream = httpBodyStream else { return self }
         stream.open()
         defer { stream.close() }

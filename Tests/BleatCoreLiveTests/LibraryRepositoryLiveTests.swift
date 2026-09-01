@@ -27,17 +27,17 @@ final class LibraryRepositoryLiveTests: XCTestCase {
     {
         let environment = ProcessInfo.processInfo.environment
         guard let largeCountString = environment["BLEAT_LARGE_LIBRARY_COUNT"],
-              let largeCount = Int(largeCountString),
-              largeCount > 0
+            let largeCount = Int(largeCountString),
+            largeCount > 0
         else {
             throw XCTSkip(
                 "Set BLEAT_LARGE_LIBRARY_COUNT to exercise the 10k live paged-load"
             )
         }
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
-              let username = environment["BLEAT_LIVE_USERNAME"],
-              let password = environment["BLEAT_LIVE_PASSWORD"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live server URLs"
@@ -134,11 +134,15 @@ final class LibraryRepositoryLiveTests: XCTestCase {
                 request: request,
                 policy: .remoteElseCache
             )
-            XCTAssertEqual(result.source, .remote, "phase 1 must serve from remote")
+            XCTAssertEqual(
+                result.source, .remote, "phase 1 must serve from remote")
             let page = result.value
-            XCTAssertEqual(page.page, request.page, "server must echo the requested page")
-            XCTAssertEqual(page.limit, limit, "server must echo the requested limit")
-            XCTAssertEqual(page.total, expectedCount, "server total must match seed count")
+            XCTAssertEqual(
+                page.page, request.page, "server must echo the requested page")
+            XCTAssertEqual(
+                page.limit, limit, "server must echo the requested limit")
+            XCTAssertEqual(
+                page.total, expectedCount, "server total must match seed count")
             XCTAssertLessThanOrEqual(
                 page.items.count,
                 limit,
@@ -154,9 +158,11 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         }
         let loadElapsed = CACurrentMediaTime() - loadStart
 
-        XCTAssertEqual(totalItems, expectedCount, "must decode all seeded items")
+        XCTAssertEqual(
+            totalItems, expectedCount, "must decode all seeded items")
         XCTAssertGreaterThan(loadElapsed, 0)
-        XCTAssertLessThan(loadElapsed, 120.0, "10k live paged-load exceeded 120s")
+        XCTAssertLessThan(
+            loadElapsed, 120.0, "10k live paged-load exceeded 120s")
 
         // --- Phase 2: cache fallback after server teardown ---
 
@@ -189,10 +195,13 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         }
         let fallbackElapsed = CACurrentMediaTime() - fallbackStart
 
-        XCTAssertEqual(fallbackPages, expectedPages, "must serve every page from cache")
-        XCTAssertEqual(fallbackItems, expectedCount, "must serve all 10k items from cache")
+        XCTAssertEqual(
+            fallbackPages, expectedPages, "must serve every page from cache")
+        XCTAssertEqual(
+            fallbackItems, expectedCount, "must serve all 10k items from cache")
         XCTAssertGreaterThan(fallbackElapsed, 0)
-        XCTAssertLessThan(fallbackElapsed, 30.0, "10k cache fallback exceeded 30s")
+        XCTAssertLessThan(
+            fallbackElapsed, 30.0, "10k cache fallback exceeded 30s")
 
         print(
             "perf-summary live paged-load+fallback: "
@@ -217,7 +226,7 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         let container = try ModelContainer(
             for: schema,
             configurations: [
-                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true),
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             ]
         )
         return LibraryCache(modelContainer: container)

@@ -1,6 +1,7 @@
 import Security
-@testable import BleatCore
 import XCTest
+
+@testable import BleatCore
 
 final class KeychainEntitlementTests: XCTestCase {
     func testApplicationHostCanPersistCredentialsInKeychain() async throws {
@@ -97,7 +98,8 @@ final class KeychainEntitlementTests: XCTestCase {
         async throws
     {
         let vault = TelemetryEnrollmentVault(
-            service: "com.terminaloutcomes.bleat.telemetry-tests.\(UUID().uuidString)"
+            service:
+                "com.terminaloutcomes.bleat.telemetry-tests.\(UUID().uuidString)"
         )
         let enrollment = TelemetryEnrollment(
             keyID: "opaque-app-attest-key-id",

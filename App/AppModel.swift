@@ -506,7 +506,8 @@ enum AppFailureOperation: String, Equatable, Sendable {
 }
 
 enum AppFailureCause: Equatable, Sendable {
-    case persistenceUnavailable, storedDataMigrationFailed, invalidInput, serverRequiresHTTPS,
+    case persistenceUnavailable, storedDataMigrationFailed, invalidInput,
+        serverRequiresHTTPS,
         serverNotReady
     case serverUnsupported, localLoginUnavailable, invalidCredentials
     case authenticationRequired, permissionDenied, itemNotFound
@@ -1308,8 +1309,8 @@ final class AppModel {
     private var pendingLocalSessionSyncAccounts: [AccountID: ServerAccount] =
         [:]
     @ObservationIgnored
-    private var pendingBookProgressMutations:
-        [BookProgressMutationKey: UUID] = [:]
+    private var pendingBookProgressMutations: [BookProgressMutationKey: UUID] =
+        [:]
     @ObservationIgnored
     private var bookProgressMutationStages:
         [BookProgressMutationKey: BookProgressMutationStage] = [:]
@@ -1337,8 +1338,7 @@ final class AppModel {
     private var seriesDownloadPreparationTasks:
         [SeriesDownloadKey: Task<Void, Never>] = [:]
     @ObservationIgnored
-    private var seriesDownloadSubmissionTasks:
-        [UUID: Task<Void, Never>] = [:]
+    private var seriesDownloadSubmissionTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored
     private var seriesDownloadSubmissionAccounts: [UUID: AccountID] = [:]
     @ObservationIgnored
@@ -1349,8 +1349,7 @@ final class AppModel {
     @ObservationIgnored
     private var seriesDownloadBlockedAccounts: Set<AccountID> = []
     private var readySeriesDownloads: [SeriesDownloadRequest] = []
-    private var queuedSeriesDownloadFailures:
-        [SeriesDownloadFailureEntry] = []
+    private var queuedSeriesDownloadFailures: [SeriesDownloadFailureEntry] = []
     private var presentedSeriesDownloadFailure: SeriesDownloadFailureEntry?
 
     private(set) var phase: AppPhase
@@ -1548,9 +1547,10 @@ final class AppModel {
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore = .shared,
         bookProgressOperationTimeout: Duration = .seconds(30),
-        bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void = {
-            try await Task.sleep(for: $0)
-        }
+        bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
+            {
+                try await Task.sleep(for: $0)
+            }
     ) {
         self.service = service
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -3414,9 +3414,15 @@ final class AppModel {
         presentNextSeriesDownload()
         presentNextSeriesDownloadFailure()
 
-        preparationTasks.values.forEach { $0.cancel() }
-        submissionTasks.forEach { $0.cancel() }
-        pageTasks.values.forEach { $0.task.cancel() }
+        for task in preparationTasks.values {
+            task.cancel()
+        }
+        for task in submissionTasks {
+            task.cancel()
+        }
+        for coordinated in pageTasks.values {
+            coordinated.task.cancel()
+        }
         for task in preparationTasks.values {
             await task.value
         }
@@ -4265,11 +4271,13 @@ final class AppModel {
                         libraryID: detail.libraryID,
                         itemID: detail.id
                     )
-                    guard isCurrentBookProgressMutation(
-                        key: key,
-                        contextGeneration: contextGeneration,
-                        revision: revision
-                    ), selectedBookID == detail.id else { return }
+                    guard
+                        isCurrentBookProgressMutation(
+                            key: key,
+                            contextGeneration: contextGeneration,
+                            revision: revision
+                        ), selectedBookID == detail.id
+                    else { return }
                     let merged = Self.reconciledBookDetail(
                         reconciled,
                         preserving: confirmedProgress,
@@ -4281,11 +4289,13 @@ final class AppModel {
                         ?? bookFinishedStates[detail.id]
                         ?? false
                 } catch let error {
-                    guard isCurrentBookProgressMutation(
-                        key: key,
-                        contextGeneration: contextGeneration,
-                        revision: revision
-                    ), selectedBookID == detail.id else { return }
+                    guard
+                        isCurrentBookProgressMutation(
+                            key: key,
+                            contextGeneration: contextGeneration,
+                            revision: revision
+                        ), selectedBookID == detail.id
+                    else { return }
                     let failure =
                         if let serviceError = error as? AppServiceError {
                             AppFailure(
@@ -4304,17 +4314,20 @@ final class AppModel {
                     )
                 }
             }
-            guard isCurrentBookProgressMutation(
-                key: key,
-                contextGeneration: contextGeneration,
-                revision: revision
-            ) else { return }
+            guard
+                isCurrentBookProgressMutation(
+                    key: key,
+                    contextGeneration: contextGeneration,
+                    revision: revision
+                )
+            else { return }
             await refreshSelectedLibraryContent()
-            guard isCurrentBookProgressMutation(
-                key: key,
-                contextGeneration: contextGeneration,
-                revision: revision
-            ),
+            guard
+                isCurrentBookProgressMutation(
+                    key: key,
+                    contextGeneration: contextGeneration,
+                    revision: revision
+                ),
                 searchQuery == query,
                 !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             else { return }
@@ -4347,9 +4360,11 @@ final class AppModel {
     private func invalidateBookProgressReconciliation(
         for key: BookProgressMutationKey
     ) {
-        guard let task = bookProgressReconciliationTasks.removeValue(
-            forKey: key
-        ) else { return }
+        guard
+            let task = bookProgressReconciliationTasks.removeValue(
+                forKey: key
+            )
+        else { return }
         task.cancel()
     }
 
@@ -5133,11 +5148,13 @@ final class AppModel {
                 selected.incoming
             )
             pendingCloudServerConfigurationChanges.removeAll()
-            let restored = try await service
+            let restored =
+                try await service
                 .authenticateRestoredAccountUsingSynchronizedCredential(
                     selected.incoming
                 )
-            cloudAccountRestoreState = restored == nil
+            cloudAccountRestoreState =
+                restored == nil
                 ? .awaitingCredentials(selected.id) : .idle
             privateCloudState = .idle
             await stopLiveUpdatesAndWait()
@@ -5993,7 +6010,8 @@ extension AudiobookshelfLiveConnectionFailure {
 }
 
 extension AudiobookshelfLiveConnectionFailureStage {
-    fileprivate var remoteTelemetryStage: RemoteTelemetryLiveUpdateFailureStage {
+    fileprivate var remoteTelemetryStage: RemoteTelemetryLiveUpdateFailureStage
+    {
         switch self {
         case .requestConstruction:
             .requestConstruction

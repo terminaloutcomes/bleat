@@ -1,8 +1,9 @@
 import AVFoundation
 import BleatCore
 import Observation
+
 #if os(iOS)
-import UIKit
+    import UIKit
 #endif
 
 enum PlaybackState: Equatable, Sendable {
@@ -1869,10 +1870,10 @@ final class PlaybackModel {
         positionConflict = nil
         nowPlayingCoordinator.clear()
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(
-            false,
-            options: .notifyOthersOnDeactivation
-        )
+            try? AVAudioSession.sharedInstance().setActive(
+                false,
+                options: .notifyOthersOnDeactivation
+            )
         #endif
         await diagnostics.record(
             .completed(.closePlayback, category: .playback)
@@ -1919,9 +1920,9 @@ final class PlaybackModel {
 
     static func activateAudioSession() throws {
         #if os(iOS)
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playback, mode: .spokenAudio)
-        try audioSession.setActive(true)
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .spokenAudio)
+            try audioSession.setActive(true)
         #endif
     }
 
@@ -1934,69 +1935,69 @@ final class PlaybackModel {
 
     private func observeAudioSession() {
         #if os(iOS)
-        let center = NotificationCenter.default
-        audioSessionObservers.append(
-            center.addObserver(
-                forName: AVAudioSession.interruptionNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                let typeValue =
-                    notification.userInfo?[
-                        AVAudioSessionInterruptionTypeKey
-                    ] as? UInt
-                let optionsValue =
-                    notification.userInfo?[
-                        AVAudioSessionInterruptionOptionKey
-                    ] as? UInt ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleInterruption(
-                        typeValue: typeValue,
-                        optionsValue: optionsValue
-                    )
-                }
-            }
-        )
-        audioSessionObservers.append(
-            center.addObserver(
-                forName: UIApplication.didEnterBackgroundNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.persistLocalPosition()
-                    if self?.preparation?.sessionID != nil {
-                        await self?.syncProgress()
+            let center = NotificationCenter.default
+            audioSessionObservers.append(
+                center.addObserver(
+                    forName: AVAudioSession.interruptionNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] notification in
+                    let typeValue =
+                        notification.userInfo?[
+                            AVAudioSessionInterruptionTypeKey
+                        ] as? UInt
+                    let optionsValue =
+                        notification.userInfo?[
+                            AVAudioSessionInterruptionOptionKey
+                        ] as? UInt ?? 0
+                    Task { @MainActor [weak self] in
+                        self?.handleInterruption(
+                            typeValue: typeValue,
+                            optionsValue: optionsValue
+                        )
                     }
                 }
-            }
-        )
-        audioSessionObservers.append(
-            center.addObserver(
-                forName: AVAudioSession.routeChangeNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                let reasonValue =
-                    notification.userInfo?[
-                        AVAudioSessionRouteChangeReasonKey
-                    ] as? UInt
-                Task { @MainActor [weak self] in
-                    self?.handleRouteChange(reasonValue: reasonValue)
+            )
+            audioSessionObservers.append(
+                center.addObserver(
+                    forName: UIApplication.didEnterBackgroundNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.persistLocalPosition()
+                        if self?.preparation?.sessionID != nil {
+                            await self?.syncProgress()
+                        }
+                    }
                 }
-            }
-        )
-        audioSessionObservers.append(
-            center.addObserver(
-                forName: AVAudioSession.mediaServicesWereResetNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    await self?.handleMediaServicesReset()
+            )
+            audioSessionObservers.append(
+                center.addObserver(
+                    forName: AVAudioSession.routeChangeNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] notification in
+                    let reasonValue =
+                        notification.userInfo?[
+                            AVAudioSessionRouteChangeReasonKey
+                        ] as? UInt
+                    Task { @MainActor [weak self] in
+                        self?.handleRouteChange(reasonValue: reasonValue)
+                    }
                 }
-            }
-        )
+            )
+            audioSessionObservers.append(
+                center.addObserver(
+                    forName: AVAudioSession.mediaServicesWereResetNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        await self?.handleMediaServicesReset()
+                    }
+                }
+            )
         #endif
     }
 
@@ -2987,8 +2988,9 @@ final class PlaybackModel {
             max(continuationOperation.requestedTime ?? window.endTime, 0),
             duration
         )
-        guard continuationOperation.requestedTime != nil
-            || continuationTime < duration - 0.001
+        guard
+            continuationOperation.requestedTime != nil
+                || continuationTime < duration - 0.001
         else {
             playbackEnded()
             return
@@ -3038,7 +3040,7 @@ final class PlaybackModel {
                     guard generation == operationGeneration else { return }
                     let shouldResume =
                         cachedContinuationOperation?.resumePlayback
-                            ?? continuationOperation.resumePlayback
+                        ?? continuationOperation.resumePlayback
                     currentTime = continuationTime
                     state = shouldResume ? .ready : .paused
                     if shouldResume {
@@ -3055,7 +3057,8 @@ final class PlaybackModel {
             }
         }
 
-        let shouldResume = cachedContinuationOperation?.resumePlayback
+        let shouldResume =
+            cachedContinuationOperation?.resumePlayback
             ?? continuationOperation.resumePlayback
 
         switch cachedStreamingPreparation {
@@ -3149,7 +3152,8 @@ final class PlaybackModel {
             guard generation == operationGeneration else { return }
             releaseAutomaticCachedPlaybackWindow()
             cachedStreamingPreparation = nil
-            let shouldResume = resumePlayback
+            let shouldResume =
+                resumePlayback
                 || cachedContinuationOperation?.resumePlayback == true
                 || isPlaybackRequested
             state = shouldResume ? .ready : .paused
@@ -3677,46 +3681,46 @@ final class PlaybackModel {
     }
 
     #if os(iOS)
-    private func handleInterruption(
-        typeValue: UInt?,
-        optionsValue: UInt
-    ) {
-        guard let typeValue,
-            let type = AVAudioSession.InterruptionType(rawValue: typeValue)
-        else {
-            return
-        }
-        switch type {
-        case .began:
-            resumeAfterInterruption = isPlaybackRequested
-            pause()
-        case .ended:
-            let options = AVAudioSession.InterruptionOptions(
-                rawValue: optionsValue
-            )
-            if resumeAfterInterruption,
-                options.contains(.shouldResume)
-            {
-                play()
+        private func handleInterruption(
+            typeValue: UInt?,
+            optionsValue: UInt
+        ) {
+            guard let typeValue,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+            else {
+                return
             }
-            resumeAfterInterruption = false
-        @unknown default:
-            resumeAfterInterruption = false
+            switch type {
+            case .began:
+                resumeAfterInterruption = isPlaybackRequested
+                pause()
+            case .ended:
+                let options = AVAudioSession.InterruptionOptions(
+                    rawValue: optionsValue
+                )
+                if resumeAfterInterruption,
+                    options.contains(.shouldResume)
+                {
+                    play()
+                }
+                resumeAfterInterruption = false
+            @unknown default:
+                resumeAfterInterruption = false
+                pause()
+            }
+        }
+
+        private func handleRouteChange(reasonValue: UInt?) {
+            guard let reasonValue,
+                let reason = AVAudioSession.RouteChangeReason(
+                    rawValue: reasonValue
+                ),
+                reason == .oldDeviceUnavailable
+            else {
+                return
+            }
             pause()
         }
-    }
-
-    private func handleRouteChange(reasonValue: UInt?) {
-        guard let reasonValue,
-            let reason = AVAudioSession.RouteChangeReason(
-                rawValue: reasonValue
-            ),
-            reason == .oldDeviceUnavailable
-        else {
-            return
-        }
-        pause()
-    }
     #endif
 
     func handleMediaServicesReset() async {

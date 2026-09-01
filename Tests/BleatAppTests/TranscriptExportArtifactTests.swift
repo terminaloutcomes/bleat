@@ -1,19 +1,21 @@
 import BleatCore
-#if os(macOS)
-    import AppKit
-#endif
 import Foundation
 import UniformTypeIdentifiers
 import XCTest
 
 @testable import Bleat
 
+#if os(macOS)
+    import AppKit
+#endif
+
 final class TranscriptExportArtifactTests: XCTestCase {
     func testWriterCreatesSanitizedTypedUTF8ArtifactWithoutNetwork() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString,
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
         defer { try? FileManager.default.removeItem(at: root) }
         let writer = TranscriptExportArtifactWriter(rootURL: root)
 
@@ -34,11 +36,13 @@ final class TranscriptExportArtifactTests: XCTestCase {
         )
     }
 
-    func testWriterKeepsEveryActiveExportAliveAndUsesIsolatedArtifacts() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString,
-            isDirectory: true
-        )
+    func testWriterKeepsEveryActiveExportAliveAndUsesIsolatedArtifacts() throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
         defer { try? FileManager.default.removeItem(at: root) }
         let writer = TranscriptExportArtifactWriter(rootURL: root)
         let firstArtifact = try writer.write(
@@ -67,10 +71,11 @@ final class TranscriptExportArtifactTests: XCTestCase {
     }
 
     func testWriterRemovesArtifactsOrphanedByAnEarlierProcessSession() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString,
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
         defer { try? FileManager.default.removeItem(at: root) }
         let orphan = root.appendingPathComponent(
             "earlier-session-orphan",
@@ -93,10 +98,11 @@ final class TranscriptExportArtifactTests: XCTestCase {
     }
 
     func testConcurrentFirstWritesSafelyShareOrphanCleanup() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString,
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
         defer { try? FileManager.default.removeItem(at: root) }
         let orphan = root.appendingPathComponent(
             "earlier-session-orphan",
@@ -160,10 +166,11 @@ final class TranscriptExportArtifactTests: XCTestCase {
     #endif
 
     func testWriterBoundsMultibyteFilenameToFilesystemComponentLimit() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString,
-            isDirectory: true
-        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
         defer { try? FileManager.default.removeItem(at: root) }
 
         let artifact = try TranscriptExportArtifactWriter(rootURL: root).write(
@@ -197,7 +204,9 @@ final class TranscriptExportArtifactTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 1)
         )
         let emptyCoverage = ChapterTranscriptExportSnapshot(
-            transcripts: [emptyChapter, transcript(chapterID: 2, text: "Available")],
+            transcripts: [
+                emptyChapter, transcript(chapterID: 2, text: "Available"),
+            ],
             expectedChapterIDs: [1, 2]
         )
         XCTAssertTrue(emptyCoverage.isIncomplete)

@@ -1,6 +1,7 @@
 import CoreGraphics
-@testable import Bleat
 import XCTest
+
+@testable import Bleat
 
 final class SeriesCoverMotionTests: XCTestCase {
     func testDepthAngleClampsDeliberateSwipes() {

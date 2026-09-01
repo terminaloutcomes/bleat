@@ -68,11 +68,13 @@ public actor TokenVault: AccountCredentialStore {
         for accountID: AccountID
     ) async throws -> AuthenticationTokens? {
         try migrateLegacyCredentialsIfNeeded(for: accountID)
-        guard let data = try storedData(
-            service: tokenService,
-            accountID: accountID,
-            synchronizable: false
-        ) else {
+        guard
+            let data = try storedData(
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+        else {
             return nil
         }
         if let tokens = try? JSONDecoder().decode(
@@ -173,17 +175,21 @@ public actor TokenVault: AccountCredentialStore {
                 for: accountID
             )?.nativeLogin
         }
-        guard let data = try storedData(
-            service: nativeLoginService,
-            accountID: accountID,
-            synchronizable: synchronizesNativeLogin
-        ) else {
+        guard
+            let data = try storedData(
+                service: nativeLoginService,
+                accountID: accountID,
+                synchronizable: synchronizesNativeLogin
+            )
+        else {
             return nil
         }
-        guard let nativeLogin = try? JSONDecoder().decode(
-            NativeLoginCredentials.self,
-            from: data
-        ) else {
+        guard
+            let nativeLogin = try? JSONDecoder().decode(
+                NativeLoginCredentials.self,
+                from: data
+            )
+        else {
             throw TokenVaultError.invalidStoredCredentials
         }
         return nativeLogin
@@ -237,7 +243,8 @@ public actor TokenVault: AccountCredentialStore {
             accountID: legacyID,
             synchronizable: false
         )
-        let native = tokenService == nativeLoginService
+        let native =
+            tokenService == nativeLoginService
             ? nil
             : try storedData(
                 service: nativeLoginService,
@@ -249,7 +256,8 @@ public actor TokenVault: AccountCredentialStore {
             accountID: canonicalID,
             synchronizable: false
         )
-        let canonicalNative = tokenService == nativeLoginService
+        let canonicalNative =
+            tokenService == nativeLoginService
             ? nil
             : try storedData(
                 service: nativeLoginService,
@@ -300,27 +308,34 @@ public actor TokenVault: AccountCredentialStore {
     }
 
     private static func validateSessionCredentialData(_ data: Data) throws {
-        guard (try? JSONDecoder().decode(
-            AuthenticationTokens.self,
-            from: data
-        )) != nil || (try? JSONDecoder().decode(
-            StoredAccountCredentials.self,
-            from: data
-        )) != nil else {
+        guard
+            (try? JSONDecoder().decode(
+                AuthenticationTokens.self,
+                from: data
+            )) != nil
+                || (try? JSONDecoder().decode(
+                    StoredAccountCredentials.self,
+                    from: data
+                )) != nil
+        else {
             throw TokenVaultError.invalidStoredCredentials
         }
     }
 
     private static func validateNativeLoginData(_ data: Data) throws {
-        guard (try? JSONDecoder().decode(
-            NativeLoginCredentials.self,
-            from: data
-        )) != nil else {
+        guard
+            (try? JSONDecoder().decode(
+                NativeLoginCredentials.self,
+                from: data
+            )) != nil
+        else {
             throw TokenVaultError.invalidStoredCredentials
         }
     }
 
-    public func removeLegacyCredentials(after migration: AccountIdentityMigration)
+    public func removeLegacyCredentials(
+        after migration: AccountIdentityMigration
+    )
         throws
     {
         try deleteSessionTokens(for: migration.legacyID)
@@ -374,17 +389,21 @@ public actor TokenVault: AccountCredentialStore {
         let sourceSynchronizable = synchronizesNativeLogin
         var credentialsByAccount: [(AccountID, Data)] = []
         for accountID in accountIDs {
-            guard let data = try storedData(
-                service: nativeLoginService,
-                accountID: accountID,
-                synchronizable: sourceSynchronizable
-            ) else {
+            guard
+                let data = try storedData(
+                    service: nativeLoginService,
+                    accountID: accountID,
+                    synchronizable: sourceSynchronizable
+                )
+            else {
                 continue
             }
-            guard (try? JSONDecoder().decode(
-                NativeLoginCredentials.self,
-                from: data
-            )) != nil else {
+            guard
+                (try? JSONDecoder().decode(
+                    NativeLoginCredentials.self,
+                    from: data
+                )) != nil
+            else {
                 throw TokenVaultError.invalidStoredCredentials
             }
             credentialsByAccount.append((accountID, data))
@@ -502,11 +521,13 @@ public actor TokenVault: AccountCredentialStore {
     private func storedUnifiedCredentials(
         for accountID: AccountID
     ) throws -> StoredAccountCredentials? {
-        guard let data = try storedData(
-            service: tokenService,
-            accountID: accountID,
-            synchronizable: false
-        ) else {
+        guard
+            let data = try storedData(
+                service: tokenService,
+                accountID: accountID,
+                synchronizable: false
+            )
+        else {
             return nil
         }
         if let stored = try? JSONDecoder().decode(
@@ -567,7 +588,8 @@ public actor TokenVault: AccountCredentialStore {
         let updateValues: [CFString: Any] = [
             kSecValueData: data
         ]
-        let accessibility: CFString = synchronizable
+        let accessibility: CFString =
+            synchronizable
             ? kSecAttrAccessibleAfterFirstUnlock
             : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let addValues: [CFString: Any] = [
@@ -647,7 +669,8 @@ public actor TokenVault: AccountCredentialStore {
             throw TokenVaultError.unexpectedStatus(errSecParam)
         }
         for attribute in attributes {
-            guard let accountID = attribute[kSecAttrAccount as String] as? String
+            guard
+                let accountID = attribute[kSecAttrAccount as String] as? String
             else {
                 throw TokenVaultError.unexpectedStatus(errSecParam)
             }

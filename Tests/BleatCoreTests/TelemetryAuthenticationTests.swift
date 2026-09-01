@@ -81,7 +81,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
             store: MemoryEnrollmentStore()
         )
         await invalidConfiguration.setEnabled(true)
-        await XCTAssertThrowsTelemetryError(.invalidConfiguration) {
+        await assertThrowsTelemetryError(.invalidConfiguration) {
             try await invalidConfiguration.currentToken()
         }
         let invalidConfigurationAvailability =
@@ -99,7 +99,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
             store: MemoryEnrollmentStore()
         )
         await invalidResponse.setEnabled(true)
-        await XCTAssertThrowsTelemetryError(.invalidResponse) {
+        await assertThrowsTelemetryError(.invalidResponse) {
             try await invalidResponse.currentToken()
         }
         let invalidResponseAvailability =
@@ -117,7 +117,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
             store: MemoryEnrollmentStore()
         )
         await rateLimited.setEnabled(true)
-        await XCTAssertThrowsTelemetryError(.rateLimited) {
+        await assertThrowsTelemetryError(.rateLimited) {
             try await rateLimited.currentToken()
         }
         let rateLimitedAvailability =
@@ -186,7 +186,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
             tracer: tracer
         )
 
-        await XCTAssertThrowsTelemetryError(.disabled) {
+        await assertThrowsTelemetryError(.disabled) {
             try await provider.currentToken()
         }
         await provider.setEnabled(true)
@@ -212,7 +212,8 @@ final class TelemetryAuthenticationTests: XCTestCase {
                 .telemetryToken,
             ]
         )
-        XCTAssertEqual(tracer.completedOutcomes, Array(repeating: .succeeded, count: 5))
+        XCTAssertEqual(
+            tracer.completedOutcomes, Array(repeating: .succeeded, count: 5))
         XCTAssertEqual(
             storedEnrollment,
             TelemetryEnrollment(
@@ -232,7 +233,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         )
         await provider.setEnabled(true)
 
-        await XCTAssertThrowsTelemetryError(.unsupported) {
+        await assertThrowsTelemetryError(.unsupported) {
             try await provider.currentToken()
         }
         let requestCount = await transport.requestCount
@@ -357,7 +358,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         waiter.cancel()
 
-        await XCTAssertThrowsTelemetryError(.cancelled) {
+        await assertThrowsTelemetryError(.cancelled) {
             try await waiter.value
         }
         while await transport.tokenCancellationCount == 0 {
@@ -393,7 +394,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         cancelledWaiter.cancel()
 
-        await XCTAssertThrowsTelemetryError(.cancelled) {
+        await assertThrowsTelemetryError(.cancelled) {
             try await cancelledWaiter.value
         }
         let token = try await survivingWaiter.value
@@ -446,10 +447,10 @@ final class TelemetryAuthenticationTests: XCTestCase {
         )
         await provider.setEnabled(true)
 
-        await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+        await assertThrowsTelemetryError(.authenticationRejected) {
             try await provider.currentToken()
         }
-        await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+        await assertThrowsTelemetryError(.authenticationRejected) {
             try await provider.currentToken()
         }
         let deleteCount = await store.deleteCount
@@ -472,7 +473,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         await provider.setEnabled(true)
 
         for _ in 0..<2 {
-            await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+            await assertThrowsTelemetryError(.authenticationRejected) {
                 try await provider.currentToken()
             }
         }
@@ -484,7 +485,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
 
         await provider.setEnabled(false)
         await provider.setEnabled(true)
-        await XCTAssertThrowsTelemetryError(.authenticationRejected) {
+        await assertThrowsTelemetryError(.authenticationRejected) {
             try await provider.currentToken()
         }
         challengeCount = await transport.attestationChallengeCount
@@ -546,7 +547,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         } catch let error as TelemetryTokenProviderError {
             XCTAssertTrue(error == .cancelled || error == .disabled)
         }
-        await XCTAssertThrowsTelemetryError(.disabled) {
+        await assertThrowsTelemetryError(.disabled) {
             try await provider.currentToken()
         }
     }
@@ -566,20 +567,20 @@ final class TelemetryAuthenticationTests: XCTestCase {
         )
         await provider.setEnabled(true)
 
-        await XCTAssertThrowsTelemetryError(.temporarilyUnavailable) {
+        await assertThrowsTelemetryError(.temporarilyUnavailable) {
             try await provider.currentToken()
         }
-        await XCTAssertThrowsTelemetryError(.backingOff) {
+        await assertThrowsTelemetryError(.backingOff) {
             try await provider.currentToken()
         }
         let challengeCount = await transport.attestationChallengeCount
         XCTAssertEqual(challengeCount, 1)
         clock.advance(by: 1.1)
-        await XCTAssertThrowsTelemetryError(.temporarilyUnavailable) {
+        await assertThrowsTelemetryError(.temporarilyUnavailable) {
             try await provider.currentToken()
         }
         clock.advance(by: 1.9)
-        await XCTAssertThrowsTelemetryError(.backingOff) {
+        await assertThrowsTelemetryError(.backingOff) {
             try await provider.currentToken()
         }
         clock.advance(by: 0.2)
@@ -637,15 +638,15 @@ private final class AuthenticationTelemetryTracer: RemoteTelemetryTracing,
     }
 }
 
-private extension TelemetryTokenProviderError {
-    static let allTestValues: [Self] = [
+extension TelemetryTokenProviderError {
+    fileprivate static let allTestValues: [Self] = [
         .disabled, .unsupported, .backingOff, .cancelled,
         .invalidConfiguration, .invalidResponse, .authenticationRejected,
         .rateLimited, .temporarilyUnavailable,
     ]
 }
 
-private func XCTAssertThrowsTelemetryError(
+private func assertThrowsTelemetryError(
     _ expected: TelemetryTokenProviderError,
     operation: () async throws -> some Any
 ) async {
@@ -732,7 +733,9 @@ private actor MemoryEnrollmentStore: TelemetryEnrollmentStoring {
     init(value: TelemetryEnrollment? = nil) { self.value = value }
 
     func enrollment() async throws -> TelemetryEnrollment? { value }
-    func save(_ enrollment: TelemetryEnrollment) async throws { value = enrollment }
+    func save(_ enrollment: TelemetryEnrollment) async throws {
+        value = enrollment
+    }
     func delete() async throws {
         value = nil
         deleteCount += 1
@@ -757,7 +760,8 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     private(set) var tokenCancellationCount = 0
 
     init(
-        clock: TestClock = TestClock(Date(timeIntervalSince1970: 2_000_000_000)),
+        clock: TestClock = TestClock(
+            Date(timeIntervalSince1970: 2_000_000_000)),
         tokenLifetimes: [TimeInterval] = [600],
         tokenDelay: Duration? = nil,
         attestationChallengeFailures: Int = 0,
@@ -777,9 +781,10 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
             + tokenChallengeCount + tokenCount
     }
 
-    func attestationChallenge() async throws(
-        TelemetryAuthenticationTransportError
-    ) -> TelemetryChallenge {
+    func attestationChallenge()
+        async throws(TelemetryAuthenticationTransportError)
+        -> TelemetryChallenge
+    {
         attestationChallengeCount += 1
         if remainingAttestationChallengeFailures > 0 {
             remainingAttestationChallengeFailures -= 1

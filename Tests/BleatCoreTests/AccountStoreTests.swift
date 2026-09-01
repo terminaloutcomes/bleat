@@ -173,10 +173,12 @@ final class AccountStoreTests: XCTestCase {
         let aliases = try await fixture.store.identityAliases()
         XCTAssertEqual(
             aliases,
-            [AccountIdentityMigration(
-                legacyID: legacy.id,
-                canonicalID: canonicalID
-            )]
+            [
+                AccountIdentityMigration(
+                    legacyID: legacy.id,
+                    canonicalID: canonicalID
+                )
+            ]
         )
     }
 

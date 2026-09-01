@@ -719,18 +719,20 @@ final class LibraryCacheTests: XCTestCase {
     func testCorruptedStoredRecordsRemainTyped() async throws {
         let fixture = try LibraryCacheFixture()
         let context = ModelContext(fixture.container)
-        context.insert(CachedLibraryCollectionRecord(
-            accountID: "account",
-            refreshedAt: Date()
-        ))
-        context.insert(CachedLibraryRecord(
-            cacheKey: "corrupt-library",
-            accountID: "account",
-            libraryID: "library",
-            position: 0,
-            payload: Data("not-json".utf8),
-            refreshedAt: Date()
-        ))
+        context.insert(
+            CachedLibraryCollectionRecord(
+                accountID: "account",
+                refreshedAt: Date()
+            ))
+        context.insert(
+            CachedLibraryRecord(
+                cacheKey: "corrupt-library",
+                accountID: "account",
+                libraryID: "library",
+                position: 0,
+                payload: Data("not-json".utf8),
+                refreshedAt: Date()
+            ))
         try context.save()
 
         do {
@@ -762,9 +764,11 @@ final class LibraryCacheTests: XCTestCase {
         let records = try pageContext.fetch(
             FetchDescriptor<CachedLibraryPageRecord>()
         )
-        try XCTUnwrap(records.first {
-            $0.accountID == "page-account"
-        }).payload = Data("not-json".utf8)
+        try XCTUnwrap(
+            records.first {
+                $0.accountID == "page-account"
+            }
+        ).payload = Data("not-json".utf8)
         try pageContext.save()
         do {
             _ = try await fixture.cache.page(
@@ -795,9 +799,11 @@ final class LibraryCacheTests: XCTestCase {
         let searchRecords = try searchContext.fetch(
             FetchDescriptor<CachedLibrarySearchRecord>()
         )
-        try XCTUnwrap(searchRecords.first {
-            $0.accountID == "search-account"
-        }).payload = Data("not-json".utf8)
+        try XCTUnwrap(
+            searchRecords.first {
+                $0.accountID == "search-account"
+            }
+        ).payload = Data("not-json".utf8)
         try searchContext.save()
         let relaunched = LibraryCache(
             modelContainer: fixture.container
@@ -828,9 +834,11 @@ final class LibraryCacheTests: XCTestCase {
         let homeRecords = try homeContext.fetch(
             FetchDescriptor<CachedLibraryHomeRecord>()
         )
-        try XCTUnwrap(homeRecords.first {
-            $0.accountID == "home-account"
-        }).payload = Data("not-json".utf8)
+        try XCTUnwrap(
+            homeRecords.first {
+                $0.accountID == "home-account"
+            }
+        ).payload = Data("not-json".utf8)
         try homeContext.save()
         do {
             _ = try await relaunched.homeShelves(
@@ -857,9 +865,11 @@ final class LibraryCacheTests: XCTestCase {
         let detailRecords = try detailContext.fetch(
             FetchDescriptor<CachedLibraryBookDetailRecord>()
         )
-        try XCTUnwrap(detailRecords.first {
-            $0.accountID == "detail-account"
-        }).payload = Data("not-json".utf8)
+        try XCTUnwrap(
+            detailRecords.first {
+                $0.accountID == "detail-account"
+            }
+        ).payload = Data("not-json".utf8)
         try detailContext.save()
         do {
             _ = try await relaunched.bookDetail(
@@ -1126,7 +1136,7 @@ final class LibraryCacheTests: XCTestCase {
                     updatedAtMilliseconds: 2,
                     isExplicit: false,
                     isAbridged: false
-                ),
+                )
             ],
             total: 1,
             page: request.page,
@@ -1154,7 +1164,7 @@ final class LibraryCacheTests: XCTestCase {
                     itemID: "item-\(suffix)"
                 ).items,
                 total: 1
-            ),
+            )
         ]
     }
 
@@ -1176,7 +1186,7 @@ final class LibraryCacheTests: XCTestCase {
                 LibraryBookContributor(
                     id: AuthorID(rawValue: "author")!,
                     name: "Author"
-                ),
+                )
             ],
             narrators: ["Narrator"],
             series: [],
@@ -1198,7 +1208,7 @@ final class LibraryCacheTests: XCTestCase {
                     start: 0,
                     end: 60,
                     title: "Chapter"
-                ),
+                )
             ],
             addedAtMilliseconds: 1,
             updatedAtMilliseconds: 2,
@@ -1241,7 +1251,7 @@ private struct LibraryCacheFixture {
                 ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
-                ),
+                )
             ]
         )
         cache = LibraryCache(modelContainer: container)

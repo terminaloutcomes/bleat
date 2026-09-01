@@ -1,4 +1,5 @@
 import Foundation
+
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
@@ -18,10 +19,12 @@ public final class URLSessionTelemetryAuthenticationTransport:
         installationID: UUID? = nil,
         configuration: URLSessionConfiguration = .ephemeral
     ) throws(TelemetryAuthenticationTransportError) {
-        guard Self.isValid(
-            baseURL: baseURL,
-            allowsInsecureLoopback: allowsInsecureLoopback
-        ) else {
+        guard
+            Self.isValid(
+                baseURL: baseURL,
+                allowsInsecureLoopback: allowsInsecureLoopback
+            )
+        else {
             throw .invalidConfiguration
         }
         self.baseURL = baseURL.appending(path: "")
@@ -35,9 +38,10 @@ public final class URLSessionTelemetryAuthenticationTransport:
         decoder = JSONDecoder()
     }
 
-    public func attestationChallenge() async throws(
-        TelemetryAuthenticationTransportError
-    ) -> TelemetryChallenge {
+    public func attestationChallenge()
+        async throws(TelemetryAuthenticationTransportError)
+        -> TelemetryChallenge
+    {
         let response: ChallengeDTO = try await post(
             path: "v1/attestation/challenge",
             body: EmptyRequest(),
@@ -165,7 +169,8 @@ public final class URLSessionTelemetryAuthenticationTransport:
         status: Int,
         data: Data
     ) -> TelemetryAuthenticationTransportError {
-        let code = (try? JSONDecoder().decode(ErrorResponseDTO.self, from: data))?
+        let code =
+            (try? JSONDecoder().decode(ErrorResponseDTO.self, from: data))?
             .error.code
         switch (status, code) {
         case (401, _), (_, "authentication_rejected"):

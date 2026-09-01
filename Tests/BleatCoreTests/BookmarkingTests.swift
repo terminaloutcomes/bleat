@@ -121,7 +121,7 @@ final class BookmarkingTests: XCTestCase {
         )
         let server = try NormalizedServerURL("https://books.example")
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.mutateBookmark(
                 accountID: accountID,
                 server: server,
@@ -133,7 +133,7 @@ final class BookmarkingTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? BookmarkError, .invalidTime)
         }
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.mutateBookmark(
                 accountID: accountID,
                 server: server,
@@ -214,7 +214,7 @@ private actor BookmarkTestCredentialStore: AccountCredentialStore {
     }
 }
 
-private func XCTAssertThrowsErrorAsync<T>(
+private func assertThrowsErrorAsync<T>(
     _ expression: @autoclosure () async throws -> T,
     _ errorHandler: (Error) -> Void
 ) async {

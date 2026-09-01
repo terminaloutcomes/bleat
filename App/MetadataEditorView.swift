@@ -25,8 +25,7 @@ struct MetadataEditorView: View {
     @State private var pendingCover: PendingCoverState = .unchanged
     @State private var showDeleteOptions = false
     @State private var showDeletionWarning = false
-    @State private var deletionCleanupStatus:
-        BookDeletionCleanupStatus?
+    @State private var deletionCleanupStatus: BookDeletionCleanupStatus?
 
     init(
         model: AppModel,
@@ -397,11 +396,14 @@ struct MetadataEditorView: View {
             status.localDownloadCleanupFailed
         ) {
         case (true, true):
-            return "The server item was deleted, but Bleat could not fully clear its cached library data or local download."
+            return
+                "The server item was deleted, but Bleat could not fully clear its cached library data or local download."
         case (true, false):
-            return "The server item was deleted, but Bleat could not fully clear its cached library data."
+            return
+                "The server item was deleted, but Bleat could not fully clear its cached library data."
         case (false, true):
-            return "The server item was deleted, but Bleat could not remove its local download."
+            return
+                "The server item was deleted, but Bleat could not remove its local download."
         case (false, false):
             return "The audiobook was deleted from the server."
         }

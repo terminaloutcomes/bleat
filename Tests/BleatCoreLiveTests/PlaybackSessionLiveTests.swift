@@ -7,9 +7,9 @@ final class PlaybackSessionLiveTests: XCTestCase {
     func testPinnedRootAndPrefixPlaybackContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
-              let username = environment["BLEAT_LIVE_USERNAME"],
-              let password = environment["BLEAT_LIVE_PASSWORD"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live playback data"
@@ -158,7 +158,7 @@ final class PlaybackSessionLiveTests: XCTestCase {
         )
         XCTAssertEqual(session.method, .directPlay)
         let source = try session.source(for: server)
-        guard case let .direct(tracks) = source else {
+        guard case .direct(let tracks) = source else {
             return XCTFail("Expected direct playback")
         }
         XCTAssertEqual(tracks.count, 1)
@@ -166,7 +166,7 @@ final class PlaybackSessionLiveTests: XCTestCase {
         try await assertTokenFree(mediaURL, store: store, accountID: accountID)
 
         let probe = try await range(
-            0 ... 0,
+            0...0,
             from: mediaURL,
             transport: transport
         )
@@ -174,9 +174,9 @@ final class PlaybackSessionLiveTests: XCTestCase {
         XCTAssertGreaterThan(totalSize, 96)
 
         let ranges = [
-            0 ... 31,
-            (totalSize / 2) ... (totalSize / 2 + 31),
-            (totalSize - 32) ... (totalSize - 1),
+            0...31,
+            (totalSize / 2)...(totalSize / 2 + 31),
+            (totalSize - 32)...(totalSize - 1),
         ]
         for requestedRange in ranges {
             let response = try await range(
@@ -236,7 +236,7 @@ final class PlaybackSessionLiveTests: XCTestCase {
             deviceInfo: Self.deviceInfo(accountID)
         )
         let source = try session.source(for: server)
-        guard case let .direct(tracks) = source else {
+        guard case .direct(let tracks) = source else {
             return XCTFail("Expected direct multi-track playback")
         }
 
@@ -255,18 +255,18 @@ final class PlaybackSessionLiveTests: XCTestCase {
         let firstURL = try XCTUnwrap(tracks.first?.url)
         let secondURL = tracks[1].url
         let firstProbe = try await range(
-            0 ... 0,
+            0...0,
             from: firstURL,
             transport: transport
         )
         let firstSize = try totalSize(from: firstProbe)
         let firstLastByte = try await range(
-            (firstSize - 1) ... (firstSize - 1),
+            (firstSize - 1)...(firstSize - 1),
             from: firstURL,
             transport: transport
         )
         let secondFirstByte = try await range(
-            0 ... 0,
+            0...0,
             from: secondURL,
             transport: transport
         )
@@ -303,7 +303,8 @@ final class PlaybackSessionLiveTests: XCTestCase {
             deviceInfo: Self.deviceInfo(accountID)
         )
         XCTAssertEqual(session.method, .transcode)
-        guard case let .hls(playlistURL) = try session.source(for: server) else {
+        guard case .hls(let playlistURL) = try session.source(for: server)
+        else {
             return XCTFail("Expected HLS playback")
         }
         try await assertTokenFree(
@@ -373,7 +374,7 @@ final class PlaybackSessionLiveTests: XCTestCase {
         transport: LocalDockerHTTPTransport
     ) async throws -> HTTPResponse {
         var lastResponse: HTTPResponse?
-        for _ in 0 ..< 100 {
+        for _ in 0..<100 {
             let response = try await transport.send(
                 TracedHTTPRequest(
                     request: URLRequest(url: url),

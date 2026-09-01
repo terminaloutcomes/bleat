@@ -1,6 +1,6 @@
 import XCTest
 
-func XCTAssertThrowsErrorAsync<T>(
+func assertThrowsErrorAsync<T>(
     _ expression: @autoclosure () async throws -> T,
     _ errorHandler: (Error) -> Void,
     file: StaticString = #filePath,

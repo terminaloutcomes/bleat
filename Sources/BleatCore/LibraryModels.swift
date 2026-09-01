@@ -26,7 +26,7 @@ extension LibraryMediaType: Codable {
             value = "book"
         case .podcast:
             value = "podcast"
-        case let .unknown(rawValue):
+        case .unknown(let rawValue):
             value = rawValue
         }
         var container = encoder.singleValueContainer()
@@ -63,12 +63,12 @@ extension LibrarySummary {
     }
 }
 
-private extension LibraryMediaType {
-    var isValidForStorage: Bool {
+extension LibraryMediaType {
+    fileprivate var isValidForStorage: Bool {
         switch self {
         case .book, .podcast:
             true
-        case let .unknown(rawValue):
+        case .unknown(let rawValue):
             !rawValue.isEmpty
                 && rawValue.rangeOfCharacter(from: .controlCharacters) == nil
         }
@@ -118,9 +118,9 @@ public struct LibraryItemFilter: Hashable, Sendable {
 
     public init(_ rawValue: String) throws(LibraryPageRequestError) {
         guard !rawValue.isEmpty,
-              rawValue.rangeOfCharacter(
-                  from: .controlCharacters
-              ) == nil
+            rawValue.rangeOfCharacter(
+                from: .controlCharacters
+            ) == nil
         else {
             throw .invalidFilter
         }
@@ -168,7 +168,7 @@ public struct LibraryItemsPageRequest: Hashable, Sendable {
         guard page >= 0 else {
             throw .invalidPage
         }
-        guard (1 ... 100).contains(limit) else {
+        guard (1...100).contains(limit) else {
             throw .invalidLimit
         }
         self.page = page
@@ -227,14 +227,14 @@ public struct LibrarySearchRequest: Hashable, Sendable {
             in: .whitespacesAndNewlines
         )
         guard !normalized.isEmpty,
-              normalized.count <= 200,
-              normalized.rangeOfCharacter(
-                  from: .controlCharacters
-              ) == nil
+            normalized.count <= 200,
+            normalized.rangeOfCharacter(
+                from: .controlCharacters
+            ) == nil
         else {
             throw .invalidQuery
         }
-        guard (1 ... 100).contains(limit) else {
+        guard (1...100).contains(limit) else {
             throw .invalidLimit
         }
         self.query = normalized
@@ -305,7 +305,7 @@ public struct LibraryHomeRequest: Hashable, Sendable {
         limit: Int = 10,
         includeProgress: Bool = true
     ) throws(LibraryHomeRequestError) {
-        guard (1 ... 100).contains(limit) else {
+        guard (1...100).contains(limit) else {
             throw .invalidLimit
         }
         self.limit = limit
@@ -314,7 +314,7 @@ public struct LibraryHomeRequest: Hashable, Sendable {
 
     var queryItems: [URLQueryItem] {
         var items = [
-            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "limit", value: String(limit))
         ]
         if includeProgress {
             items.append(
@@ -395,8 +395,10 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, libraryID, title, subtitle, authorName, narratorName, seriesName
-        case authors, series, collapsedSeries, genres, tags, publisher, publishedYear
+        case id, libraryID, title, subtitle, authorName, narratorName,
+            seriesName
+        case authors, series, collapsedSeries, genres, tags, publisher,
+            publishedYear
         case duration, trackCount, chapterCount, addedAtMilliseconds
         case updatedAtMilliseconds, isExplicit, isAbridged
     }
@@ -407,21 +409,32 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         libraryID = try values.decode(LibraryID.self, forKey: .libraryID)
         title = try values.decode(String.self, forKey: .title)
         subtitle = try values.decodeIfPresent(String.self, forKey: .subtitle)
-        authorName = try values.decodeIfPresent(String.self, forKey: .authorName)
-        narratorName = try values.decodeIfPresent(String.self, forKey: .narratorName)
-        seriesName = try values.decodeIfPresent(String.self, forKey: .seriesName)
-        authors = try values.decodeIfPresent([LibraryBookContributor].self, forKey: .authors) ?? []
-        series = try values.decodeIfPresent([LibraryBookSeries].self, forKey: .series) ?? []
-        collapsedSeries = try values.decodeIfPresent(LibraryCollapsedSeries.self, forKey: .collapsedSeries)
+        authorName = try values.decodeIfPresent(
+            String.self, forKey: .authorName)
+        narratorName = try values.decodeIfPresent(
+            String.self, forKey: .narratorName)
+        seriesName = try values.decodeIfPresent(
+            String.self, forKey: .seriesName)
+        authors =
+            try values.decodeIfPresent(
+                [LibraryBookContributor].self, forKey: .authors) ?? []
+        series =
+            try values.decodeIfPresent(
+                [LibraryBookSeries].self, forKey: .series) ?? []
+        collapsedSeries = try values.decodeIfPresent(
+            LibraryCollapsedSeries.self, forKey: .collapsedSeries)
         genres = try values.decode([String].self, forKey: .genres)
         tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
         publisher = try values.decodeIfPresent(String.self, forKey: .publisher)
-        publishedYear = try values.decodeIfPresent(String.self, forKey: .publishedYear)
+        publishedYear = try values.decodeIfPresent(
+            String.self, forKey: .publishedYear)
         duration = try values.decode(Double.self, forKey: .duration)
         trackCount = try values.decode(Int.self, forKey: .trackCount)
         chapterCount = try values.decode(Int.self, forKey: .chapterCount)
-        addedAtMilliseconds = try values.decode(Int64.self, forKey: .addedAtMilliseconds)
-        updatedAtMilliseconds = try values.decode(Int64.self, forKey: .updatedAtMilliseconds)
+        addedAtMilliseconds = try values.decode(
+            Int64.self, forKey: .addedAtMilliseconds)
+        updatedAtMilliseconds = try values.decode(
+            Int64.self, forKey: .updatedAtMilliseconds)
         isExplicit = try values.decode(Bool.self, forKey: .isExplicit)
         isAbridged = try values.decode(Bool.self, forKey: .isAbridged)
     }
@@ -477,7 +490,7 @@ public enum LibraryBrowseEntry: Hashable, Sendable {
 
     public var book: LibraryBookSummary {
         switch self {
-        case let .book(book), let .series(_, representative: book):
+        case .book(let book), .series(_, representative: let book):
             book
         }
     }
@@ -748,7 +761,7 @@ extension LibraryBookDetail {
             && progress.duration.isFinite
             && progress.duration >= 0
             && progress.progress.isFinite
-            && (0 ... 1).contains(progress.progress)
+            && (0...1).contains(progress.progress)
             && progress.currentTime.isFinite
             && progress.currentTime >= 0
             && progress.lastUpdateMilliseconds >= 0

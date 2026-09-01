@@ -63,8 +63,12 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var refreshedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; libraryID = ""; position = 0
-            payload = Data(); refreshedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            libraryID = ""
+            position = 0
+            payload = Data()
+            refreshedAt = .distantPast
         }
     }
 
@@ -75,8 +79,11 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var refreshedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; libraryID = ""
-            payload = Data(); refreshedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            libraryID = ""
+            payload = Data()
+            refreshedAt = .distantPast
         }
     }
 
@@ -87,8 +94,11 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var refreshedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; libraryID = ""
-            payload = Data(); refreshedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            libraryID = ""
+            payload = Data()
+            refreshedAt = .distantPast
         }
     }
 
@@ -99,8 +109,11 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var refreshedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; libraryID = ""
-            payload = Data(); refreshedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            libraryID = ""
+            payload = Data()
+            refreshedAt = .distantPast
         }
     }
 
@@ -113,8 +126,13 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var refreshedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; userID = ""; libraryID = ""
-            libraryItemID = ""; payload = Data(); refreshedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            userID = ""
+            libraryID = ""
+            libraryItemID = ""
+            payload = Data()
+            refreshedAt = .distantPast
         }
     }
 
@@ -126,59 +144,114 @@ public enum BleatPersistenceSchemaV0_1_1: VersionedSchema {
         var payload: Data
         var updatedAt: Date
         init() {
-            cacheKey = ""; accountID = ""; libraryItemID = ""; chapterID = 0
-            payload = Data(); updatedAt = .distantPast
+            cacheKey = ""
+            accountID = ""
+            libraryItemID = ""
+            chapterID = 0
+            payload = Data()
+            updatedAt = .distantPast
         }
     }
 
     @Model public final class ListeningSliceRecord {
         @Attribute(.unique) var eventID: UUID
-        var accountID: String; var itemID: String; var sessionID: String
-        var startedAt: Date; var endedAt: Date
-        var startPosition: Double; var endPosition: Double
-        var realSeconds: Double; var audiobookSeconds: Double; var playbackRate: Double
-        var chapterID: Int?; var chapterTitle: String?
-        var chapterStart: Double?; var chapterEnd: Double?
-        var title: String; var author: String; var duration: Double
+        var accountID: String
+        var itemID: String
+        var sessionID: String
+        var startedAt: Date
+        var endedAt: Date
+        var startPosition: Double
+        var endPosition: Double
+        var realSeconds: Double
+        var audiobookSeconds: Double
+        var playbackRate: Double
+        var chapterID: Int?
+        var chapterTitle: String?
+        var chapterStart: Double?
+        var chapterEnd: Double?
+        var title: String
+        var author: String
+        var duration: Double
         init() {
-            eventID = UUID(); accountID = ""; itemID = ""; sessionID = ""
-            startedAt = .distantPast; endedAt = .distantPast
-            startPosition = 0; endPosition = 0; realSeconds = 0
-            audiobookSeconds = 0; playbackRate = 1; title = ""; author = ""; duration = 0
+            eventID = UUID()
+            accountID = ""
+            itemID = ""
+            sessionID = ""
+            startedAt = .distantPast
+            endedAt = .distantPast
+            startPosition = 0
+            endPosition = 0
+            realSeconds = 0
+            audiobookSeconds = 0
+            playbackRate = 1
+            title = ""
+            author = ""
+            duration = 0
         }
     }
 
     @Model public final class CompletionMilestoneRecord {
         @Attribute(.unique) var eventID: UUID
-        var accountID: String; var itemID: String; var completedAt: Date
-        var duration: Double; var title: String; var author: String; var evidence: String
+        var accountID: String
+        var itemID: String
+        var completedAt: Date
+        var duration: Double
+        var title: String
+        var author: String
+        var evidence: String
         init() {
-            eventID = UUID(); accountID = ""; itemID = ""; completedAt = .distantPast
-            duration = 0; title = ""; author = ""; evidence = ""
+            eventID = UUID()
+            accountID = ""
+            itemID = ""
+            completedAt = .distantPast
+            duration = 0
+            title = ""
+            author = ""
+            evidence = ""
         }
     }
 
     @Model public final class RemoteListeningSessionRecord {
         @Attribute(.unique) var compositeID: String
-        var sessionID: String; var accountID: String; var itemID: String
-        var startedAt: Date; var updatedAt: Date
-        var realSeconds: Double; var currentTime: Double; var duration: Double
-        var title: String; var author: String
+        var sessionID: String
+        var accountID: String
+        var itemID: String
+        var startedAt: Date
+        var updatedAt: Date
+        var realSeconds: Double
+        var currentTime: Double
+        var duration: Double
+        var title: String
+        var author: String
         init() {
-            compositeID = ""; sessionID = ""; accountID = ""; itemID = ""
-            startedAt = .distantPast; updatedAt = .distantPast; realSeconds = 0
-            currentTime = 0; duration = 0; title = ""; author = ""
+            compositeID = ""
+            sessionID = ""
+            accountID = ""
+            itemID = ""
+            startedAt = .distantPast
+            updatedAt = .distantPast
+            realSeconds = 0
+            currentTime = 0
+            duration = 0
+            title = ""
+            author = ""
         }
     }
 
     @Model public final class StatisticsSessionAccountingRecord {
         @Attribute(.unique) var compositeID: String
-        var accountID: String; var sessionID: String
-        var confirmedRealSeconds: Double; var uncertainRealSeconds: Double
+        var accountID: String
+        var sessionID: String
+        var confirmedRealSeconds: Double
+        var uncertainRealSeconds: Double
         var updatedAt: Date
         init() {
-            compositeID = ""; accountID = ""; sessionID = ""
-            confirmedRealSeconds = 0; uncertainRealSeconds = 0; updatedAt = .distantPast
+            compositeID = ""
+            accountID = ""
+            sessionID = ""
+            confirmedRealSeconds = 0
+            uncertainRealSeconds = 0
+            updatedAt = .distantPast
         }
     }
 }
@@ -188,7 +261,7 @@ public enum BleatPersistenceSchemaV0_1_2: VersionedSchema {
 
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceSchemaV0_1_1.models + [
-            CachedChapterTranscriptionTaskRecord.self,
+            CachedChapterTranscriptionTaskRecord.self
         ]
     }
 
@@ -252,5 +325,6 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
 }
 
 public enum BleatPersistenceSchemaHistory {
-    public static let currentModelTypes = BleatPersistenceModelCatalog.currentModelTypes
+    public static let currentModelTypes = BleatPersistenceModelCatalog
+        .currentModelTypes
 }

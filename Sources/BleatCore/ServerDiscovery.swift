@@ -11,7 +11,7 @@ public enum AuthenticationMethod: Hashable, Sendable {
             "local"
         case .openID:
             "openid"
-        case let .unknown(value):
+        case .unknown(let value):
             value
         }
     }
@@ -108,12 +108,12 @@ public struct AudiobookshelfServerVersion:
             omittingEmptySubsequences: false
         )
         guard components.count == 3,
-              let major = Int(components[0]),
-              let minor = Int(components[1]),
-              let patch = Int(components[2]),
-              major >= 0,
-              minor >= 0,
-              patch >= 0
+            let major = Int(components[0]),
+            let minor = Int(components[1]),
+            let patch = Int(components[2]),
+            major >= 0,
+            minor >= 0,
+            patch >= 0
         else {
             return nil
         }
@@ -221,9 +221,11 @@ public struct ServerDiscoveryClient<Transport: HTTPTransport>: Sendable {
         guard status.isInitialized else {
             throw ServerDiscoveryError.uninitialized
         }
-        guard let version = AudiobookshelfServerVersion(
-            status.serverVersion
-        ) else {
+        guard
+            let version = AudiobookshelfServerVersion(
+                status.serverVersion
+            )
+        else {
             throw ServerDiscoveryError.invalidServerVersion(
                 status.serverVersion
             )
@@ -275,13 +277,14 @@ public struct ServerDiscoveryClient<Transport: HTTPTransport>: Sendable {
             throw ServerDiscoveryError.tooManyRedirects
         }
         guard let location = response.header(named: "Location"),
-              let redirectURL = URL(string: location, relativeTo: url)?.absoluteURL
+            let redirectURL = URL(string: location, relativeTo: url)?
+                .absoluteURL
         else {
             throw ServerDiscoveryError.redirectMissingLocation
         }
         guard redirectURL.user == nil, redirectURL.password == nil,
-              redirectURL.scheme?.lowercased() == "https",
-              redirectURL.host != nil
+            redirectURL.scheme?.lowercased() == "https",
+            redirectURL.host != nil
         else {
             throw ServerDiscoveryError.invalidRedirect(redirectURL)
         }

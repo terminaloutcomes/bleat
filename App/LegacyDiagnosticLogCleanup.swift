@@ -1,5 +1,5 @@
-import Foundation
 import BleatCore
+import Foundation
 
 enum LegacyDiagnosticLogCleanupResult: Equatable {
     case removed
@@ -31,10 +31,12 @@ enum LegacyDiagnosticLogCleanup {
     static func removeLegacyDirectory(
         fileManager: FileManager = .default
     ) -> LegacyDiagnosticLogCleanupResult {
-        guard let applicationSupportURL = fileManager.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
+        guard
+            let applicationSupportURL = fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first
+        else {
             return .applicationSupportUnavailable
         }
         return removeLegacyDirectory(

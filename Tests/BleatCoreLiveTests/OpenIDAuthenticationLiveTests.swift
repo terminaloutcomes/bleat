@@ -20,12 +20,14 @@ final class OpenIDAuthenticationLiveTests: XCTestCase {
             )
         }
 
-        let rootServerPort = Int(
-            environment["BLEAT_ABS_ROOT_PORT"] ?? "13378"
-        ) ?? 13378
-        let prefixServerPort = Int(
-            environment["BLEAT_ABS_PREFIX_PORT"] ?? "13379"
-        ) ?? 13379
+        let rootServerPort =
+            Int(
+                environment["BLEAT_ABS_ROOT_PORT"] ?? "13378"
+            ) ?? 13378
+        let prefixServerPort =
+            Int(
+                environment["BLEAT_ABS_PREFIX_PORT"] ?? "13379"
+            ) ?? 13379
         let callbackURL = try OpenIDCallbackURL(
             "bleat://oauth2redirect"
         )
@@ -110,7 +112,10 @@ private final class LiveTLSDelegate: NSObject, URLSessionDelegate,
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler:
+            @escaping @Sendable (
+                URLSession.AuthChallengeDisposition, URLCredential?
+            ) -> Void
     ) {
         guard let trust = challenge.protectionSpace.serverTrust else {
             completionHandler(.cancelAuthenticationChallenge, nil)
@@ -168,9 +173,11 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
         rootServerPort: Int,
         prefixServerPort: Int
     ) throws {
-        guard let certificate = LiveOIDCTransport.certificate(
-            at: caCertificateURL
-        ) else {
+        guard
+            let certificate = LiveOIDCTransport.certificate(
+                at: caCertificateURL
+            )
+        else {
             throw LiveOIDCTransportError.invalidCertificate
         }
         let configuration = URLSessionConfiguration.ephemeral
@@ -192,14 +199,16 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
         self.cookieStorage = cookieStorage
         self.rootServerPort = rootServerPort
         self.prefixServerPort = prefixServerPort
-        caddyRootPort = Int(
-            ProcessInfo.processInfo.environment["BLEAT_HTTPS_ROOT_PORT"]
-                ?? "13478"
-        ) ?? 13478
-        caddyPrefixPort = Int(
-            ProcessInfo.processInfo.environment["BLEAT_HTTPS_PREFIX_PORT"]
-                ?? "13479"
-        ) ?? 13479
+        caddyRootPort =
+            Int(
+                ProcessInfo.processInfo.environment["BLEAT_HTTPS_ROOT_PORT"]
+                    ?? "13478"
+            ) ?? 13478
+        caddyPrefixPort =
+            Int(
+                ProcessInfo.processInfo.environment["BLEAT_HTTPS_PREFIX_PORT"]
+                    ?? "13479"
+            ) ?? 13479
     }
 
     func send(_ tracedRequest: TracedHTTPRequest) async throws -> HTTPResponse {
@@ -215,7 +224,8 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
         return HTTPResponse(
             data: data,
             statusCode: httpResponse.statusCode,
-            headers: httpResponse.allHeaderFields.reduce(into: [:]) { result, item in
+            headers: httpResponse.allHeaderFields.reduce(into: [:]) {
+                result, item in
                 if let key = item.key as? String,
                     let value = item.value as? String
                 {
@@ -233,10 +243,12 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
     }
 
     private func caddyURL(for url: URL) -> URL {
-        guard var components = URLComponents(
-            url: url,
-            resolvingAgainstBaseURL: false
-        ), components.host == "127.0.0.1" else {
+        guard
+            var components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ), components.host == "127.0.0.1"
+        else {
             return url
         }
         components.host = "localhost"
@@ -252,7 +264,8 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
         guard let pem = try? String(contentsOf: url, encoding: .utf8) else {
             return nil
         }
-        let base64 = pem
+        let base64 =
+            pem
             .components(separatedBy: .newlines)
             .filter {
                 !$0.hasPrefix("---") && !$0.isEmpty
@@ -266,7 +279,9 @@ private struct LiveOIDCTransport: OpenIDSessionTransport, @unchecked Sendable {
 }
 
 @MainActor
-private final class LiveKeycloakBrowser: OpenIDBrowserSession, @unchecked Sendable {
+private final class LiveKeycloakBrowser: OpenIDBrowserSession,
+    @unchecked Sendable
+{
     let username: String
     let password: String
     let oidcPort: Int
@@ -278,9 +293,11 @@ private final class LiveKeycloakBrowser: OpenIDBrowserSession, @unchecked Sendab
         oidcPort: Int,
         caCertificateURL: URL
     ) throws {
-        guard let certificate = LiveOIDCTransport.certificate(
-            at: caCertificateURL
-        ) else {
+        guard
+            let certificate = LiveOIDCTransport.certificate(
+                at: caCertificateURL
+            )
+        else {
             throw LiveOIDCTransportError.invalidCertificate
         }
         self.username = username
@@ -349,10 +366,12 @@ private final class LiveKeycloakBrowser: OpenIDBrowserSession, @unchecked Sendab
         _ url: URL,
         oidcPort: Int
     ) -> URL {
-        guard var components = URLComponents(
-            url: url,
-            resolvingAgainstBaseURL: false
-        ), components.host == "caddy", components.port == 8445 else {
+        guard
+            var components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ), components.host == "caddy", components.port == 8445
+        else {
             return url
         }
         components.host = "localhost"
@@ -368,7 +387,9 @@ private final class LiveKeycloakBrowser: OpenIDBrowserSession, @unchecked Sendab
         let range = NSRange(page.startIndex..<page.endIndex, in: page)
         guard let match = expression.firstMatch(in: page, range: range),
             let actionRange = Range(match.range(at: 1), in: page),
-            let actionURL = URL(string: String(page[actionRange]).replacingOccurrences(of: "&amp;", with: "&"))
+            let actionURL = URL(
+                string: String(page[actionRange]).replacingOccurrences(
+                    of: "&amp;", with: "&"))
         else {
             throw OpenIDBrowserError.failed
         }

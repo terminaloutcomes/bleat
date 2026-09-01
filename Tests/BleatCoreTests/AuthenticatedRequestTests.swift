@@ -271,13 +271,13 @@ final class AuthenticatedRequestTests: XCTestCase {
         await transport.waitUntilMidSaved()
         await transport.releaseMidSave()
 
-        await XCTAssertThrowsErrorAsync(try await taskA.value) { error in
+        await assertThrowsErrorAsync(try await taskA.value) { error in
             XCTAssertEqual(
                 error as? AuthenticatedRequestError,
                 .refreshRejected
             )
         }
-        await XCTAssertThrowsErrorAsync(try await taskB.value) { error in
+        await assertThrowsErrorAsync(try await taskB.value) { error in
             XCTAssertEqual(
                 error as? AuthenticatedRequestError,
                 .refreshRejected
@@ -289,7 +289,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         ]?.rejectedAccessToken
         XCTAssertEqual(recordedToken, "old-access")
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.recoverAccessToken(
                 for: accountID,
                 server: server,
@@ -361,13 +361,13 @@ final class AuthenticatedRequestTests: XCTestCase {
         await transport.releaseInitialSend()
         await transport.releaseMidSave()
 
-        await XCTAssertThrowsErrorAsync(try await taskA.value) { error in
+        await assertThrowsErrorAsync(try await taskA.value) { error in
             XCTAssertEqual(
                 error as? AuthenticatedRequestError,
                 .refreshRejected
             )
         }
-        await XCTAssertThrowsErrorAsync(try await taskB.value) { error in
+        await assertThrowsErrorAsync(try await taskB.value) { error in
             XCTAssertEqual(
                 error as? AuthenticatedRequestError,
                 .refreshRejected
@@ -664,7 +664,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: server),
                 route: .libraries,
@@ -677,7 +677,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                 .automaticReauthenticationFailed(.invalidCredentials)
             )
         }
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: server),
                 route: .libraries,
@@ -743,7 +743,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: server),
                 route: .libraries,
@@ -804,7 +804,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: server),
                 route: .libraries,
@@ -860,7 +860,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                 for: route,
                 server: fixture.server
             )
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.coordinator.sendAuthenticated(
                     request,
                     route: route,
@@ -893,7 +893,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             ]
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.send()
         ) { error in
             XCTAssertEqual(
@@ -991,7 +991,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                     refreshResult,
                 ]
             )
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
                 XCTAssertEqual(
@@ -1028,7 +1028,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             ]
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.send()
         ) { error in
             XCTAssertEqual(
@@ -1072,7 +1072,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
 
         for _ in 0..<2 {
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
                 XCTAssertEqual(
@@ -1154,7 +1154,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                 saveFailuresRemaining: scenario.saveFailures
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
                 XCTAssertEqual(
@@ -1245,7 +1245,8 @@ final class AuthenticatedRequestTests: XCTestCase {
         let storedNativeLogin = try await store.nativeLoginCredentials(
             for: accountID
         )
-        let requiresReauthentication = await coordinator
+        let requiresReauthentication =
+            await coordinator
             .requiresReauthentication(for: accountID)
 
         XCTAssertEqual(response.statusCode, 200)
@@ -1263,7 +1264,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             responses: [],
             includeCredentials: false
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await missingFixture.send()
         ) { error in
             XCTAssertEqual(
@@ -1281,7 +1282,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             responses: [],
             credentialReadFails: true
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await readFailureFixture.send()
         ) { error in
             XCTAssertEqual(
@@ -1307,7 +1308,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             ],
             credentialSaveFails: true
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await saveFailureFixture.send()
         ) { error in
             XCTAssertEqual(
@@ -1324,7 +1325,7 @@ final class AuthenticatedRequestTests: XCTestCase {
 
     func testRequestValidationAndTransportFailuresAreTyped() async throws {
         let fixture = try Fixture(responses: [])
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: fixture.server),
                 route: .libraries,
@@ -1338,7 +1339,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             )
         }
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
                 try Self.request(for: .listeningStats, server: fixture.server),
                 route: .libraries,
@@ -1357,7 +1358,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             server: fixture.server
         )
         missingURLRequest.url = nil
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
                 missingURLRequest,
                 route: .libraries,
@@ -1371,7 +1372,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             )
         }
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
                 try Self.request(for: .libraries, server: fixture.server),
                 route: .directPlay(
@@ -1395,7 +1396,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         tokenQueryRequest.url = URL(
             string: "\(try XCTUnwrap(tokenQueryRequest.url))?token=secret"
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
                 tokenQueryRequest,
                 route: .libraries,
@@ -1412,7 +1413,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         let transportFailureFixture = try Fixture(
             responses: [.failure(.transport)]
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await transportFailureFixture.send()
         ) { error in
             XCTAssertEqual(
@@ -1541,7 +1542,7 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
         let request = try Self.request(for: .libraries, server: server)
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 request,
                 route: .libraries,
