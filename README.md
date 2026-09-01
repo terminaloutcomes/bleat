@@ -306,11 +306,6 @@ declares only the app's local preferences, app-container file metadata, and
 download-space preflight uses. Bleat declares no tracking domains or collected
 data.
 
-CloudKit-enabled archives also require `CloudKit/Bleat.ckdb`, the desired
-schema tracked with the app code, to match the last verified production export
-in `CloudKit/Production.ckdb`. See `docs/development.md` for the development
-import, production promotion, and verification workflow.
-
 For a signed archive, provide the Apple development team at invocation time.
 The team identifier is not stored in the repository:
 

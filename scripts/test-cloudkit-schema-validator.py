@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+"""Regression tests for Bleat's tracked CloudKit schema validator.
+
+These tests exercise the structural schema, code-record consistency, production
+parity, and private-database source policies without contacting CloudKit. They
+exist so changes to the release gate cannot silently weaken the safeguards that
+prevent missing production record types or public/shared database access.
+"""
+
 import importlib.util
 import sys
 import unittest

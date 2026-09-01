@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+"""Validate Bleat's versioned CloudKit schema and database-scope invariants.
+
+The validator parses the desired and production ``.ckdb`` files structurally,
+discovers record types referenced by the sync implementation, and scans
+production Swift sources for public/shared CloudKit database APIs. An optional
+strict mode also requires the exported production schema to equal the desired
+schema. This gate exists because CloudKit production promotion is manual and a
+missing type or incorrect database scope otherwise appears only as a signed-app
+runtime failure.
+"""
+
 import argparse
 import re
 import sys
