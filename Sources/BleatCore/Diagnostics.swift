@@ -188,6 +188,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case privateCloudCancelled = "private_cloud_cancelled"
     case privateCloudInvalidRecord = "private_cloud_invalid_record"
     case privateCloudPersistenceFailed = "private_cloud_persistence_failed"
+    case privateCloudNonPrivateDatabase =
+        "private_cloud_non_private_database"
     case privateCloudEngineUnavailable = "private_cloud_engine_unavailable"
     case privateCloudKitFailed = "private_cloudkit_failed"
     case privateCloudUnexpected = "private_cloud_unexpected"
@@ -227,7 +229,7 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
             unexpectedErrorDomain = error.domain
             unexpectedErrorCode = error.code
         case .disabled, .cancelled, .invalidRecord, .persistenceFailed,
-            .engineUnavailable, .none:
+            .nonPrivateDatabase, .engineUnavailable, .none:
             cloudKitCode = nil
             partialFailureCodes = []
             retryAfterMilliseconds = nil
@@ -559,6 +561,7 @@ extension PrivateCloudSyncError {
         case .cancelled: .privateCloudCancelled
         case .invalidRecord: .privateCloudInvalidRecord
         case .persistenceFailed: .privateCloudPersistenceFailed
+        case .nonPrivateDatabase: .privateCloudNonPrivateDatabase
         case .engineUnavailable: .privateCloudEngineUnavailable
         case .cloudKit: .privateCloudKitFailed
         case .unexpected: .privateCloudUnexpected

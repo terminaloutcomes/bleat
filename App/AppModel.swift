@@ -1136,6 +1136,7 @@ extension PrivateCloudSyncFailure {
         case .disabled: "iCloud sync is off"
         case .invalidRecord: "Invalid iCloud data"
         case .persistenceFailed: "Local storage unavailable"
+        case .nonPrivateDatabase: "Unsafe iCloud configuration"
         case .engineUnavailable: "iCloud sync unavailable"
         case .unexpected: "iCloud sync failed"
         }
@@ -1151,6 +1152,8 @@ extension PrivateCloudSyncFailure {
             "Bleat received incomplete or inconsistent data from iCloud."
         case .persistenceFailed:
             "Bleat could not save or read the iCloud data on this device."
+        case .nonPrivateDatabase:
+            "Bleat refused to synchronize because iCloud was not configured to use your private database."
         case .engineUnavailable:
             "Bleat could not initialize iCloud synchronization."
         case .unexpected:
@@ -1182,7 +1185,8 @@ extension PrivateCloudSyncFailure {
             "xmark.circle"
         case .disabled:
             "icloud.slash"
-        case .invalidRecord, .engineUnavailable, .unexpected:
+        case .invalidRecord, .nonPrivateDatabase, .engineUnavailable,
+            .unexpected:
             "exclamationmark.triangle"
         }
     }
@@ -1191,7 +1195,8 @@ extension PrivateCloudSyncFailure {
         switch cause {
         case .cloudKit(let failure): failure.isRetryable
         case .cancelled, .persistenceFailed, .engineUnavailable: true
-        case .disabled, .invalidRecord, .unexpected: false
+        case .disabled, .invalidRecord, .nonPrivateDatabase, .unexpected:
+            false
         }
     }
 
@@ -1221,8 +1226,8 @@ extension PrivateCloudSyncFailure {
             }
         case .persistenceFailed:
             .localStorage
-        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
-            .unexpected:
+        case .cancelled, .disabled, .invalidRecord, .nonPrivateDatabase,
+            .engineUnavailable, .unexpected:
             .unknown
         }
     }

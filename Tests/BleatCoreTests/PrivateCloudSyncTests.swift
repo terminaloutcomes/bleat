@@ -6,6 +6,36 @@ import XCTest
 @testable import BleatCore
 
 final class PrivateCloudSyncTests: XCTestCase {
+    func testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope() {
+        XCTAssertNil(
+            PrivateCloudSyncCoordinator.configurationFailure(for: .private)
+        )
+        XCTAssertEqual(
+            PrivateCloudSyncCoordinator.configurationFailure(for: .public),
+            .nonPrivateDatabase
+        )
+        XCTAssertEqual(
+            PrivateCloudSyncCoordinator.configurationFailure(for: .shared),
+            .nonPrivateDatabase
+        )
+    }
+
+    func testNonPrivateDatabaseHasSpecificDiagnosticCode() {
+        let event = DiagnosticEvent.privateCloudFailed(
+            failure: PrivateCloudSyncFailure(
+                operation: .synchronize,
+                cause: .nonPrivateDatabase
+            ),
+            correlationID: UUID(),
+            durationMilliseconds: 0
+        )
+
+        XCTAssertEqual(
+            event.failureCode,
+            .privateCloudNonPrivateDatabase
+        )
+    }
+
     func testCloudKitFailurePreservesExactCodeRetryAndPartialCodes() {
         let error = CKError(
             .partialFailure,

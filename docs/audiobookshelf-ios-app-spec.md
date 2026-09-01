@@ -1429,6 +1429,11 @@ Every code change that adds or alters a record type, field, index, or grant must
 update that file. `CloudKit/Production.ckdb` records the last schema exported
 after manual CloudKit Console promotion; CloudKit-enabled distribution
 packaging must fail while the desired and production schemas differ.
+CloudKit entitlements authorize the container rather than an individual
+database scope, so production code must use only the user's private database.
+The sync coordinator verifies `CKDatabase.databaseScope` before creating its
+engine, and the schema validation gate rejects public or shared database access
+from production sources.
 Launch restores authoritative local state before scheduling CloudKit
 synchronization as non-blocking background maintenance; a slow or
 failed CloudKit operation never delays the signed-in or signed-out transition,

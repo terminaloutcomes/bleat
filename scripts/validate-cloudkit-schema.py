@@ -48,6 +48,19 @@ PRIVATE_RECORD_GRANTS = frozenset(
         ("READ", "_world"),
     }
 )
+# CloudKit entitlements authorize a container, not an individual database
+# scope. Keep this source gate so future production code cannot bypass Bleat's
+# private-database boundary and expose records through the public/shared APIs.
+FORBIDDEN_DATABASE_ACCESS_PATTERNS = (
+    (re.compile(r"\.publicCloudDatabase\b"), "publicCloudDatabase"),
+    (re.compile(r"\.sharedCloudDatabase\b"), "sharedCloudDatabase"),
+    (
+        re.compile(
+            r"\.database\s*\(\s*with:\s*\.(?:public|shared)\b"
+        ),
+        "database(with: public/shared)",
+    ),
+)
 
 
 def without_comments(value: str) -> str:
@@ -102,6 +115,20 @@ def source_record_types(value: str) -> set[str]:
 
 def format_names(values: set[str]) -> str:
     return ", ".join(sorted(values))
+
+
+def validate_private_database_access(sources: dict[str, str]) -> None:
+    violations: list[str] = []
+    for path, source in sorted(sources.items()):
+        for pattern, description in FORBIDDEN_DATABASE_ACCESS_PATTERNS:
+            if pattern.search(source):
+                violations.append(f"{path}: {description}")
+    if violations:
+        raise SchemaValidationFailure(
+            "production CloudKit access must remain private-only ("
+            + "; ".join(violations)
+            + ")"
+        )
 
 
 def validate_desired_schema(schema: str, source: str) -> dict[str, RecordType]:
@@ -171,6 +198,12 @@ def main() -> int:
     )
     arguments = parser.parse_args()
     try:
+        swift_sources = {
+            path.relative_to(repository).as_posix(): path.read_text()
+            for directory in (repository / "App", repository / "Sources")
+            for path in directory.rglob("*.swift")
+        }
+        validate_private_database_access(swift_sources)
         desired = validate_desired_schema(
             (repository / "CloudKit/Bleat.ckdb").read_text(),
             (repository / "Sources/BleatCore/PrivateCloudSync.swift").read_text(),

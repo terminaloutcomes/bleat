@@ -30,6 +30,26 @@ def schema(*record_types: str) -> str:
 
 
 class CloudKitSchemaValidatorTests(unittest.TestCase):
+    def test_private_database_access_policy_accepts_private_scope(self) -> None:
+        VALIDATOR.validate_private_database_access(
+            {
+                "Sources/Sync.swift":
+                    "let database = container.privateCloudDatabase"
+            }
+        )
+
+    def test_private_database_access_policy_rejects_public_scope(self) -> None:
+        with self.assertRaisesRegex(
+            VALIDATOR.SchemaValidationFailure,
+            "production CloudKit access must remain private-only",
+        ):
+            VALIDATOR.validate_private_database_access(
+                {
+                    "Sources/Sync.swift":
+                        "let database = container.publicCloudDatabase"
+                }
+            )
+
     def test_matching_code_and_schema_are_valid(self) -> None:
         parsed = VALIDATOR.validate_desired_schema(
             schema("Configuration"),
