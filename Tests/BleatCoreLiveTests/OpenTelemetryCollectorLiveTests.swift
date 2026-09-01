@@ -94,63 +94,51 @@
             let token = try await provider.currentToken()
             pipeline.flush(timeout: 10)
 
-            XCTAssertEqual(
-                client.export(
-                    spans: [span()],
-                    metadata: [("authorization", "Bearer \(token)")],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .success
+            var exportResult = await client.export(
+                spans: [span()],
+                metadata: [("authorization", "Bearer \(token)")],
+                timeout: 10,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                client.export(
-                    spans: [span()],
-                    metadata: [],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            XCTAssertEqual(exportResult, .success)
+            exportResult = await client.export(
+                spans: [span()],
+                metadata: [],
+                timeout: 10,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                client.export(
-                    spans: [span()],
-                    metadata: [("authorization", "Bearer invalid.token.value")],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            XCTAssertEqual(exportResult, .unauthenticated)
+            exportResult = await client.export(
+                spans: [span()],
+                metadata: [("authorization", "Bearer invalid.token.value")],
+                timeout: 10,
+                isActive: { true }
             )
+            XCTAssertEqual(exportResult, .unauthenticated)
             let tamperedToken = try tokenWithTamperedSignature(token)
-            XCTAssertEqual(
-                client.export(
-                    spans: [span()],
-                    metadata: [
-                        ("authorization", "Bearer \(tamperedToken)")
-                    ],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            exportResult = await client.export(
+                spans: [span()],
+                metadata: [
+                    ("authorization", "Bearer \(tamperedToken)")
+                ],
+                timeout: 10,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                client.export(
-                    spans: [oversizedSpan()],
-                    metadata: [("authorization", "Bearer \(token)")],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .failure
+            XCTAssertEqual(exportResult, .unauthenticated)
+            exportResult = await client.export(
+                spans: [oversizedSpan()],
+                metadata: [("authorization", "Bearer \(token)")],
+                timeout: 10,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                client.export(
-                    spans: [oversizedSpan()],
-                    metadata: [],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            XCTAssertEqual(exportResult, .failure)
+            exportResult = await client.export(
+                spans: [oversizedSpan()],
+                metadata: [],
+                timeout: 10,
+                isActive: { true }
             )
+            XCTAssertEqual(exportResult, .unauthenticated)
 
             let logClient = HttpRemoteTelemetryOtlpLogClient(
                 endpoint: try XCTUnwrap(
@@ -159,24 +147,20 @@
                 transport: URLSessionRemoteTelemetryHTTPTransport()
             )
             defer { logClient.shutdown() }
-            XCTAssertEqual(
-                logClient.export(
-                    logs: [cloudKitLog()],
-                    metadata: [("authorization", "Bearer \(token)")],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .success
+            var logExportResult = await logClient.export(
+                logs: [cloudKitLog()],
+                metadata: [("authorization", "Bearer \(token)")],
+                timeout: 10,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                logClient.export(
-                    logs: [cloudKitLog()],
-                    metadata: [],
-                    timeout: 10,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            XCTAssertEqual(logExportResult, .success)
+            logExportResult = await logClient.export(
+                logs: [cloudKitLog()],
+                metadata: [],
+                timeout: 10,
+                isActive: { true }
             )
+            XCTAssertEqual(logExportResult, .unauthenticated)
 
             let outageClient = HttpRemoteTelemetryOtlpClient(
                 endpoint: try XCTUnwrap(
@@ -189,26 +173,22 @@
             )
             defer { outageClient.shutdown() }
 
-            XCTAssertEqual(
-                outageClient.export(
-                    spans: [span()],
+            var outageResult = await outageClient.export(
+                spans: [span()],
+                metadata: [("authorization", "Bearer \(token)")],
+                timeout: 10,
+                isActive: { true }
+            )
+            XCTAssertEqual(outageResult, .success)
+            let maximumBatch = Array(repeating: span(), count: 128)
+            for _ in 0..<32 {
+                outageResult = await outageClient.export(
+                    spans: maximumBatch,
                     metadata: [("authorization", "Bearer \(token)")],
                     timeout: 10,
                     isActive: { true }
-                ),
-                .success
-            )
-            let maximumBatch = Array(repeating: span(), count: 128)
-            for _ in 0..<32 {
-                XCTAssertEqual(
-                    outageClient.export(
-                        spans: maximumBatch,
-                        metadata: [("authorization", "Bearer \(token)")],
-                        timeout: 10,
-                        isActive: { true }
-                    ),
-                    .success
                 )
+                XCTAssertEqual(outageResult, .success)
             }
         }
 

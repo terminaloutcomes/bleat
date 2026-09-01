@@ -84,6 +84,15 @@ Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
 - UI feature models use Observation and run on `@MainActor`.
 - Token, API, repository, download, progress, and related mutable coordination
   use actors.
+- Repository-wide, in every language, target, and module, treat any async
+  implementation that delegates to a synchronous or blocking implementation as
+  a hard failure. This includes protocol-extension defaults, compatibility
+  adapters, thread or dispatch-queue wrappers, semaphore waits, and calling a
+  synchronous method from an async entry point.
+- Allow an async-to-sync fallback only for a specific unavoidable boundary that
+  the user has explicitly confirmed in advance. Document why it is necessary,
+  where blocking occurs, why a native async implementation is unavailable, and
+  what would permit its removal; add focused tests for the exceptional path.
 - Preserve playback across SwiftUI view reconstruction and account-context
   changes.
 - Use protocols only at external boundaries that need test substitution.
