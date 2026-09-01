@@ -14784,6 +14784,38 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testStreamPreparationRetainsRequestedPlaybackIdentity() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playbackGate = AsyncGate()
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            playbackGate: playbackGate
+        )
+        let playback = PlaybackModel(service: service)
+        let start = Task {
+            await playback.start(detail: fixture.detail, account: account)
+        }
+        await playbackGate.waitUntilEntered()
+
+        XCTAssertEqual(playback.state, .preparing)
+        XCTAssertEqual(playback.accountID, account.id)
+        XCTAssertEqual(playback.itemID, fixture.detail.id)
+
+        await playbackGate.release()
+        await start.value
+        await playback.stop()
+    }
+
     func testNewRequestCancelsInFlightStreamPreparation() async throws {
         let fixture = try playbackRecoveryFixture()
         defer { fixture.cleanUp() }

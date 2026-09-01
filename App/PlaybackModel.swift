@@ -396,6 +396,7 @@ final class PlaybackModel {
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
     private var activeAccount: ServerAccount?
     private var localAccountID: AccountID?
+    private var preparingAccountID: AccountID?
     private var preparation: AppPlaybackPreparation?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
@@ -471,7 +472,7 @@ final class PlaybackModel {
     }
 
     var accountID: AccountID? {
-        localAccountID ?? activeAccount?.id
+        preparingAccountID ?? localAccountID ?? activeAccount?.id
     }
 
     var libraryID: LibraryID? {
@@ -767,6 +768,7 @@ final class PlaybackModel {
         resetCachedStreamingContinuation()
         activeAccount = nil
         localAccountID = nil
+        preparingAccountID = account.id
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
@@ -826,6 +828,7 @@ final class PlaybackModel {
 
             try configureAudioSession()
             activeAccount = account
+            preparingAccountID = nil
             preparation = prepared
             activeDownloadDetail = detail
             title = prepared.title
@@ -862,6 +865,7 @@ final class PlaybackModel {
                 return
             }
             activeAccount = nil
+            preparingAccountID = nil
             preparation = nil
             activeDownloadDetail = nil
             resetPlayer()
@@ -882,6 +886,7 @@ final class PlaybackModel {
             }
             await closeActiveSession()
             activeAccount = nil
+            preparingAccountID = nil
             preparation = nil
             activeDownloadDetail = nil
             resetPlayer()
@@ -956,6 +961,7 @@ final class PlaybackModel {
         resetCachedStreamingContinuation()
         activeAccount = nil
         localAccountID = nil
+        preparingAccountID = accountID
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
@@ -1043,6 +1049,7 @@ final class PlaybackModel {
             try configureAudioSession()
             activeAccount = account
             localAccountID = accountID
+            preparingAccountID = nil
             preparation = prepared
             activeDownloadDetail =
                 automaticCachedWindow == nil
@@ -1096,6 +1103,7 @@ final class PlaybackModel {
             }
             activeAccount = nil
             localAccountID = nil
+            preparingAccountID = nil
             preparation = nil
             resetPlayer()
             releaseAutomaticCachedPlaybackWindow()
@@ -1847,6 +1855,7 @@ final class PlaybackModel {
         }
         activeAccount = nil
         localAccountID = nil
+        preparingAccountID = nil
         preparation = nil
         activeDownloadDetail = nil
         lastAutomaticDownloadSignal = nil
