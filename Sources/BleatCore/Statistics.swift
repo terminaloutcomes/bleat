@@ -732,8 +732,7 @@ public struct ListeningAccumulator: Sendable {
 
 public actor StatisticsRepository {
     private let modelContainer: ModelContainer
-    private var accumulators:
-        [PlaybackSessionID: ListeningAccumulator] = [:]
+    private var accumulators: [PlaybackSessionID: ListeningAccumulator] = [:]
 
     public init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -742,7 +741,8 @@ public actor StatisticsRepository {
     public func record(
         _ sample: StatisticsPlaybackSample
     ) throws(StatisticsRepositoryError) {
-        var accumulator = accumulators[sample.sessionID]
+        var accumulator =
+            accumulators[sample.sessionID]
             ?? ListeningAccumulator()
         let slices = try accumulator.ingest(sample)
         accumulators[sample.sessionID] = accumulator
@@ -754,9 +754,11 @@ public actor StatisticsRepository {
     public func finish(
         sessionID: PlaybackSessionID
     ) throws(StatisticsRepositoryError) {
-        guard var accumulator = accumulators.removeValue(
-            forKey: sessionID
-        ) else {
+        guard
+            var accumulator = accumulators.removeValue(
+                forKey: sessionID
+            )
+        else {
             return
         }
         try save(accumulator.finish())
@@ -886,10 +888,12 @@ public actor StatisticsRepository {
             let remoteReal = remoteSessions.reduce(0) {
                 $0 + $1.realSeconds
             }
-            let remoteSessionIDs = Set(remoteSessions.map {
-                "\($0.accountID.rawValue)\u{1f}\($0.id.rawValue)"
-            })
-            let pendingLocalReal = slices
+            let remoteSessionIDs = Set(
+                remoteSessions.map {
+                    "\($0.accountID.rawValue)\u{1f}\($0.id.rawValue)"
+                })
+            let pendingLocalReal =
+                slices
                 .filter {
                     !remoteSessionIDs.contains(
                         "\($0.accountID.rawValue)\u{1f}"
@@ -897,7 +901,8 @@ public actor StatisticsRepository {
                     )
                 }
                 .reduce(0) { $0 + $1.realSeconds }
-            let real = remoteSessions.isEmpty
+            let real =
+                remoteSessions.isEmpty
                 ? localReal
                 : remoteReal + pendingLocalReal
             let hasUncertainty = try context.fetch(
@@ -913,17 +918,18 @@ public actor StatisticsRepository {
             }.mapValues {
                 $0.reduce(0) { $0 + $1.realSeconds }
             }
-            let chapterGroups = Dictionary(grouping: slices.compactMap {
-                slice -> (String, ListeningSlice)? in
-                guard let chapterID = slice.chapterID else {
-                    return nil
-                }
-                return (
-                    "\(slice.accountID.rawValue)\u{1f}"
-                        + "\(slice.itemID.rawValue)\u{1f}\(chapterID)",
-                    slice
-                )
-            }, by: \.0)
+            let chapterGroups = Dictionary(
+                grouping: slices.compactMap {
+                    slice -> (String, ListeningSlice)? in
+                    guard let chapterID = slice.chapterID else {
+                        return nil
+                    }
+                    return (
+                        "\(slice.accountID.rawValue)\u{1f}"
+                            + "\(slice.itemID.rawValue)\u{1f}\(chapterID)",
+                        slice
+                    )
+                }, by: \.0)
             let chaptersStarted = chapterGroups.values.filter { values in
                 values.reduce(0) {
                     $0 + $1.1.audiobookSeconds
@@ -954,10 +960,12 @@ public actor StatisticsRepository {
                     $0 + $1.duration
                 },
                 booksStarted: bookReal.values.filter { $0 >= 30 }.count,
-                booksCompleted: Set(completions.map {
-                    "\($0.accountID.rawValue)\u{1f}"
-                        + $0.itemID.rawValue
-                }).count,
+                booksCompleted: Set(
+                    completions.map {
+                        "\($0.accountID.rawValue)\u{1f}"
+                            + $0.itemID.rawValue
+                    }
+                ).count,
                 chaptersStarted: chaptersStarted,
                 chaptersCompleted: chaptersCompleted,
                 sessions: Set(
@@ -1225,7 +1233,8 @@ public actor StatisticsRepository {
                 try context.fetch(FetchDescriptor<ListeningSliceRecord>())
                     .map(\.eventID)
             )
-            for slice in archive.slices where
+            for slice in archive.slices
+            where
                 !existingSliceIDs.contains(slice.id)
             {
                 guard Self.isValid(slice) else {
@@ -1238,7 +1247,8 @@ public actor StatisticsRepository {
                     FetchDescriptor<CompletionMilestoneRecord>()
                 ).map(\.eventID)
             )
-            for milestone in archive.completions where
+            for milestone in archive.completions
+            where
                 !existingCompletionIDs.contains(milestone.id)
             {
                 context.insert(CompletionMilestoneRecord(milestone))
@@ -1265,7 +1275,8 @@ public actor StatisticsRepository {
             var deletionNames = existingDeletionNames
             for record in try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
-            ) where query.contains(
+            )
+            where query.contains(
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.startedAt
             ) {
@@ -1284,7 +1295,8 @@ public actor StatisticsRepository {
             }
             for record in try context.fetch(
                 FetchDescriptor<CompletionMilestoneRecord>()
-            ) where query.contains(
+            )
+            where query.contains(
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.completedAt
             ) {
@@ -1303,7 +1315,8 @@ public actor StatisticsRepository {
             }
             for record in try context.fetch(
                 FetchDescriptor<RemoteListeningSessionRecord>()
-            ) where query.contains(
+            )
+            where query.contains(
                 accountID: AccountID(rawValue: record.accountID),
                 date: record.startedAt
             ) {
@@ -1322,7 +1335,8 @@ public actor StatisticsRepository {
             }
             for record in try context.fetch(
                 FetchDescriptor<StatisticsSessionAccountingRecord>()
-            ) where query.accountID == nil
+            )
+            where query.accountID == nil
                 || query.accountID?.rawValue == record.accountID
             {
                 context.delete(record)
@@ -1499,7 +1513,8 @@ public actor StatisticsRepository {
                         $0.compositeID == compositeID
                     }
                 )
-            let record = try context.fetch(descriptor).first
+            let record =
+                try context.fetch(descriptor).first
                 ?? StatisticsSessionAccountingRecord(
                     accountID: accountID,
                     sessionID: sessionID

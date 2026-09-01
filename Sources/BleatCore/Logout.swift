@@ -48,7 +48,7 @@ extension AuthCoordinator {
             throw LogoutError.invalidAccountID
         }
         guard !accountsLoggingIn.contains(accountID),
-              !accountsSigningOut.contains(accountID)
+            !accountsSigningOut.contains(accountID)
         else {
             throw LogoutError.accountOperationInProgress
         }
@@ -86,7 +86,7 @@ extension AuthCoordinator {
             throw LogoutError.invalidAccountID
         }
         guard !accountsLoggingIn.contains(accountID),
-              !accountsSigningOut.contains(accountID)
+            !accountsSigningOut.contains(accountID)
         else {
             throw LogoutError.accountOperationInProgress
         }
@@ -169,7 +169,7 @@ extension AuthCoordinator {
         } catch {
             return LogoutResult(remoteStatus: .requestFailed)
         }
-        guard (200 ..< 300).contains(response.statusCode) else {
+        guard (200..<300).contains(response.statusCode) else {
             return LogoutResult(
                 remoteStatus: .rejected(response.statusCode)
             )
@@ -181,16 +181,17 @@ extension AuthCoordinator {
     }
 
     private nonisolated static func providerLogoutURL(from data: Data) -> URL? {
-        guard let value = try? JSONDecoder().decode(
-            LogoutResponse.self,
-            from: data
-        ),
-              let rawURL = value.redirectURL,
-              let url = URL(string: rawURL),
-              url.scheme?.lowercased() == "https",
-              url.host != nil,
-              url.user == nil,
-              url.password == nil
+        guard
+            let value = try? JSONDecoder().decode(
+                LogoutResponse.self,
+                from: data
+            ),
+            let rawURL = value.redirectURL,
+            let url = URL(string: rawURL),
+            url.scheme?.lowercased() == "https",
+            url.host != nil,
+            url.user == nil,
+            url.password == nil
         else {
             return nil
         }

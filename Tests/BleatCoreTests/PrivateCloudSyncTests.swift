@@ -2,6 +2,7 @@ import CloudKit
 import Foundation
 import SwiftData
 import XCTest
+
 @testable import BleatCore
 
 final class PrivateCloudSyncTests: XCTestCase {
@@ -501,7 +502,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             localServer: "https://local.example"
         )
         try await fixture.accounts.save(canonical)
-        let firstLegacy = try canonical
+        let firstLegacy =
+            try canonical
             .updatingLocalServer(nil)
             .reidentified(as: AccountID(rawValue: "device-one"))
         let secondLegacy = try canonical.reidentified(
@@ -534,10 +536,11 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         XCTAssertTrue(changes.isEmpty)
         XCTAssertEqual(
-            Set(pending.compactMap {
-                if case .saveRecord(let recordID) = $0 { return recordID }
-                return nil
-            }),
+            Set(
+                pending.compactMap {
+                    if case .saveRecord(let recordID) = $0 { return recordID }
+                    return nil
+                }),
             [canonicalRecordID]
         )
 
@@ -548,10 +551,11 @@ final class PrivateCloudSyncTests: XCTestCase {
             failedRecordDeletes: [:]
         )
         XCTAssertEqual(
-            Set(followUp.compactMap {
-                if case .deleteRecord(let recordID) = $0 { return recordID }
-                return nil
-            }),
+            Set(
+                followUp.compactMap {
+                    if case .deleteRecord(let recordID) = $0 { return recordID }
+                    return nil
+                }),
             [firstRecord.recordID, secondRecord.recordID]
         )
         let restoredStore = PrivateCloudSyncStore(
@@ -561,13 +565,15 @@ final class PrivateCloudSyncTests: XCTestCase {
             configuration: fixture.configuration,
             defaults: PrivateCloudDefaultsReference(fixture.defaults)
         )
-        let restoredDeletions = try await restoredStore
+        let restoredDeletions =
+            try await restoredStore
             .prepareDeletionChanges(zoneID: fixture.zoneID)
         XCTAssertEqual(
-            Set(restoredDeletions.compactMap {
-                if case .deleteRecord(let recordID) = $0 { return recordID }
-                return nil
-            }),
+            Set(
+                restoredDeletions.compactMap {
+                    if case .deleteRecord(let recordID) = $0 { return recordID }
+                    return nil
+                }),
             [firstRecord.recordID, secondRecord.recordID]
         )
         _ = try await restoredStore.reconcileSentRecordZoneChanges(
@@ -576,7 +582,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             failedRecordSaves: [],
             failedRecordDeletes: [:]
         )
-        let confirmedDeletions = try await restoredStore
+        let confirmedDeletions =
+            try await restoredStore
             .prepareDeletionChanges(zoneID: fixture.zoneID)
         XCTAssertTrue(confirmedDeletions.isEmpty)
         let data = try XCTUnwrap(

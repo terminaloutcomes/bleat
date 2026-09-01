@@ -8,9 +8,9 @@ final class AccountStoreLiveTests: XCTestCase {
     func testPinnedRootAndPrefixNativeAccountsPersist() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
-              let username = environment["BLEAT_LIVE_USERNAME"],
-              let password = environment["BLEAT_LIVE_PASSWORD"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let username = environment["BLEAT_LIVE_USERNAME"],
+            let password = environment["BLEAT_LIVE_PASSWORD"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live account data"
@@ -52,7 +52,7 @@ final class AccountStoreLiveTests: XCTestCase {
                 ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
-                ),
+                )
             ]
         )
         let store = AccountStore(modelContainer: container)
@@ -201,7 +201,7 @@ final class AccountStoreLiveTests: XCTestCase {
         )
         XCTAssertTrue(
             collapsedPage.value.browseEntries.contains {
-                guard case let .series(series, representative: _) = $0 else {
+                guard case .series(let series, representative: _) = $0 else {
                     return false
                 }
                 return series.id == linkedSeries.id
@@ -225,12 +225,14 @@ final class AccountStoreLiveTests: XCTestCase {
             search.value.first?.libraryID,
             seededLibrary.id
         )
-        XCTAssertTrue(groupedSearch.value.authors.contains {
-            $0.id == linkedAuthor.id
-        })
-        XCTAssertTrue(groupedSearch.value.series.contains {
-            $0.id == linkedSeries.id
-        })
+        XCTAssertTrue(
+            groupedSearch.value.authors.contains {
+                $0.id == linkedAuthor.id
+            })
+        XCTAssertTrue(
+            groupedSearch.value.series.contains {
+                $0.id == linkedSeries.id
+            })
         XCTAssertFalse(home.value.isEmpty)
         XCTAssertTrue(
             home.value.allSatisfy { shelf in

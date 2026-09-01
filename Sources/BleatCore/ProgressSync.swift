@@ -63,10 +63,11 @@ extension AuthCoordinator {
             throw .unexpectedStatus(response.statusCode)
         }
         do {
-            guard let progress = try JSONDecoder().decode(
-                LibraryBookProgressDTO.self,
-                from: response.data
-            ).domainValue()
+            guard
+                let progress = try JSONDecoder().decode(
+                    LibraryBookProgressDTO.self,
+                    from: response.data
+                ).domainValue()
             else {
                 throw BookProgressError.malformedResponse
             }

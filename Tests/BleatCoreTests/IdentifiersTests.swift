@@ -65,7 +65,8 @@ final class IdentifiersTests: XCTestCase {
             try JSONDecoder().decode(AuthorID.self, from: Data("\"\"".utf8))
         )
         XCTAssertThrowsError(
-            try JSONDecoder().decode(SeriesID.self, from: Data("\"series\\n1\"".utf8))
+            try JSONDecoder().decode(
+                SeriesID.self, from: Data("\"series\\n1\"".utf8))
         )
     }
 }

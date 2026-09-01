@@ -643,8 +643,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let remoteTelemetryDownloadLogger:
         any RemoteTelemetryDownloadLogging
     private let backgroundSessionIdentifier: String
-    private let transferRetrySleep:
-        @Sendable (Duration) async throws -> Void
+    private let transferRetrySleep: @Sendable (Duration) async throws -> Void
     private let replacementTaskStartCheckpoint: @Sendable () async -> Void
     private let pauseOperationCheckpoint: @Sendable () async -> Void
     private let pauseManifestCommit:
@@ -678,8 +677,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var playbackBlockedAutomaticDownloads: Set<AutomaticDownloadKey> =
         []
     private var playbackSuspendedDownloadIDs: Set<DownloadID> = []
-    private var controlTransitions:
-        [DownloadID: DownloadControlTransition] = [:]
+    private var controlTransitions: [DownloadID: DownloadControlTransition] =
+        [:]
     // Presentation-only: a completed manual track is being handed off to the
     // next track. Never use this transient state for transfer decisions.
     private var continuingManualDownloadIDs: Set<DownloadID> = []
@@ -714,18 +713,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var records: [DownloadedBookRecord] = []
     private(set) var progress: [DownloadID: Double] = [:]
     var pausedDownloadIDs: Set<DownloadID> {
-        Set(records.compactMap { record in
-            let downloadID = record.manifest.downloadID
-            if record.manifest.state == .paused,
-                !isResumingDownload(downloadID)
-            {
-                return downloadID
-            }
-            if case .pausing = controlTransitions[downloadID] {
-                return downloadID
-            }
-            return nil
-        })
+        Set(
+            records.compactMap { record in
+                let downloadID = record.manifest.downloadID
+                if record.manifest.state == .paused,
+                    !isResumingDownload(downloadID)
+                {
+                    return downloadID
+                }
+                if case .pausing = controlTransitions[downloadID] {
+                    return downloadID
+                }
+                return nil
+            })
     }
     private(set) var failure: DownloadModelFailure? {
         didSet {
@@ -745,8 +745,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         [AutomaticDownloadKey: DownloadOperationKind] = [:]
     private var downloadOperationWaiters:
         [AutomaticDownloadKey: [DownloadOperationWaiter]] = [:]
-    private var downloadOperationDrainWaiters:
-        [DownloadOperationDrainWaiter] = []
+    private var downloadOperationDrainWaiters: [DownloadOperationDrainWaiter] =
+        []
     private var blockedCellularDownloadAccounts: Set<AccountID> = []
     private var isResettingLocalDownloads = false
 
@@ -800,25 +800,31 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         taskDescription: String? = nil,
         presentedFailure: DownloadModelFailure = .transferFailed
     ) async -> Bool {
-        guard transferMayTerminalize(
-            identity,
-            taskDescription: taskDescription
-        ) else { return false }
+        guard
+            transferMayTerminalize(
+                identity,
+                taskDescription: taskDescription
+            )
+        else { return false }
         do {
             guard
                 try await storage.markFailedIfDownloading(identity) != nil
             else { return false }
-            guard transferMayTerminalize(
-                identity,
-                taskDescription: taskDescription
-            ) else { return false }
+            guard
+                transferMayTerminalize(
+                    identity,
+                    taskDescription: taskDescription
+                )
+            else { return false }
             recordFailure(presentedFailure, for: identity.downloadID)
             return true
         } catch {
-            guard transferMayTerminalize(
-                identity,
-                taskDescription: taskDescription
-            ) else { return false }
+            guard
+                transferMayTerminalize(
+                    identity,
+                    taskDescription: taskDescription
+                )
+            else { return false }
             recordDownloadTelemetry(
                 identity,
                 stage: .manifestCommit,
@@ -955,7 +961,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         var retainedManualDownloadIDs: Set<DownloadID> = []
         currentTasks = currentTasks.filter { task, descriptor in
             let identity = descriptor.identity
-            let purpose = record(downloadID: identity.downloadID)?
+            let purpose =
+                record(downloadID: identity.downloadID)?
                 .manifest.purpose ?? .manual
             if purpose == .manual,
                 retainedManualDownloadIDs.contains(identity.downloadID)
@@ -1036,7 +1043,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if let record = record(downloadID: downloadID),
                 transferReconciliationIsEligible(record),
                 !pausedDownloadIDs.contains(downloadID),
-                accounts[record.manifest.accountID] != nil {
+                accounts[record.manifest.accountID] != nil
+            {
                 stillRecoverable = true
             } else {
                 stillRecoverable = false
@@ -1091,8 +1099,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     ) async -> Int {
         var scheduledDownloadCount = 0
         for record in records
-        where transferReconciliationIsEligible(record)
-        {
+        where transferReconciliationIsEligible(record) {
             let downloadID = record.manifest.downloadID
             if case .interruptedOnly(let accountIDs) = scope {
                 guard pendingRecoveryDownloadIDs.contains(downloadID),
@@ -1106,9 +1113,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             else {
                 continue
             }
-            guard !activeTaskKeys.contains(where: {
-                $0.downloadID == downloadID
-            }) else {
+            guard
+                !activeTaskKeys.contains(where: {
+                    $0.downloadID == downloadID
+                })
+            else {
                 continue
             }
             let futureRetries: [(DownloadTaskIdentity, Date)] =
@@ -1183,10 +1192,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         trackIndex: track.index
                     )
                     pendingRecoveryTaskKeys.remove(key)
-                    let persistedRetryCount = record.manifest.entries
+                    let persistedRetryCount =
+                        record.manifest.entries
                         .first(where: { $0.trackIndex == track.index })?
                         .transferRetryCount ?? 0
-                    transferRetryCounts[key] = persistedRetryCount > 0
+                    transferRetryCounts[key] =
+                        persistedRetryCount > 0
                         ? persistedRetryCount : nil
                     cancelDeferredRetryWake(for: key)
                 }
@@ -1244,7 +1255,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 else { continue }
                 let key = AutomaticDownloadTaskKey(identity)
                 let persistedRetryCount = entry.transferRetryCount ?? 0
-                transferRetryCounts[key] = persistedRetryCount > 0
+                transferRetryCounts[key] =
+                    persistedRetryCount > 0
                     ? persistedRetryCount : nil
                 guard let retryNotBefore = entry.retryNotBefore else {
                     continue
@@ -1305,7 +1317,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private func activeTransferTaskKeys() async
-        -> Set<AutomaticDownloadTaskKey> {
+        -> Set<AutomaticDownloadTaskKey>
+    {
         var keys: Set<AutomaticDownloadTaskKey> = []
         for task in await session.allTasks {
             guard let description = task.taskDescription,
@@ -1326,9 +1339,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func scheduledTransferDescriptorsForTesting() async
-        -> [DownloadChunkTaskDescription] {
-        var descriptors: [(key: String, descriptor: DownloadChunkTaskDescription)] =
-            []
+        -> [DownloadChunkTaskDescription]
+    {
+        var descriptors:
+            [(key: String, descriptor: DownloadChunkTaskDescription)] =
+                []
         for task in await session.allTasks
         where task.state == .running || task.state == .suspended {
             guard let description = task.taskDescription,
@@ -1780,8 +1795,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         isDrainingConcurrencyQueue = true
         defer { isDrainingConcurrencyQueue = false }
         await resumeAdmissibleSuspendedTasks()
-        guard transferAdmission.activeTransferIDs.count
-            < maximumConcurrentDownloads,
+        guard
+            transferAdmission.activeTransferIDs.count
+                < maximumConcurrentDownloads,
             let storage
         else { return }
         _ = await reconcileTransfers(
@@ -1898,10 +1914,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             accountID: pending.account.id,
             itemID: pending.detail.id
         )
-        guard await acquireDownloadOperation(
-            for: key,
-            kind: .cellularConfirmation
-        ) else {
+        guard
+            await acquireDownloadOperation(
+                for: key,
+                kind: .cellularConfirmation
+            )
+        else {
             return
         }
         defer { releaseDownloadOperation(for: key) }
@@ -1949,10 +1967,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 } else {
                     _ = try await storage.preflight(plan: pending.plan)
-                    guard record(
-                        accountID: pending.account.id,
-                        itemID: pending.detail.id
-                    ) == nil else {
+                    guard
+                        record(
+                            accountID: pending.account.id,
+                            itemID: pending.detail.id
+                        ) == nil
+                    else {
                         return
                     }
                     try await schedule(
@@ -1963,10 +1983,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 }
             case .promote:
-                guard let record = record(
-                    accountID: pending.account.id,
-                    itemID: pending.detail.id
-                ) else {
+                guard
+                    let record = record(
+                        accountID: pending.account.id,
+                        itemID: pending.detail.id
+                    )
+                else {
                     throw DownloadStorageError.recordNotFound
                 }
                 guard record.manifest.purpose == .automaticCache else {
@@ -2071,7 +2093,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         else {
             return
         }
-        guard let record = self.record(
+        guard
+            let record = self.record(
                 accountID: account.id,
                 itemID: record.manifest.itemID
             ),
@@ -2087,10 +2110,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ record: DownloadedBookRecord,
         account: ServerAccount
     ) async {
-        guard !hasCellularWork(
-            accountID: account.id,
-            itemID: record.manifest.itemID
-        ), let storage else {
+        guard
+            !hasCellularWork(
+                accountID: account.id,
+                itemID: record.manifest.itemID
+            ), let storage
+        else {
             failure = .preparationFailed
             return
         }
@@ -2118,10 +2143,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 record: record,
                 tracks: tracks
             )
-            guard !hasCellularWork(
-                accountID: account.id,
-                itemID: record.manifest.itemID
-            ) else {
+            guard
+                !hasCellularWork(
+                    accountID: account.id,
+                    itemID: record.manifest.itemID
+                )
+            else {
                 return
             }
             let fullBookBytes =
@@ -2143,10 +2170,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     )
                 )
             case .schedule:
-                guard let current = self.record(
-                    accountID: account.id,
-                    itemID: record.manifest.itemID
-                ), current.manifest.purpose == .automaticCache else {
+                guard
+                    let current = self.record(
+                        accountID: account.id,
+                        itemID: record.manifest.itemID
+                    ), current.manifest.purpose == .automaticCache
+                else {
                     return
                 }
                 try await promote(
@@ -2179,9 +2208,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let activeTaskKeys = await activeTransferTaskKeys()
-        guard !activeTaskKeys.contains(where: {
-            $0.downloadID == promoted.manifest.downloadID
-        }) else {
+        guard
+            !activeTaskKeys.contains(where: {
+                $0.downloadID == promoted.manifest.downloadID
+            })
+        else {
             return
         }
         try await schedule(
@@ -2335,10 +2366,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             } else {
                 _ = try await storage.preflight(tracks: tracks)
             }
-            guard self.record(
-                accountID: activity.account.id,
-                itemID: activity.detail.id
-            )?.manifest.purpose != .manual else {
+            guard
+                self.record(
+                    accountID: activity.account.id,
+                    itemID: activity.detail.id
+                )?.manifest.purpose != .manual
+            else {
                 return
             }
             try await schedule(
@@ -2551,9 +2584,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     automaticTargetTrackIndexes
             )
         }
-        var candidates: [
-            (track: DownloadTrackPlan, pending: Bool, committed: Int64)
-        ] = []
+        var candidates:
+            [(track: DownloadTrackPlan, pending: Bool, committed: Int64)] = []
         for track in tracks ?? plan.tracks {
             let identity = try DownloadTaskIdentity(
                 downloadID: resolvedDownloadID,
@@ -2911,7 +2943,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         else { return }
         for task in tasks {
             guard let description = task.taskDescription,
-                let identity = try? DownloadTaskIdentity
+                let identity =
+                    try? DownloadTaskIdentity
                     .decodeTaskDescription(description),
                 identity.downloadID == downloadID
             else { continue }
@@ -2927,9 +2960,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         let currentRecord: DownloadedBookRecord
         do {
-            currentRecord = try await storage.records().first(where: {
-                $0.manifest.downloadID == downloadID
-            }) ?? resolvedRecord
+            currentRecord =
+                try await storage.records().first(where: {
+                    $0.manifest.downloadID == downloadID
+                }) ?? resolvedRecord
         } catch {
             await markPauseEntriesFailed(
                 resolvedRecord,
@@ -2949,10 +2983,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         where entry.state != .complete {
             guard pauseOperationIsCurrent(pauseOperationID, for: downloadID)
             else { return }
-            guard let identity = Self.identity(
-                for: entry,
-                record: currentRecord
-            )
+            guard
+                let identity = Self.identity(
+                    for: entry,
+                    record: currentRecord
+                )
             else { continue }
             let committed: Int64
             do {
@@ -3104,18 +3139,22 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         accounts[account.id] = account
         do {
             _ = try await storage.resetTransferRetryBudget(record)
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             let plan = try await service.downloadPlan(
                 for: account,
                 itemID: record.manifest.itemID
             )
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             let tracks = try DownloadRepairPlanner.tracks(
                 record: record,
                 plan: plan
@@ -3124,17 +3163,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 record: record,
                 tracks: tracks
             )
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             if record.manifest.state == .cancelled {
                 _ = try await storage.prepareCancelledRetry(record)
                 await refresh()
-                guard resumeOperationIsCurrent(
-                    resumeOperationID,
-                    for: downloadID
-                ) else { return }
+                guard
+                    resumeOperationIsCurrent(
+                        resumeOperationID,
+                        for: downloadID
+                    )
+                else { return }
             }
             let scheduledTracks =
                 record.manifest.purpose == .automaticCache
@@ -3151,15 +3194,19 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     downloadID: record.manifest.downloadID
                 )
             }
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             await refresh()
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             recordDiagnostic(
                 .completed(
                     .repairDownload,
@@ -3168,10 +3215,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             )
         } catch let error as DownloadModelFailure {
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             failure = error
             recordDiagnostic(
                 .failed(
@@ -3181,10 +3230,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             )
         } catch let error as DownloadStorageError {
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             failure = storageFailure(error)
             recordDiagnostic(
                 .failed(
@@ -3194,10 +3245,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             )
         } catch {
-            guard resumeOperationIsCurrent(
-                resumeOperationID,
-                for: downloadID
-            ) else { return }
+            guard
+                resumeOperationIsCurrent(
+                    resumeOperationID,
+                    for: downloadID
+                )
+            else { return }
             failure = .preparationFailed
             recordDiagnostic(
                 .failed(
@@ -3300,7 +3353,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return true
         }
         let currentKind = downloadOperationKinds[key]
-        let shouldWait = kind == .cellularConfirmation
+        let shouldWait =
+            kind == .cellularConfirmation
             || (kind == .explicit && currentKind == .automatic)
         guard shouldWait else {
             return false
@@ -3422,9 +3476,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             } else if playbackSuspendedDownloadIDs.contains(
                 descriptor.identity.downloadID
-            ) && !pausedDownloadIDs.contains(
-                descriptor.identity.downloadID
-            ) {
+            )
+                && !pausedDownloadIDs.contains(
+                    descriptor.identity.downloadID
+                )
+            {
                 _ = resumeIfAdmitted(task, descriptor: descriptor)
             }
         }
@@ -3896,7 +3952,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     validator: validator,
                     finalized: finalized
                 )
-                let isContinuingManualDownload = finalized
+                let isContinuingManualDownload =
+                    finalized
                     && committedRecord.manifest.purpose == .manual
                     && committedRecord.manifest.entries.contains {
                         $0.state != .complete
@@ -3969,11 +4026,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 }
                 if finalized {
                     let current = record(downloadID: identity.downloadID)
-                    let bookIsComplete = current.map {
-                        !$0.manifest.entries.contains(where: {
-                            $0.state != .complete
-                        })
-                    } ?? false
+                    let bookIsComplete =
+                        current.map {
+                            !$0.manifest.entries.contains(where: {
+                                $0.state != .complete
+                            })
+                        } ?? false
                     if bookIsComplete {
                         pendingRecoveryDownloadIDs.remove(
                             identity.downloadID
@@ -4060,7 +4118,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 clearTransferredBytes(for: identity)
                 return
             }
-            let shouldRetryRangeMismatch = stage == .rangeValidation
+            let shouldRetryRangeMismatch =
+                stage == .rangeValidation
                 && cause == .mismatchedContentRange
             recordDownloadTelemetry(
                 identity,
@@ -4830,22 +4889,23 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return (.transportOther, nil)
         }
         let code = nsError.code
-        let cause: RemoteDownloadFailureCause = switch URLError.Code(
-            rawValue: code
-        ) {
-        case .notConnectedToInternet:
-            .offline
-        case .networkConnectionLost:
-            .connectionLost
-        case .timedOut:
-            .timedOut
-        case .cannotConnectToHost:
-            .cannotConnect
-        case .dnsLookupFailed:
-            .dnsLookupFailed
-        default:
-            .transportOther
-        }
+        let cause: RemoteDownloadFailureCause =
+            switch URLError.Code(
+                rawValue: code
+            ) {
+            case .notConnectedToInternet:
+                .offline
+            case .networkConnectionLost:
+                .connectionLost
+            case .timedOut:
+                .timedOut
+            case .cannotConnectToHost:
+                .cannotConnect
+            case .dnsLookupFailed:
+                .dnsLookupFailed
+            default:
+                .transportOther
+            }
         return (cause, code)
     }
 
@@ -5271,15 +5331,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         let identity = descriptor.identity
-        let rejectedRequest = (
-            downloadTask.currentRequest ?? downloadTask.originalRequest
-        ).map {
-            DownloadRangeRequest.applying(
-                range: descriptor.range,
-                validator: descriptor.validator,
-                to: $0
-            )
-        }
+        let rejectedRequest =
+            (downloadTask.currentRequest ?? downloadTask.originalRequest).map {
+                DownloadRangeRequest.applying(
+                    range: descriptor.range,
+                    validator: descriptor.validator,
+                    to: $0
+                )
+            }
         let result: DownloadPlacementResult? =
             invalidatedTransferIDs.withLock {
                 invalidated -> DownloadPlacementResult? in
@@ -5380,18 +5439,22 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private nonisolated func invalidateTask(_ description: String) {
-        guard let transferID = try? DownloadChunkTaskDescription.decode(
-            description
-        ).transferID else { return }
+        guard
+            let transferID = try? DownloadChunkTaskDescription.decode(
+                description
+            ).transferID
+        else { return }
         _ = invalidatedTransferIDs.withLock { transferIDs in
             transferIDs.insert(transferID)
         }
     }
 
     private nonisolated func isInvalidatedTask(_ description: String) -> Bool {
-        guard let transferID = try? DownloadChunkTaskDescription.decode(
-            description
-        ).transferID else { return false }
+        guard
+            let transferID = try? DownloadChunkTaskDescription.decode(
+                description
+            ).transferID
+        else { return false }
         return invalidatedTransferIDs.withLock { transferIDs in
             transferIDs.contains(transferID)
         }

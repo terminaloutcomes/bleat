@@ -75,7 +75,8 @@ final class HTTPTransportTests: XCTestCase {
         )
         await router.finishNetworkPathEvaluation(pathGeneration)
 
-        let recoveredPreferredServer = await router.preferredServer(for: primary)
+        let recoveredPreferredServer = await router.preferredServer(
+            for: primary)
         XCTAssertEqual(recoveredPreferredServer.server, local)
     }
 
@@ -381,7 +382,7 @@ final class HTTPTransportTests: XCTestCase {
         )
         let url = try XCTUnwrap(URL(string: "https://example.com/status"))
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await transport.send(
                 TracedHTTPRequest(
                     request: URLRequest(url: url),

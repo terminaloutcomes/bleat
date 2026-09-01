@@ -153,7 +153,7 @@ final class BonjourServiceBrowser {
 
         for (id, oldResult) in resultsByID {
             guard newResultsByID[id] == nil,
-                  let oldService = Self.discoveredService(from: oldResult)
+                let oldService = Self.discoveredService(from: oldResult)
             else {
                 continue
             }
@@ -177,19 +177,21 @@ final class BonjourServiceBrowser {
     static func discoveredService(
         from result: NWBrowser.Result
     ) -> BonjourDiscoveredService? {
-        guard case let .service(name, type, domain, endpointInterface) =
+        guard
+            case .service(
+                let name, let type, let domain, let endpointInterface) =
                 result.endpoint,
-              !name.isEmpty,
-              !type.isEmpty,
-              !domain.isEmpty
+            !name.isEmpty,
+            !type.isEmpty,
+            !domain.isEmpty
         else {
             return nil
         }
 
         let interface = endpointInterface ?? result.interfaces.first
         guard let rawIndex = interface?.index,
-              let interfaceIndex = UInt32(exactly: rawIndex),
-              interfaceIndex > 0
+            let interfaceIndex = UInt32(exactly: rawIndex),
+            interfaceIndex > 0
         else {
             return nil
         }
@@ -299,11 +301,12 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
         }
 
         guard result == kDNSServiceErr_NoError,
-              let newServiceRef
+            let newServiceRef
         else {
-            finish(.failure(
-                BonjourResolutionError.dnsServiceFailure(Int32(result))
-            ))
+            finish(
+                .failure(
+                    BonjourResolutionError.dnsServiceFailure(Int32(result))
+                ))
             return
         }
 
@@ -313,9 +316,10 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
         )
         guard queueResult == kDNSServiceErr_NoError else {
             DNSServiceRefDeallocate(newServiceRef)
-            finish(.failure(
-                BonjourResolutionError.dnsServiceFailure(Int32(queueResult))
-            ))
+            finish(
+                .failure(
+                    BonjourResolutionError.dnsServiceFailure(Int32(queueResult))
+                ))
             return
         }
 
@@ -344,7 +348,8 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
     }
 
     private static let callback: DNSServiceResolveReply = {
-        _, _, _, errorCode, _, hostTarget, port, txtLength, txtRecord, context in
+        _, _, _, errorCode, _, hostTarget, port, txtLength, txtRecord, context
+        in
         guard let context else { return }
         let resolution = Unmanaged<BonjourDNSServiceResolution>
             .fromOpaque(context)
@@ -366,9 +371,10 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
         txtRecord: UnsafePointer<UInt8>?
     ) {
         guard errorCode == kDNSServiceErr_NoError else {
-            finish(.failure(
-                BonjourResolutionError.dnsServiceFailure(Int32(errorCode))
-            ))
+            finish(
+                .failure(
+                    BonjourResolutionError.dnsServiceFailure(Int32(errorCode))
+                ))
             return
         }
         guard let hostTarget else {
@@ -435,7 +441,8 @@ enum AudiobookshelfEndpointBuilder {
         port: UInt16,
         txtData: Data
     ) throws -> ResolvedBonjourService {
-        let txt = txtData.isEmpty
+        let txt =
+            txtData.isEmpty
             ? [:]
             : NetService.dictionary(fromTXTRecord: txtData)
         let path: String
@@ -505,14 +512,14 @@ enum AudiobookshelfEndpointBuilder {
 
     private static func validDNSHostname(_ host: String) -> Bool {
         guard !host.isEmpty, host.utf8.count <= 253,
-              host.unicodeScalars.allSatisfy(\.isASCII)
+            host.unicodeScalars.allSatisfy(\.isASCII)
         else {
             return false
         }
         return host.split(separator: ".", omittingEmptySubsequences: false)
             .allSatisfy { label in
                 guard !label.isEmpty, label.utf8.count <= 63,
-                      label.first != "-", label.last != "-"
+                    label.first != "-", label.last != "-"
                 else {
                     return false
                 }
@@ -524,15 +531,15 @@ enum AudiobookshelfEndpointBuilder {
 
     private static func validPath(_ path: String) -> Bool {
         guard path.hasPrefix("/"), !path.hasPrefix("//"),
-              !path.contains("?"), !path.contains("#"),
-              let components = URLComponents(
+            !path.contains("?"), !path.contains("#"),
+            let components = URLComponents(
                 string: "https://example.invalid\(path)"
-              ),
-              components.user == nil,
-              components.password == nil,
-              components.query == nil,
-              components.fragment == nil,
-              components.percentEncodedPath == path
+            ),
+            components.user == nil,
+            components.password == nil,
+            components.query == nil,
+            components.fragment == nil,
+            components.percentEncodedPath == path
         else {
             return false
         }

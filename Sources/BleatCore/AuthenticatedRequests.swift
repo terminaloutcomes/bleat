@@ -233,8 +233,10 @@ extension AuthCoordinator {
 
         let nativeLogin: NativeLoginCredentials
         do {
-            guard let savedLogin = try await credentialStore
-                .nativeLoginCredentials(for: accountID)
+            guard
+                let savedLogin =
+                    try await credentialStore
+                    .nativeLoginCredentials(for: accountID)
             else {
                 throw AuthenticatedRequestError.missingCredentials
             }

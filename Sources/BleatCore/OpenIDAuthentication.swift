@@ -1,5 +1,5 @@
-import AuthenticationServices
 @preconcurrency import AppAuthCore
+import AuthenticationServices
 import CryptoKit
 import Foundation
 import Security
@@ -36,8 +36,9 @@ public struct OpenIDCallbackURL: Hashable, Sendable {
         guard scheme != "audiobookshelf" else {
             throw .reservedScheme
         }
-        guard components.host?.isEmpty == false
-            || !components.percentEncodedPath.isEmpty
+        guard
+            components.host?.isEmpty == false
+                || !components.percentEncodedPath.isEmpty
         else {
             throw .missingCallbackTarget
         }
@@ -138,14 +139,16 @@ public protocol OpenIDBrowserSession: Sendable {
     func presentLogout(at logoutURL: URL)
 }
 
-public extension OpenIDBrowserSession {
+extension OpenIDBrowserSession {
     @MainActor
-    func presentLogout(at logoutURL: URL) {}
+    public func presentLogout(at logoutURL: URL) {}
 }
 
 @MainActor
 protocol OpenIDWebAuthenticationSession: AnyObject {
-    var presentationContextProvider: (any ASWebAuthenticationPresentationContextProviding)? {
+    var presentationContextProvider:
+        (any ASWebAuthenticationPresentationContextProviding)?
+    {
         get set
     }
     var prefersEphemeralWebBrowserSession: Bool { get set }
@@ -219,8 +222,7 @@ public final class SystemOpenIDBrowserSession:
             any ASWebAuthenticationPresentationContextProviding
     }
 
-    private let anchorProvider:
-        @MainActor @Sendable () -> ASPresentationAnchor?
+    private let anchorProvider: @MainActor @Sendable () -> ASPresentationAnchor?
     private let sessionFactory: any OpenIDWebAuthenticationSessionFactory
     private var activeSession: ActiveSession?
 

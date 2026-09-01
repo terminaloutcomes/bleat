@@ -123,11 +123,13 @@ struct NowPlayingSnapshot: Equatable, Sendable {
 }
 
 enum NowPlayingArtwork {
-    nonisolated static func make(from image: PlatformImage) -> MPMediaItemArtwork {
+    nonisolated static func make(from image: PlatformImage)
+        -> MPMediaItemArtwork
+    {
         #if os(iOS)
-        let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
+            let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
         #else
-        let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
+            let provider: @Sendable (CGSize) -> PlatformImage = { _ in image }
         #endif
         return MPMediaItemArtwork(
             boundsSize: image.size,
@@ -267,16 +269,17 @@ final class NowPlayingCoordinator {
         else {
             return .unavailable
         }
-        let nextRate: Float? = switch step {
-        case .decrease:
-            PlaybackPreferencesStore.featuredRates.last {
-                $0 < snapshot.rate - 0.001
+        let nextRate: Float? =
+            switch step {
+            case .decrease:
+                PlaybackPreferencesStore.featuredRates.last {
+                    $0 < snapshot.rate - 0.001
+                }
+            case .increase:
+                PlaybackPreferencesStore.featuredRates.first {
+                    $0 > snapshot.rate + 0.001
+                }
             }
-        case .increase:
-            PlaybackPreferencesStore.featuredRates.first {
-                $0 > snapshot.rate + 0.001
-            }
-        }
         guard let nextRate else {
             return .unavailable
         }

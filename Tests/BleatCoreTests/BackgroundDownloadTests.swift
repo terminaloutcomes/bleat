@@ -252,7 +252,8 @@ final class BackgroundDownloadTests: XCTestCase {
                 expectedTotalByteLength: 20
             )
         ) { error in
-            XCTAssertEqual(error as? DownloadRangeError, .mismatchedContentRange)
+            XCTAssertEqual(
+                error as? DownloadRangeError, .mismatchedContentRange)
         }
         XCTAssertThrowsError(
             try DownloadRangeResponseValidator.validate(
@@ -500,7 +501,7 @@ final class BackgroundDownloadTests: XCTestCase {
         let server = try NormalizedServerURL("https://example.com")
         let identity = try Self.identity(accountID: accountID)
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.makeReplacementDownloadRequest(
                 identity: identity,
                 server: server,
@@ -517,7 +518,7 @@ final class BackgroundDownloadTests: XCTestCase {
 
         let correctURL = try AudiobookshelfRouteBuilder(server: server)
             .url(for: .downloadFile(itemID: identity.itemID, inode: "101"))
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.makeReplacementDownloadRequest(
                 identity: identity,
                 server: server,

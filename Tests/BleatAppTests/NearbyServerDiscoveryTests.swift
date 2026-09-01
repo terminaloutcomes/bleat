@@ -221,23 +221,26 @@ final class NearbyServerDiscoveryTests: XCTestCase {
         #if targetEnvironment(simulator)
             throw XCTSkip("Physical-device Bonjour validation")
         #else
-            guard ProcessInfo.processInfo.environment[
-                "BLEAT_RUN_PHYSICAL_BONJOUR_TESTS"
-            ] == "1" else {
+            guard
+                ProcessInfo.processInfo.environment[
+                    "BLEAT_RUN_PHYSICAL_BONJOUR_TESTS"
+                ] == "1"
+            else {
                 throw XCTSkip(
                     "Set BLEAT_RUN_PHYSICAL_BONJOUR_TESTS=1 on the advertising LAN"
                 )
             }
             let browser = BonjourServiceBrowser()
             let resolver = BonjourServiceResolver()
-            let completed = expectation(description: "Resolved live Bonjour service")
+            let completed = expectation(
+                description: "Resolved live Bonjour service")
             var outcome: Result<ResolvedBonjourService, Error>?
             var startedResolution = false
 
             browser.start { event in
                 guard case .added(let service) = event,
-                      service.name == "Audiobookshelf",
-                      !startedResolution
+                    service.name == "Audiobookshelf",
+                    !startedResolution
                 else {
                     return
                 }
@@ -308,11 +311,12 @@ final class NearbyServerDiscoveryTests: XCTestCase {
         server: DiscoveredServer
     ) throws -> NearbyServerResult {
         guard let host = server.baseURL.url.host,
-              let port = UInt16(exactly: server.baseURL.url.port ?? 443)
+            let port = UInt16(exactly: server.baseURL.url.port ?? 443)
         else {
             throw BonjourResolutionError.invalidURL
         }
-        let path = server.baseURL.url.path.isEmpty
+        let path =
+            server.baseURL.url.path.isEmpty
             ? "/"
             : server.baseURL.url.path
         return NearbyServerResult(

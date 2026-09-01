@@ -1,10 +1,11 @@
 import AuthenticationServices
 import BleatCore
 import SwiftUI
+
 #if os(iOS)
-import UIKit
+    import UIKit
 #else
-import AppKit
+    import AppKit
 #endif
 
 @MainActor
@@ -16,7 +17,8 @@ enum AppLaunchMode: Equatable {
     case releaseScreenshot
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
-        self = arguments.contains(Self.releaseScreenshotArgument)
+        self =
+            arguments.contains(Self.releaseScreenshotArgument)
             ? .releaseScreenshot
             : .standard
     }
@@ -36,13 +38,15 @@ final class AppBootstrap {
     let model: AppModel
 
     init() {
-        let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
+        let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder
+            .shared
         #if BLEAT_RELEASE_SECRET_SCAN
             RemoteTelemetryConsentStore
                 .applyReleaseSecretScanLaunchOverride()
         #endif
         if let event = LegacyDiagnosticLogCleanup.removeLegacyDirectory()
-            .failureDiagnosticEvent {
+            .failureDiagnosticEvent
+        {
             Task {
                 await diagnostics.record(event)
             }
@@ -86,22 +90,24 @@ final class AppBootstrap {
                         SystemOpenIDBrowserSession(
                             anchorProvider: {
                                 #if os(iOS)
-                                let activeScenes = UIApplication.shared
-                                    .connectedScenes
-                                    .compactMap {
-                                        $0 as? UIWindowScene
-                                    }
-                                    .filter {
-                                        $0.activationState
-                                            == .foregroundActive
-                                    }
-                                let windows = activeScenes.flatMap(\.windows)
-                                return windows
-                                    .first(where: \.isKeyWindow)
-                                    ?? windows.first
+                                    let activeScenes = UIApplication.shared
+                                        .connectedScenes
+                                        .compactMap {
+                                            $0 as? UIWindowScene
+                                        }
+                                        .filter {
+                                            $0.activationState
+                                                == .foregroundActive
+                                        }
+                                    let windows = activeScenes.flatMap(
+                                        \.windows)
+                                    return
+                                        windows
+                                        .first(where: \.isKeyWindow)
+                                        ?? windows.first
                                 #else
-                                return NSApplication.shared.keyWindow
-                                    ?? NSWindow()
+                                    return NSApplication.shared.keyWindow
+                                        ?? NSWindow()
                                 #endif
                             }
                         )
@@ -127,47 +133,47 @@ final class AppBootstrap {
 }
 
 #if os(iOS)
-@MainActor
-final class BleatAppDelegate: NSObject, UIApplicationDelegate {
-    static weak var current: BleatAppDelegate?
-    static var backgroundDownloadCompletion: (() -> Void)?
-    let bootstrap = AppBootstrap()
-    var model: AppModel { bootstrap.model }
-    lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
+    @MainActor
+    final class BleatAppDelegate: NSObject, UIApplicationDelegate {
+        static weak var current: BleatAppDelegate?
+        static var backgroundDownloadCompletion: (() -> Void)?
+        let bootstrap = AppBootstrap()
+        var model: AppModel { bootstrap.model }
+        lazy var carPlayCoordinator = CarPlayCoordinator(model: model)
 
-    override init() {
-        super.init()
-        Self.current = self
-    }
-
-    func application(
-        _ application: UIApplication,
-        handleEventsForBackgroundURLSession identifier: String,
-        completionHandler: @escaping () -> Void
-    ) {
-        guard identifier == bleatBackgroundDownloadSessionIdentifier else {
-            completionHandler()
-            return
+        override init() {
+            super.init()
+            Self.current = self
         }
-        Self.backgroundDownloadCompletion = completionHandler
+
+        func application(
+            _ application: UIApplication,
+            handleEventsForBackgroundURLSession identifier: String,
+            completionHandler: @escaping () -> Void
+        ) {
+            guard identifier == bleatBackgroundDownloadSessionIdentifier else {
+                completionHandler()
+                return
+            }
+            Self.backgroundDownloadCompletion = completionHandler
+        }
     }
-}
 #endif
 
 @main
 struct BleatApp: App {
     #if os(iOS)
-    @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
-    private var appDelegate
+        @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
+        private var appDelegate
     #else
-    @State private var bootstrap = AppBootstrap()
+        @State private var bootstrap = AppBootstrap()
     #endif
 
     private var model: AppModel {
         #if os(iOS)
-        appDelegate.model
+            appDelegate.model
         #else
-        bootstrap.model
+            bootstrap.model
         #endif
     }
 

@@ -92,8 +92,8 @@
         private var firstPageRequests = 0
         private var homeShelfRequests = 0
         private var libraryRequests = 0
-        private var deletedTranscriptBooks:
-            Set<ChapterTranscriptionBookKey> = []
+        private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> =
+            []
 
         @MainActor
         static func current() -> UITestAppService? {
@@ -160,9 +160,11 @@
             if let scenario = explicitScenario {
                 if arguments.contains(
                     UITestScenarioStorage.persistLocalDataResetArgument
-                ), UserDefaults.standard.bool(
-                    forKey: UITestScenarioStorage.localDataResetCompletedKey
-                ) {
+                ),
+                    UserDefaults.standard.bool(
+                        forKey: UITestScenarioStorage.localDataResetCompletedKey
+                    )
+                {
                     return UITestAppService(scenario: .signedOut)
                 }
                 if arguments.contains(UITestScenarioStorage.persistArgument) {
@@ -1108,9 +1110,11 @@
         ) async throws(AppServiceError) {}
 
         func resetLocalData() async throws(AppServiceError) {
-            guard ProcessInfo.processInfo.arguments.contains(
-                UITestScenarioStorage.persistLocalDataResetArgument
-            ) else {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    UITestScenarioStorage.persistLocalDataResetArgument
+                )
+            else {
                 return
             }
             UserDefaults.standard.set(

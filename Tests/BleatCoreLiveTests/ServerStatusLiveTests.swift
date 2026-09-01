@@ -7,7 +7,7 @@ final class ServerStatusLiveTests: XCTestCase {
     func testPinnedRootAndPrefixStatusContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-              let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live server URLs"

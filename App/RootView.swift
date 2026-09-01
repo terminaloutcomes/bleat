@@ -1639,7 +1639,8 @@ private struct SignedInView: View {
             }
         }
 
-        private func miniPlayerAccessory(containerHeight: CGFloat) -> some View {
+        private func miniPlayerAccessory(containerHeight: CGFloat) -> some View
+        {
             MiniPlayerView(
                 playback: model.playback,
                 containerHeight: containerHeight,
@@ -2047,10 +2048,12 @@ private struct BookActionContextMenuModifier: ViewModifier {
     }
 
     private func beginDownload() {
-        guard presentation.beginDownload(
-            accountID: account.id,
-            itemID: book.id
-        ) else {
+        guard
+            presentation.beginDownload(
+                accountID: account.id,
+                itemID: book.id
+            )
+        else {
             return
         }
         Task {
@@ -4100,9 +4103,7 @@ private struct BookDetailView: View {
         )
     }
 
-    private var transcriptDeletionFailure:
-        ChapterTranscriptLocalDataFailure?
-    {
+    private var transcriptDeletionFailure: ChapterTranscriptLocalDataFailure? {
         guard let bookKey = transcriptBookKey,
             case .failed(let failure) = model.transcription.deletionState(
                 for: bookKey
@@ -4113,9 +4114,7 @@ private struct BookDetailView: View {
         return failure
     }
 
-    private var transcriptPresenceFailure:
-        ChapterTranscriptLocalDataFailure?
-    {
+    private var transcriptPresenceFailure: ChapterTranscriptLocalDataFailure? {
         guard let bookKey = transcriptBookKey else {
             return nil
         }

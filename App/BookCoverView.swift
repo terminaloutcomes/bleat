@@ -37,8 +37,8 @@ actor BookCoverImageLoader {
     private let memory = NSCache<NSString, PlatformImage>()
     private var endpointRouter: ServerEndpointRouter?
     private var memoryKeys: [AccountID: Set<String>] = [:]
-    private var inFlight:
-        [BookCoverCacheKey: Task<LoadedBookCover?, Never>] = [:]
+    private var inFlight: [BookCoverCacheKey: Task<LoadedBookCover?, Never>] =
+        [:]
 
     init(
         diskCapacity: Int = BookCoverImageLoader.diskCapacity,
@@ -312,13 +312,14 @@ actor BookCoverImageLoader {
         var files: [(url: URL, size: Int64, modifiedAt: Date)] = []
         var totalSize: Int64 = 0
         for case let url as URL in enumerator {
-            guard let values = try? url.resourceValues(
-                forKeys: [
-                    .isRegularFileKey,
-                    .fileSizeKey,
-                    .contentModificationDateKey,
-                ]
-            ), values.isRegularFile == true
+            guard
+                let values = try? url.resourceValues(
+                    forKeys: [
+                        .isRegularFileKey,
+                        .fileSizeKey,
+                        .contentModificationDateKey,
+                    ]
+                ), values.isRegularFile == true
             else {
                 continue
             }
@@ -471,10 +472,12 @@ enum PlayableBookCoverState: Equatable, Sendable {
         playbackState: PlaybackState,
         isPlaybackRequested: Bool
     ) -> Self {
-        if target == PlaybackStartTarget(
-            accountID: accountID,
-            itemID: itemID
-        ) {
+        if target
+            == PlaybackStartTarget(
+                accountID: accountID,
+                itemID: itemID
+            )
+        {
             return .preparing
         }
         guard playbackAccountID == accountID,

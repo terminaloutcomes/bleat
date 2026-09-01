@@ -194,7 +194,8 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
         using logger: any OpenTelemetryApi.Logger
     ) {
         var attributes: [String: AttributeValue] = [
-            "bleat.subsystem": .string(RemoteTelemetrySubsystem.download.rawValue),
+            "bleat.subsystem": .string(
+                RemoteTelemetrySubsystem.download.rawValue),
             "bleat.download.stage": .string(event.stage.rawValue),
             "bleat.outcome": .string(event.state.rawValue),
             "bleat.retry.bucket": .string(event.retryBucket.rawValue),
@@ -223,16 +224,17 @@ public final class RemoteTelemetryLogger: RemoteTelemetryLogging,
                 transportErrorCode
             )
         }
-        let severity: Severity = switch event.state {
-        case .failed:
-            .error
-        case .waiting, .retrying, .cancelled:
-            .warn
-        case .started:
-            .debug
-        case .succeeded:
-            .info
-        }
+        let severity: Severity =
+            switch event.state {
+            case .failed:
+                .error
+            case .waiting, .retrying, .cancelled:
+                .warn
+            case .started:
+                .debug
+            case .succeeded:
+                .info
+            }
         let builder = logger.logRecordBuilder()
             .setTimestamp(event.timestamp)
             .setSeverity(severity)
@@ -1031,7 +1033,8 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
             policy: policy
         )
         let processor = BatchSpanProcessor(spanExporter: exporter)
-        let logExporter = downstreamLogExporter
+        let logExporter =
+            downstreamLogExporter
             ?? UnavailableRemoteTelemetryLogExporter()
         let logProcessor = BatchLogRecordProcessor(
             logRecordExporter: logExporter

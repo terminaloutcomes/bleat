@@ -99,9 +99,9 @@ public enum TelemetryAuthenticationTransportError:
 }
 
 public protocol TelemetryAuthenticationTransport: Sendable {
-    func attestationChallenge() async throws(
-        TelemetryAuthenticationTransportError
-    ) -> TelemetryChallenge
+    func attestationChallenge()
+        async throws(TelemetryAuthenticationTransportError)
+        -> TelemetryChallenge
     func enroll(
         challenge: TelemetryChallenge,
         keyID: String,

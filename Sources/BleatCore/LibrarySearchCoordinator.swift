@@ -33,10 +33,11 @@ private enum LibrarySearchTaskResult: Sendable {
 
 public actor LibrarySearchCoordinator {
     public typealias Sleep = @Sendable (Duration) async throws -> Void
-    public typealias Operation = @Sendable (
-        LibrarySearchContext,
-        LibrarySearchRequest
-    ) async throws(LibraryRepositoryError)
+    public typealias Operation =
+        @Sendable (
+            LibrarySearchContext,
+            LibrarySearchRequest
+        ) async throws(LibraryRepositoryError)
         -> LibraryRepositoryResult<LibrarySearchResults>
 
     private let debounceDuration: Duration
@@ -101,9 +102,9 @@ public actor LibrarySearchCoordinator {
         activeTask = nil
 
         switch result {
-        case let .success(value):
+        case .success(let value):
             return value
-        case let .repositoryFailure(error):
+        case .repositoryFailure(let error):
             if error == .cancelled {
                 throw .cancelled
             }

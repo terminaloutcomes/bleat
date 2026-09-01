@@ -71,48 +71,49 @@ public enum CloudKitFailureCode: Hashable, Sendable {
     case unknown(Int)
 
     public init(_ code: CKError.Code) {
-        self = switch code {
-        case .internalError: .internalError
-        case .partialFailure: .partialFailure
-        case .networkUnavailable: .networkUnavailable
-        case .networkFailure: .networkFailure
-        case .badContainer: .badContainer
-        case .serviceUnavailable: .serviceUnavailable
-        case .requestRateLimited: .requestRateLimited
-        case .missingEntitlement: .missingEntitlement
-        case .notAuthenticated: .notAuthenticated
-        case .permissionFailure: .permissionFailure
-        case .unknownItem: .unknownItem
-        case .invalidArguments: .invalidArguments
-        case .resultsTruncated: .resultsTruncated
-        case .serverRecordChanged: .serverRecordChanged
-        case .serverRejectedRequest: .serverRejectedRequest
-        case .assetFileNotFound: .assetFileNotFound
-        case .assetFileModified: .assetFileModified
-        case .incompatibleVersion: .incompatibleVersion
-        case .constraintViolation: .constraintViolation
-        case .operationCancelled: .operationCancelled
-        case .changeTokenExpired: .changeTokenExpired
-        case .batchRequestFailed: .batchRequestFailed
-        case .zoneBusy: .zoneBusy
-        case .badDatabase: .badDatabase
-        case .quotaExceeded: .quotaExceeded
-        case .zoneNotFound: .zoneNotFound
-        case .limitExceeded: .limitExceeded
-        case .userDeletedZone: .userDeletedZone
-        case .tooManyParticipants: .tooManyParticipants
-        case .alreadyShared: .alreadyShared
-        case .referenceViolation: .referenceViolation
-        case .managedAccountRestricted: .managedAccountRestricted
-        case .participantMayNeedVerification:
-            .participantMayNeedVerification
-        case .serverResponseLost: .serverResponseLost
-        case .assetNotAvailable: .assetNotAvailable
-        case .accountTemporarilyUnavailable:
-            .accountTemporarilyUnavailable
-        case .participantAlreadyInvited: .participantAlreadyInvited
-        @unknown default: .unknown(code.rawValue)
-        }
+        self =
+            switch code {
+            case .internalError: .internalError
+            case .partialFailure: .partialFailure
+            case .networkUnavailable: .networkUnavailable
+            case .networkFailure: .networkFailure
+            case .badContainer: .badContainer
+            case .serviceUnavailable: .serviceUnavailable
+            case .requestRateLimited: .requestRateLimited
+            case .missingEntitlement: .missingEntitlement
+            case .notAuthenticated: .notAuthenticated
+            case .permissionFailure: .permissionFailure
+            case .unknownItem: .unknownItem
+            case .invalidArguments: .invalidArguments
+            case .resultsTruncated: .resultsTruncated
+            case .serverRecordChanged: .serverRecordChanged
+            case .serverRejectedRequest: .serverRejectedRequest
+            case .assetFileNotFound: .assetFileNotFound
+            case .assetFileModified: .assetFileModified
+            case .incompatibleVersion: .incompatibleVersion
+            case .constraintViolation: .constraintViolation
+            case .operationCancelled: .operationCancelled
+            case .changeTokenExpired: .changeTokenExpired
+            case .batchRequestFailed: .batchRequestFailed
+            case .zoneBusy: .zoneBusy
+            case .badDatabase: .badDatabase
+            case .quotaExceeded: .quotaExceeded
+            case .zoneNotFound: .zoneNotFound
+            case .limitExceeded: .limitExceeded
+            case .userDeletedZone: .userDeletedZone
+            case .tooManyParticipants: .tooManyParticipants
+            case .alreadyShared: .alreadyShared
+            case .referenceViolation: .referenceViolation
+            case .managedAccountRestricted: .managedAccountRestricted
+            case .participantMayNeedVerification:
+                .participantMayNeedVerification
+            case .serverResponseLost: .serverResponseLost
+            case .assetNotAvailable: .assetNotAvailable
+            case .accountTemporarilyUnavailable:
+                .accountTemporarilyUnavailable
+            case .participantAlreadyInvited: .participantAlreadyInvited
+            @unknown default: .unknown(code.rawValue)
+            }
     }
 
     public var diagnosticCode: String {
@@ -181,9 +182,10 @@ public struct CloudKitFailure: Equatable, Sendable {
 
     public init(_ error: CKError) {
         code = CloudKitFailureCode(error.code)
-        let partialCodes = error.partialErrorsByItemID?.values.compactMap {
-            ($0 as? CKError).map { CloudKitFailureCode($0.code) }
-        } ?? []
+        let partialCodes =
+            error.partialErrorsByItemID?.values.compactMap {
+                ($0 as? CKError).map { CloudKitFailureCode($0.code) }
+            } ?? []
         partialFailureCodes = Array(Set(partialCodes)).sorted {
             $0.diagnosticCode < $1.diagnosticCode
         }
@@ -469,10 +471,11 @@ struct CloudServerAccountRecordPayload: Codable, Equatable {
             forKey: .supersededPayloadDigest
         )
         account = try values.decode(ServerAccount.self, forKey: .account)
-        legacyAccountIDs = try values.decodeIfPresent(
-            [AccountID].self,
-            forKey: .legacyAccountIDs
-        ) ?? []
+        legacyAccountIDs =
+            try values.decodeIfPresent(
+                [AccountID].self,
+                forKey: .legacyAccountIDs
+            ) ?? []
     }
 }
 
@@ -829,21 +832,23 @@ actor PrivateCloudSyncStore {
             defaults.value.dictionary(
                 forKey: synchronizedPayloadDigestsKey
             ) as? [String: Data] ?? [:]
-        legacyAccountIdentityMappings = defaults.value.dictionary(
-            forKey: legacyAccountIdentityMappingsKey
-        ) as? [String: String] ?? [:]
-        pendingLegacyRecordDeletions = (
+        legacyAccountIdentityMappings =
             defaults.value.dictionary(
+                forKey: legacyAccountIdentityMappingsKey
+            ) as? [String: String] ?? [:]
+        pendingLegacyRecordDeletions =
+            (defaults.value.dictionary(
                 forKey: pendingLegacyRecordDeletionsKey
-            ) as? [String: [String]] ?? [:]
-        ).mapValues(Set.init)
+            ) as? [String: [String]] ?? [:]).mapValues(Set.init)
         if let retainedPayloads = defaults.value.dictionary(
             forKey: retainedRecordPayloadsKey
         ) as? [String: Data] {
             for (recordName, payload) in retainedPayloads {
-                guard let record = records.first(where: {
-                    $0.key.recordName == recordName
-                })?.value else {
+                guard
+                    let record = records.first(where: {
+                        $0.key.recordName == recordName
+                    })?.value
+                else {
                     continue
                 }
                 record[Self.payloadKey] = payload as CKRecordValue
@@ -852,10 +857,12 @@ actor PrivateCloudSyncStore {
         if let data = defaults.value.data(
             forKey: pendingConfigurationConflictKey
         ) {
-            guard let conflict = try? JSONDecoder().decode(
-                CloudConfigurationConflict.self,
-                from: data
-            ) else {
+            guard
+                let conflict = try? JSONDecoder().decode(
+                    CloudConfigurationConflict.self,
+                    from: data
+                )
+            else {
                 pendingConfigurationConflictIsInvalid = true
                 return
             }
@@ -973,16 +980,17 @@ actor PrivateCloudSyncStore {
             var changes: [CKSyncEngine.PendingRecordZoneChange] =
                 try await statistics.privateCloudDeletions().map {
                     CKSyncEngine.PendingRecordZoneChange.deleteRecord(
-                    CKRecord.ID(
-                        recordName: $0.recordName,
-                        zoneID: zoneID
+                        CKRecord.ID(
+                            recordName: $0.recordName,
+                            zoneID: zoneID
+                        )
                     )
-                )
-            }
+                }
             for (canonicalName, legacyNames) in pendingLegacyRecordDeletions {
-                guard let canonicalRecord = records.first(where: {
-                    $0.key.recordName == canonicalName
-                })?.value,
+                guard
+                    let canonicalRecord = records.first(where: {
+                        $0.key.recordName == canonicalName
+                    })?.value,
                     !needsUpload(canonicalRecord)
                 else {
                     continue
@@ -1287,9 +1295,10 @@ actor PrivateCloudSyncStore {
 
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
         for record in savedRecords {
-            let legacyRecordNames = pendingLegacyRecordDeletions[
-                record.recordID.recordName
-            ] ?? []
+            let legacyRecordNames =
+                pendingLegacyRecordDeletions[
+                    record.recordID.recordName
+                ] ?? []
             pendingChanges.append(
                 contentsOf: legacyRecordNames.map {
                     .deleteRecord(
@@ -1302,7 +1311,8 @@ actor PrivateCloudSyncStore {
             )
         }
         if !confirmedDeletedRecordNames.isEmpty {
-            pendingLegacyRecordDeletions = pendingLegacyRecordDeletions
+            pendingLegacyRecordDeletions =
+                pendingLegacyRecordDeletions
                 .compactMapValues { names in
                     let remaining = names.subtracting(
                         confirmedDeletedRecordNames
@@ -1434,9 +1444,11 @@ actor PrivateCloudSyncStore {
         persist: Bool = true
     ) {
         var candidates = pendingAccountChanges[change.id] ?? []
-        guard !candidates.contains(where: {
-            $0.incoming == change.incoming
-        }) else { return }
+        guard
+            !candidates.contains(where: {
+                $0.incoming == change.incoming
+            })
+        else { return }
         candidates.append(change)
         candidates.sort { $0.structuralKey < $1.structuralKey }
         pendingAccountChanges[change.id] = candidates
@@ -1476,10 +1488,12 @@ actor PrivateCloudSyncStore {
         guard let conflict = pendingConfigurationConflict else {
             return nil
         }
-        guard let (recordID, record) = records.first(where: {
-            $0.key.recordName == "configuration.singleton"
-                && $0.value.recordType == "Configuration"
-        }) else {
+        guard
+            let (recordID, record) = records.first(where: {
+                $0.key.recordName == "configuration.singleton"
+                    && $0.value.recordType == "Configuration"
+            })
+        else {
             throw PrivateCloudSyncError.invalidRecord
         }
         switch resolution {
@@ -1549,9 +1563,11 @@ actor PrivateCloudSyncStore {
         accountID: AccountID,
         zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
-        guard let candidates = pendingAccountChanges.removeValue(
-            forKey: accountID
-        ), let change = candidates.first else {
+        guard
+            let candidates = pendingAccountChanges.removeValue(
+                forKey: accountID
+            ), let change = candidates.first
+        else {
             return nil
         }
         persistPendingAccountChanges()
@@ -1773,9 +1789,10 @@ actor PrivateCloudSyncStore {
         var remoteSessions: [RemoteListeningSession] = []
         do {
             for record in cloudRecords {
-                guard record.recordType == "ListeningSlice"
-                    || record.recordType == "CompletionMilestone"
-                    || record.recordType == "RemoteListeningSession"
+                guard
+                    record.recordType == "ListeningSlice"
+                        || record.recordType == "CompletionMilestone"
+                        || record.recordType == "RemoteListeningSession"
                 else {
                     continue
                 }
@@ -2022,13 +2039,15 @@ actor PrivateCloudSyncStore {
                 recordName: "account.\(canonicalID.rawValue)",
                 zoneID: record.recordID.zoneID
             )
-            canonicalRecord = records[canonicalIDValue]
+            canonicalRecord =
+                records[canonicalIDValue]
                 ?? CKRecord(
                     recordType: record.recordType,
                     recordID: canonicalIDValue
                 )
         case "ListeningSlice":
-            let value = try JSONDecoder().decode(ListeningSlice.self, from: data)
+            let value = try JSONDecoder().decode(
+                ListeningSlice.self, from: data)
             guard let canonical = canonicalAccountID(for: value.accountID)
             else {
                 return CanonicalizedCloudRecord(
@@ -2077,7 +2096,8 @@ actor PrivateCloudSyncStore {
                 recordName: "remote.\(canonical.rawValue).\(value.id.rawValue)",
                 zoneID: record.recordID.zoneID
             )
-            canonicalRecord = records[canonicalIDValue]
+            canonicalRecord =
+                records[canonicalIDValue]
                 ?? CKRecord(
                     recordType: record.recordType,
                     recordID: canonicalIDValue
@@ -2089,7 +2109,8 @@ actor PrivateCloudSyncStore {
                 requiresUpload: false
             )
         }
-        let requiresUpload = canonicalRecord.recordID != record.recordID
+        let requiresUpload =
+            canonicalRecord.recordID != record.recordID
             || canonicalData != data
         guard requiresUpload else {
             return CanonicalizedCloudRecord(
@@ -2228,8 +2249,9 @@ actor PrivateCloudSyncStore {
             CloudServerAccountRecordPayload.self,
             from: data
         ) {
-            guard CloudServerAccountRecordPayload.supportedSchemaVersions
-                .contains(payload.schemaVersion)
+            guard
+                CloudServerAccountRecordPayload.supportedSchemaVersions
+                    .contains(payload.schemaVersion)
             else {
                 throw PrivateCloudSyncError.invalidRecord
             }
@@ -2371,8 +2393,9 @@ actor PrivateCloudSyncStore {
         let retainedPayloads = records.reduce(
             into: [String: Data]()
         ) { result, element in
-            guard element.value.recordType == "ServerAccount"
-                || element.value.recordType == "Configuration",
+            guard
+                element.value.recordType == "ServerAccount"
+                    || element.value.recordType == "Configuration",
                 let data = element.value[Self.payloadKey] as? Data
             else {
                 return
@@ -2420,9 +2443,11 @@ actor PrivateCloudSyncStore {
     }
 
     private static func decodeSystemFields(_ data: Data) -> CKRecord? {
-        guard let unarchiver = try? NSKeyedUnarchiver(
-            forReadingFrom: data
-        ) else {
+        guard
+            let unarchiver = try? NSKeyedUnarchiver(
+                forReadingFrom: data
+            )
+        else {
             return nil
         }
         unarchiver.requiresSecureCoding = true
@@ -2645,10 +2670,11 @@ public final class PrivateCloudSyncCoordinator:
     public func resolveConfigurationConflict(
         _ resolution: CloudConfigurationConflictResolution
     ) async throws(PrivateCloudSyncFailure) {
-        let operation: PrivateCloudSyncOperation = switch resolution {
-        case .keepThisDevice: .keepLocalConfiguration
-        case .useICloud: .acceptCloudConfiguration
-        }
+        let operation: PrivateCloudSyncOperation =
+            switch resolution {
+            case .keepThisDevice: .keepLocalConfiguration
+            case .useICloud: .acceptCloudConfiguration
+            }
         try await perform(operation) {
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
@@ -2892,7 +2918,8 @@ public final class PrivateCloudSyncCoordinator:
                 )
             )
             do {
-                let pendingChanges = try await store
+                let pendingChanges =
+                    try await store
                     .reconcileSentRecordZoneChanges(
                         savedRecords: changes.savedRecords,
                         deletedRecordIDs: changes.deletedRecordIDs,
@@ -2939,7 +2966,8 @@ public final class PrivateCloudSyncCoordinator:
         } else if let error = error as? PrivateCloudSyncError {
             cause = error
         } else if let error = error as? CKError {
-            cause = error.code == .operationCancelled
+            cause =
+                error.code == .operationCancelled
                 ? .cancelled
                 : .cloudKit(CloudKitFailure(error))
         } else {

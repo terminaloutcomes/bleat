@@ -164,7 +164,7 @@ final class PlaybackSessionTests: XCTestCase {
             ),
         ]
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.openPlaybackSession(
                 accountID: fixture.accountID,
                 server: fixture.server,
@@ -180,7 +180,7 @@ final class PlaybackSessionTests: XCTestCase {
         }
 
         for device in invalidDevices {
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.coordinator.openPlaybackSession(
                     accountID: fixture.accountID,
                     server: fixture.server,
@@ -197,7 +197,7 @@ final class PlaybackSessionTests: XCTestCase {
         }
 
         for mimeType in ["", "audio mp4", "audio", "audio/mp4\nInjected"] {
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.coordinator.openPlaybackSession(
                     accountID: fixture.accountID,
                     server: fixture.server,
@@ -261,7 +261,7 @@ final class PlaybackSessionTests: XCTestCase {
 
         for (response, expectedError) in cases {
             let fixture = try Fixture(responses: [response])
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.coordinator.openPlaybackSession(
                     accountID: fixture.accountID,
                     server: fixture.server,
@@ -284,7 +284,7 @@ final class PlaybackSessionTests: XCTestCase {
             includeCredentials: false
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.openPlaybackSession(
                 accountID: fixture.accountID,
                 server: fixture.server,
@@ -365,7 +365,7 @@ final class PlaybackSessionTests: XCTestCase {
             Self.sessionJSON(method: 99)
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await Self.decodeSession(
                 Self.sessionJSON(method: 2, audioTracks: [])
             )
@@ -376,7 +376,7 @@ final class PlaybackSessionTests: XCTestCase {
             )
         }
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await Self.decodeSession(
                 Self.sessionJSON(audioTracks: [
                     Self.track(
@@ -529,7 +529,7 @@ final class PlaybackSessionTests: XCTestCase {
             ]
         for (sessionID, currentTime, duration, expected) in invalidCases {
             let fixture = try Fixture(responses: [])
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await fixture.coordinator.syncPlaybackSession(
                     accountID: fixture.accountID,
                     server: fixture.server,
@@ -547,7 +547,7 @@ final class PlaybackSessionTests: XCTestCase {
         let rejectedFixture = try Fixture(
             responses: [.init(data: Data(), statusCode: 404)]
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await rejectedFixture.coordinator.syncPlaybackSession(
                 accountID: rejectedFixture.accountID,
                 server: rejectedFixture.server,
@@ -566,7 +566,7 @@ final class PlaybackSessionTests: XCTestCase {
             responses: [],
             includeCredentials: false
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await unauthenticatedFixture.coordinator
                 .syncPlaybackSession(
                     accountID: unauthenticatedFixture.accountID,
@@ -585,7 +585,7 @@ final class PlaybackSessionTests: XCTestCase {
 
     func testCloseFailuresRemainTyped() async throws {
         let invalidFixture = try Fixture(responses: [])
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await invalidFixture.coordinator.closePlaybackSession(
                 accountID: invalidFixture.accountID,
                 server: invalidFixture.server,
@@ -601,7 +601,7 @@ final class PlaybackSessionTests: XCTestCase {
         let rejectedFixture = try Fixture(
             responses: [.init(data: Data(), statusCode: 404)]
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await rejectedFixture.coordinator.closePlaybackSession(
                 accountID: rejectedFixture.accountID,
                 server: rejectedFixture.server,
@@ -618,7 +618,7 @@ final class PlaybackSessionTests: XCTestCase {
             responses: [],
             includeCredentials: false
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await unauthenticatedFixture.coordinator
                 .closePlaybackSession(
                     accountID: unauthenticatedFixture.accountID,

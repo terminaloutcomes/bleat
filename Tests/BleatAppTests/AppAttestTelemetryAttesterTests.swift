@@ -7,7 +7,9 @@ import XCTest
 
 final class AppAttestTelemetryAttesterTests: XCTestCase {
     #if os(iOS)
-        func testAdapterHandlesServiceWorkCompletedAwayFromMainActor() async throws {
+        func testAdapterHandlesServiceWorkCompletedAwayFromMainActor()
+            async throws
+        {
             let service = OffMainAppAttestService()
             let attester = AppAttestTelemetryAttester(service: service)
 

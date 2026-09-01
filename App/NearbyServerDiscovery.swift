@@ -111,7 +111,7 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         resolver: BonjourServiceResolver = BonjourServiceResolver(),
         verifier:
             @escaping @Sendable (NormalizedServerURL) async throws
-                -> DiscoveredServer = { server in
+            -> DiscoveredServer = { server in
                 try await ServerDiscoveryClient(
                     transport: URLSessionHTTPTransport(routesRequests: false)
                 ).discover(server)
@@ -207,13 +207,13 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
             do {
                 let resolved = try await resolver.resolve(service)
                 guard generation == expectedGeneration,
-                      services.contains(service.id)
+                    services.contains(service.id)
                 else {
                     return
                 }
                 let discovered = try await verifier(resolved.baseURL)
                 guard generation == expectedGeneration,
-                      services.contains(service.id)
+                    services.contains(service.id)
                 else {
                     return
                 }
@@ -229,7 +229,7 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
                 return
             } catch {
                 guard generation == expectedGeneration,
-                      services.contains(service.id)
+                    services.contains(service.id)
                 else {
                     return
                 }
@@ -248,11 +248,11 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         noResultsTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled,
-                  let self,
-                  generation == expectedGeneration,
-                  browserFailure == nil,
-                  services.isEmpty,
-                  resultsByService.isEmpty
+                let self,
+                generation == expectedGeneration,
+                browserFailure == nil,
+                services.isEmpty,
+                resultsByService.isEmpty
             else {
                 return
             }
@@ -267,9 +267,9 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         if !results.isEmpty {
             update?(.results(results))
         } else if !services.isEmpty,
-                  settledServices.isSuperset(of: services),
-                  let failure = services.compactMap({ failuresByService[$0] })
-                    .first
+            settledServices.isSuperset(of: services),
+            let failure = services.compactMap({ failuresByService[$0] })
+                .first
         {
             update?(.failed(failure))
         } else if browserFailure == nil {
@@ -283,7 +283,7 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         if let error = error as? BonjourResolutionError {
             switch error {
             case .invalidService, .missingHostname, .invalidHostname,
-                 .invalidPort, .invalidTXTPath, .invalidURL:
+                .invalidPort, .invalidTXTPath, .invalidURL:
                 return .invalidAdvertisement
             case .dnsServiceFailure, .timedOut:
                 return .resolutionFailed
@@ -302,7 +302,7 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
         case .dns(let code):
             switch code {
             case Int32(kDNSServiceErr_PolicyDenied),
-                 Int32(kDNSServiceErr_NotPermitted):
+                Int32(kDNSServiceErr_NotPermitted):
                 return .permissionDenied
             default:
                 return .localNetworkUnavailable

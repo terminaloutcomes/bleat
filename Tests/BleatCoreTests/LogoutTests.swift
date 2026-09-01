@@ -19,7 +19,8 @@ final class LogoutTests: XCTestCase {
                 .success(
                     .init(
                         data: Data(
-                            #"{"redirect_url":"https://id.example/logout"}"#.utf8
+                            #"{"redirect_url":"https://id.example/logout"}"#
+                                .utf8
                         ),
                         statusCode: 200
                     ))
@@ -73,7 +74,9 @@ final class LogoutTests: XCTestCase {
         XCTAssertEqual(secondDeleteCount, 2)
     }
 
-    func testLogoutRejectsUnsafeProviderRedirectWithoutBlockingCleanup() async throws {
+    func testLogoutRejectsUnsafeProviderRedirectWithoutBlockingCleanup()
+        async throws
+    {
         let fixture = try LogoutFixture(
             responses: [
                 .success(
@@ -181,7 +184,7 @@ final class LogoutTests: XCTestCase {
             deleteFails: true
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.logout(
                 accountID: fixture.accountID,
                 server: fixture.server
@@ -206,7 +209,7 @@ final class LogoutTests: XCTestCase {
     func testInvalidAccountDoesNotReadDeleteOrSend() async throws {
         let fixture = try LogoutFixture(responses: [])
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await fixture.coordinator.logout(
                 accountID: AccountID(rawValue: ""),
                 server: fixture.server
@@ -247,7 +250,7 @@ final class LogoutTests: XCTestCase {
         }
         await transport.waitUntilLogoutStarts()
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.logout(
                 accountID: accountID,
                 server: server
@@ -263,7 +266,7 @@ final class LogoutTests: XCTestCase {
             url: try AudiobookshelfRouteBuilder(server: server)
                 .url(for: .libraries)
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
                 librariesRequest,
                 route: .libraries,
@@ -301,7 +304,7 @@ final class LogoutTests: XCTestCase {
         }
         await transport.waitUntilLoginStarts()
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.logout(
                 accountID: accountID,
                 server: server
@@ -312,7 +315,7 @@ final class LogoutTests: XCTestCase {
                 .accountOperationInProgress
             )
         }
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.login(
                 accountID: accountID,
                 server: server,
@@ -327,7 +330,7 @@ final class LogoutTests: XCTestCase {
         }
 
         await transport.rejectLogin()
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await login.value
         ) { error in
             XCTAssertEqual(
@@ -386,7 +389,7 @@ final class LogoutTests: XCTestCase {
         await transport.completeRefresh()
 
         let logoutResult = try await logout.value
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
             XCTAssertEqual(
@@ -443,7 +446,7 @@ final class LogoutTests: XCTestCase {
         await transport.waitUntilLogoutStarts()
         await transport.rejectInitialRequest()
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
             XCTAssertEqual(
@@ -502,7 +505,7 @@ final class LogoutTests: XCTestCase {
         let logoutResult = try await logout.value
         await transport.completeInitial(statusCode: 200)
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
             XCTAssertEqual(

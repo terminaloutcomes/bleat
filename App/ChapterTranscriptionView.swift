@@ -209,8 +209,7 @@ enum ChapterTranscriptPositionResolver {
         let positionMilliseconds = position * 1_000
         var chapterOrder: [Int: Int] = [:]
         for (index, chapter) in orderedChapters.enumerated()
-            where chapterOrder[chapter.id] == nil
-        {
+        where chapterOrder[chapter.id] == nil {
             chapterOrder[chapter.id] = index
         }
         let candidates: [Candidate] = transcripts.flatMap {
@@ -531,12 +530,14 @@ struct ChapterTranscriptLocalDataFailure: Equatable, Sendable {
     }
 
     var message: String {
-        let action = switch stage {
-        case .presenceInspection: "check"
-        case .deletion: "delete"
-        }
+        let action =
+            switch stage {
+            case .presenceInspection: "check"
+            case .deletion: "delete"
+            }
         guard case .transcriptCache(let error) = cause else {
-            return "Bleat could not \(action) the local transcript data because of an unexpected application error."
+            return
+                "Bleat could not \(action) the local transcript data because of an unexpected application error."
         }
         return switch error {
         case .invalidAccountID:
@@ -686,8 +687,8 @@ final class ChapterTranscriptionModel {
     private(set) var terminalStatesByBook:
         [ChapterTranscriptionBookKey: CachedChapterTranscriptionTaskState] =
             [:]
-    private var localDataPresenceByBook:
-        [ChapterTranscriptionBookKey: Bool] = [:]
+    private var localDataPresenceByBook: [ChapterTranscriptionBookKey: Bool] =
+        [:]
     private var localDataPresenceFailuresByBook:
         [ChapterTranscriptionBookKey: ChapterTranscriptLocalDataFailure] = [:]
     private var deletionStatesByBook:

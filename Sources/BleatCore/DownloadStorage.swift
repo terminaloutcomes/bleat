@@ -118,10 +118,12 @@ public struct DownloadStorageLayout: Sendable {
     public static func applicationSupport()
         throws(DownloadStorageError) -> DownloadStorageLayout
     {
-        guard let supportURL = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
+        guard
+            let supportURL = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first
+        else {
             throw .invalidRoot
         }
         return try DownloadStorageLayout(
@@ -422,14 +424,17 @@ public actor DownloadStorage {
                     "record.json",
                     isDirectory: false
                 )
-                guard let destinationRecord = try? decoder.decode(
-                    DownloadedBookRecord.self,
-                    from: Data(contentsOf: destinationURL)
-                ), structurallyCompatible(
-                    record,
-                    destinationRecord,
-                    ignoringAccountIdentity: true
-                ) else {
+                guard
+                    let destinationRecord = try? decoder.decode(
+                        DownloadedBookRecord.self,
+                        from: Data(contentsOf: destinationURL)
+                    ),
+                    structurallyCompatible(
+                        record,
+                        destinationRecord,
+                        ignoringAccountIdentity: true
+                    )
+                else {
                     throw .identityMigrationConflict(.incompatibleManifests)
                 }
                 let sourceHasMedia = try directoryContainsMedia(source)
@@ -445,10 +450,12 @@ public actor DownloadStorage {
                 }
                 let mediaRecord = sourceHasMedia ? record : destinationRecord
                 let mediaDirectory = sourceHasMedia ? source : destination
-                guard try mediaMatchesManifest(
-                    mediaRecord,
-                    in: mediaDirectory
-                ) else {
+                guard
+                    try mediaMatchesManifest(
+                        mediaRecord,
+                        in: mediaDirectory
+                    )
+                else {
                     throw .identityMigrationConflict(.incompatibleManifests)
                 }
                 if sourceHasMedia {
@@ -531,24 +538,27 @@ public actor DownloadStorage {
         guard fileManager.fileExists(atPath: layout.rootURL.path) else {
             return []
         }
-        guard let enumerator = fileManager.enumerator(
-            at: layout.rootURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
+        guard
+            let enumerator = fileManager.enumerator(
+                at: layout.rootURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        else {
             throw .persistenceFailed
         }
         var discovered: [RawManifestRecord] = []
         for case let url as URL in enumerator
         where url.lastPathComponent == "record.json" {
             do {
-                discovered.append(RawManifestRecord(
-                    record: try decoder.decode(
-                        DownloadedBookRecord.self,
-                        from: Data(contentsOf: url)
-                    ),
-                    directory: url.deletingLastPathComponent()
-                ))
+                discovered.append(
+                    RawManifestRecord(
+                        record: try decoder.decode(
+                            DownloadedBookRecord.self,
+                            from: Data(contentsOf: url)
+                        ),
+                        directory: url.deletingLastPathComponent()
+                    ))
             } catch {
                 // Migration must preserve malformed real-world state for a
                 // later diagnostic/recovery attempt.
@@ -578,9 +588,10 @@ public actor DownloadStorage {
         let fileManager = FileManager.default
         let names: Set<String>
         do {
-            names = Set(try fileManager.contentsOfDirectory(
-                atPath: directory.path
-            ))
+            names = Set(
+                try fileManager.contentsOfDirectory(
+                    atPath: directory.path
+                ))
         } catch {
             throw .persistenceFailed
         }
@@ -1026,9 +1037,11 @@ public actor DownloadStorage {
         _ identity: DownloadTaskIdentity
     ) throws(DownloadStorageError) -> DownloadedBookRecord? {
         var record = try load(identity)
-        guard record.manifest.entries.first(where: {
-            $0.trackIndex == identity.trackIndex
-        })?.state == .downloading else {
+        guard
+            record.manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.state == .downloading
+        else {
             return nil
         }
         do {
@@ -1046,9 +1059,11 @@ public actor DownloadStorage {
         _ identity: DownloadTaskIdentity
     ) throws(DownloadStorageError) -> DownloadedBookRecord? {
         var record = try load(identity)
-        guard let state = record.manifest.entries.first(where: {
-            $0.trackIndex == identity.trackIndex
-        })?.state else {
+        guard
+            let state = record.manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.state
+        else {
             throw .trackNotFound
         }
         guard state != .complete else { return nil }

@@ -24,7 +24,8 @@ public enum TranscriptExporter {
         transcripts: [CachedChapterTranscript],
         format: TranscriptExportFormat
     ) throws -> Data {
-        let segments = transcripts
+        let segments =
+            transcripts
             .flatMap(\.segments)
             .enumerated()
             .map { IndexedSegment(index: $0.offset, segment: $0.element) }
@@ -38,11 +39,13 @@ public enum TranscriptExporter {
         guard !segments.isEmpty else {
             throw TranscriptExportError.noSegments
         }
-        guard segments.allSatisfy({ indexed in
-            let segment = indexed.segment
-            return segment.startMilliseconds >= 0
-                && segment.endMilliseconds > segment.startMilliseconds
-        }) else {
+        guard
+            segments.allSatisfy({ indexed in
+                let segment = indexed.segment
+                return segment.startMilliseconds >= 0
+                    && segment.endMilliseconds > segment.startMilliseconds
+            })
+        else {
             throw TranscriptExportError.invalidSegment
         }
 
@@ -56,7 +59,8 @@ public enum TranscriptExporter {
         return Data(text.utf8)
     }
 
-    private static func webVTT(_ segments: [CachedTranscriptSegment]) -> String {
+    private static func webVTT(_ segments: [CachedTranscriptSegment]) -> String
+    {
         let cues = segments.map { segment in
             """
             \(timestamp(segment.startMilliseconds, separator: ".")) --> \(timestamp(segment.endMilliseconds, separator: "."))
@@ -67,7 +71,8 @@ public enum TranscriptExporter {
         return "WEBVTT\n\n" + cues.joined(separator: "\n")
     }
 
-    private static func subRip(_ segments: [CachedTranscriptSegment]) -> String {
+    private static func subRip(_ segments: [CachedTranscriptSegment]) -> String
+    {
         segments.enumerated().map { index, segment in
             "\(index + 1)\r\n"
                 + "\(timestamp(segment.startMilliseconds, separator: ",")) --> "

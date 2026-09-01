@@ -12,7 +12,8 @@
 
         func testCaptureInitialTokensAndForceRefresh() async throws {
             let item = try XCTUnwrap(try sessionCredentialItems().only)
-            let account = try XCTUnwrap(item[kSecAttrAccount as String] as? String)
+            let account = try XCTUnwrap(
+                item[kSecAttrAccount as String] as? String)
             let data = try XCTUnwrap(item[kSecValueData as String] as? Data)
             let tokens = try JSONDecoder().decode(
                 AuthenticationTokens.self,
@@ -32,9 +33,15 @@
             ).save(replacement, for: AccountID(rawValue: account))
             try writeManifest(
                 [
-                    Secret(label: "initial-access-token", value: tokens.accessToken),
-                    Secret(label: "initial-refresh-token", value: tokens.refreshToken),
-                    Secret(label: "rejected-access-token", value: rejectedAccessToken),
+                    Secret(
+                        label: "initial-access-token", value: tokens.accessToken
+                    ),
+                    Secret(
+                        label: "initial-refresh-token",
+                        value: tokens.refreshToken),
+                    Secret(
+                        label: "rejected-access-token",
+                        value: rejectedAccessToken),
                 ],
                 named: "initial.json"
             )
@@ -64,8 +71,12 @@
             )
             try writeManifest(
                 [
-                    Secret(label: "rotated-access-token", value: tokens.accessToken),
-                    Secret(label: "rotated-refresh-token", value: tokens.refreshToken),
+                    Secret(
+                        label: "rotated-access-token", value: tokens.accessToken
+                    ),
+                    Secret(
+                        label: "rotated-refresh-token",
+                        value: tokens.refreshToken),
                 ],
                 named: "rotated.json"
             )
@@ -82,7 +93,8 @@
         }
 
         func testLogoutRemovedSessionCredentials() throws {
-            XCTAssertTrue(try credentialItems(service: Self.sessionService).isEmpty)
+            XCTAssertTrue(
+                try credentialItems(service: Self.sessionService).isEmpty)
         }
 
         func testPrivateCaptureRemainsRemovedAfterLogout() throws {
@@ -171,8 +183,8 @@
         let value: String
     }
 
-    private extension Array {
-        var only: Element? {
+    extension Array {
+        fileprivate var only: Element? {
             count == 1 ? self[0] : nil
         }
     }

@@ -4,7 +4,9 @@ import XCTest
 @testable import BleatCore
 
 final class ProgressSyncTests: XCTestCase {
-    func testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts() async throws {
+    func testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts()
+        async throws
+    {
         let accountID = AccountID(rawValue: "account")
         let response = HTTPResponse(
             data: Data(
@@ -57,9 +59,12 @@ final class ProgressSyncTests: XCTestCase {
         )
     }
 
-    func testAllProgressRejectsWrongUserAndMalformedBookProgress() async throws {
-        let valid = #"{"id":"progress","userId":"other-user","libraryItemId":"item","episodeId":null,"mediaItemId":"book","mediaItemType":"book","duration":100,"progress":0.25,"currentTime":25,"isFinished":false,"hideFromContinueListening":false,"lastUpdate":12,"startedAt":1,"finishedAt":null}"#
-        let malformed = #"{"id":"progress","userId":"user","libraryItemId":"item","episodeId":null,"mediaItemId":"book","mediaItemType":"book","duration":-1,"progress":0.25,"currentTime":25,"isFinished":false,"hideFromContinueListening":false,"lastUpdate":12,"startedAt":1,"finishedAt":null}"#
+    func testAllProgressRejectsWrongUserAndMalformedBookProgress() async throws
+    {
+        let valid =
+            #"{"id":"progress","userId":"other-user","libraryItemId":"item","episodeId":null,"mediaItemId":"book","mediaItemType":"book","duration":100,"progress":0.25,"currentTime":25,"isFinished":false,"hideFromContinueListening":false,"lastUpdate":12,"startedAt":1,"finishedAt":null}"#
+        let malformed =
+            #"{"id":"progress","userId":"user","libraryItemId":"item","episodeId":null,"mediaItemId":"book","mediaItemType":"book","duration":-1,"progress":0.25,"currentTime":25,"isFinished":false,"hideFromContinueListening":false,"lastUpdate":12,"startedAt":1,"finishedAt":null}"#
         let transport = ProgressTestTransport(
             responses: [
                 HTTPResponse(
@@ -79,7 +84,7 @@ final class ProgressSyncTests: XCTestCase {
         )
         let server = try NormalizedServerURL("https://books.example")
 
-        for _ in 0 ..< 2 {
+        for _ in 0..<2 {
             do {
                 _ = try await coordinator.allBookProgress(
                     accountID: accountID,

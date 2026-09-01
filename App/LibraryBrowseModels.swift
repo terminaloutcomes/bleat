@@ -10,11 +10,11 @@ enum LibraryBrowseFilter: Hashable, Sendable {
         switch self {
         case .all:
             nil
-        case let .progress(filter):
+        case .progress(let filter):
             LibraryItemFilter(progress: filter)
-        case let .author(id, _):
+        case .author(let id, _):
             LibraryItemFilter(authorID: id)
-        case let .series(id, _):
+        case .series(let id, _):
             LibraryItemFilter(seriesID: id)
         }
     }
@@ -23,7 +23,7 @@ enum LibraryBrowseFilter: Hashable, Sendable {
         switch self {
         case .all:
             "All Books"
-        case let .progress(filter):
+        case .progress(let filter):
             switch filter {
             case .finished:
                 "Finished"
@@ -34,9 +34,9 @@ enum LibraryBrowseFilter: Hashable, Sendable {
             case .notFinished:
                 "Not Finished"
             }
-        case let .author(_, name):
+        case .author(_, let name):
             "Author: \(name)"
-        case let .series(_, name):
+        case .series(_, let name):
             "Series: \(name)"
         }
     }

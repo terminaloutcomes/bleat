@@ -43,17 +43,18 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
             throw .invalidRemoteUserID
         }
         guard !user.username.isEmpty,
-              user.username.rangeOfCharacter(
-                  from: .controlCharacters
-              ) == nil
+            user.username.rangeOfCharacter(
+                from: .controlCharacters
+            ) == nil
         else {
             throw .invalidUsername
         }
         guard AudiobookshelfServerVersion(serverVersion) != nil else {
             throw .invalidServerVersion
         }
-        guard authenticationMethods.contains(.local)
-            || authenticationMethods.contains(.openID)
+        guard
+            authenticationMethods.contains(.local)
+                || authenticationMethods.contains(.openID)
         else {
             throw .localAuthenticationUnavailable
         }
@@ -328,7 +329,9 @@ public actor AccountStore {
     public func applyIdentityMigrations(
         _ migrations: [AccountIdentityMigration]
     ) throws(AccountStoreError) -> AccountIdentityMigrationReport {
-        guard !migrations.isEmpty else { return AccountIdentityMigrationReport() }
+        guard !migrations.isEmpty else {
+            return AccountIdentityMigrationReport()
+        }
         var mapping: [String: String] = [:]
         for migration in migrations {
             if let existing = mapping[migration.legacyID.rawValue],
@@ -381,7 +384,8 @@ public actor AccountStore {
                 guard let canonical = mapping[record.accountID] else {
                     continue
                 }
-                let migrated = try replacements[record.accountID]
+                let migrated =
+                    try replacements[record.accountID]
                     ?? decode(record).reidentified(
                         as: AccountID(rawValue: canonical)
                     )
@@ -409,10 +413,11 @@ public actor AccountStore {
                         )
                     }
                 } else {
-                    modelContext.insert(AccountIdentityAliasRecord(
-                        legacyAccountID: legacy,
-                        canonicalAccountID: canonical
-                    ))
+                    modelContext.insert(
+                        AccountIdentityAliasRecord(
+                            legacyAccountID: legacy,
+                            canonicalAccountID: canonical
+                        ))
                 }
             }
             for record in try modelContext.fetch(
@@ -436,7 +441,8 @@ public actor AccountStore {
             ) {
                 if let canonical = mapping[record.accountID] {
                     record.accountID = canonical
-                    record.compositeID = RemoteListeningSessionRecord
+                    record.compositeID =
+                        RemoteListeningSessionRecord
                         .compositeID(
                             accountID: AccountID(rawValue: canonical),
                             sessionID: PlaybackSessionID(
@@ -458,7 +464,8 @@ public actor AccountStore {
             ) {
                 if let canonical = mapping[record.accountID] {
                     record.accountID = canonical
-                    record.compositeID = StatisticsSessionAccountingRecord
+                    record.compositeID =
+                        StatisticsSessionAccountingRecord
                         .compositeID(
                             accountID: AccountID(rawValue: canonical),
                             sessionID: PlaybackSessionID(
@@ -508,12 +515,13 @@ public actor AccountStore {
             cause: AccountCacheIdentityMigrationCause
         ) {
             guard let canonical = mapping[accountID] else { return }
-            residuals.append(AccountCacheIdentityMigrationResidual(
-                legacyAccountID: AccountID(rawValue: accountID),
-                canonicalAccountID: AccountID(rawValue: canonical),
-                kind: kind,
-                cause: cause
-            ))
+            residuals.append(
+                AccountCacheIdentityMigrationResidual(
+                    legacyAccountID: AccountID(rawValue: accountID),
+                    canonicalAccountID: AccountID(rawValue: canonical),
+                    kind: kind,
+                    cause: cause
+                ))
         }
 
         for record in try modelContext.fetch(
@@ -542,7 +550,8 @@ public actor AccountStore {
         {
             let bytes = Array(key.utf8)
             guard let colon = bytes.firstIndex(of: 58), colon > 0,
-                let length = Int(String(decoding: bytes[..<colon], as: UTF8.self))
+                let length = Int(
+                    String(decoding: bytes[..<colon], as: UTF8.self))
             else { return nil }
             let valueStart = colon + 1
             let valueEnd = valueStart + length
@@ -554,7 +563,9 @@ public actor AccountStore {
                 + String(decoding: bytes[valueEnd...], as: UTF8.self)
         }
 
-        func migrate<Record: PersistentModel & AnyObject, Value: Decodable & Equatable>(
+        func migrate<
+            Record: PersistentModel & AnyObject, Value: Decodable & Equatable
+        >(
             _ records: [Record],
             kind: AccountCacheKind,
             account: ReferenceWritableKeyPath<Record, String>,
@@ -582,14 +593,18 @@ public actor AccountStore {
                 guard let canonical = mapping[legacy] else { continue }
                 guard let targetKey = targetKey(record, legacy, canonical)
                 else {
-                    residual(accountID: legacy, kind: kind, cause: .malformedKey)
+                    residual(
+                        accountID: legacy, kind: kind, cause: .malformedKey)
                     continue
                 }
-                guard let decoded = try? decoder.decode(
-                    value,
-                    from: record[keyPath: payload]
-                ) else {
-                    residual(accountID: legacy, kind: kind, cause: .invalidPayload)
+                guard
+                    let decoded = try? decoder.decode(
+                        value,
+                        from: record[keyPath: payload]
+                    )
+                else {
+                    residual(
+                        accountID: legacy, kind: kind, cause: .invalidPayload)
                     continue
                 }
                 let collisions = records.filter {
@@ -603,17 +618,23 @@ public actor AccountStore {
                     record[keyPath: key] = targetKey
                     continue
                 }
-                guard let existingValue = try? decoder.decode(
-                    value,
-                    from: existing[keyPath: payload]
-                ), identity(record) == identity(existing) else {
-                    residual(accountID: legacy, kind: kind, cause: .ambiguousCollision)
+                guard
+                    let existingValue = try? decoder.decode(
+                        value,
+                        from: existing[keyPath: payload]
+                    ), identity(record) == identity(existing)
+                else {
+                    residual(
+                        accountID: legacy, kind: kind,
+                        cause: .ambiguousCollision)
                     continue
                 }
                 let recordDate = record[keyPath: timestamp]
                 let existingDate = existing[keyPath: timestamp]
                 if recordDate == existingDate && decoded != existingValue {
-                    residual(accountID: legacy, kind: kind, cause: .ambiguousCollision)
+                    residual(
+                        accountID: legacy, kind: kind,
+                        cause: .ambiguousCollision)
                 } else if recordDate > existingDate {
                     modelContext.delete(existing)
                     deleted.insert(ObjectIdentifier(existing))
@@ -636,7 +657,8 @@ public actor AccountStore {
             value: LibrarySummary.self,
             identity: { [$0.libraryID, String($0.position)] },
             targetKey: { record, legacy, canonical in
-                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+                replacementKey(
+                    record.cacheKey, legacy: legacy, canonical: canonical)
             }
         )
         migrate(
@@ -649,11 +671,13 @@ public actor AccountStore {
             value: LibraryItemsPage.self,
             identity: { [$0.libraryID] },
             targetKey: { record, legacy, canonical in
-                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+                replacementKey(
+                    record.cacheKey, legacy: legacy, canonical: canonical)
             }
         )
         migrate(
-            try modelContext.fetch(FetchDescriptor<CachedLibrarySearchRecord>()),
+            try modelContext.fetch(
+                FetchDescriptor<CachedLibrarySearchRecord>()),
             kind: .librarySearch,
             account: \.accountID,
             key: \.cacheKey,
@@ -662,7 +686,8 @@ public actor AccountStore {
             value: LibrarySearchResults.self,
             identity: { [$0.libraryID] },
             targetKey: { record, legacy, canonical in
-                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+                replacementKey(
+                    record.cacheKey, legacy: legacy, canonical: canonical)
             }
         )
         migrate(
@@ -675,11 +700,13 @@ public actor AccountStore {
             value: [LibraryBookShelf].self,
             identity: { [$0.libraryID] },
             targetKey: { record, legacy, canonical in
-                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+                replacementKey(
+                    record.cacheKey, legacy: legacy, canonical: canonical)
             }
         )
         migrate(
-            try modelContext.fetch(FetchDescriptor<CachedLibraryBookDetailRecord>()),
+            try modelContext.fetch(
+                FetchDescriptor<CachedLibraryBookDetailRecord>()),
             kind: .bookDetail,
             account: \.accountID,
             key: \.cacheKey,
@@ -688,11 +715,13 @@ public actor AccountStore {
             value: LibraryBookDetail.self,
             identity: { [$0.userID, $0.libraryID, $0.libraryItemID] },
             targetKey: { record, legacy, canonical in
-                replacementKey(record.cacheKey, legacy: legacy, canonical: canonical)
+                replacementKey(
+                    record.cacheKey, legacy: legacy, canonical: canonical)
             }
         )
         migrate(
-            try modelContext.fetch(FetchDescriptor<CachedChapterTranscriptRecord>()),
+            try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptRecord>()),
             kind: .chapterTranscript,
             account: \.accountID,
             key: \.cacheKey,
@@ -747,12 +776,13 @@ public actor AccountStore {
             throw .profileEncodingFailed
         }
 
-        let shouldActivate = makeActive
+        let shouldActivate =
+            makeActive
             || records.isEmpty
             || !records.contains(where: \.isActiveBrowsingAccount)
         if shouldActivate {
-            records.forEach {
-                $0.isActiveBrowsingAccount = false
+            for record in records {
+                record.isActiveBrowsingAccount = false
             }
         }
         if let existing = records.first(where: {
@@ -765,13 +795,14 @@ public actor AccountStore {
                 existing.isActiveBrowsingAccount = true
             }
         } else {
-            modelContext.insert(ServerAccountRecord(
-                accountID: account.id.rawValue,
-                serverURL: account.server.url.absoluteString,
-                remoteUserID: account.user.id.rawValue,
-                profileData: profileData,
-                isActiveBrowsingAccount: shouldActivate
-            ))
+            modelContext.insert(
+                ServerAccountRecord(
+                    accountID: account.id.rawValue,
+                    serverURL: account.server.url.absoluteString,
+                    remoteUserID: account.user.id.rawValue,
+                    profileData: profileData,
+                    isActiveBrowsingAccount: shouldActivate
+                ))
         }
         try saveContext()
     }
@@ -791,9 +822,11 @@ public actor AccountStore {
         }
         try save(pending)
         let records = try fetchRecords()
-        guard let record = records.first(where: {
-            $0.accountID == pending.id.rawValue
-        }) else {
+        guard
+            let record = records.first(where: {
+                $0.accountID == pending.id.rawValue
+            })
+        else {
             throw .accountNotFound(pending.id)
         }
         record.isActiveBrowsingAccount = false
@@ -818,18 +851,22 @@ public actor AccountStore {
     public func account(
         id: AccountID
     ) throws(AccountStoreError) -> ServerAccount? {
-        guard let record = try fetchRecords().first(where: {
-            $0.accountID == id.rawValue
-        }) else {
+        guard
+            let record = try fetchRecords().first(where: {
+                $0.accountID == id.rawValue
+            })
+        else {
             return nil
         }
         return try decode(record)
     }
 
     public func activeAccount() throws(AccountStoreError) -> ServerAccount? {
-        guard let record = try fetchRecords().first(where: {
-            $0.isActiveBrowsingAccount
-        }) else {
+        guard
+            let record = try fetchRecords().first(where: {
+                $0.isActiveBrowsingAccount
+            })
+        else {
             return nil
         }
         return try decode(record)
@@ -839,13 +876,15 @@ public actor AccountStore {
         id: AccountID
     ) throws(AccountStoreError) {
         let records = try fetchRecords()
-        guard records.contains(where: {
-            $0.accountID == id.rawValue
-        }) else {
+        guard
+            records.contains(where: {
+                $0.accountID == id.rawValue
+            })
+        else {
             throw .accountNotFound(id)
         }
-        records.forEach {
-            $0.isActiveBrowsingAccount = $0.accountID == id.rawValue
+        for record in records {
+            record.isActiveBrowsingAccount = record.accountID == id.rawValue
         }
         try saveContext()
     }
@@ -855,9 +894,11 @@ public actor AccountStore {
         for id: AccountID
     ) throws(AccountStoreError) {
         let records = try fetchRecords()
-        guard let record = records.first(where: {
-            $0.accountID == id.rawValue
-        }) else {
+        guard
+            let record = records.first(where: {
+                $0.accountID == id.rawValue
+            })
+        else {
             throw .accountNotFound(id)
         }
         let account = try decode(record)
@@ -879,9 +920,11 @@ public actor AccountStore {
         for id: AccountID
     ) throws(AccountStoreError) {
         let records = try fetchRecords()
-        guard let record = records.first(where: {
-            $0.accountID == id.rawValue
-        }) else {
+        guard
+            let record = records.first(where: {
+                $0.accountID == id.rawValue
+            })
+        else {
             throw .accountNotFound(id)
         }
         let account = try decode(record)
@@ -902,9 +945,11 @@ public actor AccountStore {
         id: AccountID
     ) throws(AccountStoreError) -> Bool {
         let records = try fetchRecords()
-        guard let record = records.first(where: {
-            $0.accountID == id.rawValue
-        }) else {
+        guard
+            let record = records.first(where: {
+                $0.accountID == id.rawValue
+            })
+        else {
             return false
         }
         let removedActiveAccount = record.isActiveBrowsingAccount
@@ -960,10 +1005,11 @@ public actor AccountStore {
             throw .persistenceFailed
         }
         if removedActiveAccount,
-           let replacement = records
-               .filter({ $0 !== record })
-               .sorted(by: { $0.accountID < $1.accountID })
-               .first
+            let replacement =
+                records
+                .filter({ $0 !== record })
+                .sorted(by: { $0.accountID < $1.accountID })
+                .first
         {
             replacement.isActiveBrowsingAccount = true
         }
@@ -1182,10 +1228,12 @@ extension AuthCoordinator {
         accountID: AccountID,
         accountStore: AccountStore
     ) async throws(AccountLifecycleError) -> LogoutResult {
-        guard let account = try await storedAccount(
-            id: accountID,
-            accountStore: accountStore
-        ) else {
+        guard
+            let account = try await storedAccount(
+                id: accountID,
+                accountStore: accountStore
+            )
+        else {
             throw .accountNotFound(accountID)
         }
         let result: LogoutResult
@@ -1214,10 +1262,12 @@ extension AuthCoordinator {
         accountID: AccountID,
         accountStore: AccountStore
     ) async throws(AccountLifecycleError) -> LogoutResult {
-        guard let account = try await storedAccount(
-            id: accountID,
-            accountStore: accountStore
-        ) else {
+        guard
+            let account = try await storedAccount(
+                id: accountID,
+                accountStore: accountStore
+            )
+        else {
             throw .accountNotFound(accountID)
         }
         let result: LogoutResult
@@ -1243,10 +1293,12 @@ extension AuthCoordinator {
         accountID: AccountID,
         accountStore: AccountStore
     ) async throws(AccountLifecycleError) -> LogoutResult {
-        guard let account = try await storedAccount(
-            id: accountID,
-            accountStore: accountStore
-        ) else {
+        guard
+            let account = try await storedAccount(
+                id: accountID,
+                accountStore: accountStore
+            )
+        else {
             throw .accountNotFound(accountID)
         }
         let result: LogoutResult

@@ -584,7 +584,7 @@ public actor LibraryRepository<Remote: LibraryRemoteDataSource> {
         switch cache {
         case .noCachedValue:
             .remote(remote)
-        case let .cache(cacheError):
+        case .cache(let cacheError):
             .fallbackCache(remote: remote, cache: cacheError)
         default:
             cache

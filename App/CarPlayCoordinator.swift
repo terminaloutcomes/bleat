@@ -884,9 +884,11 @@
                 }
             }
             let rate = model.playback.rate
-            decreaseButton.isEnabled = playbackAvailable
+            decreaseButton.isEnabled =
+                playbackAvailable
                 && rate > minimumRate + 0.001
-            increaseButton.isEnabled = playbackAvailable
+            increaseButton.isEnabled =
+                playbackAvailable
                 && rate < maximumRate - 0.001
             CPNowPlayingTemplate.shared.updateNowPlayingButtons([
                 decreaseButton,

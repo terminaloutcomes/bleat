@@ -83,17 +83,17 @@ public struct BookActionAvailability: Equatable, Sendable {
         tags: [String]
     ) -> LibraryItemAccessDecision {
         if !user.permissions.accessAllLibraries,
-           !user.accessibleLibraryIDs.contains(libraryID)
+            !user.accessibleLibraryIDs.contains(libraryID)
         {
             return .inaccessibleLibrary
         }
         if isExplicit,
-           !user.permissions.accessExplicitContent
+            !user.permissions.accessExplicitContent
         {
             return .explicitContentDenied
         }
         if !user.permissions.accessAllTags,
-           !hasAccessibleTags(user: user, itemTags: tags)
+            !hasAccessibleTags(user: user, itemTags: tags)
         {
             return .inaccessibleTags
         }

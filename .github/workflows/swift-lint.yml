@@ -1,0 +1,34 @@
+name: Lint Swift code
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - App/**/*.swift
+      - Sources/**/*.swift
+      - Tests/**/*.swift
+      - Package.swift
+      - .swift-format
+      - .github/workflows/swift-lint.yml
+  pull_request:
+    paths:
+      - App/**/*.swift
+      - Sources/**/*.swift
+      - Tests/**/*.swift
+      - Package.swift
+      - .swift-format
+      - .github/workflows/swift-lint.yml
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Lint Swift code
+        run: xcrun swift-format lint --recursive --parallel --strict App Sources Tests Package.swift

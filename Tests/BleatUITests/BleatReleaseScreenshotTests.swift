@@ -1,5 +1,5 @@
-import XCTest
 import UIKit
+import XCTest
 
 final class BleatReleaseScreenshotTests: XCTestCase {
     private var screenshotSuffix: String = ""
@@ -37,7 +37,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         _ orientation: ScreenshotOrientation,
         to app: XCUIApplication
     ) {
-        let deviceOrientation: UIDeviceOrientation = orientation == .landscapeLeft
+        let deviceOrientation: UIDeviceOrientation =
+            orientation == .landscapeLeft
             ? .landscapeLeft
             : .portrait
         XCUIDevice.shared.orientation = deviceOrientation
@@ -91,8 +92,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         scrollUntilHittable(server, in: form, app: app)
         server.tap()
         if let value = server.value as? String,
-           !value.isEmpty,
-           value != server.label
+            !value.isEmpty,
+            value != server.label
         {
             server.press(forDuration: 1)
             let selectAll = app.menuItems["Select All"]
@@ -240,7 +241,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         wait(for: [romanticGoats], timeout: 20)
         XCTAssertEqual(chapter.label, "romantic goats")
         let playerScroll = app.descendants(matching: .any)["player.scroll"]
-        scrollUntilHittable(app.buttons["player.toggle"], in: playerScroll, app: app)
+        scrollUntilHittable(
+            app.buttons["player.toggle"], in: playerScroll, app: app)
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "06-now-playing.png")
         app.buttons["Close"].tap()
@@ -249,7 +251,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     @MainActor
     private func captureDownloads(_ app: XCUIApplication) {
         selectRootTab(named: "Downloads", in: app)
-        XCTAssertTrue(app.navigationBars["Downloads"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.navigationBars["Downloads"].waitForExistence(timeout: 10))
         attachScreenshot(named: "07-downloads.png")
     }
 
@@ -271,30 +274,37 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             )
         )
         XCTAssertTrue(
-            app.staticTexts["Goat Ops: Incident Response for the Modern Barnyard"]
-                .waitForExistence(timeout: 20)
+            app.staticTexts[
+                "Goat Ops: Incident Response for the Modern Barnyard"
+            ]
+            .waitForExistence(timeout: 20)
         )
         dismissKeyboardIfPresent(in: app)
         XCTAssertTrue(
-            app.staticTexts["Goat Ops: Incident Response for the Modern Barnyard"]
-                .waitForExistence(timeout: 5)
+            app.staticTexts[
+                "Goat Ops: Incident Response for the Modern Barnyard"
+            ]
+            .waitForExistence(timeout: 5)
         )
         waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "08-search.png")
         let done = app.buttons["search.done"]
         if done.exists {
             done.tap()
-            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(
+                app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
         }
     }
 
     @MainActor
     private func captureSettings(_ app: XCUIApplication) {
         selectRootTab(named: "Settings", in: app)
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.navigationBars["Settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["kid"].waitForExistence(timeout: 10))
         let barnyard = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label CONTAINS %@", "barnyard.terminaloutcomes.com")
+            NSPredicate(
+                format: "label CONTAINS %@", "barnyard.terminaloutcomes.com")
         ).firstMatch
         XCTAssertTrue(barnyard.waitForExistence(timeout: 10))
         attachScreenshot(named: "09-settings.png")
@@ -302,11 +312,13 @@ final class BleatReleaseScreenshotTests: XCTestCase {
 
     @MainActor
     private func ensureSignedOut(_ app: XCUIApplication) {
-        guard app.otherElements["app.signedIn"].waitForExistence(timeout: 2) else {
+        guard app.otherElements["app.signedIn"].waitForExistence(timeout: 2)
+        else {
             return
         }
         selectRootTab(named: "Settings", in: app)
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.navigationBars["Settings"].waitForExistence(timeout: 10))
         let account = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "settings.account.")
         ).firstMatch
@@ -367,7 +379,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     ) {
         for _ in 0..<20 {
             let elementExists = element.waitForExistence(timeout: 0.5)
-            let clearsNavigationBar = elementExists
+            let clearsNavigationBar =
+                elementExists
                 && (navigationBar.map {
                     element.frame.minY >= $0.frame.maxY
                 } ?? true)
@@ -405,7 +418,8 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             {
                 return
             }
-            let scrollsTowardTop = elementExists
+            let scrollsTowardTop =
+                elementExists
                 ? element.frame.midY >= app.frame.midY
                 : scrollsTowardTopWhenMissing
             let start = container.coordinate(
@@ -422,11 +436,14 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTFail("Could not scroll to hittable element \(element) in \(container)")
+        XCTFail(
+            "Could not scroll to hittable element \(element) in \(container)")
     }
 
     @MainActor
-    private func chapter(named title: String, in app: XCUIApplication) -> XCUIElement {
+    private func chapter(named title: String, in app: XCUIApplication)
+        -> XCUIElement
+    {
         app.descendants(matching: .any).matching(
             NSPredicate(
                 format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
@@ -477,9 +494,12 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             throw ScreenshotEnvironmentError.incomplete
         }
         let appearance = environment["BLEAT_SCREENSHOT_APPEARANCE"] ?? "light"
-        guard let orientation = ScreenshotOrientation(
-            rawValue: environment["BLEAT_SCREENSHOT_ORIENTATION"] ?? "portrait"
-        ) else {
+        guard
+            let orientation = ScreenshotOrientation(
+                rawValue: environment["BLEAT_SCREENSHOT_ORIENTATION"]
+                    ?? "portrait"
+            )
+        else {
             throw ScreenshotEnvironmentError.invalidOrientation
         }
         return ScreenshotEnvironment(

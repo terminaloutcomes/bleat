@@ -45,9 +45,10 @@ extension TypedID where Kind == AccountIDKind {
         }.joined()
         let digest = SHA256.hash(data: Data(identity.utf8))
         return AccountID(
-            rawValue: "account-v1-" + digest.map {
-                String(format: "%02x", $0)
-            }.joined()
+            rawValue: "account-v1-"
+                + digest.map {
+                    String(format: "%02x", $0)
+                }.joined()
         )
     }
 }
@@ -77,7 +78,8 @@ public struct AuthorID: RawRepresentable, Hashable, Codable, Sendable {
     }
 
     private static func isValid(_ value: String) -> Bool {
-        !value.isEmpty && value.rangeOfCharacter(from: .controlCharacters) == nil
+        !value.isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
     }
 }
 
@@ -103,8 +105,10 @@ public struct SeriesID: RawRepresentable, Hashable, Codable, Sendable {
     }
 
     private static func isValid(_ value: String) -> Bool {
-        !value.isEmpty && value.rangeOfCharacter(from: .controlCharacters) == nil
+        !value.isEmpty
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
     }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
 public let AppIdentifier: String = "com.terminaloutcomes.Bleat"

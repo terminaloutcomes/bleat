@@ -318,7 +318,7 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case let .failure(error) = result else {
+        guard case .failure(let error) = result else {
             return XCTFail(
                 "Expected failure \(expected)",
                 file: file,
@@ -333,7 +333,7 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        for _ in 0 ..< 1_000 {
+        for _ in 0..<1_000 {
             if await condition() {
                 return
             }
@@ -371,9 +371,8 @@ private func performSearchForTest(
 }
 
 private actor SearchTestSleeper {
-    private var continuations: [
-        UUID: CheckedContinuation<Void, any Error>
-    ] = [:]
+    private var continuations: [UUID: CheckedContinuation<Void, any Error>] =
+        [:]
     private var durations: [Duration] = []
 
     func sleep(for duration: Duration) async throws {
@@ -401,8 +400,8 @@ private actor SearchTestSleeper {
     func resumeAll() {
         let pending = continuations.values
         continuations.removeAll()
-        pending.forEach {
-            $0.resume()
+        for continuation in pending {
+            continuation.resume()
         }
     }
 
@@ -442,10 +441,11 @@ private actor SearchTestService {
     ) async throws(LibraryRepositoryError)
         -> LibraryRepositoryResult<LibrarySearchResults>
     {
-        recordedCalls.append(Call(
-            context: context,
-            request: request
-        ))
+        recordedCalls.append(
+            Call(
+                context: context,
+                request: request
+            ))
         if blockFirstCall, recordedCalls.count == 1 {
             do {
                 try await Task.sleep(for: .seconds(30))
@@ -455,7 +455,7 @@ private actor SearchTestService {
             }
         }
         if ignoreCancellationOnFirstCall,
-           recordedCalls.count == 1
+            recordedCalls.count == 1
         {
             await withCheckedContinuation { continuation in
                 blockedContinuation = continuation

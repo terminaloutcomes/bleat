@@ -2,42 +2,44 @@ import Foundation
 import SwiftUI
 
 #if os(iOS)
-import UIKit
-typealias PlatformImage = UIImage
+    import UIKit
+    typealias PlatformImage = UIImage
 #else
-import AppKit
-typealias PlatformImage = NSImage
+    import AppKit
+    typealias PlatformImage = NSImage
 #endif
 
 enum PlatformImageSupport {
-    static func image(from data: Data) -> PlatformImage? { PlatformImage(data: data) }
+    static func image(from data: Data) -> PlatformImage? {
+        PlatformImage(data: data)
+    }
     static func size(of image: PlatformImage) -> CGSize { image.size }
     static func pixelSize(of image: PlatformImage) -> CGSize {
         #if os(iOS)
-        CGSize(
-            width: image.size.width * image.scale,
-            height: image.size.height * image.scale
-        )
+            CGSize(
+                width: image.size.width * image.scale,
+                height: image.size.height * image.scale
+            )
         #else
-        image.size
+            image.size
         #endif
     }
 
     @ViewBuilder
     static func view(for image: PlatformImage) -> some View {
         #if os(iOS)
-        Image(uiImage: image)
+            Image(uiImage: image)
         #else
-        Image(nsImage: image)
+            Image(nsImage: image)
         #endif
     }
 
     @ViewBuilder
     static func resizableView(for image: PlatformImage) -> some View {
         #if os(iOS)
-        Image(uiImage: image).resizable()
+            Image(uiImage: image).resizable()
         #else
-        Image(nsImage: image).resizable()
+            Image(nsImage: image).resizable()
         #endif
     }
 }
@@ -46,30 +48,30 @@ extension View {
     @ViewBuilder
     func iOSInlineNavigationTitle() -> some View {
         #if os(iOS)
-        navigationBarTitleDisplayMode(.inline)
+            navigationBarTitleDisplayMode(.inline)
         #else
-        self
+            self
         #endif
     }
 
     @ViewBuilder
     func iOSServerURLInput() -> some View {
         #if os(iOS)
-        textInputAutocapitalization(.never)
-            .keyboardType(.URL)
-            .autocorrectionDisabled()
+            textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                .autocorrectionDisabled()
         #else
-        self
+            self
         #endif
     }
 
     @ViewBuilder
     func iOSNoAutocapitalization() -> some View {
         #if os(iOS)
-        textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
         #else
-        self
+            self
         #endif
     }
 }
@@ -77,22 +79,24 @@ extension View {
 enum PlatformClipboard {
     static func copy(_ text: String) {
         #if os(iOS)
-        UIPasteboard.general.string = text
+            UIPasteboard.general.string = text
         #else
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
         #endif
     }
 }
 
 enum PlatformDevice {
-    static var operatingSystem: String { ProcessInfo.processInfo.operatingSystemVersionString }
+    static var operatingSystem: String {
+        ProcessInfo.processInfo.operatingSystemVersionString
+    }
     @MainActor
     static var model: String {
         #if os(iOS)
-        UIDevice.current.model
+            UIDevice.current.model
         #else
-        "Mac"
+            "Mac"
         #endif
     }
 }

@@ -152,15 +152,11 @@ public actor ServerEndpointRouter {
     private var activity:
         [NormalizedServerURL: ServerEndpointActivitySnapshot] = [:]
     private var activityObservers:
-        [
-            NormalizedServerURL:
-                [
-                    UUID:
-                        AsyncStream<
-                            ServerEndpointActivitySnapshot
-                        >.Continuation
-                ]
-        ] = [:]
+        [NormalizedServerURL:
+            [UUID:
+            AsyncStream<
+                ServerEndpointActivitySnapshot
+            >.Continuation]] = [:]
 
     public init() {}
 
@@ -183,7 +179,8 @@ public actor ServerEndpointRouter {
         } else {
             pendingLocalPathEvaluations[primary] = nil
         }
-        localAvailabilityStates[primary] = route.local == nil
+        localAvailabilityStates[primary] =
+            route.local == nil
             ? .notConfigured : .unknown
     }
 
@@ -191,31 +188,37 @@ public actor ServerEndpointRouter {
         for route in routes.values {
             guard let local = route.local else {
                 if isURL(url, under: route.primary) {
-                    return [ServerEndpointCandidate(
-                        url: url,
-                        primary: route.primary,
-                        isLocal: false,
-                        pathGeneration: currentPathGeneration
-                    )]
+                    return [
+                        ServerEndpointCandidate(
+                            url: url,
+                            primary: route.primary,
+                            isLocal: false,
+                            pathGeneration: currentPathGeneration
+                        )
+                    ]
                 }
                 continue
             }
-            guard let localURL = replacingBase(
-                in: url,
-                from: route.primary,
-                with: local
-            ) else {
+            guard
+                let localURL = replacingBase(
+                    in: url,
+                    from: route.primary,
+                    with: local
+                )
+            else {
                 continue
             }
             if pendingLocalPathEvaluations[route.primary] != nil
                 || localFailureIsActive(for: route.primary)
             {
-                return [ServerEndpointCandidate(
-                    url: url,
-                    primary: route.primary,
-                    isLocal: false,
-                    pathGeneration: currentPathGeneration
-                )]
+                return [
+                    ServerEndpointCandidate(
+                        url: url,
+                        primary: route.primary,
+                        isLocal: false,
+                        pathGeneration: currentPathGeneration
+                    )
+                ]
             }
             return [
                 ServerEndpointCandidate(
@@ -232,12 +235,14 @@ public actor ServerEndpointRouter {
                 ),
             ]
         }
-        return [ServerEndpointCandidate(
-            url: url,
-            primary: nil,
-            isLocal: false,
-            pathGeneration: currentPathGeneration
-        )]
+        return [
+            ServerEndpointCandidate(
+                url: url,
+                primary: nil,
+                isLocal: false,
+                pathGeneration: currentPathGeneration
+            )
+        ]
     }
 
     public func candidate(
@@ -506,7 +511,8 @@ public actor ServerEndpointRouter {
         usage: ServerEndpointUsage,
         purpose: ServerConnectionPurpose
     ) {
-        let previous = activity[primary]
+        let previous =
+            activity[primary]
             ?? ServerEndpointActivitySnapshot()
         let updated = ServerEndpointActivitySnapshot(
             lastConnection: ServerConnectionActivity(
@@ -718,11 +724,13 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
                 await endpointRouter.candidate(forResolvedURL: url)
             ]
         } else if let url = request.url {
-            candidates = [ServerEndpointCandidate(
-                url: url,
-                primary: nil,
-                isLocal: false
-            )]
+            candidates = [
+                ServerEndpointCandidate(
+                    url: url,
+                    primary: nil,
+                    isLocal: false
+                )
+            ]
         } else {
             candidates = []
         }

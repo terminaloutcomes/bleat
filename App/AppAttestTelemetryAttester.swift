@@ -13,43 +13,49 @@ protocol AppAttestServicing: Sendable {
 }
 
 #if os(iOS)
-private final class SystemAppAttestService:
-    AppAttestServicing, @unchecked Sendable
-{
-    private let service = DCAppAttestService.shared
+    private final class SystemAppAttestService:
+        AppAttestServicing, @unchecked Sendable
+    {
+        private let service = DCAppAttestService.shared
 
-    var isSupported: Bool { service.isSupported }
+        var isSupported: Bool { service.isSupported }
 
-    func generateKey() async throws -> String {
-        try await service.generateKey()
+        func generateKey() async throws -> String {
+            try await service.generateKey()
+        }
+
+        func attestKey(
+            _ keyID: String,
+            clientDataHash: Data
+        ) async throws -> Data {
+            try await service.attestKey(keyID, clientDataHash: clientDataHash)
+        }
+
+        func generateAssertion(
+            _ keyID: String,
+            clientDataHash: Data
+        ) async throws -> Data {
+            try await service.generateAssertion(
+                keyID,
+                clientDataHash: clientDataHash
+            )
+        }
     }
-
-    func attestKey(
-        _ keyID: String,
-        clientDataHash: Data
-    ) async throws -> Data {
-        try await service.attestKey(keyID, clientDataHash: clientDataHash)
-    }
-
-    func generateAssertion(
-        _ keyID: String,
-        clientDataHash: Data
-    ) async throws -> Data {
-        try await service.generateAssertion(
-            keyID,
-            clientDataHash: clientDataHash
-        )
-    }
-}
 #else
-private final class SystemAppAttestService:
-    AppAttestServicing, @unchecked Sendable
-{
-    var isSupported: Bool { false }
-    func generateKey() async throws -> String { throw TelemetryAttesterError.unsupported }
-    func attestKey(_ keyID: String, clientDataHash: Data) async throws -> Data { throw TelemetryAttesterError.unsupported }
-    func generateAssertion(_ keyID: String, clientDataHash: Data) async throws -> Data { throw TelemetryAttesterError.unsupported }
-}
+    private final class SystemAppAttestService:
+        AppAttestServicing, @unchecked Sendable
+    {
+        var isSupported: Bool { false }
+        func generateKey() async throws -> String {
+            throw TelemetryAttesterError.unsupported
+        }
+        func attestKey(_ keyID: String, clientDataHash: Data) async throws
+            -> Data
+        { throw TelemetryAttesterError.unsupported }
+        func generateAssertion(_ keyID: String, clientDataHash: Data)
+            async throws -> Data
+        { throw TelemetryAttesterError.unsupported }
+    }
 #endif
 
 final class AppAttestTelemetryAttester:

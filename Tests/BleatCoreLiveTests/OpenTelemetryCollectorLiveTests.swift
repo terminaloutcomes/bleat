@@ -265,7 +265,8 @@
         }
 
         private func decodedBase64URL(_ value: String) -> Data? {
-            var normalized = value
+            var normalized =
+                value
                 .replacingOccurrences(of: "-", with: "+")
                 .replacingOccurrences(of: "_", with: "/")
             normalized += String(

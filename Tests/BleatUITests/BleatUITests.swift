@@ -2583,7 +2583,8 @@ final class BleatUITests: XCTestCase {
         else {
             throw XCTSkip("Could not render the mini-player screenshot")
         }
-        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(
+            source, in: CGRect(x: 0, y: 0, width: width, height: height))
 
         return stride(from: 0, to: pixels.count, by: 4).map { index in
             let red = Double(pixels[index]) / 255
@@ -3085,9 +3086,10 @@ final class BleatLiveUITests: XCTestCase {
         }
         let password: String?
         if releaseSecretScanIsEnabled {
-            guard let rawURL = environment[
-                "BLEAT_RELEASE_SECRET_BROKER_URL"
-            ], let url = URL(string: rawURL)
+            guard
+                let rawURL = environment[
+                    "BLEAT_RELEASE_SECRET_BROKER_URL"
+                ], let url = URL(string: rawURL)
             else {
                 throw XCTSkip(
                     "Run scripts/test-release-secret-leakage.sh"

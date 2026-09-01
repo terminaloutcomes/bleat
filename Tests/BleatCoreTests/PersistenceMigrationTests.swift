@@ -7,9 +7,9 @@ import XCTest
 final class PersistenceMigrationTests: XCTestCase {
     func testReleasedStoreFixturesOpenWithCurrentCatalog() throws {
         for version in [
-            BleatPersistenceSchemaVersion.v0_1_1,
-            .v0_1_2,
-            .v0_1_3,
+            BleatPersistenceSchemaVersion.version011,
+            .version012,
+            .version013,
         ] {
             try assertReleasedStoreFixtureMigrates(version: version)
         }
@@ -71,7 +71,7 @@ final class PersistenceMigrationTests: XCTestCase {
             try currentContext.fetchCount(
                 FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
             ),
-            version == .v0_1_1 ? 0 : 1
+            version == .version011 ? 0 : 1
         )
     }
 
@@ -97,11 +97,11 @@ final class PersistenceMigrationTests: XCTestCase {
         for version: BleatPersistenceSchemaVersion
     ) -> any VersionedSchema.Type {
         switch version {
-        case .v0_1_1:
+        case .version011:
             BleatPersistenceSchemaV0_1_1.self
-        case .v0_1_2:
+        case .version012:
             BleatPersistenceSchemaV0_1_2.self
-        case .v0_1_3:
+        case .version013:
             BleatPersistenceSchemaV0_1_3.self
         }
     }
@@ -128,15 +128,16 @@ final class PersistenceMigrationTests: XCTestCase {
                 )
             )
         }
-        if version != .v0_1_1 {
+        if version != .version011 {
             context.insert(
-                BleatPersistenceSchemaV0_1_2.CachedChapterTranscriptionTaskRecord(
-                    taskKey: "migration-account-a\u{1f}book",
-                    accountID: "migration-account-a",
-                    libraryItemID: "book",
-                    payload: Data("redacted-task".utf8),
-                    finishedAt: Date(timeIntervalSince1970: 1_700_000_000)
-                )
+                BleatPersistenceSchemaV0_1_2
+                    .CachedChapterTranscriptionTaskRecord(
+                        taskKey: "migration-account-a\u{1f}book",
+                        accountID: "migration-account-a",
+                        libraryItemID: "book",
+                        payload: Data("redacted-task".utf8),
+                        finishedAt: Date(timeIntervalSince1970: 1_700_000_000)
+                    )
             )
         }
     }
@@ -159,9 +160,9 @@ final class PersistenceMigrationTests: XCTestCase {
 }
 
 private enum BleatPersistenceSchemaVersion: String, CaseIterable, Sendable {
-    case v0_1_1 = "0.1.1"
-    case v0_1_2 = "0.1.2"
-    case v0_1_3 = "0.1.3"
+    case version011 = "0.1.1"
+    case version012 = "0.1.2"
+    case version013 = "0.1.3"
 }
 
 private struct PersistenceMigrationFixture: Decodable {

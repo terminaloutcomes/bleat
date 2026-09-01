@@ -65,7 +65,8 @@ public actor TelemetryEnrollmentVault: TelemetryEnrollmentStoring {
         }
         let add: [CFString: Any] = [
             kSecValueData: data,
-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrAccessible:
+                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         let addStatus = SecItemAdd(
             query.merging(add) { _, new in new } as CFDictionary,

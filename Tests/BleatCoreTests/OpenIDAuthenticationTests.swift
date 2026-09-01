@@ -280,7 +280,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             throw PKCEGenerationError.randomGenerationFailed(-50)
         }
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
                 server: NormalizedServerURL("https://example.com"),
@@ -559,7 +559,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -602,7 +602,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -630,7 +630,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             transport: transport,
             credentialStore: OpenIDCredentialStore()
         )
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
                 server: NormalizedServerURL("https://example.com"),
@@ -684,7 +684,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -717,7 +717,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "account"),
                 server: NormalizedServerURL("https://example.com"),
@@ -761,7 +761,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
         await gate.waitUntilEntered()
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: "second-account"),
                 server: server,
@@ -850,7 +850,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -931,7 +931,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 credentialStore: store
             )
 
-            await XCTAssertThrowsErrorAsync(
+            await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
                     accountID: AccountID(rawValue: "account"),
                     server: NormalizedServerURL("https://example.com"),
@@ -963,7 +963,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             credentialStore: store
         )
 
-        await XCTAssertThrowsErrorAsync(
+        await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
                 accountID: AccountID(rawValue: ""),
                 server: NormalizedServerURL("https://example.com"),

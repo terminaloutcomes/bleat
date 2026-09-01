@@ -1,5 +1,6 @@
 import BleatCore
 import Foundation
+
 #if os(iOS)
     import UIKit
 #endif
@@ -54,9 +55,11 @@ final class RemoteTelemetryConsentStore {
         static func applyReleaseSecretScanLaunchOverride(
             processInfo: ProcessInfo = .processInfo
         ) {
-            guard processInfo.arguments.contains(
-                "--release-secret-scan-enable-telemetry"
-            ) else { return }
+            guard
+                processInfo.arguments.contains(
+                    "--release-secret-scan-enable-telemetry"
+                )
+            else { return }
             _ = RemoteTelemetryConsentStore().setEnabled(true)
         }
     #endif
@@ -127,8 +130,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
     let logger = RemoteTelemetryLogger()
     let privateCloudEvents: any PrivateCloudSyncEventRecording
     let tokenProvider: TelemetryTokenProvider?
-    private let tokenAvailabilityFailure:
-        TelemetryTokenAvailabilityFailure?
+    private let tokenAvailabilityFailure: TelemetryTokenAvailabilityFailure?
     private let worker: RemoteTelemetryRuntimeWorker?
     private var telemetryEnabled = false
 

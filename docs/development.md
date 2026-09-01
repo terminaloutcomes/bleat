@@ -17,6 +17,17 @@ swift test --filter TokenVaultTests
 app tests through the `Bleat` scheme and verify the requested test identifiers
 and outcomes in an `.xcresult` bundle.
 
+## Swift linting
+
+Run the same read-only, strict formatter lint used in GitHub Actions:
+
+```sh
+xcrun swift-format lint --recursive --parallel --strict App Sources Tests Package.swift
+```
+
+The command discovers the repository's `.swift-format` configuration. It
+reports formatting violations without modifying source files.
+
 ## Local validation
 
 Run every automated test that does not require a physical device:

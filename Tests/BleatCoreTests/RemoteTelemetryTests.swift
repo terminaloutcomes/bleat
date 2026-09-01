@@ -1,5 +1,5 @@
-@preconcurrency import OpenTelemetrySdk
 import CloudKit
+@preconcurrency import OpenTelemetrySdk
 import XCTest
 
 @testable import BleatCore
@@ -255,7 +255,8 @@ final class RemoteTelemetryTests: XCTestCase {
         }
         let failed = try XCTUnwrap(logs.last)
         XCTAssertEqual(failed.eventName, "bleat.cloudkit.sync.failed")
-        XCTAssertEqual(failed.body, .string("CloudKit synchronization lifecycle"))
+        XCTAssertEqual(
+            failed.body, .string("CloudKit synchronization lifecycle"))
         XCTAssertEqual(
             failed.attributes["bleat.cloudkit.operation"],
             .string("synchronize")
@@ -403,15 +404,17 @@ final class RemoteTelemetryTests: XCTestCase {
             source: .localServer,
             retryBucket: .one
         ).encodedSpan
-        XCTAssertEqual(liveUpdateFailure.attributes, [
-            "bleat.subsystem": "authentication",
-            "bleat.outcome": "failed",
-            "bleat.failure.category": "invalid_response",
-            "bleat.source": "local_server",
-            "bleat.retry.bucket": "one",
-            "bleat.live_update.failure_code": "malformed_packet",
-            "bleat.live_update.stage": "protocol_decoding",
-        ])
+        XCTAssertEqual(
+            liveUpdateFailure.attributes,
+            [
+                "bleat.subsystem": "authentication",
+                "bleat.outcome": "failed",
+                "bleat.failure.category": "invalid_response",
+                "bleat.source": "local_server",
+                "bleat.retry.bucket": "one",
+                "bleat.live_update.failure_code": "malformed_packet",
+                "bleat.live_update.stage": "protocol_decoding",
+            ])
     }
 
     func testChapterTranscriptionSpanEncodesReviewedInputMeasurements()

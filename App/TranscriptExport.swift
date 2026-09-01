@@ -304,7 +304,8 @@ struct TranscriptSharePayload: Equatable {
     struct TranscriptShareSheet: UIViewControllerRepresentable {
         let payload: TranscriptSharePayload
 
-        func makeUIViewController(context: Context) -> UIActivityViewController {
+        func makeUIViewController(context: Context) -> UIActivityViewController
+        {
             let configuration = UIActivityItemsConfiguration(
                 itemProviders: [payload.itemProvider()]
             )
