@@ -67,6 +67,10 @@ run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orpha
 description = "Check the ClickStack bleat logs API"
 run = "./scripts/bleat-logs.py health"
 
+[tasks."swift-fmt"]
+description = "Strictly lint Bleat Swift sources without modifying them"
+run = "xcrun swift-format lint --recursive --parallel --strict App Sources Tests Package.swift"
+
 
 [tasks."api:container:build-local"]
 description = "Build and push a local Docker image for bleat-api"
