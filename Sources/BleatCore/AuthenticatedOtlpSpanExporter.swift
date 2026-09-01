@@ -11,6 +11,62 @@ import Foundation
 @preconcurrency import OpenTelemetrySdk
 import SwiftProtobuf
 
+private func awaitTask<Result: Sendable>(
+    _ task: Task<Result, Never>,
+    until deadline: Date,
+    timeoutResult: Result
+) async -> Result {
+    let remaining = deadline.timeIntervalSinceNow
+    guard remaining > 0, !Task.isCancelled else {
+        task.cancel()
+        return timeoutResult
+    }
+    let result = AsyncTaskResult<Result>()
+    let valueTask = Task {
+        await result.resolve(task.value)
+    }
+    let timeoutTask = Task {
+        try? await Task.sleep(for: .seconds(remaining))
+        guard !Task.isCancelled else { return }
+        task.cancel()
+        await result.resolve(timeoutResult)
+    }
+    return await withTaskCancellationHandler {
+        let value = await result.value()
+        valueTask.cancel()
+        timeoutTask.cancel()
+        return value
+    } onCancel: {
+        task.cancel()
+        valueTask.cancel()
+        timeoutTask.cancel()
+        Task { await result.resolve(timeoutResult) }
+    }
+}
+
+private actor AsyncTaskResult<Result: Sendable> {
+    private var continuation: CheckedContinuation<Result, Never>?
+    private var resolvedValue: Result?
+    private var isResolved = false
+
+    func value() async -> Result {
+        if isResolved, let resolvedValue {
+            return resolvedValue
+        }
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resolve(_ value: Result) {
+        guard !isResolved else { return }
+        isResolved = true
+        resolvedValue = value
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}
+
 public enum AuthenticatedOtlpSpanExporterConfigurationError:
     Error, Equatable, Sendable
 {
@@ -125,12 +181,18 @@ enum RemoteTelemetryOtlpExportResult: Equatable, Sendable {
 }
 
 protocol RemoteTelemetryOtlpClient: Sendable {
-    func export(
+    func exportSynchronously(
         spans: [SpanData],
         metadata: [(String, String)],
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult
+    func export(
+        spans: [SpanData],
+        metadata: [(String, String)],
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult
     func cancelActiveExports()
     func shutdown()
 }
@@ -142,7 +204,7 @@ public final class AuthenticatedOtlpSpanExporter:
     private let client: any RemoteTelemetryOtlpClient
     private let timeout: TimeInterval
     private let lock = NSLock()
-    private var activeTokenRequests: [UInt64: BlockingTokenRequest] = [:]
+    private var activeTokenRequests: [UInt64: @Sendable () -> Void] = [:]
     private var nextTokenRequestID: UInt64 = 0
     private var cancellationGeneration: UInt64 = 0
     private var isShutdown = false
@@ -171,6 +233,72 @@ public final class AuthenticatedOtlpSpanExporter:
     }
 
     public func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) -> SpanExporterResultCode {
+        exportSynchronously(
+            spans: spans,
+            explicitTimeout: explicitTimeout
+        )
+    }
+
+    public func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        guard !spans.isEmpty else { return .success }
+        let allowedDuration = min(explicitTimeout ?? timeout, timeout)
+        guard allowedDuration > 0, !Task.isCancelled else { return .failure }
+        let deadline = Date().addingTimeInterval(allowedDuration)
+        guard let generation = currentExportGeneration() else {
+            return .failure
+        }
+
+        guard
+            case .success(let token) = await acquireTokenAsync(
+                rejecting: nil,
+                deadline: deadline,
+                generation: generation
+            )
+        else {
+            return .failure
+        }
+        let first = await exportAsync(
+            spans: spans,
+            token: token,
+            deadline: deadline,
+            generation: generation
+        )
+        guard first == .unauthenticated else {
+            return first == .success ? .success : .failure
+        }
+
+        guard
+            case .success(let refreshedToken) = await acquireTokenAsync(
+                rejecting: token,
+                deadline: deadline,
+                generation: generation
+            )
+        else {
+            return .failure
+        }
+        let retry = await exportAsync(
+            spans: spans,
+            token: refreshedToken,
+            deadline: deadline,
+            generation: generation
+        )
+        if retry == .unauthenticated {
+            await invalidateTokenAsync(
+                ifCurrent: refreshedToken,
+                deadline: deadline,
+                generation: generation
+            )
+        }
+        return retry == .success ? .success : .failure
+    }
+
+    private func exportSynchronously(
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
@@ -229,10 +357,28 @@ public final class AuthenticatedOtlpSpanExporter:
     public func flush(
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
+        flushSynchronously()
+    }
+
+    public func flush(
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        flushSynchronously()
+    }
+
+    private func flushSynchronously() -> SpanExporterResultCode {
         lock.withLock { isShutdown } ? .failure : .success
     }
 
     public func shutdown(explicitTimeout: TimeInterval?) {
+        shutdownSynchronously()
+    }
+
+    public func shutdown(explicitTimeout: TimeInterval?) async {
+        shutdownSynchronously()
+    }
+
+    private func shutdownSynchronously() {
         let shouldShutdown = lock.withLock {
             guard !isShutdown else { return false }
             isShutdown = true
@@ -250,10 +396,31 @@ public final class AuthenticatedOtlpSpanExporter:
             activeTokenRequests.removeAll()
             return requests
         }
-        for request in requests {
-            request.cancel()
-        }
+        for cancel in requests { cancel() }
         client.cancelActiveExports()
+    }
+
+    private func exportAsync(
+        spans: [SpanData],
+        token: String,
+        deadline: Date,
+        generation: UInt64
+    ) async -> RemoteTelemetryOtlpExportResult {
+        let remaining = deadline.timeIntervalSinceNow
+        guard remaining > 0, !Task.isCancelled,
+            isCurrent(generation: generation)
+        else {
+            return .cancelled
+        }
+        return await client.export(
+            spans: spans,
+            metadata: [("authorization", "Bearer \(token)")],
+            timeout: remaining,
+            isActive: { [weak self] in
+                !Task.isCancelled
+                    && self?.isCurrent(generation: generation) == true
+            }
+        )
     }
 
     private func export(
@@ -266,7 +433,7 @@ public final class AuthenticatedOtlpSpanExporter:
         guard remaining > 0, isCurrent(generation: generation) else {
             return .cancelled
         }
-        return client.export(
+        return client.exportSynchronously(
             spans: spans,
             metadata: [("authorization", "Bearer \(token)")],
             timeout: remaining,
@@ -288,7 +455,7 @@ public final class AuthenticatedOtlpSpanExporter:
                 cancellationGeneration == generation
             else { return nil }
             nextTokenRequestID &+= 1
-            activeTokenRequests[nextTokenRequestID] = request
+            activeTokenRequests[nextTokenRequestID] = { request.cancel() }
             return nextTokenRequestID
         }
         guard let requestID else { return .failure }
@@ -321,6 +488,47 @@ public final class AuthenticatedOtlpSpanExporter:
         return result ?? .failure
     }
 
+    private func acquireTokenAsync(
+        rejecting rejectedToken: String?,
+        deadline: Date,
+        generation: UInt64
+    ) async -> BlockingTokenResult {
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return .failure
+        }
+        let tokenProvider = self.tokenProvider
+        let task = Task<BlockingTokenResult, Never> {
+            if let rejectedToken {
+                await tokenProvider.invalidateToken(ifCurrent: rejectedToken)
+            }
+            guard !Task.isCancelled else { return .failure }
+            do {
+                return .success(try await tokenProvider.currentToken())
+            } catch {
+                return .failure
+            }
+        }
+        guard
+            let requestID = registerTokenTask(
+                cancellation: { task.cancel() },
+                generation: generation
+            )
+        else {
+            task.cancel()
+            return .failure
+        }
+        let result = await awaitTask(
+            task,
+            until: deadline,
+            timeoutResult: .failure
+        )
+        removeTokenTask(requestID)
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return .failure
+        }
+        return result
+    }
+
     private func invalidateToken(
         ifCurrent rejectedToken: String,
         deadline: Date,
@@ -333,7 +541,7 @@ public final class AuthenticatedOtlpSpanExporter:
                 cancellationGeneration == generation
             else { return nil }
             nextTokenRequestID &+= 1
-            activeTokenRequests[nextTokenRequestID] = request
+            activeTokenRequests[nextTokenRequestID] = { request.cancel() }
             return nextTokenRequestID
         }
         guard let requestID else { return }
@@ -352,6 +560,50 @@ public final class AuthenticatedOtlpSpanExporter:
         if result == nil {
             request.cancel()
         }
+    }
+
+    private func invalidateTokenAsync(
+        ifCurrent rejectedToken: String,
+        deadline: Date,
+        generation: UInt64
+    ) async {
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return
+        }
+        let tokenProvider = self.tokenProvider
+        let task = Task<Bool, Never> {
+            await tokenProvider.invalidateToken(ifCurrent: rejectedToken)
+            return !Task.isCancelled
+        }
+        guard
+            let requestID = registerTokenTask(
+                cancellation: { task.cancel() },
+                generation: generation
+            )
+        else {
+            task.cancel()
+            return
+        }
+        _ = await awaitTask(task, until: deadline, timeoutResult: false)
+        removeTokenTask(requestID)
+    }
+
+    private func registerTokenTask(
+        cancellation: @escaping @Sendable () -> Void,
+        generation: UInt64
+    ) -> UInt64? {
+        lock.withLock {
+            guard !isShutdown, cancellationGeneration == generation else {
+                return nil
+            }
+            nextTokenRequestID &+= 1
+            activeTokenRequests[nextTokenRequestID] = cancellation
+            return nextTokenRequestID
+        }
+    }
+
+    private func removeTokenTask(_ requestID: UInt64) {
+        lock.withLock { activeTokenRequests[requestID] = nil }
     }
 
     private func currentExportGeneration() -> UInt64? {
@@ -386,12 +638,42 @@ final class HttpRemoteTelemetryOtlpClient:
         self.transport = transport
     }
 
-    func export(
+    func exportSynchronously(
         spans: [SpanData],
         metadata: [(String, String)],
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult {
+        guard let urlRequest = request(spans: spans, metadata: metadata) else {
+            return .failure
+        }
+        return transport.sendSynchronously(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
+    }
+
+    func export(
+        spans: [SpanData],
+        metadata: [(String, String)],
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult {
+        guard let urlRequest = request(spans: spans, metadata: metadata) else {
+            return .failure
+        }
+        return await transport.send(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
+    }
+
+    private func request(
+        spans: [SpanData],
+        metadata: [(String, String)]
+    ) -> URLRequest? {
         let request =
             Opentelemetry_Proto_Collector_Trace_V1_ExportTraceServiceRequest
             .with {
@@ -411,13 +693,9 @@ final class HttpRemoteTelemetryOtlpClient:
         do {
             urlRequest.httpBody = try request.serializedData()
         } catch {
-            return .failure
+            return nil
         }
-        return transport.send(
-            urlRequest,
-            timeout: timeout,
-            isActive: isActive
-        )
+        return urlRequest
     }
 
     func cancelActiveExports() { transport.cancelActiveRequests() }
@@ -426,13 +704,22 @@ final class HttpRemoteTelemetryOtlpClient:
 }
 
 protocol RemoteTelemetryHTTPTransport: Sendable {
-    func send(
+    func sendSynchronously(
         _ request: URLRequest,
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult
+    func send(
+        _ request: URLRequest,
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult
     func cancelActiveRequests()
     func shutdown()
+}
+
+private struct ActiveHTTPRequest: Sendable {
+    let cancel: @Sendable () -> Void
 }
 
 final class URLSessionRemoteTelemetryHTTPTransport:
@@ -441,7 +728,7 @@ final class URLSessionRemoteTelemetryHTTPTransport:
     private let session: URLSession
     private let closeTransport: @Sendable () -> Void
     private let lock = NSLock()
-    private var activeTasks: [UInt64: URLSessionDataTask] = [:]
+    private var activeTasks: [UInt64: ActiveHTTPRequest] = [:]
     private var nextTaskID: UInt64 = 0
     private var cancellationGeneration: UInt64 = 0
     private var isShutdown = false
@@ -464,7 +751,7 @@ final class URLSessionRemoteTelemetryHTTPTransport:
         self.closeTransport = closeTransport
     }
 
-    func send(
+    func sendSynchronously(
         _ request: URLRequest,
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
@@ -488,7 +775,9 @@ final class URLSessionRemoteTelemetryHTTPTransport:
                 isActive()
             else { return nil }
             nextTaskID &+= 1
-            activeTasks[nextTaskID] = task
+            activeTasks[nextTaskID] = ActiveHTTPRequest {
+                task.cancel()
+            }
             return nextTaskID
         }
         guard let taskID else {
@@ -508,6 +797,68 @@ final class URLSessionRemoteTelemetryHTTPTransport:
         }
         guard let result else {
             task.cancel()
+            return .cancelled
+        }
+        return result
+    }
+
+    func send(
+        _ request: URLRequest,
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult {
+        guard timeout > 0, !Task.isCancelled, isActive() else {
+            return .cancelled
+        }
+        let generation: UInt64? = lock.withLock {
+            isShutdown ? nil : cancellationGeneration
+        }
+        guard let generation else { return .cancelled }
+
+        var timedRequest = request
+        timedRequest.timeoutInterval = timeout
+        let session = self.session
+        let requestTask = Task<RemoteTelemetryOtlpExportResult, Never> {
+            do {
+                let (_, response) = try await session.data(for: timedRequest)
+                return RemoteTelemetryHTTPResponse.result(
+                    response: response,
+                    error: nil
+                )
+            } catch {
+                return RemoteTelemetryHTTPResponse.result(
+                    response: nil,
+                    error: error
+                )
+            }
+        }
+        let taskID: UInt64? = lock.withLock {
+            guard !isShutdown,
+                cancellationGeneration == generation,
+                isActive()
+            else { return nil }
+            nextTaskID &+= 1
+            activeTasks[nextTaskID] = ActiveHTTPRequest {
+                requestTask.cancel()
+            }
+            return nextTaskID
+        }
+        guard let taskID else {
+            requestTask.cancel()
+            return .cancelled
+        }
+        let result = await withTaskCancellationHandler {
+            await requestTask.value
+        } onCancel: {
+            requestTask.cancel()
+        }
+        lock.withLock { activeTasks[taskID] = nil }
+        guard !Task.isCancelled,
+            lock.withLock({
+                !isShutdown && cancellationGeneration == generation
+            }), isActive()
+        else {
+            requestTask.cancel()
             return .cancelled
         }
         return result
@@ -580,12 +931,18 @@ enum RemoteTelemetryHTTPResponse {
 }
 
 protocol RemoteTelemetryOtlpLogClient: Sendable {
-    func export(
+    func exportSynchronously(
         logs: [ReadableLogRecord],
         metadata: [(String, String)],
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult
+    func export(
+        logs: [ReadableLogRecord],
+        metadata: [(String, String)],
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult
     func cancelActiveExports()
     func shutdown()
 }
@@ -599,7 +956,7 @@ public final class AuthenticatedOtlpLogExporter:
     private let client: any RemoteTelemetryOtlpLogClient
     private let timeout: TimeInterval
     private let lock = NSLock()
-    private var activeTokenRequests: [UInt64: BlockingTokenRequest] = [:]
+    private var activeTokenRequests: [UInt64: @Sendable () -> Void] = [:]
     private var nextTokenRequestID: UInt64 = 0
     private var cancellationGeneration: UInt64 = 0
     private var isEnabled = true
@@ -629,6 +986,70 @@ public final class AuthenticatedOtlpLogExporter:
     }
 
     public func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> ExportResult {
+        exportSynchronously(
+            logRecords: logRecords,
+            explicitTimeout: explicitTimeout
+        )
+    }
+
+    public func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        guard !logRecords.isEmpty else { return .success }
+        let allowedDuration = min(explicitTimeout ?? timeout, timeout)
+        guard allowedDuration > 0, !Task.isCancelled else { return .failure }
+        let deadline = Date().addingTimeInterval(allowedDuration)
+        guard let generation = currentExportGeneration() else {
+            return .failure
+        }
+        guard
+            case .success(let token) = await acquireTokenAsync(
+                rejecting: nil,
+                deadline: deadline,
+                generation: generation
+            )
+        else {
+            return .failure
+        }
+        let first = await exportAsync(
+            logs: logRecords,
+            token: token,
+            deadline: deadline,
+            generation: generation
+        )
+        guard first == .unauthenticated else {
+            return first == .success ? .success : .failure
+        }
+        guard
+            case .success(let refreshedToken) = await acquireTokenAsync(
+                rejecting: token,
+                deadline: deadline,
+                generation: generation
+            )
+        else {
+            return .failure
+        }
+        let retry = await exportAsync(
+            logs: logRecords,
+            token: refreshedToken,
+            deadline: deadline,
+            generation: generation
+        )
+        if retry == .unauthenticated {
+            await invalidateTokenAsync(
+                ifCurrent: refreshedToken,
+                deadline: deadline,
+                generation: generation
+            )
+        }
+        return retry == .success ? .success : .failure
+    }
+
+    private func exportSynchronously(
         logRecords: [ReadableLogRecord],
         explicitTimeout: TimeInterval?
     ) -> ExportResult {
@@ -683,10 +1104,28 @@ public final class AuthenticatedOtlpLogExporter:
     }
 
     public func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult {
+        forceFlushSynchronously()
+    }
+
+    public func forceFlush(
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        forceFlushSynchronously()
+    }
+
+    private func forceFlushSynchronously() -> ExportResult {
         lock.withLock { isShutdown } ? .failure : .success
     }
 
     public func shutdown(explicitTimeout: TimeInterval?) {
+        shutdownSynchronously()
+    }
+
+    public func shutdown(explicitTimeout: TimeInterval?) async {
+        shutdownSynchronously()
+    }
+
+    private func shutdownSynchronously() {
         let shouldShutdown = lock.withLock {
             guard !isShutdown else { return false }
             isShutdown = true
@@ -704,9 +1143,7 @@ public final class AuthenticatedOtlpLogExporter:
             activeTokenRequests.removeAll()
             return requests
         }
-        for request in requests {
-            request.cancel()
-        }
+        for cancel in requests { cancel() }
         client.cancelActiveExports()
     }
 
@@ -725,12 +1162,35 @@ public final class AuthenticatedOtlpLogExporter:
         guard remaining > 0, isCurrent(generation: generation) else {
             return .cancelled
         }
-        return client.export(
+        return client.exportSynchronously(
             logs: logs,
             metadata: [("authorization", "Bearer \(token)")],
             timeout: remaining,
             isActive: { [weak self] in
                 self?.isCurrent(generation: generation) == true
+            }
+        )
+    }
+
+    private func exportAsync(
+        logs: [ReadableLogRecord],
+        token: String,
+        deadline: Date,
+        generation: UInt64
+    ) async -> RemoteTelemetryOtlpExportResult {
+        let remaining = deadline.timeIntervalSinceNow
+        guard remaining > 0, !Task.isCancelled,
+            isCurrent(generation: generation)
+        else {
+            return .cancelled
+        }
+        return await client.export(
+            logs: logs,
+            metadata: [("authorization", "Bearer \(token)")],
+            timeout: remaining,
+            isActive: { [weak self] in
+                !Task.isCancelled
+                    && self?.isCurrent(generation: generation) == true
             }
         )
     }
@@ -746,7 +1206,7 @@ public final class AuthenticatedOtlpLogExporter:
                 return nil
             }
             nextTokenRequestID &+= 1
-            activeTokenRequests[nextTokenRequestID] = request
+            activeTokenRequests[nextTokenRequestID] = { request.cancel() }
             return nextTokenRequestID
         }
         guard let requestID else { return .failure }
@@ -770,6 +1230,47 @@ public final class AuthenticatedOtlpLogExporter:
         return result ?? .failure
     }
 
+    private func acquireTokenAsync(
+        rejecting rejectedToken: String?,
+        deadline: Date,
+        generation: UInt64
+    ) async -> BlockingTokenResult {
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return .failure
+        }
+        let tokenProvider = self.tokenProvider
+        let task = Task<BlockingTokenResult, Never> {
+            if let rejectedToken {
+                await tokenProvider.invalidateToken(ifCurrent: rejectedToken)
+            }
+            guard !Task.isCancelled else { return .failure }
+            do {
+                return .success(try await tokenProvider.currentToken())
+            } catch {
+                return .failure
+            }
+        }
+        guard
+            let requestID = registerTokenTask(
+                cancellation: { task.cancel() },
+                generation: generation
+            )
+        else {
+            task.cancel()
+            return .failure
+        }
+        let result = await awaitTask(
+            task,
+            until: deadline,
+            timeoutResult: .failure
+        )
+        removeTokenTask(requestID)
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return .failure
+        }
+        return result
+    }
+
     private func invalidateToken(
         ifCurrent rejectedToken: String,
         deadline: Date,
@@ -781,7 +1282,7 @@ public final class AuthenticatedOtlpLogExporter:
                 return nil
             }
             nextTokenRequestID &+= 1
-            activeTokenRequests[nextTokenRequestID] = request
+            activeTokenRequests[nextTokenRequestID] = { request.cancel() }
             return nextTokenRequestID
         }
         guard let requestID else { return }
@@ -793,6 +1294,52 @@ public final class AuthenticatedOtlpLogExporter:
         let result = request.wait(until: deadline)
         lock.withLock { activeTokenRequests[requestID] = nil }
         if result == nil { request.cancel() }
+    }
+
+    private func invalidateTokenAsync(
+        ifCurrent rejectedToken: String,
+        deadline: Date,
+        generation: UInt64
+    ) async {
+        guard !Task.isCancelled, isCurrent(generation: generation) else {
+            return
+        }
+        let tokenProvider = self.tokenProvider
+        let task = Task<Bool, Never> {
+            await tokenProvider.invalidateToken(ifCurrent: rejectedToken)
+            return !Task.isCancelled
+        }
+        guard
+            let requestID = registerTokenTask(
+                cancellation: { task.cancel() },
+                generation: generation
+            )
+        else {
+            task.cancel()
+            return
+        }
+        _ = await awaitTask(task, until: deadline, timeoutResult: false)
+        removeTokenTask(requestID)
+    }
+
+    private func registerTokenTask(
+        cancellation: @escaping @Sendable () -> Void,
+        generation: UInt64
+    ) -> UInt64? {
+        lock.withLock {
+            guard !isShutdown, isEnabled,
+                cancellationGeneration == generation
+            else {
+                return nil
+            }
+            nextTokenRequestID &+= 1
+            activeTokenRequests[nextTokenRequestID] = cancellation
+            return nextTokenRequestID
+        }
+    }
+
+    private func removeTokenTask(_ requestID: UInt64) {
+        lock.withLock { activeTokenRequests[requestID] = nil }
     }
 
     private func currentExportGeneration() -> UInt64? {
@@ -827,12 +1374,42 @@ final class HttpRemoteTelemetryOtlpLogClient:
         self.transport = transport
     }
 
-    func export(
+    func exportSynchronously(
         logs: [ReadableLogRecord],
         metadata: [(String, String)],
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) -> RemoteTelemetryOtlpExportResult {
+        guard let urlRequest = request(logs: logs, metadata: metadata) else {
+            return .failure
+        }
+        return transport.sendSynchronously(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
+    }
+
+    func export(
+        logs: [ReadableLogRecord],
+        metadata: [(String, String)],
+        timeout: TimeInterval,
+        isActive: @escaping @Sendable () -> Bool
+    ) async -> RemoteTelemetryOtlpExportResult {
+        guard let urlRequest = request(logs: logs, metadata: metadata) else {
+            return .failure
+        }
+        return await transport.send(
+            urlRequest,
+            timeout: timeout,
+            isActive: isActive
+        )
+    }
+
+    private func request(
+        logs: [ReadableLogRecord],
+        metadata: [(String, String)]
+    ) -> URLRequest? {
         let request =
             Opentelemetry_Proto_Collector_Logs_V1_ExportLogsServiceRequest
             .with {
@@ -852,13 +1429,9 @@ final class HttpRemoteTelemetryOtlpLogClient:
         do {
             urlRequest.httpBody = try request.serializedData()
         } catch {
-            return .failure
+            return nil
         }
-        return transport.send(
-            urlRequest,
-            timeout: timeout,
-            isActive: isActive
-        )
+        return urlRequest
     }
 
     func cancelActiveExports() { transport.cancelActiveRequests() }

@@ -29,15 +29,13 @@
             let originalSaveCount = await store.saveCount
             let verificationClient = environment.client()
             defer { verificationClient.shutdown() }
-            XCTAssertEqual(
-                verificationClient.export(
-                    spans: [verificationSpan()],
-                    metadata: [("authorization", "Bearer \(originalToken)")],
-                    timeout: 5,
-                    isActive: { true }
-                ),
-                .success
+            var verificationResult = await verificationClient.export(
+                spans: [verificationSpan()],
+                metadata: [("authorization", "Bearer \(originalToken)")],
+                timeout: 5,
+                isActive: { true }
             )
+            XCTAssertEqual(verificationResult, .success)
 
             let originalTracer = RemoteTelemetryTracer()
             let originalPipeline = try pipeline(
@@ -103,24 +101,20 @@
             XCTAssertEqual(relaunchedEnrollment, originalEnrollment)
             XCTAssertEqual(relaunchedSaveCount, originalSaveCount)
 
-            XCTAssertEqual(
-                verificationClient.export(
-                    spans: [verificationSpan()],
-                    metadata: [("authorization", "Bearer \(replacementToken)")],
-                    timeout: 5,
-                    isActive: { true }
-                ),
-                .success
+            verificationResult = await verificationClient.export(
+                spans: [verificationSpan()],
+                metadata: [("authorization", "Bearer \(replacementToken)")],
+                timeout: 5,
+                isActive: { true }
             )
-            XCTAssertEqual(
-                verificationClient.export(
-                    spans: [verificationSpan()],
-                    metadata: [("authorization", "Bearer \(originalToken)")],
-                    timeout: 5,
-                    isActive: { true }
-                ),
-                .unauthenticated
+            XCTAssertEqual(verificationResult, .success)
+            verificationResult = await verificationClient.export(
+                spans: [verificationSpan()],
+                metadata: [("authorization", "Bearer \(originalToken)")],
+                timeout: 5,
+                isActive: { true }
             )
+            XCTAssertEqual(verificationResult, .unauthenticated)
 
             let relaunchedPipeline = try pipeline(
                 storageURL: storageURL,

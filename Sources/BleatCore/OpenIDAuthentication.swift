@@ -1014,7 +1014,9 @@ private final class AppAuthOpenIDExternalUserAgent<
                     callbackScheme: callbackScheme
                 )
                 self.callbackURL = callbackURL
-                if !session.resumeExternalUserAgentFlow(with: callbackURL) {
+                do {
+                    try session.resumeExternalUserAgentFlow(callbackURL)
+                } catch {
                     await session.cancel()
                 }
             } catch let error as OpenIDBrowserError {

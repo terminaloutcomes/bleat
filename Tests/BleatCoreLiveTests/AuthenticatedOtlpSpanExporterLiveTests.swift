@@ -43,11 +43,9 @@
                 timeout: 10
             )
 
-            XCTAssertEqual(
-                exporter.export(spans: [span()]),
-                SpanExporterResultCode.success
-            )
-            exporter.shutdown()
+            let result = await exporter.export(spans: [span()])
+            XCTAssertEqual(result, SpanExporterResultCode.success)
+            await exporter.shutdown()
         }
 
         private func span() -> SpanData {
