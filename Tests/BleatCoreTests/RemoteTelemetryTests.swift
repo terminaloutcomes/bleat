@@ -497,6 +497,21 @@ final class RemoteTelemetryTests: XCTestCase {
         XCTAssertFalse(resource.encodedAttributes.keys.contains("device.model"))
     }
 
+    func testResourceAcceptsIntegerAndDottedNumericBuilds() throws {
+        XCTAssertEqual(
+            try resource(version: "1.2.3", build: "00042")
+                .applicationBuild,
+            "42"
+        )
+        XCTAssertEqual(
+            try resource(
+                version: "1.2.3",
+                build: "20260901.0033.10"
+            ).applicationBuild,
+            "20260901.33.10"
+        )
+    }
+
     func testResourceRejectsArbitraryOrUnboundedStrings() throws {
         XCTAssertThrowsError(
             try resource(version: "reader", build: "1")
@@ -513,6 +528,16 @@ final class RemoteTelemetryTests: XCTestCase {
                 error as? RemoteTelemetryResourceError,
                 .invalidApplicationBuild
             )
+        }
+        for build in ["1..2", "1.2.3.4", "1.2-beta", "4294967296"] {
+            XCTAssertThrowsError(
+                try resource(version: "1.0", build: build)
+            ) { error in
+                XCTAssertEqual(
+                    error as? RemoteTelemetryResourceError,
+                    .invalidApplicationBuild
+                )
+            }
         }
         XCTAssertThrowsError(
             try resource(version: "1.999999", build: "1")

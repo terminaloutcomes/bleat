@@ -119,6 +119,49 @@ Before approval, an enabled signed build is expected to fail provisioning.
 Release, TestFlight, Simulator, and device workflows remain disabled unless the
 flag is supplied; the GitHub release archive pins it to `disabled` explicitly.
 
+### CloudKit schema management
+
+`CloudKit/Bleat.ckdb` is the desired schema for
+`iCloud.com.terminaloutcomes.Bleat`. `CloudKit/Production.ckdb` is the last
+schema exported from the production environment. Changes to CloudKit record
+types, fields, indexes, or grants must update the desired file in the same
+change as the application code.
+
+Run the local structural and code-consistency gate with:
+
+```sh
+mise run test:cloudkit-schema
+```
+
+To apply a reviewed desired schema to the development environment, save a
+CloudKit management token in the macOS Keychain with `xcrun cktool save-token`,
+then run this single import:
+
+```sh
+xcrun cktool import-schema \
+  --team-id YOUR_TEAM_ID \
+  --container-id iCloud.com.terminaloutcomes.Bleat \
+  --environment development \
+  --validate \
+  --file CloudKit/Bleat.ckdb
+```
+
+Test the development environment before opening CloudKit Console. Select the
+same container, review **Deploy Schema Changes**, and promote the additive
+changes to production. Export the resulting production schema, replace
+`CloudKit/Production.ckdb`, and run:
+
+```sh
+python3 scripts/validate-cloudkit-schema.py --require-production
+```
+
+The production snapshot is deliberately separate from the desired schema so a
+code review cannot accidentally claim that manual promotion occurred. A
+CloudKit-enabled Release or TestFlight archive refuses to build while the two
+schemas differ, and the CloudKit schema pull-request check requires the same
+parity. CloudKit-disabled and Personal Team archives still validate the desired
+schema against the code but do not require production parity.
+
 The physical-device workflows use paid capabilities by default:
 
 ```sh
@@ -248,7 +291,9 @@ mise run testflight:internal
 The task uses the Apple account signed into Xcode and the ignored signing and
 production telemetry settings from `.envrc`. It gives the upload a unique UTC
 build number without changing `project.yml`, validates both the Release archive
-and its distribution-signed IPA, and sets `testFlightInternalTestingOnly`, so
+and its distribution-signed IPA, requires the tracked production CloudKit
+schema to match the desired schema when CloudKit is enabled, and sets
+`testFlightInternalTestingOnly`, so
 that exact build can never be promoted to external TestFlight testing or the
 App Store. Local archive, dSYM, IPA checksum, redacted delivery logs, export
 options, and upload metadata are retained below

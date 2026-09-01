@@ -2,27 +2,44 @@
 
 ## Status
 
-Apple's managed CarPlay Audio App entitlement has been requested and is
-pending. `BLEAT_CARPLAY_MODE` defaults to `disabled`, and no Apple approval,
-enabled provisioning-profile, or vehicle result is recorded as complete yet.
-A signed disabled-build result and partial CarPlay Simulator journeys are
-recorded below, but the required matrix is not complete.
+Apple has approved the managed CarPlay Audio App entitlement. Explicitly
+enabled development and distribution builds are signed with profiles that
+authorize CarPlay audio. `BLEAT_CARPLAY_MODE` still defaults to `disabled`.
+The signed build matrix and CarPlay Simulator journeys are complete; physical
+vehicle or head-unit validation remains outstanding.
 
 Issue [#24](https://github.com/terminaloutcomes/bleat/issues/24) remains open
 until every section below has dated evidence.
 
 ## Build and provisioning
 
-- [ ] Apple grants `com.apple.developer.carplay-audio` for the application ID.
-- [ ] Development and distribution profiles are regenerated after approval.
+- [x] Apple grants `com.apple.developer.carplay-audio` for the application ID.
+- [x] Development and distribution profiles are regenerated after approval.
 - [x] A disabled signed app omits the CarPlay audio entitlement.
-- [ ] An enabled signed app contains a Boolean CarPlay audio entitlement and
+- [x] An enabled signed app contains a Boolean CarPlay audio entitlement and
   its embedded profile authorizes the same capability.
-- [ ] Personal Team and macOS builds remain CarPlay-free.
+- [x] Personal Team and macOS builds remain CarPlay-free.
 
 Record the application version, build number, build workflow, Xcode version,
 and inspection result. Do not record team IDs, device identifiers, profile
 contents, or other signing material.
+
+### 2026-09-01 signing and TestFlight evidence
+
+- Bleat 0.1.3 was built with Xcode 26.6 (17F113) and an explicitly enabled
+  CarPlay mode.
+- The development-signed app and its embedded development profile contained
+  the Boolean CarPlay audio entitlement while retaining the expected Keychain,
+  CloudKit, and App Attest capabilities. It installed and launched on a
+  physical iPhone; this is phone deployment evidence, not a vehicle journey.
+- A distribution-signed internal-only TestFlight IPA, build
+  `20260901.0320.02`, contained `BleatCarPlayMode=enabled` and the Boolean
+  CarPlay audio entitlement. Its distribution profile authorized the same
+  capability, structural inspection passed, and App Store Connect accepted the
+  upload for processing.
+- An immediately preceding internal-only build, `20260901.0315.30`, exercised
+  the documented default and correctly omitted CarPlay. It is retained as
+  disabled-artifact evidence and is not the enabled #24 test build.
 
 ## CarPlay Simulator
 

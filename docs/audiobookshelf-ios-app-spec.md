@@ -1423,8 +1423,19 @@ Private CloudKit synchronization is opt-out and uses
 `iCloud.com.terminaloutcomes.Bleat`. Mergeable ledger records, completion
 milestones, non-secret account descriptors, and playback/download preferences
 use the private database. Access and refresh tokens never enter CloudKit or
-iCloud Keychain. Launch restores authoritative local state before scheduling
-CloudKit synchronization as non-blocking background maintenance; a slow or
+iCloud Keychain. The complete desired CloudKit schema is versioned in
+`CloudKit/Bleat.ckdb`.
+Every code change that adds or alters a record type, field, index, or grant must
+update that file. `CloudKit/Production.ckdb` records the last schema exported
+after manual CloudKit Console promotion; CloudKit-enabled distribution
+packaging must fail while the desired and production schemas differ.
+CloudKit entitlements authorize the container rather than an individual
+database scope, so production code must use only the user's private database.
+The sync coordinator verifies `CKDatabase.databaseScope` before creating its
+engine, and the schema validation gate rejects public or shared database access
+from production sources.
+Launch restores authoritative local state before scheduling CloudKit
+synchronization as non-blocking background maintenance; a slow or
 failed CloudKit operation never delays the signed-in or signed-out transition,
 and an active operation can be cancelled and retried from Settings without
 overlapping the abandoned operation. Disabling synchronization keeps all local

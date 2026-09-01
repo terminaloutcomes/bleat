@@ -246,6 +246,7 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     case cancelled
     case invalidRecord
     case persistenceFailed
+    case nonPrivateDatabase
     case engineUnavailable
     case cloudKit(CloudKitFailure)
     case unexpected(PrivateCloudSystemError)
@@ -254,7 +255,8 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable {
         switch self {
         case .cloudKit(let failure): failure.isRetryable
         case .cancelled, .persistenceFailed, .engineUnavailable: true
-        case .disabled, .invalidRecord, .unexpected: false
+        case .disabled, .invalidRecord, .nonPrivateDatabase, .unexpected:
+            false
         }
     }
 }
@@ -2466,6 +2468,7 @@ public final class PrivateCloudSyncCoordinator:
     private let store: PrivateCloudSyncStore
     private let defaults: UserDefaults
     private let eventRecorder: any PrivateCloudSyncEventRecording
+    private let configurationFailure: PrivateCloudSyncError?
     private let stateKey = "bleat.cloudKit.syncEngineState.v1"
     private let enabledKey = "bleat.cloudKit.enabled.v1"
     private let zoneID = CKRecordZone.ID(
@@ -2531,14 +2534,43 @@ public final class PrivateCloudSyncCoordinator:
         } else {
             serialization = nil
         }
+        // Bleat synchronizes listening history and account configuration. Keep
+        // that user data in the owner's private database even though the
+        // container schema also exists for CloudKit's public database scope.
+        let database = container.privateCloudDatabase
+        configurationFailure = Self.configurationFailure(
+            for: database.databaseScope
+        )
+        guard configurationFailure == nil else {
+            engine = nil
+            return
+        }
         var configuration = CKSyncEngine.Configuration(
-            database: container.privateCloudDatabase,
+            database: database,
             stateSerialization: serialization,
             delegate: self
         )
         configuration.automaticallySync = false
         configuration.subscriptionID = "bleat-private-sync-v1"
         engine = CKSyncEngine(configuration)
+    }
+
+    static func configurationFailure(
+        for databaseScope: CKDatabase.Scope
+    ) -> PrivateCloudSyncError? {
+        databaseScope == .private ? nil : .nonPrivateDatabase
+    }
+
+    private func configuredEngine() throws(PrivateCloudSyncError)
+        -> CKSyncEngine
+    {
+        if let configurationFailure {
+            throw configurationFailure
+        }
+        guard let engine else {
+            throw PrivateCloudSyncError.engineUnavailable
+        }
+        return engine
     }
 
     public var isEnabled: Bool {
@@ -2552,9 +2584,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
+            let engine = try configuredEngine()
             try await perform(.setupZone) {
                 engine.state.add(
                     pendingDatabaseChanges: [
@@ -2634,9 +2664,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
+            let engine = try configuredEngine()
             let record = try await store.prepareAccountRecord(
                 account,
                 zoneID: zoneID
@@ -2690,9 +2718,7 @@ public final class PrivateCloudSyncCoordinator:
             guard let record else {
                 return
             }
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
+            let engine = try configuredEngine()
             engine.state.add(
                 pendingRecordZoneChanges: [.saveRecord(record.recordID)]
             )
@@ -2730,9 +2756,7 @@ public final class PrivateCloudSyncCoordinator:
             guard let record else {
                 return
             }
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
+            let engine = try configuredEngine()
             engine.state.add(
                 pendingRecordZoneChanges: [
                     .saveRecord(record.recordID)
@@ -2753,9 +2777,7 @@ public final class PrivateCloudSyncCoordinator:
     ) async throws(PrivateCloudSyncFailure) {
         if enabled {
             try await perform(.enable) {
-                guard engine != nil else {
-                    throw PrivateCloudSyncError.engineUnavailable
-                }
+                _ = try configuredEngine()
                 defaults.set(true, forKey: enabledKey)
                 do {
                     try await synchronize()
@@ -2767,11 +2789,9 @@ public final class PrivateCloudSyncCoordinator:
         }
 
         try await perform(.disable) {
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
-            await engine.cancelOperations()
             if deleteCloudData {
+                let engine = try configuredEngine()
+                await engine.cancelOperations()
                 do {
                     try await perform(.deleteCloudData) {
                         engine.state.add(
@@ -2784,6 +2804,11 @@ public final class PrivateCloudSyncCoordinator:
                 } catch let failure as PrivateCloudSyncFailure {
                     throw failure.cause
                 }
+            } else {
+                // Local opt-out must remain available when a source or
+                // entitlement bug prevented the CloudKit engine from being
+                // created. No database access is needed to retain cloud data.
+                await engine?.cancelOperations()
             }
             defaults.set(false, forKey: enabledKey)
         }
@@ -2797,9 +2822,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            guard let engine else {
-                throw PrivateCloudSyncError.engineUnavailable
-            }
+            let engine = try configuredEngine()
             _ = try await store.prepareRecords(zoneID: zoneID)
             let recordIDs = try await store.recordIDs(
                 for: accountID,
