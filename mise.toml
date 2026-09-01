@@ -208,13 +208,11 @@ run = [
 
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
-depends = ["site-check", "swift-fmt"]
+depends = ["site-check", "swift-fmt", "test:cloudkit-schema"]
 run = [
   { task = "security:validate" },
   { task = "api:validate" },
-  { task = "test:cloudkit-schema" },
   { task = "test:telemetry" },
-  { task = "site-check" },
   { task = "test:local" },
   { task = "test:live" },
   { task = "test:app-live" },
