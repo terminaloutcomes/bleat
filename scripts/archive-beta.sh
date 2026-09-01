@@ -33,6 +33,16 @@ if [[ ! "${bleat_expected_build}" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
     exit 1
 fi
 
+typeset -a bleat_cloudkit_schema_arguments
+if [[ "${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" == "YES" \
+    || "${BLEAT_CLOUDKIT_MODE:-enabled}" == "disabled" ]]; then
+    bleat_cloudkit_schema_arguments=()
+else
+    bleat_cloudkit_schema_arguments=("--require-production")
+fi
+python3 "${bleat_script_dir}/validate-cloudkit-schema.py" \
+    "${bleat_cloudkit_schema_arguments[@]}"
+
 BUILD_VERBOSE="${BUILD_VERBOSE:-false}"
 BUILD_VERBOSE_FLAG="-quiet"
 if [[ "${BUILD_VERBOSE}" == "true" ]]; then

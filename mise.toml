@@ -199,12 +199,20 @@ run = ["./scripts/test-voiceover-ui.sh"]
 description = "Validate cold and warm bleat URL routing on a disposable iOS Simulator"
 run = ["./scripts/test-deep-links.sh"]
 
+[tasks."test:cloudkit-schema"]
+description = "Validate the tracked CloudKit schema and its consistency with app record types"
+run = [
+  "python3 scripts/test-cloudkit-schema-validator.py",
+  "python3 scripts/validate-cloudkit-schema.py",
+]
+
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
 depends = ["site-check", "swift-fmt"]
 run = [
   { task = "security:validate" },
   { task = "api:validate" },
+  { task = "test:cloudkit-schema" },
   { task = "test:telemetry" },
   { task = "site-check" },
   { task = "test:local" },
@@ -222,7 +230,10 @@ run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
 [tasks."test:testflight-packaging"]
 description = "Validate the internal TestFlight export configuration"
-run = "./scripts/test-testflight-export-options.sh"
+run = [
+  { task = "test:cloudkit-schema" },
+  "./scripts/test-testflight-export-options.sh",
+]
 
 [tasks."testflight:internal"]
 description = "Archive and upload a uniquely numbered TestFlight Internal Only build"

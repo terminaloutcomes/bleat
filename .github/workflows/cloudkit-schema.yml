@@ -1,0 +1,35 @@
+name: Validate CloudKit schema
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - CloudKit/**
+      - Sources/BleatCore/PrivateCloudSync.swift
+      - scripts/validate-cloudkit-schema.py
+      - scripts/test-cloudkit-schema-validator.py
+      - .github/workflows/cloudkit-schema.yml
+  pull_request:
+    paths:
+      - CloudKit/**
+      - Sources/BleatCore/PrivateCloudSync.swift
+      - scripts/validate-cloudkit-schema.py
+      - scripts/test-cloudkit-schema-validator.py
+      - .github/workflows/cloudkit-schema.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test schema validator
+        run: python3 scripts/test-cloudkit-schema-validator.py
+
+      - name: Validate desired and production schemas
+        run: python3 scripts/validate-cloudkit-schema.py --require-production
