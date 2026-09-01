@@ -307,6 +307,18 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 "Failed — Authentication configuration invalid"
             ),
             (
+                .failed(.resourceInvalid(.invalidApplicationVersion)),
+                "Failed — Application version invalid"
+            ),
+            (
+                .failed(.resourceInvalid(.invalidApplicationBuild)),
+                "Failed — Application build invalid"
+            ),
+            (
+                .failed(.resourceInvalid(.invalidOperatingSystemVersion)),
+                "Failed — Operating system version invalid"
+            ),
+            (
                 .failed(.exportConfigurationInvalid),
                 "Failed — Export configuration invalid"
             ),

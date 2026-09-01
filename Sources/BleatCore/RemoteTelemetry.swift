@@ -667,7 +667,7 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
         operatingSystemMinorVersion: Int,
         operatingSystemPatchVersion: Int,
         installationID: UUID
-    ) throws {
+    ) throws(RemoteTelemetryResourceError) {
         guard
             let normalizedVersion = Self.normalizedApplicationVersion(
                 applicationVersion
@@ -727,14 +727,23 @@ public struct RemoteTelemetryResource: Equatable, Sendable {
         return normalized.joined(separator: ".")
     }
 
+    /// Accepts the store's integer build numbers and dotted numeric versions
+    /// without allowing arbitrary strings into telemetry resources.
     private static func normalizedBuild(_ value: String) -> String? {
-        guard !value.isEmpty,
-            value.allSatisfy(\.isNumber),
-            let build = UInt32(value)
-        else {
-            return nil
+        let parts = value.split(
+            separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(parts.count) else { return nil }
+        var normalized: [String] = []
+        for part in parts {
+            guard !part.isEmpty,
+                part.allSatisfy(\.isNumber),
+                let component = UInt32(part)
+            else {
+                return nil
+            }
+            normalized.append(String(component))
         }
-        return String(build)
+        return normalized.joined(separator: ".")
     }
 }
 

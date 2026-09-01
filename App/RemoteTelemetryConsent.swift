@@ -158,15 +158,23 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             let platform: RemoteTelemetryPlatform =
                 UIDevice.current.userInterfaceIdiom == .pad
                 ? .iPadOS : .iOS
-            let resource = try? RemoteTelemetryResource(
-                applicationVersion: version,
-                applicationBuild: build,
-                platform: platform,
-                operatingSystemMajorVersion: systemVersion.majorVersion,
-                operatingSystemMinorVersion: systemVersion.minorVersion,
-                operatingSystemPatchVersion: systemVersion.patchVersion,
-                installationID: InstallationIdentifierStore().uuid
-            )
+            let resource: RemoteTelemetryResource?
+            let resourceFailure: TelemetryTokenAvailabilityFailure?
+            do {
+                resource = try RemoteTelemetryResource(
+                    applicationVersion: version,
+                    applicationBuild: build,
+                    platform: platform,
+                    operatingSystemMajorVersion: systemVersion.majorVersion,
+                    operatingSystemMinorVersion: systemVersion.minorVersion,
+                    operatingSystemPatchVersion: systemVersion.patchVersion,
+                    installationID: InstallationIdentifierStore().uuid
+                )
+                resourceFailure = nil
+            } catch {
+                resource = nil
+                resourceFailure = .resourceInvalid(error)
+            }
             let storageRootURL = FileManager.default.urls(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask
@@ -191,7 +199,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 bundle: bundle
             )
             tokenAvailabilityFailure =
-                providerFailure
+                resourceFailure
+                ?? providerFailure
                 ?? (exporterConfiguration == nil
                     ? .exportConfigurationInvalid : nil)
             let downstreamExportersFactory:

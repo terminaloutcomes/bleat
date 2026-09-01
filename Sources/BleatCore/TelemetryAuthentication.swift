@@ -35,6 +35,7 @@ public struct TelemetryBearerToken: Equatable, Sendable {
 
 public enum TelemetryTokenAvailabilityFailure: Equatable, Sendable {
     case unsupportedPlatform
+    case resourceInvalid(RemoteTelemetryResourceError)
     case authenticationConfigurationInvalid
     case exportConfigurationInvalid
     case attesterUnavailable

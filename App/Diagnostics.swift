@@ -110,6 +110,15 @@ extension TelemetryTokenAvailabilityFailure {
         switch self {
         case .unsupportedPlatform:
             "Unsupported platform"
+        case .resourceInvalid(let error):
+            switch error {
+            case .invalidApplicationVersion:
+                "Application version invalid"
+            case .invalidApplicationBuild:
+                "Application build invalid"
+            case .invalidOperatingSystemVersion:
+                "Operating system version invalid"
+            }
         case .authenticationConfigurationInvalid:
             "Authentication configuration invalid"
         case .exportConfigurationInvalid:
