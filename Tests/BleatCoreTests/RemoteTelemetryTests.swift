@@ -56,7 +56,7 @@ final class RemoteTelemetryTests: XCTestCase {
     }
 
     func testBufferedTelemetryAuthenticationRequestSpansShareParentTrace()
-        throws
+        async throws
     {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -85,12 +85,7 @@ final class RemoteTelemetryTests: XCTestCase {
             tracerFacade: tracer,
             downstreamExporter: exporter
         )
-        defer {
-            pipeline.deactivate()
-            pipeline.purge()
-            pipeline.shutdown()
-        }
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
         XCTAssertEqual(spans.count, 4)
@@ -108,10 +103,13 @@ final class RemoteTelemetryTests: XCTestCase {
             XCTAssertEqual(child.traceId, parent.traceId)
             XCTAssertEqual(child.parentSpanId, parent.spanId)
         }
+        pipeline.deactivate()
+        pipeline.purge()
+        await pipeline.shutdown()
     }
 
     func testBufferedChapterSpanExportsMeasurementsUnderBatchParent()
-        throws
+        async throws
     {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -146,12 +144,7 @@ final class RemoteTelemetryTests: XCTestCase {
             tracerFacade: tracer,
             downstreamExporter: exporter
         )
-        defer {
-            pipeline.deactivate()
-            pipeline.purge()
-            pipeline.shutdown()
-        }
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
         let batchSpan = try XCTUnwrap(
@@ -191,6 +184,9 @@ final class RemoteTelemetryTests: XCTestCase {
             chapterSpan.attributes["bleat.transcription.audio.codec"],
             .string("aac")
         )
+        pipeline.deactivate()
+        pipeline.purge()
+        await pipeline.shutdown()
     }
 
     func testCloudKitLifecycleProducesReviewedLogsAndSpan() async throws {
@@ -239,7 +235,7 @@ final class RemoteTelemetryTests: XCTestCase {
                 recordCount: 17
             )
         )
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         let span = try XCTUnwrap(spanExporter.recordedSpans.first)
         XCTAssertEqual(
@@ -248,6 +244,8 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         let logs = logExporter.recordedLogs
         XCTAssertEqual(logs.count, 2)
+        XCTAssertEqual(logExporter.synchronousExportCount, 0)
+        XCTAssertEqual(logExporter.asynchronousExportCount, 1)
         for log in logs {
             let context = try XCTUnwrap(log.spanContext)
             XCTAssertEqual(context.traceId, span.traceId)
@@ -275,10 +273,10 @@ final class RemoteTelemetryTests: XCTestCase {
         XCTAssertNil(failed.attributes["error.description"])
         pipeline.deactivate()
         pipeline.purge()
-        pipeline.shutdown()
+        await pipeline.shutdown()
     }
 
-    func testDownloadLifecycleProducesTypedCorrelatedLogs() throws {
+    func testDownloadLifecycleProducesTypedCorrelatedLogs() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let spanExporter = RecordingSpanExporter()
@@ -324,7 +322,7 @@ final class RemoteTelemetryTests: XCTestCase {
             span: span
         )
         span.end(.failed(.invalidResponse))
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         let exportedSpan = try XCTUnwrap(spanExporter.recordedSpans.first)
         let logs = logExporter.recordedLogs
@@ -601,7 +599,7 @@ final class RemoteTelemetryTests: XCTestCase {
         XCTAssertTrue(exporter.recordedSpans.isEmpty)
     }
 
-    func testPipelineBatchesReviewedSpansWithExactResource() throws {
+    func testPipelineBatchesReviewedSpansWithExactResource() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let exporter = RecordingSpanExporter()
@@ -622,7 +620,7 @@ final class RemoteTelemetryTests: XCTestCase {
             retryBucket: .one
         ).end(.failed(.media))
 
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
         XCTAssertEqual(spans.count, 2)
@@ -647,12 +645,14 @@ final class RemoteTelemetryTests: XCTestCase {
             XCTAssertTrue(span.links.isEmpty)
         }
         XCTAssertTrue(exporter.batchSizes.contains(2))
+        XCTAssertEqual(exporter.synchronousExportCount, 0)
+        XCTAssertEqual(exporter.asynchronousExportCount, 1)
         pipeline.deactivate()
         pipeline.purge()
     }
 
     func testSpansStartedDuringAsynchronousInitializationAreExported()
-        throws
+        async throws
     {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -667,7 +667,7 @@ final class RemoteTelemetryTests: XCTestCase {
             tracerFacade: tracer,
             downstreamExporter: exporter
         )
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
 
         XCTAssertEqual(
             exporter.recordedSpans.map(\.name),
@@ -677,7 +677,7 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.purge()
     }
 
-    func testFailedExportIsRetainedAndDrainedAfterRelaunch() throws {
+    func testFailedExportIsRetainedAndDrainedAfterRelaunch() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let firstTracer = RemoteTelemetryTracer()
@@ -688,10 +688,10 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: RecordingSpanExporter(result: .failure)
         )
         firstTracer.beginSpan(operation: .appLaunch).end(.succeeded)
-        first.flush(timeout: 2)
+        await first.flush(timeout: 2)
         XCTAssertFalse(batchFiles(in: directory).isEmpty)
         first.deactivate()
-        first.shutdown()
+        await first.shutdown()
 
         let exporter = RecordingSpanExporter()
         let second = try RemoteTelemetryPipeline(
@@ -700,14 +700,14 @@ final class RemoteTelemetryTests: XCTestCase {
             tracerFacade: RemoteTelemetryTracer(),
             downstreamExporter: exporter
         )
-        second.flush(timeout: 2)
+        await second.flush(timeout: 2)
         XCTAssertEqual(exporter.recordedSpans.map(\.name), ["bleat.app.launch"])
         XCTAssertTrue(batchFiles(in: directory).isEmpty)
         second.deactivate()
         second.purge()
     }
 
-    func testPersistencePrunesExpiredAndCorruptBatches() throws {
+    func testPersistencePrunesExpiredAndCorruptBatches() async throws {
         let sourceDirectory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: sourceDirectory) }
         let recording = RecordingSpanExporter()
@@ -719,7 +719,7 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: recording
         )
         tracer.beginSpan(operation: .transcription).end(.succeeded)
-        source.flush(timeout: 2)
+        await source.flush(timeout: 2)
         let span = try XCTUnwrap(recording.recordedSpans.first)
         source.deactivate()
         source.purge()
@@ -734,7 +734,8 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default,
             now: { clock.value }
         )
-        XCTAssertEqual(exporter.export(spans: [span]), .success)
+        let initialExport = await exporter.export(spans: [span])
+        XCTAssertEqual(initialExport, .success)
         XCTAssertFalse(batchFiles(in: directory).isEmpty)
         try Data("not-json".utf8).write(
             to: directory.appendingPathComponent("batch-corrupt.json")
@@ -750,8 +751,8 @@ final class RemoteTelemetryTests: XCTestCase {
         XCTAssertTrue(batchFiles(in: directory).isEmpty)
     }
 
-    func testPersistenceNeverExceedsConfiguredByteLimit() throws {
-        let span = try makeRecordedSpan()
+    func testPersistenceNeverExceedsConfiguredByteLimit() async throws {
+        let span = try await makeRecordedSpan()
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let policy = RemoteTelemetryCollectionPolicy(
@@ -767,7 +768,7 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: policy
         )
         for _ in 0..<20 {
-            _ = exporter.export(spans: [span])
+            _ = await exporter.export(spans: [span])
         }
         let bytes = batchFiles(in: directory).reduce(0) {
             $0
@@ -779,10 +780,10 @@ final class RemoteTelemetryTests: XCTestCase {
         exporter.disableAndPurge()
     }
 
-    func testByteLimitEvictsOnlyTheOldestRequiredSpans() throws {
-        let oldest = try makeRecordedSpan(operation: .appLaunch)
-        let middle = try makeRecordedSpan(operation: .libraryRefresh)
-        let newest = try makeRecordedSpan(operation: .transcription)
+    func testByteLimitEvictsOnlyTheOldestRequiredSpans() async throws {
+        let oldest = try await makeRecordedSpan(operation: .appLaunch)
+        let middle = try await makeRecordedSpan(operation: .libraryRefresh)
+        let newest = try await makeRecordedSpan(operation: .transcription)
         let firstBatch = try JSONEncoder().encode([oldest, middle])
         let retainedFirstBatch = try JSONEncoder().encode([middle])
         let secondBatch = try JSONEncoder().encode([newest])
@@ -803,8 +804,10 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         exporter.setForeground(false)
 
-        XCTAssertEqual(exporter.export(spans: [oldest, middle]), .success)
-        XCTAssertEqual(exporter.export(spans: [newest]), .success)
+        let firstExport = await exporter.export(spans: [oldest, middle])
+        let secondExport = await exporter.export(spans: [newest])
+        XCTAssertEqual(firstExport, .success)
+        XCTAssertEqual(secondExport, .success)
 
         let retained = try batchFiles(in: directory).flatMap {
             try JSONDecoder().decode(
@@ -819,8 +822,8 @@ final class RemoteTelemetryTests: XCTestCase {
         exporter.disableAndPurge()
     }
 
-    func testPersistenceStoresOnlySpanDataAndHasNoCountCap() throws {
-        let span = try makeRecordedSpan()
+    func testPersistenceStoresOnlySpanDataAndHasNoCountCap() async throws {
+        let span = try await makeRecordedSpan()
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let exporter = try BoundedPersistentSpanExporter(
@@ -829,10 +832,10 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default
         )
         exporter.setForeground(false)
-        XCTAssertEqual(
-            exporter.export(spans: Array(repeating: span, count: 200)),
-            .success
+        let exportResult = await exporter.export(
+            spans: Array(repeating: span, count: 200)
         )
+        XCTAssertEqual(exportResult, .success)
 
         let file = try XCTUnwrap(batchFiles(in: directory).first)
         let persisted = try JSONDecoder().decode(
@@ -845,9 +848,9 @@ final class RemoteTelemetryTests: XCTestCase {
         exporter.disableAndPurge()
     }
 
-    func testPersistenceDrainsOldestSpanFirstAfterRelaunch() throws {
-        let oldest = try makeRecordedSpan(operation: .appLaunch)
-        let newest = try makeRecordedSpan(operation: .transcription)
+    func testPersistenceDrainsOldestSpanFirstAfterRelaunch() async throws {
+        let oldest = try await makeRecordedSpan(operation: .appLaunch)
+        let newest = try await makeRecordedSpan(operation: .transcription)
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let failed = try BoundedPersistentSpanExporter(
@@ -856,8 +859,10 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default
         )
         failed.setForeground(false)
-        XCTAssertEqual(failed.export(spans: [newest]), .success)
-        XCTAssertEqual(failed.export(spans: [oldest]), .success)
+        let newestResult = await failed.export(spans: [newest])
+        let oldestResult = await failed.export(spans: [oldest])
+        XCTAssertEqual(newestResult, .success)
+        XCTAssertEqual(oldestResult, .success)
         failed.disable()
 
         let recording = RecordingSpanExporter()
@@ -866,7 +871,8 @@ final class RemoteTelemetryTests: XCTestCase {
             downstream: recording,
             policy: .default
         )
-        XCTAssertEqual(recovered.flush(explicitTimeout: 2), .success)
+        let flushResult = await recovered.flush(explicitTimeout: 2)
+        XCTAssertEqual(flushResult, .success)
         XCTAssertEqual(
             recording.recordedSpans.map(\.name),
             [oldest.name, newest.name]
@@ -875,7 +881,7 @@ final class RemoteTelemetryTests: XCTestCase {
     }
 
     func testOversizedBatchDropsOldestSpansWithoutExceedingLimit()
-        throws
+        async throws
     {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -893,10 +899,9 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         exporter.setForeground(false)
 
-        XCTAssertEqual(
-            exporter.export(spans: [try makeRecordedSpan()]),
-            .success
-        )
+        let span = try await makeRecordedSpan()
+        let exportResult = await exporter.export(spans: [span])
+        XCTAssertEqual(exportResult, .success)
         XCTAssertTrue(batchFiles(in: directory).isEmpty)
         exporter.disableAndPurge()
     }
@@ -920,7 +925,7 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.purge()
     }
 
-    func testBackgroundStyleFlushReturnsAtItsDeadline() throws {
+    func testBackgroundStyleFlushReturnsAtItsDeadline() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let tracer = RemoteTelemetryTracer()
@@ -933,7 +938,7 @@ final class RemoteTelemetryTests: XCTestCase {
         tracer.beginSpan(operation: .appLaunch).end(.succeeded)
 
         let started = ContinuousClock.now
-        pipeline.flush(timeout: 0.05)
+        await pipeline.flush(timeout: 0.05)
         let elapsed = started.duration(to: .now)
 
         XCTAssertLessThan(elapsed, .milliseconds(250))
@@ -941,8 +946,8 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.purge()
     }
 
-    func testBackgroundFlushAttemptsOneDrainWhileBackgrounded() throws {
-        let span = try makeRecordedSpan()
+    func testBackgroundFlushAttemptsOneDrainWhileBackgrounded() async throws {
+        let span = try await makeRecordedSpan()
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let recording = RecordingSpanExporter()
@@ -952,21 +957,20 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default
         )
         exporter.setForeground(false)
-        XCTAssertEqual(exporter.export(spans: [span]), .success)
+        let exportResult = await exporter.export(spans: [span])
+        XCTAssertEqual(exportResult, .success)
 
-        XCTAssertEqual(
-            exporter.flush(
-                explicitTimeout: 2,
-                allowWhileBackgrounded: true
-            ),
-            .success
+        let flushResult = await exporter.flush(
+            explicitTimeout: 2,
+            allowWhileBackgrounded: true
         )
+        XCTAssertEqual(flushResult, .success)
         XCTAssertEqual(recording.recordedSpans.map(\.name), [span.name])
         exporter.disableAndPurge()
     }
 
-    func testWithdrawalCancelsAnActiveDownstreamExport() throws {
-        let span = try makeRecordedSpan()
+    func testWithdrawalCancelsAnActiveDownstreamExport() async throws {
+        let span = try await makeRecordedSpan()
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let downstream = CancellableBlockingSpanExporter()
@@ -976,7 +980,8 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default
         )
 
-        XCTAssertEqual(exporter.export(spans: [span]), .success)
+        let exportResult = await exporter.export(spans: [span])
+        XCTAssertEqual(exportResult, .success)
         XCTAssertEqual(downstream.waitUntilStarted(timeout: 2), .success)
         exporter.disable()
         XCTAssertEqual(downstream.waitUntilFinished(timeout: 2), .success)
@@ -985,7 +990,7 @@ final class RemoteTelemetryTests: XCTestCase {
         exporter.disableAndPurge()
     }
 
-    func testWithdrawalStopsNewSpansAndPurgesRetainedData() throws {
+    func testWithdrawalStopsNewSpansAndPurgesRetainedData() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let tracer = RemoteTelemetryTracer()
@@ -996,7 +1001,7 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: RecordingSpanExporter(result: .failure)
         )
         tracer.beginSpan(operation: .appLaunch).end(.succeeded)
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
         XCTAssertFalse(batchFiles(in: directory).isEmpty)
 
         pipeline.deactivate()
@@ -1007,7 +1012,7 @@ final class RemoteTelemetryTests: XCTestCase {
     }
 
     func testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration()
-        throws
+        async throws
     {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1024,13 +1029,13 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.deactivate()
         pipeline.purge()
         active.end(.succeeded)
-        pipeline.shutdown()
+        await pipeline.shutdown()
 
         XCTAssertTrue(recording.recordedSpans.isEmpty)
         XCTAssertTrue(batchFiles(in: directory).isEmpty)
     }
 
-    func testRapidReenableExportsOnlyCleanGeneration() throws {
+    func testRapidReenableExportsOnlyCleanGeneration() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let tracer = RemoteTelemetryTracer()
@@ -1054,8 +1059,8 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         oldSpan.end(.succeeded)
         tracer.beginSpan(operation: .libraryRefresh).end(.succeeded)
-        current.flush(timeout: 2)
-        withdrawn.shutdown()
+        await current.flush(timeout: 2)
+        await withdrawn.shutdown()
 
         XCTAssertTrue(withdrawnExporter.recordedSpans.isEmpty)
         XCTAssertEqual(
@@ -1085,7 +1090,7 @@ final class RemoteTelemetryTests: XCTestCase {
 
     private func makeRecordedSpan(
         operation: RemoteTelemetryOperation = .appLaunch
-    ) throws -> SpanData {
+    ) async throws -> SpanData {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let recording = RecordingSpanExporter()
@@ -1097,7 +1102,7 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: recording
         )
         tracer.beginSpan(operation: operation).end(.succeeded)
-        pipeline.flush(timeout: 2)
+        await pipeline.flush(timeout: 2)
         let span = try XCTUnwrap(recording.recordedSpans.first)
         pipeline.deactivate()
         pipeline.purge()
@@ -1139,6 +1144,8 @@ private final class RecordingSpanExporter:
     private let lock = NSLock()
     private var spans: [SpanData] = []
     private var sizes: [Int] = []
+    private var synchronousExports = 0
+    private var asynchronousExports = 0
     private let result: SpanExporterResultCode
     private let delay: TimeInterval
 
@@ -1158,25 +1165,58 @@ private final class RecordingSpanExporter:
         lock.withLock { sizes }
     }
 
+    var synchronousExportCount: Int {
+        lock.withLock { synchronousExports }
+    }
+
+    var asynchronousExportCount: Int {
+        lock.withLock { asynchronousExports }
+    }
+
     func export(
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
+        lock.withLock { synchronousExports += 1 }
         if delay > 0 {
             Thread.sleep(forTimeInterval: delay)
         }
+        record(spans)
+        return result
+    }
+
+    func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        lock.withLock { asynchronousExports += 1 }
+        if delay > 0 {
+            try? await Task.sleep(for: .seconds(delay))
+        }
+        record(spans)
+        return result
+    }
+
+    private func record(_ spans: [SpanData]) {
         lock.withLock {
             self.spans.append(contentsOf: spans)
             sizes.append(spans.count)
         }
-        return result
     }
 
     func flush(explicitTimeout: TimeInterval?) -> SpanExporterResultCode {
         result
     }
 
+    func flush(
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        result
+    }
+
     func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func shutdown(explicitTimeout: TimeInterval?) async {}
 
     func cancelActiveExports() {}
 }
@@ -1186,16 +1226,40 @@ private final class RecordingLogExporter:
 {
     private let lock = NSLock()
     private var logs: [ReadableLogRecord] = []
+    private var synchronousExports = 0
+    private var asynchronousExports = 0
 
     var recordedLogs: [ReadableLogRecord] {
         lock.withLock { logs }
+    }
+
+    var synchronousExportCount: Int {
+        lock.withLock { synchronousExports }
+    }
+
+    var asynchronousExportCount: Int {
+        lock.withLock { asynchronousExports }
     }
 
     func export(
         logRecords: [ReadableLogRecord],
         explicitTimeout: TimeInterval?
     ) -> ExportResult {
-        lock.withLock { logs.append(contentsOf: logRecords) }
+        lock.withLock {
+            synchronousExports += 1
+            logs.append(contentsOf: logRecords)
+        }
+        return .success
+    }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        lock.withLock {
+            asynchronousExports += 1
+            logs.append(contentsOf: logRecords)
+        }
         return .success
     }
 
@@ -1203,7 +1267,13 @@ private final class RecordingLogExporter:
         .success
     }
 
+    func forceFlush(explicitTimeout: TimeInterval?) async -> ExportResult {
+        .success
+    }
+
     func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func shutdown(explicitTimeout: TimeInterval?) async {}
 
     func cancelActiveExports() {}
 
@@ -1239,11 +1309,42 @@ private final class CancellableBlockingSpanExporter:
         return result
     }
 
+    func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        started.signal()
+        let deadline = ContinuousClock.now.advanced(
+            by: .seconds(explicitTimeout ?? 30)
+        )
+        while !Task.isCancelled,
+            !lock.withLock({ cancelled }),
+            ContinuousClock.now < deadline
+        {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let result: SpanExporterResultCode = lock.withLock {
+            guard !cancelled, !Task.isCancelled else { return .failure }
+            self.spans.append(contentsOf: spans)
+            return .success
+        }
+        finished.signal()
+        return result
+    }
+
     func flush(explicitTimeout: TimeInterval?) -> SpanExporterResultCode {
         .success
     }
 
+    func flush(
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        .success
+    }
+
     func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func shutdown(explicitTimeout: TimeInterval?) async {}
 
     func cancelActiveExports() {
         lock.withLock { cancelled = true }

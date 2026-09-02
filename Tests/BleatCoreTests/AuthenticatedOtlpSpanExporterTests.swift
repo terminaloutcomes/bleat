@@ -45,13 +45,15 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         }
     }
 
-    func testEachExportUsesExactlyOneCurrentBearerValue() {
+    func testEachExportUsesExactlyOneCurrentBearerValue() async {
         let provider = SequenceTokenProvider(tokens: ["first", "second"])
         let client = RecordingOtlpClient(results: [.success, .success])
         let exporter = exporter(provider: provider, client: client)
 
-        XCTAssertEqual(exporter.export(spans: [span()]), .success)
-        XCTAssertEqual(exporter.export(spans: [span()]), .success)
+        let first = await exporter.export(spans: [span()])
+        let second = await exporter.export(spans: [span()])
+        XCTAssertEqual(first, .success)
+        XCTAssertEqual(second, .success)
 
         XCTAssertEqual(
             client.recordedMetadata.map {
@@ -62,8 +64,7 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 ["authorization=Bearer second"],
             ]
         )
-        XCTAssertEqual(client.synchronousExportCount, 2)
-        XCTAssertEqual(client.asynchronousExportCount, 0)
+        XCTAssertEqual(client.asynchronousExportCount, 2)
         XCTAssertEqual(client.shutdownCount, 0)
     }
 
@@ -79,7 +80,6 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         let result = await exporter.export(spans: [span()])
         XCTAssertEqual(result, .success)
         XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.synchronousExportCount, 0)
         XCTAssertEqual(client.asynchronousExportCount, 2)
         let invalidatedTokens = await provider.invalidatedTokens
         XCTAssertEqual(invalidatedTokens, ["expired"])
@@ -99,7 +99,6 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         let result = await exporter.export(spans: [span()])
         XCTAssertEqual(result, .failure)
         XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.synchronousExportCount, 0)
         XCTAssertEqual(client.asynchronousExportCount, 2)
         let requestCount = await provider.requestCount
         let invalidatedTokens = await provider.invalidatedTokens
@@ -121,7 +120,6 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         var result = await exporter.export(logRecords: [logRecord()])
         XCTAssertEqual(result, .success)
         XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.synchronousExportCount, 0)
         XCTAssertEqual(client.asynchronousExportCount, 2)
         XCTAssertEqual(
             client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" },
@@ -225,6 +223,10 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         XCTAssertEqual(logResult, .failure)
         XCTAssertEqual(spanClient.shutdownCount, 1)
         XCTAssertEqual(logClient.shutdownCount, 1)
+        XCTAssertEqual(spanClient.synchronousShutdownCount, 0)
+        XCTAssertEqual(spanClient.asynchronousShutdownCount, 1)
+        XCTAssertEqual(logClient.synchronousShutdownCount, 0)
+        XCTAssertEqual(logClient.asynchronousShutdownCount, 1)
     }
 
     func testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller() async {
@@ -273,30 +275,55 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         )
     }
 
-    func testCancellationUnblocksTokenWaitAndShutsTransportOnce() {
+    func testCancellationUnblocksTokenWaitAndShutsTransportOnce() async {
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [])
         let exporter = exporter(provider: provider, client: client)
-        let finished = expectation(description: "export returned")
-        let result = LockedExportResult()
         let span = span()
 
-        DispatchQueue.global().async {
-            result.value = exporter.export(
+        let exportTask = Task {
+            await exporter.export(
                 spans: [span],
                 explicitTimeout: 30
             )
-            finished.fulfill()
         }
         XCTAssertTrue(provider.waitUntilRequested(timeout: 2))
         exporter.cancelActiveExports()
-        wait(for: [finished], timeout: 2)
-        XCTAssertEqual(result.value, .failure)
+        let result = await exportTask.value
+        XCTAssertEqual(result, .failure)
 
-        exporter.shutdown()
-        exporter.shutdown()
+        await exporter.shutdown()
+        await exporter.shutdown()
         XCTAssertEqual(client.cancelCount, 2)
         XCTAssertEqual(client.shutdownCount, 1)
+        XCTAssertEqual(client.synchronousShutdownCount, 0)
+        XCTAssertEqual(client.asynchronousShutdownCount, 1)
+    }
+
+    func testAsyncTransportShutdownWaitsForClosureCompletion() async {
+        let gate = AsyncShutdownGate()
+        let completion = AsyncCompletionState()
+        let session = URLSession(configuration: .ephemeral)
+        let transport = URLSessionRemoteTelemetryHTTPTransport(
+            session: session,
+            closeTransport: {
+                await gate.waitForRelease()
+                session.invalidateAndCancel()
+            }
+        )
+
+        let shutdown = Task {
+            await transport.shutdown()
+            await completion.markCompleted()
+        }
+        await gate.waitUntilEntered()
+        let completedBeforeRelease = await completion.isCompleted
+        XCTAssertFalse(completedBeforeRelease)
+
+        await gate.release()
+        await shutdown.value
+        let completedAfterRelease = await completion.isCompleted
+        XCTAssertTrue(completedAfterRelease)
     }
 
     func testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport()
@@ -305,23 +332,20 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         let provider = SequenceTokenProvider(tokens: ["cancelled", "current"])
         let client = GatedRegistrationOtlpClient()
         let exporter = exporter(provider: provider, client: client)
-        let finished = expectation(description: "cancelled export returned")
-        let result = LockedExportResult()
         let span = span()
 
-        DispatchQueue.global().async {
-            result.value = exporter.export(
+        let exportTask = Task {
+            await exporter.export(
                 spans: [span],
                 explicitTimeout: 30
             )
-            finished.fulfill()
         }
         XCTAssertTrue(client.waitUntilFirstRPCWillRegister(timeout: 2))
         exporter.cancelActiveExports()
-        client.allowFirstRPCToRegister()
-        await fulfillment(of: [finished], timeout: 2)
+        await client.allowFirstRPCToRegister()
+        let result = await exportTask.value
 
-        XCTAssertEqual(result.value, .failure)
+        XCTAssertEqual(result, .failure)
         XCTAssertEqual(client.exportCount, 0)
         let laterResult = await exporter.export(spans: [span])
         XCTAssertEqual(laterResult, .success)
@@ -347,7 +371,6 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             isActive: { true }
         )
         XCTAssertEqual(spanResult, .success)
-        XCTAssertEqual(spanTransport.synchronousRequestCount, 0)
         XCTAssertEqual(spanTransport.asynchronousRequestCount, 1)
         let spanRequest = try XCTUnwrap(spanTransport.requests.first)
         XCTAssertEqual(spanRequest.url?.path, "/v1/traces")
@@ -376,7 +399,6 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             isActive: { true }
         )
         XCTAssertEqual(logResult, .success)
-        XCTAssertEqual(logTransport.synchronousRequestCount, 0)
         XCTAssertEqual(logTransport.asynchronousRequestCount, 1)
         let logRequest = try XCTUnwrap(logTransport.requests.first)
         XCTAssertEqual(logRequest.url?.path, "/v1/logs")
@@ -389,6 +411,13 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             "Bearer log-token"
         )
         XCTAssertFalse(try XCTUnwrap(logRequest.httpBody).isEmpty)
+
+        await spanClient.shutdown()
+        await logClient.shutdown()
+        XCTAssertEqual(spanTransport.synchronousShutdownCount, 0)
+        XCTAssertEqual(spanTransport.asynchronousShutdownCount, 1)
+        XCTAssertEqual(logTransport.synchronousShutdownCount, 0)
+        XCTAssertEqual(logTransport.asynchronousShutdownCount, 1)
     }
 
     func testHTTPResponseStatusPreservesAuthenticationAndTransportFailures()
@@ -469,13 +498,15 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         XCTAssertTrue(invalidatedTokens.isEmpty)
     }
 
-    func testBearerNeverAppearsInExporterOrFailureDescriptions() {
+    func testBearerNeverAppearsInExporterOrFailureDescriptions() async {
         let secret = "private-bearer-material"
         let provider = SequenceTokenProvider(tokens: [secret])
         let client = RecordingOtlpClient(results: [.failure])
         let exporter = exporter(provider: provider, client: client)
 
-        XCTAssertEqual(exporter.export(spans: [span()]), .failure)
+        let exportResult = await exporter.export(spans: [span()])
+        let flushResult = await exporter.flush()
+        XCTAssertEqual(exportResult, .failure)
         let externallyVisible = [
             String(describing: RemoteTelemetryRuntimeFailure.exportFailed),
             String(
@@ -483,24 +514,24 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                     AuthenticatedOtlpSpanExporterConfigurationError
                     .invalidEndpoint
             ),
-            String(describing: exporter.flush()),
+            String(describing: flushResult),
         ].joined(separator: "\n")
         XCTAssertFalse(externallyVisible.contains(secret))
         XCTAssertFalse(String(describing: span()).contains(secret))
     }
 
-    func testBearerNeverAppearsInCapturedProcessLogs() throws {
+    func testBearerNeverAppearsInCapturedProcessLogs() async throws {
         let secret = "captured-private-bearer-material"
         let provider = SequenceTokenProvider(tokens: [secret])
         let client = RecordingOtlpClient(results: [.failure])
         let exporter = exporter(provider: provider, client: client)
 
-        let captured = try captureStandardOutput {
+        let captured = try await captureStandardOutput {
             print("stdout capture sentinel")
             FileHandle.standardError.write(
                 Data("stderr capture sentinel\n".utf8)
             )
-            _ = exporter.export(spans: [span()])
+            _ = await exporter.export(spans: [span()])
         }
 
         XCTAssertTrue(captured.contains("stdout capture sentinel"))
@@ -553,18 +584,13 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
     }
 }
 
-private let standardOutputCaptureLock = NSLock()
-
 private enum StandardOutputCaptureError: Error {
     case unavailable
 }
 
 private func captureStandardOutput(
-    _ operation: () -> Void
-) throws -> String {
-    standardOutputCaptureLock.lock()
-    defer { standardOutputCaptureLock.unlock() }
-
+    _ operation: () async -> Void
+) async throws -> String {
     let pipe = Pipe()
     let savedStandardOutput = dup(STDOUT_FILENO)
     let savedStandardError = dup(STDERR_FILENO)
@@ -586,7 +612,7 @@ private func captureStandardOutput(
         throw StandardOutputCaptureError.unavailable
     }
 
-    operation()
+    await operation()
     fflush(nil)
     guard
         dup2(savedStandardOutput, STDOUT_FILENO) >= 0,
@@ -691,7 +717,8 @@ private final class RecordingOtlpClient:
     private var metadata: [[(String, String)]] = []
     private var cancellations = 0
     private var shutdowns = 0
-    private var synchronousExports = 0
+    private var synchronousShutdowns = 0
+    private var asynchronousShutdowns = 0
     private var asynchronousExports = 0
 
     init(results: [RemoteTelemetryOtlpExportResult]) {
@@ -705,19 +732,14 @@ private final class RecordingOtlpClient:
     var exportCount: Int { lock.withLock { metadata.count } }
     var cancelCount: Int { lock.withLock { cancellations } }
     var shutdownCount: Int { lock.withLock { shutdowns } }
-    var synchronousExportCount: Int { lock.withLock { synchronousExports } }
+    var synchronousShutdownCount: Int {
+        lock.withLock { synchronousShutdowns }
+    }
+    var asynchronousShutdownCount: Int {
+        lock.withLock { asynchronousShutdowns }
+    }
     var asynchronousExportCount: Int {
         lock.withLock { asynchronousExports }
-    }
-
-    func exportSynchronously(
-        spans: [SpanData],
-        metadata: [(String, String)],
-        timeout: TimeInterval,
-        isActive: @escaping @Sendable () -> Bool
-    ) -> RemoteTelemetryOtlpExportResult {
-        lock.withLock { synchronousExports += 1 }
-        return recordExport(metadata: metadata, isActive: isActive)
     }
 
     func export(
@@ -747,7 +769,17 @@ private final class RecordingOtlpClient:
     }
 
     func shutdown() {
-        lock.withLock { shutdowns += 1 }
+        lock.withLock {
+            shutdowns += 1
+            synchronousShutdowns += 1
+        }
+    }
+
+    func shutdown() async {
+        lock.withLock {
+            shutdowns += 1
+            asynchronousShutdowns += 1
+        }
     }
 }
 
@@ -757,28 +789,23 @@ private final class RecordingHTTPTransport:
     private let lock = NSLock()
     private let result: RemoteTelemetryOtlpExportResult
     private var recordedRequests: [URLRequest] = []
-    private var synchronousRequests = 0
     private var asynchronousRequests = 0
+    private var synchronousShutdowns = 0
+    private var asynchronousShutdowns = 0
 
     init(result: RemoteTelemetryOtlpExportResult) {
         self.result = result
     }
 
     var requests: [URLRequest] { lock.withLock { recordedRequests } }
-    var synchronousRequestCount: Int {
-        lock.withLock { synchronousRequests }
-    }
     var asynchronousRequestCount: Int {
         lock.withLock { asynchronousRequests }
     }
-
-    func sendSynchronously(
-        _ request: URLRequest,
-        timeout: TimeInterval,
-        isActive: @escaping @Sendable () -> Bool
-    ) -> RemoteTelemetryOtlpExportResult {
-        lock.withLock { synchronousRequests += 1 }
-        return record(request, isActive: isActive)
+    var synchronousShutdownCount: Int {
+        lock.withLock { synchronousShutdowns }
+    }
+    var asynchronousShutdownCount: Int {
+        lock.withLock { asynchronousShutdowns }
     }
 
     func send(
@@ -800,7 +827,8 @@ private final class RecordingHTTPTransport:
     }
 
     func cancelActiveRequests() {}
-    func shutdown() {}
+    func shutdown() { lock.withLock { synchronousShutdowns += 1 } }
+    func shutdown() async { lock.withLock { asynchronousShutdowns += 1 } }
 }
 
 private final class RecordingOtlpLogClient:
@@ -810,7 +838,8 @@ private final class RecordingOtlpLogClient:
     private var results: [RemoteTelemetryOtlpExportResult]
     private var metadata: [[(String, String)]] = []
     private var shutdowns = 0
-    private var synchronousExports = 0
+    private var synchronousShutdowns = 0
+    private var asynchronousShutdowns = 0
     private var asynchronousExports = 0
 
     init(results: [RemoteTelemetryOtlpExportResult]) {
@@ -823,19 +852,14 @@ private final class RecordingOtlpLogClient:
 
     var exportCount: Int { lock.withLock { metadata.count } }
     var shutdownCount: Int { lock.withLock { shutdowns } }
-    var synchronousExportCount: Int { lock.withLock { synchronousExports } }
+    var synchronousShutdownCount: Int {
+        lock.withLock { synchronousShutdowns }
+    }
+    var asynchronousShutdownCount: Int {
+        lock.withLock { asynchronousShutdowns }
+    }
     var asynchronousExportCount: Int {
         lock.withLock { asynchronousExports }
-    }
-
-    func exportSynchronously(
-        logs: [ReadableLogRecord],
-        metadata: [(String, String)],
-        timeout: TimeInterval,
-        isActive: @escaping @Sendable () -> Bool
-    ) -> RemoteTelemetryOtlpExportResult {
-        lock.withLock { synchronousExports += 1 }
-        return recordExport(metadata: metadata, isActive: isActive)
     }
 
     func export(
@@ -863,7 +887,17 @@ private final class RecordingOtlpLogClient:
     func cancelActiveExports() {}
 
     func shutdown() {
-        lock.withLock { shutdowns += 1 }
+        lock.withLock {
+            shutdowns += 1
+            synchronousShutdowns += 1
+        }
+    }
+
+    func shutdown() async {
+        lock.withLock {
+            shutdowns += 1
+            asynchronousShutdowns += 1
+        }
     }
 }
 
@@ -875,15 +909,6 @@ private final class CancellationAfterUnauthenticatedClient:
     var onUnauthenticated: (@Sendable () -> Void)?
 
     var exportCount: Int { lock.withLock { exports } }
-
-    func exportSynchronously(
-        spans: [SpanData],
-        metadata: [(String, String)],
-        timeout: TimeInterval,
-        isActive: @escaping @Sendable () -> Bool
-    ) -> RemoteTelemetryOtlpExportResult {
-        exportResult(isActive: isActive)
-    }
 
     func export(
         spans: [SpanData],
@@ -910,6 +935,7 @@ private final class CancellationAfterUnauthenticatedClient:
     func cancelActiveExports() {}
 
     func shutdown() {}
+    func shutdown() async {}
 }
 
 private final class GatedRegistrationOtlpClient:
@@ -917,30 +943,11 @@ private final class GatedRegistrationOtlpClient:
 {
     private let lock = NSLock()
     private let firstRPCWillRegister = DispatchSemaphore(value: 0)
-    private let allowFirstRPCRegistration = DispatchSemaphore(value: 0)
+    private let registrationGate = AsyncShutdownGate()
     private var attempts = 0
     private var exports = 0
 
     var exportCount: Int { lock.withLock { exports } }
-
-    func exportSynchronously(
-        spans: [SpanData],
-        metadata: [(String, String)],
-        timeout: TimeInterval,
-        isActive: @escaping @Sendable () -> Bool
-    ) -> RemoteTelemetryOtlpExportResult {
-        let attempt = lock.withLock {
-            attempts += 1
-            return attempts
-        }
-        if attempt == 1 {
-            firstRPCWillRegister.signal()
-            allowFirstRPCRegistration.wait()
-        }
-        guard isActive() else { return .cancelled }
-        lock.withLock { exports += 1 }
-        return .success
-    }
 
     func export(
         spans: [SpanData],
@@ -948,6 +955,14 @@ private final class GatedRegistrationOtlpClient:
         timeout: TimeInterval,
         isActive: @escaping @Sendable () -> Bool
     ) async -> RemoteTelemetryOtlpExportResult {
+        let attempt = lock.withLock {
+            attempts += 1
+            return attempts
+        }
+        if attempt == 1 {
+            firstRPCWillRegister.signal()
+            await registrationGate.waitForRelease()
+        }
         guard isActive() else { return .cancelled }
         lock.withLock { exports += 1 }
         return .success
@@ -956,22 +971,51 @@ private final class GatedRegistrationOtlpClient:
     func cancelActiveExports() {}
 
     func shutdown() {}
+    func shutdown() async {}
 
     func waitUntilFirstRPCWillRegister(timeout: TimeInterval) -> Bool {
         firstRPCWillRegister.wait(timeout: .now() + timeout) == .success
     }
 
-    func allowFirstRPCToRegister() {
-        allowFirstRPCRegistration.signal()
+    func allowFirstRPCToRegister() async {
+        await registrationGate.release()
     }
 }
 
-private final class LockedExportResult: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValue: SpanExporterResultCode?
+private actor AsyncShutdownGate {
+    private var entered = false
+    private var released = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
 
-    var value: SpanExporterResultCode? {
-        get { lock.withLock { storedValue } }
-        set { lock.withLock { storedValue = newValue } }
+    func waitForRelease() async {
+        entered = true
+        for waiter in entryWaiters { waiter.resume() }
+        entryWaiters.removeAll()
+        guard !released else { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !entered else { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        released = true
+        for waiter in releaseWaiters { waiter.resume() }
+        releaseWaiters.removeAll()
+    }
+}
+
+private actor AsyncCompletionState {
+    private(set) var isCompleted = false
+
+    func markCompleted() {
+        isCompleted = true
     }
 }

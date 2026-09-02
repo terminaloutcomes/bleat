@@ -444,8 +444,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 explicitlyRemoving: storageGeneration
             )
             if let oldPipeline {
-                DispatchQueue.global(qos: .utility).async {
-                    oldPipeline.shutdown()
+                Task {
+                    await oldPipeline.shutdown()
                 }
             }
             self?.lock.withLock {
@@ -464,8 +464,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         }
         current?.setForeground(foreground)
         guard !foreground, let current else { return }
-        DispatchQueue.global(qos: .utility).async {
-            current.flushForBackground(timeout: 2)
+        Task {
+            await current.flushForBackground(timeout: 2)
         }
     }
 
@@ -506,15 +506,19 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 downstreamLogExporter: downstream?.logs
             )
         } catch let failure as RemoteTelemetryRuntimeFailure {
-            downstream?.spans.shutdown(explicitTimeout: 0)
-            downstream?.logs.shutdown(explicitTimeout: 0)
+            Task {
+                await downstream?.spans.shutdown(explicitTimeout: 0)
+                await downstream?.logs.shutdown(explicitTimeout: 0)
+            }
             tracer.deactivate()
             logger.deactivate()
             recordFailure(failure, generation: requestedGeneration)
             return
         } catch {
-            downstream?.spans.shutdown(explicitTimeout: 0)
-            downstream?.logs.shutdown(explicitTimeout: 0)
+            Task {
+                await downstream?.spans.shutdown(explicitTimeout: 0)
+                await downstream?.logs.shutdown(explicitTimeout: 0)
+            }
             tracer.deactivate()
             logger.deactivate()
             recordFailure(.storageUnavailable, generation: requestedGeneration)
@@ -534,8 +538,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         guard !accepted else { return }
         newPipeline.deactivate()
         newPipeline.purge()
-        DispatchQueue.global(qos: .utility).async {
-            newPipeline.shutdown()
+        Task {
+            await newPipeline.shutdown()
         }
     }
 

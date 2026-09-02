@@ -93,6 +93,11 @@ Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
   the user has explicitly confirmed in advance. Document why it is necessary,
   where blocking occurs, why a native async implementation is unavailable, and
   what would permit its removal; add focused tests for the exceptional path.
+- When an async API exists, deprecate its synchronous alternative and ban all
+  direct calls to that synchronous API. A synchronous protocol witness may
+  remain only when an upstream protocol requires it; it must not perform or
+  invoke the real operation, and the owning async lifecycle must complete that
+  work explicitly.
 - Preserve playback across SwiftUI view reconstruction and account-context
   changes.
 - Use protocols only at external boundaries that need test substitution.

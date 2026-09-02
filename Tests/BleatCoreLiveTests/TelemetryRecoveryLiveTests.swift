@@ -28,7 +28,7 @@
             let originalEnrollment = try XCTUnwrap(storedOriginalEnrollment)
             let originalSaveCount = await store.saveCount
             let verificationClient = environment.client()
-            defer { verificationClient.shutdown() }
+            addTeardownBlock { await verificationClient.shutdown() }
             var verificationResult = await verificationClient.export(
                 spans: [verificationSpan()],
                 metadata: [("authorization", "Bearer \(originalToken)")],
@@ -44,9 +44,9 @@
                 provider: originalProvider,
                 environment: environment
             )
-            defer {
+            addTeardownBlock {
                 originalPipeline.deactivate()
-                originalPipeline.shutdown()
+                await originalPipeline.shutdown()
             }
 
             try environment.controller.stop(.api)
@@ -69,7 +69,7 @@
                 normalRefresh.telemetryDuration,
                 .milliseconds(100)
             )
-            originalPipeline.flush(timeout: 4)
+            await originalPipeline.flush(timeout: 4)
             let retainedFiles = try batchFiles(at: storageURL)
             XCTAssertFalse(retainedFiles.isEmpty)
             let retainedBytes = try retainedFiles.reduce(into: 0) {
@@ -84,7 +84,7 @@
                 RemoteTelemetryCollectionPolicy.default.maximumBufferedBytes
             )
             originalPipeline.deactivate()
-            originalPipeline.shutdown()
+            await originalPipeline.shutdown()
 
             try environment.controller.start(.api)
             let relaunchedProvider = try tokenProvider(
@@ -122,12 +122,12 @@
                 provider: relaunchedProvider,
                 environment: environment
             )
-            defer {
+            addTeardownBlock {
                 relaunchedPipeline.deactivate()
                 relaunchedPipeline.purge()
-                relaunchedPipeline.shutdown()
+                await relaunchedPipeline.shutdown()
             }
-            relaunchedPipeline.flush(timeout: 10)
+            await relaunchedPipeline.flush(timeout: 10)
             XCTAssertTrue(try batchFiles(at: storageURL).isEmpty)
         }
 
@@ -152,10 +152,10 @@
                 provider: provider,
                 environment: environment
             )
-            defer {
+            addTeardownBlock {
                 pipeline.deactivate()
                 pipeline.purge()
-                pipeline.shutdown()
+                await pipeline.shutdown()
             }
 
             try environment.controller.stop(.collector)
@@ -171,7 +171,7 @@
                 normalRefresh.telemetryDuration,
                 .milliseconds(100)
             )
-            pipeline.flush(timeout: 4)
+            await pipeline.flush(timeout: 4)
             XCTAssertFalse(try batchFiles(at: storageURL).isEmpty)
 
             try environment.controller.start(.collector)
@@ -210,10 +210,10 @@
                 provider: provider,
                 environment: environment
             )
-            defer {
+            addTeardownBlock {
                 pipeline.deactivate()
                 pipeline.purge()
-                pipeline.shutdown()
+                await pipeline.shutdown()
             }
 
             let firstToken = try await provider.currentToken()
@@ -226,7 +226,7 @@
                 source: .offline,
                 retryBucket: .one
             ).end(.succeeded)
-            pipeline.flush(timeout: 10)
+            await pipeline.flush(timeout: 10)
 
             let issuedTokens = await transport.issuedTokens()
             let enrollmentAfterRefresh = await store.enrollment()

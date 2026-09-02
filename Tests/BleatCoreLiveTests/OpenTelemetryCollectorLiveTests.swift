@@ -76,10 +76,10 @@
                     timeout: 10
                 )
             )
-            defer {
+            addTeardownBlock {
                 pipeline.deactivate()
                 pipeline.purge()
-                pipeline.shutdown()
+                await pipeline.shutdown()
             }
 
             tracer.beginSpan(
@@ -87,12 +87,12 @@
                 source: .offline,
                 retryBucket: .one
             ).end(.succeeded)
-            pipeline.flush(timeout: 10)
+            await pipeline.flush(timeout: 10)
 
             let enrollment = await store.enrollment()
             XCTAssertNotNil(enrollment?.installationID)
             let token = try await provider.currentToken()
-            pipeline.flush(timeout: 10)
+            await pipeline.flush(timeout: 10)
 
             var exportResult = await client.export(
                 spans: [span()],
@@ -146,7 +146,7 @@
                 ),
                 transport: URLSessionRemoteTelemetryHTTPTransport()
             )
-            defer { logClient.shutdown() }
+            addTeardownBlock { await logClient.shutdown() }
             var logExportResult = await logClient.export(
                 logs: [cloudKitLog()],
                 metadata: [("authorization", "Bearer \(token)")],
@@ -171,7 +171,7 @@
                 ),
                 transport: URLSessionRemoteTelemetryHTTPTransport()
             )
-            defer { outageClient.shutdown() }
+            addTeardownBlock { await outageClient.shutdown() }
 
             var outageResult = await outageClient.export(
                 spans: [span()],
