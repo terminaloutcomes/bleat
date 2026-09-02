@@ -548,11 +548,26 @@ final class UnavailableRemoteTelemetrySpanExporter:
         .failure
     }
 
+    func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        .failure
+    }
+
     func flush(explicitTimeout: TimeInterval?) -> SpanExporterResultCode {
         .failure
     }
 
+    func flush(
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        .failure
+    }
+
     func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func shutdown(explicitTimeout: TimeInterval?) async {}
 
     func cancelActiveExports() {}
 
@@ -569,53 +584,116 @@ final class UnavailableRemoteTelemetryLogExporter:
         .failure
     }
 
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        .failure
+    }
+
     func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult {
+        .failure
+    }
+
+    func forceFlush(explicitTimeout: TimeInterval?) async -> ExportResult {
         .failure
     }
 
     func shutdown(explicitTimeout: TimeInterval?) {}
 
+    func shutdown(explicitTimeout: TimeInterval?) async {}
+
     func cancelActiveExports() {}
 }
 
-/// Persists completed OpenTelemetry batches before attempting downstream
-/// export. The batch processor calls this exporter from its worker thread, so
-/// serialization and filesystem work never execute on the originating caller.
+private final class AsyncCompletionSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isCompleted = false
+
+    func wait() async {
+        if lock.withLock({ isCompleted }) { return }
+        await withCheckedContinuation { continuation in
+            let shouldResume = lock.withLock {
+                guard !isCompleted else { return true }
+                self.continuation = continuation
+                return false
+            }
+            if shouldResume { continuation.resume() }
+        }
+    }
+
+    func complete() {
+        let continuation: CheckedContinuation<Void, Never>? = lock.withLock {
+            guard !isCompleted else { return nil }
+            isCompleted = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+}
+
+private final class DrainCycle: @unchecked Sendable {
+    private let completion = AsyncCompletionSignal()
+    let task: Task<Bool, Never>
+
+    init() {
+        let completion = self.completion
+        task = Task {
+            await completion.wait()
+            return true
+        }
+    }
+
+    func complete() {
+        completion.complete()
+    }
+}
+
+/// Owns asynchronous persistence and downstream export for completed
+/// OpenTelemetry batches. The required synchronous witness only transfers
+/// ownership into the persistence chain; async flush and shutdown await it.
 final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
     private let storageURL: URL
     private let downstream: any RemoteTelemetryDownstreamSpanExporter
     private let policy: RemoteTelemetryCollectionPolicy
     private let now: @Sendable () -> Date
-    private let storageQueue = DispatchQueue(
-        label: "app.bleat.remote-telemetry.storage",
-        // SpanExporter.export must wait for durable persistence. Match the
-        // OpenTelemetry batch worker's QoS to avoid priority inversion while
-        // keeping all serialization and filesystem work off the main actor.
-        qos: .userInitiated
-    )
+    private let storageQueue: DispatchQueue
     private let drainQueue = DispatchQueue(
         label: "app.bleat.remote-telemetry.export",
         qos: .utility
     )
     private let stateLock = NSLock()
     private var enabled = true
+    private var acceptsPersistence = true
     private var foreground = true
     private var drainRunning = false
     private var drainRequested = false
     private var retryScheduled = false
     private var retryAttempt = 0
     private var backgroundFlushCount = 0
+    private var drainCycle: DrainCycle?
+    private var activeDownstreamTask: Task<Void, Never>?
+    private var persistenceTail: Task<Bool, Never>?
+    private var cancellationGeneration: UInt64 = 0
 
     init(
         storageURL: URL,
         downstream: any RemoteTelemetryDownstreamSpanExporter,
         policy: RemoteTelemetryCollectionPolicy,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        storageQueue: DispatchQueue = DispatchQueue(
+            label: "app.bleat.remote-telemetry.storage",
+            qos: .userInitiated
+        )
     ) throws {
         self.storageURL = storageURL
         self.downstream = downstream
         self.policy = policy
         self.now = now
+        self.storageQueue = storageQueue
         try prepareStorage()
         storageQueue.sync {
             pruneAndEnforceBounds()
@@ -623,25 +701,44 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
         requestDrain()
     }
 
+    @available(
+        *, deprecated,
+        message: "Sync export only enqueues persistence; use async export"
+    )
     func export(
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
-        guard isEnabled, !spans.isEmpty else {
-            return .failure
-        }
-        let stored = storageQueue.sync {
-            persist(spans)
-        }
-        guard stored else {
-            return .failure
-        }
-        requestDrain()
-        return .success
+        enqueuePersistence(spans) == nil ? .failure : .success
     }
 
+    func export(
+        spans: [SpanData],
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        guard let persistence = enqueuePersistence(spans) else {
+            return .failure
+        }
+        let timeout = max(explicitTimeout ?? 30, 0)
+        return await awaitTask(
+            persistence,
+            until: Date().addingTimeInterval(timeout),
+            timeoutResult: false
+        ) ? .success : .failure
+    }
+
+    @available(
+        *, deprecated,
+        message: "Synchronous telemetry flush is prohibited"
+    )
     func flush(explicitTimeout: TimeInterval?) -> SpanExporterResultCode {
-        flush(
+        .failure
+    }
+
+    func flush(
+        explicitTimeout: TimeInterval?
+    ) async -> SpanExporterResultCode {
+        await flush(
             explicitTimeout: explicitTimeout,
             allowWhileBackgrounded: false
         )
@@ -650,12 +747,10 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
     func flush(
         explicitTimeout: TimeInterval?,
         allowWhileBackgrounded: Bool
-    ) -> SpanExporterResultCode {
+    ) async -> SpanExporterResultCode {
         if allowWhileBackgrounded {
             stateLock.withLock {
                 backgroundFlushCount += 1
-                // A lifecycle flush is a fresh bounded best-effort attempt,
-                // even when a foreground retry backoff was pending.
                 retryScheduled = false
             }
         }
@@ -664,25 +759,60 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
                 stateLock.withLock { backgroundFlushCount -= 1 }
             }
         }
-        requestDrain()
-        let group = DispatchGroup()
-        group.enter()
-        drainQueue.async {
-            group.leave()
-        }
         let timeout = max(explicitTimeout ?? 30, 0)
-        let result = group.wait(timeout: .now() + timeout)
-        if result != .success,
+        let deadline = Date().addingTimeInterval(timeout)
+        if let persistence = stateLock.withLock({ persistenceTail }),
+            await awaitTask(
+                persistence,
+                until: deadline,
+                timeoutResult: false
+            ) == false
+        {
+            return .failure
+        }
+        requestDrain()
+        let cycle = stateLock.withLock { drainCycle }
+        let completed =
+            if let cycle {
+                await awaitTask(
+                    cycle.task,
+                    until: deadline,
+                    timeoutResult: false
+                )
+            } else {
+                true
+            }
+        if !completed,
             stateLock.withLock({ !foreground })
         {
             downstream.cancelActiveExports()
         }
-        return result == .success ? .success : .failure
+        return completed ? .success : .failure
     }
 
+    @available(*, deprecated, message: "Use async shutdown(explicitTimeout:)")
     func shutdown(explicitTimeout: TimeInterval?) {
         setEnabled(false)
-        downstream.shutdown(explicitTimeout: explicitTimeout)
+    }
+
+    func shutdown(explicitTimeout: TimeInterval?) async {
+        let timeout = max(explicitTimeout ?? 30, 0)
+        let deadline = Date().addingTimeInterval(timeout)
+        let persistence = stateLock.withLock {
+            acceptsPersistence = false
+            return persistenceTail
+        }
+        if let persistence {
+            _ = await awaitTask(
+                persistence,
+                until: deadline,
+                timeoutResult: false
+            )
+        }
+        setEnabled(false)
+        await downstream.shutdown(
+            explicitTimeout: max(deadline.timeIntervalSinceNow, 0)
+        )
     }
 
     func setForeground(_ foreground: Bool) {
@@ -716,15 +846,61 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
     }
 
     private func setEnabled(_ enabled: Bool) {
-        stateLock.withLock {
+        let tasks = stateLock.withLock {
             self.enabled = enabled
             if !enabled {
+                acceptsPersistence = false
+                cancellationGeneration &+= 1
                 retryScheduled = false
                 drainRequested = false
             }
+            return enabled
+                ? (nil, nil)
+                : (activeDownstreamTask, persistenceTail)
         }
         if !enabled {
+            tasks.0?.cancel()
+            tasks.1?.cancel()
             downstream.cancelActiveExports()
+        }
+    }
+
+    private func enqueuePersistence(
+        _ spans: [SpanData]
+    ) -> Task<Bool, Never>? {
+        guard !spans.isEmpty else { return nil }
+        return stateLock.withLock {
+            guard enabled, acceptsPersistence else { return nil }
+            let predecessor = persistenceTail
+            let generation = cancellationGeneration
+            let task = Task<Bool, Never> { [weak self] in
+                if let predecessor { _ = await predecessor.value }
+                guard let self, !Task.isCancelled,
+                    self.isCurrentPersistence(generation: generation)
+                else {
+                    return false
+                }
+                // Foundation has no native async durable file-write API. Keep
+                // this explicitly confirmed filesystem boundary off cooperative
+                // executors, and make the async lifecycle await its completion.
+                let stored = await withCheckedContinuation { continuation in
+                    self.storageQueue.async { [weak self] in
+                        continuation.resume(
+                            returning: self?.persist(spans) == true
+                        )
+                    }
+                }
+                if stored { self.requestDrain() }
+                return stored
+            }
+            persistenceTail = task
+            return task
+        }
+    }
+
+    private func isCurrentPersistence(generation: UInt64) -> Bool {
+        stateLock.withLock {
+            enabled && cancellationGeneration == generation
         }
     }
 
@@ -850,57 +1026,119 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
             guard !drainRunning, !retryScheduled else { return false }
             drainRequested = false
             drainRunning = true
+            drainCycle = DrainCycle()
             return true
         }
         guard shouldStart else { return }
         drainQueue.async { [weak self] in
-            self?.drain()
+            self?.drainNext()
         }
     }
 
-    private func drain() {
-        defer {
-            let shouldRestart = stateLock.withLock {
+    private func drainNext() {
+        guard mayDrain else {
+            finishDrainCycle()
+            return
+        }
+        stateLock.withLock { drainRequested = false }
+        guard let next = storageQueue.sync(execute: nextBatch) else {
+            stateLock.withLock { retryAttempt = 0 }
+            finishDrainCycle()
+            return
+        }
+        guard isEnabled else {
+            finishDrainCycle()
+            return
+        }
+
+        let start = AsyncCompletionSignal()
+        let generation = stateLock.withLock { cancellationGeneration }
+        let downstream = self.downstream
+        let task = Task { [weak self] in
+            await start.wait()
+            guard let self else { return }
+            let result: SpanExporterResultCode
+            if !Task.isCancelled,
+                self.isCurrentDrain(generation: generation)
+            {
+                result = await downstream.export(
+                    spans: next.spans,
+                    explicitTimeout: 30
+                )
+            } else {
+                result = .failure
+            }
+            self.drainQueue.async { [weak self] in
+                self?.completeDrain(next: next, result: result)
+            }
+        }
+        let shouldRun = stateLock.withLock {
+            guard enabled, cancellationGeneration == generation else {
+                return false
+            }
+            activeDownstreamTask = task
+            return true
+        }
+        guard shouldRun else {
+            task.cancel()
+            start.complete()
+            finishDrainCycle()
+            return
+        }
+        start.complete()
+    }
+
+    private func completeDrain(
+        next: (url: URL, spans: [SpanData]),
+        result: SpanExporterResultCode
+    ) {
+        stateLock.withLock { activeDownstreamTask = nil }
+        switch result {
+        case .success:
+            guard isEnabled else {
+                finishDrainCycle()
+                return
+            }
+            storageQueue.sync {
+                try? FileManager.default.removeItem(at: next.url)
+            }
+            stateLock.withLock { retryAttempt = 0 }
+            drainNext()
+        case .failure:
+            scheduleRetry()
+            finishDrainCycle()
+        }
+    }
+
+    private func finishDrainCycle() {
+        let outcome: (completion: DrainCycle?, shouldRestart: Bool) =
+            stateLock.withLock {
+                activeDownstreamTask = nil
                 drainRunning = false
                 guard enabled,
                     foreground || backgroundFlushCount > 0,
                     drainRequested,
                     !retryScheduled
-                else { return false }
+                else {
+                    let completion = drainCycle
+                    drainCycle = nil
+                    return (completion, false)
+                }
                 drainRequested = false
                 drainRunning = true
-                return true
+                return (nil, true)
             }
-            if shouldRestart {
-                drainQueue.async { [weak self] in self?.drain() }
-            }
+        if let completion = outcome.completion {
+            completion.complete()
         }
-        while mayDrain {
-            stateLock.withLock { drainRequested = false }
-            guard let next = storageQueue.sync(execute: nextBatch) else {
-                stateLock.withLock {
-                    retryAttempt = 0
-                }
-                return
-            }
-            guard isEnabled else { return }
-            let result = downstream.export(
-                spans: next.spans,
-                explicitTimeout: 30
-            )
-            switch result {
-            case .success:
-                guard isEnabled else { return }
-                storageQueue.sync {
-                    try? FileManager.default.removeItem(at: next.url)
-                }
-                stateLock.withLock {
-                    retryAttempt = 0
-                }
-            case .failure:
-                scheduleRetry()
-                return
-            }
+        if outcome.shouldRestart {
+            drainNext()
+        }
+    }
+
+    private func isCurrentDrain(generation: UInt64) -> Bool {
+        stateLock.withLock {
+            enabled && cancellationGeneration == generation
         }
     }
 
@@ -998,13 +1236,194 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
     }
 }
 
+/// Adapts OpenTelemetry 2.5.1's synchronous batch-processor callback to the
+/// native async downstream exporter. The processor has no async callback to
+/// implement, so this method only acknowledges that the batch was queued; all
+/// authentication and network work happens in the awaited task chain below.
+/// Remove this adapter when the upstream batch processor offers an async hook.
+final class QueuedRemoteTelemetryLogExporter:
+    RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
+{
+    private let downstream: any RemoteTelemetryDownstreamLogExporter
+    private let lock = NSLock()
+    private var tail: Task<ExportResult, Never>?
+    private var cancellationGeneration: UInt64 = 0
+    private var isEnabled = true
+    private var acceptsExports = true
+    private var isShutdown = false
+    private var shutdownTask: Task<Void, Never>?
+
+    init(downstream: any RemoteTelemetryDownstreamLogExporter) {
+        self.downstream = downstream
+    }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> ExportResult {
+        enqueue(logRecords, explicitTimeout: explicitTimeout) == nil
+            ? .failure : .success
+    }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        guard
+            let task = enqueue(
+                logRecords,
+                explicitTimeout: explicitTimeout
+            )
+        else {
+            return .failure
+        }
+        let timeout = max(explicitTimeout ?? 30, 0)
+        return await awaitTask(
+            task,
+            until: Date().addingTimeInterval(timeout),
+            timeoutResult: .failure
+        )
+    }
+
+    @available(
+        *, deprecated,
+        message: "Synchronous telemetry flush is prohibited"
+    )
+    func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult {
+        .failure
+    }
+
+    func forceFlush(
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult {
+        let timeout = max(explicitTimeout ?? 30, 0)
+        let deadline = Date().addingTimeInterval(timeout)
+        if let task = lock.withLock({ tail }),
+            await awaitTask(
+                task,
+                until: deadline,
+                timeoutResult: .failure
+            ) != .success
+        {
+            return .failure
+        }
+        let remaining = deadline.timeIntervalSinceNow
+        guard remaining > 0 else { return .failure }
+        return await downstream.forceFlush(explicitTimeout: remaining)
+    }
+
+    @available(*, deprecated, message: "Use async shutdown(explicitTimeout:)")
+    func shutdown(explicitTimeout: TimeInterval?) {
+        stopAcceptingExports()
+    }
+
+    func shutdown(explicitTimeout: TimeInterval?) async {
+        let task = beginShutdown(explicitTimeout: explicitTimeout)
+        await task.value
+    }
+
+    func cancelActiveExports() {
+        let task = lock.withLock {
+            cancellationGeneration &+= 1
+            let task = tail
+            tail = nil
+            return task
+        }
+        task?.cancel()
+        downstream.cancelActiveExports()
+    }
+
+    func disable() {
+        let task = lock.withLock {
+            isEnabled = false
+            acceptsExports = false
+            cancellationGeneration &+= 1
+            let task = tail
+            tail = nil
+            return task
+        }
+        task?.cancel()
+        downstream.disable()
+    }
+
+    private func enqueue(
+        _ logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> Task<ExportResult, Never>? {
+        guard !logRecords.isEmpty else {
+            return Task { .success }
+        }
+        return lock.withLock { () -> Task<ExportResult, Never>? in
+            guard isEnabled, acceptsExports, !isShutdown else { return nil }
+            let predecessor = tail
+            let generation = cancellationGeneration
+            let downstream = self.downstream
+            let task = Task<ExportResult, Never> { [weak self] in
+                if let predecessor { _ = await predecessor.value }
+                guard let self, !Task.isCancelled,
+                    self.isCurrent(generation: generation)
+                else {
+                    return .failure
+                }
+                return await downstream.export(
+                    logRecords: logRecords,
+                    explicitTimeout: explicitTimeout
+                )
+            }
+            tail = task
+            return task
+        }
+    }
+
+    private func beginShutdown(
+        explicitTimeout: TimeInterval?
+    ) -> Task<Void, Never> {
+        lock.withLock {
+            if let shutdownTask { return shutdownTask }
+            isShutdown = true
+            acceptsExports = false
+            let pending = tail
+            let downstream = self.downstream
+            let timeout = max(explicitTimeout ?? 30, 0)
+            let task = Task<Void, Never> {
+                let deadline = Date().addingTimeInterval(timeout)
+                if let pending,
+                    await awaitTask(
+                        pending,
+                        until: deadline,
+                        timeoutResult: .failure
+                    ) != .success
+                {
+                    pending.cancel()
+                    downstream.cancelActiveExports()
+                }
+                await downstream.shutdown(
+                    explicitTimeout: max(deadline.timeIntervalSinceNow, 0)
+                )
+            }
+            shutdownTask = task
+            return task
+        }
+    }
+
+    private func stopAcceptingExports() {
+        lock.withLock { acceptsExports = false }
+    }
+
+    private func isCurrent(generation: UInt64) -> Bool {
+        lock.withLock {
+            isEnabled && cancellationGeneration == generation
+        }
+    }
+}
+
 /// Owns one enabled OpenTelemetry provider. Callers retain the stable facade,
 /// while consent changes replace or deactivate this pipeline.
 public final class RemoteTelemetryPipeline: @unchecked Sendable {
     private let provider: TracerProviderSdk
     private let loggerProvider: LoggerProviderSdk
     private let exporter: BoundedPersistentSpanExporter
-    private let logExporter: any RemoteTelemetryDownstreamLogExporter
+    private let logExporter: QueuedRemoteTelemetryLogExporter
     private let tracerFacade: RemoteTelemetryTracer
     private let loggerFacade: RemoteTelemetryLogger
     private var processor: BatchSpanProcessor
@@ -1033,9 +1452,12 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
             policy: policy
         )
         let processor = BatchSpanProcessor(spanExporter: exporter)
-        let logExporter =
+        let downstreamLogExporter =
             downstreamLogExporter
             ?? UnavailableRemoteTelemetryLogExporter()
+        let logExporter = QueuedRemoteTelemetryLogExporter(
+            downstream: downstreamLogExporter
+        )
         let logProcessor = BatchLogRecordProcessor(
             logRecordExporter: logExporter
         )
@@ -1078,19 +1500,28 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
         exporter.setForeground(foreground)
     }
 
-    public func flush(timeout: TimeInterval) {
+    public func flush(timeout: TimeInterval) async {
+        // OpenTelemetry's processors expose only synchronous queue-drain hooks.
+        // Their exporter witnesses persist or enqueue the batch without doing
+        // authentication or network transport; the real drains are awaited below.
         provider.forceFlush(timeout: timeout)
         _ = logProcessor.forceFlush(explicitTimeout: timeout)
-        _ = exporter.flush(explicitTimeout: timeout)
+        async let spanResult = exporter.flush(explicitTimeout: timeout)
+        async let logResult = logExporter.forceFlush(explicitTimeout: timeout)
+        _ = await (spanResult, logResult)
     }
 
-    public func flushForBackground(timeout: TimeInterval) {
+    public func flushForBackground(timeout: TimeInterval) async {
+        // See flush(timeout:): these calls only empty the upstream processor
+        // queues. Authentication and transport remain in the awaited exporters.
         provider.forceFlush(timeout: timeout)
         _ = logProcessor.forceFlush(explicitTimeout: timeout)
-        _ = exporter.flush(
+        async let spanResult = exporter.flush(
             explicitTimeout: timeout,
             allowWhileBackgrounded: true
         )
+        async let logResult = logExporter.forceFlush(explicitTimeout: timeout)
+        _ = await (spanResult, logResult)
     }
 
     public func deactivate() {
@@ -1105,8 +1536,12 @@ public final class RemoteTelemetryPipeline: @unchecked Sendable {
         exporter.disableAndPurge()
     }
 
-    public func shutdown() {
+    public func shutdown() async {
+        // Upstream shutdown is synchronous-only. The witnesses stop accepting
+        // batches but do not close transport; the awaited lifecycle owns closure.
         processor.shutdown(explicitTimeout: 2)
         _ = logProcessor.shutdown(explicitTimeout: 2)
+        await exporter.shutdown(explicitTimeout: 2)
+        await logExporter.shutdown(explicitTimeout: 2)
     }
 }
