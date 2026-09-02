@@ -23,13 +23,18 @@
             "--ui-testing-home-download-unavailable"
         case homeRefreshFailure = "--ui-testing-home-refresh-failure"
         case homeShelfOrder = "--ui-testing-home-shelf-order"
+        case contextDownloadRemoval =
+            "--ui-testing-context-download-removal"
+        case contextDownloadRemovalFailure =
+            "--ui-testing-context-download-removal-failure"
 
         var isSignedIn: Bool {
             switch self {
             case .signedIn, .refresh, .emptyLibraryRefreshFailure,
                 .limitedPermissions, .playback, .largeLibrary, .homeLoading,
                 .homeEmpty, .homeDownloadLoading, .homeDownloadUnavailable,
-                .homeRefreshFailure, .homeShelfOrder:
+                .homeRefreshFailure, .homeShelfOrder,
+                .contextDownloadRemoval, .contextDownloadRemovalFailure:
                 true
             case .signedOut, .openID, .rejectLogin, .submissionProgress,
                 .launching, .unavailableStartup:
@@ -40,7 +45,8 @@
         var hasCompletedDownload: Bool {
             switch self {
             case .homeDownloadLoading, .homeDownloadUnavailable,
-                .homeShelfOrder:
+                .homeShelfOrder, .contextDownloadRemoval,
+                .contextDownloadRemovalFailure:
                 true
             default:
                 false
@@ -84,6 +90,12 @@
             ProcessInfo.processInfo.arguments.contains(
                 UITestScenario.unavailableStartup.rawValue
             ) ? .persistenceUnavailable : nil
+        }
+
+        static var downloadRemovalFailure: DownloadModelFailure? {
+            ProcessInfo.processInfo.arguments.contains(
+                UITestScenario.contextDownloadRemovalFailure.rawValue
+            ) ? .storageUnavailable : nil
         }
 
         private let scenario: UITestScenario
@@ -187,6 +199,9 @@
 
         private init(scenario: UITestScenario) {
             self.scenario = scenario
+            let isContextDownloadRemoval =
+                scenario == .contextDownloadRemoval
+                || scenario == .contextDownloadRemovalFailure
             accountResult = Self.makeAccount(
                 hasManagementPermissions: scenario != .limitedPermissions,
                 deniesPlayback: ProcessInfo.processInfo.arguments.contains(
@@ -195,7 +210,14 @@
             )
             downloadsStorageRootURL =
                 scenario.hasCompletedDownload
-                ? try? Self.makeCompletedDownloadFixture()
+                ? try? Self.makeCompletedDownloadFixture(
+                    itemID: isContextDownloadRemoval
+                        ? LibraryItemID(rawValue: "ui-book")
+                        : LibraryItemID(rawValue: "ui-downloaded"),
+                    purpose: ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-automatic-context-download"
+                    ) ? .automaticCache : .manual
+                )
                 : nil
         }
 
@@ -1315,7 +1337,10 @@
             return 10_000
         }
 
-        private static func makeCompletedDownloadFixture() throws -> URL {
+        private static func makeCompletedDownloadFixture(
+            itemID: LibraryItemID,
+            purpose: DownloadPurpose
+        ) throws -> URL {
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
                     "BleatUITestDownloads-\(UUID().uuidString)",
@@ -1323,7 +1348,6 @@
                 )
             let layout = try DownloadStorageLayout(rootURL: root)
             let accountID = AccountID(rawValue: "ui-account")
-            let itemID = LibraryItemID(rawValue: "ui-downloaded")
             let audio = silentWaveFixture()
             let track = DownloadTrackPlan(
                 index: 0,
@@ -1339,7 +1363,10 @@
             var manifest = try DownloadManifest(
                 downloadID: DownloadID(rawValue: "ui-downloaded-download"),
                 accountID: accountID,
-                plan: plan
+                plan: plan,
+                purpose: purpose,
+                automaticTargetTrackIndexes:
+                    purpose == .automaticCache ? [track.index] : nil
             )
             try manifest.markComplete(
                 trackIndex: 0,

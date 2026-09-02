@@ -276,6 +276,12 @@ enum DownloadControlAction: Hashable {
     case remove
 }
 
+enum DownloadRemovalResult: Equatable, Sendable {
+    case removed
+    case controlTransitionInProgress
+    case failed(DownloadModelFailure)
+}
+
 enum DownloadControlPhase: Equatable {
     case waitingToDownload
     case downloading
@@ -649,6 +655,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let pauseManifestCommit:
         @Sendable (DownloadStorage, DownloadTaskIdentity, Int64) async throws
             -> Void
+    private let removalStorageCheckpoint:
+        @MainActor @Sendable () async throws -> Void
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
     private let automaticLookaheadKey =
@@ -880,7 +888,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     identity,
                     observedByteLength: committed
                 )
-            }
+            },
+        removalStorageCheckpoint:
+            @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
         diagnosticEmitter = OrderedDownloadDiagnosticEmitter(
@@ -893,6 +903,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.replacementTaskStartCheckpoint = replacementTaskStartCheckpoint
         self.pauseOperationCheckpoint = pauseOperationCheckpoint
         self.pauseManifestCommit = pauseManifestCommit
+        self.removalStorageCheckpoint = removalStorageCheckpoint
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         let loadedMaximumConcurrentDownloads =
@@ -2750,14 +2761,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     func remove(
         _ record: DownloadedBookRecord,
         duringTransition: Bool = false
-    ) async -> Bool {
+    ) async -> DownloadRemovalResult {
         guard let storage else {
             failure = .storageUnavailable
-            return false
+            return .failed(.storageUnavailable)
         }
         let downloadID = record.manifest.downloadID
-        if !duringTransition {
-            guard controlTransitions[downloadID] == nil else { return false }
+        if !duringTransition,
+            let transition = controlTransitions[downloadID]
+        {
+            switch transition {
+            case .pausing, .resuming, .cancelling:
+                return .controlTransitionInProgress
+            case .pauseFailed:
+                break
+            }
         }
         invalidatePauseOperation(for: downloadID)
         invalidateResumeOperation(for: downloadID)
@@ -2783,6 +2801,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             finishTransferSpan(identity, outcome: .cancelled)
         }
         do {
+            try await removalStorageCheckpoint()
             try await storage.remove(record)
             automaticCachePins[downloadID] = nil
             deferredAutomaticCacheCleanup[downloadID] = nil
@@ -2797,10 +2816,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 downloadID
             )
             await refresh()
-            return true
+            return .removed
+        } catch let modelFailure as DownloadModelFailure {
+            failure = modelFailure
+            return .failed(modelFailure)
+        } catch let storageError as DownloadStorageError {
+            let modelFailure = storageFailure(storageError)
+            failure = modelFailure
+            return .failed(modelFailure)
         } catch {
             failure = .transferFailed
-            return false
+            return .failed(.transferFailed)
         }
     }
 
@@ -2827,7 +2853,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         await waitForDownloadOperations()
         let removableRecords = records
         for record in removableRecords {
-            guard await remove(record, duringTransition: true) else {
+            let result = await remove(
+                record,
+                duringTransition: true
+            )
+            guard case .removed = result else {
                 return false
             }
         }

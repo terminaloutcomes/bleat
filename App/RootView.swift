@@ -1526,24 +1526,24 @@ private struct SignedInView: View {
             }
         }
         .alert(
-            bookActionPresentation.downloadFailure?.title
+            bookActionPresentation.failure?.title
                 ?? "Download unavailable",
             isPresented: Binding(
                 get: {
-                    bookActionPresentation.downloadFailure != nil
+                    bookActionPresentation.failure != nil
                 },
                 set: {
                     if !$0 {
-                        bookActionPresentation.dismissDownloadFailure()
+                        bookActionPresentation.dismissFailure()
                     }
                 }
             )
         ) {
             Button("OK") {
-                bookActionPresentation.dismissDownloadFailure()
+                bookActionPresentation.dismissFailure()
             }
         } message: {
-            if let failure = bookActionPresentation.downloadFailure {
+            if let failure = bookActionPresentation.failure {
                 Text(failure.message)
             }
         }
@@ -1833,6 +1833,33 @@ private enum BookContextAction: Hashable {
     case transcribe
 }
 
+private enum BookActionContextFailure: Equatable {
+    case action(AppFailure)
+    case removal(DownloadModelFailure)
+    case removalControlTransitionInProgress
+    case removalPlaybackProtected
+
+    var title: String {
+        switch self {
+        case .action(let failure): failure.title
+        case .removal: "Download removal failed"
+        case .removalControlTransitionInProgress: "Download is busy"
+        case .removalPlaybackProtected: "Download is in use"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .action(let failure): failure.message
+        case .removal(let failure): failure.message
+        case .removalControlTransitionInProgress:
+            "Wait for the current download action to finish, then try again."
+        case .removalPlaybackProtected:
+            "Stop playback before removing this download."
+        }
+    }
+}
+
 extension BookActionAvailability {
     fileprivate var canOpenEditor: Bool {
         visibleActions.contains(.editMetadata)
@@ -1857,8 +1884,8 @@ private final class BookActionContextPresentation {
     }
 
     var request: Request?
-    private(set) var downloadFailure: AppFailure?
-    private var pendingDownloads: Set<DownloadPreparationKey> = []
+    private(set) var failure: BookActionContextFailure?
+    private var pendingDownloadOperations: Set<DownloadPreparationKey> = []
 
     var requestBinding: Binding<Request?> {
         Binding(
@@ -1877,36 +1904,54 @@ private final class BookActionContextPresentation {
 
     func dismiss() {
         request = nil
-        downloadFailure = nil
+        failure = nil
     }
 
-    func beginDownload(accountID: AccountID, itemID: LibraryItemID) -> Bool {
-        pendingDownloads.insert(
+    func beginDownloadOperation(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Bool {
+        pendingDownloadOperations.insert(
             DownloadPreparationKey(accountID: accountID, itemID: itemID)
         ).inserted
     }
 
-    func finishDownload(accountID: AccountID, itemID: LibraryItemID) {
-        pendingDownloads.remove(
+    func finishDownloadOperation(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) {
+        pendingDownloadOperations.remove(
             DownloadPreparationKey(accountID: accountID, itemID: itemID)
         )
     }
 
-    func isDownloadPending(
+    func isDownloadOperationPending(
         accountID: AccountID,
         itemID: LibraryItemID
     ) -> Bool {
-        pendingDownloads.contains(
+        pendingDownloadOperations.contains(
             DownloadPreparationKey(accountID: accountID, itemID: itemID)
         )
     }
 
     func presentDownloadFailure(_ failure: AppFailure) {
-        downloadFailure = failure
+        self.failure = .action(failure)
     }
 
-    func dismissDownloadFailure() {
-        downloadFailure = nil
+    func presentRemovalFailure(_ failure: DownloadModelFailure) {
+        self.failure = .removal(failure)
+    }
+
+    func presentRemovalControlTransitionInProgress() {
+        failure = .removalControlTransitionInProgress
+    }
+
+    func presentRemovalPlaybackProtected() {
+        failure = .removalPlaybackProtected
+    }
+
+    func dismissFailure() {
+        failure = nil
     }
 }
 
@@ -1999,7 +2044,7 @@ private struct BookActionContextMenuModifier: ViewModifier {
                     beginDownload()
                 }
                 .disabled(
-                    presentation.isDownloadPending(
+                    presentation.isDownloadOperationPending(
                         accountID: account.id,
                         itemID: book.id
                     )
@@ -2029,18 +2074,59 @@ private struct BookActionContextMenuModifier: ViewModifier {
                 "book.context.\(book.id.rawValue).transcribe"
             )
         }
+
+        if let record = localDownloadRecord {
+            Button(
+                "Remove Download",
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                beginRemoval(record)
+            }
+            .disabled(
+                isDownloadProtected
+                    || removalControlTransitionIsActive(record)
+                    || presentation.isDownloadOperationPending(
+                        accountID: account.id,
+                        itemID: book.id
+                    )
+            )
+            .accessibilityIdentifier(
+                "book.context.\(book.id.rawValue).removeDownload"
+            )
+        }
     }
 
     private var canStartDownload: Bool {
-        guard
-            let record = model.downloads.record(
-                accountID: account.id,
-                itemID: book.id
-            )
-        else {
+        guard let record = localDownloadRecord else {
             return true
         }
         return record.manifest.purpose == .automaticCache
+    }
+
+    private var localDownloadRecord: DownloadedBookRecord? {
+        model.downloads.record(accountID: account.id, itemID: book.id)
+    }
+
+    private var isDownloadProtected: Bool {
+        let target = PlaybackStartTarget(
+            accountID: account.id,
+            itemID: book.id
+        )
+        return model.playbackStartTarget == target
+            || model.playback.accountID == account.id
+                && model.playback.itemID == book.id
+    }
+
+    private func removalControlTransitionIsActive(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        switch model.downloads.controlSnapshot(for: record).phase {
+        case .pausing, .resuming, .cancelling:
+            true
+        default:
+            false
+        }
     }
 
     private func begin(_ action: BookContextAction) {
@@ -2049,7 +2135,7 @@ private struct BookActionContextMenuModifier: ViewModifier {
 
     private func beginDownload() {
         guard
-            presentation.beginDownload(
+            presentation.beginDownloadOperation(
                 accountID: account.id,
                 itemID: book.id
             )
@@ -2061,10 +2147,49 @@ private struct BookActionContextMenuModifier: ViewModifier {
         }
     }
 
+    private func beginRemoval(_ record: DownloadedBookRecord) {
+        guard
+            !removalControlTransitionIsActive(record),
+            presentation.beginDownloadOperation(
+                accountID: account.id,
+                itemID: book.id
+            )
+        else {
+            return
+        }
+        Task {
+            defer {
+                presentation.finishDownloadOperation(
+                    accountID: account.id,
+                    itemID: book.id
+                )
+            }
+            switch await model.removeDownload(record) {
+            case .removed, .unavailable:
+                break
+            case .playbackProtected:
+                guard model.account?.id == account.id else {
+                    return
+                }
+                presentation.presentRemovalPlaybackProtected()
+            case .controlTransitionInProgress:
+                guard model.account?.id == account.id else {
+                    return
+                }
+                presentation.presentRemovalControlTransitionInProgress()
+            case .failed(let failure):
+                guard model.account?.id == account.id else {
+                    return
+                }
+                presentation.presentRemovalFailure(failure)
+            }
+        }
+    }
+
     @MainActor
     private func prepareDownload() async {
         defer {
-            presentation.finishDownload(
+            presentation.finishDownloadOperation(
                 accountID: account.id,
                 itemID: book.id
             )
@@ -5624,7 +5749,7 @@ private struct DownloadStorageView: View {
             {
                 Button("Delete", role: .destructive) {
                     Task {
-                        await model.downloads.remove(record)
+                        await model.removeDownload(record)
                     }
                 }
             }

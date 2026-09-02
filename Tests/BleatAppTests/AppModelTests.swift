@@ -5588,6 +5588,10 @@ final class AppModelTests: XCTestCase {
         let relaunchedDescriptors =
             await relaunchedModel.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(relaunchedDescriptors.isEmpty)
+
+        let removalResult = await model.remove(record)
+        XCTAssertEqual(removalResult, .removed)
+        XCTAssertTrue(model.records.isEmpty)
         await relaunchedModel.removeAll()
     }
 
@@ -5665,6 +5669,63 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(updated.manifest.entries[0].state, .paused)
         XCTAssertEqual(updated.manifest.state, .paused)
+        await model.removeAll()
+    }
+
+    func testRemovalReportsAnInFlightControlTransition() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatRemovalDuringPause-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Removal during pause",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "removal-during-pause",
+            committedByteCount: 5
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let gate = AsyncGate()
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(request)
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.removal-during-pause.\(UUID().uuidString)",
+            pauseOperationCheckpoint: {
+                await gate.enterAndWait()
+            }
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+        let pauseTask = Task { @MainActor in
+            await model.pause(record)
+        }
+        await gate.waitUntilEntered()
+
+        let result = await model.remove(record)
+
+        XCTAssertEqual(result, .controlTransitionInProgress)
+        XCTAssertNotNil(
+            model.record(accountID: account.id, itemID: detail.id)
+        )
+        await gate.release()
+        await pauseTask.value
         await model.removeAll()
     }
 
@@ -14782,6 +14843,241 @@ final class AppModelTests: XCTestCase {
             closedSessions,
             [PlaybackSessionID(rawValue: "playback-start-session")]
         )
+    }
+
+    func testStreamPreparationRetainsRequestedPlaybackIdentity() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playbackGate = AsyncGate()
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            playbackGate: playbackGate
+        )
+        let playback = PlaybackModel(service: service)
+        let start = Task {
+            await playback.start(detail: fixture.detail, account: account)
+        }
+        await playbackGate.waitUntilEntered()
+
+        XCTAssertEqual(playback.state, .preparing)
+        XCTAssertEqual(playback.accountID, account.id)
+        XCTAssertEqual(playback.itemID, fixture.detail.id)
+
+        await playbackGate.release()
+        await start.value
+        await playback.stop()
+    }
+
+    func testRemovalFinishesBeforePlaybackReadsDownloadedMedia()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let downloadRoot = fixture.root.appendingPathComponent(
+            "RemovalPlaybackCoordination",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: downloadRoot,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        try await prepareCompleteDownload(
+            root: downloadRoot,
+            account: account,
+            detail: fixture.detail
+        )
+        let removalGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: downloadRoot,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("removal-playback-coordination"),
+            downloadRemovalStorageCheckpoint: {
+                await removalGate.enterAndWait()
+            }
+        )
+        await model.start()
+        let record = try XCTUnwrap(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+
+        let removal = Task { await model.removeDownload(record) }
+        await removalGate.waitUntilEntered()
+        let playbackStart = Task {
+            await model.startPlayback(
+                detail: fixture.detail,
+                account: account
+            )
+        }
+        let playbackQueued = await waitUntil(timeout: .seconds(2)) {
+            model.playbackStartTarget
+                == PlaybackStartTarget(
+                    accountID: account.id,
+                    itemID: fixture.detail.id
+                )
+        }
+        XCTAssertTrue(playbackQueued)
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertTrue(openRequests.isEmpty)
+
+        await removalGate.release()
+        let removalOutcome = await removal.value
+        let playbackOutcome = await playbackStart.value
+        XCTAssertEqual(removalOutcome, .removed)
+        XCTAssertEqual(playbackOutcome, .started(source: .streamed))
+        XCTAssertNil(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+        await model.playback.stop()
+    }
+
+    func testRemovalReturnsTypedStorageFailureWithoutDroppingRecord()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let downloadRoot = fixture.root.appendingPathComponent(
+            "RemovalStorageFailure",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: downloadRoot,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        try await prepareCompleteDownload(
+            root: downloadRoot,
+            account: account,
+            detail: fixture.detail
+        )
+        let model = AppModel(
+            service: TestAppService(activeAccount: .success(account)),
+            downloadsStorageRootURL: downloadRoot,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("removal-storage-failure"),
+            downloadRemovalStorageCheckpoint: {
+                throw DownloadStorageError.persistenceFailed
+            }
+        )
+        await model.start()
+        let record = try XCTUnwrap(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+
+        let outcome = await model.removeDownload(record)
+        XCTAssertEqual(outcome, .failed(.storageUnavailable))
+        XCTAssertNotNil(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+    }
+
+    func testPlaybackPreparationReturnsTypedProtectedRemoval()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let downloadRoot = fixture.root.appendingPathComponent(
+            "PlaybackProtectedRemoval",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: downloadRoot,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        try await prepareCompleteDownload(
+            root: downloadRoot,
+            account: account,
+            detail: fixture.detail,
+            complete: false
+        )
+        let playbackGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            playbackGate: playbackGate
+        )
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: downloadRoot,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("playback-protected-removal")
+        )
+        await model.start()
+        let record = try XCTUnwrap(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+        let playbackStart = Task {
+            await model.startPlayback(
+                detail: fixture.detail,
+                account: account
+            )
+        }
+        await playbackGate.waitUntilEntered()
+
+        XCTAssertEqual(
+            model.playbackStartTarget,
+            PlaybackStartTarget(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+        let removalOutcome = await model.removeDownload(record)
+        XCTAssertEqual(removalOutcome, .playbackProtected)
+        XCTAssertNotNil(
+            model.downloads.record(
+                accountID: account.id,
+                itemID: fixture.detail.id
+            )
+        )
+
+        await playbackGate.release()
+        let playbackOutcome = await playbackStart.value
+        XCTAssertEqual(playbackOutcome, .started(source: .streamed))
+        await model.playback.stop()
     }
 
     func testNewRequestCancelsInFlightStreamPreparation() async throws {
