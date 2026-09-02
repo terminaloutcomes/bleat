@@ -925,6 +925,82 @@ final class RemoteTelemetryTests: XCTestCase {
         pipeline.purge()
     }
 
+    func testSynchronousSpanWitnessReturnsBeforePersistenceAndAsyncFlushWaits()
+        async throws
+    {
+        let span = try await makeRecordedSpan()
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storageQueue = DispatchQueue(
+            label: "app.bleat.remote-telemetry.storage.test"
+        )
+        let persistenceGate = DispatchSemaphore(value: 0)
+        let exporter = try BoundedPersistentSpanExporter(
+            storageURL: directory,
+            downstream: RecordingSpanExporter(result: .failure),
+            policy: .default,
+            storageQueue: storageQueue
+        )
+        storageQueue.async { persistenceGate.wait() }
+        defer {
+            persistenceGate.signal()
+            exporter.disableAndPurge()
+        }
+
+        let started = ContinuousClock.now
+        let exportResult = synchronousExport(exporter, spans: [span])
+        let elapsed = started.duration(to: .now)
+        XCTAssertEqual(exportResult, .success)
+        XCTAssertLessThan(elapsed, .milliseconds(100))
+
+        let completion = TestCompletionFlag()
+        let flush = Task {
+            let result = await exporter.flush(explicitTimeout: 2)
+            completion.complete()
+            return result
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(completion.isComplete)
+        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+
+        persistenceGate.signal()
+        let flushResult = await flush.value
+        XCTAssertEqual(flushResult, .success)
+        XCTAssertTrue(completion.isComplete)
+        XCTAssertFalse(batchFiles(in: directory).isEmpty)
+    }
+
+    func testConcurrentLogShutdownCallersAwaitSharedCompletion() async {
+        let downstream = GatedShutdownLogExporter()
+        let exporter = QueuedRemoteTelemetryLogExporter(
+            downstream: downstream
+        )
+        let firstCompletion = TestCompletionFlag()
+        let secondCompletion = TestCompletionFlag()
+
+        let first = Task {
+            await exporter.shutdown(explicitTimeout: 2)
+            firstCompletion.complete()
+        }
+        await downstream.waitUntilShutdownStarts()
+        let second = Task {
+            await exporter.shutdown(explicitTimeout: 2)
+            secondCompletion.complete()
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(firstCompletion.isComplete)
+        XCTAssertFalse(secondCompletion.isComplete)
+        XCTAssertEqual(downstream.shutdownCount, 1)
+
+        downstream.completeShutdown()
+        await first.value
+        await second.value
+        XCTAssertTrue(firstCompletion.isComplete)
+        XCTAssertTrue(secondCompletion.isComplete)
+        XCTAssertEqual(downstream.shutdownCount, 1)
+    }
+
     func testBackgroundStyleFlushReturnsAtItsDeadline() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1088,6 +1164,13 @@ final class RemoteTelemetryTests: XCTestCase {
         )
     }
 
+    private func synchronousExport(
+        _ exporter: any SpanExporter,
+        spans: [SpanData]
+    ) -> SpanExporterResultCode {
+        exporter.export(spans: spans, explicitTimeout: 2)
+    }
+
     private func makeRecordedSpan(
         operation: RemoteTelemetryOperation = .appLaunch
     ) async throws -> SpanData {
@@ -1135,6 +1218,96 @@ private final class TestDateBox: @unchecked Sendable {
     var value: Date {
         get { lock.withLock { storedValue } }
         set { lock.withLock { storedValue = newValue } }
+    }
+}
+
+private final class TestCompletionFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completed = false
+
+    var isComplete: Bool {
+        lock.withLock { completed }
+    }
+
+    func complete() {
+        lock.withLock { completed = true }
+    }
+}
+
+private final class TestAsyncSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var completed = false
+
+    func wait() async {
+        if lock.withLock({ completed }) { return }
+        await withCheckedContinuation { continuation in
+            let resumeImmediately = lock.withLock {
+                if completed { return true }
+                self.continuation = continuation
+                return false
+            }
+            if resumeImmediately { continuation.resume() }
+        }
+    }
+
+    func complete() {
+        let continuation = lock.withLock {
+            completed = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+}
+
+private final class GatedShutdownLogExporter:
+    RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
+{
+    private let lock = NSLock()
+    private let shutdownStarted = TestAsyncSignal()
+    private let shutdownCompletion = TestAsyncSignal()
+    private var shutdowns = 0
+
+    var shutdownCount: Int {
+        lock.withLock { shutdowns }
+    }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) -> ExportResult { .failure }
+
+    func export(
+        logRecords: [ReadableLogRecord],
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult { .failure }
+
+    func forceFlush(explicitTimeout: TimeInterval?) -> ExportResult { .failure }
+
+    func forceFlush(
+        explicitTimeout: TimeInterval?
+    ) async -> ExportResult { .failure }
+
+    func shutdown(explicitTimeout: TimeInterval?) {}
+
+    func shutdown(explicitTimeout: TimeInterval?) async {
+        lock.withLock { shutdowns += 1 }
+        shutdownStarted.complete()
+        await shutdownCompletion.wait()
+    }
+
+    func cancelActiveExports() {}
+
+    func disable() {}
+
+    func waitUntilShutdownStarts() async {
+        await shutdownStarted.wait()
+    }
+
+    func completeShutdown() {
+        shutdownCompletion.complete()
     }
 }
 
