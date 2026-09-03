@@ -2250,11 +2250,17 @@ final class AppModelTests: XCTestCase {
             async throws
         {
             let account = try fixtureAccount()
-            let chapter = PlaybackChapter(
+            let cachedChapter = PlaybackChapter(
                 id: 1,
                 start: 0,
                 end: 20,
                 title: "Chapter One"
+            )
+            let activeChapter = PlaybackChapter(
+                id: 2,
+                start: 20,
+                end: 40,
+                title: "Chapter Two"
             )
             let details = (1...3).map { index in
                 fixtureBookDetail(
@@ -2263,14 +2269,19 @@ final class AppModelTests: XCTestCase {
                         title: "Book \(index)",
                         libraryID: fixtureLibrary().id
                     ),
-                    chapters: [chapter]
+                    chapters:
+                        index == 3
+                        ? [cachedChapter, activeChapter] : [cachedChapter]
                 )
             }
             let transcriberGate = AsyncGate()
             let service = TestAppService(
                 activeAccount: .success(account),
                 transcriptLoad: .success([
-                    fixtureTranscript(chapter: chapter, text: "cached")
+                    fixtureTranscript(
+                        chapter: cachedChapter,
+                        text: "cached"
+                    )
                 ])
             )
             let coordinator = makeTranscriptionModel(
@@ -2297,13 +2308,21 @@ final class AppModelTests: XCTestCase {
             )
             coordinator.retainTranscriptCache(for: visibleBookKey)
             coordinator.start(
-                chapters: [chapter],
+                chapters: [activeChapter],
                 detail: details[2],
                 account: account,
                 downloads: appModel.downloads,
                 appModel: appModel
             )
-            await transcriberGate.waitUntilEntered()
+            let transcriberStarted = await transcriberGate.waitUntilEntered(
+                timeout: .seconds(2)
+            )
+            guard transcriberStarted else {
+                coordinator.cancel()
+                await transcriberGate.release()
+                XCTFail("Timed out waiting for transcription to start")
+                return
+            }
             await Task.yield()
 
             NotificationCenter.default.post(
@@ -2320,13 +2339,19 @@ final class AppModelTests: XCTestCase {
             )
             XCTAssertFalse(
                 coordinator.isCached(
-                    chapterID: chapter.id, for: inactiveBookKey)
+                    chapterID: cachedChapter.id, for: inactiveBookKey)
             )
             XCTAssertTrue(
-                coordinator.isCached(chapterID: chapter.id, for: visibleBookKey)
+                coordinator.isCached(
+                    chapterID: cachedChapter.id,
+                    for: visibleBookKey
+                )
             )
             XCTAssertTrue(
-                coordinator.isCached(chapterID: chapter.id, for: activeBookKey)
+                coordinator.isCached(
+                    chapterID: cachedChapter.id,
+                    for: activeBookKey
+                )
             )
 
             coordinator.releaseTranscriptCache(for: visibleBookKey)
@@ -20033,6 +20058,15 @@ private actor AsyncGate {
         await withCheckedContinuation { continuation in
             enteredContinuations.append(continuation)
         }
+    }
+
+    func waitUntilEntered(timeout: Duration) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !entered, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return entered
     }
 
     func release() {

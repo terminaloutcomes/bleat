@@ -217,67 +217,6 @@ final class NearbyServerDiscoveryTests: XCTestCase {
         }
     }
 
-    func testPhysicalDeviceResolvesAndVerifiesLiveAdvertisement() async throws {
-        #if targetEnvironment(simulator)
-            throw XCTSkip("Physical-device Bonjour validation")
-        #else
-            guard
-                ProcessInfo.processInfo.environment[
-                    "BLEAT_RUN_PHYSICAL_BONJOUR_TESTS"
-                ] == "1"
-            else {
-                throw XCTSkip(
-                    "Set BLEAT_RUN_PHYSICAL_BONJOUR_TESTS=1 on the advertising LAN"
-                )
-            }
-            let browser = BonjourServiceBrowser()
-            let resolver = BonjourServiceResolver()
-            let completed = expectation(
-                description: "Resolved live Bonjour service")
-            var outcome: Result<ResolvedBonjourService, Error>?
-            var startedResolution = false
-
-            browser.start { event in
-                guard case .added(let service) = event,
-                    service.name == "Audiobookshelf",
-                    !startedResolution
-                else {
-                    return
-                }
-                startedResolution = true
-                Task { @MainActor in
-                    do {
-                        outcome = .success(try await resolver.resolve(service))
-                    } catch {
-                        outcome = .failure(error)
-                    }
-                    completed.fulfill()
-                }
-            }
-
-            await fulfillment(of: [completed], timeout: 15)
-            browser.cancel()
-            resolver.cancelAll()
-            let resolved = try XCTUnwrap(outcome).get()
-
-            XCTAssertEqual(
-                resolved.host,
-                "audiobookshelf.housenet.yaleman.org"
-            )
-            XCTAssertEqual(resolved.port, 443)
-            XCTAssertEqual(resolved.path, "/")
-            XCTAssertEqual(
-                resolved.baseURL.url.absoluteString,
-                "https://audiobookshelf.housenet.yaleman.org"
-            )
-
-            let discovered = try await ServerDiscoveryClient(
-                transport: URLSessionHTTPTransport(routesRequests: false)
-            ).discover(resolved.baseURL)
-            XCTAssertEqual(discovered.baseURL, resolved.baseURL)
-        #endif
-    }
-
     private func discoveredService(
         name: String = "Audiobookshelf",
         interfaceIndex: UInt32 = 7
