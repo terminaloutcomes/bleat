@@ -21,6 +21,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Install ripgrep
+        run: brew install ripgrep
+
       - name: Run host validation
         env:
           BLEAT_SKIP_SIMULATOR: "1"
@@ -44,6 +47,8 @@ jobs:
         env:
           BLEAT_SKIP_HOST: "1"
           BLEAT_SIMULATOR_DESTINATION: platform=iOS Simulator,name=${{ matrix.device }}
+          BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
+          BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}
         run: ./scripts/test-core.sh
 
   archive:
