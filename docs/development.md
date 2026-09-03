@@ -60,6 +60,12 @@ For host-only validation without starting a Simulator:
 BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh
 ```
 
+For Simulator-only validation after host validation has run independently:
+
+```sh
+BLEAT_SKIP_HOST=1 ./scripts/test-core.sh
+```
+
 The complete gate defaults to an `iPhone 17 Pro` and one UI-test worker. Select
 another installed Simulator or opt into more workers only on a stable host:
 
