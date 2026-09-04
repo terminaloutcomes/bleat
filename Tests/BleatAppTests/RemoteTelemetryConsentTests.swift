@@ -430,6 +430,9 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                     isDirectory: true
                 )
             defer { try? FileManager.default.removeItem(at: storageRoot) }
+            let pipelineBuildGate = OneShotPipelineBuildGate()
+            defer { pipelineBuildGate.release() }
+
             let controller = RemoteTelemetryController(
                 resource: try RemoteTelemetryResource(
                     applicationVersion: "1.2.3",
@@ -440,11 +443,13 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                     operatingSystemPatchVersion: 0,
                     installationID: UUID()
                 ),
-                storageRootURL: storageRoot
+                storageRootURL: storageRoot,
+                beforePipelineBuild: {
+                    pipelineBuildGate.block()
+                }
             )
 
             controller.tracer.beginSpan(operation: .appLaunch).end(.succeeded)
-            try await Task.sleep(for: .milliseconds(100))
             XCTAssertFalse(hasPersistedBatch(in: storageRoot))
 
             let firstGeneration = UUID()
@@ -453,7 +458,16 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 true,
                 storageGeneration: firstGeneration
             )
-            try await Task.sleep(for: .milliseconds(100))
+
+            let pipelineBuildWasBlocked =
+                await pipelineBuildGate.waitUntilBlocked()
+            guard pipelineBuildWasBlocked else {
+                XCTFail(
+                    "telemetry pipeline construction did not reach the test gate"
+                )
+                return
+            }
+
             let withdrawnSpan = controller.tracer.beginSpan(
                 operation: .libraryRefresh
             )
@@ -463,6 +477,7 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 retryBucket: .one
             ).end(.succeeded)
             controller.setRemoteTelemetryForeground(false)
+            pipelineBuildGate.release()
             try await waitForPersistedBatch(in: storageRoot)
 
             controller.applyRemoteTelemetryConsent(
@@ -478,7 +493,7 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 true,
                 storageGeneration: currentGeneration
             )
-            try await Task.sleep(for: .milliseconds(100))
+
             controller.tracer.beginSpan(operation: .playbackStart)
                 .end(.succeeded)
             controller.setRemoteTelemetryForeground(false)
@@ -534,6 +549,59 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         }
     #endif
 }
+
+#if DEBUG && os(iOS)
+    private final class OneShotPipelineBuildGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private let continueBuild = DispatchSemaphore(value: 0)
+
+        private var didBlock = false
+        private var didRelease = false
+
+        func block() {
+            let shouldWait = lock.withLock {
+                guard !didBlock else { return false }
+
+                didBlock = true
+                return !didRelease
+            }
+
+            if shouldWait {
+                continueBuild.wait()
+            }
+        }
+
+        func waitUntilBlocked(
+            timeout: Duration = .seconds(5)
+        ) async -> Bool {
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: timeout)
+
+            while clock.now < deadline {
+                if lock.withLock({ didBlock }) {
+                    return true
+                }
+
+                await Task.yield()
+            }
+
+            return lock.withLock { didBlock }
+        }
+
+        func release() {
+            let shouldSignal = lock.withLock {
+                guard !didRelease else { return false }
+
+                didRelease = true
+                return didBlock
+            }
+
+            if shouldSignal {
+                continueBuild.signal()
+            }
+        }
+    }
+#endif
 
 @MainActor
 private final class RecordingRemoteTelemetryConsentController:
