@@ -67,12 +67,11 @@ BLEAT_SKIP_HOST=1 ./scripts/test-core.sh
 ```
 
 The complete gate defaults to an `iPhone 17 Pro` and one UI-test worker. Select
-another installed Simulator or opt into more workers only on a stable host:
+another installed Simulator:
 
 ```sh
 BLEAT_SIMULATOR_DESTINATION='platform=iOS Simulator,name=iPad (A16)' \
   ./scripts/test-core.sh
-BLEAT_SIMULATOR_TEST_WORKERS=2 ./scripts/test-core.sh
 ```
 
 List available Simulator devices with:
@@ -87,7 +86,6 @@ Run app-hosted tests in a development-signed macOS process with:
 export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 mise run macos:test
 ```
-
 
 ### Paid developer capability build modes
 

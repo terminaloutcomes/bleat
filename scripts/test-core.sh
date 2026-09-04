@@ -78,12 +78,6 @@ if [[ "${bleat_skip_simulator}" == "1" ]]; then
 fi
 
 simulator_destination="${BLEAT_SIMULATOR_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro}"
-simulator_test_workers="${BLEAT_SIMULATOR_TEST_WORKERS:-1}"
-
-if [[ ! "${simulator_test_workers}" =~ ^[1-9][0-9]*$ ]]; then
-    print -u2 "BLEAT_SIMULATOR_TEST_WORKERS must be a positive integer"
-    exit 2
-fi
 
 echo "Running base tests"
 xcodebuild \
@@ -133,7 +127,7 @@ bleat_verify_result_bundle \
     BleatAppTests \
     '["testPhysicalDeviceResolvesAndVerifiesLiveAdvertisement()"]'
 
-echo "Running UI tests with ${simulator_test_workers} workers"
+echo "Running UI tests on ${simulator_destination}"
 xcodebuild \
     -quiet \
     -project Bleat.xcodeproj \
@@ -146,8 +140,7 @@ xcodebuild \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     -enableCodeCoverage YES \
     -resultBundlePath "${bleat_result_root}/ui-tests.xcresult" \
-    -parallel-testing-enabled YES \
-    -parallel-testing-worker-count "${simulator_test_workers}" \
+    -parallel-testing-enabled NO \
     -only-testing:BleatUITests \
     -skip-testing:BleatUITests/BleatAccessibilityAuditUITests \
     test
