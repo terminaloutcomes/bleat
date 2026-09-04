@@ -10,6 +10,7 @@ zola = "0.22.1"
 "cargo:cargo-audit" = "0.22.2"
 "cargo:cargo-tarpaulin" = "0.32.8"
 ripgrep = "latest"
+swiftlint = "latest"
 
 [tasks."api:fmt"]
 description = "Fix bleat-api Rust formatting"
@@ -67,9 +68,13 @@ run = "docker compose --file bleat-api/compose.yml down --volumes --remove-orpha
 description = "Check the ClickStack bleat logs API"
 run = "./scripts/bleat-logs.py health"
 
-[tasks."swift-fmt"]
+[tasks."swift-lint"]
 description = "Strictly lint Bleat Swift sources without modifying them"
 run = "xcrun swift-format lint --recursive --parallel --strict App Sources Tests Package.swift"
+
+[tasks.swift-fmt]
+description = "Fix Bleat Swift formatting"
+run = "xcrun swift-format format --recursive --parallel --in-place App Sources Tests Package.swift"
 
 
 [tasks."api:container:build-local"]

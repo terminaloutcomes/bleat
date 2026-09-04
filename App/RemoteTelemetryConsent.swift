@@ -477,25 +477,33 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             recordFailure(.invalidResource, generation: requestedGeneration)
             return
         }
+
         guard let storageRootURL else {
             recordFailure(.storageUnavailable, generation: requestedGeneration)
             return
         }
+
         let shouldBuild = lock.withLock {
-            wantsEnabled && generation == requestedGeneration
+            wantsEnabled
+                && generation == requestedGeneration
                 && pipeline == nil
         }
+
         guard shouldBuild else { return }
+
         purgeStorageGenerations(
             retaining: storageGeneration,
             explicitlyRemoving: nil
         )
+
         let storageURL = storageRootURL.appendingPathComponent(
             Self.directoryName(for: storageGeneration),
             isDirectory: true
         )
+
         let newPipeline: RemoteTelemetryPipeline
         let downstream = downstreamExportersFactory?()
+
         do {
             newPipeline = try RemoteTelemetryPipeline(
                 resource: resource,
@@ -510,6 +518,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 await downstream?.spans.shutdown(explicitTimeout: 0)
                 await downstream?.logs.shutdown(explicitTimeout: 0)
             }
+
             tracer.deactivate()
             logger.deactivate()
             recordFailure(failure, generation: requestedGeneration)
@@ -519,27 +528,56 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 await downstream?.spans.shutdown(explicitTimeout: 0)
                 await downstream?.logs.shutdown(explicitTimeout: 0)
             }
+
             tracer.deactivate()
             logger.deactivate()
-            recordFailure(.storageUnavailable, generation: requestedGeneration)
+            recordFailure(
+                .storageUnavailable,
+                generation: requestedGeneration
+            )
             return
         }
-        let accepted = lock.withLock {
-            guard wantsEnabled, generation == requestedGeneration,
-                pipeline == nil
-            else {
-                return false
+
+        let activation:
+            (
+                accepted: Bool,
+                shouldFlushForBackground: Bool
+            ) = lock.withLock {
+                guard wantsEnabled,
+                    generation == requestedGeneration,
+                    pipeline == nil
+                else {
+                    return (
+                        accepted: false,
+                        shouldFlushForBackground: false
+                    )
+                }
+
+                pipeline = newPipeline
+                state = .active(requestedGeneration)
+                newPipeline.setForeground(isForeground)
+
+                return (
+                    accepted: true,
+                    shouldFlushForBackground: !isForeground
+                )
             }
-            pipeline = newPipeline
-            state = .active(requestedGeneration)
-            newPipeline.setForeground(isForeground)
-            return true
+
+        guard activation.accepted else {
+            newPipeline.deactivate()
+            newPipeline.purge()
+
+            Task {
+                await newPipeline.shutdown()
+            }
+
+            return
         }
-        guard !accepted else { return }
-        newPipeline.deactivate()
-        newPipeline.purge()
-        Task {
-            await newPipeline.shutdown()
+
+        if activation.shouldFlushForBackground {
+            Task {
+                await newPipeline.flushForBackground(timeout: 2)
+            }
         }
     }
 
