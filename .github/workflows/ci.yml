@@ -28,13 +28,6 @@ jobs:
         env:
           BLEAT_SKIP_SIMULATOR: "1"
         run: ./scripts/test-core.sh
-      - name: Upload XCTest result bundles
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: xcresult-host-${{ matrix.device }}
-          path: .build/test-core-results/*.xcresult
-          if-no-files-found: warn
 
   simulator:
     name: ${{ matrix.device }} Simulator tests
@@ -66,34 +59,22 @@ jobs:
           path: .build/test-core-results/*.xcresult
           if-no-files-found: warn
   accessibility:
-    name: ${{ matrix.device }} Accessibility tests
+    name: Accessibility tests
     runs-on: macos-26
     timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        device:
-          - iPhone 17 Pro
-          - iPad (A16)
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up mise toolchain
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-      - name: Run Accessibility validation
-        env:
-          BLEAT_SKIP_HOST: "1"
-          BLEAT_SIMULATOR_DESTINATION: platform=iOS Simulator,name=${{ matrix.device }}
-          BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
-          BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}
-        run: |
-          mise run test:accessibility
-      - name: Upload XCTest result bundles
+
+      - name: Run accessibility validation
+        run: ./scripts/test-accessibility-ui.sh
+
+      - name: Upload accessibility results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: xcresult-accessibility-${{ matrix.device }}
-          path: .build/test-core-results/*.xcresult
+          name: accessibility-results
+          path: .build/accessibility-ui-results/**
           if-no-files-found: warn
 
   archive:
