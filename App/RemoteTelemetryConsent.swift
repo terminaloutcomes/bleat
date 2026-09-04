@@ -230,7 +230,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         /// construction continues through the bundle-backed initializer above.
         init(
             resource: RemoteTelemetryResource?,
-            storageRootURL: URL?
+            storageRootURL: URL?,
+            beforePipelineBuild: (@Sendable () -> Void)? = nil
         ) {
             privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
                 tracer: tracer,
@@ -242,7 +243,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 tracer: tracer,
                 logger: logger,
                 resource: resource,
-                storageRootURL: storageRootURL
+                storageRootURL: storageRootURL,
+                beforePipelineBuild: beforePipelineBuild
             )
         }
     #endif
@@ -379,6 +381,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     private let logger: RemoteTelemetryLogger
     private let resource: RemoteTelemetryResource?
     private let storageRootURL: URL?
+    private let beforePipelineBuild: (@Sendable () -> Void)?
     private let downstreamExportersFactory:
         (@Sendable () -> AuthenticatedOtlpExporters?)?
     private let queue = DispatchQueue(
@@ -397,6 +400,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         logger: RemoteTelemetryLogger,
         resource: RemoteTelemetryResource?,
         storageRootURL: URL?,
+        beforePipelineBuild: (@Sendable () -> Void)? = nil,
         downstreamExportersFactory:
             (@Sendable () -> AuthenticatedOtlpExporters?)? = nil
     ) {
@@ -404,6 +408,7 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         self.logger = logger
         self.resource = resource
         self.storageRootURL = storageRootURL
+        self.beforePipelineBuild = beforePipelineBuild
         self.downstreamExportersFactory = downstreamExportersFactory
     }
 
@@ -490,6 +495,8 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
         }
 
         guard shouldBuild else { return }
+
+        beforePipelineBuild?()
 
         purgeStorageGenerations(
             retaining: storageGeneration,
