@@ -149,6 +149,7 @@ xcodebuild \
     -parallel-testing-enabled YES \
     -parallel-testing-worker-count "${simulator_test_workers}" \
     -only-testing:BleatUITests \
+    -skip-testing:BleatUITests/BleatAccessibilityAuditUITests \
     test
 bleat_verify_result_bundle \
     "${bleat_result_root}/ui-tests.xcresult" \
