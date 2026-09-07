@@ -316,7 +316,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             localServer: "https://local.example"
         )
         try await fixture.accounts.save(edited)
-        try await fixture.store.applyFetchedRecord(cloudAccountRecord)
+        try await fixture.store.applyFetchedRecord(
+            cloudAccountRecord, persistSystemFields: true)
 
         let preserved = try await fixture.accounts.account(id: edited.id)
         let pending = await fixture.store
@@ -402,7 +403,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             from: pushedData
         )
 
-        try await fixture.store.applyFetchedRecord(delayedRecord)
+        try await fixture.store.applyFetchedRecord(
+            delayedRecord, persistSystemFields: true)
 
         let stored = try await fixture.accounts.account(id: edited.id)
         let pending = await fixture.store
@@ -456,7 +458,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         incoming[PrivateCloudSyncStore.payloadKey] =
             try JSONEncoder().encode(remoteUpdate) as CKRecordValue
 
-        try await fixture.store.applyFetchedRecord(incoming)
+        try await fixture.store.applyFetchedRecord(
+            incoming, persistSystemFields: true)
         let stored = try await fixture.accounts.account(id: remoteUpdate.id)
         let pending = await fixture.store
             .pendingServerConfigurationChanges()
@@ -506,7 +509,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         record[PrivateCloudSyncStore.payloadKey] =
             try JSONEncoder().encode(incoming) as CKRecordValue
 
-        try await fixture.store.applyFetchedRecord(record)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
 
         let stored = try await fixture.accounts.account(id: incoming.id)
         let pending = await fixture.store
@@ -657,7 +661,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         try await fixture.configuration.apply(localEdit)
 
         try await fixture.store.applyFetchedRecord(
-            cloudConfigurationRecord
+            cloudConfigurationRecord,
+            persistSystemFields: true
         )
         let preserved = await fixture.configuration.snapshot()
         let conflict = await fixture.store.configurationConflict()
@@ -869,7 +874,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
         record[PrivateCloudSyncStore.payloadKey] =
             try JSONEncoder().encode(cloud) as CKRecordValue
-        try await fixture.store.applyFetchedRecord(record)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
 
         let outgoing = try await fixture.store.resolveConfigurationConflict(
             .useICloud
@@ -902,7 +908,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             nextCommandAction: .nextChapter
         )
         try await fixture.configuration.apply(local)
-        try await fixture.store.applyFetchedRecord(record)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
 
         let outgoingValue = try await fixture.store
             .resolveConfigurationConflict(.keepThisDevice)
@@ -922,6 +929,134 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
         let remainingConflict = await fixture.store.configurationConflict()
         XCTAssertNotNil(remainingConflict)
+    }
+
+    func testExplicitFetchedRecordPersistenceSurvivesStoreRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let snapshot = await fixture.configuration.snapshot()
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let record = try XCTUnwrap(
+            prepared.first { $0.recordType == "Configuration" }
+        )
+
+        try await fixture.store.applyFetchedRecord(
+            record,
+            persistSystemFields: true
+        )
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(
+                try XCTUnwrap(UserDefaults(suiteName: fixture.suite))
+            )
+        )
+        let restoredValue = await restoredStore.record(for: record.recordID)
+        let restored = try XCTUnwrap(restoredValue)
+        XCTAssertEqual(restored.recordID, record.recordID)
+        XCTAssertEqual(restored.recordType, record.recordType)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: XCTUnwrap(
+                    restored[PrivateCloudSyncStore.payloadKey] as? Data
+                )
+            ),
+            snapshot
+        )
+        let pending = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(pending.isEmpty)
+    }
+
+    func testBatchedAccountConflictsPersistCompletedStateAfterRecreation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        for server in ["https://first.example", "https://second.example"] {
+            try await fixture.accounts.save(
+                makeAccount(server: server, localServer: nil)
+            )
+        }
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        let accounts = prepared.filter { $0.recordType == "ServerAccount" }
+        XCTAssertEqual(accounts.count, 2)
+        let serverRecords = accounts.map { client in
+            let server = CKRecord(
+                recordType: client.recordType,
+                recordID: client.recordID
+            )
+            server[PrivateCloudSyncStore.payloadKey] =
+                client[PrivateCloudSyncStore.payloadKey]
+            return server
+        }
+        let pending = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: prepared.filter { $0.recordType != "ServerAccount" },
+            deletedRecordIDs: [],
+            failedRecordSaves: zip(accounts, serverRecords).map {
+                client, server in
+                (
+                    record: client,
+                    error: serverConflictError(
+                        clientRecord: client,
+                        serverRecord: server
+                    )
+                )
+            },
+            failedRecordDeletes: [:]
+        )
+        XCTAssertTrue(pending.isEmpty)
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics,
+            accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(
+                try XCTUnwrap(UserDefaults(suiteName: fixture.suite))
+            )
+        )
+        for server in serverRecords {
+            let restoredValue = await restoredStore.record(for: server.recordID)
+            let restored = try XCTUnwrap(restoredValue)
+            XCTAssertEqual(restored.recordID, server.recordID)
+            XCTAssertEqual(restored.recordType, server.recordType)
+            XCTAssertEqual(
+                try JSONDecoder().decode(
+                    CloudServerAccountRecordPayload.self,
+                    from: XCTUnwrap(
+                        restored[PrivateCloudSyncStore.payloadKey] as? Data
+                    )
+                ),
+                try JSONDecoder().decode(
+                    CloudServerAccountRecordPayload.self,
+                    from: XCTUnwrap(
+                        server[PrivateCloudSyncStore.payloadKey] as? Data
+                    )
+                )
+            )
+        }
+        let nextSync = try await restoredStore.prepareRecords(
+            zoneID: fixture.zoneID
+        )
+        XCTAssertTrue(nextSync.isEmpty)
     }
 
     func testSavedRecordSystemFieldsSurviveStoreRecreation() async throws {

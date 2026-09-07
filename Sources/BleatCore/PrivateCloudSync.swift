@@ -1177,10 +1177,13 @@ actor PrivateCloudSyncStore {
         return (pendingChanges, firstFailure)
     }
 
+    /// Applies one fetched record. Passing `true` archives the whole cached
+    /// record state, including system fields. Callers passing `false` must
+    /// persist record state at their owning batch boundary.
     @discardableResult
     func applyFetchedRecord(
         _ record: CKRecord,
-        persistSystemFields: Bool = true
+        persistSystemFields: Bool
     ) async throws -> Bool {
         learnLegacyAccountMappings(from: [record])
         let canonicalization = try canonicalizedCloudRecord(record)
