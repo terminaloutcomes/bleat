@@ -14,16 +14,21 @@ final class PrivateCloudSyncTests: XCTestCase {
             (.persistenceFailed, .privateCloudPersistenceFailed),
             (.nonPrivateDatabase, .privateCloudNonPrivateDatabase),
             (.engineUnavailable, .privateCloudEngineUnavailable),
-            (.cloudKit(CloudKitFailure(CKError(.networkFailure))), .privateCloudKitFailed),
             (
-                .unexpected(PrivateCloudSystemError(NSError(domain: "test", code: 1))),
+                .cloudKit(CloudKitFailure(CKError(.networkFailure))),
+                .privateCloudKitFailed
+            ),
+            (
+                .unexpected(
+                    PrivateCloudSystemError(NSError(domain: "test", code: 1))),
                 .privateCloudUnexpected
             ),
         ]
         for (error, expected) in cases {
             XCTAssertEqual(error.diagnosticFailureCode, expected)
             let event = DiagnosticEvent.privateCloudFailed(
-                failure: PrivateCloudSyncFailure(operation: .synchronize, cause: error),
+                failure: PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: error),
                 correlationID: UUID(),
                 durationMilliseconds: 0
             )
