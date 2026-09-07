@@ -9244,6 +9244,7 @@ final class AppModelTests: XCTestCase {
         guard case .failed(let presented) = model.privateCloudState else {
             return XCTFail("Expected a typed iCloud failure")
         }
+        XCTAssertEqual(presented.diagnosticFailureCode, .privateCloudKitFailed)
         XCTAssertEqual(presented.title, "iCloud sync unavailable")
         XCTAssertTrue(presented.message.contains("iCloud"))
         XCTAssertFalse(presented.message.contains("Audiobookshelf"))
