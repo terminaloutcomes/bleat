@@ -1,0 +1,13 @@
+coverage_service: cobertura_xml
+xcodeproj: Bleat.xcodeproj
+scheme: Bleat
+configuration: Debug
+build_directory: .build/ci-smoke/derived
+output_directory: .build/coverage/swift
+binary_basename: Bleat
+source_files:
+  - App/**/*.swift
+  - Sources/**/*.swift
+ignore:
+  - Tests/**
+  - .build/**

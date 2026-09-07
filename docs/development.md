@@ -22,11 +22,39 @@ and outcomes in an `.xcresult` bundle.
 Run the same read-only, strict formatter lint task used in GitHub Actions:
 
 ```sh
-mise run swift-fmt
+mise run swift-lint
 ```
 
 The task discovers the repository's `.swift-format` configuration. It
 reports formatting violations without modifying source files.
+
+## Continuous integration
+
+`Validate Bleat` runs on pull requests and pushes to `main`, without duplicate
+branch-push runs. Its Apple gate runs strict lint through mise, one Debug iPhone
+Simulator build, and two UI smoke tests: startup and the signed-in library
+before playback. It checks the result bundle for both passing test identifiers.
+This is a compile-and-launch gate, not the full app regression suite.
+
+Run the same smoke gate locally with `zsh scripts/test-ci-smoke.sh`. It uses
+`BLEAT_SIMULATOR_DESTINATION` when set. Run `bundle install` followed by
+`bundle exec slather coverage` to export coverage from that build. Swift
+coverage reflects only the smoke tests, not full behavioral coverage.
+
+The Linux job checks Rust formatting and Clippy, then runs Tarpaulin with all
+features and targets, including PostgreSQL container integration tests. Docker
+must be available; these tests are not skipped when measuring coverage.
+Run this coverage suite locally with `mise run api:coverage`.
+
+Swift and Rust coverage artifacts are sent together to Coveralls using the
+`COVERALLS_REPO_TOKEN` repository secret. Fork pull requests still generate
+reports but do not upload them to Coveralls. Upload failures are warnings, not
+test failures. No custom job timeout is imposed; GitHub's runner limits apply.
+
+The manual `Full Apple validation` workflow retains host tests, iPhone and iPad
+regression suites, accessibility checks, and unsigned archive validation.
+Release automation remains separate. Smoke tests use non-routable telemetry
+URLs and require neither production endpoints nor signing credentials.
 
 ## Local validation
 

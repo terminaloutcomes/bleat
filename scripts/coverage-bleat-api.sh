@@ -6,7 +6,7 @@ readonly report=".build/coverage/bleat-api/tarpaulin-report.json"
 readonly overall_coverage_warning_threshold="80"
 
 mkdir -p ".build/coverage/bleat-api"
-rm -f "${report}"
+rm -f "${report}" .build/coverage/bleat-api/lcov.info
 
 cargo tarpaulin \
   --locked \
@@ -14,10 +14,16 @@ cargo tarpaulin \
   --all-features \
   --all-targets \
   --engine llvm \
-  --out Json \
+  --out Json Lcov \
   --output-dir "${output_directory}" \
   -- \
   --test-threads=4
+
+# Keep source paths portable when CI uploads the report from another runner.
+BLEAT_COVERAGE_ROOT="$PWD/" perl -pi -e \
+  's/^SF:\Q$ENV{BLEAT_COVERAGE_ROOT}\E/SF:/; s/^SF:(src|tests)\//SF:bleat-api\/$1\//' \
+  .build/coverage/bleat-api/lcov.info
+jq -e '.coverable > 0' "${report}" >/dev/null
 
 readonly overall_covered="$(jq -er '.covered' "${report}")"
 readonly overall_coverable="$(jq -er '.coverable' "${report}")"
