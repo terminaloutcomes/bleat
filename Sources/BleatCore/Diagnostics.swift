@@ -555,7 +555,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
 }
 
 extension PrivateCloudSyncError {
-    fileprivate var diagnosticFailureCode: DiagnosticFailureCode {
+    public var diagnosticFailureCode: DiagnosticFailureCode {
         switch self {
         case .disabled: .privateCloudDisabled
         case .cancelled: .privateCloudCancelled

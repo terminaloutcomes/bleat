@@ -340,18 +340,3 @@ extension AppServiceError {
         }
     }
 }
-
-extension PrivateCloudSyncError {
-    fileprivate var diagnosticFailureCode: DiagnosticFailureCode {
-        switch self {
-        case .disabled: .privateCloudDisabled
-        case .cancelled: .privateCloudCancelled
-        case .invalidRecord: .privateCloudInvalidRecord
-        case .persistenceFailed: .privateCloudPersistenceFailed
-        case .nonPrivateDatabase: .privateCloudNonPrivateDatabase
-        case .engineUnavailable: .privateCloudEngineUnavailable
-        case .cloudKit: .privateCloudKitFailed
-        case .unexpected: .privateCloudUnexpected
-        }
-    }
-}
