@@ -28,13 +28,14 @@ jobs:
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           install: false
+      - name: Install zsh
+        run: |
+          brew install zsh
       - run: mise run swift-lint
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - name: Install zsh
-        run: brew install zsh
       - name: Build and run smoke tests
         run: ./scripts/test-ci-smoke.sh
       - name: Generate Swift smoke coverage
