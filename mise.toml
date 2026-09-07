@@ -5,7 +5,6 @@ _.file = { path = ".envrc", redact = true, required = true }
 gitleaks = "latest"
 node = "24"
 pnpm = "11.17.0"
-rust = "1.97.0"
 zola = "0.22.1"
 "cargo:cargo-audit" = "0.22.2"
 "cargo:cargo-tarpaulin" = "latest"
