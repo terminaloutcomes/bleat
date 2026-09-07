@@ -11,6 +11,7 @@ rm -f "${report}" .build/coverage/bleat-api/lcov.info
 cargo tarpaulin \
   --locked \
   --manifest-path bleat-api/Cargo.toml \
+  --exclude-files bleat-api/src/main.rs \
   --all-features \
   --all-targets \
   --engine llvm \
