@@ -114,8 +114,8 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         env:
           BLEAT_CARPLAY_MODE: disabled
-          BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ vars.BLEAT_TELEMETRY_AUTH_BASE_URL }}
-          BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ vars.BLEAT_TELEMETRY_OTLP_ENDPOINT }}
+          BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
+          BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}
         run: ./scripts/archive-beta.sh
 
       - name: Publish GitHub Release

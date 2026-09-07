@@ -1,0 +1,128 @@
+name: Validate Bleat
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iOS lint and smoke
+    runs-on: macos-26
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      BLEAT_TELEMETRY_AUTH_BASE_URL: https://telemetry-auth.invalid
+      BLEAT_TELEMETRY_OTLP_ENDPOINT: https://telemetry-otlp.invalid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Prepare CI environment file
+        run: touch .envrc
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          install: false
+      - name: Install zsh
+        run: |
+          brew install zsh
+      - run: mise run swift-lint
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Build and run smoke tests
+        run: ./scripts/test-ci-smoke.sh
+      - name: Generate Swift smoke coverage
+        run: |
+          bundle exec slather coverage
+          bundle exec ruby -r nokogiri -e '
+            path = ".build/coverage/swift/cobertura.xml"
+            report = Nokogiri::XML(File.read(path))
+            abort "Swift coverage contains no executable lines" if report.xpath("//class/lines/line").empty?
+            report.xpath("//source").each { |source| source.content = "." }
+            File.write(path, report.to_xml)
+          '
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: swift-coverage
+          path: .build/coverage/swift/cobertura.xml
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ios-smoke-results
+          path: .build/ci-smoke/results.xcresult
+          retention-days: 7
+          if-no-files-found: warn
+
+  rust:
+    name: Rust lint, tests and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: touch .envrc
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          components: rustfmt,clippy
+          rust-src-dir: bleat-api/
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: bleat-api
+      - run: mise run 'api:validate'
+      - name: Full Rust coverage including container integration tests
+        run: |
+          sudo apt -y install zsh
+            ./scripts/coverage-bleat-api.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rust-coverage
+          path: .build/coverage/bleat-api/lcov.info
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage:
+    name: Publish coverage
+    needs: [ios, rust]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          pattern: "*-coverage"
+          path: coverage
+      - name: Publish Swift smoke coverage
+        id: swift
+        continue-on-error: true
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        with:
+          github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          file: coverage/swift-coverage/cobertura.xml
+          flag-name: swift-smoke
+          parallel: true
+      - name: Publish full Rust coverage
+        id: rust
+        continue-on-error: true
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        with:
+          github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          file: coverage/rust-coverage/lcov.info
+          flag-name: rust-full
+          parallel: true
+      - name: Finish combined coverage report
+        id: finish
+        continue-on-error: true
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        with:
+          github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          parallel-finished: true
+      - if: steps.swift.outcome == 'failure' || steps.rust.outcome == 'failure' || steps.finish.outcome == 'failure'
+        run: echo "::warning::Coveralls upload failed; test results remain available."
