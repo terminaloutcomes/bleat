@@ -34,6 +34,8 @@ reports formatting violations without modifying source files.
 branch-push runs. Its Apple gate runs strict lint through mise, one Debug iPhone
 Simulator build, and two UI smoke tests: startup and the signed-in library
 before playback. It checks the result bundle for both passing test identifiers.
+After building, the gate waits for the selected Simulator to finish booting and
+installs the built app before starting XCTest on that same Simulator ID.
 This is a compile-and-launch gate, not the full app regression suite.
 
 Run the same smoke gate locally with `zsh scripts/test-ci-smoke.sh`. It uses
