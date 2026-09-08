@@ -713,6 +713,7 @@ struct ChapterTranscriptionView: View {
         ChapterTranscriptNavigationMessage?
     @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         detail: LibraryBookDetail,
@@ -862,12 +863,26 @@ struct ChapterTranscriptionView: View {
                         "Transcription uses verified audio stored on this device."
                     )
                 }
+                #if DEBUG || BLEAT_UI_TESTING
+                    .overlay {
+                        if ProcessInfo.processInfo.arguments.contains(
+                            "--ui-testing-accessibility-audit"
+                        ) {
+                            Text(reduceMotion ? "enabled" : "disabled")
+                            .accessibilityIdentifier(
+                                "transcription.reduceMotion"
+                            )
+                            .opacity(0)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                #endif
                 .task(id: highlightedTarget) {
                     guard let target = highlightedTarget else {
                         return
                     }
                     await Task.yield()
-                    withAnimation {
+                    withAnimation(reduceMotion ? nil : .default) {
                         scrollProxy.scrollTo(target, anchor: .center)
                     }
                     do {

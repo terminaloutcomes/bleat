@@ -806,6 +806,15 @@
             guard hasCompleteCache || hasPartialCache else {
                 return []
             }
+            let navigationSegments: [CachedTranscriptSegment] =
+                arguments.contains("--ui-testing-long-transcript")
+                ? (0..<30).map { index in
+                    CachedTranscriptSegment(
+                        startMilliseconds: 1_800_000 + Int64(index) * 300,
+                        endMilliseconds: 1_800_000 + Int64(index + 1) * 300,
+                        text: "Earlier transcript segment \(index + 1)"
+                    )
+                } : []
             let transcripts = [
                 CachedChapterTranscript(
                     chapterID: 0,
@@ -827,7 +836,7 @@
                     chapterStartMilliseconds: 1_800_000,
                     chapterEndMilliseconds: 3_600_000,
                     localeIdentifier: "en-AU",
-                    segments: [
+                    segments: navigationSegments + [
                         CachedTranscriptSegment(
                             startMilliseconds: 1_810_000,
                             endMilliseconds: 1_812_000,

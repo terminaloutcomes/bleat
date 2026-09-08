@@ -2643,6 +2643,8 @@ final class BleatUITests: XCTestCase {
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
                 "--ui-testing-transcription-position",
+                "--ui-testing-accessibility-audit",
+                "--ui-testing-long-transcript",
             ]
         )
 
@@ -2656,12 +2658,32 @@ final class BleatUITests: XCTestCase {
         let action = app.buttons["transcription.goToCurrentPosition"]
         XCTAssertTrue(action.waitForExistence(timeout: 3))
         XCTAssertTrue(action.isHittable)
+        let motion = app.staticTexts["transcription.reduceMotion"]
+        XCTAssertTrue(motion.waitForExistence(timeout: 3))
+        XCTAssertTrue(["enabled", "disabled"].contains(motion.label))
+        let setting = XCTAttachment(string: "Reduce Motion: \(motion.label)")
+        setting.name = "Transcript navigation system setting"
+        setting.lifetime = .keepAlways
+        add(setting)
         action.tap()
 
         let highlight = app.buttons["transcription.currentPositionHighlight"]
         XCTAssertTrue(highlight.waitForExistence(timeout: 3))
-        XCTAssertTrue(highlight.label.contains("Another DOOMSDAY mention"))
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
+        let target = app.buttons["transcription.segment.1.30"]
+        XCTAssertTrue(target.isHittable)
+        XCTAssertTrue(target.label.contains("Another DOOMSDAY mention"))
+
+        // Navigating to the same segment again must restore and clear its highlight.
+        for _ in 0..<12 where !action.isHittable {
+            app.swipeDown()
+        }
+        XCTAssertTrue(action.isHittable)
+        action.tap()
+        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(target.isHittable)
+        XCTAssertTrue(target.label.contains("Another DOOMSDAY mention"))
 
         app.terminate()
         let relaunched = launch(
