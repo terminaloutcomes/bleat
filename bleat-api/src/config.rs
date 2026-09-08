@@ -217,6 +217,20 @@ pub struct Arguments {
     )]
     pub challenge_issuance_per_minute: usize,
 
+    #[arg(
+        long,
+        env = "BLEAT_API_CHALLENGE_ISSUANCE_BURST",
+        default_value_t = 600
+    )]
+    pub challenge_issuance_burst: usize,
+
+    #[arg(
+        long,
+        env = "BLEAT_API_CHALLENGE_MAX_CLIENTS",
+        default_value_t = 10_000
+    )]
+    pub challenge_max_clients: usize,
+
     #[arg(long, env = "BLEAT_API_TOKEN_LIFETIME_SECONDS", default_value_t = 600)]
     pub token_lifetime_seconds: u64,
 
@@ -278,6 +292,8 @@ pub struct Config {
     pub challenge_lifetime: Duration,
     pub challenge_cleanup_batch_size: usize,
     pub challenge_issuance_per_minute: usize,
+    pub challenge_issuance_burst: usize,
+    pub challenge_max_clients: usize,
     pub token_lifetime: Duration,
     pub jwt_signing_key_file: Option<SecretFilePath>,
     pub jwt_public_key_set_file: Option<SecretFilePath>,
@@ -391,6 +407,8 @@ impl Config {
             challenge_lifetime: Duration::from_secs(arguments.challenge_lifetime_seconds),
             challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
             challenge_issuance_per_minute: arguments.challenge_issuance_per_minute,
+            challenge_issuance_burst: arguments.challenge_issuance_burst,
+            challenge_max_clients: arguments.challenge_max_clients,
             token_lifetime: Duration::from_secs(arguments.token_lifetime_seconds),
             jwt_signing_key_file: secret_file_path(arguments.jwt_signing_key_file),
             jwt_public_key_set_file: secret_file_path(arguments.jwt_public_key_set_file),
@@ -419,6 +437,18 @@ impl Config {
             self.challenge_issuance_per_minute,
             1,
             100_000,
+        )?;
+        bounded_usize(
+            "challenge issuance burst",
+            self.challenge_issuance_burst,
+            1,
+            100_000,
+        )?;
+        bounded_usize(
+            "challenge maximum clients",
+            self.challenge_max_clients,
+            1,
+            1_000_000,
         )?;
         bounded_duration("token lifetime", self.token_lifetime, 60, 3_600)?;
         bounded_duration("request timeout", self.request_timeout, 1, 60)?;
@@ -658,6 +688,27 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn challenge_admission_configuration_rejects_zero_and_unbounded_values() {
+        for (rate, burst, maximum, field, upper) in [
+            (0, 600, 10_000, "challenge issuance per minute", 100_000),
+            (600, 0, 10_000, "challenge issuance burst", 100_000),
+            (600, 100_001, 10_000, "challenge issuance burst", 100_000),
+            (600, 600, 0, "challenge maximum clients", 1_000_000),
+            (600, 600, 1_000_001, "challenge maximum clients", 1_000_000),
+        ] {
+            let mut arguments = development_arguments();
+            arguments.challenge_issuance_per_minute = rate;
+            arguments.challenge_issuance_burst = burst;
+            arguments.challenge_max_clients = maximum;
+            let result = Config::from_arguments(arguments, TelemetryExportConfig::default());
+            assert_eq!(
+                result.expect_err("invalid limits"),
+                ConfigError::ValueOutOfRange(field, 1, upper)
+            );
+        }
+    }
+
     fn development_arguments() -> Arguments {
         Arguments {
             bind_address: DEFAULT_BIND_ADDRESS
@@ -676,6 +727,8 @@ mod tests {
             challenge_lifetime_seconds: 120,
             challenge_cleanup_batch_size: 1_000,
             challenge_issuance_per_minute: 600,
+            challenge_issuance_burst: 600,
+            challenge_max_clients: 10_000,
             token_lifetime_seconds: 600,
             jwt_signing_key_file: None,
             jwt_public_key_set_file: None,

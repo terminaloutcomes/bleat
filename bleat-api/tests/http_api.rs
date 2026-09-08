@@ -55,6 +55,8 @@ fn test_arguments(postgres: &TestPostgres) -> Arguments {
         challenge_lifetime_seconds: 120,
         challenge_cleanup_batch_size: 1_000,
         challenge_issuance_per_minute: 600,
+        challenge_issuance_burst: 600,
+        challenge_max_clients: 10_000,
         token_lifetime_seconds: 600,
         jwt_signing_key_file: None,
         jwt_public_key_set_file: None,
@@ -777,10 +779,16 @@ async fn unknown_installations_and_excess_issuance_are_typed() {
 
     let router = configured_test_router(&postgres, |config| {
         config.challenge_issuance_per_minute = 1;
+        config.challenge_issuance_burst = 1;
     })
     .await;
     let request = || {
         Request::post("/v1/attestation/challenge")
+            .extension(axum::extract::ConnectInfo(
+                "192.0.2.1:1234"
+                    .parse::<std::net::SocketAddr>()
+                    .expect("peer"),
+            ))
             .header("content-type", "application/json")
             .body(Body::from("{}"))
             .expect("valid request")

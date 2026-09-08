@@ -1841,7 +1841,14 @@ requests, while exporter shutdown invalidates the shared session after both
 signal processors release it.
 
 The telemetry authentication backend persists installation identity and
-challenge state in PostgreSQL through typed ORM statements. Installations use
+challenge state in PostgreSQL through typed ORM statements. Challenge issuance
+uses one bounded, in-memory Governor quota per canonical IPv4 address or IPv6
+/64 across both challenge routes. Trusted forwarding resolution precedes
+admission; absent connection identity uses global concurrency alone. Global
+saturation never consumes client quota. Restarts reset quota and replicas
+enforce independently; quota, client-map capacity, and global capacity have
+distinct typed responses. Operational settings and expiry semantics are
+documented in `bleat-api/README.md`. Installations use
 opaque UUIDs and retain the App Attest key identifier, 65-byte P-256 public key,
 typed App Attest environment, active or disabled status, monotonic assertion
 counter, and timestamps. Challenge responses contain 32 random bytes encoded as

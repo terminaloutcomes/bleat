@@ -38,10 +38,11 @@ use crate::{
     config::{Config, DeploymentMode, TrustedProxyConfig},
     database,
     error::ApiError,
-    forwarding::resolve_client_address,
+    forwarding::{ClientAddressResolution, resolve_client_address},
     installation::{
         CounterAdvanceOutcome, InstallationRepository, InstallationStoreError, NewInstallation,
     },
+    issuance::{AdmissionFailure, ClientKey, IssuanceLimiter},
     telemetry_auth::{
         ClientDataPurpose, JWKS_CACHE_SECONDS, TokenIssuer, TokenIssuerError, TokenResponse,
         client_data_hash,
@@ -67,43 +68,7 @@ struct AppState {
     evidence_verifier: Arc<InstallationEvidenceVerifier>,
     token_issuer: Arc<TokenIssuer>,
     challenge_lifetime: std::time::Duration,
-    issuance_limiter: IssuanceLimiter,
-}
-
-#[derive(Clone)]
-struct IssuanceLimiter {
-    maximum: usize,
-    window: Arc<tokio::sync::Mutex<IssuanceWindow>>,
-}
-
-struct IssuanceWindow {
-    started: Instant,
-    issued: usize,
-}
-
-impl IssuanceLimiter {
-    fn new(maximum: usize) -> Self {
-        Self {
-            maximum,
-            window: Arc::new(tokio::sync::Mutex::new(IssuanceWindow {
-                started: Instant::now(),
-                issued: 0,
-            })),
-        }
-    }
-
-    async fn allow(&self) -> bool {
-        let mut window = self.window.lock().await;
-        if window.started.elapsed() >= std::time::Duration::from_secs(60) {
-            window.started = Instant::now();
-            window.issued = 0;
-        }
-        if window.issued >= self.maximum {
-            return false;
-        }
-        window.issued += 1;
-        true
-    }
+    issuance_limiter: Arc<IssuanceLimiter>,
 }
 
 #[derive(Debug, Serialize)]
@@ -165,6 +130,8 @@ impl From<IssuedChallenge> for ChallengeResponse {
 pub enum RouterBuildError {
     #[error("production App Attest verification configuration is invalid")]
     AppAttest,
+    #[error("challenge admission configuration is invalid")]
+    ChallengeAdmission,
     #[error("JWT signing configuration is invalid: {0}")]
     TokenIssuer(#[source] TokenIssuerError),
 }
@@ -225,12 +192,21 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
         token_issuer,
         database,
         challenge_lifetime: config.challenge_lifetime,
-        issuance_limiter: IssuanceLimiter::new(config.challenge_issuance_per_minute),
+        issuance_limiter: IssuanceLimiter::from_config(config)
+            .ok_or(RouterBuildError::ChallengeAdmission)?,
     };
     let protected_routes = Router::new()
         .route("/v1/attestation/challenge", post(attestation_challenge))
-        .route("/v1/attestation/enroll", post(enroll))
         .route("/v1/token/challenge", post(token_challenge))
+        .route_layer(middleware::from_fn_with_state(
+            ChallengeAdmission {
+                limiter: Arc::clone(&state.issuance_limiter),
+                rate: config.challenge_issuance_per_minute,
+                burst: config.challenge_issuance_burst,
+            },
+            admit_challenge,
+        ))
+        .route("/v1/attestation/enroll", post(enroll))
         .route("/v1/token", post(token))
         .with_state(state.clone());
 
@@ -278,7 +254,6 @@ async fn attestation_challenge(
     payload: Result<Json<AttestationChallengeRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let Json(_payload) = parse_json(payload, request_id)?;
-    ensure_issuance_allowed(&state, request_id).await?;
     let challenge = state
         .challenges
         .issue_attestation_at(state.challenge_lifetime, Utc::now())
@@ -297,7 +272,6 @@ async fn token_challenge(
     payload: Result<Json<TokenChallengeRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let Json(payload) = parse_json(payload, request_id)?;
-    ensure_issuance_allowed(&state, request_id).await?;
     let challenge = state
         .challenges
         .issue_token_at(
@@ -585,11 +559,51 @@ fn parse_json<T>(
     })
 }
 
-async fn ensure_issuance_allowed(state: &AppState, request_id: RequestId) -> Result<(), ApiError> {
-    if state.issuance_limiter.allow().await {
-        Ok(())
-    } else {
-        Err(ApiError::issuance_rate_limited(request_id.0))
+#[derive(Clone)]
+struct ChallengeAdmission {
+    limiter: Arc<IssuanceLimiter>,
+    rate: usize,
+    burst: usize,
+}
+
+async fn admit_challenge(
+    State(admission): State<ChallengeAdmission>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let Some(resolution) = request.extensions().get::<ClientAddressResolution>() else {
+        return next.run(request).await;
+    };
+    let key = ClientKey::from(resolution.client);
+    let request_id = request
+        .extensions()
+        .get::<RequestId>()
+        .map_or_else(Uuid::new_v4, |id| id.0);
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map_or("/*", MatchedPath::as_str);
+    match admission.limiter.check(key).await {
+        Ok(()) => next.run(request).await,
+        Err(AdmissionFailure::Quota { retry_seconds }) => {
+            // One event per rejection is also its count; no actor aggregation state is kept.
+            warn!(event.name = "challenge.admission.rejected", timestamp = %Utc::now(),
+                limit.kind = "client_quota", failure.code = "rate_limited",
+                failure.stage = "challenge_admission", client.address = %key,
+                configured.rate = admission.rate, configured.burst = admission.burst,
+                http.route = route, retry_after_seconds = retry_seconds,
+                request.id = %request_id, rejection.count = 1_u64,
+                "client challenge quota exceeded");
+            ApiError::issuance_rate_limited(request_id, retry_seconds).into_response()
+        }
+        Err(AdmissionFailure::Capacity) => {
+            warn!(event.name = "challenge.admission.rejected", timestamp = %Utc::now(),
+                limit.kind = "client_map_capacity", failure.code = "limiter_capacity",
+                failure.stage = "challenge_admission", http.route = route,
+                request.id = %request_id, rejection.count = 1_u64,
+                "challenge client storage is full");
+            ApiError::limiter_capacity(request_id).into_response()
+        }
     }
 }
 
@@ -625,7 +639,13 @@ async fn enforce_limits(
         .map_or_else(Uuid::new_v4, |request_id| request_id.0);
     let permit = match Arc::clone(&limits.permits).try_acquire_owned() {
         Ok(permit) => permit,
-        Err(_) => return ApiError::rate_limited(request_id).into_response(),
+        Err(_) => {
+            warn!(event.name = "request.capacity.rejected", limit.kind = "global_concurrency",
+                failure.code = "global_capacity", failure.stage = "global_admission",
+                request.id = %request_id, rejection.count = 1_u64,
+                "global request capacity exhausted");
+            return ApiError::rate_limited(request_id).into_response();
+        }
     };
     let operation = async move {
         let response = next.run(request).await;
@@ -667,8 +687,12 @@ async fn instrument_request(
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|ConnectInfo(address)| *address);
-    let client_address = peer
-        .map(|address| resolve_client_address(&trusted_proxies, address, request.headers()).client);
+    let resolution =
+        peer.map(|address| resolve_client_address(&trusted_proxies, address, request.headers()));
+    let client_address = resolution.as_ref().map(|resolution| resolution.client);
+    if let Some(resolution) = resolution {
+        request.extensions_mut().insert(resolution);
+    }
     let user_agent = request
         .headers()
         .get(USER_AGENT)
@@ -916,7 +940,7 @@ mod tests {
             .to_bytes();
         let rejected_body: serde_json::Value =
             serde_json::from_slice(&rejected_body).expect("rejection body should be JSON");
-        assert_eq!(rejected_body["error"]["code"], "rate_limited");
+        assert_eq!(rejected_body["error"]["code"], "global_capacity");
         assert_eq!(activity.maximum.load(Ordering::SeqCst), 1);
     }
 
@@ -959,3 +983,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "http_admission_tests.rs"]
+mod admission_tests;
