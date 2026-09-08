@@ -47,6 +47,8 @@ The Linux job checks Rust formatting and Clippy, then runs Tarpaulin with all
 features and targets, including PostgreSQL container integration tests. Docker
 must be available; these tests are not skipped when measuring coverage.
 Run this coverage suite locally with `mise run api:coverage`.
+`main.rs` is excluded from Tarpaulin coverage and its generated LCOV report
+uploaded to Coveralls.
 
 Swift and Rust coverage artifacts are sent together to Coveralls using the
 `COVERALLS_REPO_TOKEN` repository secret. Fork pull requests still generate
