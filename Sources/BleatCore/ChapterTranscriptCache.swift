@@ -72,6 +72,13 @@ public enum CachedChapterTranscriptionTaskOutcome:
 public enum CachedChapterTranscriptionTaskFailure:
     String, Codable, Equatable, Sendable
 {
+    case jobMissingAudio
+    case jobSourceChanged
+    case jobChapterLayoutChanged
+    case jobInsufficientSourceIdentity
+    case jobInvalidCheckpoint
+    case jobStaleRevision
+    case jobPersistenceFailed
     case audioNotDownloaded
     case localAudioUnavailable
     case invalidChapterRange
@@ -160,6 +167,7 @@ public enum CachedChapterTranscriptSearch {
 }
 
 public enum ChapterTranscriptCacheError: Error, Equatable, Sendable {
+    case job(ChapterTranscriptionJobFailure)
     case invalidAccountID
     case invalidItemID
     case invalidTranscript
@@ -221,8 +229,18 @@ public final class CachedChapterTranscriptionTaskRecord {
     }
 }
 
-@ModelActor
+/// Approved synchronous SwiftData boundary (2026-09-08). Contexts are created
+/// lazily on this actor rather than by an initializer that may run on MainActor.
+/// SwiftData has no native asynchronous fetch/save API; replace this boundary
+/// when one becomes available. No model instances leave the actor.
 public actor ChapterTranscriptCache {
+    public nonisolated let modelContainer: ModelContainer
+    lazy var modelContext = ModelContext(modelContainer)
+
+    public init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     public func save(
         _ transcript: CachedChapterTranscript,
         accountID: AccountID,
@@ -233,6 +251,15 @@ public actor ChapterTranscriptCache {
             throw .invalidTranscript
         }
 
+        try stageTranscript(transcript, accountID: accountID, itemID: itemID)
+        try saveContext()
+    }
+
+    func stageTranscript(
+        _ transcript: CachedChapterTranscript, accountID: AccountID,
+        itemID: LibraryItemID, context: ModelContext? = nil
+    ) throws(ChapterTranscriptCacheError) {
+        let context = context ?? modelContext
         let payload: Data
         do {
             payload = try JSONEncoder().encode(transcript)
@@ -244,12 +271,12 @@ public actor ChapterTranscriptCache {
             itemID: itemID,
             chapterID: transcript.chapterID
         )
-        let records = try records()
+        let records = try records(context: context)
         if let record = records.first(where: { $0.cacheKey == key }) {
             record.payload = payload
             record.updatedAt = transcript.updatedAt
         } else {
-            modelContext.insert(
+            context.insert(
                 CachedChapterTranscriptRecord(
                     cacheKey: key,
                     accountID: accountID.rawValue,
@@ -259,7 +286,6 @@ public actor ChapterTranscriptCache {
                     updatedAt: transcript.updatedAt
                 ))
         }
-        try saveContext()
     }
 
     public func transcripts(
@@ -267,7 +293,8 @@ public actor ChapterTranscriptCache {
         itemID: LibraryItemID
     ) throws(ChapterTranscriptCacheError) -> [CachedChapterTranscript] {
         try validate(accountID: accountID, itemID: itemID)
-        let scopedRecords = try records().filter {
+        let readContext = ModelContext(modelContainer)
+        let scopedRecords = try records(context: readContext).filter {
             $0.accountID == accountID.rawValue
                 && $0.libraryItemID == itemID.rawValue
         }
@@ -384,6 +411,10 @@ public actor ChapterTranscriptCache {
         {
             modelContext.delete(record)
         }
+        for record in try jobRecords()
+        where record.accountID == accountID.rawValue
+            && record.libraryItemID == itemID.rawValue
+        { modelContext.delete(record) }
         for record in try taskRecords()
         where record.accountID == accountID.rawValue
             && record.libraryItemID == itemID.rawValue
@@ -405,6 +436,12 @@ public actor ChapterTranscriptCache {
         if hasTranscript {
             return true
         }
+        if try jobRecords().contains(where: {
+            $0.accountID == accountID.rawValue
+                && $0.libraryItemID == itemID.rawValue
+        }) {
+            return true
+        }
         return try taskRecords().contains {
             $0.accountID == accountID.rawValue
                 && $0.libraryItemID == itemID.rawValue
@@ -421,6 +458,10 @@ public actor ChapterTranscriptCache {
         where record.accountID == accountID.rawValue {
             modelContext.delete(record)
         }
+        for record in try jobRecords()
+        where record.accountID == accountID.rawValue {
+            modelContext.delete(record)
+        }
         for record in try taskRecords()
         where record.accountID == accountID.rawValue {
             modelContext.delete(record)
@@ -428,7 +469,7 @@ public actor ChapterTranscriptCache {
         try saveContext()
     }
 
-    private func validate(
+    func validate(
         accountID: AccountID,
         itemID: LibraryItemID
     ) throws(ChapterTranscriptCacheError) {
@@ -440,11 +481,12 @@ public actor ChapterTranscriptCache {
         }
     }
 
-    private func records() throws(ChapterTranscriptCacheError)
+    private func records(context: ModelContext? = nil)
+        throws(ChapterTranscriptCacheError)
         -> [CachedChapterTranscriptRecord]
     {
         do {
-            return try modelContext.fetch(
+            return try (context ?? modelContext).fetch(
                 FetchDescriptor<CachedChapterTranscriptRecord>()
             )
         } catch {
@@ -452,7 +494,7 @@ public actor ChapterTranscriptCache {
         }
     }
 
-    private func saveContext() throws(ChapterTranscriptCacheError) {
+    func saveContext() throws(ChapterTranscriptCacheError) {
         do {
             try modelContext.save()
         } catch {
@@ -473,7 +515,7 @@ public actor ChapterTranscriptCache {
         }
     }
 
-    private static func isValid(
+    static func isValid(
         _ transcript: CachedChapterTranscript
     ) -> Bool {
         transcript.chapterStartMilliseconds >= 0
@@ -490,7 +532,7 @@ public actor ChapterTranscriptCache {
             }
     }
 
-    private static func isValid(
+    static func isValid(
         _ state: CachedChapterTranscriptionTaskState
     ) -> Bool {
         let selected = state.selectedChapterIDs
@@ -534,7 +576,7 @@ public actor ChapterTranscriptCache {
         }.joined()
     }
 
-    private static func taskKey(
+    static func taskKey(
         accountID: AccountID,
         itemID: LibraryItemID
     ) -> String {

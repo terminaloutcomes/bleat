@@ -301,6 +301,23 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   under the account and library item with start and finish timestamps plus
   monotonic elapsed time. The transcription screen reloads that terminal state
   after relaunch without retaining private filenames or framework diagnostics.
+- New batches persist their selection, language, source identity, and per-chapter
+  pending/running/completed/failed state before Speech starts. Each successful
+  transcript and chapter completion commit atomically. Cancellation and relaunch
+  expose explicit Resume for unfinished chapters in ascending chapter-index
+  order; opening the screen never starts Speech. Resume uses checkpoint state,
+  even if an unfinished chapter has older cached text.
+- Resume validates all selected local source tracks against download identity,
+  chapter boundaries, track timelines, file identity, size, and modification
+  metadata. Missing, changed, or insufficient identity is a typed failure that
+  preserves saved text. Metadata-preserving content replacement is an accepted
+  limitation; content hashing is excluded. Older terminal-only history is not
+  promoted into resumable jobs. Replacing a pending selection requires confirmation.
+- Checkpoint transactions use a dedicated actor with lazily created SwiftData
+  contexts; local metadata reads use a separate worker actor. The maintainer
+  approved these synchronous framework boundaries on 2026-09-08 because native
+  async APIs are unavailable. No file contents are read by the metadata boundary.
+  Replace these exceptions when native async framework APIs become available.
 - I can search transcript text case-insensitively across every previously
   transcribed chapter of the current book. Query terms may appear in any order,
   but every term must occur within the same transcript segment.
@@ -330,7 +347,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can explicitly delete the current audiobook's local transcript segments
   and latest transcription task state after destructive confirmation from the
   transcription screen or Book Detail. Deletion is scoped to the exact account
-  and book, cancels and awaits matching transcription work before purging, and
+  and book, cancels and awaits matching transcription and checkpoint writes before purging, and
   does not remove downloaded audio, bookmarks, or playback state.
 - Removing an account or deleting the book removes its cached transcripts and
   terminal transcription task state.

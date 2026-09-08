@@ -48,6 +48,10 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case search
     case loadBook = "load_book"
     case loadBookmarks = "load_bookmarks"
+    case loadTranscriptionJob = "load_transcription_job"
+    case checkpointTranscriptionJob = "checkpoint_transcription_job"
+    case commitTranscriptionChapter = "commit_transcription_chapter"
+    case validateTranscriptionSource = "validate_transcription_source"
     case inspectTranscriptCache = "inspect_transcript_cache"
     case deleteTranscriptCache = "delete_transcript_cache"
     case saveMetadata = "save_metadata"
@@ -139,6 +143,17 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case bookDeletionDenied = "book_deletion_denied"
     case bookDeletionUnavailable = "book_deletion_unavailable"
     case bookmarkUnavailable = "bookmark_unavailable"
+    case transcriptionJobMissingAudio = "transcription_job_missing_audio"
+    case transcriptionJobSourceChanged = "transcription_job_source_changed"
+    case transcriptionJobChapterLayoutChanged =
+        "transcription_job_chapter_layout_changed"
+    case transcriptionJobInsufficientSourceIdentity =
+        "transcription_job_insufficient_source_identity"
+    case transcriptionJobInvalidCheckpoint =
+        "transcription_job_invalid_checkpoint"
+    case transcriptionJobStaleRevision = "transcription_job_stale_revision"
+    case transcriptionJobPersistenceFailed =
+        "transcription_job_persistence_failed"
     case transcriptCacheInvalidAccountID =
         "transcript_cache_invalid_account_id"
     case transcriptCacheInvalidItemID = "transcript_cache_invalid_item_id"

@@ -492,6 +492,14 @@ protocol AppServicing: Sendable {
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookDetail
 
+    func transcriptionJob(accountID: AccountID, itemID: LibraryItemID)
+        async throws(AppServiceError) -> ChapterTranscriptionJob?
+    func saveTranscriptionJob(
+        _ job: ChapterTranscriptionJob,
+        replacing expected: ChapterTranscriptionJob?,
+        transcript: CachedChapterTranscript?, accountID: AccountID,
+        itemID: LibraryItemID) async throws(AppServiceError)
+
     func cachedChapterTranscripts(
         accountID: AccountID,
         itemID: LibraryItemID
@@ -870,6 +878,18 @@ extension AppServicing {
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
         AsyncStream { $0.finish() }
+    }
+
+    func transcriptionJob(accountID: AccountID, itemID: LibraryItemID)
+        async throws(AppServiceError) -> ChapterTranscriptionJob?
+    { nil }
+    func saveTranscriptionJob(
+        _ job: ChapterTranscriptionJob,
+        replacing expected: ChapterTranscriptionJob?,
+        transcript: CachedChapterTranscript?, accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        throw .transcriptCache(.job(.persistenceFailed))
     }
 
     func cachedChapterTranscripts(
@@ -2730,6 +2750,28 @@ actor LiveAppService: AppServicing {
             : .deleted
     }
 
+    func transcriptionJob(accountID: AccountID, itemID: LibraryItemID)
+        async throws(AppServiceError) -> ChapterTranscriptionJob?
+    {
+        do {
+            return try await transcriptCache.job(
+                accountID: accountID, itemID: itemID)
+        } catch { throw .transcriptCache(error) }
+    }
+
+    func saveTranscriptionJob(
+        _ job: ChapterTranscriptionJob,
+        replacing expected: ChapterTranscriptionJob?,
+        transcript: CachedChapterTranscript?, accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await transcriptCache.saveJob(
+                job, replacing: expected, transcript: transcript,
+                accountID: accountID, itemID: itemID)
+        } catch { throw .transcriptCache(error) }
+    }
+
     func cachedChapterTranscripts(
         accountID: AccountID,
         itemID: LibraryItemID
@@ -2982,6 +3024,7 @@ actor LiveAppService: AppServicing {
             try context.delete(model: CachedLibraryBookDetailRecord.self)
             try context.delete(model: CachedChapterTranscriptRecord.self)
             try context.delete(model: CachedChapterTranscriptionTaskRecord.self)
+            try context.delete(model: CachedChapterTranscriptionJobRecord.self)
             try context.delete(model: ListeningSliceRecord.self)
             try context.delete(model: CompletionMilestoneRecord.self)
             try context.delete(model: RemoteListeningSessionRecord.self)

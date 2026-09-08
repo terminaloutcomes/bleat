@@ -327,6 +327,7 @@ extension AppServiceError {
             ).diagnosticFailureCode
         }
         return switch error {
+        case .job(let cause): cause.diagnosticCode
         case .invalidAccountID: .transcriptCacheInvalidAccountID
         case .invalidItemID: .transcriptCacheInvalidItemID
         case .invalidTranscript: .transcriptCacheInvalidTranscript

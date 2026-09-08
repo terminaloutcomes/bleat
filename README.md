@@ -1051,8 +1051,24 @@ matching transcription work before removing the exact account and audiobook's
 transcript segments and latest task result. Downloaded audio, bookmarks, and
 playback state remain unchanged.
 
-This is the chapter-level capability slice of GitHub issue #5. Partial-result
-resume remains tracked as follow-up work.
+Interrupted transcription selections now retain durable chapter checkpoints.
+After cancellation or relaunch, Resume continues unfinished chapters in ascending
+chapter-index order with the original language. Speech never restarts just from
+opening the screen. Each chapter's final text and completed state are committed
+together; earlier text remains readable, searchable, and exportable after a later
+failure. Replacing an unfinished selection requires confirmation and keeps saved
+text. Older terminal history remains readable but is not converted into resumable
+jobs.
+
+Resume requires the original selection's downloaded tracks, including tracks used
+by completed chapters. Bleat compares download identity, chapter boundaries,
+track timelines, and local file identity, length, and modification metadata.
+Missing, changed, or unverifiable audio produces a specific failure without
+removing transcript text or fetching media automatically. This uses metadata,
+not content hashes, so changes preserving all compared metadata are not detected.
+SwiftData checkpoint operations and local metadata inspection run off the main
+actor. Removing account, book, or local transcript data drains matching writes
+before purging the saved job.
 
 ## Manual device beta checks
 

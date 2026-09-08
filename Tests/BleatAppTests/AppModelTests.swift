@@ -1213,6 +1213,267 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(view.model === appModel.transcription)
     }
 
+    func testResumeUsesCheckpointInsteadOfOlderCachedTextAndSavedLocale()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapters = [
+            PlaybackChapter(id: 1, start: 0, end: 20, title: "One"),
+            PlaybackChapter(id: 3, start: 20, end: 40, title: "Three"),
+        ]
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "resume", title: "Resume", libraryID: fixtureLibrary().id),
+            chapters: chapters)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success(
+                chapters.map {
+                    fixtureTranscript(chapter: $0, text: "older text")
+                }))
+        var job = ChapterTranscriptionJob(
+            localeIdentifier: "en-AU",
+            chapters: chapters.map {
+                ChapterTranscriptionJobChapter(
+                    id: $0.id, start: $0.start, end: $0.end)
+            })
+        job.source = ChapterTranscriptionSourceIdentity(
+            downloadID: DownloadID(rawValue: "test-download"),
+            tracks: [
+                ChapterTranscriptionSourceTrack(
+                    index: 0, inode: nil, expectedBytes: 10, observedBytes: 10,
+                    start: 0, duration: 60, validator: nil, fileIdentifier: 1,
+                    modifiedAt: Date(timeIntervalSince1970: 1))
+            ])
+        job.chapters[0].state = .completed
+        job.chapters[1].state = .running
+        try await service.saveTranscriptionJob(
+            job, replacing: nil, transcript: nil, accountID: account.id,
+            itemID: detail.id)
+        let recorder = ChapterTranscriptionRequestRecorder()
+        let coordinator = makeTranscriptionModel(requestRecorder: recorder)
+        let appModel = AppModel(service: service, transcription: coordinator)
+        let key = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: detail.id)
+        await coordinator.loadCachedTranscripts(
+            detail: detail, account: account, appModel: appModel)
+        let beforeResume = await recorder.recordedRequests()
+        XCTAssertTrue(beforeResume.isEmpty)
+        XCTAssertEqual(
+            coordinator.resumableJob(for: key)?.unfinishedChapters.map(\.id),
+            [3])
+        coordinator.start(
+            chapters: [], detail: detail, account: account,
+            downloads: appModel.downloads, appModel: appModel, resume: true)
+        let terminal = await waitForTranscriptionTerminalState(
+            in: coordinator, bookKey: key)
+        XCTAssertEqual(terminal?.outcome, .succeeded)
+        XCTAssertEqual(terminal?.completedChapterIDs, [1, 3])
+        let requests = await recorder.recordedRequests()
+        XCTAssertEqual(requests.map(\.chapterStartSeconds), [20])
+        XCTAssertEqual(requests.first?.locale.identifier, "en-AU")
+        XCTAssertEqual(
+            coordinator.searchResults(query: "older text", for: key).count, 1)
+        XCTAssertNil(coordinator.resumableJob(for: key))
+    }
+
+    func testResumeRejectsChangedSourceAndKeepsSearchableText() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "changed-resume", title: "Resume",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            transcriptLoad: .success([
+                fixtureTranscript(chapter: chapter, text: "preserve text")
+            ]))
+        var job = ChapterTranscriptionJob(
+            localeIdentifier: "en-AU",
+            chapters: [ChapterTranscriptionJobChapter(id: 1, start: 0, end: 20)]
+        )
+        job.source = ChapterTranscriptionSourceIdentity(
+            downloadID: DownloadID(rawValue: "different-download"),
+            tracks: [
+                ChapterTranscriptionSourceTrack(
+                    index: 0, inode: nil, expectedBytes: 10, observedBytes: 10,
+                    start: 0, duration: 60, validator: nil, fileIdentifier: 1,
+                    modifiedAt: Date(timeIntervalSince1970: 1))
+            ])
+        try await service.saveTranscriptionJob(
+            job, replacing: nil, transcript: nil, accountID: account.id,
+            itemID: detail.id)
+        let recorder = ChapterTranscriptionRequestRecorder()
+        let coordinator = makeTranscriptionModel(requestRecorder: recorder)
+        let appModel = AppModel(service: service, transcription: coordinator)
+        let key = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: detail.id)
+        await coordinator.loadCachedTranscripts(
+            detail: detail, account: account, appModel: appModel)
+        coordinator.start(
+            chapters: [], detail: detail, account: account,
+            downloads: appModel.downloads, appModel: appModel, resume: true)
+        let terminal = await waitForTranscriptionTerminalState(
+            in: coordinator, bookKey: key)
+        XCTAssertEqual(terminal?.failure, .jobSourceChanged)
+        let requests = await recorder.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
+        XCTAssertEqual(
+            coordinator.searchResults(query: "preserve text", for: key).count, 1
+        )
+        XCTAssertEqual(coordinator.resumableJob(for: key), job)
+    }
+
+    func testOtherBookCheckpointLoadFailureCannotReplaceActiveTranscription()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let active = fixtureBookDetail(
+            item: fixtureBook(
+                id: "active-job", title: "Active",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let other = fixtureBookDetail(
+            item: fixtureBook(
+                id: "invalid-job", title: "Invalid",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let service = TestAppService(activeAccount: .success(account))
+        await service.failTranscriptionJobLoad(for: other.id)
+        let gate = AsyncGate()
+        let coordinator = makeTranscriptionModel(transcriberGate: gate)
+        let appModel = AppModel(service: service, transcription: coordinator)
+        let activeKey = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: active.id)
+        let otherKey = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: other.id)
+        coordinator.start(
+            chapters: [chapter], detail: active, account: account,
+            downloads: appModel.downloads, appModel: appModel)
+        await gate.waitUntilEntered()
+        await coordinator.loadCachedTranscripts(
+            detail: other, account: account, appModel: appModel)
+        XCTAssertTrue(coordinator.isWorking(for: activeKey))
+        XCTAssertEqual(
+            coordinator.cacheFailures[otherKey], .job(.invalidCheckpoint))
+        coordinator.cancel()
+        await gate.release()
+        _ = await waitForTranscriptionTerminalState(
+            in: coordinator, bookKey: activeKey)
+    }
+
+    func testMissingTranscriptionAudioRecordsSpecificSourceStage() async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "missing-audio", title: "Missing",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let coordinator = ChapterTranscriptionModel()
+        let appModel = AppModel(
+            service: TestAppService(activeAccount: .success(account)),
+            diagnostics: diagnostics, transcription: coordinator)
+        let key = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: detail.id)
+        coordinator.start(
+            chapters: [chapter], detail: detail, account: account,
+            downloads: appModel.downloads, appModel: appModel)
+        let terminal = await waitForTranscriptionTerminalState(
+            in: coordinator, bookKey: key)
+        XCTAssertEqual(terminal?.failure, .jobMissingAudio)
+        let events = await diagnostics.events()
+        XCTAssertTrue(
+            events.contains {
+                $0.operation == .validateTranscriptionSource
+                    && $0.failureCode == .transcriptionJobMissingAudio
+            })
+    }
+
+    func testTranscriptDeletionWaitsForInitialCheckpoint() async throws {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "delete-checkpoint", title: "Delete",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let service = TestAppService(activeAccount: .success(account))
+        let gate = AsyncGate()
+        await service.setInitialCheckpointGate(gate)
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(service: service, transcription: coordinator)
+        coordinator.start(
+            chapters: [chapter], detail: detail, account: account,
+            downloads: appModel.downloads, appModel: appModel)
+        await gate.waitUntilEntered()
+        let deletion = Task {
+            await coordinator.deleteLocalData(
+                detail: detail, account: account, appModel: appModel)
+        }
+        let key = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: detail.id)
+        for _ in 0..<100 where coordinator.deletionState(for: key) != .deleting
+        { await Task.yield() }
+        XCTAssertEqual(coordinator.deletionState(for: key), .deleting)
+        await gate.release()
+        let deleted = await deletion.value
+        XCTAssertTrue(deleted)
+        let job = try await service.transcriptionJob(
+            accountID: account.id, itemID: detail.id)
+        XCTAssertNil(job)
+        XCTAssertNil(coordinator.resumableJob(for: key))
+    }
+
+    func testInterruptedSelectionWithoutTranscriptStillHasDeletableLocalData()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "pending-only", title: "Pending",
+                libraryID: fixtureLibrary().id), chapters: [chapter])
+        let service = TestAppService(activeAccount: .success(account))
+        let job = ChapterTranscriptionJob(
+            localeIdentifier: "en-AU",
+            chapters: [ChapterTranscriptionJobChapter(id: 1, start: 0, end: 20)]
+        )
+        try await service.saveTranscriptionJob(
+            job, replacing: nil, transcript: nil, accountID: account.id,
+            itemID: detail.id)
+        let coordinator = makeTranscriptionModel()
+        let appModel = AppModel(service: service, transcription: coordinator)
+        let key = ChapterTranscriptionBookKey(
+            accountID: account.id, itemID: detail.id)
+        await coordinator.loadCachedTranscripts(
+            detail: detail, account: account, appModel: appModel)
+        XCTAssertTrue(coordinator.hasLocalData(for: key))
+        let deleted = await coordinator.deleteLocalData(
+            detail: detail, account: account, appModel: appModel)
+        XCTAssertTrue(deleted)
+        XCTAssertFalse(coordinator.hasLocalData(for: key))
+    }
+
+    func testResumePlannerRejectsMissingOrChangedChapterBounds() throws {
+        let chapter = PlaybackChapter(id: 1, start: 0, end: 20, title: "One")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "layout", title: "Layout", libraryID: fixtureLibrary().id),
+            chapters: [chapter])
+        let job = ChapterTranscriptionJob(
+            localeIdentifier: "en-AU",
+            chapters: [ChapterTranscriptionJobChapter(id: 1, start: 0, end: 21)]
+        )
+        XCTAssertThrowsError(
+            try ChapterTranscriptionResumePlanner.selectedChapters(
+                job: job, detail: detail)
+        ) { error in
+            XCTAssertEqual(
+                error as? ChapterTranscriptionJobFailure, .chapterLayoutChanged)
+        }
+    }
+
     func testTranscriptionBatchSkipsChaptersWithCachedTranscripts()
         async throws
     {
@@ -17714,6 +17975,17 @@ final class AppModelTests: XCTestCase {
                     cachePin: nil
                 )
             },
+            sourceIdentityLoader: { _, _, _, _ in
+                ChapterTranscriptionSourceIdentity(
+                    downloadID: DownloadID(rawValue: "test-download"),
+                    tracks: [
+                        ChapterTranscriptionSourceTrack(
+                            index: 0, inode: nil, expectedBytes: 10,
+                            observedBytes: 10, start: 0, duration: 60,
+                            validator: nil, fileIdentifier: 1,
+                            modifiedAt: Date(timeIntervalSince1970: 1))
+                    ])
+            },
             transcriberFactory: {
                 TestChapterTranscriber(
                     gate: transcriberGate,
@@ -18870,6 +19142,48 @@ private actor TestAppService: AppServicing {
         return try value(from: result)
     }
 
+    private var transcriptionJobs:
+        [ChapterTranscriptionBookKey: ChapterTranscriptionJob] = [:]
+    private var initialCheckpointGate: AsyncGate?
+    func setInitialCheckpointGate(_ gate: AsyncGate) {
+        initialCheckpointGate = gate
+    }
+    private var failingTranscriptionJobItems: Set<LibraryItemID> = []
+    func failTranscriptionJobLoad(for itemID: LibraryItemID) {
+        failingTranscriptionJobItems.insert(itemID)
+    }
+
+    func transcriptionJob(accountID: AccountID, itemID: LibraryItemID)
+        async throws(AppServiceError) -> ChapterTranscriptionJob?
+    {
+        if failingTranscriptionJobItems.contains(itemID) {
+            throw .transcriptCache(.job(.invalidCheckpoint))
+        }
+        return transcriptionJobs[
+            ChapterTranscriptionBookKey(accountID: accountID, itemID: itemID)]
+    }
+
+    func saveTranscriptionJob(
+        _ job: ChapterTranscriptionJob,
+        replacing expected: ChapterTranscriptionJob?,
+        transcript: CachedChapterTranscript?, accountID: AccountID,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        let key = ChapterTranscriptionBookKey(
+            accountID: accountID, itemID: itemID)
+        guard transcriptionJobs[key] == expected else {
+            throw .transcriptCache(.job(.staleRevision))
+        }
+        if expected == nil, let initialCheckpointGate {
+            await initialCheckpointGate.enterAndWait()
+        }
+        if let transcript {
+            try await saveCachedChapterTranscript(
+                transcript, accountID: accountID, itemID: itemID)
+        }
+        transcriptionJobs[key] = job
+    }
+
     func saveCachedChapterTranscript(
         _ transcript: CachedChapterTranscript,
         accountID: AccountID,
@@ -18959,6 +19273,7 @@ private actor TestAppService: AppServicing {
         )
         recordedTranscriptDeletionRequests.append(bookKey)
         deletedTranscriptBooks.insert(bookKey)
+        transcriptionJobs[bookKey] = nil
         transcriptPersistenceEvents.append(.deleted(bookKey))
     }
 

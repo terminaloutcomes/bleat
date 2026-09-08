@@ -2229,6 +2229,29 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testInterruptedTranscriptionOffersExplicitResume() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-resumable",
+            ])
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["book.detail.transcription"].tap()
+        let resume = app.buttons["transcription.resume"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 3))
+        XCTAssertTrue(resume.isEnabled)
+        XCTAssertTrue(app.staticTexts["transcription.resumeProgress"].exists)
+        XCTAssertFalse(app.buttons["Cancelling…"].exists)
+    }
+
+    @MainActor
     func testCachedTranscriptionCannotBeQueuedAgain() {
         let app = launch(
             scenario: "--ui-testing-playback",

@@ -294,8 +294,17 @@ public enum BleatPersistenceSchemaV0_1_3: VersionedSchema {
     }
 }
 
-public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+public enum BleatPersistenceSchemaV0_1_4: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 4) }
+    public static var models: [any PersistentModel.Type] {
+        BleatPersistenceModelCatalog.currentModelTypes.filter {
+            $0 != CachedChapterTranscriptionJobRecord.self
+        }
+    }
+}
+
+public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 5) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -306,6 +315,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
         [
             BleatPersistenceSchemaV0_1_1.self,
             BleatPersistenceSchemaV0_1_2.self,
+            BleatPersistenceSchemaV0_1_4.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -318,6 +328,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_2.self,
+                toVersion: BleatPersistenceSchemaV0_1_4.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_4.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]

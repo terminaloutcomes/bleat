@@ -409,6 +409,7 @@ private struct ChapterTranscriptCacheFixture {
         let schema = Schema([
             CachedChapterTranscriptRecord.self,
             CachedChapterTranscriptionTaskRecord.self,
+            CachedChapterTranscriptionJobRecord.self,
         ])
         container = try ModelContainer(
             for: schema,

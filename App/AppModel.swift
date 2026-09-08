@@ -1465,6 +1465,51 @@ final class AppModel {
     let downloads: DownloadModel
     let transcription: ChapterTranscriptionModel
 
+    func transcriptionJob(for account: ServerAccount, itemID: LibraryItemID)
+        async throws(AppServiceError) -> ChapterTranscriptionJob?
+    {
+        do {
+            return try await service.transcriptionJob(
+                accountID: account.id, itemID: itemID)
+        } catch {
+            await diagnostics.record(
+                .failed(
+                    .loadTranscriptionJob, category: .app,
+                    failureCode: error.transcriptCacheDiagnosticFailureCode))
+            throw error
+        }
+    }
+
+    func saveTranscriptionJob(
+        _ job: ChapterTranscriptionJob,
+        replacing expected: ChapterTranscriptionJob?,
+        transcript: CachedChapterTranscript? = nil, for account: ServerAccount,
+        itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await service.saveTranscriptionJob(
+                job, replacing: expected, transcript: transcript,
+                accountID: account.id, itemID: itemID)
+        } catch {
+            await diagnostics.record(
+                .failed(
+                    transcript == nil
+                        ? .checkpointTranscriptionJob
+                        : .commitTranscriptionChapter, category: .app,
+                    failureCode: error.transcriptCacheDiagnosticFailureCode))
+            throw error
+        }
+    }
+
+    func recordTranscriptionSourceFailure(
+        _ failure: ChapterTranscriptionJobFailure
+    ) async {
+        await diagnostics.record(
+            .failed(
+                .validateTranscriptionSource, category: .app,
+                failureCode: failure.diagnosticCode))
+    }
+
     func cachedChapterTranscripts(
         for account: ServerAccount,
         itemID: LibraryItemID
@@ -3873,7 +3918,7 @@ final class AppModel {
         }
         bookDeletionState = .deleting
 
-        transcription.cancel(
+        await transcription.cancelAndWait(
             for: ChapterTranscriptionBookKey(
                 accountID: account.id,
                 itemID: detail.id
@@ -5371,7 +5416,7 @@ final class AppModel {
             await stopLiveUpdatesAndWait()
             await playback.stop()
             for account in accounts {
-                transcription.cancel(for: account.id)
+                await transcription.cancelAndWait(for: account.id)
             }
             await cancelSeriesDownloads()
             guard await downloads.removeAllForLocalDataReset() else {
@@ -5466,7 +5511,7 @@ final class AppModel {
         await diagnostics.record(
             .started(.removeAccount, category: .auth)
         )
-        transcription.cancel(for: account.id)
+        await transcription.cancelAndWait(for: account.id)
         await cancelSeriesDownloads(for: account.id)
         if playback.accountID == account.id {
             await playback.stop()
