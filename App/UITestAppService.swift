@@ -1,6 +1,34 @@
 #if DEBUG || BLEAT_UI_TESTING
     import BleatCore
     import Foundation
+    import Observation
+
+    @MainActor
+    @Observable
+    final class UITestPlaybackSyncGate {
+        enum State {
+            case idle
+            case waiting
+        }
+
+        static let shared = UITestPlaybackSyncGate()
+        private(set) var state = State.idle
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func wait() async {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                state = .waiting
+            }
+        }
+
+        func release() {
+            let pending = continuation
+            continuation = nil
+            state = .idle
+            pending?.resume()
+        }
+    }
 
     private enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
@@ -1024,7 +1052,8 @@
                 ]
                 : playbackTracks
             return AppPlaybackPreparation(
-                sessionID: nil,
+                sessionID: delaysPlaybackSync
+                    ? PlaybackSessionID(rawValue: "ui-delayed-stop") : nil,
                 itemID: itemID,
                 title: title,
                 duration: 3_600,
@@ -1039,12 +1068,22 @@
             sessionID: PlaybackSessionID
         ) async throws(AppServiceError) {}
 
+        private var delaysPlaybackSync: Bool {
+            ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-delayed-playback-sync"
+            )
+        }
+
         func syncPlayback(
             for account: ServerAccount,
             sessionID: PlaybackSessionID,
             currentTime: Double,
             duration: Double
-        ) async throws(AppServiceError) {}
+        ) async throws(AppServiceError) {
+            if delaysPlaybackSync {
+                await UITestPlaybackSyncGate.shared.wait()
+            }
+        }
 
         func syncLocalPlaybackSessions(
             for account: ServerAccount,
