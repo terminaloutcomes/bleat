@@ -1,3 +1,5 @@
+// These routes share tracing callsites with the capture test. Serialize their first
+// registration too: a scoped subscriber alone does not isolate the global interest cache.
 use super::*;
 use crate::config::ForwardingHeader;
 use governor::{Quota, clock::DefaultClock};
@@ -84,6 +86,7 @@ async fn error_body(response: Response, code: &str) {
 
 #[tokio::test]
 async fn both_routes_share_quota_failed_handlers_are_not_refunded_and_clients_are_independent() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
     let (router, _) = admission_router(no_forwarding(), 8);
     let first = router
         .clone()
@@ -116,6 +119,7 @@ async fn both_routes_share_quota_failed_handlers_are_not_refunded_and_clients_ar
 
 #[tokio::test]
 async fn global_saturation_does_not_consume_quota_and_health_and_readiness_remain_available() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
     let (router, permits) = admission_router(no_forwarding(), 1);
     let held = permits.acquire().await.expect("permit");
     let response = router
@@ -157,6 +161,7 @@ async fn global_saturation_does_not_consume_quota_and_health_and_readiness_remai
 
 #[tokio::test]
 async fn missing_connection_identity_skips_client_admission_even_with_forwarding_headers() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
     let (router, _) = admission_router(no_forwarding(), 1);
     for _ in 0..3 {
         assert_eq!(
@@ -177,6 +182,7 @@ async fn missing_connection_identity_skips_client_admission_even_with_forwarding
 
 #[tokio::test]
 async fn map_capacity_is_distinct_and_existing_clients_keep_their_quota() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
     let (router, _) = admission_router(no_forwarding(), 1);
     assert_eq!(
         router
@@ -219,6 +225,7 @@ async fn map_capacity_is_distinct_and_existing_clients_keep_their_quota() {
 
 #[tokio::test]
 async fn forwarding_decisions_are_reused_for_admission_without_reparsing() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
     let overlong = vec!["192.0.2.99"; 33].join(", ");
     let cases = vec![
         (
@@ -357,7 +364,7 @@ async fn every_rejection_logs_actor_or_capacity_classification_and_correlation()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("JSON log"))
         .filter(|event| event["fields"]["rejection.count"] == 1)
         .collect();
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 4, "captured rejection events: {events:#?}");
     for (event, id) in events.iter().zip(ids) {
         assert_eq!(event["fields"]["request.id"], id);
         assert!(event["timestamp"].is_string());
