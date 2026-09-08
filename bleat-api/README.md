@@ -90,6 +90,8 @@ Flags and matching environment variables configure the service:
 | `--challenge-lifetime-seconds` | `BLEAT_API_CHALLENGE_LIFETIME_SECONDS` | `120` |
 | `--challenge-cleanup-batch-size` | `BLEAT_API_CHALLENGE_CLEANUP_BATCH_SIZE` | `1000` |
 | `--challenge-issuance-per-minute` | `BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE` | `600` |
+| `--challenge-issuance-burst` | `BLEAT_API_CHALLENGE_ISSUANCE_BURST` | `600` |
+| `--challenge-max-clients` | `BLEAT_API_CHALLENGE_MAX_CLIENTS` | `10000` |
 | `--token-lifetime-seconds` | `BLEAT_API_TOKEN_LIFETIME_SECONDS` | `600` |
 | `--jwt-signing-key-file` | `BLEAT_API_JWT_SIGNING_KEY_FILE` | unset; required in production |
 | `--jwt-public-key-set-file` | `BLEAT_API_JWT_PUBLIC_KEY_SET_FILE` | unset |
@@ -364,3 +366,51 @@ omitted.
 
 Published images include signed provenance and an SBOM. The reusable workflow
 is pinned to an immutable commit from Docker's `v1` release line.
+
+## Per-client challenge admission
+
+Both `POST /v1/attestation/challenge` and `POST /v1/token/challenge` consume
+one shared per-client Governor admission before body parsing and challenge
+creation. Global concurrency rejection happens first and does not consume
+quota; health and readiness bypass both controls. Handler failures do not refund
+an admission. Rate and burst must each be 1–100,000, and maximum client entries
+must be 1–1,000,000. Defaults retain the previous 600 allowance as an explicit
+burst of 600, with a sustained rate of 600/minute **per client**.
+
+This intentionally replaces the application-wide fixed minute window with
+continuously replenishing GCRA admission. For illustration only, 60/minute
+with burst 10 allows ten immediate requests and replenishes one per second;
+these illustration values are not production defaults. Governor owns all rate
+arithmetic ([quota semantics](https://docs.rs/governor/0.10.4/governor/struct.Quota.html)).
+
+Admission consumes the typed `forwarding.rs` resolution placed in request
+extensions. IPv4-mapped IPv6 is canonicalized to IPv4; IPv4 uses the complete
+address and IPv6 shares the first 64 bits. Existing forwarding policy remains
+authoritative, including its socket-peer fallback for missing, malformed,
+conflicting, excessive, or untrusted forwarding input. Without connection
+metadata there is no usable identity: skip client admission and rely on global
+concurrency, never a shared unknown bucket or an arbitrary forwarding header.
+
+The map and its cleanup queue have the same hard client bound. Lookup, insert,
+admission, and eviction share a short async-mutex critical section without an
+await while held. Immediate Governor `check()` does not wait for refill.
+Housekeeping rotates through at most 64 entries per second, and admission of a
+new key at capacity also examines at most 64 entries. Idle entries expire only
+after Governor's complete burst replenishment duration rounded up to whole
+seconds since their last check. Active or depleted buckets are never evicted
+for recency. A new key can receive a capacity response until a later bounded
+cleanup pass finds space; existing keys continue using their allowance.
+
+Quota rejection returns JSON `429 rate_limited` with the correlated request ID
+and `Retry-After` rounded up from Governor's rejection on the same clock.
+Client-map exhaustion returns `503 limiter_capacity`; global concurrency
+exhaustion returns `503 global_capacity`. Capacity failures are resource events,
+not actor quota breaches. Every rejection emits one event with count 1 and its
+specific failure code/stage and limit kind. Quota events include the canonical
+IPv4 address or IPv6 `/64`, timestamp, configured rate/burst, route, retry delay,
+and request ID. No actor metric labels, raw forwarding headers, or auth material
+are added. Addresses stay out of response bodies.
+
+State exists only in memory: restarts reset quotas, and replicas enforce
+independent quotas. Rejection logging is separate from limiter-state retention.
+Use ingress or shared enforcement when a deployment-wide limit is required.

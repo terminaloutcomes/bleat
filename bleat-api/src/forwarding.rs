@@ -40,7 +40,7 @@ pub(crate) enum ClientAddressDecision {
     Fallback(ForwardingFailure),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ClientAddressResolution {
     pub client: IpAddr,
     pub decision: ClientAddressDecision,

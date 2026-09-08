@@ -22,10 +22,13 @@ remove their availability limits.
 - `BLEAT_API_DATABASE_MAX_CONNECTIONS` is a per-pod pool limit. Its default is
   16, so the API's possible database connections increase by 16 for every pod
   unless the deployment overrides it.
-- `BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE` is also per pod. Its default is 600,
-  so two pods can collectively issue approximately 1,200 challenges per
-  minute. Use ingress-level or shared enforcement if an incident requires one
-  global limit.
+- `BLEAT_API_CHALLENGE_ISSUANCE_PER_MINUTE` is per client and per pod (default
+  600), shared across both challenge endpoints. The explicit burst defaults to
+  600, with continuous Governor refill. Two pods allow one client a combined
+  sustained 1,200/minute plus their independent bursts; restarts reset quotas.
+  The bounded in-memory client map defaults to 10,000 entries per pod. See
+  `bleat-api/README.md` for identity, expiry, and capacity semantics. Use ingress
+  or shared enforcement if an incident requires one deployment-wide limit.
 - `BLEAT_API_MAX_CONCURRENT_REQUESTS` is per pod and intentionally adds request
   capacity as replicas are added.
 - Each pod checks and applies SeaORM migrations before binding its listener.

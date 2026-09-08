@@ -20,6 +20,7 @@ pub mod error;
 mod forwarding;
 pub mod http;
 pub mod installation;
+mod issuance;
 pub mod observability;
 pub mod telemetry_auth;
 
