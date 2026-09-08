@@ -242,7 +242,7 @@ other rows map section 22 release criteria.
 | AC-25 | Concurrent progress never silently overwrites two changed positions | `APP-OFFLINE-POSITION-001` | verified |
 | AC-26 | Metadata editing uses best-effort stale-draft handling without claiming atomic conflict prevention | `APP-METADATA-001` | verified |
 | AC-27 | Account removal leaves no credential or cross-account cache record | `APP-ACCOUNT-001`, `ACCOUNT-003` | verified |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The remaining accessibility audits are tracked by [Reduce Motion #41](https://github.com/terminaloutcomes/bleat/issues/41) and [iPad keyboard #40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
+| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The completed maintainer Reduce Motion audit is recorded below. The remaining iPad keyboard audit is tracked by [#40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
 | AC-29 | Server deletion is permission-gated, distinguishes both deletion modes, and stops matching playback first | `APP-BOOK-DELETE-001` | verified |
 
 ## Largest Dynamic Type audit
@@ -314,3 +314,11 @@ application audit boundary.
 This automated result validates the accessibility information VoiceOver
 receives, not spoken output or VoiceOver gesture operation. Issue #39 remains
 open until the manual iPhone and iPad audit records those results.
+
+## Reduce Motion audit
+
+On 2026-09-08, the maintainer confirmed completion of the Reduce Motion audits
+and reported “no motion I can really find.” This maintainer-reported result
+closes the Reduce Motion audit work for AC-28. Device models, OS/app builds,
+and individual journey results were not supplied with that confirmation.
+No additional automated or device validation was performed when recording it.

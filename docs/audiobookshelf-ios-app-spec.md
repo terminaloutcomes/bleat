@@ -1967,7 +1967,8 @@ wire schema must be re-audited before release as part of GitHub issue 68.
   ([GitHub issue #45](https://github.com/terminaloutcomes/bleat/issues/45)).
 - Support Bold Text ([GitHub issue #44](https://github.com/terminaloutcomes/bleat/issues/44)),
   Increase Contrast ([GitHub issue #43](https://github.com/terminaloutcomes/bleat/issues/43)),
-  and Reduce Motion ([GitHub issue #41](https://github.com/terminaloutcomes/bleat/issues/41)).
+  and Reduce Motion (completed maintainer audit recorded in
+  `docs/requirements-traceability.md`).
 - Keep primary navigation, login, browsing, and playback layouts usable in
   portrait and landscape on iPhone and iPad.
 - Provide keyboard shortcuts on iPad for play/pause, skip, speed, and search
