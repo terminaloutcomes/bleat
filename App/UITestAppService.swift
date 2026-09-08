@@ -238,7 +238,10 @@
             async throws(AppServiceError) -> ServerAccount?
         {
             if scenario == .launching {
-                try? await Task.sleep(for: .seconds(5))
+                // Keep this scenario pending regardless of how long XCTest
+                // takes to attach. AsyncStream ends the wait on cancellation.
+                let pending = AsyncStream<Void> { _ in }
+                for await _ in pending {}
                 return nil
             }
             guard isSignedInScenario else {
