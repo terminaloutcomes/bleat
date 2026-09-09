@@ -14151,6 +14151,69 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testDownloadedPlaybackCanSeekToChapterFromBookDetail()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "DownloadedChapterPlayback-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let account = try fixtureAccount()
+        let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let chapter = PlaybackChapter(
+            id: 1,
+            start: 0.25,
+            end: 0.75,
+            title: "Chapter One"
+        )
+        let detail = fixtureBookDetail(
+            item: summary,
+            chapters: [chapter]
+        )
+        try await prepareCompleteDownload(
+            root: root,
+            account: account,
+            detail: detail
+        )
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(
+            service: service,
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier:
+                backgroundSessionIdentifier("downloaded-chapter-playback")
+        )
+        await model.start()
+
+        let initialOutcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initialOutcome, .started(source: .downloaded))
+        XCTAssertEqual(model.playback.libraryID, detail.libraryID)
+
+        let chapterOutcome = await model.startPlayback(
+            detail: detail,
+            account: account,
+            position: .chapter(chapter)
+        )
+
+        XCTAssertEqual(chapterOutcome, .started(source: .activePlayer))
+        XCTAssertEqual(
+            model.playback.currentTime,
+            chapter.start,
+            accuracy: 0.01
+        )
+        let playbackRequests = await service.playbackOpenRequests()
+        XCTAssertTrue(playbackRequests.isEmpty)
+        await model.playback.stop()
+    }
+
     func testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork()
         async throws
     {
