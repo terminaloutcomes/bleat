@@ -195,6 +195,10 @@ run = ["./scripts/test-dynamic-type-ui.sh"]
 description = "Run Bold Text, Increase Contrast, and interaction-target UI audits"
 run = ["./scripts/test-accessibility-ui.sh"]
 
+[tasks."test:mini-player-motion"]
+description = "Audit mini-player dismissal and restoration with both Reduce Motion settings"
+run = ["./scripts/test-mini-player-motion.sh"]
+
 [tasks."test:voiceover"]
 description = "Run VoiceOver semantic UI audits on iPhone and iPad simulators"
 run = ["./scripts/test-voiceover-ui.sh"]

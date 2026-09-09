@@ -262,16 +262,16 @@ private struct PlaybackScrubberView: View {
 
 struct MiniPlayerView: View {
     @Bindable var playback: PlaybackModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let containerHeight: CGFloat
     var foreground: Color = .white
     let showPlayer: () -> Void
-    @State private var isDismissing = false
 
     var miniPlayerRoundingRadius: CGFloat = 8
 
     var body: some View {
 
-        if !isDismissing {
+        if !playback.isDismissingMiniPlayer {
             HStack(spacing: 12) {
                 Button(action: showPlayer) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -357,7 +357,11 @@ struct MiniPlayerView: View {
             )
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(
+                reduceMotion
+                    ? .opacity
+                    : .move(edge: .bottom).combined(with: .opacity)
+            )
             .highPriorityGesture(miniPlayerGesture)
             .accessibilityElement(children: .contain)
             .accessibilityAction(named: "Stop and Dismiss Playback") {
@@ -386,19 +390,19 @@ struct MiniPlayerView: View {
     }
 
     private func stopAndDismiss() {
-        guard !isDismissing else {
+        guard !playback.isDismissingMiniPlayer else {
             return
         }
-        withAnimation(.easeOut(duration: 0.2)) {
-            isDismissing = true
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            playback.isDismissingMiniPlayer = true
         }
         Task {
             await playback.stop()
-            guard playback.hasActiveBook else {
-                return
-            }
-            withAnimation(.easeIn(duration: 0.2)) {
-                isDismissing = false
+            withAnimation(
+                playback.hasActiveBook && !reduceMotion
+                    ? .easeIn(duration: 0.2) : nil
+            ) {
+                playback.isDismissingMiniPlayer = false
             }
         }
     }

@@ -404,6 +404,22 @@ beneath `.build/voiceover-ui-results/`. This deterministic gate validates the
 accessibility tree; spoken output and gesture operation still require the
 manual VoiceOver audit tracked in issue #39.
 
+### Mini-player Reduce Motion audit
+
+Run dismissal while playing and paused, restoration after a superseded stop,
+and upward-swipe navigation on disposable iPhone and iPad Simulators:
+
+```sh
+mise run test:mini-player-motion
+```
+
+The audit sets the system Reduce Motion preference to disabled and enabled,
+reboots each Simulator, and verifies the effective SwiftUI value inside the app
+against the requested value. Every pass verifies all four test identifiers and
+outcomes in its `.xcresult` bundle under `.build/mini-player-motion/`.
+These automated checks verify behavior and setting propagation; visual motion
+and physical-device VoiceOver action operation require manual observation.
+
 ## Evidence requirements
 
 A successful command exit is not sufficient evidence. Confirm that every

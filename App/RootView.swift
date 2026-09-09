@@ -72,6 +72,7 @@ struct RootView: View {
     @State private var isShowingDiagnostics = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.legibilityWeight) private var legibilityWeight
     @ColourSchemePreference private var colourScheme
 
@@ -127,6 +128,9 @@ struct RootView: View {
                             .accessibilityIdentifier(
                                 "accessibility.boldText"
                             )
+                            Text(reduceMotion ? "enabled" : "disabled")
+                            .accessibilityIdentifier(
+                                "accessibility.reduceMotion")
                             Text(
                                 colorSchemeContrast == .increased
                                     ? "enabled" : "disabled"
@@ -140,6 +144,16 @@ struct RootView: View {
                 .font(.caption2)
                 .opacity(0)
                 .allowsHitTesting(false)
+            }
+            .overlay(alignment: .topTrailing) {
+                if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-delayed-playback-sync"
+                ), UITestPlaybackSyncGate.shared.state == .waiting {
+                    Button("Complete Sync") {
+                        UITestPlaybackSyncGate.shared.release()
+                    }
+                    .accessibilityIdentifier("testing.playback.completeSync")
+                }
             }
         #endif
         .task {

@@ -446,6 +446,7 @@ final class PlaybackModel {
     private var automaticCachePinReleaser:
         (@MainActor @Sendable (AutomaticCachePin?) -> Void)?
 
+    var isDismissingMiniPlayer = false
     private(set) var state: PlaybackState = .idle
     private(set) var syncState: PlaybackSyncState = .idle
     private(set) var itemID: LibraryItemID?

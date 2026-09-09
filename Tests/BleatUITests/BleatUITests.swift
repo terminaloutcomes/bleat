@@ -2053,15 +2053,7 @@ final class BleatUITests: XCTestCase {
 
         var miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
-        swipeDownToStop(miniToggle)
-        let playingDismissed = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "hittable == false"),
-            object: miniToggle
-        )
-        XCTAssertEqual(
-            XCTWaiter.wait(for: [playingDismissed], timeout: 3),
-            .completed
-        )
+        app.buttons["player.mini.open"].swipeDown(velocity: .fast)
         XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 10))
 
         let restartedPlay = app.buttons["book.detail.play"]
@@ -2072,14 +2064,15 @@ final class BleatUITests: XCTestCase {
         let pause = app.buttons["book.detail.play"]
         XCTAssertTrue(pause.waitForExistence(timeout: 3))
         let playbackRequested = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "label == %@", "Pause"),
+            predicate: NSPredicate(
+                format: "label == %@", "Pause The Test Audiobook"),
             object: pause
         )
         XCTAssertEqual(
             XCTWaiter.wait(for: [playbackRequested], timeout: 3),
             .completed
         )
-        XCTAssertEqual(pause.label, "Pause")
+        XCTAssertEqual(pause.label, "Pause The Test Audiobook")
         pause.tap()
         let playbackPaused = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label == %@", "Play"),
@@ -2090,16 +2083,59 @@ final class BleatUITests: XCTestCase {
             .completed
         )
         XCTAssertEqual(miniToggle.label, "Play")
-        swipeDownToStop(miniToggle)
-        let pausedDismissed = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "hittable == false"),
-            object: miniToggle
-        )
-        XCTAssertEqual(
-            XCTWaiter.wait(for: [pausedDismissed], timeout: 3),
-            .completed
-        )
+        app.buttons["player.mini.open"].swipeDown(velocity: .fast)
         XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testMiniPlayerRestoresWhenStopIsSuperseded() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-delayed-playback-sync"]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+        let miniToggle = app.buttons["player.mini.toggle"]
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        app.buttons["player.mini.open"].swipeDown(velocity: .fast)
+        XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 3))
+
+        let completeSync = app.buttons["testing.playback.completeSync"]
+        XCTAssertTrue(completeSync.waitForExistence(timeout: 3))
+
+        // Resume and pause while stop awaits progress synchronization. Pause
+        // supersedes the pending stop, leaving an active book to restore.
+        XCTAssertEqual(play.label, "Start The Test Audiobook")
+        play.tap()
+        XCTAssertEqual(play.label, "Pause The Test Audiobook")
+        XCTAssertFalse(miniToggle.exists)
+        play.tap()
+        completeSync.tap()
+        XCTAssertTrue(miniToggle.waitForExistence(timeout: 10))
+        XCTAssertEqual(miniToggle.label, "Play")
+        XCTAssertTrue(miniToggle.isHittable)
+        miniToggle.tap()
+        XCTAssertEqual(miniToggle.label, "Pause")
+    }
+
+    @MainActor
+    func testMiniPlayerReportsSystemReduceMotionSetting() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-accessibility-audit"]
+        )
+        let state = app.staticTexts["accessibility.reduceMotion"]
+        XCTAssertTrue(state.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            state.label,
+            ProcessInfo.processInfo.environment["BLEAT_EXPECT_REDUCE_MOTION"]
+                ?? (UIAccessibility.isReduceMotionEnabled
+                    ? "enabled" : "disabled")
+        )
     }
 
     @MainActor
@@ -2116,34 +2152,12 @@ final class BleatUITests: XCTestCase {
 
         let miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
-        swipeUpToOpenNowPlaying(miniToggle)
+        app.buttons["player.mini.open"].swipeUp(velocity: .fast)
         let playerScreen = app.otherElements["player.screen"]
         XCTAssertTrue(playerScreen.waitForExistence(timeout: 3))
         app.buttons["Close"].tap()
         XCTAssertTrue(playerScreen.waitForNonExistence(timeout: 3))
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
-    }
-
-    @MainActor
-    private func swipeDownToStop(_ element: XCUIElement) {
-        let start = element.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
-        )
-        start.press(
-            forDuration: 0.05,
-            thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80))
-        )
-    }
-
-    @MainActor
-    private func swipeUpToOpenNowPlaying(_ element: XCUIElement) {
-        let start = element.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
-        )
-        start.press(
-            forDuration: 0.05,
-            thenDragTo: start.withOffset(CGVector(dx: 0, dy: -80))
-        )
     }
 
     @MainActor
