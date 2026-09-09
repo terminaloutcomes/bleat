@@ -241,6 +241,7 @@ public enum AccountCacheKind: String, Equatable, Sendable {
     case bookDetail
     case chapterTranscript
     case transcriptionTask
+    case transcriptionJob
 }
 
 public enum AccountCacheIdentityMigrationCause: Equatable, Sendable {
@@ -631,7 +632,9 @@ public actor AccountStore {
                 }
                 let recordDate = record[keyPath: timestamp]
                 let existingDate = existing[keyPath: timestamp]
-                if recordDate == existingDate && decoded != existingValue {
+                if (kind == .transcriptionJob || recordDate == existingDate)
+                    && decoded != existingValue
+                {
                     residual(
                         accountID: legacy, kind: kind,
                         cause: .ambiguousCollision)
@@ -744,6 +747,22 @@ public actor AccountStore {
             payload: \.payload,
             timestamp: \.finishedAt,
             value: CachedChapterTranscriptionTaskState.self,
+            identity: { [$0.libraryItemID] },
+            targetKey: { record, _, canonical in
+                [canonical, record.libraryItemID]
+                    .map { "\($0.utf8.count):\($0)" }.joined()
+            }
+        )
+        migrate(
+            try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptionJobRecord>()
+            ),
+            kind: .transcriptionJob,
+            account: \.accountID,
+            key: \.jobKey,
+            payload: \.payload,
+            timestamp: \.updatedAt,
+            value: ChapterTranscriptionJob.self,
             identity: { [$0.libraryItemID] },
             targetKey: { record, _, canonical in
                 [canonical, record.libraryItemID]
@@ -997,6 +1016,11 @@ public actor AccountStore {
             }
             for cached in try modelContext.fetch(
                 FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
+            ) where legacyIDs.contains(cached.accountID) {
+                modelContext.delete(cached)
+            }
+            for cached in try modelContext.fetch(
+                FetchDescriptor<CachedChapterTranscriptionJobRecord>()
             ) where legacyIDs.contains(cached.accountID) {
                 modelContext.delete(cached)
             }

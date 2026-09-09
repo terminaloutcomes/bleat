@@ -290,6 +290,7 @@ struct ChapterTranscriptionBatchProgress: Equatable, Sendable {
 }
 
 enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
+    case job(ChapterTranscriptionJobFailure)
     case audioNotDownloaded
     case localAudioUnavailable
     case invalidChapterRange
@@ -299,6 +300,7 @@ enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
 
     var message: String {
         switch self {
+        case .job(let failure): failure.message
         case .audioNotDownloaded:
             "Download this chapter or the full audiobook before transcribing."
         case .localAudioUnavailable:
@@ -316,6 +318,7 @@ enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
 
     var cachedTaskFailure: CachedChapterTranscriptionTaskFailure {
         switch self {
+        case .job(let failure): failure.cachedTaskFailure
         case .audioNotDownloaded:
             .audioNotDownloaded
         case .localAudioUnavailable:
@@ -335,6 +338,7 @@ enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
 extension ChapterTranscriptionViewFailure {
     var remoteTelemetryOutcome: RemoteTelemetryOutcome {
         switch self {
+        case .job: .failed(.localStorage)
         case .cancelled:
             .cancelled
         case .audioNotDownloaded:
@@ -350,9 +354,7 @@ extension ChapterTranscriptionViewFailure {
 }
 
 extension ChapterTranscriptionFailure {
-    fileprivate var remoteTelemetryFailureCategory:
-        RemoteTelemetryFailureCategory
-    {
+    var remoteTelemetryFailureCategory: RemoteTelemetryFailureCategory {
         switch self {
         case .operatingSystemUnsupported, .unavailableOnDevice,
             .unsupportedLocale, .languageAssetsUnavailable:
@@ -369,7 +371,7 @@ extension ChapterTranscriptionFailure {
 }
 
 extension ChapterTranscriptionFailure {
-    fileprivate var cachedTaskFailure: CachedChapterTranscriptionTaskFailure {
+    var cachedTaskFailure: CachedChapterTranscriptionTaskFailure {
         switch self {
         case .invalidChapterStart, .invalidAudioRange:
             .invalidChapterRange
@@ -400,8 +402,23 @@ extension ChapterTranscriptionFailure {
 }
 
 extension CachedChapterTranscriptionTaskFailure {
-    fileprivate var message: String {
+    var message: String {
         switch self {
+        case .jobMissingAudio:
+            ChapterTranscriptionJobFailure.missingAudio.message
+        case .jobSourceChanged:
+            ChapterTranscriptionJobFailure.sourceChanged.message
+        case .jobChapterLayoutChanged:
+            ChapterTranscriptionJobFailure.chapterLayoutChanged.message
+        case .jobInsufficientSourceIdentity:
+            ChapterTranscriptionJobFailure.insufficientSourceIdentity.message
+        case .jobInvalidCheckpoint:
+            ChapterTranscriptionJobFailure.invalidCheckpoint.message
+        case .jobStaleRevision:
+            ChapterTranscriptionJobFailure.staleRevision.message
+        case .jobPersistenceFailed:
+            ChapterTranscriptionJobFailure.persistenceFailed.message
+
         case .audioNotDownloaded:
             "Download this chapter or the full audiobook before transcribing."
         case .localAudioUnavailable:
@@ -494,6 +511,7 @@ enum ChapterTranscriptionViewState: Equatable, Sendable {
 }
 
 enum ChapterTranscriptCacheViewFailure: Equatable, Sendable {
+    case job(ChapterTranscriptionJobFailure)
     case loadFailed
     case saveFailed
     case taskStateLoadFailed
@@ -501,6 +519,7 @@ enum ChapterTranscriptCacheViewFailure: Equatable, Sendable {
 
     var message: String {
         switch self {
+        case .job(let failure): failure.message
         case .loadFailed:
             "Saved transcriptions could not be loaded."
         case .saveFailed:
@@ -540,6 +559,7 @@ struct ChapterTranscriptLocalDataFailure: Equatable, Sendable {
                 "Bleat could not \(action) the local transcript data because of an unexpected application error."
         }
         return switch error {
+        case .job(let cause): cause.message
         case .invalidAccountID:
             "Bleat could not \(action) the local transcript data because its saved account identity is invalid."
         case .invalidItemID:
@@ -566,7 +586,7 @@ enum ChapterTranscriptDeletionState: Equatable, Sendable {
     case failed(ChapterTranscriptLocalDataFailure)
 }
 
-private struct ActiveChapterTranscriptionBatch {
+struct ActiveChapterTranscriptionBatch {
     let taskID: UUID
     let persistenceToken: UUID
     let bookKey: ChapterTranscriptionBookKey
@@ -672,1395 +692,6 @@ typealias ChapterTranscriptionAudioLoader =
 
 typealias ChapterTranscriberFactory = @Sendable () -> any ChapterTranscribing
 
-@MainActor
-@Observable
-final class ChapterTranscriptionModel {
-    @ObservationIgnored
-    private let remoteTelemetryTracer: any RemoteTelemetryTracing
-    @ObservationIgnored
-    private var remoteTelemetrySpan: RemoteTelemetrySpan?
-    private(set) var state: ChapterTranscriptionViewState = .ready
-    private(set) var cachedTranscriptsByBook:
-        [ChapterTranscriptionBookKey: [CachedChapterTranscript]] = [:]
-    private(set) var cacheFailures:
-        [ChapterTranscriptionBookKey: ChapterTranscriptCacheViewFailure] = [:]
-    private(set) var terminalStatesByBook:
-        [ChapterTranscriptionBookKey: CachedChapterTranscriptionTaskState] =
-            [:]
-    private var localDataPresenceByBook: [ChapterTranscriptionBookKey: Bool] =
-        [:]
-    private var localDataPresenceFailuresByBook:
-        [ChapterTranscriptionBookKey: ChapterTranscriptLocalDataFailure] = [:]
-    private var deletionStatesByBook:
-        [ChapterTranscriptionBookKey: ChapterTranscriptDeletionState] = [:]
-    @ObservationIgnored
-    private var transcriptionTask: Task<Void, Never>?
-    @ObservationIgnored
-    private var transcriptionTasks:
-        [UUID: (bookKey: ChapterTranscriptionBookKey, task: Task<Void, Never>)] =
-            [:]
-    @ObservationIgnored
-    private var activeTaskID: UUID?
-    @ObservationIgnored
-    private var activeBatch: ActiveChapterTranscriptionBatch?
-    @ObservationIgnored
-    private weak var activeAppModel: AppModel?
-    @ObservationIgnored
-    private var activeCompletedChapterIDs: [Int] = []
-    @ObservationIgnored
-    private var pendingTerminalPersistence:
-        [UUID: (bookKey: ChapterTranscriptionBookKey, token: UUID)] = [:]
-    @ObservationIgnored
-    private var bookRevisions: [ChapterTranscriptionBookKey: UInt64] = [:]
-    @ObservationIgnored
-    private var loadTokens: [ChapterTranscriptionBookKey: UUID] = [:]
-    @ObservationIgnored
-    private var presenceTokens: [ChapterTranscriptionBookKey: UUID] = [:]
-    @ObservationIgnored
-    private var viewRetentionCounts: [ChapterTranscriptionBookKey: Int] = [:]
-    @ObservationIgnored
-    private var cacheExpiryDeadlines:
-        [ChapterTranscriptionBookKey: ContinuousClock.Instant] = [:]
-    @ObservationIgnored
-    private var cacheReaperTask: Task<Void, Never>?
-    #if canImport(UIKit)
-        @ObservationIgnored
-        private var memoryWarningTask: Task<Void, Never>?
-    #endif
-    @ObservationIgnored
-    private let transcriptCacheTTL: Duration
-    @ObservationIgnored
-    private let transcriptCacheReapInterval: Duration
-    @ObservationIgnored
-    private let audioLoader: ChapterTranscriptionAudioLoader
-    @ObservationIgnored
-    private let transcriberFactory: ChapterTranscriberFactory
-
-    init(
-        transcriptCacheTTL: Duration = .seconds(300),
-        transcriptCacheReapInterval: Duration = .seconds(60),
-        audioLoader: ChapterTranscriptionAudioLoader? = nil,
-        transcriberFactory: ChapterTranscriberFactory? = nil,
-        remoteTelemetryTracer: any RemoteTelemetryTracing =
-            InactiveRemoteTelemetryTracer()
-    ) {
-        self.remoteTelemetryTracer = remoteTelemetryTracer
-        self.transcriptCacheTTL = transcriptCacheTTL
-        self.transcriptCacheReapInterval = transcriptCacheReapInterval
-        self.audioLoader = audioLoader ?? Self.loadAudio
-        self.transcriberFactory =
-            transcriberFactory ?? { SpeechChapterTranscriber() }
-        startCacheMaintenance()
-    }
-
-    deinit {
-        cacheReaperTask?.cancel()
-        #if canImport(UIKit)
-            memoryWarningTask?.cancel()
-        #endif
-    }
-
-    var isWorking: Bool {
-        switch state {
-        case .preparingAudio, .transcribing, .saving, .cancelling:
-            true
-        case .ready, .complete, .failed:
-            false
-        }
-    }
-
-    func loadCachedTranscripts(
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        appModel: AppModel
-    ) async {
-        let bookKey = Self.bookKey(detail: detail, account: account)
-        let loadToken = UUID()
-        let startingRevision = revision(for: bookKey)
-        loadTokens[bookKey] = loadToken
-        defer {
-            if loadTokens[bookKey] == loadToken {
-                loadTokens[bookKey] = nil
-            }
-        }
-        do {
-            let loaded = try await appModel.cachedChapterTranscripts(
-                for: account,
-                itemID: detail.id
-            )
-            guard !Task.isCancelled else {
-                return
-            }
-            guard loadTokens[bookKey] == loadToken else {
-                return
-            }
-            if revision(for: bookKey) == startingRevision {
-                cachedTranscriptsByBook[bookKey] = Self.sorted(loaded)
-            } else {
-                cachedTranscriptsByBook[bookKey] = Self.merge(
-                    loaded: loaded,
-                    current: cachedTranscriptsByBook[bookKey] ?? []
-                )
-            }
-            localDataPresenceByBook[bookKey] =
-                cachedTranscriptsByBook[bookKey]?.isEmpty == false
-                || terminalStatesByBook[bookKey] != nil
-            scheduleExpiryIfInactive(for: bookKey)
-            if cacheFailures[bookKey] == .loadFailed {
-                cacheFailures[bookKey] = nil
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            guard loadTokens[bookKey] == loadToken,
-                revision(for: bookKey) == startingRevision
-            else {
-                return
-            }
-            cacheFailures[bookKey] = .loadFailed
-        }
-        do {
-            let loaded =
-                try await appModel.cachedChapterTranscriptionTaskState(
-                    for: account,
-                    itemID: detail.id
-                )
-            guard !Task.isCancelled else {
-                return
-            }
-            guard loadTokens[bookKey] == loadToken else {
-                return
-            }
-            guard revision(for: bookKey) == startingRevision else {
-                return
-            }
-            terminalStatesByBook[bookKey] =
-                terminalStatesByBook[bookKey] ?? loaded
-            localDataPresenceByBook[bookKey] =
-                cachedTranscriptsByBook[bookKey]?.isEmpty == false
-                || terminalStatesByBook[bookKey] != nil
-            if cacheFailures[bookKey] == .taskStateLoadFailed {
-                cacheFailures[bookKey] = nil
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            guard loadTokens[bookKey] == loadToken,
-                revision(for: bookKey) == startingRevision
-            else {
-                return
-            }
-            if cacheFailures[bookKey] == nil {
-                cacheFailures[bookKey] = .taskStateLoadFailed
-            }
-        }
-    }
-
-    func retainTranscriptCache(for bookKey: ChapterTranscriptionBookKey) {
-        viewRetentionCounts[bookKey, default: 0] += 1
-        cacheExpiryDeadlines[bookKey] = nil
-    }
-
-    func releaseTranscriptCache(for bookKey: ChapterTranscriptionBookKey) {
-        let remaining = max((viewRetentionCounts[bookKey] ?? 1) - 1, 0)
-        if remaining == 0 {
-            viewRetentionCounts[bookKey] = nil
-            scheduleExpiryIfInactive(for: bookKey)
-        } else {
-            viewRetentionCounts[bookKey] = remaining
-        }
-    }
-
-    func reapExpiredTranscriptCaches(
-        now: ContinuousClock.Instant = .now
-    ) {
-        let expired = cacheExpiryDeadlines.compactMap { bookKey, deadline in
-            deadline <= now && !isCacheProtected(bookKey) ? bookKey : nil
-        }
-        for bookKey in expired {
-            evictTranscriptCache(for: bookKey)
-        }
-    }
-
-    func evictInactiveTranscriptCachesForMemoryPressure() {
-        let inactiveBookKeys = Set(cachedTranscriptsByBook.keys)
-            .union(loadTokens.keys)
-            .filter { !isCacheProtected($0) }
-        for bookKey in inactiveBookKeys {
-            evictTranscriptCache(for: bookKey)
-        }
-    }
-
-    func state(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> ChapterTranscriptionViewState? {
-        state.bookKey == bookKey ? state : nil
-    }
-
-    func isWorking(for bookKey: ChapterTranscriptionBookKey) -> Bool {
-        isWorking && state.bookKey == bookKey
-    }
-
-    func isCancelling(for bookKey: ChapterTranscriptionBookKey) -> Bool {
-        guard case .cancelling(let stateBookKey, _) = state else {
-            return false
-        }
-        return stateBookKey == bookKey
-    }
-
-    func isCached(
-        chapterID: Int,
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> Bool {
-        cachedTranscriptsByBook[bookKey]?.contains {
-            $0.chapterID == chapterID
-        } == true
-    }
-
-    func hasLoadedTranscriptCache(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> Bool {
-        cachedTranscriptsByBook[bookKey] != nil
-    }
-
-    func chaptersNeedingTranscription(
-        _ chapters: [PlaybackChapter],
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> [PlaybackChapter] {
-        guard let cachedTranscripts = cachedTranscriptsByBook[bookKey] else {
-            return chapters
-        }
-        let cachedChapterIDs = Set(cachedTranscripts.map(\.chapterID))
-        return chapters.filter { !cachedChapterIDs.contains($0.id) }
-    }
-
-    func transcriptSegments(
-        chapterID: Int,
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> [TranscriptSegment]? {
-        cachedTranscriptsByBook[bookKey]?
-            .first { $0.chapterID == chapterID }?
-            .segments.map(TranscriptSegment.init(cached:))
-    }
-
-    func transcriptExportSnapshot(
-        for bookKey: ChapterTranscriptionBookKey,
-        expectedChapterIDs: [Int]
-    ) -> ChapterTranscriptExportSnapshot {
-        ChapterTranscriptExportSnapshot(
-            transcripts: cachedTranscriptsByBook[bookKey] ?? [],
-            expectedChapterIDs: expectedChapterIDs
-        )
-    }
-
-    func cacheFailure(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> ChapterTranscriptCacheViewFailure? {
-        cacheFailures[bookKey]
-    }
-
-    func terminalState(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> CachedChapterTranscriptionTaskState? {
-        terminalStatesByBook[bookKey]
-    }
-
-    func hasLocalData(for bookKey: ChapterTranscriptionBookKey) -> Bool {
-        localDataPresenceByBook[bookKey] == true
-    }
-
-    func deletionState(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> ChapterTranscriptDeletionState {
-        deletionStatesByBook[bookKey] ?? .idle
-    }
-
-    func localDataPresenceFailure(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> ChapterTranscriptLocalDataFailure? {
-        localDataPresenceFailuresByBook[bookKey]
-    }
-
-    func refreshLocalDataPresence(
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        appModel: AppModel
-    ) async {
-        let bookKey = Self.bookKey(detail: detail, account: account)
-        let token = UUID()
-        let startingRevision = revision(for: bookKey)
-        presenceTokens[bookKey] = token
-        defer {
-            if presenceTokens[bookKey] == token {
-                presenceTokens[bookKey] = nil
-            }
-        }
-        do {
-            let containsData =
-                try await appModel.hasCachedChapterTranscriptData(
-                    for: account,
-                    itemID: detail.id
-                )
-            guard presenceTokens[bookKey] == token,
-                revision(for: bookKey) == startingRevision
-            else {
-                return
-            }
-            localDataPresenceByBook[bookKey] = containsData
-            localDataPresenceFailuresByBook[bookKey] = nil
-        } catch let error {
-            guard presenceTokens[bookKey] == token,
-                revision(for: bookKey) == startingRevision
-            else {
-                return
-            }
-            localDataPresenceFailuresByBook[bookKey] =
-                ChapterTranscriptLocalDataFailure(
-                    stage: .presenceInspection,
-                    cause: error
-                )
-        }
-    }
-
-    @discardableResult
-    func deleteLocalData(
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        appModel: AppModel
-    ) async -> Bool {
-        let bookKey = Self.bookKey(detail: detail, account: account)
-        guard deletionState(for: bookKey) != .deleting else {
-            return false
-        }
-        deletionStatesByBook[bookKey] = .deleting
-        invalidateTerminalPersistence { $0.bookKey == bookKey }
-        invalidateBook(bookKey)
-
-        let tasks = transcriptionTasks.values.compactMap {
-            $0.bookKey == bookKey ? $0.task : nil
-        }
-        if activeBatch?.bookKey == bookKey {
-            state = .cancelling(
-                bookKey: bookKey,
-                chapterID: state.currentChapterID
-            )
-            cancelWithoutPersisting()
-        }
-        for task in tasks {
-            task.cancel()
-        }
-        for task in tasks {
-            await task.value
-        }
-
-        do {
-            try await appModel.deleteCachedChapterTranscriptData(
-                for: account,
-                itemID: detail.id
-            )
-            cachedTranscriptsByBook[bookKey] = []
-            terminalStatesByBook[bookKey] = nil
-            localDataPresenceByBook[bookKey] = false
-            localDataPresenceFailuresByBook[bookKey] = nil
-            cacheExpiryDeadlines[bookKey] = nil
-            cacheFailures[bookKey] = nil
-            deletionStatesByBook[bookKey] = .idle
-            if state.bookKey == bookKey {
-                state = .ready
-            }
-            markMutated(bookKey)
-            return true
-        } catch let error {
-            deletionStatesByBook[bookKey] = .failed(
-                ChapterTranscriptLocalDataFailure(
-                    stage: .deletion,
-                    cause: error
-                )
-            )
-            if state.bookKey == bookKey {
-                state = .ready
-            }
-            return false
-        }
-    }
-
-    func dismissDeletionFailure(for bookKey: ChapterTranscriptionBookKey) {
-        guard case .failed = deletionState(for: bookKey) else {
-            return
-        }
-        deletionStatesByBook[bookKey] = .idle
-    }
-
-    func dismissLocalDataPresenceFailure(
-        for bookKey: ChapterTranscriptionBookKey
-    ) {
-        localDataPresenceFailuresByBook[bookKey] = nil
-    }
-
-    func searchResults(
-        query: String,
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> [CachedChapterTranscriptMatch] {
-        CachedChapterTranscriptSearch.matches(
-            query: query,
-            in: cachedTranscriptsByBook[bookKey] ?? []
-        )
-    }
-
-    func resolveTranscriptPosition(
-        _ position: Double,
-        detail: LibraryBookDetail,
-        account: ServerAccount
-    ) -> ChapterTranscriptPositionResolution {
-        let bookKey = Self.bookKey(detail: detail, account: account)
-        return ChapterTranscriptPositionResolver.resolve(
-            position: position,
-            chapters: detail.chapters,
-            transcripts: cachedTranscriptsByBook[bookKey] ?? []
-        )
-    }
-
-    func start(
-        chapters selectedChapters: [PlaybackChapter],
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        downloads: DownloadModel,
-        appModel: AppModel
-    ) {
-        let bookKey = Self.bookKey(detail: detail, account: account)
-        guard !isWorking,
-            deletionState(for: bookKey) != .deleting
-        else {
-            return
-        }
-        let selectedChapterIDs = Set(selectedChapters.map(\.id))
-        let chapters = chaptersNeedingTranscription(
-            ChapterTranscriptionBatchPlanner.orderedChapters(
-                selectedChapterIDs: selectedChapterIDs,
-                from: detail.chapters
-            ),
-            for: bookKey
-        )
-        guard !chapters.isEmpty else {
-            return
-        }
-        let batch = ActiveChapterTranscriptionBatch(
-            taskID: UUID(),
-            persistenceToken: UUID(),
-            bookKey: bookKey,
-            account: account,
-            selectedChapterIDs: chapters.map(\.id),
-            startedAt: Date(),
-            startedInstant: .now
-        )
-        markMutated(bookKey)
-        terminalStatesByBook[bookKey] = nil
-        let taskID = batch.taskID
-        activeTaskID = taskID
-        activeBatch = batch
-        pendingTerminalPersistence[taskID] = (
-            bookKey: bookKey,
-            token: batch.persistenceToken
-        )
-        activeAppModel = appModel
-        activeCompletedChapterIDs = []
-        remoteTelemetrySpan = remoteTelemetryTracer.beginSpan(
-            operation: .transcription,
-            source: .downloaded
-        )
-        cacheExpiryDeadlines[bookKey] = nil
-        state = .preparingAudio(
-            bookKey: bookKey,
-            totalChapters: chapters.count
-        )
-        let task = Task(priority: .utility) { [weak self] in
-            guard let self else {
-                return
-            }
-            await self.runBatch(
-                taskID: taskID,
-                chapters: chapters,
-                bookKey: bookKey,
-                detail: detail,
-                account: account,
-                downloads: downloads,
-                appModel: appModel
-            )
-            self.transcriptionTaskDidFinish(taskID)
-        }
-        transcriptionTask = task
-        transcriptionTasks[taskID] = (bookKey, task)
-    }
-
-    func cancel() {
-        guard isWorking,
-            let bookKey = state.bookKey,
-            activeBatch != nil,
-            !isCancelling(for: bookKey)
-        else {
-            return
-        }
-        let chapterID = state.currentChapterID
-        markMutated(bookKey)
-        state = .cancelling(
-            bookKey: bookKey,
-            chapterID: chapterID
-        )
-        transcriptionTask?.cancel()
-    }
-
-    func cancel(for accountID: AccountID) {
-        invalidateTerminalPersistence {
-            $0.bookKey.accountID == accountID
-        }
-        if state.bookKey?.accountID == accountID {
-            if isWorking {
-                cancelWithoutPersisting()
-            }
-            state = .ready
-        }
-        invalidateBooks { $0.accountID == accountID }
-        cachedTranscriptsByBook = cachedTranscriptsByBook.filter {
-            $0.key.accountID != accountID
-        }
-        viewRetentionCounts = viewRetentionCounts.filter {
-            $0.key.accountID != accountID
-        }
-        cacheExpiryDeadlines = cacheExpiryDeadlines.filter {
-            $0.key.accountID != accountID
-        }
-        cacheFailures = cacheFailures.filter {
-            $0.key.accountID != accountID
-        }
-        terminalStatesByBook = terminalStatesByBook.filter {
-            $0.key.accountID != accountID
-        }
-        localDataPresenceByBook = localDataPresenceByBook.filter {
-            $0.key.accountID != accountID
-        }
-        localDataPresenceFailuresByBook =
-            localDataPresenceFailuresByBook.filter {
-                $0.key.accountID != accountID
-            }
-        deletionStatesByBook = deletionStatesByBook.filter {
-            $0.key.accountID != accountID
-        }
-    }
-
-    func cancel(for bookKey: ChapterTranscriptionBookKey) {
-        invalidateTerminalPersistence { $0.bookKey == bookKey }
-        if state.bookKey == bookKey {
-            if isWorking {
-                cancelWithoutPersisting()
-            }
-            state = .ready
-        }
-        cachedTranscriptsByBook[bookKey] = nil
-        invalidateBook(bookKey)
-        viewRetentionCounts[bookKey] = nil
-        cacheExpiryDeadlines[bookKey] = nil
-        cacheFailures[bookKey] = nil
-        terminalStatesByBook[bookKey] = nil
-        localDataPresenceByBook[bookKey] = nil
-        localDataPresenceFailuresByBook[bookKey] = nil
-        deletionStatesByBook[bookKey] = nil
-    }
-
-    private func runBatch(
-        taskID: UUID,
-        chapters: [PlaybackChapter],
-        bookKey: ChapterTranscriptionBookKey,
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        downloads: DownloadModel,
-        appModel: AppModel
-    ) async {
-        var currentChapterID: Int?
-        var completedChapterIDs: [Int] = []
-        do {
-            try Task.checkCancellation()
-            let audio: PreparedChapterTranscriptionAudio
-            do {
-                audio = try await audioLoader(
-                    detail,
-                    account,
-                    downloads,
-                    chapters
-                )
-            } catch let failure as ChapterTranscriptionAudioLoadFailure {
-                if Task.isCancelled {
-                    throw CancellationError()
-                }
-                await fail(
-                    taskID: taskID,
-                    bookKey: bookKey,
-                    chapterID: nil,
-                    failure: failure.viewFailure
-                )
-                return
-            }
-            defer {
-                downloads.releaseAutomaticCachePin(audio.cachePin)
-            }
-            try Task.checkCancellation()
-            guard activeTaskID == taskID else {
-                return
-            }
-
-            let transcriber = transcriberFactory()
-            for (chapterIndex, chapter) in chapters.enumerated() {
-                currentChapterID = chapter.id
-                let progress = ChapterTranscriptionBatchProgress(
-                    bookKey: bookKey,
-                    chapterID: chapter.id,
-                    chapterTitle: chapter.title,
-                    completedChapters: chapterIndex,
-                    totalChapters: chapters.count
-                )
-                let slices: [ChapterAudioSlice]
-                do {
-                    slices = try ChapterAudioSlicePlanner.slices(
-                        for: chapter,
-                        tracks: audio.tracks.map(\.timeline)
-                    )
-                } catch {
-                    await fail(
-                        taskID: taskID,
-                        bookKey: bookKey,
-                        chapterID: chapter.id,
-                        failure: .invalidChapterRange
-                    )
-                    return
-                }
-
-                var transcript: [TranscriptSegment] = []
-                let chapterSpan = remoteTelemetrySpan.map {
-                    remoteTelemetryTracer.beginChildSpan(
-                        operation: .transcriptionChapter,
-                        parent: $0
-                    )
-                }
-                var telemetryInput = ChapterTelemetryInputAccumulator()
-                do {
-                    for (sliceIndex, slice) in slices.enumerated() {
-                        try Task.checkCancellation()
-                        guard
-                            let track = audio.tracks.first(where: {
-                                $0.timeline.trackIndex == slice.trackIndex
-                            })
-                        else {
-                            chapterSpan?.end(
-                                .failed(.media),
-                                transcriptionInput:
-                                    telemetryInput.telemetryInput
-                            )
-                            await fail(
-                                taskID: taskID,
-                                bookKey: bookKey,
-                                chapterID: chapter.id,
-                                failure: .localAudioUnavailable
-                            )
-                            return
-                        }
-                        state = .transcribing(
-                            progress: progress,
-                            completedSlices: sliceIndex,
-                            totalSlices: slices.count
-                        )
-                        let result = try await transcriber.transcribe(
-                            ChapterTranscriptionRequest(
-                                audioFileURL: track.url,
-                                locale: .current,
-                                audioStartSeconds: slice.audioStartSeconds,
-                                audioDurationSeconds: slice.durationSeconds,
-                                chapterStartSeconds:
-                                    slice.wholeBookStartSeconds
-                            )
-                        )
-                        telemetryInput.append(result.input)
-                        try Task.checkCancellation()
-                        guard activeTaskID == taskID else {
-                            chapterSpan?.end(
-                                .cancelled,
-                                transcriptionInput:
-                                    telemetryInput.telemetryInput
-                            )
-                            return
-                        }
-                        transcript.append(contentsOf: result.segments)
-                    }
-                } catch is CancellationError {
-                    chapterSpan?.end(
-                        .cancelled,
-                        transcriptionInput: telemetryInput.telemetryInput
-                    )
-                    throw CancellationError()
-                } catch let failure as ChapterTranscriptionFailure {
-                    chapterSpan?.end(
-                        .failed(failure.remoteTelemetryFailureCategory),
-                        transcriptionInput: telemetryInput.telemetryInput
-                    )
-                    throw failure
-                } catch {
-                    chapterSpan?.end(
-                        .failed(.media),
-                        transcriptionInput: telemetryInput.telemetryInput
-                    )
-                    throw error
-                }
-                chapterSpan?.end(
-                    .succeeded,
-                    transcriptionInput: telemetryInput.telemetryInput
-                )
-                let sortedTranscript = transcript.sorted {
-                    ($0.startMilliseconds, $0.endMilliseconds)
-                        < ($1.startMilliseconds, $1.endMilliseconds)
-                }
-                guard
-                    let chapterStartMilliseconds = Self.milliseconds(
-                        chapter.start
-                    ),
-                    let chapterEndMilliseconds = Self.milliseconds(
-                        chapter.end
-                    )
-                else {
-                    await fail(
-                        taskID: taskID,
-                        bookKey: bookKey,
-                        chapterID: chapter.id,
-                        failure: .invalidChapterRange
-                    )
-                    return
-                }
-                state = .saving(progress)
-                let cachedTranscript = CachedChapterTranscript(
-                    chapterID: chapter.id,
-                    chapterTitle: chapter.title,
-                    chapterStartMilliseconds: chapterStartMilliseconds,
-                    chapterEndMilliseconds: chapterEndMilliseconds,
-                    localeIdentifier: Locale.current.identifier,
-                    segments: sortedTranscript.map(
-                        CachedTranscriptSegment.init(transcript:)
-                    )
-                )
-                do {
-                    try await appModel.saveCachedChapterTranscript(
-                        cachedTranscript,
-                        for: account,
-                        itemID: detail.id
-                    )
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    if Task.isCancelled {
-                        throw CancellationError()
-                    }
-                    cacheFailures[bookKey] = .saveFailed
-                    await fail(
-                        taskID: taskID,
-                        bookKey: bookKey,
-                        chapterID: chapter.id,
-                        failure: .cacheSaveFailed
-                    )
-                    return
-                }
-                guard activeTaskID == taskID else {
-                    return
-                }
-                updateCache(
-                    cachedTranscript,
-                    for: bookKey
-                )
-                completedChapterIDs.append(chapter.id)
-                activeCompletedChapterIDs = completedChapterIDs
-                try Task.checkCancellation()
-            }
-
-            guard activeTaskID == taskID else {
-                return
-            }
-            state = .complete(
-                bookKey: bookKey,
-                chapterIDs: completedChapterIDs
-            )
-            guard let batch = activeBatch else {
-                finishTask(taskID)
-                return
-            }
-            let terminalState = Self.terminalState(
-                batch: batch,
-                completedChapterIDs: completedChapterIDs,
-                currentChapterID: nil,
-                outcome: .succeeded,
-                failure: nil
-            )
-            terminalStatesByBook[bookKey] = terminalState
-            localDataPresenceByBook[bookKey] = true
-            markMutated(bookKey)
-            remoteTelemetrySpan?.end(.succeeded)
-            remoteTelemetrySpan = nil
-            finishTask(taskID)
-            await persist(
-                terminalState,
-                batch: batch,
-                appModel: appModel
-            )
-        } catch is CancellationError {
-            await fail(
-                taskID: taskID,
-                bookKey: bookKey,
-                chapterID: currentChapterID,
-                failure: .cancelled
-            )
-        } catch let failure as ChapterTranscriptionFailure {
-            if Task.isCancelled {
-                await fail(
-                    taskID: taskID,
-                    bookKey: bookKey,
-                    chapterID: currentChapterID,
-                    failure: .cancelled
-                )
-                return
-            }
-            await fail(
-                taskID: taskID,
-                bookKey: bookKey,
-                chapterID: currentChapterID,
-                failure: .transcription(failure)
-            )
-        } catch {
-            if Task.isCancelled {
-                await fail(
-                    taskID: taskID,
-                    bookKey: bookKey,
-                    chapterID: currentChapterID,
-                    failure: .cancelled
-                )
-                return
-            }
-            await fail(
-                taskID: taskID,
-                bookKey: bookKey,
-                chapterID: currentChapterID,
-                failure: .localAudioUnavailable
-            )
-        }
-    }
-
-    private func updateCache(
-        _ transcript: CachedChapterTranscript,
-        for bookKey: ChapterTranscriptionBookKey
-    ) {
-        var transcripts = cachedTranscriptsByBook[bookKey] ?? []
-        transcripts.removeAll { $0.chapterID == transcript.chapterID }
-        transcripts.append(transcript)
-        transcripts.sort {
-            ($0.chapterStartMilliseconds, $0.chapterID)
-                < ($1.chapterStartMilliseconds, $1.chapterID)
-        }
-        cachedTranscriptsByBook[bookKey] = transcripts
-        localDataPresenceByBook[bookKey] = true
-        cacheFailures[bookKey] = nil
-        markMutated(bookKey)
-        scheduleExpiryIfInactive(for: bookKey)
-    }
-
-    private func fail(
-        taskID: UUID,
-        bookKey: ChapterTranscriptionBookKey,
-        chapterID: Int?,
-        failure: ChapterTranscriptionViewFailure
-    ) async {
-        guard activeTaskID == taskID,
-            let batch = activeBatch,
-            let appModel = activeAppModel
-        else {
-            return
-        }
-        let completedChapterIDs = activeCompletedChapterIDs
-        state = .failed(
-            bookKey: bookKey,
-            chapterID: chapterID,
-            failure: failure
-        )
-        let outcome: CachedChapterTranscriptionTaskOutcome =
-            failure == .cancelled ? .cancelled : .failed
-        let terminalState = Self.terminalState(
-            batch: batch,
-            completedChapterIDs: completedChapterIDs,
-            currentChapterID: chapterID,
-            outcome: outcome,
-            failure: failure.cachedTaskFailure
-        )
-        terminalStatesByBook[bookKey] = terminalState
-        localDataPresenceByBook[bookKey] = true
-        markMutated(bookKey)
-        remoteTelemetrySpan?.end(failure.remoteTelemetryOutcome)
-        remoteTelemetrySpan = nil
-        finishTask(taskID)
-        await persist(
-            terminalState,
-            batch: batch,
-            appModel: appModel
-        )
-    }
-
-    private func finishTask(_ taskID: UUID) {
-        guard activeTaskID == taskID else {
-            return
-        }
-        remoteTelemetrySpan?.end(.cancelled)
-        remoteTelemetrySpan = nil
-        transcriptionTask = nil
-        let bookKey = activeBatch?.bookKey
-        activeTaskID = nil
-        activeBatch = nil
-        activeAppModel = nil
-        activeCompletedChapterIDs = []
-        if let bookKey {
-            scheduleExpiryIfInactive(for: bookKey)
-        }
-    }
-
-    private func transcriptionTaskDidFinish(_ taskID: UUID) {
-        transcriptionTasks[taskID] = nil
-    }
-
-    private func cancelWithoutPersisting() {
-        transcriptionTask?.cancel()
-        guard let taskID = activeTaskID else {
-            return
-        }
-        finishTask(taskID)
-    }
-
-    private func startCacheMaintenance() {
-        let reapInterval = transcriptCacheReapInterval
-        cacheReaperTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: reapInterval)
-                } catch {
-                    return
-                }
-                self?.reapExpiredTranscriptCaches()
-            }
-        }
-        #if canImport(UIKit)
-            memoryWarningTask = Task { @MainActor [weak self] in
-                for await _ in NotificationCenter.default.notifications(
-                    named: UIApplication.didReceiveMemoryWarningNotification
-                ) {
-                    guard !Task.isCancelled else {
-                        return
-                    }
-                    self?.evictInactiveTranscriptCachesForMemoryPressure()
-                }
-            }
-        #endif
-    }
-
-    private func revision(
-        for bookKey: ChapterTranscriptionBookKey
-    ) -> UInt64 {
-        bookRevisions[bookKey] ?? 0
-    }
-
-    private func markMutated(_ bookKey: ChapterTranscriptionBookKey) {
-        bookRevisions[bookKey, default: 0] &+= 1
-    }
-
-    private func invalidateBook(_ bookKey: ChapterTranscriptionBookKey) {
-        loadTokens[bookKey] = nil
-        presenceTokens[bookKey] = nil
-        markMutated(bookKey)
-    }
-
-    private func invalidateBooks(
-        where predicate: (ChapterTranscriptionBookKey) -> Bool
-    ) {
-        let bookKeys = Set(bookRevisions.keys)
-            .union(loadTokens.keys)
-            .union(presenceTokens.keys)
-            .union(cachedTranscriptsByBook.keys)
-            .union(localDataPresenceFailuresByBook.keys)
-            .union(deletionStatesByBook.keys)
-            .union(viewRetentionCounts.keys)
-            .union(cacheExpiryDeadlines.keys)
-            .filter(predicate)
-        for bookKey in bookKeys {
-            invalidateBook(bookKey)
-        }
-    }
-
-    private func isCacheProtected(
-        _ bookKey: ChapterTranscriptionBookKey
-    ) -> Bool {
-        (viewRetentionCounts[bookKey] ?? 0) > 0
-            || activeBatch?.bookKey == bookKey
-    }
-
-    private func scheduleExpiryIfInactive(
-        for bookKey: ChapterTranscriptionBookKey
-    ) {
-        guard cachedTranscriptsByBook[bookKey] != nil,
-            !isCacheProtected(bookKey)
-        else {
-            cacheExpiryDeadlines[bookKey] = nil
-            return
-        }
-        cacheExpiryDeadlines[bookKey] = .now.advanced(
-            by: transcriptCacheTTL
-        )
-    }
-
-    private func evictTranscriptCache(
-        for bookKey: ChapterTranscriptionBookKey
-    ) {
-        cachedTranscriptsByBook[bookKey] = nil
-        cacheExpiryDeadlines[bookKey] = nil
-        invalidateBook(bookKey)
-    }
-
-    private func persist(
-        _ terminalState: CachedChapterTranscriptionTaskState,
-        batch: ActiveChapterTranscriptionBatch,
-        appModel: AppModel
-    ) async {
-        guard isTerminalPersistenceValid(for: batch) else {
-            return
-        }
-        defer {
-            if isTerminalPersistenceValid(for: batch) {
-                pendingTerminalPersistence[batch.taskID] = nil
-            }
-        }
-        do {
-            try await appModel.saveCachedChapterTranscriptionTaskState(
-                terminalState,
-                for: batch.account,
-                itemID: batch.bookKey.itemID
-            )
-            guard isTerminalPersistenceValid(for: batch),
-                terminalStatesByBook[batch.bookKey]?.taskID
-                    == terminalState.taskID
-            else {
-                return
-            }
-            if cacheFailures[batch.bookKey] == .taskStateLoadFailed
-                || cacheFailures[batch.bookKey] == .taskStateSaveFailed
-            {
-                cacheFailures[batch.bookKey] = nil
-            }
-        } catch is CancellationError {
-            guard isTerminalPersistenceValid(for: batch),
-                terminalStatesByBook[batch.bookKey]?.taskID
-                    == terminalState.taskID
-            else {
-                return
-            }
-            cacheFailures[batch.bookKey] = .taskStateSaveFailed
-        } catch {
-            guard isTerminalPersistenceValid(for: batch),
-                terminalStatesByBook[batch.bookKey]?.taskID
-                    == terminalState.taskID
-            else {
-                return
-            }
-            cacheFailures[batch.bookKey] = .taskStateSaveFailed
-        }
-    }
-
-    private func isTerminalPersistenceValid(
-        for batch: ActiveChapterTranscriptionBatch
-    ) -> Bool {
-        pendingTerminalPersistence[batch.taskID]?.token
-            == batch.persistenceToken
-    }
-
-    private func invalidateTerminalPersistence(
-        where predicate: (
-            (bookKey: ChapterTranscriptionBookKey, token: UUID)
-        ) -> Bool
-    ) {
-        pendingTerminalPersistence = pendingTerminalPersistence.filter {
-            !predicate($0.value)
-        }
-    }
-
-    private static func terminalState(
-        batch: ActiveChapterTranscriptionBatch,
-        completedChapterIDs: [Int],
-        currentChapterID: Int?,
-        outcome: CachedChapterTranscriptionTaskOutcome,
-        failure: CachedChapterTranscriptionTaskFailure?
-    ) -> CachedChapterTranscriptionTaskState {
-        let finishedAt = max(Date(), batch.startedAt)
-        return CachedChapterTranscriptionTaskState(
-            taskID: batch.taskID,
-            selectedChapterIDs: batch.selectedChapterIDs,
-            completedChapterIDs: completedChapterIDs,
-            currentChapterID: currentChapterID,
-            outcome: outcome,
-            failure: failure,
-            startedAt: batch.startedAt,
-            finishedAt: finishedAt,
-            durationMilliseconds: elapsedMilliseconds(
-                since: batch.startedInstant
-            )
-        )
-    }
-
-    private static func elapsedMilliseconds(
-        since start: ContinuousClock.Instant
-    ) -> Int64 {
-        let components = start.duration(to: .now).components
-        guard components.seconds >= 0,
-            components.attoseconds >= 0
-        else {
-            return 0
-        }
-        let (milliseconds, overflow) =
-            components.seconds.multipliedReportingOverflow(by: 1_000)
-        guard !overflow else {
-            return Int64.max
-        }
-        let fractionalMilliseconds =
-            components.attoseconds / 1_000_000_000_000_000
-        let (result, additionOverflow) =
-            milliseconds
-            .addingReportingOverflow(fractionalMilliseconds)
-        return additionOverflow ? Int64.max : result
-    }
-
-    private static func bookKey(
-        detail: LibraryBookDetail,
-        account: ServerAccount
-    ) -> ChapterTranscriptionBookKey {
-        ChapterTranscriptionBookKey(
-            accountID: account.id,
-            itemID: detail.id
-        )
-    }
-
-    private static func loadAudio(
-        detail: LibraryBookDetail,
-        account: ServerAccount,
-        downloads: DownloadModel,
-        chapters: [PlaybackChapter]
-    ) async throws -> PreparedChapterTranscriptionAudio {
-        guard
-            let record = downloads.record(
-                accountID: account.id,
-                itemID: detail.id
-            )
-        else {
-            throw ChapterTranscriptionAudioLoadFailure.audioNotDownloaded
-        }
-
-        let entries = record.manifest.entries.sorted {
-            $0.trackIndex < $1.trackIndex
-        }
-        let timelineTracks: [ChapterAudioTrack] = entries.compactMap {
-            entry in
-            guard let startOffset = entry.startOffset,
-                let duration = entry.duration
-            else {
-                return nil
-            }
-            return ChapterAudioTrack(
-                trackIndex: entry.trackIndex,
-                startOffsetSeconds: startOffset,
-                durationSeconds: duration
-            )
-        }
-        if timelineTracks.count == entries.count {
-            var requiredTrackIndexes: Set<Int> = []
-            do {
-                for chapter in chapters {
-                    requiredTrackIndexes.formUnion(
-                        try ChapterAudioSlicePlanner.slices(
-                            for: chapter,
-                            tracks: timelineTracks
-                        ).map(\.trackIndex)
-                    )
-                }
-            } catch {
-                throw ChapterTranscriptionAudioLoadFailure
-                    .localAudioUnavailable
-            }
-            let entriesByIndex = Dictionary(
-                uniqueKeysWithValues: entries.map { ($0.trackIndex, $0) }
-            )
-            guard
-                requiredTrackIndexes.allSatisfy({ trackIndex in
-                    guard let entry = entriesByIndex[trackIndex] else {
-                        return false
-                    }
-                    return entry.state == .complete
-                        && entry.placement == .finalized
-                        && entry.observedByteLength == entry.expectedByteLength
-                })
-            else {
-                throw ChapterTranscriptionAudioLoadFailure.audioNotDownloaded
-            }
-            let pin = downloads.pinAutomaticCacheTracks(
-                for: record,
-                trackIndexes: requiredTrackIndexes
-            )
-            let urlsByIndex: [Int: URL]
-            do {
-                urlsByIndex = try await downloads.localTrackURLs(
-                    for: record,
-                    trackIndexes: requiredTrackIndexes
-                )
-            } catch {
-                downloads.releaseAutomaticCachePin(pin)
-                throw ChapterTranscriptionAudioLoadFailure
-                    .localAudioUnavailable
-            }
-            let tracks = timelineTracks.compactMap { timeline in
-                urlsByIndex[timeline.trackIndex].map {
-                    PreparedChapterTranscriptionTrack(
-                        timeline: timeline,
-                        url: $0
-                    )
-                }
-            }
-            guard tracks.count == requiredTrackIndexes.count else {
-                downloads.releaseAutomaticCachePin(pin)
-                throw ChapterTranscriptionAudioLoadFailure
-                    .localAudioUnavailable
-            }
-            return PreparedChapterTranscriptionAudio(
-                tracks: tracks,
-                cachePin: pin
-            )
-        }
-
-        guard downloads.isFullBookAvailable(record) else {
-            throw ChapterTranscriptionAudioLoadFailure.localAudioUnavailable
-        }
-        let allTrackIndexes = Set(entries.map(\.trackIndex))
-        let pin = downloads.pinAutomaticCacheTracks(
-            for: record,
-            trackIndexes: allTrackIndexes
-        )
-        do {
-            let urls = try await downloads.localTrackURLs(for: record)
-            let durations = try await audioDurations(for: urls)
-            guard urls.count == durations.count, !urls.isEmpty else {
-                throw ChapterTranscriptionAudioLoadFailure
-                    .localAudioUnavailable
-            }
-            var nextStartOffset = 0.0
-            let tracks = zip(entries, zip(urls, durations)).map {
-                entry, urlAndDuration in
-                let (url, duration) = urlAndDuration
-                defer { nextStartOffset += duration }
-                return PreparedChapterTranscriptionTrack(
-                    timeline: ChapterAudioTrack(
-                        trackIndex: entry.trackIndex,
-                        startOffsetSeconds: nextStartOffset,
-                        durationSeconds: duration
-                    ),
-                    url: url
-                )
-            }
-            return PreparedChapterTranscriptionAudio(
-                tracks: tracks,
-                cachePin: pin
-            )
-        } catch is CancellationError {
-            downloads.releaseAutomaticCachePin(pin)
-            throw CancellationError()
-        } catch {
-            downloads.releaseAutomaticCachePin(pin)
-            throw ChapterTranscriptionAudioLoadFailure.localAudioUnavailable
-        }
-    }
-
-    private static func merge(
-        loaded: [CachedChapterTranscript],
-        current: [CachedChapterTranscript]
-    ) -> [CachedChapterTranscript] {
-        var transcriptsByChapterID: [Int: CachedChapterTranscript] = [:]
-        for transcript in loaded {
-            transcriptsByChapterID[transcript.chapterID] = transcript
-        }
-        for transcript in current {
-            transcriptsByChapterID[transcript.chapterID] = transcript
-        }
-        return sorted(Array(transcriptsByChapterID.values))
-    }
-
-    private static func sorted(
-        _ transcripts: [CachedChapterTranscript]
-    ) -> [CachedChapterTranscript] {
-        transcripts.sorted {
-            ($0.chapterStartMilliseconds, $0.chapterID)
-                < ($1.chapterStartMilliseconds, $1.chapterID)
-        }
-    }
-
-    private static func audioDurations(
-        for urls: [URL]
-    ) async throws -> [Double] {
-        try await Task.detached(priority: .utility) {
-            try urls.map { url in
-                let file = try AVAudioFile(forReading: url)
-                let sampleRate = file.processingFormat.sampleRate
-                guard sampleRate.isFinite, sampleRate > 0 else {
-                    throw ChapterAudioSlicePlanFailure
-                        .invalidTrackDurations
-                }
-                return Double(file.length) / sampleRate
-            }
-        }.value
-    }
-
-    private static func milliseconds(_ seconds: Double) -> Int64? {
-        guard seconds.isFinite,
-            seconds >= 0,
-            seconds <= Double(Int64.max) / 1_000
-        else {
-            return nil
-        }
-        return Int64((seconds * 1_000).rounded())
-    }
-}
-
-extension ChapterTranscriptionAudioLoadFailure {
-    fileprivate var viewFailure: ChapterTranscriptionViewFailure {
-        switch self {
-        case .audioNotDownloaded:
-            .audioNotDownloaded
-        case .localAudioUnavailable:
-            .localAudioUnavailable
-        }
-    }
-}
-
-extension TranscriptSegment {
-    fileprivate init(cached: CachedTranscriptSegment) {
-        self.init(
-            startMilliseconds: cached.startMilliseconds,
-            endMilliseconds: cached.endMilliseconds,
-            text: cached.text
-        )
-    }
-}
-
-extension CachedTranscriptSegment {
-    fileprivate init(transcript: TranscriptSegment) {
-        self.init(
-            startMilliseconds: transcript.startMilliseconds,
-            endMilliseconds: transcript.endMilliseconds,
-            text: transcript.text
-        )
-    }
-}
-
 struct ChapterTranscriptionView: View {
     let detail: LibraryBookDetail
     let account: ServerAccount
@@ -2077,6 +708,7 @@ struct ChapterTranscriptionView: View {
     @State private var exportArtifact: TranscriptExportArtifact?
     @State private var exportFailure: TranscriptExportArtifactError?
     @State private var showTranscriptDeletionConfirmation = false
+    @State private var pendingReplacement: [PlaybackChapter]?
     @State private var currentPositionMessage:
         ChapterTranscriptNavigationMessage?
     @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
@@ -2109,10 +741,36 @@ struct ChapterTranscriptionView: View {
                     } else {
                         chapterSelector
                         cacheFailureContent
+                        if let job = model.resumableJob(for: bookKey),
+                            !model.isWorking(for: bookKey)
+                        {
+                            Text(
+                                "\(job.completedChapterIDs.count) completed, \(job.unfinishedChapters.count) remaining"
+                            )
+                            .accessibilityIdentifier(
+                                "transcription.resumeProgress")
+                        }
                         transcriptionStatusContent
                         playbackFailureContent
                         selectedTranscriptContent
                     }
+                }
+                .confirmationDialog(
+                    "Replace the unfinished transcription selection?",
+                    isPresented: Binding(
+                        get: { pendingReplacement != nil },
+                        set: { if !$0 { pendingReplacement = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    Button("Replace Selection") {
+                        if let chapters = pendingReplacement {
+                            startSelection(chapters, replacePending: true)
+                        }
+                        pendingReplacement = nil
+                    }
+                    Button("Cancel", role: .cancel) { pendingReplacement = nil }
+                } message: {
+                    Text("Saved transcript text will be kept.")
                 }
                 .navigationTitle("Transcription")
                 .iOSInlineNavigationTitle()
@@ -2514,7 +1172,9 @@ struct ChapterTranscriptionView: View {
                             failure.message,
                             systemImage: "exclamationmark.triangle"
                         )
-                        if failure == .audioNotDownloaded {
+                        if failure == .audioNotDownloaded
+                            || failure == .job(.missingAudio)
+                        {
                             Button("Download Audiobook") {
                                 showDownloadConfirmation = true
                             }
@@ -2576,7 +1236,9 @@ struct ChapterTranscriptionView: View {
                 .foregroundStyle(.secondary)
             }
             .accessibilityIdentifier("transcription.terminalState")
-            if terminalState.failure == .audioNotDownloaded {
+            if terminalState.failure == .audioNotDownloaded
+                || terminalState.failure == .jobMissingAudio
+            {
                 Button("Download Audiobook") {
                     showDownloadConfirmation = true
                 }
@@ -2699,6 +1361,19 @@ struct ChapterTranscriptionView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(.bar)
+        } else if !isSelectingChapters, model.resumableJob(for: bookKey) != nil
+        {
+            Button("Resume", systemImage: "play.fill") {
+                model.start(
+                    chapters: [], detail: detail, account: account,
+                    downloads: downloads, appModel: appModel, resume: true)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.hasLoadedTranscriptCache(for: bookKey))
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .accessibilityIdentifier("transcription.resume")
         } else if isSelectingChapters {
             Button(
                 "Transcribe \(chapterCountText(selectedUncachedChapterIDs.count))",
@@ -2711,13 +1386,7 @@ struct ChapterTranscriptionView: View {
                         from: detail.chapters
                     )
                 selectedChapterID = chapters.first?.id
-                model.start(
-                    chapters: chapters,
-                    detail: detail,
-                    account: account,
-                    downloads: downloads,
-                    appModel: appModel
-                )
+                startSelection(chapters)
                 isSelectingChapters = false
                 selectedChapterIDs.removeAll()
             }
@@ -2744,13 +1413,7 @@ struct ChapterTranscriptionView: View {
                 guard let chapter = selectedChapter else {
                     return
                 }
-                model.start(
-                    chapters: [chapter],
-                    detail: detail,
-                    account: account,
-                    downloads: downloads,
-                    appModel: appModel
-                )
+                startSelection([chapter])
             }
             .buttonStyle(.borderedProminent)
             .disabled(
@@ -2762,6 +1425,27 @@ struct ChapterTranscriptionView: View {
             .background(.bar)
             .accessibilityIdentifier("transcription.start")
         }
+    }
+
+    private func startSelection(
+        _ chapters: [PlaybackChapter], replacePending: Bool = false
+    ) {
+        if let job = model.resumableJob(for: bookKey), !replacePending {
+            if ChapterTranscriptionResumePlanner.canResumeSelection(
+                chapters, job: job, detail: detail)
+            {
+                model.start(
+                    chapters: [], detail: detail, account: account,
+                    downloads: downloads, appModel: appModel, resume: true)
+            } else {
+                pendingReplacement = chapters
+            }
+            return
+        }
+        model.start(
+            chapters: chapters, detail: detail, account: account,
+            downloads: downloads, appModel: appModel,
+            replacePending: replacePending)
     }
 
     private var selectedChapter: PlaybackChapter? {

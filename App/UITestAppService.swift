@@ -238,7 +238,10 @@
             async throws(AppServiceError) -> ServerAccount?
         {
             if scenario == .launching {
-                try? await Task.sleep(for: .seconds(5))
+                // Keep this scenario pending regardless of how long XCTest
+                // takes to attach. AsyncStream ends the wait on cancellation.
+                let pending = AsyncStream<Void> { _ in }
+                for await _ in pending {}
                 return nil
             }
             guard isSignedInScenario else {
@@ -792,6 +795,56 @@
             return hasPartialCache || omitsCurrentChapter
                 ? [transcripts[0]]
                 : transcripts
+        }
+
+        private var transcriptionJobs:
+            [ChapterTranscriptionBookKey: ChapterTranscriptionJob] = [:]
+
+        func transcriptionJob(accountID: AccountID, itemID: LibraryItemID)
+            async throws(AppServiceError) -> ChapterTranscriptionJob?
+        {
+            let key = ChapterTranscriptionBookKey(
+                accountID: accountID, itemID: itemID)
+            if deletedTranscriptBooks.contains(key) { return nil }
+            if let job = transcriptionJobs[key] { return job }
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-transcription-resumable")
+            else { return nil }
+            var job = ChapterTranscriptionJob(
+                localeIdentifier: "en-AU",
+                chapters: [
+                    ChapterTranscriptionJobChapter(id: 0, start: 0, end: 1800),
+                    ChapterTranscriptionJobChapter(
+                        id: 1, start: 1800, end: 3600),
+                ])
+            job.source = ChapterTranscriptionSourceIdentity(
+                downloadID: DownloadID(rawValue: "test-download"),
+                tracks: [
+                    ChapterTranscriptionSourceTrack(
+                        index: 0, inode: nil, expectedBytes: 10,
+                        observedBytes: 10, start: 0, duration: 3600,
+                        validator: nil, fileIdentifier: 1,
+                        modifiedAt: .distantPast)
+                ])
+            job.chapters[0].state = .completed
+            job.chapters[1].state = .running
+            transcriptionJobs[key] = job
+            return job
+        }
+
+        func saveTranscriptionJob(
+            _ job: ChapterTranscriptionJob,
+            replacing expected: ChapterTranscriptionJob?,
+            transcript: CachedChapterTranscript?, accountID: AccountID,
+            itemID: LibraryItemID
+        ) async throws(AppServiceError) {
+            let key = ChapterTranscriptionBookKey(
+                accountID: accountID, itemID: itemID)
+            guard transcriptionJobs[key] == expected else {
+                throw .transcriptCache(.job(.staleRevision))
+            }
+            transcriptionJobs[key] = job
         }
 
         func saveCachedChapterTranscript(

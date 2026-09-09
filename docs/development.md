@@ -37,6 +37,9 @@ before playback. It checks the result bundle for both passing test identifiers.
 After building, the gate waits for the selected Simulator to finish booting and
 installs the built app before starting XCTest on that same Simulator ID.
 This is a compile-and-launch gate, not the full app regression suite.
+The startup fixture remains suspended until cancellation so slow automation
+attachment cannot miss the launching screen. Its test waits beyond the former
+five-second fixture timeout before inspecting the startup label.
 
 Run the same smoke gate locally with `zsh scripts/test-ci-smoke.sh`. It uses
 `BLEAT_SIMULATOR_DESTINATION` when set. Run `bundle install` followed by

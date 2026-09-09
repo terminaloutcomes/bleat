@@ -114,8 +114,11 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchingScreenDescribesStartupWork() {
+    func testLaunchingScreenDescribesStartupWork() async throws {
         let app = launch(scenario: "--ui-testing-launching")
+        // Exercise delayed automation attachment beyond the old five-second
+        // fixture timeout, which let startup finish before CI inspected it.
+        try await Task.sleep(for: .seconds(6))
         let launchScreen = app.descendants(matching: .any)["app.launching"]
         let expectedLabel = "Starting Bleat. Restoring your account"
 
@@ -124,7 +127,7 @@ final class BleatUITests: XCTestCase {
             for: NSPredicate(format: "label == %@", expectedLabel),
             evaluatedWith: launchScreen
         )
-        wait(for: [launchStatus], timeout: 3)
+        await fulfillment(of: [launchStatus], timeout: 3)
         XCTAssertEqual(
             launchScreen.label,
             expectedLabel
@@ -2226,6 +2229,29 @@ final class BleatUITests: XCTestCase {
         XCTAssertFalse(transcription.isEnabled)
         XCTAssertFalse(app.buttons["book.detail.edit"].exists)
         XCTAssertFalse(app.buttons["book.detail.download"].exists)
+    }
+
+    @MainActor
+    func testInterruptedTranscriptionOffersExplicitResume() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-resumable",
+            ])
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["book.detail.transcription"].tap()
+        let resume = app.buttons["transcription.resume"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 3))
+        XCTAssertTrue(resume.isEnabled)
+        XCTAssertTrue(app.staticTexts["transcription.resumeProgress"].exists)
+        XCTAssertFalse(app.buttons["Cancelling…"].exists)
     }
 
     @MainActor
