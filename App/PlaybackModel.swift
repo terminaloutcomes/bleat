@@ -477,7 +477,7 @@ final class PlaybackModel {
     }
 
     var libraryID: LibraryID? {
-        activeDownloadDetail?.libraryID
+        activeDownloadDetail?.libraryID ?? localPlaybackSession?.libraryID
     }
 
     var hasActiveBook: Bool {
