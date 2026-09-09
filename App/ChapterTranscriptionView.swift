@@ -733,26 +733,21 @@ struct ChapterTranscriptionView: View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 List {
+                    cacheFailureContent
+                    if let job = model.resumableJob(for: bookKey),
+                        !model.isWorking(for: bookKey)
+                    {
+                        resumableJobContent(job)
+                    }
+                    transcriptionStatusContent
+                    playbackFailureContent
                     if model.hasLoadedTranscriptCache(for: bookKey) {
                         currentPositionContent
                     }
                     if hasSearchQuery {
-                        playbackFailureContent
                         searchContent
                     } else {
                         chapterSelector
-                        cacheFailureContent
-                        if let job = model.resumableJob(for: bookKey),
-                            !model.isWorking(for: bookKey)
-                        {
-                            Text(
-                                "\(job.completedChapterIDs.count) completed, \(job.unfinishedChapters.count) remaining"
-                            )
-                            .accessibilityIdentifier(
-                                "transcription.resumeProgress")
-                        }
-                        transcriptionStatusContent
-                        playbackFailureContent
                         selectedTranscriptContent
                     }
                 }
@@ -1068,6 +1063,39 @@ struct ChapterTranscriptionView: View {
     }
 
     @ViewBuilder
+    private func resumableJobContent(
+        _ job: ChapterTranscriptionJob
+    ) -> some View {
+        Section {
+            Text(
+                "\(job.completedChapterIDs.count) completed, \(job.unfinishedChapters.count) remaining"
+            )
+            .accessibilityIdentifier("transcription.resumeProgress")
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Remaining chapters")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(job.unfinishedChapters, id: \.id) { chapter in
+                    Text(chapterTitle(chapter.id))
+                        .accessibilityIdentifier(
+                            "transcription.resumeChapter.\(chapter.id)"
+                        )
+                }
+            }
+
+            Button("Retry Remaining Chapters", systemImage: "arrow.clockwise") {
+                retryResumableJob()
+            }
+            .disabled(
+                model.isWorking
+                    || !model.hasLoadedTranscriptCache(for: bookKey)
+            )
+            .accessibilityIdentifier("transcription.retryRemaining")
+        }
+    }
+
+    @ViewBuilder
     private var searchContent: some View {
         let matches = model.searchResults(
             query: searchQuery,
@@ -1216,21 +1244,25 @@ struct ChapterTranscriptionView: View {
                         "Transcribed \(chapterCountText(terminalState.completedChapterIDs.count)) in \(elapsedTime(terminalState.durationMilliseconds)).",
                         systemImage: "checkmark.circle"
                     )
+                    .accessibilityIdentifier("transcription.terminalState")
                 case .failed:
                     Label(
                         terminalState.failure?.message
                             ?? "Transcription failed.",
                         systemImage: "exclamationmark.triangle"
                     )
+                    .accessibilityIdentifier("transcription.terminalState")
                     Text(
                         "Failed after \(elapsedTime(terminalState.durationMilliseconds))."
                     )
                     .foregroundStyle(.secondary)
+                    attemptedChapterContent(terminalState)
                 case .cancelled:
                     Label(
                         "Transcription was cancelled.",
                         systemImage: "xmark.circle"
                     )
+                    .accessibilityIdentifier("transcription.terminalState")
                     Text(
                         "Cancelled after \(elapsedTime(terminalState.durationMilliseconds))."
                     )
@@ -1250,12 +1282,53 @@ struct ChapterTranscriptionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-            .accessibilityIdentifier("transcription.terminalState")
             if terminalState.failure == .audioNotDownloaded
                 || terminalState.failure == .jobMissingAudio
             {
                 Button("Download Audiobook") {
                     showDownloadConfirmation = true
+                }
+            }
+            if terminalState.outcome == .failed,
+                !terminalRetryChapters(terminalState).isEmpty
+            {
+                Button(
+                    "Retry Failed Transcription",
+                    systemImage: "arrow.clockwise"
+                ) {
+                    retry(terminalState)
+                }
+                .disabled(
+                    model.isWorking
+                        || !model.hasLoadedTranscriptCache(for: bookKey)
+                )
+                .accessibilityIdentifier("transcription.retryFailure")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func attemptedChapterContent(
+        _ terminalState: CachedChapterTranscriptionTaskState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Attempted chapters")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(terminalState.selectedChapterIDs, id: \.self) { chapterID in
+                if terminalState.currentChapterID == chapterID {
+                    Label(
+                        chapterTitle(chapterID),
+                        systemImage: "exclamationmark.circle"
+                    )
+                    .accessibilityIdentifier(
+                        "transcription.failedChapter.\(chapterID)"
+                    )
+                } else {
+                    Text(chapterTitle(chapterID))
+                        .accessibilityIdentifier(
+                            "transcription.attemptedChapter.\(chapterID)"
+                        )
                 }
             }
         }
@@ -1378,17 +1451,7 @@ struct ChapterTranscriptionView: View {
                 .background(.bar)
         } else if !isSelectingChapters, model.resumableJob(for: bookKey) != nil
         {
-            Button("Resume", systemImage: "play.fill") {
-                model.start(
-                    chapters: [], detail: detail, account: account,
-                    downloads: downloads, appModel: appModel, resume: true)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!model.hasLoadedTranscriptCache(for: bookKey))
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(.bar)
-            .accessibilityIdentifier("transcription.resume")
+            EmptyView()
         } else if isSelectingChapters {
             Button(
                 "Transcribe \(chapterCountText(selectedUncachedChapterIDs.count))",
@@ -1461,6 +1524,35 @@ struct ChapterTranscriptionView: View {
             chapters: chapters, detail: detail, account: account,
             downloads: downloads, appModel: appModel,
             replacePending: replacePending)
+    }
+
+    private func retryResumableJob() {
+        model.start(
+            chapters: [], detail: detail, account: account,
+            downloads: downloads, appModel: appModel, resume: true)
+    }
+
+    private func retry(
+        _ terminalState: CachedChapterTranscriptionTaskState
+    ) {
+        if model.resumableJob(for: bookKey) != nil {
+            retryResumableJob()
+            return
+        }
+        startSelection(terminalRetryChapters(terminalState))
+    }
+
+    private func terminalRetryChapters(
+        _ terminalState: CachedChapterTranscriptionTaskState
+    ) -> [PlaybackChapter] {
+        let completedChapterIDs = Set(terminalState.completedChapterIDs)
+        let retryChapterIDs = Set(terminalState.selectedChapterIDs).subtracting(
+            completedChapterIDs
+        )
+        return ChapterTranscriptionBatchPlanner.orderedChapters(
+            selectedChapterIDs: retryChapterIDs,
+            from: detail.chapters
+        )
     }
 
     private var selectedChapter: PlaybackChapter? {

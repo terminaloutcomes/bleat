@@ -1052,15 +1052,18 @@ transcript segments and latest task result. Downloaded audio, bookmarks, and
 playback state remain unchanged.
 
 Interrupted transcription selections now retain durable chapter checkpoints.
-After cancellation or relaunch, Resume continues unfinished chapters in ascending
-chapter-index order with the original language. Speech never restarts just from
-opening the screen. Each chapter's final text and completed state are committed
-together; earlier text remains readable, searchable, and exportable after a later
-failure. Replacing an unfinished selection requires confirmation and keeps saved
-text. Older terminal history remains readable but is not converted into resumable
-jobs.
+After cancellation or relaunch, the top of the transcription screen names every
+unfinished chapter and provides a Retry Remaining Chapters action. A persisted
+failure is also shown above the chapter selector with the attempted chapter names,
+the chapter that failed, and a Retry Failed Transcription action. Retry continues
+unfinished chapters in ascending chapter-index order with the original language;
+opening the screen never restarts Speech. Each chapter's final text and completed
+state are committed together; earlier text remains readable, searchable, and
+exportable after a later failure. Replacing an unfinished selection requires
+confirmation and keeps saved text. Older terminal history remains readable but is
+not converted into resumable jobs.
 
-Resume requires the original selection's downloaded tracks, including tracks used
+Retry requires the original selection's downloaded tracks, including tracks used
 by completed chapters. Bleat compares download identity, chapter boundaries,
 track timelines, and local file identity, length, and modification metadata.
 Missing, changed, or unverifiable audio produces a specific failure without

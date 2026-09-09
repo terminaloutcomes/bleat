@@ -930,15 +930,18 @@
                 return nil
             }
             let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let failed = ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-transcription-failed"
+            )
             return CachedChapterTranscriptionTaskState(
                 taskID: UUID(
                     uuidString: "00000000-0000-0000-0000-000000000001"
                 ) ?? UUID(),
                 selectedChapterIDs: [0, 1],
-                completedChapterIDs: [0, 1],
-                currentChapterID: nil,
-                outcome: .succeeded,
-                failure: nil,
+                completedChapterIDs: failed ? [0] : [0, 1],
+                currentChapterID: failed ? 1 : nil,
+                outcome: failed ? .failed : .succeeded,
+                failure: failed ? .chapterExtractionFailed : nil,
                 startedAt: startedAt,
                 finishedAt: startedAt.addingTimeInterval(125),
                 durationMilliseconds: 125_000
