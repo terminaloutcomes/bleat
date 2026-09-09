@@ -2381,13 +2381,14 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testInterruptedTranscriptionOffersExplicitResume() {
+    func testInterruptedTranscriptionShowsNamedRetryActionsAtTop() {
         let app = launch(
             scenario: "--ui-testing-playback",
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
                 "--ui-testing-transcription-resumable",
+                "--ui-testing-transcription-failed",
             ])
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
@@ -2396,11 +2397,55 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(actions.waitForExistence(timeout: 3))
         actions.tap()
         app.buttons["book.detail.transcription"].tap()
-        let resume = app.buttons["transcription.resume"]
-        XCTAssertTrue(resume.waitForExistence(timeout: 3))
-        XCTAssertTrue(resume.isEnabled)
-        XCTAssertTrue(app.staticTexts["transcription.resumeProgress"].exists)
+        let resumeProgress = app.staticTexts["transcription.resumeProgress"]
+        XCTAssertTrue(resumeProgress.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["transcription.resumeChapter.1"].exists)
+        let retryRemaining = app.buttons["transcription.retryRemaining"]
+        XCTAssertTrue(retryRemaining.exists)
+        XCTAssertTrue(retryRemaining.isEnabled)
+        let terminalState = app.staticTexts["transcription.terminalState"]
+        XCTAssertTrue(terminalState.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "transcription.attemptedChapter.0"
+            ].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "transcription.failedChapter.1"
+            ].exists)
+        XCTAssertTrue(app.buttons["transcription.retryFailure"].exists)
+        let firstChapter = app.buttons["transcription.chapter.0"]
+        XCTAssertTrue(firstChapter.exists)
+        XCTAssertLessThan(resumeProgress.frame.minY, firstChapter.frame.minY)
+        XCTAssertLessThan(terminalState.frame.minY, firstChapter.frame.minY)
         XCTAssertFalse(app.buttons["Cancelling…"].exists)
+    }
+
+    @MainActor
+    func testFailedTranscriptionDoesNotResumeDifferentPendingSelection() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-resumable",
+                "--ui-testing-transcription-failed",
+                "--ui-testing-transcription-mismatched-failure",
+            ])
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let retryFailure = app.buttons["transcription.retryFailure"]
+        XCTAssertTrue(retryFailure.waitForExistence(timeout: 3))
+        retryFailure.tap()
+
+        XCTAssertTrue(
+            app.buttons["Replace Selection"].waitForExistence(timeout: 3))
     }
 
     @MainActor

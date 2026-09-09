@@ -304,10 +304,15 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - New batches persist their selection, language, source identity, and per-chapter
   pending/running/completed/failed state before Speech starts. Each successful
   transcript and chapter completion commit atomically. Cancellation and relaunch
-  expose explicit Resume for unfinished chapters in ascending chapter-index
-  order; opening the screen never starts Speech. Resume uses checkpoint state,
-  even if an unfinished chapter has older cached text.
-- Resume validates all selected local source tracks against download identity,
+  expose the unfinished chapter names and an explicit retry action above the
+  chapter selector. A persisted failure appears there too, names the attempted
+  and failed chapters, and provides its own retry action only for typed failures
+  that can be retried immediately. Failures requiring download, source repair,
+  checkpoint replacement, or a supported device retain their specific recovery
+  message without an ineffective retry action. Retry uses ascending chapter-index
+  order and checkpoint state, even if an unfinished chapter has older cached text;
+  opening the screen never starts Speech.
+- Retry validates all selected local source tracks against download identity,
   chapter boundaries, track timelines, file identity, size, and modification
   metadata. Missing, changed, or insufficient identity is a typed failure that
   preserves saved text. Metadata-preserving content replacement is an accepted
