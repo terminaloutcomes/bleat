@@ -49,6 +49,24 @@ extension ChapterTranscriptionJobFailure {
 
 /// Job completion is authoritative even when an older transcript has the same chapter ID.
 enum ChapterTranscriptionResumePlanner {
+    static func canResumeSelection(
+        _ chapters: [PlaybackChapter], job: ChapterTranscriptionJob,
+        detail: LibraryBookDetail
+    ) -> Bool {
+        // Completed chapters must still match too: resume validates the whole job.
+        guard (try? selectedChapters(job: job, detail: detail)) != nil else {
+            return false
+        }
+        let selection = chapters.sorted { $0.id < $1.id }
+        func matches(_ saved: [ChapterTranscriptionJobChapter]) -> Bool {
+            selection.count == saved.count
+                && zip(selection, saved).allSatisfy {
+                    $0.id == $1.id && $0.start == $1.start && $0.end == $1.end
+                }
+        }
+        return matches(job.chapters) || matches(job.unfinishedChapters)
+    }
+
     static func selectedChapters(
         job: ChapterTranscriptionJob, detail: LibraryBookDetail
     ) throws(ChapterTranscriptionJobFailure) -> [PlaybackChapter] {

@@ -1247,6 +1247,19 @@ final class AppModelTests: XCTestCase {
             ])
         job.chapters[0].state = .completed
         job.chapters[1].state = .running
+        XCTAssertTrue(
+            ChapterTranscriptionResumePlanner.canResumeSelection(
+                [chapters[1]], job: job, detail: detail))
+        let changedCompletedChapter = fixtureBookDetail(
+            item: fixtureBook(
+                id: "resume", title: "Resume", libraryID: fixtureLibrary().id),
+            chapters: [
+                PlaybackChapter(id: 1, start: 0, end: 19, title: "One"),
+                chapters[1],
+            ])
+        XCTAssertFalse(
+            ChapterTranscriptionResumePlanner.canResumeSelection(
+                [chapters[1]], job: job, detail: changedCompletedChapter))
         try await service.saveTranscriptionJob(
             job, replacing: nil, transcript: nil, accountID: account.id,
             itemID: detail.id)
@@ -1472,6 +1485,20 @@ final class AppModelTests: XCTestCase {
             XCTAssertEqual(
                 error as? ChapterTranscriptionJobFailure, .chapterLayoutChanged)
         }
+        XCTAssertFalse(
+            ChapterTranscriptionResumePlanner.canResumeSelection(
+                [chapter], job: job, detail: detail))
+        let matchingJob = ChapterTranscriptionJob(
+            localeIdentifier: "en-AU",
+            chapters: [ChapterTranscriptionJobChapter(id: 1, start: 0, end: 20)]
+        )
+        XCTAssertTrue(
+            ChapterTranscriptionResumePlanner.canResumeSelection(
+                [chapter], job: matchingJob, detail: detail))
+        XCTAssertFalse(
+            ChapterTranscriptionResumePlanner.canResumeSelection(
+                [PlaybackChapter(id: 1, start: 1, end: 20, title: "One")],
+                job: matchingJob, detail: detail))
     }
 
     func testTranscriptionBatchSkipsChaptersWithCachedTranscripts()

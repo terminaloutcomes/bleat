@@ -1431,9 +1431,8 @@ struct ChapterTranscriptionView: View {
         _ chapters: [PlaybackChapter], replacePending: Bool = false
     ) {
         if let job = model.resumableJob(for: bookKey), !replacePending {
-            let selection = chapters.map(\.id).sorted()
-            if selection == job.unfinishedChapters.map(\.id)
-                || selection == job.chapters.map(\.id)
+            if ChapterTranscriptionResumePlanner.canResumeSelection(
+                chapters, job: job, detail: detail)
             {
                 model.start(
                     chapters: [], detail: detail, account: account,
