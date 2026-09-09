@@ -1021,6 +1021,141 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookEditorDisplaysCachedCover() throws {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-cover-image"])
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        XCTAssertTrue(
+            app.buttons["book.detail.actions"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(try redCoverFraction(app.screenshot().image), 0.01)
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(
+            app.textFields["metadata.title"].waitForExistence(timeout: 5))
+        let form = app.collectionViews.firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 3))
+        let screenshot = form.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertGreaterThan(
+            try redCoverFraction(screenshot.image), 0.04,
+            "The editor must render the cached red cover, not its grey placeholder"
+        )
+    }
+
+    @MainActor
+    func testBookContextEditorDisplaysCover() throws {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-cover-image"])
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.press(forDuration: 1)
+        let edit = app.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        edit.tap()
+        XCTAssertTrue(
+            app.textFields["metadata.title"].waitForExistence(timeout: 5))
+        let form = app.collectionViews.firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 3))
+        XCTAssertGreaterThan(
+            try redCoverFraction(form.screenshot().image), 0.04)
+    }
+
+    private func redCoverFraction(_ image: UIImage) throws -> Double {
+        let width = 128
+        let height = 256
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let context = try XCTUnwrap(
+            CGContext(
+                data: &pixels, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(
+            try XCTUnwrap(image.cgImage),
+            in: CGRect(x: 0, y: 0, width: width, height: height))
+        let count = stride(from: 0, to: pixels.count, by: 4).count {
+            pixels[$0] > 150 && pixels[$0 + 1] < 80 && pixels[$0 + 2] < 80
+        }
+        return Double(count) / Double(width * height)
+    }
+
+    @MainActor
+    func testBookDetailEditSurvivesSameBookDownloadProgress() {
+        checkEditDuringDownload(
+            scenario: "--ui-testing-context-download-removal")
+    }
+
+    @MainActor
+    func testBookDetailEditSurvivesUnrelatedDownloadProgress() {
+        checkEditDuringDownload(scenario: "--ui-testing-home-shelf-order")
+    }
+
+    @MainActor
+    private func checkEditDuringDownload(scenario: String) {
+        let app = launch(
+            scenario: scenario,
+            additionalArguments: ["--ui-testing-edit-download-progress"])
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        let menuStarted = Date()
+        actions.tap()
+        XCTAssertLessThan(
+            Date().timeIntervalSince(menuStarted), 10,
+            "Progress kept the actions menu busy until the download finished")
+        let edit = app.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        // Keep the menu open across multiple progress callbacks before selecting.
+        let menuInterval = expectation(
+            description: "Progress while menu is open")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            menuInterval.fulfill()
+        }
+        wait(for: [menuInterval], timeout: 3)
+        XCTAssertTrue(
+            edit.exists, "Download progress dismissed the actions menu")
+        guard edit.exists else { return }
+        edit.tap()
+        let title = app.textFields["metadata.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        guard title.exists else { return }
+        title.tap()
+        title.typeText(" draft")
+        let draft = title.value as? String
+        XCTAssertLessThan(
+            Date().timeIntervalSince(menuStarted), 30,
+            "The draft must be entered while download updates are still running"
+        )
+        let completionInterval = expectation(
+            description: "Download completes while editing")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 42) {
+            completionInterval.fulfill()
+        }
+        wait(for: [completionInterval], timeout: 45)
+        XCTAssertTrue(title.exists, "Download progress dismissed the editor")
+        XCTAssertEqual(title.value as? String, draft)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertNotEqual(
+            title.value as? String, draft, "Cancel should discard the draft")
+        title.tap()
+        title.typeText(" saved")
+        app.buttons["metadata.save"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
     func testBookContextMenuPresentsExistingEditorAndTranscriptionDirectly() {
         let app = launch(
             scenario: "--ui-testing-signed-in",

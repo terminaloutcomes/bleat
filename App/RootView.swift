@@ -3830,6 +3830,182 @@ private struct SeriesCarouselBookCard: View {
     }
 }
 
+// Keep high-frequency transfer observation below the detail presentation owner.
+private struct BookDetailDownloadControls: View {
+    @Bindable var downloads: DownloadModel
+    let account: ServerAccount
+    let detail: LibraryBookDetail
+
+    var body: some View {
+        let availability = BookActionAvailability(
+            user: account.user,
+            detail: detail
+        )
+        if availability.visibleActions.contains(.download) {
+            if let record = downloads.record(
+                accountID: account.id,
+                itemID: detail.id
+            ) {
+                if record.manifest.purpose == .automaticCache
+                    || !downloads.isFullBookAvailable(record)
+                {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(
+                                    systemName: downloadStatusIcon(record)
+                                )
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(downloadStatus(record))
+                                    Text(downloadBytes(record))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .fixedSize(
+                                    horizontal: true,
+                                    vertical: false
+                                )
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier(
+                                "book.detail.downloadStatus"
+                            )
+                            Spacer()
+                            downloadTransferButton(
+                                record,
+                                account: account
+                            )
+                        }
+                        .font(.subheadline)
+
+                        if record.manifest.purpose == .automaticCache
+                            || !downloads.isFullBookAvailable(record)
+                        {
+                            ProgressView(
+                                value: downloads.progress[
+                                    record.manifest.downloadID
+                                ] ?? 0
+                            )
+                        }
+
+                    }
+                    .padding()
+                    .background(
+                        .quaternary,
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
+                }
+            } else {
+                Button {
+                    Task {
+                        await downloads.download(
+                            detail: detail,
+                            account: account
+                        )
+                    }
+                } label: {
+                    Label(
+                        "Download",
+                        systemImage: "arrow.down.circle"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Download \(detail.title)")
+                .accessibilityIdentifier("book.detail.download")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func downloadTransferButton(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) -> some View {
+        let snapshot = downloads.controlSnapshot(for: record)
+        if downloadIsActive(record) {
+            Button {
+                Task {
+                    await downloads.cancel(record)
+                }
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(.title2)
+            }
+            .disabled(snapshot.phase == .cancelling)
+            .accessibilityLabel(
+                snapshot.phase == .cancelling
+                    ? "Stopping download" : "Stop download"
+            )
+            .accessibilityIdentifier("book.detail.download.stop")
+        } else if record.manifest.state != .deleting {
+            Button {
+                Task {
+                    await startDownload(record, account: account)
+                }
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title2)
+            }
+            .accessibilityLabel("Download")
+            .accessibilityIdentifier("book.detail.download.start")
+        }
+    }
+
+    private func startDownload(
+        _ record: DownloadedBookRecord,
+        account: ServerAccount
+    ) async {
+        let snapshot = downloads.controlSnapshot(for: record)
+        if snapshot.actions.contains(.continueDownload)
+            || snapshot.phase == .pauseFailed
+        {
+            await downloads.continueDownload(record)
+        } else if record.manifest.purpose == .automaticCache,
+            downloads.automaticCacheState(for: record) != .failed
+        {
+            await downloads.downloadFullBook(record, account: account)
+        } else {
+            await downloads.repair(record, account: account)
+        }
+    }
+
+    private func downloadIsActive(
+        _ record: DownloadedBookRecord
+    ) -> Bool {
+        let snapshot = downloads.controlSnapshot(for: record)
+        return snapshot.actions.contains(.cancel)
+            || snapshot.phase == .cancelling
+    }
+
+    private func downloadStatus(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        downloadControlLabel(
+            downloads.controlSnapshot(for: record).phase
+        )
+    }
+
+    private func downloadStatusIcon(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        downloadControlIcon(
+            downloads.controlSnapshot(for: record).phase
+        )
+    }
+
+    private func downloadBytes(
+        _ record: DownloadedBookRecord
+    ) -> String {
+        DownloadByteProgressFormatter.string(
+            downloadedBytes: downloads.displayedDownloadedByteLength(
+                for: record
+            ),
+            expectedBytes: downloads.expectedByteLength(for: record)
+        )
+    }
+
+}
+
 private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
@@ -3868,6 +4044,9 @@ private struct BookDetailView: View {
         .iOSInlineNavigationTitle()
         .task(id: book.id.rawValue) {
             await model.loadBookDetail(book)
+            #if DEBUG || BLEAT_UI_TESTING
+                await model.downloads.runEditPresentationDownloadFixture()
+            #endif
         }
         .task(id: transcriptPresenceTaskID) {
             guard let detail = loadedDetail,
@@ -4407,7 +4586,13 @@ private struct BookDetailView: View {
 
                 VStack(spacing: 12) {
                     playbackAction(detail)
-                    downloadAction(detail)
+                    if let account = model.account {
+                        BookDetailDownloadControls(
+                            downloads: model.downloads,
+                            account: account,
+                            detail: detail
+                        )
+                    }
 
                 }
                 if let description = detail.descriptionPlain,
@@ -4669,177 +4854,6 @@ private struct BookDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-
-    @ViewBuilder
-    private func downloadAction(_ detail: LibraryBookDetail) -> some View {
-        if let account = model.account {
-            let availability = BookActionAvailability(
-                user: account.user,
-                detail: detail
-            )
-            if availability.visibleActions.contains(.download) {
-                if let record = model.downloads.record(
-                    accountID: account.id,
-                    itemID: detail.id
-                ) {
-                    if record.manifest.purpose == .automaticCache
-                        || !model.downloads.isFullBookAvailable(record)
-                    {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(alignment: .top, spacing: 8) {
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(
-                                        systemName: downloadStatusIcon(record)
-                                    )
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        Text(downloadStatus(record))
-                                        Text(downloadBytes(record))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .fixedSize(
-                                        horizontal: true,
-                                        vertical: false
-                                    )
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityIdentifier(
-                                    "book.detail.downloadStatus"
-                                )
-                                Spacer()
-                                downloadTransferButton(
-                                    record,
-                                    account: account
-                                )
-                            }
-                            .font(.subheadline)
-
-                            if record.manifest.purpose == .automaticCache
-                                || !model.downloads.isFullBookAvailable(record)
-                            {
-                                ProgressView(
-                                    value: model.downloads.progress[
-                                        record.manifest.downloadID
-                                    ] ?? 0
-                                )
-                            }
-
-                        }
-                        .padding()
-                        .background(
-                            .quaternary,
-                            in: RoundedRectangle(cornerRadius: 12)
-                        )
-                    }
-                } else {
-                    Button {
-                        Task {
-                            await model.downloads.download(
-                                detail: detail,
-                                account: account
-                            )
-                        }
-                    } label: {
-                        Label(
-                            "Download",
-                            systemImage: "arrow.down.circle"
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel("Download \(detail.title)")
-                    .accessibilityIdentifier("book.detail.download")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func downloadTransferButton(
-        _ record: DownloadedBookRecord,
-        account: ServerAccount
-    ) -> some View {
-        let snapshot = model.downloads.controlSnapshot(for: record)
-        if downloadIsActive(record) {
-            Button {
-                Task {
-                    await model.downloads.cancel(record)
-                }
-            } label: {
-                Image(systemName: "stop.fill")
-                    .font(.title2)
-            }
-            .disabled(snapshot.phase == .cancelling)
-            .accessibilityLabel(
-                snapshot.phase == .cancelling
-                    ? "Stopping download" : "Stop download"
-            )
-            .accessibilityIdentifier("book.detail.download.stop")
-        } else if record.manifest.state != .deleting {
-            Button {
-                Task {
-                    await startDownload(record, account: account)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.title2)
-            }
-            .accessibilityLabel("Download")
-            .accessibilityIdentifier("book.detail.download.start")
-        }
-    }
-
-    private func startDownload(
-        _ record: DownloadedBookRecord,
-        account: ServerAccount
-    ) async {
-        let snapshot = model.downloads.controlSnapshot(for: record)
-        if snapshot.actions.contains(.continueDownload)
-            || snapshot.phase == .pauseFailed
-        {
-            await model.downloads.continueDownload(record)
-        } else if record.manifest.purpose == .automaticCache,
-            model.downloads.automaticCacheState(for: record) != .failed
-        {
-            await model.downloads.downloadFullBook(record, account: account)
-        } else {
-            await model.downloads.repair(record, account: account)
-        }
-    }
-
-    private func downloadIsActive(
-        _ record: DownloadedBookRecord
-    ) -> Bool {
-        let snapshot = model.downloads.controlSnapshot(for: record)
-        return snapshot.actions.contains(.cancel)
-            || snapshot.phase == .cancelling
-    }
-
-    private func downloadStatus(
-        _ record: DownloadedBookRecord
-    ) -> String {
-        downloadControlLabel(
-            model.downloads.controlSnapshot(for: record).phase
-        )
-    }
-
-    private func downloadStatusIcon(
-        _ record: DownloadedBookRecord
-    ) -> String {
-        downloadControlIcon(
-            model.downloads.controlSnapshot(for: record).phase
-        )
-    }
-
-    private func downloadBytes(
-        _ record: DownloadedBookRecord
-    ) -> String {
-        DownloadByteProgressFormatter.string(
-            downloadedBytes: model.downloads.displayedDownloadedByteLength(
-                for: record
-            ),
-            expectedBytes: model.downloads.expectedByteLength(for: record)
-        )
     }
 
     private func durationText(_ duration: Double) -> String {

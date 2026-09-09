@@ -44,7 +44,14 @@ actor BookCoverImageLoader {
         diskCapacity: Int = BookCoverImageLoader.diskCapacity,
         cacheRoot: URL? = nil,
         fetch: @escaping Fetch = { request in
-            try await URLSession.shared.data(for: request)
+            #if DEBUG || BLEAT_UI_TESTING
+                if let response = try UITestAppService.coverImageResponse(
+                    for: request)
+                {
+                    return response
+                }
+            #endif
+            return try await URLSession.shared.data(for: request)
         }
     ) {
         self.diskCapacity = max(0, diskCapacity)
@@ -404,7 +411,8 @@ struct BookCoverView: View {
     }
 
     var body: some View {
-        Group {
+        // Keep the loading task attached to a concrete container across state changes.
+        Color.clear.overlay {
             switch state {
             case .loaded(let image):
                 PlatformImageSupport.resizableView(for: image)
