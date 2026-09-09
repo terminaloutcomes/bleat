@@ -52,7 +52,7 @@
             guard
                 let exporter = AVAssetExportSession(
                     asset: asset,
-                    presetName: AVAssetExportPresetPassthrough
+                    presetName: AVAssetExportPresetAppleM4A
                 )
             else {
                 throw AudioChapterSliceExportFailure.unavailable
