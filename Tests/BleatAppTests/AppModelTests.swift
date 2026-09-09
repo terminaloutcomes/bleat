@@ -1660,6 +1660,40 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testPersistentTranscriptionFailuresIdentifyImmediateRetrySupport() {
+        let retryable: [CachedChapterTranscriptionTaskFailure] = [
+            .jobPersistenceFailed,
+            .cacheSaveFailed,
+            .languageAssetInstallationFailed,
+            .chapterExtractionFailed,
+            .analyzerInputFailed,
+            .analyzerFinalizationFailed,
+            .resultStreamFailed,
+        ]
+        XCTAssertTrue(retryable.allSatisfy(\.supportsImmediateRetry))
+
+        let requiresRecovery: [CachedChapterTranscriptionTaskFailure] = [
+            .jobMissingAudio,
+            .jobSourceChanged,
+            .jobChapterLayoutChanged,
+            .jobInsufficientSourceIdentity,
+            .jobInvalidCheckpoint,
+            .jobStaleRevision,
+            .audioNotDownloaded,
+            .localAudioUnavailable,
+            .invalidChapterRange,
+            .cancelled,
+            .operatingSystemUnsupported,
+            .unavailableOnDevice,
+            .unsupportedLocale,
+            .languageAssetsUnavailable,
+            .audioFileUnreadable,
+            .chapterExtractionUnavailable,
+        ]
+        XCTAssertTrue(
+            requiresRecovery.allSatisfy { !$0.supportsImmediateRetry })
+    }
+
     func testLateTranscriptLoadCannotReplaceNewerBatchResult() async throws {
         let account = try fixtureAccount()
         let chapter = PlaybackChapter(

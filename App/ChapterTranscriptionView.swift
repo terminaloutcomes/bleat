@@ -402,6 +402,24 @@ extension ChapterTranscriptionFailure {
 }
 
 extension CachedChapterTranscriptionTaskFailure {
+    var supportsImmediateRetry: Bool {
+        switch self {
+        case .jobPersistenceFailed, .cacheSaveFailed,
+            .languageAssetInstallationFailed, .chapterExtractionFailed,
+            .analyzerInputFailed, .analyzerFinalizationFailed,
+            .resultStreamFailed:
+            true
+        case .jobMissingAudio, .jobSourceChanged, .jobChapterLayoutChanged,
+            .jobInsufficientSourceIdentity, .jobInvalidCheckpoint,
+            .jobStaleRevision, .audioNotDownloaded, .localAudioUnavailable,
+            .invalidChapterRange, .cancelled, .operatingSystemUnsupported,
+            .unavailableOnDevice, .unsupportedLocale,
+            .languageAssetsUnavailable, .audioFileUnreadable,
+            .chapterExtractionUnavailable:
+            false
+        }
+    }
+
     var message: String {
         switch self {
         case .jobMissingAudio:
@@ -1290,6 +1308,7 @@ struct ChapterTranscriptionView: View {
                 }
             }
             if terminalState.outcome == .failed,
+                terminalState.failure?.supportsImmediateRetry == true,
                 !terminalRetryChapters(terminalState).isEmpty
             {
                 Button(
@@ -1535,10 +1554,6 @@ struct ChapterTranscriptionView: View {
     private func retry(
         _ terminalState: CachedChapterTranscriptionTaskState
     ) {
-        if model.resumableJob(for: bookKey) != nil {
-            retryResumableJob()
-            return
-        }
         startSelection(terminalRetryChapters(terminalState))
     }
 

@@ -1055,7 +1055,10 @@ Interrupted transcription selections now retain durable chapter checkpoints.
 After cancellation or relaunch, the top of the transcription screen names every
 unfinished chapter and provides a Retry Remaining Chapters action. A persisted
 failure is also shown above the chapter selector with the attempted chapter names,
-the chapter that failed, and a Retry Failed Transcription action. Retry continues
+the chapter that failed, and a Retry Failed Transcription action when the typed
+failure can be retried immediately. Failures requiring a download, changed source,
+valid checkpoint, or supported device retain their specific recovery message
+without offering a retry that would immediately fail again. Retry continues
 unfinished chapters in ascending chapter-index order with the original language;
 opening the screen never restarts Speech. Each chapter's final text and completed
 state are committed together; earlier text remains readable, searchable, and

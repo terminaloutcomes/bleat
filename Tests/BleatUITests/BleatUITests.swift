@@ -2422,6 +2422,33 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testFailedTranscriptionDoesNotResumeDifferentPendingSelection() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-resumable",
+                "--ui-testing-transcription-failed",
+                "--ui-testing-transcription-mismatched-failure",
+            ])
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["book.detail.transcription"].tap()
+
+        let retryFailure = app.buttons["transcription.retryFailure"]
+        XCTAssertTrue(retryFailure.waitForExistence(timeout: 3))
+        retryFailure.tap()
+
+        XCTAssertTrue(
+            app.buttons["Replace Selection"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testCachedTranscriptionCannotBeQueuedAgain() {
         let app = launch(
             scenario: "--ui-testing-playback",

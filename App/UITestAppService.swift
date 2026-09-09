@@ -933,13 +933,21 @@
             let failed = ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-transcription-failed"
             )
+            let mismatchedFailure = ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-transcription-mismatched-failure"
+            )
+            let selectedChapterIDs = mismatchedFailure ? [0] : [0, 1]
+            let completedChapterIDs =
+                mismatchedFailure
+                ? [] : failed ? [0] : [0, 1]
+            let currentChapterID = mismatchedFailure ? 0 : failed ? 1 : nil
             return CachedChapterTranscriptionTaskState(
                 taskID: UUID(
                     uuidString: "00000000-0000-0000-0000-000000000001"
                 ) ?? UUID(),
-                selectedChapterIDs: [0, 1],
-                completedChapterIDs: failed ? [0] : [0, 1],
-                currentChapterID: failed ? 1 : nil,
+                selectedChapterIDs: selectedChapterIDs,
+                completedChapterIDs: completedChapterIDs,
+                currentChapterID: currentChapterID,
                 outcome: failed ? .failed : .succeeded,
                 failure: failed ? .chapterExtractionFailed : nil,
                 startedAt: startedAt,
