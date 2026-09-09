@@ -5197,6 +5197,43 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         controlTransitions[downloadID] == .cancelling(operationID)
     }
 
+    #if DEBUG || BLEAT_UI_TESTING
+        // Exercise the same observed byte-progress path as URLSession callbacks.
+        // Only the disposable UI-test record is changed; no network transfer runs.
+        func runEditPresentationDownloadFixture() async {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-edit-download-progress"
+                ), let completed = records.first,
+                let entry = completed.manifest.entries.first,
+                let identity = Self.identity(for: entry, record: completed)
+            else { return }
+            do {
+                var manifest = completed.manifest
+                try manifest.markDownloading(
+                    trackIndex: entry.trackIndex, observedByteLength: 0)
+                records = [
+                    DownloadedBookRecord(
+                        manifest: manifest, detail: completed.detail)
+                ]
+                defer {
+                    records = [completed]
+                    clearTransferredBytes(for: identity)
+                }
+                for tick in 1...200 {
+                    try await Task.sleep(for: .milliseconds(200))
+                    updateTransferredBytes(
+                        entry.expectedByteLength * Int64(tick) / 200,
+                        for: identity)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                failure = .transferFailed
+            }
+        }
+    #endif
+
     private func updateTransferredBytes(
         _ totalBytesWritten: Int64,
         for identity: DownloadTaskIdentity

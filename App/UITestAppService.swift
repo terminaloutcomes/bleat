@@ -80,6 +80,25 @@
     }
 
     actor UITestAppService: AppServicing {
+        static func coverImageResponse(for request: URLRequest) throws -> (
+            Data, URLResponse
+        )? {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-cover-image")
+            else { return nil }
+            guard let url = request.url,
+                let response = HTTPURLResponse(
+                    url: url, statusCode: 200, httpVersion: nil,
+                    headerFields: ["Content-Type": "image/png"]),
+                let data = Data(
+                    base64Encoded:
+                        "iVBORw0KGgoAAAANSUhEUgAAAHgAAAC0CAIAAADQLH9KAAABUklEQVR4nO3QQQkAIADAQEP4tn8ow9hCYR4swLix59KFxvODTwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINuhVo0K1Ag24FGnQr0KBbgQbdCjToVqBBtwINutUBheICeJoPc1EAAAAASUVORK5CYII="
+                )
+            else { throw URLError(.badServerResponse) }
+            return (data, response)
+        }
+
         static var opensSettingsAtLaunch: Bool {
             ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-open-settings"

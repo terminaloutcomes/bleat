@@ -260,7 +260,7 @@ struct MetadataEditorView: View {
     private var coverSection: some View {
         let hasPendingCover = pendingCoverJPEGData != nil
         Section("Cover") {
-            Group {
+            VStack(spacing: 0) {
                 if case .ready(let data) = pendingCover,
                     let image = PlatformImageSupport.image(from: data)
                 {
