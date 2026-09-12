@@ -2094,7 +2094,7 @@ Use a disposable Audiobookshelf container with a seeded library:
 
 - range seeks through `/public/session/<id>/track/<index>` near the beginning, middle, and end of a long file;
 - repeated seeking;
-- track transitions with negligible missing/duplicate audio;
+- track transitions without perceptible skipping, repetition, gap, click, or interruption;
 - HLS playback from the returned `/hls/<session-id>/output.m3u8` with relative segments and no undocumented header injection;
 - public direct-play and HLS URLs fail after their session is closed;
 - local/remote source transition;
@@ -2202,7 +2202,7 @@ The 1.0 release is acceptable only when:
 - [ ] **AC-09:** Streaming uses the current session-scoped `/public/session/` and `/hls/` routes without token query parameters or undocumented AVFoundation header options.
 - [ ] **AC-10:** Speed remains correct through pause, track change, lock, interruption, and relaunch.
 - [ ] **AC-11:** Lock Screen/Control Center/Bluetooth/AirPlay controls report the whole-book position correctly.
-- [ ] **AC-21:** Multi-file track boundaries neither skip nor repeat material beyond a documented tolerance.
+- [x] **AC-21:** Multi-file track boundaries transition without perceptible skipping, repetition, gap, click, or interruption. Manual release-client validation is recorded in [GitHub issue #32](https://github.com/terminaloutcomes/bleat/issues/32).
 - [ ] **AC-22:** Downloads continue or recover after suspension, termination, token refresh, and connectivity loss.
 - [ ] **AC-23:** Downloaded media plays while the server is offline.
 - [ ] **AC-24:** Offline sessions synchronize once and are not duplicated.
