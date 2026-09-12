@@ -29,8 +29,11 @@ remove their availability limits.
   The bounded in-memory client map defaults to 10,000 entries per pod. See
   `bleat-api/README.md` for identity, expiry, and capacity semantics. Use ingress
   or shared enforcement if an incident requires one deployment-wide limit.
-- `BLEAT_API_MAX_CONCURRENT_REQUESTS` is per pod and intentionally adds request
-  capacity as replicas are added.
+- `BLEAT_API_MAX_CONCURRENT_REQUESTS` defaults to 64 per pod. One Tower limit
+  covers all four authentication routes and immediately sheds excess requests;
+  health and readiness remain available. This in-flight bound is separate from
+  the per-client challenge quota and the database pool. Replicas have
+  independent allowances and intentionally add request capacity.
 - Each pod checks and applies SeaORM migrations before binding its listener.
   Scaling an unchanged image against an up-to-date schema is safe. Coordinate
   a schema-changing release separately; do not use replica scaling as a

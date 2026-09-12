@@ -112,12 +112,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let rateLimited = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
             transport: FakeTelemetryTransport(
-                enrollmentFailure: .rateLimited
+                enrollmentFailure: .rateLimited(retryAfterSeconds: nil)
             ),
             store: MemoryEnrollmentStore()
         )
         await rateLimited.setEnabled(true)
-        await assertThrowsTelemetryError(.rateLimited) {
+        await assertThrowsTelemetryError(.rateLimited(retryAfterSeconds: nil)) {
             try await rateLimited.currentToken()
         }
         let rateLimitedAvailability =
@@ -588,6 +588,39 @@ final class TelemetryAuthenticationTests: XCTestCase {
         XCTAssertEqual(token, "token-1")
     }
 
+    func testRateLimitRetryAfterDelaysTheNextChallengeAttempt() async {
+        let clock = TestClock(Date(timeIntervalSince1970: 2_000_000_000))
+        let transport = FakeTelemetryTransport(
+            clock: clock,
+            attestationChallengeFailures: 2,
+            attestationChallengeFailure: .rateLimited(retryAfterSeconds: 60)
+        )
+        let provider = TelemetryTokenProvider(
+            attester: FakeTelemetryAttester(),
+            transport: transport,
+            store: MemoryEnrollmentStore(),
+            dateProvider: clock.now,
+            jitterProvider: { 1 }
+        )
+        await provider.setEnabled(true)
+
+        await assertThrowsTelemetryError(.rateLimited(retryAfterSeconds: 60)) {
+            try await provider.currentToken()
+        }
+        clock.advance(by: 59.9)
+        await assertThrowsTelemetryError(.backingOff) {
+            try await provider.currentToken()
+        }
+        let firstChallengeCount = await transport.attestationChallengeCount
+        XCTAssertEqual(firstChallengeCount, 1)
+        clock.advance(by: 0.2)
+        await assertThrowsTelemetryError(.rateLimited(retryAfterSeconds: 60)) {
+            try await provider.currentToken()
+        }
+        let secondChallengeCount = await transport.attestationChallengeCount
+        XCTAssertEqual(secondChallengeCount, 2)
+    }
+
     func testErrorsContainNoChallengeKeyOrTokenMaterial() async {
         let values = TelemetryTokenProviderError.allTestValues
             .map(String.init(describing:))
@@ -642,7 +675,7 @@ extension TelemetryTokenProviderError {
     fileprivate static let allTestValues: [Self] = [
         .disabled, .unsupported, .backingOff, .cancelled,
         .invalidConfiguration, .invalidResponse, .authenticationRejected,
-        .rateLimited, .temporarilyUnavailable,
+        .rateLimited(retryAfterSeconds: nil), .temporarilyUnavailable,
     ]
 }
 
@@ -752,6 +785,8 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     private let tokenDelay: Duration?
     private let enrollmentFailure: TelemetryAuthenticationTransportError?
     private let tokenChallengeFailure: TelemetryAuthenticationTransportError?
+    private let attestationChallengeFailure:
+        TelemetryAuthenticationTransportError
     private var remainingAttestationChallengeFailures: Int
     private(set) var attestationChallengeCount = 0
     private(set) var enrollmentCount = 0
@@ -765,12 +800,15 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         tokenLifetimes: [TimeInterval] = [600],
         tokenDelay: Duration? = nil,
         attestationChallengeFailures: Int = 0,
+        attestationChallengeFailure: TelemetryAuthenticationTransportError =
+            .temporarilyUnavailable,
         enrollmentFailure: TelemetryAuthenticationTransportError? = nil,
         tokenChallengeFailure: TelemetryAuthenticationTransportError? = nil
     ) {
         self.clock = clock
         self.tokenLifetimes = tokenLifetimes
         self.tokenDelay = tokenDelay
+        self.attestationChallengeFailure = attestationChallengeFailure
         self.enrollmentFailure = enrollmentFailure
         self.tokenChallengeFailure = tokenChallengeFailure
         remainingAttestationChallengeFailures = attestationChallengeFailures
@@ -788,7 +826,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         attestationChallengeCount += 1
         if remainingAttestationChallengeFailures > 0 {
             remainingAttestationChallengeFailures -= 1
-            throw .temporarilyUnavailable
+            throw attestationChallengeFailure
         }
         return challenge(value: "attestation-challenge")
     }

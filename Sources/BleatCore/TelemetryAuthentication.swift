@@ -94,7 +94,7 @@ public enum TelemetryAuthenticationTransportError:
     case invalidConfiguration
     case cancelled
     case temporarilyUnavailable
-    case rateLimited
+    case rateLimited(retryAfterSeconds: Int?)
     case authenticationRejected
     case malformedResponse
 }
@@ -128,7 +128,7 @@ public enum TelemetryTokenProviderError: Error, Equatable, Sendable {
     case invalidConfiguration
     case invalidResponse
     case authenticationRejected
-    case rateLimited
+    case rateLimited(retryAfterSeconds: Int?)
     case temporarilyUnavailable
 }
 
@@ -292,7 +292,7 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             return .acquiring
         }
         if transientFailureCount > 0 {
-            if transientFailure == .rateLimited {
+            if case .some(.rateLimited) = transientFailure {
                 return .failed(.rateLimited)
             }
             if let nextRetryAt, nextRetryAt > dateProvider() {
@@ -404,13 +404,21 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             terminalFailure = failure
             return
         }
-        guard failure == .temporarilyUnavailable || failure == .rateLimited
-        else { return }
+        let retryAfterSeconds: Int?
+        switch failure {
+        case .temporarilyUnavailable:
+            retryAfterSeconds = nil
+        case .rateLimited(let seconds):
+            retryAfterSeconds = seconds
+        default:
+            return
+        }
         transientFailureCount = min(transientFailureCount + 1, 6)
         transientFailure = failure
         let base = min(pow(2, Double(transientFailureCount - 1)), 32)
         let jitter = min(max(jitterProvider(), 0.5), 1.5)
-        nextRetryAt = dateProvider().addingTimeInterval(base * jitter)
+        let delay = max(base * jitter, Double(retryAfterSeconds ?? 0))
+        nextRetryAt = dateProvider().addingTimeInterval(delay)
     }
 
     private static func refresh(
@@ -683,7 +691,8 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
             case .authenticationRejected: return .authenticationRejected
             case .invalidConfiguration: return .invalidConfiguration
             case .malformedResponse: return .invalidResponse
-            case .rateLimited: return .rateLimited
+            case .rateLimited(let retryAfterSeconds):
+                return .rateLimited(retryAfterSeconds: retryAfterSeconds)
             case .temporarilyUnavailable: return .temporarilyUnavailable
             }
         }

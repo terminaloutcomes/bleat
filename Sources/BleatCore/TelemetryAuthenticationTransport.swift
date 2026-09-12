@@ -156,7 +156,11 @@ public final class URLSessionTelemetryAuthenticationTransport:
             throw .malformedResponse
         }
         guard response.statusCode == expectedStatus else {
-            throw Self.error(status: response.statusCode, data: data)
+            throw Self.error(
+                status: response.statusCode,
+                data: data,
+                retryAfter: response.value(forHTTPHeaderField: "Retry-After")
+            )
         }
         do {
             return try decoder.decode(ResponseBody.self, from: data)
@@ -167,7 +171,8 @@ public final class URLSessionTelemetryAuthenticationTransport:
 
     private static func error(
         status: Int,
-        data: Data
+        data: Data,
+        retryAfter: String?
     ) -> TelemetryAuthenticationTransportError {
         let code =
             (try? JSONDecoder().decode(ErrorResponseDTO.self, from: data))?
@@ -176,12 +181,23 @@ public final class URLSessionTelemetryAuthenticationTransport:
         case (401, _), (_, "authentication_rejected"):
             return .authenticationRejected
         case (429, _), (_, "rate_limited"):
-            return .rateLimited
+            return .rateLimited(
+                retryAfterSeconds: Self.retryAfterSeconds(retryAfter)
+            )
         case (408, _), (500...599, _), (_, "temporarily_unavailable"):
             return .temporarilyUnavailable
         default:
             return .malformedResponse
         }
+    }
+
+    private static func retryAfterSeconds(_ value: String?) -> Int? {
+        guard let value,
+            let seconds = UInt64(
+                value.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        else { return nil }
+        return Int(min(seconds, 3_600))
     }
 
     private static func isValid(

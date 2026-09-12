@@ -1,8 +1,9 @@
 use std::{net::SocketAddr, sync::Arc, time::Instant};
 
 use axum::{
-    Json, Router,
+    BoxError, Json, Router,
     body::Body,
+    error_handling::HandleErrorLayer,
     extract::{
         ConnectInfo, DefaultBodyLimit, Extension, MatchedPath, State, rejection::JsonRejection,
     },
@@ -22,6 +23,7 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use tower::{ServiceBuilder, limit::GlobalConcurrencyLimitLayer, load_shed::LoadShedLayer};
 use tracing::{Instrument, debug, field, info, info_span, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
@@ -57,7 +59,6 @@ struct RequestId(Uuid);
 #[derive(Clone)]
 struct RequestLimits {
     timeout: std::time::Duration,
-    permits: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Clone)]
@@ -139,8 +140,8 @@ pub enum RouterBuildError {
 pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, RouterBuildError> {
     let limits = RequestLimits {
         timeout: config.request_timeout,
-        permits: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_requests)),
     };
+    let concurrency = GlobalConcurrencyLimitLayer::new(config.max_concurrent_requests);
     let evidence_verifier = match config.deployment_mode {
         DeploymentMode::Development => InstallationEvidenceVerifier::Development,
         DeploymentMode::Production => InstallationEvidenceVerifier::production(
@@ -219,6 +220,7 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
         .merge(apply_limits(
             protected_routes,
             limits,
+            concurrency,
             config.max_request_body_bytes,
         ))
         .layer(middleware::from_fn_with_state(
@@ -227,10 +229,21 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
         )))
 }
 
-fn apply_limits(routes: Router, limits: RequestLimits, max_request_body_bytes: usize) -> Router {
+fn apply_limits(
+    routes: Router,
+    limits: RequestLimits,
+    concurrency: GlobalConcurrencyLimitLayer,
+    max_request_body_bytes: usize,
+) -> Router {
     routes
         .layer(DefaultBodyLimit::max(max_request_body_bytes))
         .layer(middleware::from_fn_with_state(limits, enforce_limits))
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(handle_admission_error))
+                .layer(LoadShedLayer::new())
+                .layer(concurrency),
+        )
 }
 
 async fn health() -> Json<StatusBody> {
@@ -637,25 +650,31 @@ async fn enforce_limits(
         .extensions()
         .get::<RequestId>()
         .map_or_else(Uuid::new_v4, |request_id| request_id.0);
-    let permit = match Arc::clone(&limits.permits).try_acquire_owned() {
-        Ok(permit) => permit,
-        Err(_) => {
-            warn!(event.name = "request.capacity.rejected", limit.kind = "global_concurrency",
-                failure.code = "global_capacity", failure.stage = "global_admission",
-                request.id = %request_id, rejection.count = 1_u64,
-                "global request capacity exhausted");
-            return ApiError::rate_limited(request_id).into_response();
-        }
-    };
-    let operation = async move {
-        let response = next.run(request).await;
-        drop(permit);
-        response
-    };
-
-    match tokio::time::timeout(limits.timeout, operation).await {
+    match tokio::time::timeout(limits.timeout, next.run(request)).await {
         Ok(response) => response,
         Err(_) => ApiError::timed_out(request_id).into_response(),
+    }
+}
+
+async fn handle_admission_error(
+    Extension(request_id): Extension<RequestId>,
+    matched_path: Option<MatchedPath>,
+    error: BoxError,
+) -> Response {
+    let route = matched_path.as_ref().map_or("/*", MatchedPath::as_str);
+    if error.is::<tower::load_shed::error::Overloaded>() {
+        warn!(event.name = "request.capacity.rejected", timestamp = %Utc::now(),
+            limit.kind = "global_concurrency", failure.code = "global_capacity",
+            failure.stage = "global_admission", http.route = route,
+            request.id = %request_id.0, rejection.count = 1_u64,
+            "global request capacity exhausted");
+        ApiError::rate_limited(request_id.0).into_response()
+    } else {
+        warn!(event.name = "request.admission.failed", timestamp = %Utc::now(),
+            failure.code = "admission_middleware", failure.stage = "global_admission",
+            http.route = route, request.id = %request_id.0,
+            "request admission middleware failed");
+        ApiError::temporarily_unavailable(request_id.0).into_response()
     }
 }
 
@@ -813,10 +832,8 @@ mod tests {
             .route("/healthz", get(health))
             .merge(apply_limits(
                 protected,
-                RequestLimits {
-                    timeout,
-                    permits: Arc::new(tokio::sync::Semaphore::new(permits)),
-                },
+                RequestLimits { timeout },
+                GlobalConcurrencyLimitLayer::new(permits),
                 1_024,
             ))
             .layer(middleware::from_fn_with_state(

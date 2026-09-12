@@ -40,8 +40,8 @@ fn admission_router(
             challenges,
             RequestLimits {
                 timeout: Duration::from_secs(1),
-                permits: Arc::clone(&permits),
             },
+            GlobalConcurrencyLimitLayer::with_semaphore(Arc::clone(&permits)),
             1024,
         ))
         .layer(middleware::from_fn_with_state(trusted, instrument_request));
@@ -81,6 +81,104 @@ async fn error_body(response: Response, code: &str) {
             .expect("message")
             .parse::<std::net::IpAddr>()
             .is_err()
+    );
+}
+
+#[derive(Clone)]
+struct HeldHandler {
+    entered: tokio::sync::mpsc::UnboundedSender<()>,
+    release: Arc<tokio::sync::Semaphore>,
+}
+
+async fn held_handler(State(state): State<HeldHandler>) -> StatusCode {
+    state.entered.send(()).expect("test receiver should exist");
+    let _permit = state
+        .release
+        .acquire()
+        .await
+        .expect("test gate should be open");
+    StatusCode::NO_CONTENT
+}
+
+#[tokio::test]
+async fn global_capacity_is_shared_across_authentication_routes_and_router_clones() {
+    let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
+    let (entered, mut arrivals) = tokio::sync::mpsc::unbounded_channel();
+    let release = Arc::new(tokio::sync::Semaphore::new(0));
+    let state = HeldHandler {
+        entered,
+        release: Arc::clone(&release),
+    };
+    let protected = Router::new()
+        .route("/v1/attestation/challenge", post(held_handler))
+        .route("/v1/token/challenge", post(held_handler))
+        .route("/v1/attestation/enroll", post(held_handler))
+        .route("/v1/token", post(held_handler))
+        .with_state(state);
+    let router = Router::new()
+        .route("/healthz", get(health))
+        .route("/readyz", get(|| async { StatusCode::OK }))
+        .merge(apply_limits(
+            protected,
+            RequestLimits {
+                timeout: Duration::from_secs(5),
+            },
+            GlobalConcurrencyLimitLayer::new(2),
+            1024,
+        ))
+        .layer(middleware::from_fn_with_state(
+            no_forwarding(),
+            instrument_request,
+        ));
+
+    let first_router = router.clone();
+    let first = tokio::spawn(async move {
+        first_router
+            .oneshot(request("/v1/attestation/challenge", None, &[]))
+            .await
+            .expect("first response")
+    });
+    arrivals.recv().await.expect("first handler should enter");
+    let second_router = router.clone();
+    let second = tokio::spawn(async move {
+        second_router
+            .oneshot(request("/v1/attestation/enroll", None, &[]))
+            .await
+            .expect("second response")
+    });
+    arrivals.recv().await.expect("second handler should enter");
+
+    for route in ["/v1/token/challenge", "/v1/token"] {
+        let response = tokio::time::timeout(
+            Duration::from_millis(250),
+            router.clone().oneshot(request(route, None, &[])),
+        )
+        .await
+        .expect("saturation should shed without waiting")
+        .expect("saturation response");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        error_body(response, "global_capacity").await;
+    }
+    for route in ["/healthz", "/readyz"] {
+        assert_eq!(
+            router
+                .clone()
+                .oneshot(Request::get(route).body(Body::empty()).expect("request"))
+                .await
+                .expect("health response")
+                .status(),
+            StatusCode::OK
+        );
+    }
+
+    release.add_permits(2);
+    assert_eq!(
+        first.await.expect("first task").status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        second.await.expect("second task").status(),
+        StatusCode::NO_CONTENT
     );
 }
 

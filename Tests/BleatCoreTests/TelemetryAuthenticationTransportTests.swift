@@ -188,6 +188,62 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
             XCTAssertFalse(String(describing: error).contains("sensitive"))
         }
     }
+
+    func testRateLimitAndCapacityResponsesMapToTransientTypedErrors()
+        async throws
+    {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TelemetryURLProtocolStub.self]
+        let transport = try URLSessionTelemetryAuthenticationTransport(
+            baseURL: XCTUnwrap(URL(string: "https://auth.example")),
+            configuration: configuration
+        )
+        defer { TelemetryURLProtocolStub.setHandler(nil) }
+
+        let cases:
+            [(Int, String, String?, TelemetryAuthenticationTransportError)] = [
+                (
+                    429, "rate_limited", "60",
+                    .rateLimited(retryAfterSeconds: 60)
+                ),
+                (
+                    429, "rate_limited", "invalid",
+                    .rateLimited(retryAfterSeconds: nil)
+                ),
+                (
+                    429, "rate_limited", "7200",
+                    .rateLimited(retryAfterSeconds: 3_600)
+                ),
+                (503, "global_capacity", nil, .temporarilyUnavailable),
+                (503, "limiter_capacity", nil, .temporarilyUnavailable),
+            ]
+        for (status, code, retryAfter, expected) in cases {
+            TelemetryURLProtocolStub.setHandler { request in
+                var headers = ["Content-Type": "application/json"]
+                if let retryAfter { headers["Retry-After"] = retryAfter }
+                return (
+                    HTTPURLResponse(
+                        url: request.url ?? URL(fileURLWithPath: "/"),
+                        statusCode: status,
+                        httpVersion: "HTTP/1.1",
+                        headerFields: headers
+                    )!,
+                    Data(
+                        """
+                        {"error":{"code":"\(code)","message":"sensitive server detail"}}
+                        """.utf8
+                    )
+                )
+            }
+            do {
+                _ = try await transport.attestationChallenge()
+                XCTFail("rejected request unexpectedly succeeded")
+            } catch let error {
+                XCTAssertEqual(error, expected)
+                XCTAssertFalse(String(describing: error).contains("sensitive"))
+            }
+        }
+    }
 }
 
 private final class TelemetryURLProtocolRecorder: @unchecked Sendable {
