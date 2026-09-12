@@ -12,7 +12,8 @@ Add a row before implementing a requirement and retain its ID for the life of
 the project.
 
 Status values are `not-started`, `in-progress`, `implemented`, and `verified`.
-“Verified” means the listed automated test currently passes.
+“Verified” means the listed automated test currently passes, or a requirement
+explicitly designated for manual validation has recorded release evidence.
 `OIDC-001` through `OIDC-006` cover the protocol and browser-session
 invariants. Application integration and the live provider matrix are tracked
 by `APP-OIDC-001` and [GitHub issue #2](https://github.com/terminaloutcomes/bleat/issues/2).
@@ -239,7 +240,7 @@ other rows map section 22 release criteria.
 | AC-18 | Post-1.0 statistics export/import is redacted and idempotent | [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | not-started |
 | AC-19 | Ambiguous synchronization remains visibly approximate without altering the exact local ledger | `StatisticsSessionAccountingRecord`, `StatisticsView` | implemented |
 | AC-20 | Online synchronization sends only the new listening delta | `StatisticsRepository.pendingRealSeconds`, `PlaybackModel.syncProgress` | implemented |
-| AC-21 | Multi-file boundaries stay within a documented measured tolerance | Functional transition coverage exists; measured boundary evidence is tracked in [GitHub issue #32](https://github.com/terminaloutcomes/bleat/issues/32) | implemented |
+| AC-21 | Multi-file boundaries transition without perceptible skipping, repetition, gaps, clicks, or interruption | Functional transition coverage exists; manual release-client validation recorded in [GitHub issue #32](https://github.com/terminaloutcomes/bleat/issues/32) found no perceptible boundary defect | verified |
 | AC-22 | Downloads recover after suspension, termination, token refresh, and connectivity loss | `DOWNLOAD-002` through `DOWNLOAD-007`, focused `AppModelTests`, the disposable app-live 401 fault, and the completed [physical-device download recovery record](release-evidence/download-recovery.md) | verified |
 | AC-23 | Downloaded media plays while the server is offline | `APP-DOWNLOAD-001`, `BleatLiveUITests.testLiveOfflineCachedDownloadAndLocalProgress` | verified |
 | AC-24 | Offline sessions synchronize exactly once | `APP-OFFLINE-SESSION-001`, `PLAYBACK-006` | verified |
