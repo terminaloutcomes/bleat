@@ -1874,7 +1874,9 @@ authentication routes and never consumes client quota. Health and readiness
 bypass that allowance. Restarts reset quota and replicas
 enforce independently; quota, client-map capacity, and global capacity have
 distinct typed responses. Operational settings and expiry semantics are
-documented in `bleat-api/README.md`. Installations use
+documented in `bleat-api/README.md`. The Swift telemetry client treats 429 and
+503 capacity responses as transient and waits at least the bounded 429
+`Retry-After` delta-seconds before another authentication attempt. Installations use
 opaque UUIDs and retain the App Attest key identifier, 65-byte P-256 public key,
 typed App Attest environment, active or disabled status, monotonic assertion
 counter, and timestamps. Challenge responses contain 32 random bytes encoded as
