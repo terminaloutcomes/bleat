@@ -1869,7 +1869,9 @@ challenge state in PostgreSQL through typed ORM statements. Challenge issuance
 uses one bounded, in-memory Governor quota per canonical IPv4 address or IPv6
 /64 across both challenge routes. Trusted forwarding resolution precedes
 admission; absent connection identity uses global concurrency alone. Global
-saturation never consumes client quota. Restarts reset quota and replicas
+saturation is immediately shed by one shared Tower allowance across the four
+authentication routes and never consumes client quota. Health and readiness
+bypass that allowance. Restarts reset quota and replicas
 enforce independently; quota, client-map capacity, and global capacity have
 distinct typed responses. Operational settings and expiry semantics are
 documented in `bleat-api/README.md`. Installations use

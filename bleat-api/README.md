@@ -377,6 +377,15 @@ an admission. Rate and burst must each be 1–100,000, and maximum client entrie
 must be 1–1,000,000. Defaults retain the previous 600 allowance as an explicit
 burst of 600, with a sustained rate of 600/minute **per client**.
 
+Tower shares one global concurrency allowance across all four authentication
+routes and their service clones. Load shedding rejects a request immediately
+when all slots are occupied; it does not wait for a slot or consume client
+quota. The default 64 in-flight requests is a resource bound for the four
+routes, separate from the per-client rate and the default 16-connection
+database pool. It applies per process, so each replica has its own 64 slots.
+Startup logs report the configured bound, active Tower load shedding, and that
+client admission applies when a client address can be resolved.
+
 This intentionally replaces the application-wide fixed minute window with
 continuously replenishing GCRA admission. For illustration only, 60/minute
 with burst 10 allows ten immediate requests and replenishes one per second;
