@@ -8626,11 +8626,20 @@ final class AppModelTests: XCTestCase {
             account: nil,
             initialTime: 0.5
         )
+        let serverProgress = LibraryBookProgress(
+            id: "progress", userID: UserID(rawValue: "user"),
+            libraryItemID: fixture.detail.id, bookID: fixture.detail.bookID,
+            duration: 3_600, progress: 0.96, currentTime: 3_456.25,
+            isFinished: false, hideFromContinueListening: false,
+            lastUpdateMilliseconds: 1, startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil
+        )
 
         XCTAssertEqual(
             playback.transcriptNavigationPosition(
                 accountID: fixture.accountID,
-                itemID: fixture.detail.id
+                itemID: fixture.detail.id,
+                serverProgress: (fixture.accountID, serverProgress)
             ),
             .active(0.5)
         )
