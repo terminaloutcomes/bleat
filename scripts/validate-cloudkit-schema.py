@@ -43,9 +43,7 @@ FIELD_PATTERN = re.compile(
     r"([A-Z]+(?:<[A-Z0-9]+>)?)"
     r"((?:\s+(?:QUERYABLE|SORTABLE|SEARCHABLE))*)\s*,?\s*$"
 )
-GRANT_PATTERN = re.compile(
-    r'^\s*GRANT\s+(READ|CREATE|WRITE)\s+TO\s+"([^"]+)"\s*,?\s*$'
-)
+GRANT_PATTERN = re.compile(r'^\s*GRANT\s+(READ|CREATE|WRITE)\s+TO\s+"([^"]+)"\s*,?\s*$')
 SOURCE_RECORD_PATTERNS = (
     re.compile(r'\btype:\s*"([A-Z][A-Za-z0-9_]*)"'),
     re.compile(r'\brecordType:\s*"([A-Z][A-Za-z0-9_]*)"'),
@@ -66,9 +64,7 @@ FORBIDDEN_DATABASE_ACCESS_PATTERNS = (
     (re.compile(r"\.publicCloudDatabase\b"), "publicCloudDatabase"),
     (re.compile(r"\.sharedCloudDatabase\b"), "sharedCloudDatabase"),
     (
-        re.compile(
-            r"\.database\s*\(\s*with:\s*\.(?:public|shared)\b"
-        ),
+        re.compile(r"\.database\s*\(\s*with:\s*\.(?:public|shared)\b"),
         "database(with: public/shared)",
     ),
 )
@@ -148,8 +144,7 @@ def validate_desired_schema(schema: str, source: str) -> dict[str, RecordType]:
     code_types = source_record_types(source)
     if missing := code_types - desired_types:
         raise SchemaValidationFailure(
-            "CloudKit/Bleat.ckdb is missing code record types: "
-            + format_names(missing)
+            f"CloudKit/Bleat.ckdb is missing code record types: {format_names(missing)}"
         )
     if unused := desired_types - code_types:
         raise SchemaValidationFailure(
@@ -227,7 +222,11 @@ def main() -> int:
     except (OSError, UnicodeError, SchemaValidationFailure) as error:
         print(f"CloudKit schema validation failed: {error}", file=sys.stderr)
         return 1
-    scope = "desired and production schemas" if arguments.require_production else "desired schema"
+    scope = (
+        "desired and production schemas"
+        if arguments.require_production
+        else "desired schema"
+    )
     print(f"CloudKit {scope} validated.")
     return 0
 

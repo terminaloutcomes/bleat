@@ -1,9 +1,8 @@
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
-
+from pathlib import Path
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "scan-release-secrets.py"
 SPEC = importlib.util.spec_from_file_location("scan_release_secrets", SCRIPT)
@@ -37,10 +36,7 @@ class ReleaseSecretScannerTests(unittest.TestCase):
             {"fixture": secret},
         )
         self.assertTrue(
-            any(
-                finding[1] == "json-ascii-uppercase-slashes"
-                for finding in findings
-            )
+            any(finding[1] == "json-ascii-uppercase-slashes" for finding in findings)
         )
 
     def test_lowercase_and_mixed_case_percent_escaping_is_detected(self):
@@ -68,17 +64,13 @@ class ReleaseSecretScannerTests(unittest.TestCase):
     def test_private_server_artifact_is_redacted_before_scanning(self):
         secret = "private-refresh-token-0123456789"
         original = f"refreshToken: '{secret}'".encode()
-        redacted, redactions = SCANNER.redact_bytes(
-            original, {"refresh-token": secret}
-        )
+        redacted, redactions = SCANNER.redact_bytes(original, {"refresh-token": secret})
         self.assertNotIn(secret.encode(), redacted)
         self.assertEqual(
             redactions,
             [("refresh-token", "raw-utf8", 1)],
         )
-        self.assertEqual(
-            SCANNER.scan_bytes(redacted, {"refresh-token": secret}), []
-        )
+        self.assertEqual(SCANNER.scan_bytes(redacted, {"refresh-token": secret}), [])
 
     def test_token_query_parameters_are_detected_without_a_sentinel(self):
         self.assertEqual(

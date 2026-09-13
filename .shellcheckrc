@@ -1,0 +1,2 @@
+# disable the "we can't check zsh" check SC1071
+disable=SC1071

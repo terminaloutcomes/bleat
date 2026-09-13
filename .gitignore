@@ -14,8 +14,7 @@ TestSupport/ServerHarness/state/
 TestSupport/ServerHarness/app-live-artifacts/
 TestSupport/ServerHarness/media-large/
 build/
-bleat-api/target
-/bleat-api/target/
+**/target/
 
 # test harness files
 TestSupport/ServerHarness/media-large/*

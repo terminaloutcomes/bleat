@@ -13,7 +13,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 SCRIPT_PATH = Path(__file__).with_name("validate-cloudkit-schema.py")
 SPEC = importlib.util.spec_from_file_location("validate_cloudkit_schema", SCRIPT_PATH)
 if SPEC is None or SPEC.loader is None:
@@ -27,12 +26,12 @@ def schema(*record_types: str) -> str:
     records = []
     for record_type in record_types:
         records.append(
-            f'''RECORD TYPE {record_type} (
+            f"""RECORD TYPE {record_type} (
                 payload BYTES QUERYABLE SORTABLE,
                 GRANT WRITE TO "_creator",
                 GRANT CREATE TO "_icloud",
                 GRANT READ TO "_world"
-            );'''
+            );"""
         )
     return "DEFINE SCHEMA\n" + "\n".join(records)
 
@@ -40,10 +39,7 @@ def schema(*record_types: str) -> str:
 class CloudKitSchemaValidatorTests(unittest.TestCase):
     def test_private_database_access_policy_accepts_private_scope(self) -> None:
         VALIDATOR.validate_private_database_access(
-            {
-                "Sources/Sync.swift":
-                    "let database = container.privateCloudDatabase"
-            }
+            {"Sources/Sync.swift": "let database = container.privateCloudDatabase"}
         )
 
     def test_private_database_access_policy_rejects_public_scope(self) -> None:
@@ -52,10 +48,7 @@ class CloudKitSchemaValidatorTests(unittest.TestCase):
             "production CloudKit access must remain private-only",
         ):
             VALIDATOR.validate_private_database_access(
-                {
-                    "Sources/Sync.swift":
-                        "let database = container.publicCloudDatabase"
-                }
+                {"Sources/Sync.swift": "let database = container.publicCloudDatabase"}
             )
 
     def test_matching_code_and_schema_are_valid(self) -> None:
@@ -72,8 +65,7 @@ class CloudKitSchemaValidatorTests(unittest.TestCase):
         ):
             VALIDATOR.validate_desired_schema(
                 schema("Configuration"),
-                'record(type: "Configuration")\n'
-                'record(type: "RemoteListeningSession")',
+                'record(type: "Configuration")\nrecord(type: "RemoteListeningSession")',
             )
 
     def test_invalid_payload_contract_is_rejected(self) -> None:
@@ -94,8 +86,7 @@ class CloudKitSchemaValidatorTests(unittest.TestCase):
         desired_text = schema("Configuration", "RemoteListeningSession")
         desired = VALIDATOR.validate_desired_schema(
             desired_text,
-            'record(type: "Configuration")\n'
-            'record(type: "RemoteListeningSession")',
+            'record(type: "Configuration")\nrecord(type: "RemoteListeningSession")',
         )
         with self.assertRaisesRegex(
             VALIDATOR.SchemaValidationFailure,

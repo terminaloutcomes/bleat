@@ -2,7 +2,6 @@
 import json
 import os
 import sys
-from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -35,7 +34,7 @@ def request(
     path: str,
     token: str,
     timeout: float,
-    body: Optional[str] = None,
+    body: str | None = None,
 ) -> tuple[int, str]:
     headers = {"Accept": "application/json"}
     if token:
@@ -134,7 +133,7 @@ class MCPClient:
             raise RuntimeError(f"MCP tool reported failure: {name}")
         content = result.get("content")
         if not isinstance(content, list):
-            raise RuntimeError(f"MCP tool returned no content: {name}")
+            raise TypeError(f"MCP tool returned no content: {name}")
         return content
 
 
@@ -196,7 +195,7 @@ def main(arguments: list[str]) -> int:
     command, *values = arguments
     method: str
     path: str
-    body: Optional[str] = None
+    body: str | None = None
     if command == "health":
         if values:
             return fail("health does not accept arguments")

@@ -115,7 +115,7 @@ if [[ "$(plutil -extract BleatTelemetryAuthenticationBaseURL raw "${bleat_app_in
     exit 1
 fi
 
-python3 "${bleat_script_dir}/inspect-release-archive.py" \
+"${bleat_script_dir}/inspect-release-archive.py" \
     --archive "${bleat_archive_path}" \
     --carplay-mode "${BLEAT_CARPLAY_MODE:-disabled}" \
     --package-resolution \

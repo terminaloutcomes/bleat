@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 
@@ -52,14 +52,14 @@ def main() -> int:
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response)
-            self.server.delivered = True  # type: ignore[attr-defined]
+            self.server.delivered = True  # ty: ignore[unresolved-attribute]
 
         def log_message(self, format: str, *args: object) -> None:
             return
 
     server = HTTPServer(("127.0.0.1", args.port), Handler)
-    server.delivered = False  # type: ignore[attr-defined]
-    while not server.delivered:  # type: ignore[attr-defined]
+    server.delivered = False  # ty: ignore[unresolved-attribute]
+    while not server.delivered:  # ty: ignore[unresolved-attribute]
         server.handle_request()
     server.server_close()
     return 0

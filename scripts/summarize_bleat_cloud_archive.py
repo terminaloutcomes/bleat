@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Usage:
 #   python3 scripts/summarize_bleat_cloud_archive.py
 #
@@ -71,7 +73,7 @@ def summary(value):
     if isinstance(value, dict):
         if set(value) == {"NS.time"} and isinstance(value["NS.time"], (int, float)):
             timestamp = datetime.datetime(
-                2001, 1, 1, tzinfo=datetime.timezone.utc
+                2001, 1, 1, tzinfo=datetime.UTC
             ) + datetime.timedelta(seconds=value["NS.time"])
             return f"date={timestamp.isoformat()}"
         return f"dictionary_count={len(value)}"
