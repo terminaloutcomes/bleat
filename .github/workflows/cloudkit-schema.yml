@@ -29,10 +29,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: "Set up empty env"
+        run: "touch .envrc"
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
 
       - name: Test schema validator
-        run: uv run  scripts/test-cloudkit-schema-validator.py
+        run: uv run scripts/test-cloudkit-schema-validator.py
 
       - name: Validate desired and production schemas
-        run: uv run  scripts/validate-cloudkit-schema.py --require-production
+        run: uv run scripts/validate-cloudkit-schema.py --require-production
