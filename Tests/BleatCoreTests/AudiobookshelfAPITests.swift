@@ -16,32 +16,40 @@ final class AudiobookshelfAPITests: XCTestCase {
         let result = try await fixture.api.listeningSessions(page: 0)
         let requests = await fixture.transport.recordedRequests()
         let request = try XCTUnwrap(requests.first)
-        let components = try XCTUnwrap(URLComponents(
-            url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false
-        ))
-        XCTAssertEqual(components.path, "/audiobookshelf/api/me/listening-sessions")
-        XCTAssertEqual(components.queryItems, [
-            URLQueryItem(name: "itemsPerPage", value: "500"),
-            URLQueryItem(name: "page", value: "0"),
-        ])
+        let components = try XCTUnwrap(
+            URLComponents(
+                url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false
+            ))
+        XCTAssertEqual(
+            components.path, "/audiobookshelf/api/me/listening-sessions")
+        XCTAssertEqual(
+            components.queryItems,
+            [
+                URLQueryItem(name: "itemsPerPage", value: "500"),
+                URLQueryItem(name: "page", value: "0"),
+            ])
         XCTAssertEqual(result.value.total, 2)
         XCTAssertEqual(result.value.sessions.count, 1)
-        XCTAssertEqual(result.value.sessions.first?.itemID.rawValue, "book-item-1")
+        XCTAssertEqual(
+            result.value.sessions.first?.itemID.rawValue, "book-item-1")
         XCTAssertEqual(result.value.sessions.first?.realSeconds, 60)
     }
 
     func testListeningSessionsRootHostedRoute() async throws {
         let fixture = try APIFixture(
-            responses: [HTTPResponse(
-                data: try Self.fixture(named: "listening-sessions-page"),
-                statusCode: 200
-            )],
+            responses: [
+                HTTPResponse(
+                    data: try Self.fixture(named: "listening-sessions-page"),
+                    statusCode: 200
+                )
+            ],
             serverAddress: "https://example.com"
         )
         _ = try await fixture.api.listeningSessions(page: 0)
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertEqual(requests.first?.url?.path,
-                       "/api/me/listening-sessions")
+        XCTAssertEqual(
+            requests.first?.url?.path,
+            "/api/me/listening-sessions")
     }
 
     func testBookDetailUsesNativeAccountAndMapsExpandedContract()

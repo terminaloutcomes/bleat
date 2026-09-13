@@ -168,9 +168,10 @@ final class StatisticsTests: XCTestCase {
             chapterStart: nil, chapterEnd: nil,
             title: "Example", author: "Reader", duration: 100
         )
-        try await repository.importArchive(StatisticsArchive(
-            slices: [slice], completions: [], remoteSessions: []
-        ))
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: [slice], completions: [], remoteSessions: []
+            ))
         try await repository.confirmSync(
             accountID: accountID, sessionID: sessionID, realSeconds: 4
         )
@@ -205,9 +206,10 @@ final class StatisticsTests: XCTestCase {
             title: "Example", author: "Reader"
         )
         do {
-            try await repository.importArchive(StatisticsArchive(
-                slices: [], completions: [], remoteSessions: [invalid]
-            ))
+            try await repository.importArchive(
+                StatisticsArchive(
+                    slices: [], completions: [], remoteSessions: [invalid]
+                ))
             XCTFail("Invalid archive should fail")
         } catch let error {
             XCTAssertEqual(error, .invalidArchive)
@@ -231,10 +233,12 @@ final class StatisticsTests: XCTestCase {
         try await repository.upsertRemoteSessions([remote])
         let portable = try await repository.archive().portableRedacted()
         let json = try JSONEncoder().encode(portable)
-        XCTAssertFalse(String(decoding: json, as: UTF8.self)
-            .contains(rawSession.rawValue))
-        XCTAssertTrue(portable.remoteSessions[0].id.rawValue
-            .hasPrefix("portable:"))
+        XCTAssertFalse(
+            String(decoding: json, as: UTF8.self)
+                .contains(rawSession.rawValue))
+        XCTAssertTrue(
+            portable.remoteSessions[0].id.rawValue
+                .hasPrefix("portable:"))
         try await repository.importArchive(portable)
         try await repository.importArchive(portable)
         let result = try await repository.archive()
@@ -269,19 +273,21 @@ final class StatisticsTests: XCTestCase {
                 author: "Reader", duration: 100
             )
         }
-        try await repository.importArchive(StatisticsArchive(
-            slices: slices, completions: [], remoteSessions: []
-        ))
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: slices, completions: [], remoteSessions: []
+            ))
         for session in [sessionID, otherSession] {
             try await repository.confirmSync(
                 accountID: accountID, sessionID: session,
                 realSeconds: 10
             )
         }
-        try await repository.reset(query: StatisticsQuery(
-            accountID: accountID, start: early,
-            end: early.addingTimeInterval(86_400)
-        ))
+        try await repository.reset(
+            query: StatisticsQuery(
+                accountID: accountID, start: early,
+                end: early.addingTimeInterval(86_400)
+            ))
         let pending = try await repository.pendingRealSeconds(
             accountID: accountID, sessionID: otherSession
         )
@@ -307,17 +313,19 @@ final class StatisticsTests: XCTestCase {
                 author: "Reader", duration: 100
             )
         }
-        try await repository.importArchive(StatisticsArchive(
-            slices: slices, completions: [], remoteSessions: []
-        ))
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: slices, completions: [], remoteSessions: []
+            ))
         try await repository.confirmSync(
             accountID: accountID, sessionID: sessionID,
             realSeconds: 10
         )
         do {
-            try await repository.reset(query: StatisticsQuery(
-                accountID: accountID, start: early, end: later
-            ))
+            try await repository.reset(
+                query: StatisticsQuery(
+                    accountID: accountID, start: early, end: later
+                ))
             XCTFail("Expected an ambiguous split-session reset to be rejected")
         } catch let error {
             XCTAssertEqual(error, .partialSessionResetRequiresFullSession)
@@ -331,7 +339,8 @@ final class StatisticsTests: XCTestCase {
     }
 
     func testRangeResetRejectsMixedConfirmedAndUncertainSplitSession()
-        async throws {
+        async throws
+    {
         let repository = try repository()
         let early = Date(timeIntervalSince1970: 9_000)
         let later = early.addingTimeInterval(86_400)
@@ -348,9 +357,10 @@ final class StatisticsTests: XCTestCase {
                 author: "Reader", duration: 100
             )
         }
-        try await repository.importArchive(StatisticsArchive(
-            slices: slices, completions: [], remoteSessions: []
-        ))
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: slices, completions: [], remoteSessions: []
+            ))
         try await repository.markSyncUncertain(
             accountID: accountID, sessionID: sessionID, realSeconds: 10
         )
@@ -358,10 +368,11 @@ final class StatisticsTests: XCTestCase {
             accountID: accountID, sessionID: sessionID, realSeconds: 10
         )
         do {
-            try await repository.reset(query: StatisticsQuery(
-                accountID: accountID, start: later,
-                end: later.addingTimeInterval(86_400)
-            ))
+            try await repository.reset(
+                query: StatisticsQuery(
+                    accountID: accountID, start: later,
+                    end: later.addingTimeInterval(86_400)
+                ))
             XCTFail("Expected an ambiguous split-session reset to be rejected")
         } catch let error {
             XCTAssertEqual(error, .partialSessionResetRequiresFullSession)
@@ -387,17 +398,19 @@ final class StatisticsTests: XCTestCase {
                 author: "Reader", duration: 100
             )
         }
-        try await repository.importArchive(StatisticsArchive(
-            slices: slices, completions: [], remoteSessions: []
-        ))
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: slices, completions: [], remoteSessions: []
+            ))
         try await repository.confirmSync(
             accountID: accountID, sessionID: sessionID, realSeconds: 10
         )
         do {
-            try await repository.reset(query: StatisticsQuery(
-                accountID: accountID, start: later,
-                end: later.addingTimeInterval(86_400)
-            ))
+            try await repository.reset(
+                query: StatisticsQuery(
+                    accountID: accountID, start: later,
+                    end: later.addingTimeInterval(86_400)
+                ))
             XCTFail("Expected a split-session reset to be rejected")
         } catch let error {
             XCTAssertEqual(error, .partialSessionResetRequiresFullSession)

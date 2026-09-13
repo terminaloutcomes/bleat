@@ -1937,9 +1937,11 @@ final class AppModel {
             )
             await loadLibraries()
             await loadStatistics()
-            Task { await self.refreshStatisticsHistory(
-                force: false, targetAccountID: restoredAccount.id
-            ) }
+            Task {
+                await self.refreshStatisticsHistory(
+                    force: false, targetAccountID: restoredAccount.id
+                )
+            }
             startLiveUpdates(for: restoredAccount)
             await diagnostics.record(
                 .completed(.appStart, category: .app)
@@ -2029,9 +2031,11 @@ final class AppModel {
             schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
-            Task { await self.refreshStatisticsHistory(
-                force: false, targetAccountID: authenticatedAccount.id
-            ) }
+            Task {
+                await self.refreshStatisticsHistory(
+                    force: false, targetAccountID: authenticatedAccount.id
+                )
+            }
             await synchronizePrivateCloud()
             startLiveUpdates(for: authenticatedAccount)
             telemetryOutcome = .succeeded
@@ -2074,9 +2078,11 @@ final class AppModel {
             await downloads.start(account: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
-            Task { await self.refreshStatisticsHistory(
-                force: false, targetAccountID: authenticatedAccount.id
-            ) }
+            Task {
+                await self.refreshStatisticsHistory(
+                    force: false, targetAccountID: authenticatedAccount.id
+                )
+            }
             startLiveUpdates(for: authenticatedAccount)
             await diagnostics.record(.completed(.login, category: .auth))
             return true
@@ -2132,9 +2138,11 @@ final class AppModel {
             loginStatus = .idle
             await loadLibraries()
             await loadStatistics()
-            Task { await self.refreshStatisticsHistory(
-                force: false, targetAccountID: authenticated.id
-            ) }
+            Task {
+                await self.refreshStatisticsHistory(
+                    force: false, targetAccountID: authenticated.id
+                )
+            }
             startLiveUpdates(for: authenticated)
             return true
         } catch let error {
@@ -5092,7 +5100,8 @@ final class AppModel {
         }
         statistics = .loading
         statisticsExploration = .loading
-        let effectiveQuery = statisticsQuery
+        let effectiveQuery =
+            statisticsQuery
             ?? StatisticsQuery(accountID: account?.id)
         do {
             let summary = try await service.statisticsSummary(
@@ -5109,8 +5118,10 @@ final class AppModel {
                         && statisticsHistoryProgress[$0.id]?
                             .lastCompletedAt == nil)
             }
-            statistics = .loaded(stale ? summary.withCoverage(.stale)
-                                        : summary)
+            statistics = .loaded(
+                stale
+                    ? summary.withCoverage(.stale)
+                    : summary)
         } catch let error {
             statistics = .failed(
                 AppFailure(
@@ -5124,9 +5135,10 @@ final class AppModel {
                 try await service.statisticsExploration(query: effectiveQuery)
             )
         } catch let error {
-            statisticsExploration = .failed(AppFailure(
-                operation: .loadStatistics, serviceError: error
-            ))
+            statisticsExploration = .failed(
+                AppFailure(
+                    operation: .loadStatistics, serviceError: error
+                ))
         }
     }
 
@@ -5141,7 +5153,8 @@ final class AppModel {
                     )
                 for account in self.accounts {
                     if let progress = try? await self.service
-                        .statisticsHistoryProgress(for: account.id) {
+                        .statisticsHistoryProgress(for: account.id)
+                    {
                         self.statisticsHistoryProgress[account.id] = progress
                     }
                 }
@@ -5156,8 +5169,10 @@ final class AppModel {
         statisticsLiveSlice = nil
     }
 
-    func refreshStatisticsHistory(force: Bool,
-                                  targetAccountID: AccountID? = nil) async {
+    func refreshStatisticsHistory(
+        force: Bool,
+        targetAccountID: AccountID? = nil
+    ) async {
         statisticsHistoryFailure = nil
         let selected = targetAccountID ?? statisticsQuery?.accountID
         for target in accounts where selected == nil || selected == target.id {
@@ -5177,8 +5192,10 @@ final class AppModel {
         await loadStatistics()
     }
 
-    func exportStatistics(for account: ServerAccount,
-                          query: StatisticsQuery) async -> Data? {
+    func exportStatistics(
+        for account: ServerAccount,
+        query: StatisticsQuery
+    ) async -> Data? {
         statisticsArchiveFailure = nil
         do {
             return try await service.exportStatistics(
@@ -5199,8 +5216,10 @@ final class AppModel {
     }
 
     @discardableResult
-    func importStatistics(_ data: Data,
-                          for account: ServerAccount) async -> Bool {
+    func importStatistics(
+        _ data: Data,
+        for account: ServerAccount
+    ) async -> Bool {
         statisticsArchiveFailure = nil
         do {
             try await service.importStatistics(data, for: account)
@@ -5410,9 +5429,11 @@ final class AppModel {
             await downloads.start(account: authenticated)
             await loadLibraries()
             await loadStatistics()
-            Task { await self.refreshStatisticsHistory(
-                force: false, targetAccountID: authenticated.id
-            ) }
+            Task {
+                await self.refreshStatisticsHistory(
+                    force: false, targetAccountID: authenticated.id
+                )
+            }
             startLiveUpdates(for: authenticated)
             return true
         } catch let error {

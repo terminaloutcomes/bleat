@@ -4916,9 +4916,10 @@ private struct StatisticsView: View {
     @Bindable var model: AppModel
     @State private var selectedAccountID: AccountID?
     @State private var range: StatisticsRange = .lifetime
-    @State private var customStart = Calendar.current.date(
-        byAdding: .month, value: -1, to: Date()
-    ) ?? Date()
+    @State private var customStart =
+        Calendar.current.date(
+            byAdding: .month, value: -1, to: Date()
+        ) ?? Date()
     @State private var customEnd = Date()
     @State private var exportDocument: StatisticsJSONDocument?
     @State private var exporting = false
@@ -4933,15 +4934,18 @@ private struct StatisticsView: View {
         let start: Date?
         switch range {
         case .lifetime: start = nil
-        case .week: start = Calendar.current.date(
-            byAdding: .day, value: -7, to: Date()
-        )
-        case .month: start = Calendar.current.date(
-            byAdding: .day, value: -30, to: Date()
-        )
+        case .week:
+            start = Calendar.current.date(
+                byAdding: .day, value: -7, to: Date()
+            )
+        case .month:
+            start = Calendar.current.date(
+                byAdding: .day, value: -30, to: Date()
+            )
         case .custom: start = Calendar.current.startOfDay(for: customStart)
         }
-        let end = range == .custom
+        let end =
+            range == .custom
             ? Calendar.current.date(
                 byAdding: .day, value: 1,
                 to: Calendar.current.startOfDay(for: customEnd)
@@ -4978,29 +4982,36 @@ private struct StatisticsView: View {
                             }
                         }
                         if range == .custom {
-                            DatePicker("From", selection: $customStart,
-                                       displayedComponents: .date)
-                            DatePicker("Through", selection: $customEnd,
-                                       in: customStart..., displayedComponents: .date)
+                            DatePicker(
+                                "From", selection: $customStart,
+                                displayedComponents: .date)
+                            DatePicker(
+                                "Through", selection: $customEnd,
+                                in: customStart..., displayedComponents: .date)
                         }
                     }
                     Section {
                         LabeledContent(
                             "Time Listening",
-                            value: duration(summary.realSeconds + liveRealSeconds)
+                            value: duration(
+                                summary.realSeconds + liveRealSeconds)
                         )
-                        .accessibilityLabel("Time listening, \(range.title), \(scopeLabel), \(coverageLabel(summary))")
+                        .accessibilityLabel(
+                            "Time listening, \(range.title), \(scopeLabel), \(coverageLabel(summary))"
+                        )
                         if summary.realTimeCoverage != .thisApp {
                             LabeledContent(
                                 "This App",
-                                value: duration(summary.localRealSeconds
-                                    + liveRealSeconds)
+                                value: duration(
+                                    summary.localRealSeconds
+                                        + liveRealSeconds)
                             )
                         }
                         LabeledContent(
                             "Audiobook Time",
-                            value: duration(summary.audiobookSeconds
-                                            + liveAudiobookSeconds)
+                            value: duration(
+                                summary.audiobookSeconds
+                                    + liveAudiobookSeconds)
                         )
                         if let speed = summary.effectiveAverageSpeed {
                             LabeledContent(
@@ -5045,7 +5056,8 @@ private struct StatisticsView: View {
                         )
                     }
                     if summary.allDeviceBounds.upper
-                        > summary.allDeviceBounds.lower {
+                        > summary.allDeviceBounds.lower
+                    {
                         Section {
                             Label(
                                 "All-device time is between \(duration(summary.allDeviceBounds.lower)) and \(duration(summary.allDeviceBounds.upper)) while a server update remains uncertain.",
@@ -5053,17 +5065,23 @@ private struct StatisticsView: View {
                             )
                         }
                     }
-                    if case .loaded(let exploration) = model.statisticsExploration {
+                    if case .loaded(let exploration) = model
+                        .statisticsExploration
+                    {
                         if !exploration.days.isEmpty {
                             Section("This App by Day") {
-                                Chart(Array(exploration.days.suffix(30))) { day in
+                                Chart(Array(exploration.days.suffix(30))) {
+                                    day in
                                     BarMark(
                                         x: .value("Day", day.date, unit: .day),
-                                        y: .value("Hours", day.realSeconds / 3600)
+                                        y: .value(
+                                            "Hours", day.realSeconds / 3600)
                                     )
                                 }
                                 .frame(height: 180)
-                                .accessibilityLabel("Daily listening hours in this app for \(range.title), \(scopeLabel)")
+                                .accessibilityLabel(
+                                    "Daily listening hours in this app for \(range.title), \(scopeLabel)"
+                                )
                             }
                         }
                         if !exploration.books.isEmpty {
@@ -5071,8 +5089,14 @@ private struct StatisticsView: View {
                                 ForEach(exploration.books) { book in
                                     NavigationLink {
                                         List {
-                                            LabeledContent("Time Listening", value: duration(book.realSeconds))
-                                            LabeledContent("Audiobook Time", value: duration(book.audiobookSeconds))
+                                            LabeledContent(
+                                                "Time Listening",
+                                                value: duration(
+                                                    book.realSeconds))
+                                            LabeledContent(
+                                                "Audiobook Time",
+                                                value: duration(
+                                                    book.audiobookSeconds))
                                         }
                                         .navigationTitle(book.title)
                                     } label: {
@@ -5086,9 +5110,20 @@ private struct StatisticsView: View {
                                 ForEach(exploration.recentSessions) { session in
                                     NavigationLink {
                                         List {
-                                            LabeledContent("Started", value: session.startedAt.formatted())
-                                            LabeledContent("Time Listening", value: duration(session.realSeconds))
-                                            LabeledContent("Coverage", value: session.coverage == .thisApp ? "This App" : "All Devices")
+                                            LabeledContent(
+                                                "Started",
+                                                value: session.startedAt
+                                                    .formatted())
+                                            LabeledContent(
+                                                "Time Listening",
+                                                value: duration(
+                                                    session.realSeconds))
+                                            LabeledContent(
+                                                "Coverage",
+                                                value: session.coverage
+                                                    == .thisApp
+                                                    ? "This App" : "All Devices"
+                                            )
                                         }
                                         .navigationTitle(session.title)
                                     } label: {
@@ -5100,33 +5135,46 @@ private struct StatisticsView: View {
                     }
                     if let failure = model.statisticsHistoryFailure {
                         Section {
-                            Label(failure.message,
-                                  systemImage: failure.systemImage)
+                            Label(
+                                failure.message,
+                                systemImage: failure.systemImage)
                         }
                     }
                     if let failure = model.statisticsArchiveFailure {
                         Section {
-                            Label(failure.message,
-                                  systemImage: failure.systemImage)
+                            Label(
+                                failure.message,
+                                systemImage: failure.systemImage)
                         }
                     }
                     Section("History") {
                         ForEach(model.accounts) { account in
                             if selectedAccountID == nil
-                                || selectedAccountID == account.id {
-                                if let progress = model.statisticsHistoryProgress[account.id] {
-                                    LabeledContent(account.user.username,
-                                        value: model.statisticsHistoryFailedAccounts.contains(account.id)
+                                || selectedAccountID == account.id
+                            {
+                                if let progress =
+                                    model.statisticsHistoryProgress[account.id]
+                                {
+                                    LabeledContent(
+                                        account.user.username,
+                                        value: model
+                                            .statisticsHistoryFailedAccounts
+                                            .contains(account.id)
                                             ? "Import failed; cached data is stale"
-                                            : ((progress.startedAt ?? .distantPast)
-                                                > (progress.lastCompletedAt ?? .distantPast)
+                                            : ((progress.startedAt
+                                                ?? .distantPast)
+                                                > (progress.lastCompletedAt
+                                                    ?? .distantPast)
                                                 ? "\(progress.completedPages)/\(progress.totalPages) pages"
-                                                : (progress.lastCompletedAt?.formatted()
+                                                : (progress.lastCompletedAt?
+                                                    .formatted()
                                                     ?? "Not imported")))
                                 } else if account.connectionState
-                                    == .reauthenticationRequired {
-                                    LabeledContent(account.user.username,
-                                                   value: "Sign-in required")
+                                    == .reauthenticationRequired
+                                {
+                                    LabeledContent(
+                                        account.user.username,
+                                        value: "Sign-in required")
                                 }
                             }
                         }
@@ -5138,17 +5186,22 @@ private struct StatisticsView: View {
                                     if let data = await model.exportStatistics(
                                         for: account, query: query
                                     ) {
-                                        exportDocument = StatisticsJSONDocument(data: data)
+                                        exportDocument = StatisticsJSONDocument(
+                                            data: data)
                                         exporting = true
                                     }
                                 }
                             }
                             Button("Import JSON") { importing = true }
-                            Button("Reset Listening Statistics", role: .destructive) {
+                            Button(
+                                "Reset Listening Statistics", role: .destructive
+                            ) {
                                 confirmingReset = true
                             }
                         } else {
-                            Text("Select one account to export, import, or reset its history.")
+                            Text(
+                                "Select one account to export, import, or reset its history."
+                            )
                         }
                     }
                 }
@@ -5183,13 +5236,17 @@ private struct StatisticsView: View {
             contentType: .json,
             defaultFilename: "bleat-listening-statistics"
         ) { _ in exportDocument = nil }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.json]) { result in
+        .fileImporter(
+            isPresented: $importing,
+            allowedContentTypes: [.json]
+        ) { result in
             guard let account = selectedAccount else { return }
             Task {
                 if case .success(let url) = result {
                     let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    defer {
+                        if scoped { url.stopAccessingSecurityScopedResource() }
+                    }
                     do {
                         let handle = try FileHandle(forReadingFrom: url)
                         defer { try? handle.close() }
@@ -5215,7 +5272,9 @@ private struct StatisticsView: View {
                 Task { _ = await model.resetStatistics(query: query) }
             }
         } message: {
-            Text("This deletes \(scopeLabel) history for \(range.title) from Bleat and its private iCloud copy. Audiobookshelf sessions may return on a later import.")
+            Text(
+                "This deletes \(scopeLabel) history for \(range.title) from Bleat and its private iCloud copy. Audiobookshelf sessions may return on a later import."
+            )
         }
         .accessibilityIdentifier("statistics.view")
     }
@@ -5226,14 +5285,14 @@ private struct StatisticsView: View {
 
     private var liveRealSeconds: Double {
         guard let slice = model.statisticsLiveSlice,
-              query.contains(accountID: slice.accountID, date: slice.startedAt)
+            query.contains(accountID: slice.accountID, date: slice.startedAt)
         else { return 0 }
         return slice.realSeconds
     }
 
     private var liveAudiobookSeconds: Double {
         guard let slice = model.statisticsLiveSlice,
-              query.contains(accountID: slice.accountID, date: slice.startedAt)
+            query.contains(accountID: slice.accountID, date: slice.startedAt)
         else { return 0 }
         return slice.audiobookSeconds
     }

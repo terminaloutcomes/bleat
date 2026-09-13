@@ -1003,7 +1003,8 @@ extension AppServicing {
     }
 
     func uncommittedStatisticsSlice(accountID: AccountID?)
-        async -> ListeningSlice? { nil }
+        async -> ListeningSlice?
+    { nil }
 
     func importStatisticsHistory(
         for account: ServerAccount,
@@ -1019,7 +1020,8 @@ extension AppServicing {
     func resumeStatisticsHistoryImport(for accountID: AccountID) async {}
 
     func statisticsHistoryProgress(for accountID: AccountID)
-        async throws(AppServiceError) -> StatisticsHistoryProgress {
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+    {
         StatisticsHistoryProgress(
             startedAt: nil, lastCompletedAt: nil,
             completedPages: 0, totalPages: 0
@@ -1162,8 +1164,7 @@ actor LiveAppService: AppServicing {
         let id: UUID
         let task: Task<StatisticsHistoryProgress, Error>
     }
-    private var statisticsHistoryTasks:
-        [AccountID: StatisticsHistoryTask] = [:]
+    private var statisticsHistoryTasks: [AccountID: StatisticsHistoryTask] = [:]
     private var suspendedStatisticsHistoryAccounts: Set<AccountID> = []
     private var statisticsHistorySkipAutomaticAccounts: Set<AccountID> = []
     private var statisticsHistoryResetAll = false
@@ -2122,7 +2123,9 @@ actor LiveAppService: AppServicing {
                     try await accountStore.save(persisted)
                 } else {
                     await suspendStatisticsHistoryImport(for: account.id)
-                    defer { suspendedStatisticsHistoryAccounts.remove(account.id) }
+                    defer {
+                        suspendedStatisticsHistoryAccounts.remove(account.id)
+                    }
                     let migration = AccountIdentityMigration(
                         legacyID: account.id,
                         canonicalID: canonicalID
@@ -2162,7 +2165,9 @@ actor LiveAppService: AppServicing {
                     )
                 if persisted.id != account.id {
                     await suspendStatisticsHistoryImport(for: account.id)
-                    defer { suspendedStatisticsHistoryAccounts.remove(account.id) }
+                    defer {
+                        suspendedStatisticsHistoryAccounts.remove(account.id)
+                    }
                     let migration = AccountIdentityMigration(
                         legacyID: account.id,
                         canonicalID: persisted.id
@@ -3257,7 +3262,8 @@ actor LiveAppService: AppServicing {
     }
 
     func uncommittedStatisticsSlice(accountID: AccountID?)
-        async -> ListeningSlice? {
+        async -> ListeningSlice?
+    {
         await statisticsRepository.uncommittedSlice(accountID: accountID)
     }
 
@@ -3272,7 +3278,9 @@ actor LiveAppService: AppServicing {
             throw .statisticsHistory(.cancelled)
         }
         if statisticsHistorySkipAutomaticAccounts.contains(account.id) {
-            if !force { return try await statisticsHistoryProgress(for: account.id) }
+            if !force {
+                return try await statisticsHistoryProgress(for: account.id)
+            }
             statisticsHistorySkipAutomaticAccounts.remove(account.id)
         }
         let persistedAccounts: [ServerAccount]
@@ -3285,13 +3293,14 @@ actor LiveAppService: AppServicing {
             throw .statistics(.invalidAccountMapping)
         }
         if statisticsHistoryResetAll
-            || suspendedStatisticsHistoryAccounts.contains(account.id) {
+            || suspendedStatisticsHistoryAccounts.contains(account.id)
+        {
             throw .statisticsHistory(.cancelled)
         }
         if let existing = statisticsHistoryTasks[account.id] {
-            do { return try await existing.task.value }
-            catch let error as AppServiceError { throw error }
-            catch { throw .statisticsHistory(.cancelled) }
+            do { return try await existing.task.value } catch let error
+                as AppServiceError
+            { throw error } catch { throw .statisticsHistory(.cancelled) }
         }
         let task = Task {
             try await performStatisticsHistoryImport(
@@ -3307,13 +3316,14 @@ actor LiveAppService: AppServicing {
                 statisticsHistoryTasks[account.id] = nil
             }
         }
-        do { return try await task.value }
-        catch let error as AppServiceError { throw error }
-        catch { throw .statisticsHistory(.cancelled) }
+        do { return try await task.value } catch let error as AppServiceError {
+            throw error
+        } catch { throw .statisticsHistory(.cancelled) }
     }
 
     func statisticsHistoryProgress(for accountID: AccountID)
-        async throws(AppServiceError) -> StatisticsHistoryProgress {
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+    {
         do {
             return try await statisticsRepository.historyProgress(
                 accountID: accountID
@@ -3335,10 +3345,12 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .statistics(error)
         }
-        if !force, let last = [
-            previous.lastCompletedAt, previous.startedAt
-        ].compactMap({ $0 }).max(),
-            Date().timeIntervalSince(last) < 86_400 {
+        if !force,
+            let last = [
+                previous.lastCompletedAt, previous.startedAt,
+            ].compactMap({ $0 }).max(),
+            Date().timeIntervalSince(last) < 86_400
+        {
             return previous
         }
         let api = AudiobookshelfAPI(
@@ -3363,7 +3375,8 @@ actor LiveAppService: AppServicing {
                 var fingerprints: [[String]] = []
                 for page in 0..<first.numPages {
                     try Task.checkCancellation()
-                    let batch = page == 0
+                    let batch =
+                        page == 0
                         ? first
                         : try await api.listeningSessions(page: page).value
                     fingerprints.append(batch.fingerprint)
@@ -3383,10 +3396,12 @@ actor LiveAppService: AppServicing {
                     stable = check.total == 0 && check.numPages == 0
                 }
                 for page in 0..<first.numPages {
-                    let check = try await api.listeningSessions(page: page).value
+                    let check = try await api.listeningSessions(page: page)
+                        .value
                     if check.total != first.total
                         || check.numPages != first.numPages
-                        || check.fingerprint != fingerprints[page] {
+                        || check.fingerprint != fingerprints[page]
+                    {
                         stable = false
                         break
                     }
@@ -3421,7 +3436,8 @@ actor LiveAppService: AppServicing {
     }
 
     private func cancelStatisticsHistoryImport(for accountID: AccountID)
-        async {
+        async
+    {
         guard let registered = statisticsHistoryTasks[accountID] else {
             return
         }

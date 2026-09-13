@@ -101,7 +101,8 @@ public actor AudiobookshelfAPI<
             try await get(
                 .listeningSessions,
                 queryItems: [
-                    URLQueryItem(name: "itemsPerPage", value: String(itemsPerPage)),
+                    URLQueryItem(
+                        name: "itemsPerPage", value: String(itemsPerPage)),
                     URLQueryItem(name: "page", value: String(page)),
                 ],
                 as: ListeningSessionsPageDTO.self
@@ -122,7 +123,8 @@ public actor AudiobookshelfAPI<
         sessions.reserveCapacity(payload.sessions.count)
         for value in payload.sessions
         where value.mediaType == "book"
-            || (value.mediaType == nil && value.bookID != nil) {
+            || (value.mediaType == nil && value.bookID != nil)
+        {
             guard !value.id.isEmpty,
                 let startedAt = value.startedAt ?? value.updatedAt,
                 let updatedAt = value.updatedAt ?? value.startedAt,
@@ -136,21 +138,23 @@ public actor AudiobookshelfAPI<
             else {
                 throw .invalidListeningSessions
             }
-            let itemID = value.libraryItemID
+            let itemID =
+                value.libraryItemID
                 ?? value.bookID.map { "book:\($0)" }
                 ?? "session:\(value.id)"
-            sessions.append(RemoteListeningSession(
-                id: PlaybackSessionID(rawValue: value.id),
-                accountID: accountID,
-                itemID: LibraryItemID(rawValue: itemID),
-                startedAt: Date(timeIntervalSince1970: startedAt / 1000),
-                updatedAt: Date(timeIntervalSince1970: updatedAt / 1000),
-                realSeconds: value.timeListening ?? 0,
-                currentTime: value.currentTime ?? 0,
-                duration: value.duration ?? 0,
-                title: value.displayTitle ?? "Untitled",
-                author: value.displayAuthor ?? ""
-            ))
+            sessions.append(
+                RemoteListeningSession(
+                    id: PlaybackSessionID(rawValue: value.id),
+                    accountID: accountID,
+                    itemID: LibraryItemID(rawValue: itemID),
+                    startedAt: Date(timeIntervalSince1970: startedAt / 1000),
+                    updatedAt: Date(timeIntervalSince1970: updatedAt / 1000),
+                    realSeconds: value.timeListening ?? 0,
+                    currentTime: value.currentTime ?? 0,
+                    duration: value.duration ?? 0,
+                    title: value.displayTitle ?? "Untitled",
+                    author: value.displayAuthor ?? ""
+                ))
         }
         return AudiobookshelfAPIResult(
             value: ListeningSessionsPage(

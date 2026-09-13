@@ -251,7 +251,8 @@ public struct RemoteListeningSession:
     }
 
     func replacingSessionID(_ sessionID: PlaybackSessionID)
-        -> RemoteListeningSession {
+        -> RemoteListeningSession
+    {
         RemoteListeningSession(
             id: sessionID, accountID: accountID, itemID: itemID,
             startedAt: startedAt, updatedAt: updatedAt,
@@ -317,7 +318,8 @@ public struct StatisticsSummary: Equatable, Sendable {
         self.sessions = sessions
         self.effectiveAverageSpeed = effectiveAverageSpeed
         self.realTimeCoverage = realTimeCoverage
-        self.allDeviceBounds = allDeviceBounds
+        self.allDeviceBounds =
+            allDeviceBounds
             ?? StatisticsTimeBounds(lower: realSeconds, upper: realSeconds)
     }
 
@@ -336,7 +338,8 @@ public struct StatisticsSummary: Equatable, Sendable {
     )
 
     public func withCoverage(_ coverage: StatisticsCoverage)
-        -> StatisticsSummary {
+        -> StatisticsSummary
+    {
         StatisticsSummary(
             realSeconds: realSeconds,
             localRealSeconds: localRealSeconds,
@@ -668,8 +671,10 @@ public struct StatisticsHistoryProgress: Equatable, Sendable {
     public let completedPages: Int
     public let totalPages: Int
 
-    public init(startedAt: Date?, lastCompletedAt: Date?,
-                completedPages: Int, totalPages: Int) {
+    public init(
+        startedAt: Date?, lastCompletedAt: Date?,
+        completedPages: Int, totalPages: Int
+    ) {
         self.startedAt = startedAt
         self.lastCompletedAt = lastCompletedAt
         self.completedPages = completedPages
@@ -714,29 +719,34 @@ public struct StatisticsArchive: Codable, Sendable {
         StatisticsArchive(
             version: version, exportedAt: exportedAt,
             slices: slices.map {
-                $0.replacingSessionID(Self.portableSessionID(
-                    sessionID: $0.sessionID
-                ))
+                $0.replacingSessionID(
+                    Self.portableSessionID(
+                        sessionID: $0.sessionID
+                    ))
             },
             completions: completions,
             remoteSessions: remoteSessions.map {
-                $0.replacingSessionID(Self.portableSessionID(
-                    sessionID: $0.id
-                ))
+                $0.replacingSessionID(
+                    Self.portableSessionID(
+                        sessionID: $0.id
+                    ))
             }
         )
     }
 
     static func portableSessionID(sessionID: PlaybackSessionID)
-        -> PlaybackSessionID {
+        -> PlaybackSessionID
+    {
         if sessionID.rawValue.hasPrefix("portable:") {
             return sessionID
         }
-        let input = "bleat-statistics-session-v1\u{0}"
+        let input =
+            "bleat-statistics-session-v1\u{0}"
             + sessionID.rawValue
         let digest = SHA256.hash(data: Data(input.utf8))
-        return PlaybackSessionID(rawValue: "portable:"
-            + digest.map { String(format: "%02x", $0) }.joined())
+        return PlaybackSessionID(
+            rawValue: "portable:"
+                + digest.map { String(format: "%02x", $0) }.joined())
     }
 }
 
@@ -1019,7 +1029,8 @@ public actor StatisticsRepository {
                     stored.updatedAt = session.updatedAt
                     // A server-side deletion or correction must not silently
                     // reduce an already observed lifetime total.
-                    stored.realSeconds = max(stored.realSeconds, session.realSeconds)
+                    stored.realSeconds = max(
+                        stored.realSeconds, session.realSeconds)
                     stored.currentTime = session.currentTime
                     stored.duration = session.duration
                     stored.title = session.title
@@ -1069,16 +1080,19 @@ public actor StatisticsRepository {
         at date: Date = Date()
     ) throws(StatisticsRepositoryError) {
         guard completedPages >= 0, totalPages >= 0,
-            completedPages <= totalPages else {
+            completedPages <= totalPages
+        else {
             throw .invalidArchive
         }
         let context = ModelContext(modelContainer)
         let rawID = accountID.rawValue
         do {
-            let record = try context.fetch(
-                FetchDescriptor<StatisticsHistoryImportRecord>(
-                    predicate: #Predicate { $0.accountID == rawID }
-                )).first ?? StatisticsHistoryImportRecord(accountID: accountID)
+            let record =
+                try context.fetch(
+                    FetchDescriptor<StatisticsHistoryImportRecord>(
+                        predicate: #Predicate { $0.accountID == rawID }
+                    )
+                ).first ?? StatisticsHistoryImportRecord(accountID: accountID)
             if record.modelContext == nil {
                 context.insert(record)
             }
@@ -1153,18 +1167,21 @@ public actor StatisticsRepository {
             var bounds = StatisticsTimeBounds(lower: 0, upper: 0)
             var coveredSessions: Set<String> = []
             for remote in remoteSessions {
-                let sessionKey = key(remote.accountID.rawValue, remote.id.rawValue)
+                let sessionKey = key(
+                    remote.accountID.rawValue, remote.id.rawValue)
                 coveredSessions.insert(sessionKey)
                 let local = localBySession[sessionKey] ?? 0
                 let record = accountingBySession[sessionKey]
                 let confirmed = min(local, record?.confirmedRealSeconds ?? 0)
-                let uncertain = min(max(0, local - confirmed),
-                                    record?.uncertainRealSeconds ?? 0)
+                let uncertain = min(
+                    max(0, local - confirmed),
+                    record?.uncertainRealSeconds ?? 0)
                 let pending = max(0, local - confirmed - uncertain)
-                let resolvedUncertain = record.map {
-                    remote.updatedAt > $0.updatedAt
-                        && remote.realSeconds >= confirmed + uncertain
-                } ?? false
+                let resolvedUncertain =
+                    record.map {
+                        remote.updatedAt > $0.updatedAt
+                            && remote.realSeconds >= confirmed + uncertain
+                    } ?? false
                 let lower = max(remote.realSeconds, confirmed) + pending
                 bounds = StatisticsTimeBounds(
                     lower: bounds.lower + lower,
@@ -1279,8 +1296,10 @@ public actor StatisticsRepository {
             let days = Dictionary(grouping: slices) {
                 Calendar.current.startOfDay(for: $0.startedAt)
             }.map { date, values in
-                StatisticsDay(date: date, realSeconds:
-                    values.reduce(0) { $0 + $1.realSeconds })
+                StatisticsDay(
+                    date: date,
+                    realSeconds:
+                        values.reduce(0) { $0 + $1.realSeconds })
             }.sorted { $0.date < $1.date }
             let books = Dictionary(grouping: slices) {
                 $0.accountID.rawValue + "\u{1f}" + $0.itemID.rawValue
@@ -1295,9 +1314,10 @@ public actor StatisticsRepository {
                     }
                 )
             }.sorted { $0.realSeconds > $1.realSeconds }
-            let remoteIDs = Set(remote.map {
-                $0.accountID.rawValue + "\u{1f}" + $0.id.rawValue
-            })
+            let remoteIDs = Set(
+                remote.map {
+                    $0.accountID.rawValue + "\u{1f}" + $0.id.rawValue
+                })
             let localSessions = Dictionary(grouping: slices) {
                 $0.accountID.rawValue + "\u{1f}" + $0.sessionID.rawValue
             }.compactMap { key, values -> StatisticsRecentSession? in
@@ -1572,12 +1592,15 @@ public actor StatisticsRepository {
     ) throws(StatisticsRepositoryError) {
         guard archive.version == 1,
             Set(archive.slices.map(\.id)).count == archive.slices.count,
-            Set(archive.completions.map(\.id)).count == archive.completions.count,
-            Set(archive.remoteSessions.map {
-                RemoteListeningSessionRecord.compositeID(
-                    accountID: $0.accountID, sessionID: $0.id
-                )
-            }).count == archive.remoteSessions.count,
+            Set(archive.completions.map(\.id)).count
+                == archive.completions.count,
+            Set(
+                archive.remoteSessions.map {
+                    RemoteListeningSessionRecord.compositeID(
+                        accountID: $0.accountID, sessionID: $0.id
+                    )
+                }
+            ).count == archive.remoteSessions.count,
             archive.slices.allSatisfy(Self.isValid),
             archive.completions.allSatisfy({
                 !$0.accountID.rawValue.isEmpty
@@ -1622,8 +1645,8 @@ public actor StatisticsRepository {
                 FetchDescriptor<RemoteListeningSessionRecord>()
             )
             var existingRemote: [String: RemoteListeningSessionRecord] = [:]
-            var existingByPortableID:
-                [String: RemoteListeningSessionRecord] = [:]
+            var existingByPortableID: [String: RemoteListeningSessionRecord] =
+                [:]
             for record in existingRecords {
                 existingRemote[record.compositeID] = record
                 let portable = StatisticsArchive.portableSessionID(
@@ -1637,15 +1660,18 @@ public actor StatisticsRepository {
                 let key = RemoteListeningSessionRecord.compositeID(
                     accountID: session.accountID, sessionID: session.id
                 )
-                let portableKey = session.accountID.rawValue
+                let portableKey =
+                    session.accountID.rawValue
                     + "\u{1f}" + session.id.rawValue
                 if let stored = existingRemote[key]
-                    ?? existingByPortableID[portableKey] {
+                    ?? existingByPortableID[portableKey]
+                {
                     if session.updatedAt > stored.updatedAt {
                         stored.itemID = session.itemID.rawValue
                         stored.startedAt = session.startedAt
                         stored.updatedAt = session.updatedAt
-                        stored.realSeconds = max(stored.realSeconds, session.realSeconds)
+                        stored.realSeconds = max(
+                            stored.realSeconds, session.realSeconds)
                         stored.currentTime = session.currentTime
                         stored.duration = session.duration
                         stored.title = session.title
@@ -1680,15 +1706,18 @@ public actor StatisticsRepository {
             for record in try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
             ) {
-                let sessionKey = StatisticsSessionAccountingRecord
+                let sessionKey =
+                    StatisticsSessionAccountingRecord
                     .compositeID(
                         accountID: AccountID(rawValue: record.accountID),
                         sessionID: PlaybackSessionID(rawValue: record.sessionID)
                     )
-                guard query.contains(
-                    accountID: AccountID(rawValue: record.accountID),
-                    date: record.startedAt
-                ) else {
+                guard
+                    query.contains(
+                        accountID: AccountID(rawValue: record.accountID),
+                        date: record.startedAt
+                    )
+                else {
                     remainingRealBySession[sessionKey, default: 0] +=
                         record.realSeconds
                     continue
@@ -1709,10 +1738,12 @@ public actor StatisticsRepository {
             }
             for record in try context.fetch(
                 FetchDescriptor<StatisticsSessionAccountingRecord>()
-            ) where affectedSessionKeys.contains(record.compositeID)
+            )
+            where affectedSessionKeys.contains(record.compositeID)
                 && (remainingRealBySession[record.compositeID] ?? 0) > 0
                 && (record.confirmedRealSeconds > 0
-                    || record.uncertainRealSeconds > 0) {
+                    || record.uncertainRealSeconds > 0)
+            {
                 throw StatisticsRepositoryError
                     .partialSessionResetRequiresFullSession
             }
@@ -1758,20 +1789,23 @@ public actor StatisticsRepository {
             }
             for record in try context.fetch(
                 FetchDescriptor<StatisticsSessionAccountingRecord>()
-            )
-            {
+            ) {
                 let fullRange = query.start == nil && query.end == nil
-                let selectedAccount = query.accountID == nil
+                let selectedAccount =
+                    query.accountID == nil
                     || query.accountID?.rawValue == record.accountID
-                guard (fullRange && selectedAccount)
-                    || affectedSessionKeys.contains(record.compositeID)
+                guard
+                    (fullRange && selectedAccount)
+                        || affectedSessionKeys.contains(record.compositeID)
                 else { continue }
                 context.delete(record)
             }
             for record in try context.fetch(
                 FetchDescriptor<StatisticsHistoryImportRecord>()
-            ) where query.accountID == nil
-                || query.accountID?.rawValue == record.accountID {
+            )
+            where query.accountID == nil
+                || query.accountID?.rawValue == record.accountID
+            {
                 record.lastCompletedAt = nil
                 record.startedAt = nil
                 record.completedPages = 0
