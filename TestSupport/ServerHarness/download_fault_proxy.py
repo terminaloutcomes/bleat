@@ -258,7 +258,10 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
                 )
             self.send_response(response.status)
             for name, value in response.getheaders():
-                if name.lower() not in HOP_BY_HOP_HEADERS and name.lower() != "content-length":
+                if (
+                    name.lower() not in HOP_BY_HOP_HEADERS
+                    and name.lower() != "content-length"
+                ):
                     self.send_header(name, value)
             self.send_header("Content-Length", str(len(response_body)))
             self.end_headers()

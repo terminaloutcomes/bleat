@@ -26,17 +26,13 @@ def representations(value: str) -> dict[str, bytes]:
         "raw-utf8": raw,
         "authorization-bearer": f"Bearer {value}".encode("utf-8"),
         "json-escaped": json_unicode.encode("utf-8"),
-        "json-escaped-slashes": json_unicode.replace("/", "\\/").encode(
-            "utf-8"
-        ),
+        "json-escaped-slashes": json_unicode.replace("/", "\\/").encode("utf-8"),
         "json-ascii-escaped": json_ascii.encode("ascii"),
-        "json-ascii-escaped-slashes": json_ascii.replace(
-            "/", "\\/"
-        ).encode("ascii"),
+        "json-ascii-escaped-slashes": json_ascii.replace("/", "\\/").encode("ascii"),
         "json-ascii-uppercase": json_ascii_upper.encode("ascii"),
-        "json-ascii-uppercase-slashes": json_ascii_upper.replace(
-            "/", "\\/"
-        ).encode("ascii"),
+        "json-ascii-uppercase-slashes": json_ascii_upper.replace("/", "\\/").encode(
+            "ascii"
+        ),
         "base64": base64.b64encode(raw),
         "base64url-padded": base64.urlsafe_b64encode(raw),
         "base64url-unpadded": base64.urlsafe_b64encode(raw).rstrip(b"="),
@@ -57,7 +53,7 @@ def percent_encoded_pattern(value: str) -> re.Pattern[bytes] | None:
     while index < len(encoded):
         if encoded[index] == "%" and index + 2 < len(encoded):
             parts.append(b"%")
-            for character in encoded[index + 1:index + 3]:
+            for character in encoded[index + 1 : index + 3]:
                 if character.isalpha():
                     parts.append(
                         b"["
@@ -84,9 +80,7 @@ def load_secrets(manifests: list[Path]) -> dict[str, str]:
             if not isinstance(label, str) or not label:
                 raise ValueError(f"invalid secret label in {manifest.name}")
             if not isinstance(value, str) or len(value.encode("utf-8")) < 16:
-                raise ValueError(
-                    f"secret {label!r} in {manifest.name} is too short"
-                )
+                raise ValueError(f"secret {label!r} in {manifest.name} is too short")
             if label in secrets and secrets[label] != value:
                 raise ValueError(f"conflicting secret label {label!r}")
             secrets[label] = value
@@ -100,25 +94,23 @@ def iter_files(root: Path):
         yield root, Path(root.name)
         return
     for directory, names, filenames in os.walk(root, followlinks=False):
-        names[:] = sorted(name for name in names if not Path(directory, name).is_symlink())
+        names[:] = sorted(
+            name for name in names if not Path(directory, name).is_symlink()
+        )
         for filename in sorted(filenames):
             path = Path(directory, filename)
             if path.is_file() and not path.is_symlink():
                 yield path, path.relative_to(root)
 
 
-def scan_bytes(
-    data: bytes, secrets: dict[str, str]
-) -> list[tuple[str, str, int]]:
+def scan_bytes(data: bytes, secrets: dict[str, str]) -> list[tuple[str, str, int]]:
     findings: list[tuple[str, str, int]] = []
     for label, value in secrets.items():
         percent_pattern = percent_encoded_pattern(value)
         if percent_pattern is not None:
             count = len(percent_pattern.findall(data))
             if count:
-                findings.append(
-                    (label, "url-percent-case-insensitive", count)
-                )
+                findings.append((label, "url-percent-case-insensitive", count))
         seen: set[bytes] = set()
         for representation, pattern in representations(value).items():
             if pattern in seen:
@@ -137,14 +129,10 @@ def redact_bytes(
     for label, value in secrets.items():
         percent_pattern = percent_encoded_pattern(value)
         if percent_pattern is not None:
-            replacement = (
-                f"[REDACTED:{label}:url-percent-case-insensitive]".encode()
-            )
+            replacement = f"[REDACTED:{label}:url-percent-case-insensitive]".encode()
             data, count = percent_pattern.subn(replacement, data)
             if count:
-                redactions.append(
-                    (label, "url-percent-case-insensitive", count)
-                )
+                redactions.append((label, "url-percent-case-insensitive", count))
         patterns = sorted(
             representations(value).items(),
             key=lambda item: len(item[1]),
@@ -272,12 +260,8 @@ def main() -> int:
         "status": "failed" if findings else "passed",
         "secretLabels": sorted(secrets),
         "surfaceLabels": [label for label, _ in args.surface],
-        "redactedSurfaceLabels": [
-            label for label, _ in (args.redact_surface or [])
-        ],
-        "redactionCount": sum(
-            int(redaction["count"]) for redaction in redactions
-        ),
+        "redactedSurfaceLabels": [label for label, _ in (args.redact_surface or [])],
+        "redactionCount": sum(int(redaction["count"]) for redaction in redactions),
         "redactions": redactions,
         "scannedFileCount": file_count,
         "scannedByteCount": byte_count,

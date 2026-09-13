@@ -16,9 +16,7 @@ SECRET_PATTERNS = (
         r"(authorization:\s*bearer\s+)[A-Za-z0-9._-]+",
         re.IGNORECASE,
     ),
-    re.compile(
-        r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"
-    ),
+    re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
 )
 
 
