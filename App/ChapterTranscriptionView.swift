@@ -155,7 +155,7 @@ enum ChapterTranscriptNavigationMessage: Equatable, Sendable {
         case .invalidPosition:
             "The playback position is outside this audiobook."
         case .chapterNotTranscribed(let title):
-            "\(title) has not been transcribed."
+            "Chapter ‘\(title)’ has not been transcribed."
         case .noSpeechDetected(let title):
             "No speech was detected in \(title)."
         }
@@ -730,8 +730,16 @@ struct ChapterTranscriptionView: View {
     @State private var currentPositionMessage:
         ChapterTranscriptNavigationMessage?
     @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
+    @State private var chapterNavigationRequest: ChapterNavigationRequest?
+    @State private var pendingTranscriptionChapter: PlaybackChapter?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct ChapterNavigationRequest: Equatable {
+        let id = UUID()
+        let chapterID: Int
+        let offerTranscription: Bool
+    }
 
     init(
         detail: LibraryBookDetail,
@@ -890,6 +898,47 @@ struct ChapterTranscriptionView: View {
                         }
                     }
                 #endif
+                .alert(
+                    "Start Transcription?",
+                    isPresented: Binding(
+                        get: { pendingTranscriptionChapter != nil },
+                        set: { if !$0 { pendingTranscriptionChapter = nil } }
+                    )
+                ) {
+                    if let chapter = pendingTranscriptionChapter {
+                        Button("Start Transcription") {
+                            pendingTranscriptionChapter = nil
+                            startChapterTranscription(chapter)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {
+                        pendingTranscriptionChapter = nil
+                    }
+                } message: {
+                    if let chapter = pendingTranscriptionChapter {
+                        Text(
+                            ChapterTranscriptNavigationMessage
+                                .chapterNotTranscribed(
+                                    title: chapter.title
+                                ).text
+                        )
+                    }
+                }
+                .task(id: chapterNavigationRequest) {
+                    guard let request = chapterNavigationRequest else { return }
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    scrollProxy.scrollTo(request.chapterID, anchor: .center)
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    if request.offerTranscription,
+                        let chapter = detail.chapters.first(where: {
+                            $0.id == request.chapterID
+                        }), canStartChapterTranscription(chapter)
+                    {
+                        pendingTranscriptionChapter = chapter
+                    }
+                }
                 .task(id: highlightedTarget) {
                     guard let target = highlightedTarget else {
                         return
@@ -1043,6 +1092,10 @@ struct ChapterTranscriptionView: View {
                 }
                 .accessibilityIdentifier(
                     "transcription.chapter.\(chapter.id)"
+                )
+                .id(chapter.id)
+                .accessibilityAddTraits(
+                    selectedChapterID == chapter.id ? .isSelected : []
                 )
                 .buttonStyle(.plain)
                 .disabled(isSelectingChapters && isCached)
@@ -1510,7 +1563,7 @@ struct ChapterTranscriptionView: View {
                 guard let chapter = selectedChapter else {
                     return
                 }
-                startSelection([chapter])
+                startChapterTranscription(chapter)
             }
             .buttonStyle(.borderedProminent)
             .disabled(
@@ -1707,13 +1760,39 @@ struct ChapterTranscriptionView: View {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private func canStartChapterTranscription(_ chapter: PlaybackChapter)
+        -> Bool
+    {
+        !model.isWorking && !isDeletingTranscript
+            && model.hasLoadedTranscriptCache(for: bookKey)
+            && !model.isCached(chapterID: chapter.id, for: bookKey)
+    }
+
+    private func startChapterTranscription(_ chapter: PlaybackChapter) {
+        guard canStartChapterTranscription(chapter) else { return }
+        startSelection([chapter])
+    }
+
+    private func revealChapter(_ chapterID: Int, offerTranscription: Bool) {
+        searchQuery = ""
+        isSelectingChapters = false
+        selectedChapterIDs.removeAll()
+        selectedChapterID = chapterID
+        chapterNavigationRequest = ChapterNavigationRequest(
+            chapterID: chapterID, offerTranscription: offerTranscription
+        )
+    }
+
     private func goToCurrentPosition() {
+        pendingTranscriptionChapter = nil
+        chapterNavigationRequest = nil
         currentPositionMessage = nil
         highlightedTarget = nil
         guard
             let position = appModel.playback.transcriptNavigationPosition(
                 accountID: account.id,
-                itemID: detail.id
+                itemID: detail.id,
+                serverProgress: detail.progress.map { (account.id, $0) }
             )
         else {
             currentPositionMessage = .noPosition
@@ -1726,15 +1805,19 @@ struct ChapterTranscriptionView: View {
         ) {
         case .target(let target):
             searchQuery = ""
+            isSelectingChapters = false
+            selectedChapterIDs.removeAll()
             selectedChapterID = target.chapterID
             highlightedTarget = target
         case .invalidPosition:
             currentPositionMessage = .invalidPosition
         case .chapterNotTranscribed(let chapterID):
+            revealChapter(chapterID, offerTranscription: true)
             currentPositionMessage = .chapterNotTranscribed(
                 title: chapterTitle(chapterID)
             )
         case .noSpeechDetected(let chapterID):
+            revealChapter(chapterID, offerTranscription: false)
             currentPositionMessage = .noSpeechDetected(
                 title: chapterTitle(chapterID)
             )
