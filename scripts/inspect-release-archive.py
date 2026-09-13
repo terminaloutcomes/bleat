@@ -193,7 +193,9 @@ def inspect_archive(archive: Path, package_resolution: Path, carplay_mode: str) 
             "archive must declare that it uses only exempt encryption"
         )
     if info.get("BleatCarPlayMode") != carplay_mode:
-        raise InspectionFailure("archive CarPlay mode does not match the requested mode")
+        raise InspectionFailure(
+            "archive CarPlay mode does not match the requested mode"
+        )
 
     app_manifest = app / "PrivacyInfo.xcprivacy"
     inspect_privacy_manifest(load_plist(app_manifest))

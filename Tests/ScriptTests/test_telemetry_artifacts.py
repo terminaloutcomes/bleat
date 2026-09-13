@@ -5,11 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
-from telemetry_artifacts import check_artifacts, contains_secret, redact
+from telemetry_artifacts import (  # ty: ignore[unresolved-import]
+    check_artifacts,
+    contains_secret,
+    redact,
+)
 
 
 class TelemetryArtifactTests(unittest.TestCase):
