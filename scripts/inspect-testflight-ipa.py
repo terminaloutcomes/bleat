@@ -184,8 +184,8 @@ def inspect_ipa(
         expiration = profile.get("ExpirationDate")
         if not isinstance(expiration, datetime.datetime):
             raise InspectionFailure("embedded profile has no expiration date")
-        if expiration.replace(tzinfo=datetime.timezone.utc) <= datetime.datetime.now(
-            datetime.timezone.utc
+        if expiration.replace(tzinfo=datetime.UTC) <= datetime.datetime.now(
+            datetime.UTC
         ):
             raise InspectionFailure("embedded profile has expired")
 

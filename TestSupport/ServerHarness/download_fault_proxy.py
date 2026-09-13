@@ -10,7 +10,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-
 DOWNLOAD_PATH = re.compile(r"/api/items/[^/]+/file/[^/]+/download$")
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -130,8 +129,8 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
     sys_version = ""
 
     @property
-    def fault_server(self) -> "FaultProxyServer":
-        return self.server  # type: ignore[return-value]
+    def fault_server(self) -> FaultProxyServer:
+        return self.server  # ty: ignore[invalid-return-type]
 
     def do_GET(self) -> None:
         self._handle_request()

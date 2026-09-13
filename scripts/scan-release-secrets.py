@@ -7,14 +7,14 @@ import argparse
 import base64
 import json
 import os
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 from urllib.parse import quote
 
 
 def representations(value: str) -> dict[str, bytes]:
-    raw = value.encode("utf-8")
+    raw = value.encode()
     json_unicode = json.dumps(value, ensure_ascii=False)[1:-1]
     json_ascii = json.dumps(value, ensure_ascii=True)[1:-1]
     json_ascii_upper = re.sub(
@@ -24,9 +24,9 @@ def representations(value: str) -> dict[str, bytes]:
     )
     encoded = {
         "raw-utf8": raw,
-        "authorization-bearer": f"Bearer {value}".encode("utf-8"),
-        "json-escaped": json_unicode.encode("utf-8"),
-        "json-escaped-slashes": json_unicode.replace("/", "\\/").encode("utf-8"),
+        "authorization-bearer": f"Bearer {value}".encode(),
+        "json-escaped": json_unicode.encode(),
+        "json-escaped-slashes": json_unicode.replace("/", "\\/").encode(),
         "json-ascii-escaped": json_ascii.encode("ascii"),
         "json-ascii-escaped-slashes": json_ascii.replace("/", "\\/").encode("ascii"),
         "json-ascii-uppercase": json_ascii_upper.encode("ascii"),
@@ -79,7 +79,7 @@ def load_secrets(manifests: list[Path]) -> dict[str, str]:
             value = entry.get("value")
             if not isinstance(label, str) or not label:
                 raise ValueError(f"invalid secret label in {manifest.name}")
-            if not isinstance(value, str) or len(value.encode("utf-8")) < 16:
+            if not isinstance(value, str) or len(value.encode()) < 16:
                 raise ValueError(f"secret {label!r} in {manifest.name} is too short")
             if label in secrets and secrets[label] != value:
                 raise ValueError(f"conflicting secret label {label!r}")
@@ -261,11 +261,11 @@ def main() -> int:
         "secretLabels": sorted(secrets),
         "surfaceLabels": [label for label, _ in args.surface],
         "redactedSurfaceLabels": [label for label, _ in (args.redact_surface or [])],
-        "redactionCount": sum(int(redaction["count"]) for redaction in redactions),
+        "redactionCount": sum(int(redaction["count"]) for redaction in redactions),  # ty: ignore[invalid-argument-type]
         "redactions": redactions,
         "scannedFileCount": file_count,
         "scannedByteCount": byte_count,
-        "findingCount": sum(int(finding["count"]) for finding in findings),
+        "findingCount": sum(int(finding["count"]) for finding in findings),  # ty: ignore[invalid-argument-type]
         "findings": findings,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)

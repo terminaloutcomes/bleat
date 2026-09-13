@@ -10,6 +10,8 @@ zola = "0.22.1"
 "cargo:cargo-tarpaulin" = "latest"
 ripgrep = "latest"
 swiftlint = "latest"
+shellcheck = "latest"
+uv = "latest"
 
 [tasks."api:fmt"]
 description = "Fix bleat-api Rust formatting"
@@ -20,7 +22,7 @@ run = "cargo fmt --all"
 description = "cargo-check bleat-api"
 dir = "./bleat-api"
 depends = ["api:fmt"]
-run = "cargo check --all-targets --all-features"
+run = "cargo check --quiet --all-targets --all-features"
 
 [tasks."api:clippy"]
 description = "Lint bleat-api"
@@ -31,10 +33,10 @@ run = "cargo clippy --all-targets --all-features -- -D warnings"
 [tasks."api:test"]
 description = "Test bleat-api against disposable PostgreSQL"
 depends = ["api:fmt"]
+dir = "./bleat-api"
 run = """cargo test \
   --quiet \
   --locked \
-  --manifest-path bleat-api/Cargo.toml \
   --all-features \
   -- \
   --nocapture \
@@ -344,3 +346,38 @@ exec ./scripts/deploy-device.sh
 
 [tasks.clippy]
 run = { task = "api:clippy" }
+
+[tasks.shellcheck]
+run = "find . -name '*.sh' -not -path '*.build/*' -type f -exec shellcheck '{}' +"
+
+[tasks."scripts:fmt"]
+dir = "./scripts/"
+run = "cargo fmt --quiet"
+
+[tasks."scripts:clippy"]
+depends = ["scripts:fmt"]
+dir = "./scripts/"
+run = "cargo clippy --all-targets --all-features --quiet -- -D warnings"
+
+[tasks."scripts:test"]
+depends = ["scripts:fmt"]
+dir = "./scripts/"
+run = "cargo test"
+
+[tasks."scripts:check"]
+dir = "./scripts/"
+depends = ["scripts:clippy", "scripts:test"]
+
+[tasks."python:fmt"]
+dir = "./scripts/"
+run = "uv run ruff format"
+
+[tasks."scripts:ruff"]
+depends = ["python:fmt"]
+dir = "./scripts/"
+run = "uv run ruff check ."
+
+[tasks."scripts:ty"]
+depends = ["python:fmt"]
+dir = "./scripts/"
+run = "uv run ruff check ."

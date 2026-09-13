@@ -9,7 +9,6 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-
 SECRET_PATTERNS = (
     re.compile(r"(postgres(?:ql)?://[^:\s]+:)[^@\s]+(?=@)", re.IGNORECASE),
     re.compile(

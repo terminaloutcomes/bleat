@@ -1,9 +1,8 @@
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
-
+from pathlib import Path
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "scan-release-secrets.py"
 SPEC = importlib.util.spec_from_file_location("scan_release_secrets", SCRIPT)
