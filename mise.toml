@@ -366,7 +366,7 @@ run = "cargo test"
 
 [tasks."scripts:check"]
 dir = "./scripts/"
-depends = ["scripts:clippy", "scripts:test"]
+depends = ["scripts:clippy", "scripts:test", "scripts:ruff", "scripts:ty"]
 
 [tasks."python:fmt"]
 dir = "./scripts/"
@@ -380,4 +380,4 @@ run = "uv run ruff check ."
 [tasks."scripts:ty"]
 depends = ["python:fmt"]
 dir = "./scripts/"
-run = "uv run ruff check ."
+run = "uv run ty check ."
