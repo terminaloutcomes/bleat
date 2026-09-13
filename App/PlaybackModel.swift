@@ -20,10 +20,11 @@ enum PlaybackState: Equatable, Sendable {
 enum PlaybackTranscriptNavigationPosition: Equatable, Sendable {
     case active(Double)
     case saved(Double)
+    case server(Double)
 
     var wholeBookTime: Double {
         switch self {
-        case .active(let time), .saved(let time):
+        case .active(let time), .saved(let time), .server(let time):
             time
         }
     }
@@ -514,13 +515,25 @@ final class PlaybackModel {
 
     func transcriptNavigationPosition(
         accountID: AccountID,
-        itemID: LibraryItemID
+        itemID: LibraryItemID,
+        serverProgress: (accountID: AccountID, progress: LibraryBookProgress)? =
+            nil
     ) -> PlaybackTranscriptNavigationPosition? {
         if isPrepared(accountID: accountID, itemID: itemID) {
             return .active(currentTime)
         }
-        return positionStore.position(accountID: accountID, itemID: itemID)
-            .map(PlaybackTranscriptNavigationPosition.saved)
+        if let saved = positionStore.position(
+            accountID: accountID, itemID: itemID)
+        {
+            return .saved(saved)
+        }
+        guard let serverProgress,
+            serverProgress.accountID == accountID,
+            serverProgress.progress.libraryItemID == itemID
+        else {
+            return nil
+        }
+        return .server(serverProgress.progress.currentTime)
     }
 
     var isPlaying: Bool {

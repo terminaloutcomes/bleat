@@ -8545,6 +8545,59 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testTranscriptNavigationPositionFallsBackToScopedServerProgress()
+        throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playback = fixture.model(activation: TestAudioSessionActivation())
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        for time in [3_456.25, 0] {
+            let progress = LibraryBookProgress(
+                id: "progress", userID: UserID(rawValue: "user"),
+                libraryItemID: fixture.detail.id, bookID: fixture.detail.bookID,
+                duration: 3_600, progress: 0.96, currentTime: time,
+                isFinished: false, hideFromContinueListening: false,
+                lastUpdateMilliseconds: 1, startedAtMilliseconds: 1,
+                finishedAtMilliseconds: nil
+            )
+            XCTAssertEqual(
+                playback.transcriptNavigationPosition(
+                    accountID: fixture.accountID, itemID: fixture.detail.id,
+                    serverProgress: (fixture.accountID, progress)
+                ), .server(time)
+            )
+            XCTAssertNil(
+                playback.transcriptNavigationPosition(
+                    accountID: AccountID(rawValue: "other"),
+                    itemID: fixture.detail.id,
+                    serverProgress: (fixture.accountID, progress)
+                )
+            )
+            XCTAssertNil(
+                playback.transcriptNavigationPosition(
+                    accountID: fixture.accountID,
+                    itemID: LibraryItemID(rawValue: "other"),
+                    serverProgress: (fixture.accountID, progress)
+                )
+            )
+            try store.save(
+                42, accountID: fixture.accountID, itemID: fixture.detail.id)
+            XCTAssertEqual(
+                playback.transcriptNavigationPosition(
+                    accountID: fixture.accountID, itemID: fixture.detail.id,
+                    serverProgress: (fixture.accountID, progress)
+                ), .saved(42)
+            )
+            try store.remove(
+                accountID: fixture.accountID, itemID: fixture.detail.id)
+        }
+        XCTAssertNil(
+            playback.transcriptNavigationPosition(
+                accountID: fixture.accountID, itemID: fixture.detail.id
+            ))
+    }
+
     func testTranscriptNavigationPositionUsesOnlyExactActiveBookBeforeSaved()
         async throws
     {

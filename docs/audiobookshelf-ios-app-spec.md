@@ -327,11 +327,17 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   transcribed chapter of the current book. Query terms may appear in any order,
   but every term must occur within the same transcript segment.
 - A first-row action uses the exact account and book's active playback position,
-  or its saved position when no matching player is active, to select and scroll
-  to the nearest cached transcript segment and highlight it briefly. Scrolling
-  respects the system Reduce Motion setting: enabled jumps without animation;
-  disabled retains the default animation. Highlight clearing and repeated
-  navigation remain available in both modes. The action does not mutate playback or fetch from the server. Missing positions, positions
+  then its saved local position, then the displayed book’s account-scoped server
+  progress timestamp when neither is available, to select and scroll
+  to the nearest cached transcript segment and highlight it briefly. Untranscribed
+  destinations are selected and revealed with “Chapter ‘<chapter title>’ has not
+  been transcribed.” and a Start Transcription confirmation. Cancel leaves the
+  chapter selected; confirmation starts only that chapter through the existing
+  workflow. Active work or deletion prevents a conflicting start. No-speech
+  destinations are revealed with their distinct explanation and no start prompt.
+  Segment scrolling respects Reduce Motion; repeated navigation and highlight
+  clearing remain available in both modes. The action
+  does not mutate playback or fetch from the server. Missing positions, positions
   outside the book, untranscribed containing chapters, and chapters with no
   speech remain distinct explanatory states.
 - Tapping a transcript segment or search result opens actions to copy only its

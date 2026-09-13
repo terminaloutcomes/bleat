@@ -2762,6 +2762,35 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func
+        testTranscriptGoToCurrentPositionUsesServerProgressWithoutLocalPlayback()
+    {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-server-progress",
+            ]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        XCTAssertTrue(
+            app.staticTexts["96% complete"].waitForExistence(timeout: 3))
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+        let action = app.buttons["transcription.goToCurrentPosition"]
+        XCTAssertTrue(action.waitForExistence(timeout: 3))
+        action.tap()
+        let highlight = app.buttons["transcription.currentPositionHighlight"]
+        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        XCTAssertTrue(highlight.label.contains("Another DOOMSDAY mention"))
+        XCTAssertFalse(
+            app.staticTexts["transcription.currentPositionMessage"].exists)
+    }
+
+    @MainActor
     func testTranscriptCurrentPositionWaitsForCacheLoad() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
@@ -2796,7 +2825,7 @@ final class BleatUITests: XCTestCase {
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
-                "--ui-testing-transcription-position",
+                "--ui-testing-transcription-server-progress",
                 "--ui-testing-transcription-current-chapter-untranscribed",
             ]
         )
@@ -2809,15 +2838,75 @@ final class BleatUITests: XCTestCase {
         app.buttons["book.detail.transcription"].tap()
         app.buttons["transcription.goToCurrentPosition"].tap()
 
+        let confirmation = app.alerts.buttons["Start Transcription"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.alerts.staticTexts[
+                "Chapter ‘Chapter Two’ has not been transcribed."
+            ].exists
+        )
+        app.alerts.buttons["Cancel"].tap()
+        let chapter = app.buttons["transcription.chapter.1"]
+        XCTAssertTrue(chapter.isSelected)
+        XCTAssertTrue(chapter.isHittable)
+        XCTAssertTrue(app.buttons["transcription.start"].isEnabled)
         let message = app.staticTexts["transcription.currentPositionMessage"]
         XCTAssertTrue(message.waitForExistence(timeout: 3))
         XCTAssertEqual(
             message.label,
-            "Chapter Two has not been transcribed."
+            "Chapter ‘Chapter Two’ has not been transcribed."
+        )
+        app.buttons["transcription.select"].tap()
+        app.buttons["transcription.goToCurrentPosition"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        app.alerts.buttons["Cancel"].tap()
+        XCTAssertFalse(app.buttons["transcription.startBatch"].exists)
+        XCTAssertTrue(chapter.isSelected)
+        app.buttons["transcription.goToCurrentPosition"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.tap()
+        XCTAssertTrue(
+            app.staticTexts[
+                "Download this chapter or the full audiobook before transcribing."
+            ]
+            .waitForExistence(timeout: 5)
         )
         XCTAssertFalse(
             app.buttons["transcription.currentPositionHighlight"].exists
         )
+    }
+
+    @MainActor
+    func testTranscriptGoToCurrentPositionRevealsNoSpeechChapterFromSearch() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-available",
+                "--ui-testing-transcription-cache",
+                "--ui-testing-transcription-server-progress",
+                "--ui-testing-transcription-current-chapter-no-speech",
+            ]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
+        app.staticTexts["The Test Audiobook"].tap()
+        app.buttons["book.detail.actions"].tap()
+        app.buttons["book.detail.transcription"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("Doomsday")
+        app.buttons["transcription.goToCurrentPosition"].tap()
+        let chapter = app.buttons["transcription.chapter.1"]
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        XCTAssertTrue(chapter.isSelected)
+        XCTAssertTrue(chapter.isHittable)
+        XCTAssertEqual(
+            app.staticTexts["transcription.currentPositionMessage"].label,
+            "No speech was detected in Chapter Two."
+        )
+        XCTAssertFalse(app.alerts.buttons["Start Transcription"].exists)
+        XCTAssertFalse(app.buttons["transcription.start"].isEnabled)
     }
 
     @MainActor

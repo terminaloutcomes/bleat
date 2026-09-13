@@ -764,7 +764,18 @@
                 updatedAtMilliseconds: 1,
                 isExplicit: false,
                 isAbridged: false,
-                progress: nil
+                progress: ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-transcription-server-progress"
+                )
+                    ? LibraryBookProgress(
+                        id: "ui-progress", userID: account.user.id,
+                        libraryItemID: itemID,
+                        bookID: BookID(rawValue: "ui-book"),
+                        duration: 3_600, progress: 0.96, currentTime: 3_456,
+                        isFinished: false, hideFromContinueListening: false,
+                        lastUpdateMilliseconds: 1, startedAtMilliseconds: 1,
+                        finishedAtMilliseconds: nil
+                    ) : nil
             )
         }
 
@@ -845,6 +856,23 @@
                     ]
                 ),
             ]
+            if arguments.contains(
+                "--ui-testing-transcription-current-chapter-no-speech")
+            {
+                return transcripts.map { transcript in
+                    CachedChapterTranscript(
+                        chapterID: transcript.chapterID,
+                        chapterTitle: transcript.chapterTitle,
+                        chapterStartMilliseconds: transcript
+                            .chapterStartMilliseconds,
+                        chapterEndMilliseconds: transcript
+                            .chapterEndMilliseconds,
+                        localeIdentifier: transcript.localeIdentifier,
+                        segments: transcript.chapterID == 1
+                            ? [] : transcript.segments
+                    )
+                }
+            }
             let omitsCurrentChapter = arguments.contains(
                 "--ui-testing-transcription-current-chapter-untranscribed"
             )
