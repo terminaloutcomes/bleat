@@ -1,7 +1,9 @@
 import BleatCore
 import BleatTranscription
+import Charts
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 let websiteURL = "https://bleat.terminaloutcomes.com"
 
@@ -4912,6 +4914,42 @@ private struct BookDetailView: View {
 
 private struct StatisticsView: View {
     @Bindable var model: AppModel
+    @State private var selectedAccountID: AccountID?
+    @State private var range: StatisticsRange = .lifetime
+    @State private var customStart = Calendar.current.date(
+        byAdding: .month, value: -1, to: Date()
+    ) ?? Date()
+    @State private var customEnd = Date()
+    @State private var exportDocument: StatisticsJSONDocument?
+    @State private var exporting = false
+    @State private var importing = false
+    @State private var confirmingReset = false
+
+    private var selectedAccount: ServerAccount? {
+        model.accounts.first { $0.id == selectedAccountID }
+    }
+
+    private var query: StatisticsQuery {
+        let start: Date?
+        switch range {
+        case .lifetime: start = nil
+        case .week: start = Calendar.current.date(
+            byAdding: .day, value: -7, to: Date()
+        )
+        case .month: start = Calendar.current.date(
+            byAdding: .day, value: -30, to: Date()
+        )
+        case .custom: start = Calendar.current.startOfDay(for: customStart)
+        }
+        let end = range == .custom
+            ? Calendar.current.date(
+                byAdding: .day, value: 1,
+                to: Calendar.current.startOfDay(for: customEnd)
+            ) : nil
+        return StatisticsQuery(
+            accountID: selectedAccountID, start: start, end: end
+        )
+    }
 
     var body: some View {
         Group {
@@ -4926,14 +4964,43 @@ private struct StatisticsView: View {
                 )
             case .loaded(let summary):
                 List {
-                    Section("") {
+                    Section {
+                        Picker("Account", selection: $selectedAccountID) {
+                            Text("All Accounts").tag(nil as AccountID?)
+                            ForEach(model.accounts) { account in
+                                Text(account.user.username)
+                                    .tag(Optional(account.id))
+                            }
+                        }
+                        Picker("Range", selection: $range) {
+                            ForEach(StatisticsRange.allCases) { value in
+                                Text(value.title).tag(value)
+                            }
+                        }
+                        if range == .custom {
+                            DatePicker("From", selection: $customStart,
+                                       displayedComponents: .date)
+                            DatePicker("Through", selection: $customEnd,
+                                       in: customStart..., displayedComponents: .date)
+                        }
+                    }
+                    Section {
                         LabeledContent(
                             "Time Listening",
-                            value: duration(summary.realSeconds)
+                            value: duration(summary.realSeconds + liveRealSeconds)
                         )
+                        .accessibilityLabel("Time listening, \(range.title), \(scopeLabel), \(coverageLabel(summary))")
+                        if summary.realTimeCoverage != .thisApp {
+                            LabeledContent(
+                                "This App",
+                                value: duration(summary.localRealSeconds
+                                    + liveRealSeconds)
+                            )
+                        }
                         LabeledContent(
                             "Audiobook Time",
-                            value: duration(summary.audiobookSeconds)
+                            value: duration(summary.audiobookSeconds
+                                            + liveAudiobookSeconds)
                         )
                         if let speed = summary.effectiveAverageSpeed {
                             LabeledContent(
@@ -4945,6 +5012,9 @@ private struct StatisticsView: View {
                                 ) + "×"
                             )
                         }
+                        Text(coverageLabel(summary))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                     Section("Books") {
                         LabeledContent(
@@ -4974,26 +5044,211 @@ private struct StatisticsView: View {
                             value: summary.sessions.formatted()
                         )
                     }
-                    if summary.realTimeCoverage == .approximate {
+                    if summary.allDeviceBounds.upper
+                        > summary.allDeviceBounds.lower {
                         Section {
                             Label(
-                                "Some listening time is approximate because a server update had an uncertain result.",
+                                "All-device time is between \(duration(summary.allDeviceBounds.lower)) and \(duration(summary.allDeviceBounds.upper)) while a server update remains uncertain.",
                                 systemImage: "exclamationmark.triangle"
                             )
                         }
                     }
+                    if case .loaded(let exploration) = model.statisticsExploration {
+                        if !exploration.days.isEmpty {
+                            Section("This App by Day") {
+                                Chart(Array(exploration.days.suffix(30))) { day in
+                                    BarMark(
+                                        x: .value("Day", day.date, unit: .day),
+                                        y: .value("Hours", day.realSeconds / 3600)
+                                    )
+                                }
+                                .frame(height: 180)
+                                .accessibilityLabel("Daily listening hours in this app for \(range.title), \(scopeLabel)")
+                            }
+                        }
+                        if !exploration.books.isEmpty {
+                            Section("Books in This App") {
+                                ForEach(exploration.books) { book in
+                                    NavigationLink {
+                                        List {
+                                            LabeledContent("Time Listening", value: duration(book.realSeconds))
+                                            LabeledContent("Audiobook Time", value: duration(book.audiobookSeconds))
+                                        }
+                                        .navigationTitle(book.title)
+                                    } label: {
+                                        Text(book.title)
+                                    }
+                                }
+                            }
+                        }
+                        if !exploration.recentSessions.isEmpty {
+                            Section("Recent Sessions") {
+                                ForEach(exploration.recentSessions) { session in
+                                    NavigationLink {
+                                        List {
+                                            LabeledContent("Started", value: session.startedAt.formatted())
+                                            LabeledContent("Time Listening", value: duration(session.realSeconds))
+                                            LabeledContent("Coverage", value: session.coverage == .thisApp ? "This App" : "All Devices")
+                                        }
+                                        .navigationTitle(session.title)
+                                    } label: {
+                                        Text(session.title)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if let failure = model.statisticsHistoryFailure {
+                        Section {
+                            Label(failure.message,
+                                  systemImage: failure.systemImage)
+                        }
+                    }
+                    if let failure = model.statisticsArchiveFailure {
+                        Section {
+                            Label(failure.message,
+                                  systemImage: failure.systemImage)
+                        }
+                    }
+                    Section("History") {
+                        ForEach(model.accounts) { account in
+                            if selectedAccountID == nil
+                                || selectedAccountID == account.id {
+                                if let progress = model.statisticsHistoryProgress[account.id] {
+                                    LabeledContent(account.user.username,
+                                        value: model.statisticsHistoryFailedAccounts.contains(account.id)
+                                            ? "Import failed; cached data is stale"
+                                            : ((progress.startedAt ?? .distantPast)
+                                                > (progress.lastCompletedAt ?? .distantPast)
+                                                ? "\(progress.completedPages)/\(progress.totalPages) pages"
+                                                : (progress.lastCompletedAt?.formatted()
+                                                    ?? "Not imported")))
+                                } else if account.connectionState
+                                    == .reauthenticationRequired {
+                                    LabeledContent(account.user.username,
+                                                   value: "Sign-in required")
+                                }
+                            }
+                        }
+                    }
+                    Section("Your Data") {
+                        if let account = selectedAccount {
+                            Button("Export JSON") {
+                                Task {
+                                    if let data = await model.exportStatistics(
+                                        for: account, query: query
+                                    ) {
+                                        exportDocument = StatisticsJSONDocument(data: data)
+                                        exporting = true
+                                    }
+                                }
+                            }
+                            Button("Import JSON") { importing = true }
+                            Button("Reset Listening Statistics", role: .destructive) {
+                                confirmingReset = true
+                            }
+                        } else {
+                            Text("Select one account to export, import, or reset its history.")
+                        }
+                    }
                 }
                 .refreshable {
-                    await model.loadStatistics()
+                    await model.refreshStatisticsHistory(force: true)
                     await model.synchronizePrivateCloud()
                 }
             }
         }
         .navigationTitle("Listening Statistics")
         .task {
-            await model.loadStatistics()
+            await reload()
+            model.startStatisticsLiveUpdates()
+            await model.refreshStatisticsHistory(force: false)
+        }
+        .onDisappear { model.stopStatisticsLiveUpdates() }
+        .onChange(of: selectedAccountID) { _, _ in
+            Task { await reload() }
+        }
+        .onChange(of: range) { _, _ in
+            Task { await reload() }
+        }
+        .onChange(of: customStart) { _, _ in
+            Task { await reload() }
+        }
+        .onChange(of: customEnd) { _, _ in
+            Task { await reload() }
+        }
+        .fileExporter(
+            isPresented: $exporting,
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: "bleat-listening-statistics"
+        ) { _ in exportDocument = nil }
+        .fileImporter(isPresented: $importing,
+                      allowedContentTypes: [.json]) { result in
+            guard let account = selectedAccount else { return }
+            Task {
+                if case .success(let url) = result {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let handle = try FileHandle(forReadingFrom: url)
+                        defer { try? handle.close() }
+                        var data = Data()
+                        for try await byte in handle.bytes {
+                            data.append(byte)
+                        }
+                        _ = await model.importStatistics(data, for: account)
+                    } catch {
+                        model.reportStatisticsImportFileFailure()
+                    }
+                } else {
+                    model.reportStatisticsImportFileFailure()
+                }
+            }
+        }
+        .confirmationDialog(
+            "Reset listening statistics?",
+            isPresented: $confirmingReset,
+            titleVisibility: .visible
+        ) {
+            Button("Delete \(scopeLabel) Statistics", role: .destructive) {
+                Task { _ = await model.resetStatistics(query: query) }
+            }
+        } message: {
+            Text("This deletes \(scopeLabel) history for \(range.title) from Bleat and its private iCloud copy. Audiobookshelf sessions may return on a later import.")
         }
         .accessibilityIdentifier("statistics.view")
+    }
+
+    private var scopeLabel: String {
+        selectedAccount?.user.username ?? "All Accounts"
+    }
+
+    private var liveRealSeconds: Double {
+        guard let slice = model.statisticsLiveSlice,
+              query.contains(accountID: slice.accountID, date: slice.startedAt)
+        else { return 0 }
+        return slice.realSeconds
+    }
+
+    private var liveAudiobookSeconds: Double {
+        guard let slice = model.statisticsLiveSlice,
+              query.contains(accountID: slice.accountID, date: slice.startedAt)
+        else { return 0 }
+        return slice.audiobookSeconds
+    }
+
+    private func coverageLabel(_ summary: StatisticsSummary) -> String {
+        switch summary.realTimeCoverage {
+        case .thisApp: "This App"
+        case .allDevices: "All Devices (imported history)"
+        case .approximate: "Approximate all-device time"
+        case .stale: "Stale history"
+        }
+    }
+
+    private func reload() async {
+        await model.loadStatistics(query: query)
     }
 
     private func duration(_ seconds: Double) -> String {
@@ -5004,6 +5259,34 @@ private struct StatisticsView: View {
             return "\(minutes) min"
         }
         return "\(hours) hr \(minutes) min"
+    }
+}
+
+private enum StatisticsRange: String, CaseIterable, Identifiable {
+    case lifetime, week, month, custom
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .lifetime: "Lifetime"
+        case .week: "Last 7 Days"
+        case .month: "Last 30 Days"
+        case .custom: "Custom Dates"
+        }
+    }
+}
+
+private struct StatisticsJSONDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    private let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        throw CocoaError(.fileReadUnknown)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 

@@ -475,6 +475,13 @@ public actor AccountStore {
                         )
                 }
             }
+            for record in try modelContext.fetch(
+                FetchDescriptor<StatisticsHistoryImportRecord>()
+            ) {
+                if let canonical = mapping[record.accountID] {
+                    record.accountID = canonical
+                }
+            }
             let residuals = try migrateLegacyCaches(mapping: mapping)
             try modelContext.save()
             return AccountIdentityMigrationReport(residuals: residuals)

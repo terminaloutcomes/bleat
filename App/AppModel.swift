@@ -535,6 +535,7 @@ enum AppFailureCause: Equatable, Sendable {
     case inaccessibleLibrary, inaccessibleTags, explicitContentDenied
     case invalidPlaybackPosition, unknownPlaybackChapter
     case invalidPlaybackChapterOffset
+    case statisticsResetSplitSession
     case localDataReset(LocalDataResetFailure)
     case privateCloud(PrivateCloudSyncFailure)
 
@@ -566,6 +567,7 @@ struct AppFailure: Equatable, Sendable {
         case .invalidPlaybackPosition: "Invalid playback position"
         case .unknownPlaybackChapter: "Chapter unavailable"
         case .invalidPlaybackChapterOffset: "Invalid chapter position"
+        case .statisticsResetSplitSession: "Reset needs a wider range"
         case .itemNotFound: "Audiobook not found"
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
@@ -652,6 +654,8 @@ struct AppFailure: Equatable, Sendable {
             "The server returned incomplete or inconsistent data."
         case .localStorageUnavailable:
             "Bleat could not save or read the required data on this device."
+        case .statisticsResetSplitSession:
+            "This range splits a playback session whose listening time was already synchronized. Select a range containing the whole session or reset the account."
         case .unavailableOffline:
             "This information has not been saved for offline access."
         case .serverUnavailable:
@@ -694,6 +698,7 @@ struct AppFailure: Equatable, Sendable {
         case .playbackIdentityMismatch, .invalidPlaybackPosition,
             .unknownPlaybackChapter, .invalidPlaybackChapterOffset:
             "exclamationmark.triangle"
+        case .statisticsResetSplitSession: "calendar.badge.exclamationmark"
         case .inaccessibleLibrary, .inaccessibleTags,
             .explicitContentDenied:
             "lock"
@@ -825,10 +830,13 @@ struct AppFailure: Equatable, Sendable {
             case .accountPersistenceFailed, .credentialRollbackFailed:
                 return .localStorageUnavailable
             }
+        case .statistics(.partialSessionResetRequiresFullSession):
+            return .statisticsResetSplitSession
         case .accountStore, .credentialStore, .accountIdentityMigration,
             .libraryCache,
             .transcriptCache, .statistics:
             return .localStorageUnavailable
+        case .statisticsHistory(let error): return apiCause(error)
         case .localDataReset(let error):
             return .localDataReset(error)
         case .privateCloud(let error):
@@ -949,7 +957,7 @@ struct AppFailure: Equatable, Sendable {
         case .unexpectedStatus(let status): statusCause(status)
         case .malformedResponse, .invalidLibrary, .invalidPage,
             .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults,
-            .invalidPersonalizedShelves:
+            .invalidPersonalizedShelves, .invalidListeningSessions:
             .invalidServerResponse
         case .cancelled: .requestCancelled
         case .invalidAccountID, .routeConstruction: .requestRejected
@@ -1121,6 +1129,7 @@ extension AppFailureCause {
         case .serverUnsupported, .localLoginUnavailable:
             .unsupported
         case .invalidInput, .serverRequiresHTTPS,
+            .statisticsResetSplitSession,
             .authenticationSessionInProgress, .accountUnavailable,
             .invalidPlaybackPosition, .unknownPlaybackChapter,
             .invalidPlaybackChapterOffset,
@@ -1447,6 +1456,16 @@ final class AppModel {
     }
     private(set) var bookFinishedStates: [LibraryItemID: Bool] = [:]
     private(set) var statistics: ResourceState<StatisticsSummary> = .idle
+    private(set) var statisticsExploration:
+        ResourceState<StatisticsExploration> = .idle
+    private(set) var statisticsLiveSlice: ListeningSlice?
+    private var statisticsLiveTask: Task<Void, Never>?
+    private(set) var statisticsHistoryProgress:
+        [AccountID: StatisticsHistoryProgress] = [:]
+    private(set) var statisticsHistoryFailure: AppFailure?
+    private(set) var statisticsHistoryFailedAccounts: Set<AccountID> = []
+    private(set) var statisticsArchiveFailure: AppFailure?
+    private var statisticsQuery: StatisticsQuery?
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var cloudAccountRestoreState: CloudAccountRestoreState = .idle
     private(set) var privateCloudSyncAvailable = true
@@ -1918,6 +1937,9 @@ final class AppModel {
             )
             await loadLibraries()
             await loadStatistics()
+            Task { await self.refreshStatisticsHistory(
+                force: false, targetAccountID: restoredAccount.id
+            ) }
             startLiveUpdates(for: restoredAccount)
             await diagnostics.record(
                 .completed(.appStart, category: .app)
@@ -2007,6 +2029,9 @@ final class AppModel {
             schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
+            Task { await self.refreshStatisticsHistory(
+                force: false, targetAccountID: authenticatedAccount.id
+            ) }
             await synchronizePrivateCloud()
             startLiveUpdates(for: authenticatedAccount)
             telemetryOutcome = .succeeded
@@ -2049,6 +2074,9 @@ final class AppModel {
             await downloads.start(account: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
+            Task { await self.refreshStatisticsHistory(
+                force: false, targetAccountID: authenticatedAccount.id
+            ) }
             startLiveUpdates(for: authenticatedAccount)
             await diagnostics.record(.completed(.login, category: .auth))
             return true
@@ -2104,6 +2132,9 @@ final class AppModel {
             loginStatus = .idle
             await loadLibraries()
             await loadStatistics()
+            Task { await self.refreshStatisticsHistory(
+                force: false, targetAccountID: authenticated.id
+            ) }
             startLiveUpdates(for: authenticated)
             return true
         } catch let error {
@@ -5055,14 +5086,31 @@ final class AppModel {
         }
     }
 
-    func loadStatistics() async {
+    func loadStatistics(query: StatisticsQuery? = nil) async {
+        if let query {
+            statisticsQuery = query
+        }
         statistics = .loading
+        statisticsExploration = .loading
+        let effectiveQuery = statisticsQuery
+            ?? StatisticsQuery(accountID: account?.id)
         do {
-            statistics = .loaded(
-                try await service.statisticsSummary(
-                    query: StatisticsQuery(accountID: account?.id)
-                )
+            let summary = try await service.statisticsSummary(
+                query: effectiveQuery
             )
+            let affectedAccounts = accounts.filter {
+                effectiveQuery.accountID == nil
+                    || effectiveQuery.accountID == $0.id
+            }
+            let stale = affectedAccounts.contains {
+                $0.connectionState != .connected
+                    || statisticsHistoryFailedAccounts.contains($0.id)
+                    || (summary.realTimeCoverage != .thisApp
+                        && statisticsHistoryProgress[$0.id]?
+                            .lastCompletedAt == nil)
+            }
+            statistics = .loaded(stale ? summary.withCoverage(.stale)
+                                        : summary)
         } catch let error {
             statistics = .failed(
                 AppFailure(
@@ -5070,6 +5118,126 @@ final class AppModel {
                     serviceError: error
                 )
             )
+        }
+        do {
+            statisticsExploration = .loaded(
+                try await service.statisticsExploration(query: effectiveQuery)
+            )
+        } catch let error {
+            statisticsExploration = .failed(AppFailure(
+                operation: .loadStatistics, serviceError: error
+            ))
+        }
+    }
+
+    func startStatisticsLiveUpdates() {
+        statisticsLiveTask?.cancel()
+        statisticsLiveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.statisticsLiveSlice =
+                    await self.service.uncommittedStatisticsSlice(
+                        accountID: self.statisticsQuery?.accountID
+                    )
+                for account in self.accounts {
+                    if let progress = try? await self.service
+                        .statisticsHistoryProgress(for: account.id) {
+                        self.statisticsHistoryProgress[account.id] = progress
+                    }
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    func stopStatisticsLiveUpdates() {
+        statisticsLiveTask?.cancel()
+        statisticsLiveTask = nil
+        statisticsLiveSlice = nil
+    }
+
+    func refreshStatisticsHistory(force: Bool,
+                                  targetAccountID: AccountID? = nil) async {
+        statisticsHistoryFailure = nil
+        let selected = targetAccountID ?? statisticsQuery?.accountID
+        for target in accounts where selected == nil || selected == target.id {
+            do {
+                statisticsHistoryProgress[target.id] =
+                    try await service.importStatisticsHistory(
+                        for: target, force: force
+                    )
+                statisticsHistoryFailedAccounts.remove(target.id)
+            } catch let error {
+                statisticsHistoryFailedAccounts.insert(target.id)
+                statisticsHistoryFailure = AppFailure(
+                    operation: .loadStatistics, serviceError: error
+                )
+            }
+        }
+        await loadStatistics()
+    }
+
+    func exportStatistics(for account: ServerAccount,
+                          query: StatisticsQuery) async -> Data? {
+        statisticsArchiveFailure = nil
+        do {
+            return try await service.exportStatistics(
+                for: account, query: query
+            )
+        } catch let error {
+            statisticsArchiveFailure = AppFailure(
+                operation: .loadStatistics, serviceError: error
+            )
+            return nil
+        }
+    }
+
+    func reportStatisticsImportFileFailure() {
+        statisticsArchiveFailure = AppFailure(
+            .loadStatistics, .localStorageUnavailable
+        )
+    }
+
+    @discardableResult
+    func importStatistics(_ data: Data,
+                          for account: ServerAccount) async -> Bool {
+        statisticsArchiveFailure = nil
+        do {
+            try await service.importStatistics(data, for: account)
+            await loadStatistics()
+            await synchronizeStatisticsMutationToPrivateCloud()
+            return true
+        } catch let error {
+            statisticsArchiveFailure = AppFailure(
+                operation: .loadStatistics, serviceError: error
+            )
+            return false
+        }
+    }
+
+    @discardableResult
+    func resetStatistics(query: StatisticsQuery) async -> Bool {
+        statisticsArchiveFailure = nil
+        do {
+            try await service.resetStatistics(query: query)
+            await loadStatistics()
+            await synchronizeStatisticsMutationToPrivateCloud()
+            return true
+        } catch let error {
+            statisticsArchiveFailure = AppFailure(
+                operation: .loadStatistics, serviceError: error
+            )
+            return false
+        }
+    }
+
+    private func synchronizeStatisticsMutationToPrivateCloud() async {
+        if let current = privateCloudSyncTask {
+            await current.value
+        }
+        await synchronizePrivateCloud()
+        if case .failed(let failure) = privateCloudState {
+            statisticsArchiveFailure = failure
         }
     }
 
@@ -5242,6 +5410,9 @@ final class AppModel {
             await downloads.start(account: authenticated)
             await loadLibraries()
             await loadStatistics()
+            Task { await self.refreshStatisticsHistory(
+                force: false, targetAccountID: authenticated.id
+            ) }
             startLiveUpdates(for: authenticated)
             return true
         } catch let error {
@@ -5502,6 +5673,7 @@ final class AppModel {
         await invalidatePlaybackStarts()
         let removingBrowsingAccount = account.id == self.account?.id
         accountActionStatus = .removing
+        await service.suspendStatisticsHistoryImport(for: account.id)
         seriesDownloadBlockedAccounts.insert(account.id)
         if removingBrowsingAccount {
             await stopLiveUpdatesAndWait()
@@ -5569,6 +5741,7 @@ final class AppModel {
             seriesDownloadBlockedAccounts.remove(account.id)
             return true
         } catch let error {
+            await service.resumeStatisticsHistoryImport(for: account.id)
             let failure = AppFailure(
                 operation: .removeAccount, serviceError: error)
             accountActionStatus = .failed(

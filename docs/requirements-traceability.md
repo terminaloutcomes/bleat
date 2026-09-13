@@ -213,8 +213,8 @@ own signed wrong-claim matrix.
 
 ## Acceptance criteria
 
-The identifiers below are stable. `AC-12` through `AC-20` describe post-1.0
-statistics scope; remaining work is tracked in
+The identifiers below are stable. `AC-12` through `AC-20` describe
+statistics scope; remaining evidence is tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). The
 other rows map section 22 release criteria.
 
@@ -235,9 +235,9 @@ other rows map section 22 release criteria.
 | AC-13 | One hour at 2× records one real hour and two audiobook hours while seeks record neither | `StatisticsTests` covers rate and seek accounting; long-duration coverage remains | implemented |
 | AC-14 | Multi-account statistics do not merge identity collisions | `StatisticsRepository`, account-scoped record keys | implemented |
 | AC-15 | Required counts and finished runtime display correctly | `StatisticsRepository`, `StatisticsView`, `StatisticsTests` | implemented |
-| AC-16 | Post-1.0 remote and local sources deduplicate with coverage labels | [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | not-started |
+| AC-16 | Remote and local sources deduplicate with coverage labels | `StatisticsRepository`, `AudiobookshelfAPI.listeningSessions`, `StatisticsView`; focused host tests cover bounded totals and account identity; live paging evidence remains in [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | implemented |
 | AC-17 | Live statistics survive relaunch with no more than five seconds lost | `ListeningAccumulator`, SwiftData records, `StatisticsTests` | implemented |
-| AC-18 | Post-1.0 statistics export/import is redacted and idempotent | [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | not-started |
+| AC-18 | Statistics export/import is redacted and idempotent | `StatisticsArchive.portableRedacted`, `LiveAppService.importStatistics`, `StatisticsTests.testPortableArchiveHidesSessionIDsAndReimportDoesNotDuplicate`; app journey evidence remains in [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | implemented |
 | AC-19 | Ambiguous synchronization remains visibly approximate without altering the exact local ledger | `StatisticsSessionAccountingRecord`, `StatisticsView` | implemented |
 | AC-20 | Online synchronization sends only the new listening delta | `StatisticsRepository.pendingRealSeconds`, `PlaybackModel.syncProgress` | implemented |
 | AC-21 | Multi-file boundaries transition without perceptible skipping, repetition, gaps, clicks, or interruption | Functional transition coverage exists; manual release-client validation recorded in [GitHub issue #32](https://github.com/terminaloutcomes/bleat/issues/32) found no perceptible boundary defect | verified |

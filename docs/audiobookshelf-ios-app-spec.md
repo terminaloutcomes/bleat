@@ -52,7 +52,7 @@ These decisions keep the first release bounded:
 | CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, and verified complete downloads; account and download management remain phone-only. Managed entitlement enablement and real-environment validation are deferred until after 1.0 |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
-| Statistics and time tracking | Deferred until after the MVP. Section 12 retains the intended design, and [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks the remaining implementation; it is not an MVP or 1.0 release requirement |
+| Statistics and time tracking | Local measurement and lifetime summaries are implemented. [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks server-history, exploration, portability, and remaining validation evidence |
 | Cleartext HTTP | Not supported in production builds |
 | Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
 | Third-party analytics | None by default |
@@ -367,10 +367,10 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Explicit cancellation, account removal, or book deletion stops the relevant
   active transcription task.
 
-### 4.6 Listening statistics — post-MVP
+### 4.6 Listening statistics
 
-This user story is intentionally deferred until after the MVP. Its remaining
-implementation is tracked in
+A first Statistics view is implemented. Per-book chapter and completion detail,
+large-ledger performance, and end-to-end evidence remain tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 - I can see lifetime totals across all configured Audiobookshelf accounts or filter to one account.
@@ -1352,9 +1352,9 @@ rules.
 ## 12. Lifetime listening statistics
 
 The app implements the local ledger, completion milestones, lifetime summary,
-and private CloudKit merge. Paginated server-history import, user-facing
-archive import/export, range charts, and large-ledger performance work remain
-deferred in
+private CloudKit merge, paginated server-history import, selected-account JSON
+portability, date-range exploration, and confirmed local reset. Large-ledger
+performance and end-to-end evidence remain tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 ### 12.1 Metric definitions
@@ -1453,6 +1453,7 @@ Listening history contains personal behavioral data. It receives the same file p
 - Ordinary sign-out retains statistics.
 - Removing an account presents separate choices for credentials/cache/downloads and listening history.
 - “Reset listening statistics” identifies the affected account/range and is destructive only after confirmation.
+- A range that cuts through a partly synchronized playback session is rejected with a typed explanation; a wider range or full-account reset avoids ambiguous sync attribution.
 - Export produces a versioned JSON document with no tokens, cookies, server-session URLs, or local media paths. The share sheet warns that titles and listening times are personal.
 - Import validates schema and account mapping, then upserts by stable event/session ID so importing the same file twice changes nothing.
 - Structured statistics remain eligible for encrypted device backup; downloaded audio and regenerable covers remain excluded.
@@ -2033,7 +2034,7 @@ wire schema must be re-audited before release as part of GitHub issue 68.
   invalid or obsolete background tasks are cancelled.
 - Repeated play taps cannot create multiple simultaneous server sessions.
 
-The following targets apply to the deferred post-MVP statistics work tracked in
+The following targets apply to the statistics work tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
 - Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
@@ -2052,7 +2053,7 @@ The following targets apply to the deferred post-MVP statistics work tracked in
 - whole-book/track/chapter time mapping;
 - speed persistence and pitch-algorithm selection;
 
-The following advanced statistics tests remain post-MVP under
+The following additional statistics evidence remains tracked under
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
 - wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;

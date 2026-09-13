@@ -183,6 +183,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case legacyDiagnosticDirectoryRemovalFailed =
         "legacy_diagnostic_directory_removal_failed"
     case invalidInput = "invalid_input"
+    case statisticsResetSplitSession = "statistics_reset_split_session"
     case authenticationRequired = "authentication_required"
     case permissionDenied = "permission_denied"
     case itemNotFound = "item_not_found"
