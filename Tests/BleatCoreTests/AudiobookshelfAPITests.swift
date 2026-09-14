@@ -4,6 +4,54 @@ import XCTest
 @testable import BleatCore
 
 final class AudiobookshelfAPITests: XCTestCase {
+    func testListeningSessionsUseZeroIndexedPrefixedRouteAndPinnedShape()
+        async throws
+    {
+        let fixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try Self.fixture(named: "listening-sessions-page"),
+                statusCode: 200
+            )
+        ])
+        let result = try await fixture.api.listeningSessions(page: 0)
+        let requests = await fixture.transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        let components = try XCTUnwrap(
+            URLComponents(
+                url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false
+            ))
+        XCTAssertEqual(
+            components.path, "/audiobookshelf/api/me/listening-sessions")
+        XCTAssertEqual(
+            components.queryItems,
+            [
+                URLQueryItem(name: "itemsPerPage", value: "500"),
+                URLQueryItem(name: "page", value: "0"),
+            ])
+        XCTAssertEqual(result.value.total, 2)
+        XCTAssertEqual(result.value.sessions.count, 1)
+        XCTAssertEqual(
+            result.value.sessions.first?.itemID.rawValue, "book-item-1")
+        XCTAssertEqual(result.value.sessions.first?.realSeconds, 60)
+    }
+
+    func testListeningSessionsRootHostedRoute() async throws {
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: try Self.fixture(named: "listening-sessions-page"),
+                    statusCode: 200
+                )
+            ],
+            serverAddress: "https://example.com"
+        )
+        _ = try await fixture.api.listeningSessions(page: 0)
+        let requests = await fixture.transport.recordedRequests()
+        XCTAssertEqual(
+            requests.first?.url?.path,
+            "/api/me/listening-sessions")
+    }
+
     func testBookDetailUsesNativeAccountAndMapsExpandedContract()
         async throws
     {
@@ -1521,7 +1569,8 @@ private struct APIFixture {
         responses: [HTTPResponse] = [],
         responsesByPath: [String: [HTTPResponse]] = [:],
         delayProgressResponses: Bool = false,
-        includeCredentials: Bool = true
+        includeCredentials: Bool = true,
+        serverAddress: String = "https://example.com/audiobookshelf"
     ) throws {
         transport = APIScriptTransport(
             responses: responses,
@@ -1538,9 +1587,7 @@ private struct APIFixture {
         )
         let account = try ServerAccount(
             id: AccountID(rawValue: "account"),
-            server: NormalizedServerURL(
-                "https://example.com/audiobookshelf"
-            ),
+            server: NormalizedServerURL(serverAddress),
             serverVersion: "2.36.0",
             authenticationMethods: [.local],
             user: AuthenticatedUser(

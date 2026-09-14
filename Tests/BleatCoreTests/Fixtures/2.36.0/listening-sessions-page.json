@@ -1,0 +1,31 @@
+{
+  "total": 2,
+  "numPages": 1,
+  "page": 0,
+  "itemsPerPage": 500,
+  "sessions": [
+    {
+      "id": "remote-session-1",
+      "libraryItemId": "book-item-1",
+      "mediaType": "book",
+      "startedAt": 1750000000000,
+      "updatedAt": 1750000060000,
+      "timeListening": 60,
+      "currentTime": 120,
+      "duration": 3600,
+      "displayTitle": "A Book",
+      "displayAuthor": "An Author",
+      "chapters": null
+    },
+    {
+      "id": "podcast-session",
+      "libraryItemId": "podcast-item",
+      "mediaType": "podcast",
+      "startedAt": 1750000000000,
+      "updatedAt": 1750000060000,
+      "timeListening": 60,
+      "currentTime": 120,
+      "duration": 3600
+    }
+  ]
+}

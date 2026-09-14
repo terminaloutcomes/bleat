@@ -34,6 +34,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidBookDetail
     case invalidSearchResults
     case invalidPersonalizedShelves
+    case invalidListeningSessions
 }
 
 public actor AudiobookshelfAPI<
@@ -85,6 +86,86 @@ public actor AudiobookshelfAPI<
         }
         return AudiobookshelfAPIResult(
             value: libraries,
+            correlationID: result.correlationID
+        )
+    }
+
+    public func listeningSessions(page: Int, itemsPerPage: Int = 500)
+        async throws(AudiobookshelfAPIError)
+        -> AudiobookshelfAPIResult<ListeningSessionsPage>
+    {
+        guard page >= 0, (1...500).contains(itemsPerPage) else {
+            throw .invalidPage
+        }
+        let result: AudiobookshelfAPIResult<ListeningSessionsPageDTO> =
+            try await get(
+                .listeningSessions,
+                queryItems: [
+                    URLQueryItem(
+                        name: "itemsPerPage", value: String(itemsPerPage)),
+                    URLQueryItem(name: "page", value: String(page)),
+                ],
+                as: ListeningSessionsPageDTO.self
+            )
+        let payload = result.value
+        guard payload.page == page,
+            payload.itemsPerPage == itemsPerPage,
+            payload.total >= 0,
+            payload.numPages >= 0,
+            payload.numPages == payload.total / itemsPerPage
+                + (payload.total % itemsPerPage == 0 ? 0 : 1),
+            page < payload.numPages || (page == 0 && payload.total == 0),
+            payload.sessions.count <= itemsPerPage
+        else {
+            throw .invalidListeningSessions
+        }
+        var sessions: [RemoteListeningSession] = []
+        sessions.reserveCapacity(payload.sessions.count)
+        for value in payload.sessions
+        where value.mediaType == "book"
+            || (value.mediaType == nil && value.bookID != nil)
+        {
+            guard !value.id.isEmpty,
+                let startedAt = value.startedAt ?? value.updatedAt,
+                let updatedAt = value.updatedAt ?? value.startedAt,
+                startedAt.isFinite, updatedAt.isFinite,
+                (value.timeListening ?? 0).isFinite,
+                (value.timeListening ?? 0) >= 0,
+                (value.currentTime ?? 0).isFinite,
+                (value.currentTime ?? 0) >= 0,
+                (value.duration ?? 0).isFinite,
+                (value.duration ?? 0) >= 0
+            else {
+                throw .invalidListeningSessions
+            }
+            let itemID =
+                value.libraryItemID
+                ?? value.bookID.map { "book:\($0)" }
+                ?? "session:\(value.id)"
+            sessions.append(
+                RemoteListeningSession(
+                    id: PlaybackSessionID(rawValue: value.id),
+                    accountID: accountID,
+                    itemID: LibraryItemID(rawValue: itemID),
+                    startedAt: Date(timeIntervalSince1970: startedAt / 1000),
+                    updatedAt: Date(timeIntervalSince1970: updatedAt / 1000),
+                    realSeconds: value.timeListening ?? 0,
+                    currentTime: value.currentTime ?? 0,
+                    duration: value.duration ?? 0,
+                    title: value.displayTitle ?? "Untitled",
+                    author: value.displayAuthor ?? ""
+                ))
+        }
+        return AudiobookshelfAPIResult(
+            value: ListeningSessionsPage(
+                total: payload.total,
+                numPages: payload.numPages,
+                page: payload.page,
+                fingerprint: payload.sessions.map {
+                    $0.id + ":" + String($0.updatedAt ?? 0)
+                },
+                sessions: sessions
+            ),
             correlationID: result.correlationID
         )
     }
@@ -470,6 +551,45 @@ private enum LibraryMediaTypeDTO: Decodable, Sendable {
         case .unknown(let value):
             .unknown(value)
         }
+    }
+}
+
+public struct ListeningSessionsPage: Sendable {
+    public let total: Int
+    public let numPages: Int
+    public let page: Int
+    public let fingerprint: [String]
+    public let sessions: [RemoteListeningSession]
+}
+
+// Pinned source: server/controllers/MeController.js and
+// server/models/PlaybackSession.js at 96d4021a3cd45f67bf374b65abafbe5d73e926b5.
+private struct ListeningSessionsPageDTO: Decodable, Sendable {
+    let total: Int
+    let numPages: Int
+    let page: Int
+    let itemsPerPage: Int
+    let sessions: [ListeningSessionDTO]
+}
+
+private struct ListeningSessionDTO: Decodable, Sendable {
+    let id: String
+    let libraryItemID: String?
+    let bookID: String?
+    let mediaType: String?
+    let startedAt: Double?
+    let updatedAt: Double?
+    let timeListening: Double?
+    let currentTime: Double?
+    let duration: Double?
+    let displayTitle: String?
+    let displayAuthor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, mediaType, startedAt, updatedAt, timeListening
+        case currentTime, duration, displayTitle, displayAuthor
+        case libraryItemID = "libraryItemId"
+        case bookID = "bookId"
     }
 }
 

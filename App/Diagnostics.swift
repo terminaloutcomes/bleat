@@ -259,6 +259,8 @@ extension AppFailure {
         case (_, .persistenceUnavailable): .persistenceUnavailable
         case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput
+        case (_, .statisticsResetSplitSession):
+            .statisticsResetSplitSession
         case (_, .serverRequiresHTTPS): .serverRequiresHTTPS
         case (_, .serverNotReady): .serverNotReady
         case (_, .serverUnsupported): .serverUnsupported

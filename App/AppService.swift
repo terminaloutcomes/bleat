@@ -176,8 +176,17 @@ enum AppServiceError: Error, Equatable, Sendable {
     case libraryCache(LibraryCacheError)
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
+    case statisticsHistory(AudiobookshelfAPIError)
     case privateCloud(PrivateCloudSyncFailure)
     case localDataReset(LocalDataResetFailure)
+}
+
+private struct PortableStatisticsDocument: Codable {
+    let version: Int
+    let sourceAccountID: AccountID
+    let serverURL: String
+    let remoteUserID: UserID
+    let archive: StatisticsArchive
 }
 
 enum LocalDataResetFailure: Error, Equatable, Sendable {
@@ -663,6 +672,38 @@ protocol AppServicing: Sendable {
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary
 
+    func statisticsExploration(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsExploration
+
+    func uncommittedStatisticsSlice(accountID: AccountID?)
+        async -> ListeningSlice?
+
+    func importStatisticsHistory(
+        for account: ServerAccount,
+        force: Bool
+    ) async throws(AppServiceError) -> StatisticsHistoryProgress
+
+    func suspendStatisticsHistoryImport(for accountID: AccountID) async
+    func resumeStatisticsHistoryImport(for accountID: AccountID) async
+
+    func statisticsHistoryProgress(for accountID: AccountID)
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+
+    func exportStatistics(
+        for account: ServerAccount,
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> Data
+
+    func importStatistics(
+        _ data: Data,
+        for account: ServerAccount
+    ) async throws(AppServiceError)
+
+    func resetStatistics(
+        query: StatisticsQuery
+    ) async throws(AppServiceError)
+
     func recordCompletion(
         _ milestone: CompletionMilestone
     ) async throws(AppServiceError)
@@ -955,6 +996,52 @@ extension AppServicing {
         .empty
     }
 
+    func statisticsExploration(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsExploration {
+        .empty
+    }
+
+    func uncommittedStatisticsSlice(accountID: AccountID?)
+        async -> ListeningSlice?
+    { nil }
+
+    func importStatisticsHistory(
+        for account: ServerAccount,
+        force: Bool
+    ) async throws(AppServiceError) -> StatisticsHistoryProgress {
+        StatisticsHistoryProgress(
+            startedAt: nil, lastCompletedAt: nil,
+            completedPages: 0, totalPages: 0
+        )
+    }
+
+    func suspendStatisticsHistoryImport(for accountID: AccountID) async {}
+    func resumeStatisticsHistoryImport(for accountID: AccountID) async {}
+
+    func statisticsHistoryProgress(for accountID: AccountID)
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+    {
+        StatisticsHistoryProgress(
+            startedAt: nil, lastCompletedAt: nil,
+            completedPages: 0, totalPages: 0
+        )
+    }
+
+    func exportStatistics(
+        for account: ServerAccount,
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> Data { Data() }
+
+    func importStatistics(
+        _ data: Data,
+        for account: ServerAccount
+    ) async throws(AppServiceError) {}
+
+    func resetStatistics(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) {}
+
     func recordCompletion(
         _ milestone: CompletionMilestone
     ) async throws(AppServiceError) {}
@@ -1073,6 +1160,14 @@ actor LiveAppService: AppServicing {
     private let libraryCache: LibraryCache
     private let transcriptCache: ChapterTranscriptCache
     private let statisticsRepository: StatisticsRepository
+    private struct StatisticsHistoryTask {
+        let id: UUID
+        let task: Task<StatisticsHistoryProgress, Error>
+    }
+    private var statisticsHistoryTasks: [AccountID: StatisticsHistoryTask] = [:]
+    private var suspendedStatisticsHistoryAccounts: Set<AccountID> = []
+    private var statisticsHistorySkipAutomaticAccounts: Set<AccountID> = []
+    private var statisticsHistoryResetAll = false
     private let privateCloudSync: PrivateCloudSyncCoordinator?
     private var didMigrateAccountIdentities = false
     private var networkPathMonitor: AppNetworkPathMonitor?
@@ -1370,6 +1465,7 @@ actor LiveAppService: AppServicing {
                 primary: account.server,
                 usage: .primary
             )
+            suspendedStatisticsHistoryAccounts.remove(account.id)
             return account
         } catch let error {
             throw .onboarding(error)
@@ -2026,6 +2122,10 @@ actor LiveAppService: AppServicing {
                 if canonicalID == account.id {
                     try await accountStore.save(persisted)
                 } else {
+                    await suspendStatisticsHistoryImport(for: account.id)
+                    defer {
+                        suspendedStatisticsHistoryAccounts.remove(account.id)
+                    }
                     let migration = AccountIdentityMigration(
                         legacyID: account.id,
                         canonicalID: canonicalID
@@ -2064,6 +2164,10 @@ actor LiveAppService: AppServicing {
                         }
                     )
                 if persisted.id != account.id {
+                    await suspendStatisticsHistoryImport(for: account.id)
+                    defer {
+                        suspendedStatisticsHistoryAccounts.remove(account.id)
+                    }
                     let migration = AccountIdentityMigration(
                         legacyID: account.id,
                         canonicalID: persisted.id
@@ -2173,6 +2277,7 @@ actor LiveAppService: AppServicing {
                 primary: account.server,
                 usage: .primary
             )
+            suspendedStatisticsHistoryAccounts.remove(account.id)
             return account
         } catch let error {
             throw .onboarding(error)
@@ -2199,6 +2304,7 @@ actor LiveAppService: AppServicing {
                 primary: authenticated.server,
                 usage: .primary
             )
+            suspendedStatisticsHistoryAccounts.remove(authenticated.id)
             return authenticated
         } catch let error {
             throw .onboarding(error)
@@ -2241,6 +2347,7 @@ actor LiveAppService: AppServicing {
                 primary: authenticated.server,
                 usage: .primary
             )
+            suspendedStatisticsHistoryAccounts.remove(authenticated.id)
             return authenticated
         } catch let error {
             throw .onboarding(error)
@@ -2979,6 +3086,7 @@ actor LiveAppService: AppServicing {
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
+        await suspendStatisticsHistoryImport(for: account.id)
         primaryPlaybackMediaAccounts.remove(account.id)
         await stopLiveUpdates(for: account.id)
         do {
@@ -3005,6 +3113,11 @@ actor LiveAppService: AppServicing {
     }
 
     func resetLocalData() async throws(AppServiceError) {
+        statisticsHistoryResetAll = true
+        defer { statisticsHistoryResetAll = false }
+        for accountID in Array(statisticsHistoryTasks.keys) {
+            await cancelStatisticsHistoryImport(for: accountID)
+        }
         primaryPlaybackMediaAccounts.removeAll()
         let activeAccountIDs = Array(liveClients.keys)
         for accountID in activeAccountIDs {
@@ -3030,6 +3143,7 @@ actor LiveAppService: AppServicing {
             try context.delete(model: RemoteListeningSessionRecord.self)
             try context.delete(model: PrivateCloudStatisticsDeletionRecord.self)
             try context.delete(model: StatisticsSessionAccountingRecord.self)
+            try context.delete(model: StatisticsHistoryImportRecord.self)
             try context.save()
         } catch {
             throw .localDataReset(.persistentStore)
@@ -3046,6 +3160,7 @@ actor LiveAppService: AppServicing {
         _ account: ServerAccount,
         includeStatistics: Bool
     ) async throws(AppServiceError) {
+        await suspendStatisticsHistoryImport(for: account.id)
         primaryPlaybackMediaAccounts.remove(account.id)
         await stopLiveUpdates(for: account.id)
         do {
@@ -3131,6 +3246,307 @@ actor LiveAppService: AppServicing {
     ) async throws(AppServiceError) -> StatisticsSummary {
         do {
             return try await statisticsRepository.summary(query: query)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func statisticsExploration(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> StatisticsExploration {
+        do {
+            return try await statisticsRepository.exploration(query: query)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func uncommittedStatisticsSlice(accountID: AccountID?)
+        async -> ListeningSlice?
+    {
+        await statisticsRepository.uncommittedSlice(accountID: accountID)
+    }
+
+    func importStatisticsHistory(
+        for account: ServerAccount,
+        force: Bool
+    ) async throws(AppServiceError) -> StatisticsHistoryProgress {
+        if statisticsHistoryResetAll {
+            throw .statisticsHistory(.cancelled)
+        }
+        if suspendedStatisticsHistoryAccounts.contains(account.id) {
+            throw .statisticsHistory(.cancelled)
+        }
+        if statisticsHistorySkipAutomaticAccounts.contains(account.id) {
+            if !force {
+                return try await statisticsHistoryProgress(for: account.id)
+            }
+            statisticsHistorySkipAutomaticAccounts.remove(account.id)
+        }
+        let persistedAccounts: [ServerAccount]
+        do {
+            persistedAccounts = try await accountStore.accounts()
+        } catch let error {
+            throw .accountStore(error)
+        }
+        guard persistedAccounts.contains(where: { $0.id == account.id }) else {
+            throw .statistics(.invalidAccountMapping)
+        }
+        if statisticsHistoryResetAll
+            || suspendedStatisticsHistoryAccounts.contains(account.id)
+        {
+            throw .statisticsHistory(.cancelled)
+        }
+        if let existing = statisticsHistoryTasks[account.id] {
+            do { return try await existing.task.value } catch let error
+                as AppServiceError
+            { throw error } catch { throw .statisticsHistory(.cancelled) }
+        }
+        let task = Task {
+            try await performStatisticsHistoryImport(
+                for: account, force: force
+            )
+        }
+        let taskID = UUID()
+        statisticsHistoryTasks[account.id] = StatisticsHistoryTask(
+            id: taskID, task: task
+        )
+        defer {
+            if statisticsHistoryTasks[account.id]?.id == taskID {
+                statisticsHistoryTasks[account.id] = nil
+            }
+        }
+        do { return try await task.value } catch let error as AppServiceError {
+            throw error
+        } catch { throw .statisticsHistory(.cancelled) }
+    }
+
+    func statisticsHistoryProgress(for accountID: AccountID)
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+    {
+        do {
+            return try await statisticsRepository.historyProgress(
+                accountID: accountID
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    private func performStatisticsHistoryImport(
+        for account: ServerAccount,
+        force: Bool
+    ) async throws(AppServiceError) -> StatisticsHistoryProgress {
+        let previous: StatisticsHistoryProgress
+        do {
+            previous = try await statisticsRepository.historyProgress(
+                accountID: account.id
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+        if !force,
+            let last = [
+                previous.lastCompletedAt, previous.startedAt,
+            ].compactMap({ $0 }).max(),
+            Date().timeIntervalSince(last) < 86_400
+        {
+            return previous
+        }
+        let api = AudiobookshelfAPI(
+            account: account,
+            authCoordinator: coordinator
+        )
+        do {
+            try await statisticsRepository.updateHistoryProgress(
+                accountID: account.id,
+                completedPages: 0,
+                totalPages: 0,
+                completed: false
+            )
+            for attempt in 0..<2 {
+                let first = try await api.listeningSessions(page: 0).value
+                try await statisticsRepository.updateHistoryProgress(
+                    accountID: account.id,
+                    completedPages: 0,
+                    totalPages: first.numPages,
+                    completed: false
+                )
+                var fingerprints: [[String]] = []
+                for page in 0..<first.numPages {
+                    try Task.checkCancellation()
+                    let batch =
+                        page == 0
+                        ? first
+                        : try await api.listeningSessions(page: page).value
+                    fingerprints.append(batch.fingerprint)
+                    try await statisticsRepository.upsertRemoteSessions(
+                        batch.sessions
+                    )
+                    try await statisticsRepository.updateHistoryProgress(
+                        accountID: account.id,
+                        completedPages: page + 1,
+                        totalPages: first.numPages,
+                        completed: false
+                    )
+                }
+                var stable = true
+                if first.numPages == 0 {
+                    let check = try await api.listeningSessions(page: 0).value
+                    stable = check.total == 0 && check.numPages == 0
+                }
+                for page in 0..<first.numPages {
+                    let check = try await api.listeningSessions(page: page)
+                        .value
+                    if check.total != first.total
+                        || check.numPages != first.numPages
+                        || check.fingerprint != fingerprints[page]
+                    {
+                        stable = false
+                        break
+                    }
+                }
+                if stable {
+                    try await statisticsRepository.updateHistoryProgress(
+                        accountID: account.id,
+                        completedPages: first.numPages,
+                        totalPages: first.numPages,
+                        completed: true
+                    )
+                    return try await statisticsRepository.historyProgress(
+                        accountID: account.id
+                    )
+                }
+                if attempt == 1 {
+                    throw AppServiceError.statisticsHistory(
+                        .invalidListeningSessions
+                    )
+                }
+            }
+            throw AppServiceError.statisticsHistory(.invalidListeningSessions)
+        } catch let error as AppServiceError {
+            throw error
+        } catch let error as AudiobookshelfAPIError {
+            throw .statisticsHistory(error)
+        } catch let error as StatisticsRepositoryError {
+            throw .statistics(error)
+        } catch {
+            throw .statisticsHistory(.cancelled)
+        }
+    }
+
+    private func cancelStatisticsHistoryImport(for accountID: AccountID)
+        async
+    {
+        guard let registered = statisticsHistoryTasks[accountID] else {
+            return
+        }
+        registered.task.cancel()
+        _ = try? await registered.task.value
+        if statisticsHistoryTasks[accountID]?.id == registered.id {
+            statisticsHistoryTasks[accountID] = nil
+        }
+    }
+
+    func suspendStatisticsHistoryImport(for accountID: AccountID) async {
+        suspendedStatisticsHistoryAccounts.insert(accountID)
+        await cancelStatisticsHistoryImport(for: accountID)
+    }
+
+    func resumeStatisticsHistoryImport(for accountID: AccountID) async {
+        suspendedStatisticsHistoryAccounts.remove(accountID)
+    }
+
+    func exportStatistics(
+        for account: ServerAccount,
+        query: StatisticsQuery
+    ) async throws(AppServiceError) -> Data {
+        guard query.accountID == account.id else {
+            throw .statistics(.invalidAccountMapping)
+        }
+        do {
+            let archive = try await statisticsRepository.archive(query: query)
+            let document = PortableStatisticsDocument(
+                version: 1,
+                sourceAccountID: account.id,
+                serverURL: account.server.url.absoluteString,
+                remoteUserID: account.user.id,
+                archive: archive.portableRedacted()
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            return try encoder.encode(document)
+        } catch let error as StatisticsRepositoryError {
+            throw .statistics(error)
+        } catch {
+            throw .statistics(.invalidArchive)
+        }
+    }
+
+    func importStatistics(
+        _ data: Data,
+        for account: ServerAccount
+    ) async throws(AppServiceError) {
+        let document: PortableStatisticsDocument
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            document = try decoder.decode(
+                PortableStatisticsDocument.self, from: data
+            )
+        } catch {
+            throw .statistics(.invalidArchive)
+        }
+        guard document.version == 1,
+            document.archive.version == 1,
+            document.serverURL == account.server.url.absoluteString,
+            document.remoteUserID == account.user.id,
+            document.archive.slices.allSatisfy({
+                $0.accountID == document.sourceAccountID
+            }),
+            document.archive.completions.allSatisfy({
+                $0.accountID == document.sourceAccountID
+            }),
+            document.archive.remoteSessions.allSatisfy({
+                $0.accountID == document.sourceAccountID
+            })
+        else {
+            throw .statistics(.invalidAccountMapping)
+        }
+        do {
+            try await statisticsRepository.importArchive(
+                document.archive.reidentified(as: account.id)
+            )
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func resetStatistics(
+        query: StatisticsQuery
+    ) async throws(AppServiceError) {
+        let affected: [AccountID]
+        if let accountID = query.accountID {
+            affected = [accountID]
+        } else {
+            do {
+                affected = try await accountStore.accounts().map(\.id)
+            } catch let error {
+                throw .accountStore(error)
+            }
+        }
+        for accountID in affected {
+            await suspendStatisticsHistoryImport(for: accountID)
+        }
+        defer {
+            for accountID in affected {
+                suspendedStatisticsHistoryAccounts.remove(accountID)
+                statisticsHistorySkipAutomaticAccounts.insert(accountID)
+            }
+        }
+        do {
+            try await statisticsRepository.reset(query: query)
         } catch let error {
             throw .statistics(error)
         }

@@ -30,8 +30,14 @@ Native Audiobookshelf username/password and server-advertised OpenID Connect
 login are supported authentication methods. Bleat records local listening slices,
 completion milestones, and lifetime summaries. Downloaded playback uses a
 durable UUIDv4 local-session outbox and reports measured listening time.
-Listening-history import/export and richer statistics views remain deferred in
-[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
+Listening Statistics can import paginated server sessions, compare account and
+date ranges, show daily listening and recent books/sessions, and export or
+import a versioned JSON archive for one selected account. It labels stale and
+uncertain coverage. Export substitutes non-secret identifiers for playback
+session IDs. A confirmed reset can remove one account's selected range from
+Bleat; later Audiobookshelf imports may restore server-held sessions.
+If a date range cuts through a playback session with partially synchronized
+time, Bleat asks for a wider range so reset cannot alter pending sync accounting.
 Bookmark creates, renames, and deletes also use a durable local
 outbox when the server is unavailable.
 
@@ -832,6 +838,11 @@ repeatable; mutation recovery continues through its existing durable state.
 **Remove Account** always asks for confirmation and removes the account's
 local books, metadata, and device progress. It separately asks whether to keep
 or delete listening history.
+
+Listening Statistics uses pull-to-refresh for an explicit server-history
+import. Automatic imports run at most daily per account. JSON archives contain
+book titles and listening times, which are personal behavioral data; choose a
+safe destination when exporting them.
 
 The app requires HTTPS. The live app harness below supplies a trusted,
 disposable local CA to its temporary simulator; production builds continue to
