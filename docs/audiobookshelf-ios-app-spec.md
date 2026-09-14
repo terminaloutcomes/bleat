@@ -49,7 +49,7 @@ These decisions keep the first release bounded:
 | Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
 | Podcasts and ebooks | Out of scope for 1.0 |
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
-| CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, and verified complete downloads; account and download management remain phone-only. Managed entitlement enablement and real-environment validation are deferred until after 1.0 |
+| CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, and verified complete downloads; account and download management remain phone-only. Apple approved the managed entitlement, and CarPlay Simulator and maintainer-reported physical validation are recorded in `docs/release-evidence/carplay.md`. The public GitHub release archive enables CarPlay explicitly |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
 | Statistics and time tracking | Local measurement and lifetime summaries are implemented. [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks server-history, exploration, portability, and remaining validation evidence |
@@ -1064,15 +1064,17 @@ cover views, and account/item generation checks. Concurrent requests for the
 same account and cache-busted URL are deduplicated. Late results must not
 replace artwork or templates for a newer account, library, or playback item.
 The CarPlay entitlement requires Apple's approval and matching provisioning.
-The request is pending, and `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to
-`disabled` for every workflow; Personal Team and macOS builds force it off.
-After approval, a paid-team iOS build may opt in explicitly, while an enabled
-signed build without matching provisioning must fail. See Apple's
+Apple has approved it, and matching development and distribution profiles have
+been verified. `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to `disabled` for
+local workflows; the public GitHub release archive explicitly enables it.
+Personal Team and macOS builds force it off. Other paid-team iOS builds may opt
+in explicitly, while an enabled signed build without matching provisioning
+must fail. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
-Entitlement enablement and CarPlay Simulator/vehicle validation are tracked in
-[GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24) as
-post-1.0 work and are not a 1.0 release acceptance gate.
+Entitlement enablement and CarPlay Simulator/vehicle validation are recorded in
+`docs/release-evidence/carplay.md` and the closed
+[GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24).
 
 Handle:
 
@@ -2233,7 +2235,6 @@ The 1.0 release is acceptable only when:
 - [listening statistics and portability](https://github.com/terminaloutcomes/bleat/issues/26),
   including paginated history import, archive import/export, advanced views,
   and the performance work described in section 12;
-- [managed CarPlay entitlement and real-environment validation](https://github.com/terminaloutcomes/bleat/issues/24);
 - [signed native macOS authentication and Keychain persistence validation](https://github.com/terminaloutcomes/bleat/issues/25);
 - Apple Watch remote and offline transfer;
 - widgets and Live Activities;

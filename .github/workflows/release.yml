@@ -113,7 +113,7 @@ jobs:
       - name: Validate Release archive
         if: steps.version.outputs.changed == 'true'
         env:
-          BLEAT_CARPLAY_MODE: disabled
+          BLEAT_CARPLAY_MODE: enabled
           BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
           BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}
         run: ./scripts/archive-beta.sh

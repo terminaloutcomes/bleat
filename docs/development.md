@@ -140,23 +140,26 @@ When the global setting is `NO`, the individual settings remain available:
   compiled application.
 
 CloudKit and App Attest default to `enabled`; CarPlay defaults to `disabled`
-for every build workflow. Unsupported values fail the build. The selected
+for local build workflows. The public GitHub release workflow explicitly
+enables CarPlay. Unsupported values fail the build. The selected
 effective modes are embedded in `Info.plist`, and Xcode selects the exact
 CloudKit, App Attest, and CarPlay entitlement combination. macOS and Personal
 Team builds force the effective CarPlay mode to `disabled`.
 
-Apple's managed entitlement and a matching profile are required before an
-enabled build can sign. After approval, opt in explicitly for any supported
-build, for example:
+Apple has approved the managed entitlement, and matching development and
+distribution profiles have been verified. A matching profile is required for
+an enabled build to sign. Opt in explicitly for any supported build, for
+example:
 
 ```sh
 BLEAT_CARPLAY_MODE=enabled mise run iphone
 BLEAT_CARPLAY_MODE=enabled mise run testflight:internal
 ```
 
-Before approval, an enabled signed build is expected to fail provisioning.
-Release, TestFlight, Simulator, and device workflows remain disabled unless the
-flag is supplied; the GitHub release archive pins it to `disabled` explicitly.
+An enabled signed build without matching provisioning fails.
+Local archive, TestFlight, Simulator, and device workflows remain disabled
+unless the flag is supplied; the GitHub release archive pins it to `enabled`
+explicitly.
 
 ### CloudKit schema management
 
@@ -316,9 +319,9 @@ origins configured in the environment:
 ./scripts/archive-beta.sh
 ```
 
-The archive defaults to `BLEAT_CARPLAY_MODE=disabled`. An explicit enabled
-archive is supported only after the App ID and provisioning profile authorize
-the managed CarPlay Audio App entitlement.
+The local archive defaults to `BLEAT_CARPLAY_MODE=disabled`; the public GitHub
+release workflow explicitly selects `enabled`. A signed enabled archive needs
+a profile that authorizes the managed CarPlay Audio App entitlement.
 
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:
