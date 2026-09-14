@@ -10,6 +10,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
             (.disabled, .privateCloudDisabled),
             (.cancelled, .privateCloudCancelled),
+            (.callbackTimedOut, .privateCloudCallbackTimedOut),
+            (.stopping, .privateCloudStopping),
             (.invalidRecord, .privateCloudInvalidRecord),
             (.persistenceFailed, .privateCloudPersistenceFailed),
             (.nonPrivateDatabase, .privateCloudNonPrivateDatabase),
@@ -48,6 +50,106 @@ final class PrivateCloudSyncTests: XCTestCase {
             PrivateCloudSyncCoordinator.configurationFailure(for: .shared),
             .nonPrivateDatabase
         )
+    }
+
+    func testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain()
+        async throws
+    {
+        let lifecycle = PrivateCloudSyncLifecycle()
+        await lifecycle.setForeground(false)
+        let run = try await lifecycle.begin(deadline: .milliseconds(30))
+        let callback = await run.beginCallback {}
+        try await Task.sleep(for: .milliseconds(50))
+        let expiredInBackground = await run.checkDeadline(for: callback)
+        XCTAssertFalse(expiredInBackground)
+
+        await lifecycle.setForeground(true)
+        try await Task.sleep(for: .milliseconds(50))
+        let expiredInForeground = await run.checkDeadline(for: callback)
+        XCTAssertTrue(expiredInForeground)
+        let result = await run.waitForResult()
+        guard case .failure(let failure) = result else {
+            return XCTFail("Expected a typed callback timeout")
+        }
+        XCTAssertEqual(failure.operation, .applyFetchedChanges)
+        XCTAssertEqual(failure.cause, .callbackTimedOut)
+        do {
+            _ = try await lifecycle.begin()
+            XCTFail("Retry must wait for the old callback")
+        } catch {
+            XCTAssertEqual(error, .stopping)
+        }
+
+        await run.endCallback(callback)
+        await lifecycle.finish(run)
+        await run.complete(.failure(failure))
+        await run.waitForDrain()
+        _ = try await lifecycle.begin()
+    }
+
+    func testFetchedCallbackProgressResetsNoProgressDeadline() async throws {
+        let run = PrivateCloudSyncRun(deadline: .seconds(1))
+        let callback = await run.beginCallback {}
+        try await Task.sleep(for: .milliseconds(100))
+        try await run.checkCallback(callback)
+        try await Task.sleep(for: .milliseconds(100))
+        let expiredAfterProgress = await run.checkDeadline(for: callback)
+        XCTAssertFalse(expiredAfterProgress)
+        try await Task.sleep(for: .milliseconds(950))
+        let expiredWithoutProgress = await run.checkDeadline(for: callback)
+        XCTAssertTrue(expiredWithoutProgress)
+        await run.endCallback(callback)
+    }
+
+    func testFetchedCallbackFailureOverridesSuccessfulEngineCompletion()
+        async throws
+    {
+        let run = PrivateCloudSyncRun()
+        let failure = PrivateCloudSyncFailure(
+            operation: .applyFetchedChanges,
+            cause: .invalidRecord
+        )
+        await run.failCallback(failure)
+        await run.complete(.success(()))
+        let result = await run.waitForResult()
+        guard case .failure(let reported) = result else {
+            return XCTFail("A failed callback must fail the overall sync")
+        }
+        XCTAssertEqual(reported, failure)
+    }
+
+    func testInterruptedFetchedBatchCanReconcileOnRetry() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(
+                forName: fixture.suite
+            )
+        }
+        let records = try (0..<3).map { index in
+            let slice = makeSlice(index: index)
+            return try makeRecord(
+                type: "ListeningSlice",
+                name: "slice.\(slice.id.uuidString.lowercased())",
+                value: slice,
+                zoneID: fixture.zoneID
+            )
+        }
+        let checkpoint = FetchedBatchCheckpoint(failAt: 3)
+        do {
+            _ = try await fixture.store.applyFetchedRecords(
+                records,
+                checkActive: { try await checkpoint.check() }
+            )
+            XCTFail("Expected the interrupted batch to stop")
+        } catch let error as PrivateCloudSyncError {
+            XCTAssertEqual(error, .callbackTimedOut)
+        }
+        let beforeRetry = try await fixture.statistics.archive()
+        XCTAssertTrue(beforeRetry.slices.isEmpty)
+
+        _ = try await fixture.store.applyFetchedRecords(records)
+        let afterRetry = try await fixture.statistics.archive()
+        XCTAssertEqual(afterRetry.slices.count, 3)
     }
 
     func testNonPrivateDatabaseHasSpecificDiagnosticCode() {
@@ -1979,6 +2081,18 @@ private actor PrivateCloudDiagnosticRecorderSpy: DiagnosticRecording {
 
     func events() -> [DiagnosticEvent] {
         recordedEvents
+    }
+}
+
+private actor FetchedBatchCheckpoint {
+    private var count = 0
+    private let failAt: Int
+
+    init(failAt: Int) { self.failAt = failAt }
+
+    func check() throws {
+        count += 1
+        if count == failAt { throw PrivateCloudSyncError.callbackTimedOut }
     }
 }
 

@@ -352,8 +352,14 @@ enum PrivateCloudState: Equatable, Sendable {
     case idle
     case syncing
     case cancelling
+    case stopping(AppFailure)
     case cancelled
     case failed(AppFailure)
+
+    var isStopping: Bool {
+        if case .stopping = self { return true }
+        return false
+    }
 }
 
 enum CloudAccountRestoreState: Equatable, Sendable {
@@ -1145,6 +1151,8 @@ extension PrivateCloudSyncFailure {
     fileprivate var presentationTitle: String {
         switch cause {
         case .cancelled: "iCloud sync cancelled"
+        case .callbackTimedOut: "iCloud sync timed out"
+        case .stopping: "iCloud sync is stopping"
         case .cloudKit(let failure):
             switch failure.code {
             case .notAuthenticated: "Sign in to iCloud"
@@ -1170,6 +1178,10 @@ extension PrivateCloudSyncFailure {
             "Turn on iCloud synchronization before syncing."
         case .cancelled:
             "iCloud synchronization was cancelled."
+        case .callbackTimedOut:
+            "Applying iCloud changes made no progress for 60 seconds while Bleat was active. You can retry after the old sync stops."
+        case .stopping:
+            "The previous iCloud synchronization is still stopping."
         case .invalidRecord:
             "Bleat received incomplete or inconsistent data from iCloud."
         case .persistenceFailed:
@@ -1207,7 +1219,8 @@ extension PrivateCloudSyncFailure {
             "xmark.circle"
         case .disabled:
             "icloud.slash"
-        case .invalidRecord, .nonPrivateDatabase, .engineUnavailable,
+        case .callbackTimedOut, .stopping, .invalidRecord,
+            .nonPrivateDatabase, .engineUnavailable,
             .unexpected:
             "exclamationmark.triangle"
         }
@@ -1216,8 +1229,11 @@ extension PrivateCloudSyncFailure {
     fileprivate var isRetryable: Bool {
         switch cause {
         case .cloudKit(let failure): failure.isRetryable
-        case .cancelled, .persistenceFailed, .engineUnavailable: true
-        case .disabled, .invalidRecord, .nonPrivateDatabase, .unexpected:
+        case .cancelled, .callbackTimedOut, .persistenceFailed,
+            .engineUnavailable:
+            true
+        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+            .unexpected:
             false
         }
     }
@@ -1250,9 +1266,12 @@ extension PrivateCloudSyncFailure {
             .localStorage
         case .nonPrivateDatabase:
             .sourceBug
-        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+        case .cancelled, .stopping, .disabled, .invalidRecord,
+            .engineUnavailable,
             .unexpected:
             .unknown
+        case .callbackTimedOut:
+            .timeout
         }
     }
 
@@ -1732,6 +1751,11 @@ final class AppModel {
     func setRemoteTelemetryForeground(_ foreground: Bool) {
         remoteTelemetryConsentController
             .setRemoteTelemetryForeground(foreground)
+        Task {
+            await service.setPrivateCloudSynchronizationForeground(
+                foreground
+            )
+        }
     }
 
     func refreshRemoteTelemetryTokenAvailability() async {
@@ -5274,9 +5298,13 @@ final class AppModel {
     }
 
     func cancelPrivateCloudSynchronization() async {
-        guard let task = privateCloudSyncTask,
-            canCancelPrivateCloudSynchronization
-        else {
+        guard let task = privateCloudSyncTask else {
+            return
+        }
+        guard canCancelPrivateCloudSynchronization else {
+            // A timed-out callback still owns local state until it drains.
+            await service.waitForPrivateCloudSynchronizationDrain()
+            await task.value
             return
         }
         privateCloudSyncGeneration &+= 1
@@ -5376,6 +5404,22 @@ final class AppModel {
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {
+                return false
+            }
+            if case .privateCloud(let failure) = error,
+                failure.operation == .applyFetchedChanges
+            {
+                let presentation = AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: error
+                )
+                privateCloudState = .stopping(presentation)
+                canCancelPrivateCloudSynchronization = false
+                await service.waitForPrivateCloudSynchronizationDrain()
+                guard privateCloudSyncGeneration == generation else {
+                    return false
+                }
+                privateCloudState = .failed(presentation)
                 return false
             }
             if case .privateCloud(let failure) = error,

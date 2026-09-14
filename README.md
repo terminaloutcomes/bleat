@@ -415,9 +415,15 @@ typed CloudKit code, and local diagnostics retain the operation, exact code,
 partial-failure codes, and retry delay without recording record identifiers or
 localized error descriptions. Stage diagnostics also report privacy-safe
 durations and available record counts, including failed stages, for zone setup,
-fetch, fetched-record application, local preparation, and upload. Bleat retains
-each successful record's CloudKit
-system fields, mutable-record payload digests, per-row statistics sync state,
+fetch, fetched-record application, local preparation, and upload.
+Foreground fetched-record application has a 60-second no-progress deadline.
+If it expires, Settings reports the specific timeout and keeps the sync in a
+stopping state until the old callback drains; retry starts only afterward.
+Fetched callback failures make the overall sync fail even when CloudKit's fetch
+operation returns successfully.
+
+Bleat retains each successful record's CloudKit system fields, mutable-record
+payload digests, per-row statistics sync state,
 and account-scoped deletion tombstones across launches, so an unchanged sync
 does not scan or re-enqueue the complete statistics archive and interrupted
 deletions retry.
