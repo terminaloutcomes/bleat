@@ -5,11 +5,13 @@
 Apple has approved the managed CarPlay Audio App entitlement. Explicitly
 enabled development and distribution builds are signed with profiles that
 authorize CarPlay audio. `BLEAT_CARPLAY_MODE` still defaults to `disabled`.
-The signed build matrix and CarPlay Simulator journeys are complete; physical
-vehicle or head-unit validation remains outstanding.
+The signed build matrix and CarPlay Simulator journeys are complete. The
+maintainer reports that the physical wireless CarPlay journeys also passed.
+The public GitHub release workflow now explicitly enables CarPlay; other build
+workflows retain their disabled default.
 
-Issue [#24](https://github.com/terminaloutcomes/bleat/issues/24) remains open
-until every section below has dated evidence.
+Issue [#24](https://github.com/terminaloutcomes/bleat/issues/24) was closed on
+2026-09-14 after the maintainer checked every physical journey.
 
 ## Build and provisioning
 
@@ -40,6 +42,15 @@ contents, or other signing material.
 - An immediately preceding internal-only build, `20260901.0315.30`, exercised
   the documented default and correctly omitted CarPlay. It is retained as
   disabled-artifact evidence and is not the enabled #24 test build.
+
+### 2026-09-14 release archive validation
+
+- A local `BLEAT_CARPLAY_MODE=enabled` Release archive of Bleat 0.1.3 (2),
+  built with Xcode 26.6 (17F113), passed `scripts/archive-beta.sh` and its
+  archive inspector. The built `Info.plist` reported `BleatCarPlayMode=enabled`;
+  the signed app and embedded profile passed the CarPlay entitlement checks.
+  This validates the selected build mode locally, not a GitHub Actions run or
+  a new public release.
 
 ## CarPlay Simulator
 
@@ -90,13 +101,24 @@ and result for each journey.
 
 ## Physical vehicle or head unit
 
-- [ ] Online and downloaded playback work on the head unit.
-- [ ] Playback continues correctly while the phone app is backgrounded.
-- [ ] Wired or wireless disconnect and reconnect behave correctly as
+- [x] Online and downloaded playback work on the head unit.
+- [x] Playback continues correctly while the phone app is backgrounded.
+- [x] Wired or wireless disconnect and reconnect behave correctly as
   applicable to the tested system.
-- [ ] Head-unit transport controls operate on whole-book position.
-- [ ] Simultaneous phone use does not disrupt CarPlay playback or navigation.
+- [x] Head-unit transport controls operate on whole-book position.
+- [x] Simultaneous phone use does not disrupt CarPlay playback or navigation.
 
 Record the date, application version/build, iOS version, connection type, and
 vehicle or head-unit model. Do not record device identifiers or private account
 details.
+
+### Maintainer-reported physical validation, reported 2026-09-14
+
+- iPhone running iOS 26.6.2, connected wirelessly to a Pioneer head unit via
+  CarPlay. The exact head-unit model and app version/build were not supplied.
+- The maintainer used CarPlay during approximately the preceding one to two
+  weeks. They reported that every physical journey above worked, including
+  online and downloaded playback with the phone foregrounded and backgrounded,
+  wireless reconnect, whole-book head-unit controls, and simultaneous phone use.
+- This is maintainer-reported vehicle evidence; it is separate from the
+  2026-08-31 Simulator and 2026-09-01 signed-artifact checks above.

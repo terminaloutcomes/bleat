@@ -267,19 +267,20 @@ The equivalent command-line simulator workflow is:
 mise run simulator
 ```
 
-The iOS target includes a `CPTemplateApplicationScene`. The managed CarPlay
-Audio App entitlement request is pending Apple approval, so every supported
-workflow defaults to `BLEAT_CARPLAY_MODE=disabled`. macOS and Personal Team
-builds force that effective mode even when `enabled` is requested. After Apple
-approves the capability and a matching profile is installed, an entitled iOS
-build can opt in explicitly with `BLEAT_CARPLAY_MODE=enabled`; until then an
-enabled signed build is expected to fail provisioning.
+The iOS target includes a `CPTemplateApplicationScene`. Apple has approved the
+managed CarPlay Audio App entitlement, and matching development and
+distribution profiles have been verified. Local build workflows default to
+`BLEAT_CARPLAY_MODE=disabled`; the public GitHub release workflow explicitly
+enables it. macOS and Personal Team builds force the effective mode off even
+when `enabled` is requested. Other entitled iOS builds can opt in explicitly
+with `BLEAT_CARPLAY_MODE=enabled`; a signed build without a matching profile
+fails provisioning.
 Follow Apple's
 [entitlement request](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [CarPlay scene](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay)
 guidance when provisioning the app. Entitlement enablement and real-environment
-validation are tracked in [GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24)
-as post-1.0 work and do not block the 1.0 release.
+validation are recorded in [GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24)
+and `docs/release-evidence/carplay.md`.
 
 ## Archive a beta
 
@@ -360,7 +361,7 @@ direct `scripts/build-device.sh` usage default to
 `BUILD_WITHOUT_PAID_DEVELOPER=NO`, enabling CloudKit and App Attest. Set
 `BUILD_WITHOUT_PAID_DEVELOPER=YES` explicitly for a Personal Team build that
 omits those capabilities, forces CarPlay off, and retains device-only Keychain
-access. CarPlay defaults off independently; after Apple approval, pass
+access. CarPlay defaults off independently; pass
 `BLEAT_CARPLAY_MODE=enabled` explicitly to a paid-team iOS workflow.
 
 ## Sign in
