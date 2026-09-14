@@ -5834,6 +5834,7 @@ private struct SettingsView: View {
             .disabled(
                 model.privateCloudState == .syncing
                     || model.privateCloudState == .cancelling
+                    || model.privateCloudState.isStopping
             )
             .accessibilityIdentifier("settings.icloud.enabled")
 
@@ -5851,6 +5852,9 @@ private struct SettingsView: View {
             } else if model.privateCloudState == .cancelling {
                 ProgressView("Cancelling…")
                     .accessibilityIdentifier("settings.icloud.cancelling")
+            } else if model.privateCloudState.isStopping {
+                ProgressView("Stopping iCloud sync…")
+                    .accessibilityIdentifier("settings.icloud.stopping")
             } else {
                 Button(
                     privateCloudSyncButtonTitle,
@@ -5879,6 +5883,10 @@ private struct SettingsView: View {
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("settings.icloud.error")
             }
+            if case .stopping(let failure) = model.privateCloudState {
+                Text(failure.message)
+                    .foregroundStyle(.red)
+            }
         } header: {
             Text("iCloud")
         } footer: {
@@ -5892,7 +5900,7 @@ private struct SettingsView: View {
         switch model.privateCloudState {
         case .cancelled, .failed:
             "Retry Sync"
-        case .disabled, .idle, .syncing, .cancelling:
+        case .disabled, .idle, .syncing, .cancelling, .stopping:
             "Sync Now"
         }
     }

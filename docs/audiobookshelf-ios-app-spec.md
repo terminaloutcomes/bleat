@@ -1529,6 +1529,14 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
+Foreground fetched-record callbacks have a 60-second no-progress deadline;
+background suspension does not consume that deadline. A timeout reports a
+typed, retryable `apply_fetched_changes` failure and requests CKSyncEngine
+cancellation. The visible state remains stopping until the callback drains,
+and no retry may overlap its local mutations. Any fetched callback failure
+must fail the overall synchronization result even if the fetch itself returns
+successfully. Pending local changes and CKSyncEngine state remain available for
+reconciliation on retry.
 Presentation summary refresh follows a completed
 CloudKit result and does not keep the iCloud state active. A
 `serverRecordChanged` save failure is resolved against the

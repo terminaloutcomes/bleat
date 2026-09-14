@@ -734,6 +734,10 @@ protocol AppServicing: Sendable {
 
     func cancelPrivateCloudSynchronization() async
 
+    func waitForPrivateCloudSynchronizationDrain() async
+
+    func setPrivateCloudSynchronizationForeground(_ foreground: Bool) async
+
     func pendingPrivateCloudConfigurationConflict() async
         -> CloudConfigurationConflict?
 
@@ -1095,6 +1099,10 @@ extension AppServicing {
     }
 
     func cancelPrivateCloudSynchronization() async {}
+
+    func waitForPrivateCloudSynchronizationDrain() async {}
+
+    func setPrivateCloudSynchronizationForeground(_ foreground: Bool) async {}
 
     func pendingPrivateCloudConfigurationConflict() async
         -> CloudConfigurationConflict?
@@ -3639,6 +3647,14 @@ actor LiveAppService: AppServicing {
 
     func cancelPrivateCloudSynchronization() async {
         await privateCloudSync?.cancelSynchronization()
+    }
+
+    func waitForPrivateCloudSynchronizationDrain() async {
+        await privateCloudSync?.waitForSynchronizationDrain()
+    }
+
+    func setPrivateCloudSynchronizationForeground(_ foreground: Bool) async {
+        await privateCloudSync?.setForeground(foreground)
     }
 
     func pendingPrivateCloudConfigurationConflict() async

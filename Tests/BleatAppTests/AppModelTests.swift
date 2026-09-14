@@ -9569,6 +9569,80 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
     }
 
+    func testFetchedCallbackTimeoutKeepsRetryBlockedUntilDrain() async throws {
+        let drainGate = AsyncGate()
+        let failure = PrivateCloudSyncFailure(
+            operation: .applyFetchedChanges,
+            cause: .callbackTimedOut
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudDrainGate: drainGate,
+            privateCloudSyncResult: .failure(.privateCloud(failure))
+        )
+        let model = AppModel(service: service)
+
+        await model.start()
+        await drainGate.waitUntilEntered()
+        guard case .stopping(let presented) = model.privateCloudState else {
+            return XCTFail("Expected the old callback to remain visible")
+        }
+        XCTAssertEqual(
+            presented.diagnosticFailureCode, .privateCloudCallbackTimedOut)
+        XCTAssertFalse(model.canCancelPrivateCloudSynchronization)
+
+        await model.synchronizePrivateCloud()
+        let requestCount =
+            await service.privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(requestCount, 1)
+
+        var cancellationFinished = false
+        let cancellation = Task { @MainActor in
+            await model.cancelPrivateCloudSynchronization()
+            cancellationFinished = true
+        }
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertFalse(cancellationFinished)
+
+        await drainGate.release()
+        await cancellation.value
+        XCTAssertTrue(cancellationFinished)
+        guard case .failed(let final) = model.privateCloudState else {
+            return XCTFail("Expected timeout after callback drainage")
+        }
+        XCTAssertEqual(
+            final.diagnosticFailureCode, .privateCloudCallbackTimedOut)
+    }
+
+    func testLocalResetWaitsForTimedOutFetchedCallback() async throws {
+        let drainGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudDrainGate: drainGate,
+            privateCloudSyncResult: .failure(
+                .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .applyFetchedChanges,
+                        cause: .callbackTimedOut
+                    )
+                )
+            )
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await drainGate.waitUntilEntered()
+
+        let reset = Task { @MainActor in await model.resetLocalData() }
+        await service.waitForPrivateCloudDrainRequests(2)
+        let beforeDrain = await service.privateCloudSyncSettingRequests()
+        XCTAssertTrue(beforeDrain.isEmpty)
+
+        await drainGate.release()
+        await reset.value
+        let afterDrain = await service.privateCloudSyncSettingRequests()
+        XCTAssertEqual(afterDrain.first?.enabled, false)
+    }
+
     func testCloudSyncCanRestartWhileStatisticsSummaryReloadContinues()
         async
     {
@@ -18975,6 +19049,10 @@ private actor TestAppService: AppServicing {
     private let searchGate: AsyncGate?
     private let serverEndpointRouterGate: AsyncGate?
     private let privateCloudSyncGate: AsyncGate?
+    private let privateCloudDrainGate: AsyncGate?
+    private var privateCloudDrainRequests = 0
+    private var privateCloudDrainWaiters:
+        [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private let accountsGate: AsyncGate?
     private let activeAccountGate: AsyncGate?
     private let bookmarksGate: AsyncGate?
@@ -19193,6 +19271,7 @@ private actor TestAppService: AppServicing {
         searchGate: AsyncGate? = nil,
         serverEndpointRouterGate: AsyncGate? = nil,
         privateCloudSyncGate: AsyncGate? = nil,
+        privateCloudDrainGate: AsyncGate? = nil,
         accountsGate: AsyncGate? = nil,
         activeAccountGate: AsyncGate? = nil,
         bookmarksGate: AsyncGate? = nil,
@@ -19265,6 +19344,7 @@ private actor TestAppService: AppServicing {
         self.searchGate = searchGate
         self.serverEndpointRouterGate = serverEndpointRouterGate
         self.privateCloudSyncGate = privateCloudSyncGate
+        self.privateCloudDrainGate = privateCloudDrainGate
         self.accountsGate = accountsGate
         self.activeAccountGate = activeAccountGate
         self.bookmarksGate = bookmarksGate
@@ -19554,6 +19634,25 @@ private actor TestAppService: AppServicing {
     func cancelPrivateCloudSynchronization() async {
         privateCloudCancellationRequests += 1
         await privateCloudSyncGate?.release()
+    }
+
+    func waitForPrivateCloudSynchronizationDrain() async {
+        privateCloudDrainRequests += 1
+        let ready = privateCloudDrainWaiters.filter {
+            privateCloudDrainRequests >= $0.count
+        }
+        privateCloudDrainWaiters.removeAll {
+            privateCloudDrainRequests >= $0.count
+        }
+        for waiter in ready { waiter.continuation.resume() }
+        await privateCloudDrainGate?.enterAndWait()
+    }
+
+    func waitForPrivateCloudDrainRequests(_ count: Int) async {
+        if privateCloudDrainRequests >= count { return }
+        await withCheckedContinuation {
+            privateCloudDrainWaiters.append((count, $0))
+        }
     }
 
     func setPrivateCloudSyncEnabled(

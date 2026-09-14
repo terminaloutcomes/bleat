@@ -244,6 +244,8 @@ public struct PrivateCloudSystemError: Equatable, Sendable {
 public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     case disabled
     case cancelled
+    case callbackTimedOut
+    case stopping
     case invalidRecord
     case persistenceFailed
     case nonPrivateDatabase
@@ -254,8 +256,11 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable {
     public var isRetryable: Bool {
         switch self {
         case .cloudKit(let failure): failure.isRetryable
-        case .cancelled, .persistenceFailed, .engineUnavailable: true
-        case .disabled, .invalidRecord, .nonPrivateDatabase, .unexpected:
+        case .cancelled, .callbackTimedOut, .persistenceFailed,
+            .engineUnavailable:
+            true
+        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+            .unexpected:
             false
         }
     }
@@ -1013,13 +1018,17 @@ actor PrivateCloudSyncStore {
 
     func apply(
         modifications: [CKDatabase.RecordZoneChange.Modification],
-        deletions: [CKDatabase.RecordZoneChange.Deletion]
+        deletions: [CKDatabase.RecordZoneChange.Deletion],
+        checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        try await checkActive()
         let fetchedResult = try await applyFetchedRecordsToleratingFailures(
             modifications.map(\.record),
-            persistState: false
+            persistState: false,
+            checkActive: checkActive
         )
         for deletion in deletions {
+            try await checkActive()
             records.removeValue(forKey: deletion.recordID)
             synchronizedPayloadDigests[deletion.recordID.recordName] = nil
             try await applyDeletion(
@@ -1027,6 +1036,7 @@ actor PrivateCloudSyncStore {
                 recordType: deletion.recordType
             )
         }
+        try await checkActive()
         do {
             try await statistics.clearPrivateCloudDeletions(
                 recordNames: Set(deletions.map { $0.recordID.recordName })
@@ -1043,11 +1053,13 @@ actor PrivateCloudSyncStore {
 
     func applyFetchedRecords(
         _ fetchedRecords: [CKRecord],
-        persistState: Bool = true
+        persistState: Bool = true,
+        checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
         let result = try await applyFetchedRecordsToleratingFailures(
             fetchedRecords,
-            persistState: persistState
+            persistState: persistState,
+            checkActive: checkActive
         )
         if let failure = result.failure {
             throw failure
@@ -1057,7 +1069,8 @@ actor PrivateCloudSyncStore {
 
     private func applyFetchedRecordsToleratingFailures(
         _ fetchedRecords: [CKRecord],
-        persistState: Bool
+        persistState: Bool,
+        checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> (
         pendingChanges: [CKSyncEngine.PendingRecordZoneChange],
         failure: PrivateCloudSyncError?
@@ -1076,6 +1089,7 @@ actor PrivateCloudSyncStore {
         }
         var firstFailure: PrivateCloudSyncError?
         for fetchedRecord in fetchedRecords {
+            try await checkActive()
             let canonicalization: CanonicalizedCloudRecord
             do {
                 canonicalization = try canonicalizedCloudRecord(fetchedRecord)
@@ -1156,7 +1170,11 @@ actor PrivateCloudSyncStore {
                 }
             }
         }
-        let application = try await apply(recordsToApply)
+        try await checkActive()
+        let application = try await apply(
+            recordsToApply,
+            checkActive: checkActive
+        )
         if firstFailure == nil {
             firstFailure = application.failure
         }
@@ -1172,6 +1190,7 @@ actor PrivateCloudSyncStore {
             }
         }
         if persistState {
+            try await checkActive()
             persistRecordState()
         }
         return (pendingChanges, firstFailure)
@@ -1843,7 +1862,8 @@ actor PrivateCloudSyncStore {
     }
 
     private func apply(
-        _ recordsToApply: [CKRecord]
+        _ recordsToApply: [CKRecord],
+        checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> (
         appliedRecords: [CKRecord],
         failure: PrivateCloudSyncError?
@@ -1858,6 +1878,7 @@ actor PrivateCloudSyncStore {
         let ignoredStatisticsAccounts = ignoredStatisticsAccountIDs()
         let ignoredAccounts = ignoredAccountIDs()
         for record in recordsToApply {
+            try await checkActive()
             do {
                 guard let data = record[Self.payloadKey] as? Data else {
                     throw PrivateCloudSyncError.invalidRecord
@@ -1919,6 +1940,7 @@ actor PrivateCloudSyncStore {
                 }
             }
         }
+        try await checkActive()
         do {
             if !slices.isEmpty || !completions.isEmpty
                 || !remoteSessions.isEmpty
@@ -1929,14 +1951,17 @@ actor PrivateCloudSyncStore {
                     remoteSessions: remoteSessions
                 )
                 try await statistics.importArchive(archive)
+                try await checkActive()
                 try await statistics.markPrivateCloudArchiveSynchronized(
                     archive
                 )
             }
             for account in accountsToSave {
+                try await checkActive()
                 try await accounts.save(account)
             }
             for snapshot in configurations {
+                try await checkActive()
                 try await configuration.apply(snapshot)
             }
         } catch let error as PrivateCloudSyncError {
@@ -2461,6 +2486,161 @@ actor PrivateCloudSyncStore {
     }
 }
 
+/// One visible result may finish before CloudKit has drained. The run remains
+/// owned by the lifecycle until its underlying operation and delegate return.
+actor PrivateCloudSyncRun {
+    private var reported: Result<Void, PrivateCloudSyncFailure>?
+    private var resultWaiter:
+        CheckedContinuation<Result<Void, PrivateCloudSyncFailure>, Never>?
+    private var drained = false
+    private var drainWaiters: [CheckedContinuation<Void, Never>] = []
+    private var callbackWaiters: [CheckedContinuation<Void, Never>] = []
+    private var callbackFailure: PrivateCloudSyncFailure?
+    private var foreground = true
+    private var callbacks:
+        [UUID: (elapsed: Duration, since: ContinuousClock.Instant?)] = [:]
+    private var watchdogs: [UUID: Task<Void, Never>] = [:]
+    private let deadline: Duration
+
+    init(deadline: Duration = .seconds(60)) {
+        self.deadline = deadline
+    }
+
+    func waitForResult() async -> Result<Void, PrivateCloudSyncFailure> {
+        if let reported { return reported }
+        return await withCheckedContinuation { resultWaiter = $0 }
+    }
+
+    func waitForDrain() async {
+        if drained { return }
+        await withCheckedContinuation { drainWaiters.append($0) }
+    }
+
+    func setForeground(_ foreground: Bool) {
+        guard self.foreground != foreground else { return }
+        let now = ContinuousClock.now
+        for (id, value) in callbacks {
+            let elapsed =
+                value.elapsed + (value.since.map { now - $0 } ?? .zero)
+            callbacks[id] = (elapsed, foreground ? now : nil)
+        }
+        self.foreground = foreground
+    }
+
+    func beginCallback(
+        cancelOperations: @escaping @Sendable () async -> Void
+    ) -> UUID {
+        let id = UUID()
+        callbacks[id] = (.zero, foreground ? ContinuousClock.now : nil)
+        watchdogs[id] = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self else { return }
+                if await self.checkDeadline(for: id) {
+                    await cancelOperations()
+                    return
+                }
+            }
+        }
+        return id
+    }
+
+    func endCallback(_ id: UUID) {
+        callbacks[id] = nil
+        watchdogs.removeValue(forKey: id)?.cancel()
+        if callbacks.isEmpty {
+            for waiter in callbackWaiters { waiter.resume() }
+            callbackWaiters.removeAll()
+        }
+    }
+
+    func waitForCallbacks() async {
+        if callbacks.isEmpty { return }
+        await withCheckedContinuation { callbackWaiters.append($0) }
+    }
+
+    func checkDeadline(for id: UUID) -> Bool {
+        guard let callback = callbacks[id], callbackFailure == nil else {
+            return false
+        }
+        let elapsed =
+            callback.elapsed
+            + (callback.since.map { ContinuousClock.now - $0 } ?? .zero)
+        guard elapsed >= deadline else { return false }
+        failCallback(
+            PrivateCloudSyncFailure(
+                operation: .applyFetchedChanges,
+                cause: .callbackTimedOut
+            )
+        )
+        return true
+    }
+
+    func checkCallback(_ id: UUID) throws(PrivateCloudSyncError) {
+        if let callbackFailure { throw callbackFailure.cause }
+        guard callbacks[id] != nil else { return }
+        callbacks[id] = (.zero, foreground ? ContinuousClock.now : nil)
+    }
+
+    func failure() -> PrivateCloudSyncFailure? { callbackFailure }
+
+    func failCallback(_ failure: PrivateCloudSyncFailure) {
+        guard callbackFailure == nil else { return }
+        callbackFailure = failure
+        report(.failure(failure))
+    }
+
+    func complete(_ result: Result<Void, PrivateCloudSyncFailure>) {
+        if let callbackFailure {
+            report(.failure(callbackFailure))
+        } else {
+            report(result)
+        }
+        drained = true
+        for waiter in drainWaiters { waiter.resume() }
+        drainWaiters.removeAll()
+        for task in watchdogs.values { task.cancel() }
+        watchdogs.removeAll()
+    }
+
+    private func report(_ result: Result<Void, PrivateCloudSyncFailure>) {
+        guard reported == nil else { return }
+        reported = result
+        resultWaiter?.resume(returning: result)
+        resultWaiter = nil
+    }
+}
+
+actor PrivateCloudSyncLifecycle {
+    private var run: PrivateCloudSyncRun?
+    private var foreground = true
+
+    func begin(
+        deadline: Duration = .seconds(60)
+    ) async throws(PrivateCloudSyncError) -> PrivateCloudSyncRun {
+        guard run == nil else { throw .stopping }
+        let next = PrivateCloudSyncRun(deadline: deadline)
+        await next.setForeground(foreground)
+        run = next
+        return next
+    }
+
+    func current() -> PrivateCloudSyncRun? { run }
+
+    func setForeground(_ foreground: Bool) async {
+        self.foreground = foreground
+        await run?.setForeground(foreground)
+    }
+
+    func finish(_ finished: PrivateCloudSyncRun) {
+        if run === finished { run = nil }
+    }
+
+    func waitForDrain() async {
+        await run?.waitForDrain()
+    }
+}
+
 public final class PrivateCloudSyncCoordinator:
     CKSyncEngineDelegate,
     @unchecked Sendable
@@ -2479,6 +2659,7 @@ public final class PrivateCloudSyncCoordinator:
         ownerName: CKCurrentUserDefaultName
     )
     private var engine: CKSyncEngine?
+    private let lifecycle = PrivateCloudSyncLifecycle()
 
     public init(
         statistics: StatisticsRepository,
@@ -2583,6 +2764,50 @@ public final class PrivateCloudSyncCoordinator:
     }
 
     public func synchronize() async throws(PrivateCloudSyncFailure) {
+        let run: PrivateCloudSyncRun
+        do {
+            run = try await lifecycle.begin()
+        } catch {
+            throw PrivateCloudSyncFailure(
+                operation: .synchronize,
+                cause: error
+            )
+        }
+        Task { [self] in
+            let result: Result<Void, PrivateCloudSyncFailure>
+            do {
+                try await synchronizeOnce(run: run)
+                result = .success(())
+            } catch let failure as PrivateCloudSyncFailure {
+                result = .failure(failure)
+            } catch {
+                result = .failure(
+                    Self.mappedFailure(
+                        operation: .synchronize,
+                        error: error
+                    ))
+            }
+            await run.waitForCallbacks()
+            await lifecycle.finish(run)
+            await run.complete(result)
+        }
+        switch await run.waitForResult() {
+        case .success: return
+        case .failure(let failure): throw failure
+        }
+    }
+
+    public func setForeground(_ foreground: Bool) async {
+        await lifecycle.setForeground(foreground)
+    }
+
+    public func waitForSynchronizationDrain() async {
+        await lifecycle.waitForDrain()
+    }
+
+    private func synchronizeOnce(
+        run: PrivateCloudSyncRun
+    ) async throws(PrivateCloudSyncFailure) {
         try await perform(.synchronize) {
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
@@ -2596,13 +2821,21 @@ public final class PrivateCloudSyncCoordinator:
                 )
                 try await engine.sendChanges()
             }
-            try await perform(.fetchChanges) {
-                try await engine.fetchChanges(
-                    CKSyncEngine.FetchChangesOptions(
-                        scope: .zoneIDs([zoneID])
+            do {
+                try await perform(.fetchChanges) {
+                    try await engine.fetchChanges(
+                        CKSyncEngine.FetchChangesOptions(
+                            scope: .zoneIDs([zoneID])
+                        )
                     )
-                )
+                    if let failure = await run.failure() { throw failure }
+                }
+            } catch {
+                if let failure = await run.failure() { throw failure }
+                throw error
             }
+            await run.waitForCallbacks()
+            if let failure = await run.failure() { throw failure }
             let records = try await perform(
                 .prepareLocalChanges,
                 count: { $0.records.count + $0.deletions.count }
@@ -2903,14 +3136,36 @@ public final class PrivateCloudSyncCoordinator:
                     phase: .started
                 )
             )
+            let run = await lifecycle.current()
+            let callbackID = await run?.beginCallback {
+                await self.recordFailure(
+                    PrivateCloudSyncFailure(
+                        operation: .applyFetchedChanges,
+                        cause: .callbackTimedOut
+                    ),
+                    correlationID: correlationID,
+                    startedAt: startedAt,
+                    recordCount: recordCount
+                )
+                await syncEngine.cancelOperations()
+            }
             do {
                 let pendingChanges = try await store.apply(
                     modifications: changes.modifications,
-                    deletions: changes.deletions
+                    deletions: changes.deletions,
+                    checkActive: {
+                        if let callbackID {
+                            try await run?.checkCallback(callbackID)
+                        }
+                    }
                 )
+                if let callbackID {
+                    try await run?.checkCallback(callbackID)
+                }
                 syncEngine.state.add(
                     pendingRecordZoneChanges: pendingChanges
                 )
+                if let callbackID { await run?.endCallback(callbackID) }
                 await recordCompletion(
                     operation: .applyFetchedChanges,
                     correlationID: correlationID,
@@ -2918,15 +3173,21 @@ public final class PrivateCloudSyncCoordinator:
                     recordCount: recordCount
                 )
             } catch {
-                await recordFailure(
-                    Self.mappedFailure(
-                        operation: .applyFetchedChanges,
-                        error: error
-                    ),
-                    correlationID: correlationID,
-                    startedAt: startedAt,
-                    recordCount: recordCount
+                let failure = Self.mappedFailure(
+                    operation: .applyFetchedChanges,
+                    error: error
                 )
+                await run?.failCallback(failure)
+                if let callbackID { await run?.endCallback(callbackID) }
+                if failure.cause != .callbackTimedOut {
+                    await recordFailure(
+                        failure,
+                        correlationID: correlationID,
+                        startedAt: startedAt,
+                        recordCount: recordCount
+                    )
+                }
+                await syncEngine.cancelOperations()
             }
         case .sentRecordZoneChanges(let changes):
             let correlationID = UUID()
@@ -2987,15 +3248,15 @@ public final class PrivateCloudSyncCoordinator:
             return failure
         }
         let cause: PrivateCloudSyncError
-        if Task.isCancelled || error is CancellationError {
-            cause = .cancelled
-        } else if let error = error as? PrivateCloudSyncError {
+        if let error = error as? PrivateCloudSyncError {
             cause = error
         } else if let error = error as? CKError {
             cause =
                 error.code == .operationCancelled
                 ? .cancelled
                 : .cloudKit(CloudKitFailure(error))
+        } else if Task.isCancelled || error is CancellationError {
+            cause = .cancelled
         } else {
             cause = .unexpected(PrivateCloudSystemError(error))
         }

@@ -226,12 +226,16 @@ extension PrivateCloudState {
         case .idle: "Idle"
         case .syncing: "Syncing"
         case .cancelling: "Cancelling"
+        case .stopping: "Stopping"
         case .cancelled: "Cancelled"
         case .failed: "Failed"
         }
     }
 
     fileprivate var failure: AppFailure? {
+        if case .stopping(let failure) = self {
+            return failure
+        }
         if case .failed(let failure) = self {
             return failure
         }

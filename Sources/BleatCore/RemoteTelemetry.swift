@@ -394,9 +394,12 @@ extension PrivateCloudSyncError {
             }
         case .persistenceFailed:
             .localStorage
+        case .callbackTimedOut:
+            .timeout
         case .nonPrivateDatabase:
             .sourceBug
-        case .cancelled, .disabled, .invalidRecord, .engineUnavailable,
+        case .cancelled, .stopping, .disabled, .invalidRecord,
+            .engineUnavailable,
             .unexpected:
             .unknown
         }
