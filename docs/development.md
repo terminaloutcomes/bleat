@@ -323,6 +323,13 @@ The local archive defaults to `BLEAT_CARPLAY_MODE=disabled`; the public GitHub
 release workflow explicitly selects `enabled`. A signed enabled archive needs
 a profile that authorizes the managed CarPlay Audio App entitlement.
 
+Every archive defaults to one UTC build number in `YYYYMMDD.HHmm.SS` format,
+generated once and reused for the complete archive, inspection, export, and
+evidence chain. `MARKETING_VERSION` remains the user-facing application
+version. Set `BLEAT_BUILD_NUMBER` to a valid one-to-three-component numeric
+value only when a reproducible or otherwise explicit build identifier is
+required; the supplied value is propagated unchanged.
+
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:
 
@@ -331,8 +338,9 @@ mise run testflight:internal
 ```
 
 The task uses the Apple account signed into Xcode and the ignored signing and
-production telemetry settings from `.envrc`. It gives the upload a unique UTC
-build number without changing `project.yml`, validates both the Release archive
+production telemetry settings from `.envrc`. It uses the same UTC build-number
+policy as every other archive without changing `project.yml`, validates both
+the Release archive
 and its distribution-signed IPA, requires the tracked production CloudKit
 schema to match the desired schema when CloudKit is enabled, and sets
 `testFlightInternalTestingOnly`, so

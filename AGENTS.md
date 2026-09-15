@@ -333,8 +333,10 @@ Simulator test.
 ## Versioning and automated releases
 
 `MARKETING_VERSION` in `project.yml` is the application version source of
-truth. `CURRENT_PROJECT_VERSION` is the build number. When changing either,
-regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit the generated
+truth. Distributable builds use the UTC timestamp build number resolved by
+`scripts/resolve-build-number.sh`; `CURRENT_PROJECT_VERSION` is only the
+project fallback for ordinary builds. When changing either project setting,
+regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit generated
 version settings directly.
 
 Every application version bump must add a matching `CHANGELOG.md` section using

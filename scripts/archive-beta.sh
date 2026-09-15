@@ -7,6 +7,7 @@ readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_archive_path="${BLEAT_ARCHIVE_PATH:-${bleat_repository_root}/.build/Bleat.xcarchive}"
 readonly bleat_project_configuration="${bleat_repository_root}/project.yml"
+readonly bleat_expected_build="$("${bleat_script_dir}/resolve-build-number.sh")"
 
 readonly bleat_expected_version="$(
     awk '$1 == "MARKETING_VERSION:" {
@@ -15,21 +16,8 @@ readonly bleat_expected_version="$(
         exit
     }' "${bleat_project_configuration}"
 )"
-readonly bleat_project_build="$(
-    awk '$1 == "CURRENT_PROJECT_VERSION:" {
-        gsub(/"/, "", $2)
-        print $2
-        exit
-    }' "${bleat_project_configuration}"
-)"
-readonly bleat_expected_build="${BLEAT_BUILD_NUMBER:-${bleat_project_build}}"
-
-if [[ -z "${bleat_expected_version}" || -z "${bleat_project_build}" ]]; then
-    print -u2 "Could not read the app version and build from project.yml"
-    exit 1
-fi
-if [[ ! "${bleat_expected_build}" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
-    print -u2 "BLEAT_BUILD_NUMBER must contain one to three dot-separated integers"
+if [[ -z "${bleat_expected_version}" ]]; then
+    print -u2 "Could not read MARKETING_VERSION from project.yml"
     exit 1
 fi
 
@@ -76,6 +64,8 @@ else
         "CODE_SIGNING_REQUIRED=NO"
     )
 fi
+
+print "Archiving Bleat ${bleat_expected_version} (${bleat_expected_build})..."
 
 xcodebuild \
     -project "${bleat_repository_root}/Bleat.xcodeproj" \

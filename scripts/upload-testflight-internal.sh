@@ -8,7 +8,7 @@ readonly bleat_project_configuration="${bleat_repository_root}/project.yml"
 
 readonly bleat_development_team="${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the App Store Connect bundle identifier}"
-readonly bleat_build_number="${BLEAT_BUILD_NUMBER:-$(date -u '+%Y%m%d.%H%M.%S')}"
+readonly bleat_build_number="$("${bleat_script_dir}/resolve-build-number.sh")"
 readonly bleat_version="$(
     awk '$1 == "MARKETING_VERSION:" {
         gsub(/"/, "", $2)
@@ -21,11 +21,6 @@ if [[ -z "${bleat_version}" ]]; then
     print -u2 "Could not read MARKETING_VERSION from project.yml"
     exit 1
 fi
-if [[ ! "${bleat_build_number}" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
-    print -u2 "BLEAT_BUILD_NUMBER must contain one to three dot-separated integers"
-    exit 64
-fi
-
 readonly bleat_relative_output_directory=".build/testflight-internal/${bleat_version}-${bleat_build_number}"
 readonly bleat_output_directory="${bleat_repository_root}/${bleat_relative_output_directory}"
 readonly bleat_archive_path="${bleat_output_directory}/Bleat.xcarchive"
