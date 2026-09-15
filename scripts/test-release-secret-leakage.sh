@@ -441,8 +441,8 @@ bleat_version="$(
         "${bleat_repository_root}/project.yml"
 )"
 bleat_build="$(
-    awk '$1 == "CURRENT_PROJECT_VERSION:" {gsub(/"/, "", $2); print $2; exit}' \
-        "${bleat_repository_root}/project.yml"
+    plutil -extract CFBundleVersion raw \
+        "${bleat_archive_path}/Products/Applications/Bleat.app/Info.plist"
 )"
 bleat_commit="$(git -C "${bleat_repository_root}" rev-parse HEAD)"
 if [[ -z "$(git -C "${bleat_repository_root}" status --porcelain --untracked-files=all)" ]]; then

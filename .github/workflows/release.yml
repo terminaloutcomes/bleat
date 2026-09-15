@@ -8,6 +8,7 @@ on:
       - project.yml
       - CHANGELOG.md
       - scripts/archive-beta.sh
+      - scripts/resolve-build-number.sh
       - .github/workflows/release.yml
 
 permissions:
@@ -110,9 +111,20 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: mise run security:validate
 
+      - name: Generate release build number
+        if: steps.version.outputs.changed == 'true'
+        id: build
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          build_number="$(./scripts/resolve-build-number.sh)"
+          print "build_number=${build_number}" >> "${GITHUB_OUTPUT}"
+          print "Release build number: ${build_number}"
+
       - name: Validate Release archive
         if: steps.version.outputs.changed == 'true'
         env:
+          BLEAT_BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
           BLEAT_CARPLAY_MODE: enabled
           BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
           BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}

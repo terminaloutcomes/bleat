@@ -240,6 +240,7 @@ run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 description = "Validate the internal TestFlight export configuration"
 run = [
   { task = "test:cloudkit-schema" },
+  "./scripts/test-build-number.sh",
   "./scripts/test-testflight-export-options.sh",
 ]
 
