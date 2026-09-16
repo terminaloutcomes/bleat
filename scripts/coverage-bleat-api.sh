@@ -4,6 +4,7 @@ set -euo pipefail
 readonly output_directory="$PWD/.build/coverage/bleat-api"
 readonly report="${output_directory}/tarpaulin-report.json"
 readonly lcov="${output_directory}/lcov.info"
+readonly overall_coverage_warning_threshold="80"
 
 mkdir -p "${output_directory}"
 rm -f "${report}" "${lcov}"
