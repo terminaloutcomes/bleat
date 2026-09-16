@@ -2161,6 +2161,16 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testNowPlayingCoverOpensBookDetail() {
+        assertNowPlayingBookControlOpensDetail("player.book.cover")
+    }
+
+    @MainActor
+    func testNowPlayingTitleOpensBookDetail() {
+        assertNowPlayingBookControlOpensDetail("player.book.title")
+    }
+
+    @MainActor
     func testLargeScrubberJumpsRequireConfirmationWithoutGuardingCommands() {
         let app = launch(scenario: "--ui-testing-playback")
 
@@ -3016,6 +3026,41 @@ final class BleatUITests: XCTestCase {
         app.launchArguments = [scenario] + additionalArguments
         app.launch()
         return app
+    }
+
+    @MainActor
+    private func assertNowPlayingBookControlOpensDetail(
+        _ identifier: String
+    ) {
+        let app = launch(scenario: "--ui-testing-playback")
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.navigationBars["Downloads"].waitForExistence(timeout: 3)
+        )
+        let miniPlayer = app.buttons["player.mini.open"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+
+        let openBook = app.buttons[identifier]
+        XCTAssertTrue(openBook.waitForExistence(timeout: 3))
+        XCTAssertTrue(openBook.isHittable)
+        openBook.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["book.detail"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(tabButton("Library", in: app).isSelected)
+        XCTAssertFalse(app.otherElements["player.screen"].exists)
     }
 
     private func averageLuminance(of image: UIImage) throws -> Double {

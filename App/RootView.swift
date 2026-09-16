@@ -1452,7 +1452,20 @@ private struct SignedInView: View {
             #endif
         }
         .sheet(isPresented: $navigation.showsPlayer) {
-            NowPlaying(playback: model.playback)
+            if let accountID = model.playback.accountID,
+                let libraryID = model.playback.libraryID,
+                let itemID = model.playback.itemID
+            {
+                NowPlaying(playback: model.playback) {
+                    openPlayingBook(
+                        accountID: accountID,
+                        libraryID: libraryID,
+                        itemID: itemID
+                    )
+                }
+            } else {
+                NowPlaying(playback: model.playback)
+            }
 
         }
         .sheet(item: bookActionPresentation.requestBinding) { request in
@@ -1753,6 +1766,26 @@ private struct SignedInView: View {
     private func handlePlaybackOutcome(_ outcome: PlaybackStartOutcome) {
         guard let failure = outcome.presentationFailure else { return }
         playbackFailure = failure
+    }
+
+    private func openPlayingBook(
+        accountID: AccountID,
+        libraryID: LibraryID,
+        itemID: LibraryItemID
+    ) {
+        navigation.showsPlayer = false
+        navigation.receive(
+            route: .book(
+                id: itemID,
+                target: DeepLinkScope(
+                    accountID: accountID,
+                    libraryID: libraryID
+                )
+            )
+        )
+        Task {
+            await navigation.applyPendingRoute(model: model)
+        }
     }
 }
 
