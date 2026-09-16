@@ -2329,13 +2329,14 @@ final class AppModel {
         guard accountActionStatus == .idle else {
             return
         }
+        accountActionStatus = .switching
         await invalidatePlaybackStarts()
         await cancelPrivateCloudSynchronization()
-        accountActionStatus = .switching
         await stopLiveUpdatesAndWait()
         await diagnostics.record(
             .started(.switchAccount, category: .auth)
         )
+        await playback.stopForAccountSwitch()
         do {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
@@ -4606,6 +4607,9 @@ final class AppModel {
         book: LibraryBookSummary,
         account: ServerAccount
     ) async -> BrowsingPlaybackActionOutcome {
+        guard accountActionStatus != .switching else {
+            return .start(.superseded)
+        }
         if playback.accountID == account.id,
             playback.itemID == book.id,
             playback.isPlaybackRequested
@@ -4649,6 +4653,9 @@ final class AppModel {
     private func startPlayback(
         _ request: PlaybackStartRequest
     ) async -> PlaybackStartOutcome {
+        guard accountActionStatus != .switching else {
+            return .superseded
+        }
         let target = PlaybackStartTarget(
             accountID: request.account.id,
             itemID: request.book.itemID

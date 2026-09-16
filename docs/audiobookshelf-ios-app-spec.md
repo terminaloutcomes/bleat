@@ -45,7 +45,7 @@ These decisions keep the first release bounded:
 | Minimum Audiobookshelf version | 2.26.0, because this introduced access/refresh tokens and managed sessions |
 | Audited server contract | Audiobookshelf v2.36.0 at commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5` |
 | Client interoperability reference | Official mobile client at commit `185cba16eb122b40e8537a7bf475632680d6fb94`; copy its server contract, not its implementation bugs or legacy token-in-URL workarounds |
-| Server selection | One active browsing context at a time; playback and downloads continue when the user browses another account |
+| Server selection | One active browsing context at a time; switching accounts stops playback and clears Now Playing, while unrelated downloads continue |
 | Multiple users on one server | Supported; an account is identified by normalized server URL plus remote user ID |
 | Podcasts and ebooks | Out of scope for 1.0 |
 | Metadata matching providers | Out of scope for 1.0; manual editing is in scope |
@@ -125,7 +125,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - As a user, I can enter an Audiobookshelf server URL, including a path prefix such as `https://example.com/audiobookshelf`.
 - I can sign in using a local Audiobookshelf username and password.
 - I can add multiple users from the same server and users from different servers.
-- I can switch accounts without stopping current playback or unrelated background downloads.
+- I can switch accounts and have current playback and Now Playing cleared without stopping unrelated background downloads.
 - I can see when an account requires reauthentication.
 - I can sign out or remove an account, with clear confirmation that removes its downloaded books.
 - I can tap a saved account to edit its primary URL, optional local-network URL,
@@ -950,7 +950,7 @@ Use a `PlaybackRouteAdapter` selected by the validated server version. For every
 - HLS segment URLs are relative to the manifest and are served by the current `HlsRouter` while the stream is open.
 - Do not add bearer headers using undocumented AVFoundation options and do not rewrite the manifest unless a future, separately verified server contract requires it.
 
-The playback session must remain open while either route is in use. Do not close it on ordinary backgrounding, route changes, or account-tab changes. Close it when replacing the book, explicitly stopping playback, or after the final sync at completion.
+The playback session must remain open while either route is in use. Do not close it on ordinary backgrounding or route changes. Close it when replacing the book, explicitly stopping playback, switching accounts, or after the final sync at completion.
 
 Treat session IDs and the resulting public/HLS URLs as short-lived secrets: never log them, persist them beyond recovery metadata, share them, or include them in diagnostics.
 
