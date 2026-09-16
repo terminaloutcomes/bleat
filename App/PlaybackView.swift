@@ -410,28 +410,46 @@ struct MiniPlayerView: View {
 
 struct NowPlaying: View {
     @Bindable var playback: PlaybackModel
+    let openBook: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var bookmarkDraft: BookmarkDraft?
 
     @ColourSchemePreference private var colourScheme
 
+    init(
+        playback: PlaybackModel,
+        openBook: (() -> Void)? = nil
+    ) {
+        self.playback = playback
+        self.openBook = openBook
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 22) {
-                    BookCoverView(
-                        accountID: playback.accountID,
-                        url: playback.coverURL,
-                        cornerRadius: 16,
-                        loadPolicy: playback.coverLoadPolicy
-                    )
-                    .aspectRatio(1, contentMode: .fit)
-                    .frame(maxWidth: 300)
+                    if let openBook {
+                        Button(action: openBook) {
+                            bookCover
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(playback.title)")
+                        .accessibilityIdentifier("player.book.cover")
+                    } else {
+                        bookCover
+                    }
 
                     VStack(spacing: 4) {
-                        Text(playback.title)
-                            .font(.title2.bold())
-                            .multilineTextAlignment(.center)
+                        if let openBook {
+                            Button(action: openBook) {
+                                bookTitle
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Open \(playback.title)")
+                            .accessibilityIdentifier("player.book.title")
+                        } else {
+                            bookTitle
+                        }
                         // if !playback.author.isEmpty {
                         //     Text(playback.author)
                         //         .foregroundStyle(.secondary)
@@ -769,6 +787,25 @@ struct NowPlaying: View {
             }
         }
         .accessibilityIdentifier("player.screen").tint(colourScheme.color)
+    }
+
+    private var bookCover: some View {
+        BookCoverView(
+            accountID: playback.accountID,
+            url: playback.coverURL,
+            cornerRadius: 16,
+            loadPolicy: playback.coverLoadPolicy
+        )
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: 300)
+    }
+
+    private var bookTitle: some View {
+        Text(playback.title)
+            .font(.title2.bold())
+            .multilineTextAlignment(.center)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     @ToolbarContentBuilder
