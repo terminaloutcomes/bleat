@@ -385,6 +385,7 @@ final class PlaybackModel {
             Double
         ) throws -> AppPlaybackQueuePlan
     private var generation: UInt64 = 0
+    private var isAccountSwitchShutdownInProgress = false
     private var player: AVQueuePlayer?
     private var timeObserver: Any?
     private var timeControlStatusObserver: NSKeyValueObservation?
@@ -1428,6 +1429,9 @@ final class PlaybackModel {
     }
 
     private func play(preservingPendingPlaybackStart: Bool) {
+        guard !isAccountSwitchShutdownInProgress else {
+            return
+        }
         guard let player,
             preparation != nil,
             state != .preparing,
@@ -1514,6 +1518,9 @@ final class PlaybackModel {
     }
 
     func pause() {
+        guard !isAccountSwitchShutdownInProgress else {
+            return
+        }
         guard let player, hasActiveBook else {
             return
         }
@@ -1688,6 +1695,9 @@ final class PlaybackModel {
         to requestedTime: Double,
         preservingPendingPlaybackStart: Bool
     ) async {
+        guard !isAccountSwitchShutdownInProgress else {
+            return
+        }
         guard let preparation else {
             if preservingPendingPlaybackStart {
                 pendingPlaybackStartSpan?.end(.cancelled)
@@ -1838,6 +1848,19 @@ final class PlaybackModel {
     }
 
     func stop() async {
+        await stop(allowsSupersession: true)
+    }
+
+    func stopForAccountSwitch() async {
+        guard !isAccountSwitchShutdownInProgress else {
+            return
+        }
+        isAccountSwitchShutdownInProgress = true
+        defer { isAccountSwitchShutdownInProgress = false }
+        await stop(allowsSupersession: false)
+    }
+
+    private func stop(allowsSupersession: Bool) async {
         await diagnostics.record(
             .started(.closePlayback, category: .playback)
         )
@@ -1855,7 +1878,7 @@ final class PlaybackModel {
         } else {
             persistLocalPosition()
         }
-        guard generation == operationGeneration else {
+        guard !allowsSupersession || generation == operationGeneration else {
             return
         }
         await finishStatisticsSession()
@@ -1864,7 +1887,7 @@ final class PlaybackModel {
         releaseAutomaticCachedPlaybackWindow()
         resetCachedStreamingContinuation()
         await closeActiveSession()
-        guard generation == operationGeneration else {
+        guard !allowsSupersession || generation == operationGeneration else {
             return
         }
         activeAccount = nil
@@ -3747,7 +3770,8 @@ final class PlaybackModel {
     #endif
 
     func handleMediaServicesReset() async {
-        guard preparation != nil,
+        guard !isAccountSwitchShutdownInProgress,
+            preparation != nil,
             let intent = PlaybackMediaServicesResetIntent.decide(for: state)
         else {
             return
@@ -3839,6 +3863,9 @@ final class PlaybackModel {
     func handleRemoteCommand(
         _ command: PlaybackRemoteCommand
     ) -> PlaybackRemoteCommandOutcome {
+        guard !isAccountSwitchShutdownInProgress else {
+            return .unavailable
+        }
         switch command {
         case .play:
             guard isPlaybackControlAvailable, !isPlaybackRequested else {

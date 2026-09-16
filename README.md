@@ -598,6 +598,9 @@ intervals. AirPods report only Previous or Next to Bleat, not the originating
 ear or tap count.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
+Switching accounts first stops playback and clears the mini-player and system
+Now Playing state, then activates the selected account. If activation fails,
+the current account remains selected while playback stays stopped.
 The CarPlay audio scene shares the phone's active account, selected audiobook
 library, downloads, and process-wide player. Its Home, Library, and Downloads
 tabs provide personalized shelves, a library chooser, explicit pagination,

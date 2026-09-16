@@ -10015,6 +10015,150 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.playback.hasActiveBook)
     }
 
+    func testSwitchAccountClearsActivePlayback() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let playbackOutcome = await model.startPlayback(
+            detail: fixture.detail,
+            account: first
+        )
+        XCTAssertEqual(playbackOutcome, .started(source: .streamed))
+        model.playback.pause()
+        XCTAssertTrue(model.playback.hasActiveBook)
+        XCTAssertEqual(model.playback.accountID, first.id)
+        let syncCountBeforeSwitch = await service.playbackSyncSessionIDs().count
+
+        await model.switchAccount(to: second)
+
+        XCTAssertEqual(model.account, second)
+        XCTAssertFalse(model.playback.hasActiveBook)
+        XCTAssertNil(model.playback.accountID)
+        XCTAssertNil(model.playback.itemID)
+        XCTAssertEqual(model.playback.state, .idle)
+        let syncedSessions = await service.playbackSyncSessionIDs()
+        let closedSessions = await service.playbackCloseSessionIDs()
+        XCTAssertGreaterThan(syncedSessions.count, syncCountBeforeSwitch)
+        XCTAssertEqual(
+            syncedSessions.last,
+            PlaybackSessionID(rawValue: "playback-start-session")
+        )
+        XCTAssertEqual(
+            closedSessions,
+            [PlaybackSessionID(rawValue: "playback-start-session")]
+        )
+    }
+
+    func testFailedAccountSwitchClearsPlaybackButKeepsCurrentAccount()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            activateAccount: .failure(.accountStore(.persistenceFailed))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: first.id,
+            account: first
+        )
+        model.playback.pause()
+
+        await model.switchAccount(to: second)
+
+        XCTAssertEqual(model.account, first)
+        XCTAssertFalse(model.playback.hasActiveBook)
+        XCTAssertNil(model.playback.accountID)
+        XCTAssertNil(model.playback.itemID)
+        XCTAssertEqual(
+            model.accountActionStatus,
+            .failed(AppFailure(.switchAccount, .localStorageUnavailable))
+        )
+    }
+
+    func testAccountSwitchRejectsPlaybackStartWhileStoppingOldSession()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second",
+            server: "https://second.example"
+        )
+        let closeGate = AsyncGate()
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL
+                    )
+                )
+            ],
+            playbackCloseGate: closeGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initialOutcome = await model.startPlayback(
+            detail: fixture.detail,
+            account: first
+        )
+        XCTAssertEqual(initialOutcome, .started(source: .streamed))
+
+        let switching = Task { await model.switchAccount(to: second) }
+        await closeGate.waitUntilEntered()
+        let reentrantOutcome = await model.startPlayback(
+            detail: fixture.detail,
+            account: first
+        )
+        let remoteSeekOutcome = model.playback.handleRemoteCommand(.seek(0.5))
+        await model.playback.handleMediaServicesReset()
+
+        XCTAssertEqual(reentrantOutcome, .superseded)
+        XCTAssertEqual(remoteSeekOutcome, .unavailable)
+        await closeGate.release()
+        await switching.value
+        XCTAssertEqual(model.account, second)
+        XCTAssertFalse(model.playback.hasActiveBook)
+    }
+
     func testStartFailureShowsUnavailableState() async {
         let service = TestAppService(
             activeAccount: .failure(.accountStore(.persistenceFailed))
@@ -18962,6 +19106,7 @@ private actor TestAppService: AppServicing {
             AppServiceError
         >
     private var loginResult: Result<ServerAccount, AppServiceError>
+    private var activateAccountResult: Result<Void, AppServiceError>
     private var accountUpdateOutcomes: [AccountUpdateServiceOutcome] = []
     private var librariesResult:
         Result<
@@ -19206,6 +19351,7 @@ private actor TestAppService: AppServicing {
         login: Result<ServerAccount, AppServiceError> = .failure(
             .onboarding(.authenticationRequestFailed)
         ),
+        activateAccount: Result<Void, AppServiceError> = .success(()),
         libraries: Result<[LibrarySummary], AppServiceError> = .success([]),
         firstPage: Result<LibraryItemsPage, AppServiceError> = .failure(
             .libraryRepository(.noCachedValue)
@@ -19314,6 +19460,7 @@ private actor TestAppService: AppServicing {
         accountsResult = accounts
         activeAccountResult = activeAccount
         loginResult = login
+        activateAccountResult = activateAccount
         librariesResult = libraries
         firstPageResult = firstPage
         nextPageResult = nextPage
@@ -19810,6 +19957,7 @@ private actor TestAppService: AppServicing {
         _ account: ServerAccount
     ) async throws(AppServiceError) {
         recordedActivatedAccounts.append(account)
+        try value(from: activateAccountResult)
     }
 
     func login(
