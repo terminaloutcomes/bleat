@@ -1,1 +1,3 @@
-//! Nothing here so far, this is a placeholder while shell scripts are moved to Rust.
+//! Script-related things for the Bleat project because shell scripts aren't fun.
+
+pub mod deploy_device;

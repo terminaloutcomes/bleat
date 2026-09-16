@@ -9,11 +9,13 @@ on:
     paths:
       - .dockerignore
       - bleat-api/**
+      - scripts/**
       - .github/workflows/build-bleat-api-container.yml
   pull_request:
     paths:
       - .dockerignore
       - bleat-api/**
+      - scripts/**
       - .github/workflows/build-bleat-api-container.yml
 
 permissions:

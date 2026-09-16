@@ -303,7 +303,7 @@ run = """
 export BLEAT_DEVICE_ID="${BLEAT_IPHONE_ID:?Set BLEAT_IPHONE_ID to the connected iPhone UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/iphone-release"
 export BLEAT_DEVICE_BUILD_DIRECTORY
-exec ./scripts/deploy-device.sh
+exec cargo run --quiet --package scripts --bin deploy-device
 """
 
 [tasks."ipad:build"]
@@ -342,32 +342,19 @@ run = """
 BLEAT_DEVICE_ID="${BLEAT_IPAD_ID:?Set BLEAT_IPAD_ID to the connected iPad UDID}"
 BLEAT_DEVICE_BUILD_DIRECTORY=".build/ipad-release"
 export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
-exec ./scripts/deploy-device.sh
+exec cargo run --quiet --package scripts --bin deploy-device
 """
 
+[tasks.rust-fmt]
+run = "cargo fmt --quiet"
+
+
 [tasks.clippy]
-run = { task = "api:clippy" }
+depends = ["rust-fmt"]
+run = "cargo clippy --all-targets --all-features --quiet -- -D warnings"
 
 [tasks.shellcheck]
 run = "find . -name '*.sh' -not -path '*.build/*' -type f -exec shellcheck '{}' +"
-
-[tasks."scripts:fmt"]
-dir = "./scripts/"
-run = "cargo fmt --quiet"
-
-[tasks."scripts:clippy"]
-depends = ["scripts:fmt"]
-dir = "./scripts/"
-run = "cargo clippy --all-targets --all-features --quiet -- -D warnings"
-
-[tasks."scripts:test"]
-depends = ["scripts:fmt"]
-dir = "./scripts/"
-run = "cargo test"
-
-[tasks."scripts:check"]
-dir = "./scripts/"
-depends = ["scripts:clippy", "scripts:test", "scripts:ruff", "scripts:ty"]
 
 [tasks."python:fmt"]
 dir = "./scripts/"
