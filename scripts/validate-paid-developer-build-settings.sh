@@ -1,11 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# hacky script because calling the rust project from xcode is a pain
+set -euo pipefail
 
-if [ -z "$(which cargo)" ]; then
-    echo "Cargo is not installed. Please install Rust and Cargo."
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "Cargo is not installed. Please install Rust and Cargo." >&2
     exit 1
 fi
 
-
-cd "$(dirname "$0")" && cargo run --quiet --bin validate-paid-developer-build-settings
+readonly repository_root="${SRCROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cargo run \
+    --quiet \
+    --manifest-path "${repository_root}/scripts/Cargo.toml" \
+    --bin validate-paid-developer-build-settings

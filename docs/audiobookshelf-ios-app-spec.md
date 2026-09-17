@@ -1065,11 +1065,11 @@ same account and cache-busted URL are deduplicated. Late results must not
 replace artwork or templates for a newer account, library, or playback item.
 The CarPlay entitlement requires Apple's approval and matching provisioning.
 Apple has approved it, and matching development and distribution profiles have
-been verified. `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to `disabled` for
-local workflows; the public GitHub release archive explicitly enables it.
-Personal Team and macOS builds force it off. Other paid-team iOS builds may opt
-in explicitly, while an enabled signed build without matching provisioning
-must fail. See Apple's
+been verified. `BLEAT_CARPLAY_MODE=enabled|disabled` defaults to `enabled` for
+all workflows. Personal Team and macOS builds force the effective mode off.
+Paid-team iOS builds whose profiles do not authorize CarPlay must opt out
+explicitly, while an enabled signed build without matching provisioning must
+fail. See Apple's
 [CarPlay entitlement process](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [scene guidance](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay).
 Entitlement enablement and CarPlay Simulator/vehicle validation are recorded in

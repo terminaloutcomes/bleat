@@ -139,27 +139,27 @@ When the global setting is `NO`, the individual settings remain available:
   signing entitlement. It does not remove the implemented scene from the
   compiled application.
 
-CloudKit and App Attest default to `enabled`; CarPlay defaults to `disabled`
-for local build workflows. The public GitHub release workflow explicitly
-enables CarPlay. Unsupported values fail the build. The selected
+CloudKit, App Attest, and CarPlay default to `enabled`. Set
+`BLEAT_CARPLAY_MODE=disabled` explicitly for a paid-team profile that does not
+authorize CarPlay. The public GitHub release workflow also pins CarPlay to
+`enabled`. Unsupported values fail the build. The selected
 effective modes are embedded in `Info.plist`, and Xcode selects the exact
 CloudKit, App Attest, and CarPlay entitlement combination. macOS and Personal
 Team builds force the effective CarPlay mode to `disabled`.
 
 Apple has approved the managed entitlement, and matching development and
 distribution profiles have been verified. A matching profile is required for
-an enabled build to sign. Opt in explicitly for any supported build, for
-example:
+an enabled build to sign. Opt out when using a paid-team profile without that
+entitlement, for example:
 
 ```sh
-BLEAT_CARPLAY_MODE=enabled mise run iphone
-BLEAT_CARPLAY_MODE=enabled mise run testflight:internal
+BLEAT_CARPLAY_MODE=disabled mise run iphone
+BLEAT_CARPLAY_MODE=disabled mise run testflight:internal
 ```
 
-An enabled signed build without matching provisioning fails.
-Local archive, TestFlight, Simulator, and device workflows remain disabled
-unless the flag is supplied; the GitHub release archive pins it to `enabled`
-explicitly.
+An enabled signed build without matching provisioning fails. Local archive,
+TestFlight, Simulator, device, and test workflows default to enabled; the
+GitHub release archive pins it to `enabled` explicitly.
 
 ### CloudKit schema management
 
@@ -319,9 +319,10 @@ origins configured in the environment:
 ./scripts/archive-beta.sh
 ```
 
-The local archive defaults to `BLEAT_CARPLAY_MODE=disabled`; the public GitHub
-release workflow explicitly selects `enabled`. A signed enabled archive needs
-a profile that authorizes the managed CarPlay Audio App entitlement.
+The local archive defaults to `BLEAT_CARPLAY_MODE=enabled`, matching the public
+GitHub release workflow. A signed enabled archive needs a profile that
+authorizes the managed CarPlay Audio App entitlement; set the mode to
+`disabled` explicitly for a paid-team profile without it.
 
 Every archive defaults to one UTC build number in `YYYYMMDD.HHmm.SS` format,
 generated once and reused for the complete archive, inspection, export, and

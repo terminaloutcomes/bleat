@@ -74,7 +74,7 @@ xcodebuild -quiet \
     -derivedDataPath "${bleat_repo_root}/.build/xcode-derived" \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
-    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     build-for-testing
 
@@ -90,7 +90,7 @@ xcodebuild -quiet \
     -resultBundlePath "${result_bundle}" \
     BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
     BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
-    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
+    BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-enabled}" \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     test
 
