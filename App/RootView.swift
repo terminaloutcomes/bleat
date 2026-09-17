@@ -3895,9 +3895,7 @@ private struct BookDetailDownloadControls: View {
                 accountID: account.id,
                 itemID: detail.id
             ) {
-                if record.manifest.purpose == .automaticCache
-                    || !downloads.isFullBookAvailable(record)
-                {
+                if !downloads.isFullBookAvailable(record) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top, spacing: 8) {
                             HStack(alignment: .top, spacing: 8) {
@@ -3926,15 +3924,11 @@ private struct BookDetailDownloadControls: View {
                         }
                         .font(.subheadline)
 
-                        if record.manifest.purpose == .automaticCache
-                            || !downloads.isFullBookAvailable(record)
-                        {
-                            ProgressView(
-                                value: downloads.progress[
-                                    record.manifest.downloadID
-                                ] ?? 0
-                            )
-                        }
+                        ProgressView(
+                            value: downloads.progress[
+                                record.manifest.downloadID
+                            ] ?? 0
+                        )
 
                     }
                     .padding()
@@ -4053,6 +4047,88 @@ private struct BookDetailDownloadControls: View {
         )
     }
 
+}
+
+private struct BookDetailLinkLayout: Layout {
+    let horizontalSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let rows = rows(
+            for: subviews,
+            maximumWidth: proposal.width ?? .infinity
+        )
+        return CGSize(
+            width: proposal.width ?? rows.map(\.width).max() ?? 0,
+            height: rows.reduce(0) { $0 + $1.height }
+        )
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var origin = bounds.origin
+        for row in rows(for: subviews, maximumWidth: bounds.width) {
+            for element in row.elements {
+                element.subview.place(
+                    at: origin,
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(element.size)
+                )
+                origin.x += element.size.width + horizontalSpacing
+            }
+            origin.x = bounds.minX
+            origin.y += row.height
+        }
+    }
+
+    private func rows(
+        for subviews: Subviews,
+        maximumWidth: CGFloat
+    ) -> [Row] {
+        var rows: [Row] = []
+        var row = Row()
+        for subview in subviews {
+            let size = subview.sizeThatFits(
+                ProposedViewSize(width: maximumWidth, height: nil)
+            )
+            let requiredWidth =
+                row.elements.isEmpty
+                ? size.width : horizontalSpacing + size.width
+            if !row.elements.isEmpty,
+                row.width + requiredWidth > maximumWidth
+            {
+                rows.append(row)
+                row = Row()
+            }
+            row.elements.append(Element(subview: subview, size: size))
+            row.width +=
+                row.elements.count == 1
+                ? size.width : horizontalSpacing + size.width
+            row.height = max(row.height, size.height)
+        }
+        if !row.elements.isEmpty {
+            rows.append(row)
+        }
+        return rows
+    }
+
+    private struct Element {
+        let subview: LayoutSubview
+        let size: CGSize
+    }
+
+    private struct Row {
+        var elements: [Element] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
 }
 
 private struct BookDetailView: View {
@@ -4516,7 +4592,7 @@ private struct BookDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     if !detail.authors.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
+                        BookDetailLinkLayout(horizontalSpacing: 4) {
                             ForEach(
                                 Array(detail.authors.enumerated()),
                                 id: \.offset
@@ -4531,17 +4607,21 @@ private struct BookDetailView: View {
                                         )
                                     }
                                 } label: {
-                                    Text(author.name)
-                                        .underline()
-                                        .frame(
-                                            maxWidth: .infinity,
-                                            minHeight: 44,
-                                            alignment: .leading
-                                        )
+                                    Text(
+                                        author.name
+                                            + (index == detail.authors.count - 1
+                                                ? "" : ",")
+                                    )
+                                    .underline(true, color: .primary)
+                                    .frame(
+                                        minWidth: 44,
+                                        minHeight: 44,
+                                        alignment: .leading
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .frame(
-                                    maxWidth: .infinity,
+                                    minWidth: 44,
                                     minHeight: 44,
                                     alignment: .leading
                                 )
@@ -4557,7 +4637,7 @@ private struct BookDetailView: View {
                         }
                     }
                     if !detail.series.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
+                        BookDetailLinkLayout(horizontalSpacing: 4) {
                             ForEach(
                                 Array(detail.series.enumerated()),
                                 id: \.offset
@@ -4570,17 +4650,21 @@ private struct BookDetailView: View {
                                         from: origin
                                     )
                                 } label: {
-                                    Text(seriesLinkLabel(series))
-                                        .underline()
-                                        .frame(
-                                            maxWidth: .infinity,
-                                            minHeight: 44,
-                                            alignment: .leading
-                                        )
+                                    Text(
+                                        seriesLinkLabel(series)
+                                            + (index == detail.series.count - 1
+                                                ? "" : ",")
+                                    )
+                                    .underline(true, color: .primary)
+                                    .frame(
+                                        minWidth: 44,
+                                        minHeight: 44,
+                                        alignment: .leading
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .frame(
-                                    maxWidth: .infinity,
+                                    minWidth: 44,
                                     minHeight: 44,
                                     alignment: .leading
                                 )
@@ -4619,22 +4703,9 @@ private struct BookDetailView: View {
                     .accessibilityIdentifier("book.detail.account")
                 }
 
-                if let progress = detail.progress {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(value: progress.progress).tint(
-                            colourScheme.color)
-                        Text(
-                            progress.isFinished
-                                ? "Finished"
-                                : "\(Int(progress.progress * 100))% complete"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-
                 VStack(spacing: 12) {
                     playbackAction(detail)
+                    playbackProgress(detail, colourScheme: colourScheme)
                     if let account = model.account {
                         BookDetailDownloadControls(
                             downloads: model.downloads,
@@ -4660,6 +4731,39 @@ private struct BookDetailView: View {
             .padding()
         }
         .accessibilityIdentifier("book.detail")
+    }
+
+    @ViewBuilder
+    private func playbackProgress(
+        _ detail: LibraryBookDetail,
+        colourScheme: ColourScheme
+    ) -> some View {
+        if let progress = detail.progress {
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressView(value: progress.progress)
+                    .tint(colourScheme.color)
+                HStack {
+                    if let chapterIndex = PlaybackChapterIndexResolver.resolve(
+                        chapters: detail.chapters,
+                        wholeBookTime: progress.currentTime
+                    ) {
+                        Text(
+                            "Chapter \(chapterIndex + 1)/\(detail.chapters.count)"
+                        )
+                        .accessibilityIdentifier(
+                            "book.detail.progress.chapter"
+                        )
+                    }
+                    Spacer()
+                    Text(
+                        "\(min(100, max(0, Int(progress.progress * 100))))%"
+                    )
+                    .accessibilityIdentifier("book.detail.progress.percentage")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder

@@ -500,9 +500,10 @@ clearing the loaded page; unchanged results are not republished. **Load More**
 fetches the next page using the active sort and filter. Collapsed server series
 are shown as series entries; opening one uses the server's uncollapsed sequence
 order, supports cached pages and pagination, and provides a swipeable cover
-browser. A book's authors and series are separate accessible controls: an
-author opens a named Library filter that can be cleared, while a series opens
-its ordered series detail. **Download Series** loads every remaining series
+browser. A book's authors and series use compact, comma-delimited lists that
+wrap for larger text while keeping every entry a separate accessible control.
+An author opens a named Library filter that can be cleared, while a series
+opens its ordered series detail. **Download Series** loads every remaining series
 page, asks for confirmation even if you navigate elsewhere, and hands each book
 to the normal download flow. Another series can be prepared at the same time;
 completed confirmations are shown in order. Existing downloads are retained,
@@ -717,8 +718,10 @@ or—by default—24 hours after the book finishes. Cleanup never applies to an
 explicit download. **Download Full Book** promotes an automatic cache in place,
 keeps its verified files, and downloads only the remaining files.
 
-Book detail keeps Play, Download, and finished-state actions above long
-description and metadata content. Its Details and Chapters sections are
+Book detail keeps Play and available Download actions above long description
+and metadata content; completed local downloads do not show another Download
+button. Chapter and completion progress sits directly below Play or Resume.
+Its Details and Chapters sections are
 collapsible; the Chapters header shows the count, and each chapter shows its
 duration and asks for confirmation before moving playback there. Bookmarks
 follow Chapters. When detail loading fails,

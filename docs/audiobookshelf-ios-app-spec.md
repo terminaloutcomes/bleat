@@ -461,10 +461,11 @@ The detail screen contains:
 
 - Resume/Play;
 - Download, pause, retry, or remove download;
-- progress and finished state;
+- chapter and completion progress directly below the primary playback action;
 - metadata in a collapsible Details section;
-- separate 44-point-or-larger author and series controls that retain their
-  position-based accessibility identifiers; authors select a clearable Library
+- comma-delimited inline author and series lists that wrap for Dynamic Type;
+  every entry remains a separate 44-point-or-larger control with its
+  position-based accessibility identifier. Authors select a clearable Library
   filter and series push a series detail above the book;
 - a collapsible Chapters section whose header shows the chapter count, with
   duration-bearing rows that confirm before starting or repositioning playback

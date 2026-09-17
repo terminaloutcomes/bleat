@@ -204,6 +204,11 @@ final class BleatUITests: XCTestCase {
             app.buttons["book.detail.author.1"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.author.1"].isHittable)
+        XCTAssertEqual(
+            app.buttons["book.detail.author.0"].frame.midY,
+            app.buttons["book.detail.author.1"].frame.midY,
+            accuracy: 1
+        )
         XCTAssertTrue(
             app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
         )
@@ -212,6 +217,11 @@ final class BleatUITests: XCTestCase {
             app.buttons["book.detail.series.1"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.series.1"].isHittable)
+        XCTAssertEqual(
+            app.buttons["book.detail.series.0"].frame.midY,
+            app.buttons["book.detail.series.1"].frame.midY,
+            accuracy: 1
+        )
         Self.scrollUntilHittable(
             app: app,
             identifier: "book.detail.chapters.disclosure",
@@ -716,6 +726,48 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["search.book.ui-search-book.play"]
                 .waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testBookDetailPlacesChapterProgressBelowPlayback() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-server-progress"
+            ]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        let play = app.buttons["book.detail.play"]
+        let chapter = app.staticTexts["book.detail.progress.chapter"]
+        let percentage = app.staticTexts["book.detail.progress.percentage"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        XCTAssertEqual(chapter.label, "Chapter 2/2")
+        XCTAssertEqual(percentage.label, "96%")
+        XCTAssertGreaterThanOrEqual(chapter.frame.minY, play.frame.maxY)
+    }
+
+    @MainActor
+    func testBookDetailHidesDownloadForCachedBook() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal",
+            additionalArguments: ["--ui-testing-automatic-context-download"]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["book.detail.download"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["book.detail.downloadStatus"]
+                .exists
         )
     }
 
@@ -2786,8 +2838,9 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
         app.staticTexts["The Test Audiobook"].tap()
-        XCTAssertTrue(
-            app.staticTexts["96% complete"].waitForExistence(timeout: 3))
+        let percentage = app.staticTexts["book.detail.progress.percentage"]
+        XCTAssertTrue(percentage.waitForExistence(timeout: 3))
+        XCTAssertEqual(percentage.label, "96%")
         app.buttons["book.detail.actions"].tap()
         app.buttons["book.detail.transcription"].tap()
         let action = app.buttons["transcription.goToCurrentPosition"]
