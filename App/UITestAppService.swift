@@ -257,13 +257,17 @@
             )
             downloadsStorageRootURL =
                 scenario.hasCompletedDownload
-                ? try? Self.makeCompletedDownloadFixture(
+                ? try? Self.makeDownloadFixture(
                     itemID: isContextDownloadRemoval
                         ? LibraryItemID(rawValue: "ui-book")
                         : LibraryItemID(rawValue: "ui-downloaded"),
                     purpose: ProcessInfo.processInfo.arguments.contains(
                         "--ui-testing-automatic-context-download"
-                    ) ? .automaticCache : .manual
+                    ) ? .automaticCache : .manual,
+                    completedAutomaticWindowOnly:
+                        ProcessInfo.processInfo.arguments.contains(
+                            "--ui-testing-complete-automatic-window"
+                        )
                 )
                 : nil
         }
@@ -278,7 +282,25 @@
             guard isSignedInScenario else {
                 return []
             }
-            return [try account()]
+            let primary = try account()
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-multiple-accounts"
+                )
+            else {
+                return [primary]
+            }
+            return [
+                primary,
+                try Self.makeAccount(
+                    id: "ui-secondary-account",
+                    serverAddress: "https://other-books.example",
+                    userID: "ui-secondary-user",
+                    username: "other-reader",
+                    hasManagementPermissions: true,
+                    deniesPlayback: false
+                ).get(),
+            ]
         }
 
         func activeAccount()
@@ -1496,9 +1518,10 @@
             return 10_000
         }
 
-        private static func makeCompletedDownloadFixture(
+        private static func makeDownloadFixture(
             itemID: LibraryItemID,
-            purpose: DownloadPurpose
+            purpose: DownloadPurpose,
+            completedAutomaticWindowOnly: Bool
         ) throws -> URL {
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
@@ -1518,7 +1541,22 @@
                 startOffset: 0,
                 duration: 5
             )
-            let plan = DownloadPlan(itemID: itemID, tracks: [track])
+            let remainingTrack = DownloadTrackPlan(
+                index: 1,
+                inode: "ui-remaining-track",
+                expectedByteLength: Int64(audio.count),
+                mimeType: "audio/wav",
+                safeExtension: .wav,
+                destinationEntry: "00001.wav",
+                startOffset: 5,
+                duration: 5
+            )
+            let plan = DownloadPlan(
+                itemID: itemID,
+                tracks:
+                    completedAutomaticWindowOnly
+                    ? [track, remainingTrack] : [track]
+            )
             var manifest = try DownloadManifest(
                 downloadID: DownloadID(rawValue: "ui-downloaded-download"),
                 accountID: accountID,
@@ -1532,7 +1570,9 @@
                 observedByteLength: Int64(audio.count),
                 placement: .finalized
             )
-            try manifest.finish()
+            if !completedAutomaticWindowOnly {
+                try manifest.finish()
+            }
             let record = DownloadedBookRecord(
                 manifest: manifest,
                 detail: try completedDownloadDetail(itemID: itemID)
@@ -1624,6 +1664,10 @@
         }
 
         private static func makeAccount(
+            id: String = "ui-account",
+            serverAddress: String = "https://books.example",
+            userID: String = "ui-user",
+            username: String = "reader",
             hasManagementPermissions: Bool,
             deniesPlayback: Bool
         )
@@ -1632,15 +1676,15 @@
             do {
                 return .success(
                     try ServerAccount(
-                        id: AccountID(rawValue: "ui-account"),
+                        id: AccountID(rawValue: id),
                         server: NormalizedServerURL(
-                            "https://books.example"
+                            serverAddress
                         ),
                         serverVersion: "2.36.0",
                         authenticationMethods: [.local],
                         user: AuthenticatedUser(
-                            id: UserID(rawValue: "ui-user"),
-                            username: "reader",
+                            id: UserID(rawValue: userID),
+                            username: username,
                             type: .user,
                             permissions: UserPermissions(
                                 download: hasManagementPermissions,

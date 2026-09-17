@@ -204,6 +204,11 @@ final class BleatUITests: XCTestCase {
             app.buttons["book.detail.author.1"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.author.1"].isHittable)
+        XCTAssertEqual(
+            app.buttons["book.detail.author.0"].frame.midY,
+            app.buttons["book.detail.author.1"].frame.midY,
+            accuracy: 1
+        )
         XCTAssertTrue(
             app.buttons["book.detail.series.0"].waitForExistence(timeout: 3)
         )
@@ -212,6 +217,11 @@ final class BleatUITests: XCTestCase {
             app.buttons["book.detail.series.1"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["book.detail.series.1"].isHittable)
+        XCTAssertEqual(
+            app.buttons["book.detail.series.0"].frame.midY,
+            app.buttons["book.detail.series.1"].frame.midY,
+            accuracy: 1
+        )
         Self.scrollUntilHittable(
             app: app,
             identifier: "book.detail.chapters.disclosure",
@@ -453,7 +463,10 @@ final class BleatUITests: XCTestCase {
 
     @MainActor
     func testBookDetailDisclosuresAndConfirmedChapterNavigation() {
-        let app = launch(scenario: "--ui-testing-playback")
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-multiple-accounts"]
+        )
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
@@ -472,7 +485,9 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(detailsDisclosure.isHittable)
         let duration = app.staticTexts["book.detail.details.duration"]
+        let account = app.descendants(matching: .any)["book.detail.account"]
         XCTAssertFalse(duration.exists)
+        XCTAssertFalse(account.exists)
         detailsDisclosure.tap()
         XCTAssertTrue(duration.waitForExistence(timeout: 3))
         XCTAssertEqual(
@@ -486,7 +501,11 @@ final class BleatUITests: XCTestCase {
         let genres = app.staticTexts["book.detail.details.genres"]
         XCTAssertTrue(language.waitForExistence(timeout: 3))
         XCTAssertTrue(genres.waitForExistence(timeout: 3))
+        XCTAssertTrue(account.waitForExistence(timeout: 3))
+        XCTAssertTrue(account.label.contains("reader"))
+        XCTAssertTrue(account.label.contains("books.example"))
         XCTAssertEqual(language.frame.maxX, genres.frame.maxX, accuracy: 1)
+        XCTAssertGreaterThan(account.frame.minY, genres.frame.minY)
         detailsDisclosure.tap()
         XCTAssertTrue(duration.waitForNonExistence(timeout: 3))
 
@@ -716,6 +735,96 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["search.book.ui-search-book.play"]
                 .waitForExistence(timeout: 3)
+        )
+    }
+
+    @MainActor
+    func testBookDetailPlacesChapterProgressBelowPlayback() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-transcription-server-progress"
+            ]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        let play = app.buttons["book.detail.play"]
+        let chapter = app.staticTexts["book.detail.progress.chapter"]
+        let percentage = app.staticTexts["book.detail.progress.percentage"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        XCTAssertTrue(chapter.waitForExistence(timeout: 3))
+        XCTAssertEqual(chapter.label, "Chapter 2/2")
+        XCTAssertEqual(percentage.label, "96%")
+        XCTAssertGreaterThanOrEqual(chapter.frame.minY, play.frame.maxY)
+    }
+
+    @MainActor
+    func testBookDetailHidesDownloadForCachedBook() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal",
+            additionalArguments: ["--ui-testing-automatic-context-download"]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["book.detail.download"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["book.detail.downloadStatus"]
+                .exists
+        )
+    }
+
+    @MainActor
+    func testCompletedAutomaticWindowHasNoDownloadActions() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal",
+            additionalArguments: [
+                "--ui-testing-automatic-context-download",
+                "--ui-testing-complete-automatic-window",
+            ]
+        )
+        let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.tap()
+
+        let status = app.descendants(matching: .any)[
+            "book.detail.downloadStatus"
+        ]
+        XCTAssertTrue(status.waitForExistence(timeout: 3))
+        XCTAssertTrue(status.label.contains("Downloaded"))
+        XCTAssertEqual(
+            app.progressIndicators["book.detail.downloadProgress"].value
+                as? String,
+            "100%"
+        )
+        XCTAssertFalse(app.buttons["book.detail.download.start"].exists)
+
+        app.navigationBars.buttons.firstMatch.tap()
+        tabButton("Downloads", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["Downloaded"].waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            app.progressIndicators[
+                "downloads.progress.ui-downloaded-download"
+            ].value as? String,
+            "100%"
+        )
+        XCTAssertFalse(app.buttons["downloads.start"].exists)
+
+        tabButton("Home", in: app).tap()
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        XCTAssertFalse(
+            app.buttons["book.context.ui-book.download"].exists
+        )
+        XCTAssertTrue(
+            app.buttons["book.context.ui-book.removeDownload"].exists
         )
     }
 
@@ -2786,8 +2895,9 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3))
         app.staticTexts["The Test Audiobook"].tap()
-        XCTAssertTrue(
-            app.staticTexts["96% complete"].waitForExistence(timeout: 3))
+        let percentage = app.staticTexts["book.detail.progress.percentage"]
+        XCTAssertTrue(percentage.waitForExistence(timeout: 3))
+        XCTAssertEqual(percentage.label, "96%")
         app.buttons["book.detail.actions"].tap()
         app.buttons["book.detail.transcription"].tap()
         let action = app.buttons["transcription.goToCurrentPosition"]
@@ -3197,6 +3307,9 @@ final class BleatLiveUITests: XCTestCase {
         #endif
         let environment = try await liveEnvironment()
         var app = XCUIApplication()
+        app.launchArguments = [
+            "-bleat.downloads.automaticLookahead.v1", "1",
+        ]
         app.launch()
 
         XCTAssertTrue(
@@ -3269,6 +3382,17 @@ final class BleatLiveUITests: XCTestCase {
 
         let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["book.detail.downloadStatus"]
+                .waitForExistence(timeout: 20)
+        )
+        app.buttons["book.detail.play"].tap()
+        XCTAssertTrue(
+            app.staticTexts["Downloaded"].waitForExistence(timeout: 60)
+        )
+        XCTAssertFalse(app.buttons["book.detail.download.start"].exists)
+        app.buttons["book.detail.play"].tap()
+
         miniPlayer.tap()
         XCTAssertTrue(
             app.otherElements["player.screen"].waitForExistence(timeout: 10)
@@ -3294,21 +3418,31 @@ final class BleatLiveUITests: XCTestCase {
         secondFile.tap()
         app.buttons["Close"].tap()
 
-        XCTAssertTrue(
-            app.descendants(matching: .any)["book.detail.downloadStatus"]
-                .waitForExistence(timeout: 20)
-        )
-        XCTAssertTrue(
-            app.staticTexts["Cached"].waitForExistence(timeout: 60)
-        )
-        XCTAssertTrue(
-            app.buttons["book.detail.download.fullBook"]
-                .waitForExistence(timeout: 10)
-        )
-        app.buttons["book.detail.download.fullBook"].tap()
-
         stopMiniPlayer(in: app)
         tabButton("Home", in: app).tap()
+        XCTAssertTrue(remoteOpen.waitForExistence(timeout: 20))
+        let liveBookID = String(
+            remoteOpen.identifier.dropFirst("home.book.".count)
+        )
+        remoteOpen.press(forDuration: 1)
+        let removeCached = app.buttons[
+            "book.context.\(liveBookID).removeDownload"
+        ]
+        XCTAssertTrue(removeCached.waitForExistence(timeout: 10))
+        XCTAssertFalse(
+            app.buttons["book.context.\(liveBookID).download"].exists
+        )
+        removeCached.tap()
+        XCTAssertTrue(removeCached.waitForNonExistence(timeout: 10))
+
+        XCTAssertTrue(remoteOpen.waitForExistence(timeout: 20))
+        remoteOpen.press(forDuration: 1)
+        let download = app.buttons[
+            "book.context.\(liveBookID).download"
+        ]
+        XCTAssertTrue(download.waitForExistence(timeout: 10))
+        download.tap()
+
         let downloadedPlay = app.buttons.matching(
             NSPredicate(
                 format:

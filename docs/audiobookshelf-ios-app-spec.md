@@ -461,10 +461,11 @@ The detail screen contains:
 
 - Resume/Play;
 - Download, pause, retry, or remove download;
-- progress and finished state;
+- chapter and completion progress directly below the primary playback action;
 - metadata in a collapsible Details section;
-- separate 44-point-or-larger author and series controls that retain their
-  position-based accessibility identifiers; authors select a clearable Library
+- comma-delimited inline author and series lists that wrap for Dynamic Type;
+  every entry remains a separate 44-point-or-larger control with its
+  position-based accessibility identifier. Authors select a clearable Library
   filter and series push a series detail above the book;
 - a collapsible Chapters section whose header shows the chapter count, with
   duration-bearing rows that confirm before starting or repositioning playback
@@ -472,7 +473,8 @@ The detail screen contains:
 - bookmarks after chapters;
 - Edit item in the top-right actions menu, gated by server permission;
 - a single Edit destination for metadata, cover, and server deletion;
-- server/account attribution when it could be ambiguous.
+- server/account attribution as the final Details row when it could be
+  ambiguous.
 - a typed failure reason that distinguishes missing or forbidden items,
   reauthentication, invalid server responses, local-storage failures, offline
   cache misses, and temporary server failures;
@@ -1197,10 +1199,12 @@ network** and **Retrying download**.
 
 An automatic cache additionally has a window-scoped `queued`, `downloading`,
 `cached`, or `failed` state. It becomes `cached` when every target track is
-finalized at its expected byte length. Whole-book `complete` remains the only
-state that guarantees uninterrupted whole-book offline playback. A completed
-automatic window may start from its verified local files and remains usable
-offline only to the end of that window.
+finalized at its expected byte length. Presentation labels that state
+**Downloaded** at 100% and suppresses further per-book Download actions across
+Book Detail, Downloads, and context menus. Whole-book `complete` remains the
+only state that guarantees uninterrupted whole-book offline playback. A
+completed automatic window may start from its verified local files and remains
+usable offline only to the end of that window.
 
 A book becomes `complete` only after:
 
