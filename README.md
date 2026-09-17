@@ -706,8 +706,9 @@ configured number of files ahead. The default is five files ahead; a single
 M4B is downloaded once in full. Automatic transfers wait for stable playback,
 run at background priority, and suspend whenever the player needs bandwidth.
 Their status and displayed byte count cover only the active file window, so a
-fully cached window reads **Cached** at 100% without claiming the whole book is
-available offline. Play starts immediately from a finalized, byte-verified
+fully cached window reads **Downloaded** at 100% and offers no further per-book
+Download action, without changing the whole-book offline guarantee. Play starts
+immediately from a finalized, byte-verified
 cached window when it covers the requested position. Bleat keeps filling the
 window and prepares any later streaming continuation in the background; a
 full-book download remains the only guarantee that playback can reach the end
@@ -716,7 +717,8 @@ toward device storage until cleanup removes them. Settings can delete
 automatic cache files after each completed chapter, when the book finishes,
 or—by default—24 hours after the book finishes. Cleanup never applies to an
 explicit download. **Download Full Book** promotes an automatic cache in place,
-keeps its verified files, and downloads only the remaining files.
+keeps its verified files, and downloads only the remaining files when requested
+before the current automatic window completes or through Download Series.
 
 Book detail keeps Play and available Download actions above long description
 and metadata content; completed local downloads do not show another Download
@@ -724,7 +726,8 @@ button. Chapter and completion progress sits directly below Play or Resume.
 Its Details and Chapters sections are
 collapsible; the Chapters header shows the count, and each chapter shows its
 duration and asks for confirmation before moving playback there. Bookmarks
-follow Chapters. When detail loading fails,
+follow Chapters. When multiple accounts are configured, the source account is
+the final row in Details. When detail loading fails,
 the screen distinguishes missing or forbidden items, expired authentication,
 invalid server responses, local-storage failures, offline cache misses, and
 temporary server failures. Retryable failures include a **Try Again** action;

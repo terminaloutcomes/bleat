@@ -2150,7 +2150,10 @@ private struct BookActionContextMenuModifier: ViewModifier {
         guard let record = localDownloadRecord else {
             return true
         }
-        return record.manifest.purpose == .automaticCache
+        guard record.manifest.purpose == .automaticCache else {
+            return false
+        }
+        return model.downloads.automaticCacheState(for: record) != .cached
     }
 
     private var localDownloadRecord: DownloadedBookRecord? {
@@ -3929,6 +3932,9 @@ private struct BookDetailDownloadControls: View {
                                 record.manifest.downloadID
                             ] ?? 0
                         )
+                        .accessibilityIdentifier(
+                            "book.detail.downloadProgress"
+                        )
 
                     }
                     .padding()
@@ -3980,7 +3986,10 @@ private struct BookDetailDownloadControls: View {
                     ? "Stopping download" : "Stop download"
             )
             .accessibilityIdentifier("book.detail.download.stop")
-        } else if record.manifest.state != .deleting {
+        } else if record.manifest.state != .deleting,
+            snapshot.actions.contains(.continueDownload)
+                || snapshot.actions.contains(.retry)
+        {
             Button {
                 Task {
                     await startDownload(record, account: account)
@@ -4691,18 +4700,6 @@ private struct BookDetailView: View {
                     }
                 }
 
-                if model.accounts.count > 1,
-                    let account = model.account
-                {
-                    Label(
-                        "\(account.user.username) · \(account.server.url.host ?? account.server.url.absoluteString)",
-                        systemImage: "person.crop.circle"
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("book.detail.account")
-                }
-
                 VStack(spacing: 12) {
                     playbackAction(detail)
                     playbackProgress(detail, colourScheme: colourScheme)
@@ -4850,6 +4847,16 @@ private struct BookDetailView: View {
                         .accessibilityIdentifier(
                             "book.detail.details.genres"
                         )
+                    }
+                    if model.accounts.count > 1,
+                        let account = model.account
+                    {
+                        LabeledContent(
+                            "Account",
+                            value:
+                                "\(account.user.username) · \(account.server.url.host ?? account.server.url.absoluteString)"
+                        )
+                        .accessibilityIdentifier("book.detail.account")
                     }
                 }
                 .padding(.top, 8)
@@ -6233,6 +6240,9 @@ private struct DownloadStorageView: View {
                 ]
                     ?? (downloadIsComplete(record) ? 1 : 0)
             )
+            .accessibilityIdentifier(
+                "downloads.progress.\(record.manifest.downloadID.rawValue)"
+            )
             HStack {
                 Text(downloadStateLabel(record))
                 Spacer()
@@ -6350,7 +6360,7 @@ private struct DownloadStorageView: View {
         _ record: DownloadedBookRecord
     ) -> Bool {
         if record.manifest.purpose == .automaticCache {
-            return !model.downloads.isFullyDownloaded(for: record)
+            return model.downloads.automaticCacheState(for: record) != .cached
         }
         return !downloadIsComplete(record)
     }
@@ -6416,7 +6426,7 @@ private func downloadControlLabel(_ phase: DownloadControlPhase) -> String {
     case .caching:
         "Caching"
     case .cached:
-        "Cached"
+        "Downloaded"
     case .cacheFailed:
         "Cache failed"
     }
