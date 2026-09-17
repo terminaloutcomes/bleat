@@ -1447,6 +1447,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             }
         }
+        if record.manifest.state == .complete {
+            return DownloadControlSnapshot(phase: .complete, actions: [.remove])
+        }
+        if automaticCacheState(for: record) == .cached {
+            return DownloadControlSnapshot(phase: .cached, actions: [.remove])
+        }
         if isWaitingForNetwork(record) {
             return DownloadControlSnapshot(
                 phase: .waitingForNetwork,
@@ -2538,11 +2544,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         retaining targetTrackIndexes: Set<Int>,
         storage: DownloadStorage
     ) async {
-        let states = Dictionary(
-            uniqueKeysWithValues: record.manifest.entries.map {
-                ($0.trackIndex, $0.state)
-            }
-        )
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -2562,11 +2563,31 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 state: .cancelled
             )
             finishTransferSpan(identity, outcome: .cancelled)
-            if states[identity.trackIndex] == .downloading {
-                _ = try? await storage.removeTrackFiles(identity)
-                _ = try? await storage.markQueued(identity)
-            }
             clearTransferredBytes(for: identity)
+        }
+        for entry in record.manifest.entries
+        where !targetTrackIndexes.contains(entry.trackIndex)
+            && entry.state != .complete
+        {
+            guard let identity = Self.identity(for: entry, record: record)
+            else { continue }
+            do {
+                try await storage.removeTrackFiles(identity)
+                _ = try await storage.markQueued(identity)
+            } catch {
+                presentTransferOperationFailure(error)
+                continue
+            }
+            let key = AutomaticDownloadTaskKey(identity)
+            pendingRecoveryTaskKeys.remove(key)
+            cancelDeferredRetryWake(for: key)
+            transferRetryCounts[key] = nil
+            clearTransferredBytes(for: identity)
+        }
+        if !pendingRecoveryTaskKeys.contains(where: {
+            $0.downloadID == record.manifest.downloadID
+        }) {
+            pendingRecoveryDownloadIDs.remove(record.manifest.downloadID)
         }
     }
 
