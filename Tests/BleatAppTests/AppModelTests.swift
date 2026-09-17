@@ -682,6 +682,127 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    func testCachedAutomaticWindowOverridesStaleRetryPresentation()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCachedWindowRetry-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "cached-window-retry",
+                title: "Cached window retry",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let tracks = (0..<2).map { index in
+            DownloadTrackPlan(
+                index: index,
+                inode: "\(index)",
+                expectedByteLength: 4,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: String(format: "%05d.mp3", index)
+            )
+        }
+        let plan = DownloadPlan(itemID: detail.id, tracks: tracks)
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let downloadID = DownloadID(rawValue: "cached-window-retry")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
+        )
+        let cachedIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[1]
+        )
+        let staged = root.appendingPathComponent("cached-track")
+        try Data(repeating: 0xAB, count: 4).write(to: staged)
+        _ = try await storage.commitChunk(
+            cachedIdentity,
+            temporaryURL: staged,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        )
+        let obsoleteIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[0]
+        )
+        _ = try await storage.deferRetry(
+            obsoleteIdentity,
+            until: Date().addingTimeInterval(120),
+            retryCount: 1
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            downloadPlan: .success(plan)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cached-window-retry.\(UUID().uuidString)"
+        )
+
+        await model.start(account: nil)
+
+        let record = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+        XCTAssertEqual(model.displayedDownloadedByteLength(for: record), 4)
+        XCTAssertEqual(model.expectedByteLength(for: record), 4)
+        XCTAssertEqual(
+            model.pendingRecoveryDownloadIDsForTesting,
+            [downloadID]
+        )
+        XCTAssertEqual(
+            model.controlSnapshot(for: record),
+            DownloadControlSnapshot(phase: .cached, actions: [.remove])
+        )
+
+        model.setAutomaticLookaheadCount(1)
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .progress,
+                detail: detail,
+                account: account,
+                currentTime: 1.5,
+                chapters: [],
+                fileRanges: [
+                    AutomaticDownloadFileRange(index: 0, start: 0, end: 1),
+                    AutomaticDownloadFileRange(index: 1, start: 1, end: 2),
+                ]
+            )
+        )
+
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        let cleaned = try XCTUnwrap(model.records.first)
+        let obsoleteEntry = try XCTUnwrap(
+            cleaned.manifest.entries.first { $0.trackIndex == 0 }
+        )
+        XCTAssertEqual(obsoleteEntry.state, .queued)
+        XCTAssertNil(obsoleteEntry.retryNotBefore)
+        XCTAssertNil(obsoleteEntry.transferRetryCount)
+        XCTAssertEqual(
+            model.controlSnapshot(for: cleaned),
+            DownloadControlSnapshot(phase: .cached, actions: [.remove])
+        )
+        await model.removeAll()
+    }
+
     func testPlayableCoverStateUsesExactAccountAndItemIdentity() {
         let account = AccountID(rawValue: "account-1")
         let otherAccount = AccountID(rawValue: "account-2")
