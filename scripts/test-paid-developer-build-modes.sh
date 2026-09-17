@@ -27,6 +27,22 @@ build_settings() {
     >"${output_path}"
 }
 
+build_default_settings() {
+  local global_mode="$1"
+  local sdk="$2"
+  local output_path="$3"
+
+  xcodebuild \
+    -project Bleat.xcodeproj \
+    -target "${target_name}" \
+    -configuration Release \
+    -sdk "${sdk}" \
+    -showBuildSettings \
+    -json \
+    BUILD_WITHOUT_PAID_DEVELOPER="${global_mode}" \
+    >"${output_path}"
+}
+
 assert_settings() {
   local global_mode="$1"
   local configured_cloudkit_mode="$2"
@@ -72,23 +88,37 @@ for carplay_mode in disabled enabled; do
 done
 assert_settings YES enabled enabled enabled disabled disabled disabled
 
-macos_settings="${temporary_directory}/macos-carplay-enabled.json"
-xcodebuild \
-  -project Bleat.xcodeproj \
-  -target "${target_name}" \
-  -configuration Release \
-  -sdk macosx \
-  -showBuildSettings \
-  -json \
-  BUILD_WITHOUT_PAID_DEVELOPER=NO \
-  BLEAT_CLOUDKIT_MODE=enabled \
-  BLEAT_APP_ATTEST_MODE=enabled \
-  BLEAT_CARPLAY_MODE=enabled \
-  >"${macos_settings}"
+paid_default_settings="${temporary_directory}/paid-default.json"
+build_default_settings NO iphoneos "${paid_default_settings}"
 jq -e \
   --arg target "${target_name}" \
   'any(.[];
     .target == $target
+    and .buildSettings.BLEAT_CARPLAY_MODE == "enabled"
+    and .buildSettings.BLEAT_EFFECTIVE_CARPLAY_MODE == "enabled"
+    and .buildSettings.CODE_SIGN_ENTITLEMENTS == "App/Bleat.cloudkit-enabled.app-attest-enabled.carplay-enabled.entitlements"
+  )' \
+  "${paid_default_settings}" >/dev/null
+
+personal_default_settings="${temporary_directory}/personal-default.json"
+build_default_settings YES iphoneos "${personal_default_settings}"
+jq -e \
+  --arg target "${target_name}" \
+  'any(.[];
+    .target == $target
+    and .buildSettings.BLEAT_CARPLAY_MODE == "enabled"
+    and .buildSettings.BLEAT_EFFECTIVE_CARPLAY_MODE == "disabled"
+    and .buildSettings.CODE_SIGN_ENTITLEMENTS == "App/Bleat.cloudkit-disabled.app-attest-disabled.entitlements"
+  )' \
+  "${personal_default_settings}" >/dev/null
+
+macos_settings="${temporary_directory}/macos-carplay-enabled.json"
+build_default_settings NO macosx "${macos_settings}"
+jq -e \
+  --arg target "${target_name}" \
+  'any(.[];
+    .target == $target
+    and .buildSettings.BLEAT_CARPLAY_MODE == "enabled"
     and .buildSettings.BLEAT_EFFECTIVE_CARPLAY_MODE == "disabled"
     and .buildSettings.CODE_SIGN_ENTITLEMENTS == "App/BleatMac.enabled.entitlements"
   )' \

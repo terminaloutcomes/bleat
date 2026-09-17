@@ -834,7 +834,7 @@ bleat_capture_device() {
         -parallel-testing-enabled NO \
         ENABLE_TESTABILITY=YES \
         BUILD_WITHOUT_PAID_DEVELOPER=YES \
-        BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
+        BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-enabled}" \
         build-for-testing
     bleat_xctestrun="$(find "${bleat_derived_data}/Build/Products" -name '*.xctestrun' -print -quit)"
     [[ -n "${bleat_xctestrun}" ]] || bleat_fail "Xcode did not produce an xctestrun file"

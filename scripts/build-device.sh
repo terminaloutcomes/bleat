@@ -25,7 +25,7 @@ fi
 : "${BLEAT_DEVICE_BUILD_DIRECTORY:?Set BLEAT_DEVICE_BUILD_DIRECTORY to the device build directory}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
 readonly bleat_app="${BLEAT_DEVICE_BUILD_DIRECTORY}/Build/Products/Release-iphoneos/Bleat.app"
-readonly requested_carplay_mode="${BLEAT_CARPLAY_MODE:-disabled}"
+readonly requested_carplay_mode="${BLEAT_CARPLAY_MODE:-enabled}"
 
 if [ -d "${bleat_app}" ]; then
   echo "Removing existing build at ${bleat_app} before building..."
@@ -50,7 +50,7 @@ xcodebuild \
   PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
   BUILD_WITHOUT_PAID_DEVELOPER="${build_without_paid_developer}" \
   BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
-  BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
+  BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-enabled}" \
   BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
   BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_telemetry_auth_base_url}" \
   BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_telemetry_otlp_endpoint}" \

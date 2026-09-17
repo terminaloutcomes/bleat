@@ -2,13 +2,14 @@
 
 ## Status
 
-Apple has approved the managed CarPlay Audio App entitlement. Explicitly
-enabled development and distribution builds are signed with profiles that
-authorize CarPlay audio. `BLEAT_CARPLAY_MODE` still defaults to `disabled`.
+Apple has approved the managed CarPlay Audio App entitlement. Development and
+distribution builds default to `BLEAT_CARPLAY_MODE=enabled` and are signed with
+profiles that authorize CarPlay audio.
 The signed build matrix and CarPlay Simulator journeys are complete. The
 maintainer reports that the physical wireless CarPlay journeys also passed.
-The public GitHub release workflow now explicitly enables CarPlay; other build
-workflows retain their disabled default.
+The public GitHub release workflow also pins CarPlay to enabled. Personal Team
+and macOS builds still force it off, and paid-team profiles without the managed
+entitlement can opt out explicitly.
 
 Issue [#24](https://github.com/terminaloutcomes/bleat/issues/24) was closed on
 2026-09-14 after the maintainer checked every physical journey.

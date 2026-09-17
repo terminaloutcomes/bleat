@@ -269,12 +269,11 @@ mise run simulator
 
 The iOS target includes a `CPTemplateApplicationScene`. Apple has approved the
 managed CarPlay Audio App entitlement, and matching development and
-distribution profiles have been verified. Local build workflows default to
-`BLEAT_CARPLAY_MODE=disabled`; the public GitHub release workflow explicitly
-enables it. macOS and Personal Team builds force the effective mode off even
-when `enabled` is requested. Other entitled iOS builds can opt in explicitly
-with `BLEAT_CARPLAY_MODE=enabled`; a signed build without a matching profile
-fails provisioning.
+distribution profiles have been verified. Build workflows default to
+`BLEAT_CARPLAY_MODE=enabled`; set it to `disabled` explicitly when using a paid
+team whose profile does not authorize CarPlay. macOS and Personal Team builds
+force the effective mode off even when `enabled` is requested. A signed enabled
+build without a matching profile fails provisioning.
 Follow Apple's
 [entitlement request](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements)
 and [CarPlay scene](https://developer.apple.com/documentation/carplay/displaying-content-in-carplay)
@@ -363,8 +362,9 @@ direct `scripts/build-device.sh` usage default to
 `BUILD_WITHOUT_PAID_DEVELOPER=NO`, enabling CloudKit and App Attest. Set
 `BUILD_WITHOUT_PAID_DEVELOPER=YES` explicitly for a Personal Team build that
 omits those capabilities, forces CarPlay off, and retains device-only Keychain
-access. CarPlay defaults off independently; pass
-`BLEAT_CARPLAY_MODE=enabled` explicitly to a paid-team iOS workflow.
+access. CarPlay defaults on for paid-team iOS workflows; pass
+`BLEAT_CARPLAY_MODE=disabled` explicitly when the profile does not authorize
+the managed entitlement.
 
 ## Sign in
 
