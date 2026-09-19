@@ -10556,12 +10556,551 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.isBookFinished(secondItemID))
     }
 
+    func testLiveProgressPatchesOneItemWithoutReloadingBrowsing() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let item = try XCTUnwrap(page.items.first)
+        let other = fixtureBook(
+            id: "other", title: "Other", libraryID: library.id)
+        let shelf = LibraryBookShelf(
+            id: "continue-listening", label: "Continue Listening",
+            labelLocalizationKey: nil, items: [item, other], total: 2
+        )
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(page), homeShelves: .success([shelf]),
+            search: .success([item, other])
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.search(query: "Book")
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.setBookProgress(
+            fixtureProgress(
+                userID: account.user.id, itemID: item.id, isFinished: true
+            ))
+
+        for _ in 0..<3 {
+            await service.emitLiveUpdate(
+                liveProgress(item.id, isFinished: true))
+        }
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertTrue(model.isBookFinished(item.id))
+        XCTAssertFalse(model.isBookFinished(other.id))
+        XCTAssertEqual(model.books, .loaded(page))
+        XCTAssertEqual(
+            model.searchResults,
+            .loaded(LibrarySearchResults(books: [item, other])))
+        guard case .loaded(let shelves) = model.homeShelves else {
+            return XCTFail("Expected loaded shelves")
+        }
+        XCTAssertEqual(shelves.first?.items, [other])
+        XCTAssertEqual(shelves.first?.total, 1)
+        let requests = await service.liveRefreshRequestCounts()
+        var expected = baseline
+        expected.progress += 1
+        XCTAssertEqual(requests, expected)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressRefreshesOnlyAffectedOpenDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let item = try XCTUnwrap(page.items.first)
+        let detail = fixtureBookDetail(item: item)
+        let progress = fixtureProgress(
+            userID: account.user.id, itemID: item.id, isFinished: true
+        )
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(page), bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(item)
+        await service.setBookProgress(progress)
+        let baseline = await service.liveRefreshRequestCounts()
+
+        await service.emitLiveUpdate(
+            liveProgress(LibraryItemID(rawValue: "other")))
+        try await Task.sleep(for: .milliseconds(350))
+        let unrelatedRequests = await service.liveRefreshRequestCounts()
+        var unrelatedExpected = baseline
+        unrelatedExpected.progress += 1
+        XCTAssertEqual(unrelatedRequests, unrelatedExpected)
+        for _ in 0..<3 {
+            await service.emitLiveUpdate(
+                liveProgress(item.id, isFinished: true))
+        }
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(
+            model.bookDetail, .loaded(detail.replacingProgress(with: progress)))
+        var expected = unrelatedExpected
+        expected.progress += 1
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+        let progressRequests = await service.bookProgressRequests()
+        XCTAssertEqual(progressRequests.last, item.id)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveRefreshStaysSuspendedAcrossBackgroundNetworkRecovery()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        model.setLiveUpdatesActive(false)
+        await model.start()
+        try await waitForLiveNetworkObserver(service)
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitNetworkPathUpdate()
+        try await Task.sleep(for: .milliseconds(400))
+        let backgroundRequests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(backgroundRequests, baseline)
+        let backgroundSubscriber = await service.hasLiveUpdatesSubscriber()
+        XCTAssertFalse(backgroundSubscriber)
+
+        model.setLiveUpdatesActive(true)
+        try await Task.sleep(for: .milliseconds(400))
+        let foregroundRequests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(foregroundRequests.libraries, baseline.libraries + 1)
+        XCTAssertEqual(foregroundRequests.allProgress, baseline.allProgress + 1)
+        XCTAssertEqual(foregroundRequests.pages, baseline.pages + 1)
+        XCTAssertEqual(foregroundRequests.shelves, baseline.shelves + 1)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveRefreshCancelsQueuedCatalogChangeOnBackground() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
+        // A marker on the same stream confirms that the event was consumed.
+        await service.emitLiveUpdate(.connection(.authenticated))
+        for _ in 0..<100 where model.liveUpdateConnectionState != .authenticated
+        {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(model.liveUpdateConnectionState, .authenticated)
+        model.setLiveUpdatesActive(false)
+        try await Task.sleep(for: .milliseconds(400))
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, baseline)
+    }
+
+    func testLiveRefreshStopsInFlightCatalogCascadeOnBackground() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        let gate = AsyncGate()
+        await service.setAllBookProgressGate(gate)
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
+        await gate.waitUntilEntered()
+        model.setLiveUpdatesActive(false)
+        await gate.release()
+        try await Task.sleep(for: .milliseconds(100))
+        var expected = baseline
+        expected.allProgress += 1
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+    }
+
+    func testLiveProgressDoesNotReplaceNewlySelectedDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let other = fixtureBook(
+            id: "other", title: "Other", libraryID: library.id)
+        let detail = fixtureBookDetail(item: item)
+        let otherDetail = fixtureBookDetail(item: other)
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            bookDetail: .success(detail), bookProgressGate: gate
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(item)
+        await service.setBookProgress(
+            fixtureProgress(
+                userID: account.user.id, itemID: item.id, isFinished: true
+            ))
+        await service.emitLiveUpdate(liveProgress(item.id, isFinished: true))
+        await gate.waitUntilEntered()
+        await service.queueBookDetails([.success(otherDetail)], gates: [])
+        await model.loadBookDetail(other)
+        await gate.release()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.bookDetail, .loaded(otherDetail))
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressDoesNotCancelInFlightCatalogRefresh() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            bookDetail: .success(fixtureBookDetail(item: item))
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(item)
+        let gate = AsyncGate()
+        await service.setAllBookProgressGate(gate)
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
+        await gate.waitUntilEntered()
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(300))
+        await gate.release()
+        try await Task.sleep(for: .milliseconds(400))
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests.libraries, baseline.libraries + 1)
+        XCTAssertEqual(requests.pages, baseline.pages + 1)
+        XCTAssertEqual(requests.shelves, baseline.shelves + 1)
+        XCTAssertEqual(requests.progress, baseline.progress + 1)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressInsertsReordersAndHidesContinueListeningItem()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let other = fixtureBook(
+            id: "other", title: "Other", libraryID: library.id)
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(
+                    items: [item, other], total: 2, page: 0, limit: 50)),
+            homeShelves: .success([
+                LibraryBookShelf(
+                    id: "continue-listening", label: "Continue Listening",
+                    labelLocalizationKey: nil, items: [other], total: 1
+                )
+            ])
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        let baseline = await service.liveRefreshRequestCounts()
+        let progress = fixtureBookProgress(progress: 0.25, isFinished: false)
+        await service.setBookProgress(progress)
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        guard case .loaded(let shelves) = model.homeShelves else {
+            return XCTFail("Expected shelves")
+        }
+        XCTAssertEqual(shelves.first?.items, [item, other])
+        XCTAssertEqual(shelves.first?.total, 2)
+        await service.setBookProgress(
+            LibraryBookProgress(
+                id: progress.id, userID: progress.userID,
+                libraryItemID: progress.libraryItemID,
+                bookID: progress.bookID, duration: progress.duration,
+                progress: progress.progress,
+                currentTime: progress.currentTime, isFinished: false,
+                hideFromContinueListening: true,
+                lastUpdateMilliseconds: 2, startedAtMilliseconds: 1,
+                finishedAtMilliseconds: nil
+            ))
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        guard case .loaded(let hiddenShelves) = model.homeShelves else {
+            return XCTFail("Expected shelves")
+        }
+        XCTAssertEqual(hiddenShelves.first?.items, [other])
+        var expected = baseline
+        expected.progress += 2
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressFetchesOnlyMissingItemToCreateContinueListening()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let detail = fixtureBookDetail(item: item)
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(
+                LibraryItemsPage(items: [], total: 0, page: 0, limit: 50)),
+            bookDetail: .success(detail)
+        )
+        await service.setRefreshedBookDetail(.success(detail))
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.setBookProgress(
+            fixtureBookProgress(progress: 0.25, isFinished: false))
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        guard case .loaded(let shelves) = model.homeShelves else {
+            return XCTFail("Expected shelves")
+        }
+        XCTAssertEqual(shelves.first?.id, "continue-listening")
+        XCTAssertEqual(shelves.first?.items, [detail.summary])
+        var expected = baseline
+        expected.progress += 1
+        expected.details += 1
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let page = fixturePage(libraryID: library.id)
+        let item = try XCTUnwrap(page.items.first)
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(page)
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.setLibraryProgressFilter(.notStarted)
+        let baseline = await service.liveRefreshRequestCounts()
+        let empty = LibraryItemsPage(items: [], total: 0, page: 0, limit: 50)
+        await service.setFirstPage(.success(empty))
+        await service.setBookProgress(
+            fixtureBookProgress(progress: 0.25, isFinished: false))
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(model.books, .loaded(empty))
+        var expected = baseline
+        expected.progress += 1
+        expected.pages += 1
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+        await service.setBookProgress(
+            fixtureBookProgress(progress: 0.5, isFinished: false))
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        expected.progress += 1
+        let advancedRequests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(advancedRequests, expected)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressClearsRemovedProgressFromOpenDetail() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let detail = fixtureBookDetail(item: item).replacingProgress(
+            with: fixtureBookProgress(progress: 0.5, isFinished: false)
+        )
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(item)
+        await service.emitLiveUpdate(liveProgress(item.id))
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(
+            model.bookDetail, .loaded(detail.replacingProgress(with: nil)))
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testLiveProgressEchoDoesNotRefreshStreamedPlayback() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([fixtureLibrary()]),
+            bookDetail: .success(fixture.detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL))
+            ]
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(fixture.detail.summary)
+        await model.playback.start(
+            detail: fixture.detail, account: account, initialTime: 0.25)
+        XCTAssertTrue(
+            model.playback.isPrepared(
+                accountID: account.id, itemID: fixture.detail.id))
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(
+            liveProgress(
+                fixture.detail.id,
+                sessionID: PlaybackSessionID(rawValue: "playback-start-session")
+            ))
+        try await Task.sleep(for: .milliseconds(400))
+        guard case .loaded(let localShelves) = model.homeShelves else {
+            return XCTFail("Expected local playback shelf")
+        }
+        XCTAssertEqual(localShelves.first?.items.map(\.id), [fixture.detail.id])
+        model.playback.pause()
+        await service.emitLiveUpdate(liveProgress(fixture.detail.id))
+        try await Task.sleep(for: .milliseconds(400))
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, baseline)
+        model.setLiveUpdatesActive(false)
+        await model.playback.stop()
+    }
+
+    func testLiveProgressSuppressionIsScopedToPlaybackAccount() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let other = try fixtureAccount(
+            accountID: "other-account", userID: "other-user",
+            username: "other", server: "https://other.example"
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([fixtureLibrary()]),
+            bookDetail: .success(fixture.detail)
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await model.loadBookDetail(fixture.detail.summary)
+        await model.playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: other.id, account: other
+        )
+        model.playback.pause()
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(liveProgress(fixture.detail.id))
+        try await Task.sleep(for: .milliseconds(400))
+        var expected = baseline
+        expected.progress += 1
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, expected)
+        XCTAssertEqual(model.playback.accountID, other.id)
+        model.setLiveUpdatesActive(false)
+        await model.playback.stop()
+    }
+
+    func testLiveProgressKeepsStableOrderForEqualTimestamps() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let other = fixtureBook(
+            id: "item-2", title: "Other", libraryID: library.id)
+        let firstProgress = fixtureBookProgress(
+            progress: 0.25, isFinished: false)
+        let secondProgress = LibraryBookProgress(
+            id: "progress-2", userID: account.user.id, libraryItemID: other.id,
+            bookID: BookID(rawValue: "book-2"), duration: 100, progress: 0.25,
+            currentTime: 25, isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 1, startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil
+        )
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            homeShelves: .success([
+                LibraryBookShelf(
+                    id: "continue-listening", label: "Continue Listening",
+                    labelLocalizationKey: nil,
+                    items: [item, other], total: 2
+                )
+            ]), allBookProgress: [.success([firstProgress, secondProgress])]
+        )
+        let model = AppModel(service: service)
+        try await startLiveRefreshTest(model, service: service)
+        await service.setBookProgress(firstProgress)
+        for _ in 0..<2 {
+            await service.emitLiveUpdate(liveProgress(item.id))
+            try await Task.sleep(for: .milliseconds(350))
+            guard case .loaded(let shelves) = model.homeShelves else {
+                return XCTFail("Expected shelves")
+            }
+            XCTAssertEqual(shelves.first?.items, [item, other])
+        }
+        model.setLiveUpdatesActive(false)
+    }
+
+    private func liveProgress(
+        _ itemID: LibraryItemID, isFinished: Bool = false,
+        sessionID: PlaybackSessionID? = nil
+    ) -> AudiobookshelfLiveUpdate {
+        .event(
+            .playbackProgress(
+                AudiobookshelfLivePlaybackProgress(
+                    itemID: itemID, sessionID: sessionID,
+                    deviceDescription: nil,
+                    currentTime: 30, duration: 60, isFinished: isFinished,
+                    lastUpdateMilliseconds: 100
+                )))
+    }
+
+    private func waitForLiveNetworkObserver(_ service: TestAppService)
+        async throws
+    {
+        for _ in 0..<100 {
+            if await service.networkPathObserverCount() > 0 { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTFail("Network observer did not start")
+    }
+
+    private func startLiveRefreshTest(
+        _ model: AppModel, service: TestAppService
+    ) async throws {
+        await model.start()
+        try await waitForLiveNetworkObserver(service)
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            if await service.hasLiveUpdatesSubscriber() { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let subscribed = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(subscribed)
+        // Let the initial path-recovery catch-up finish before counting events.
+        try await Task.sleep(for: .milliseconds(400))
+    }
+
     func testLiveProgressUpdatesFinishedStateImmediately() async throws {
         let fixture = try playbackRecoveryFixture()
         defer { fixture.cleanUp() }
         let account = try fixtureAccount()
         let itemID = fixture.detail.id
-        let service = TestAppService(activeAccount: .success(account))
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([fixtureLibrary()]),
+            bookDetail: .success(fixture.detail)
+        )
         let model = AppModel(service: service)
         await model.start()
         for _ in 0..<100 {
@@ -10577,6 +11116,12 @@ final class AppModelTests: XCTestCase {
         let hasSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertTrue(hasSubscriber)
 
+        try await Task.sleep(for: .milliseconds(400))
+        await model.loadBookDetail(
+            fixtureBook(
+                id: itemID.rawValue, title: fixture.detail.title,
+                libraryID: fixture.detail.libraryID
+            ))
         await model.playback.startDownloaded(
             detail: fixture.detail,
             trackURLs: [fixture.audioURL],
@@ -10592,6 +11137,13 @@ final class AppModelTests: XCTestCase {
         let playbackState = model.playback.state
         let playbackChapter = model.playback.currentChapterIndex
 
+        let baseline = await service.liveRefreshRequestCounts()
+        await service.emitLiveUpdate(liveProgress(itemID))
+        try await Task.sleep(for: .milliseconds(50))
+        guard case .loaded(let localShelves) = model.homeShelves else {
+            return XCTFail("Expected local playback shelf")
+        }
+        XCTAssertEqual(localShelves.first?.items.map(\.id), [itemID])
         await service.emitLiveUpdate(
             .event(
                 .playbackProgress(
@@ -10611,6 +11163,9 @@ final class AppModelTests: XCTestCase {
             await Task.yield()
         }
 
+        try await Task.sleep(for: .milliseconds(400))
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, baseline)
         XCTAssertTrue(model.isBookFinished(itemID))
         XCTAssertEqual(model.playback.itemID, playbackItemID)
         XCTAssertEqual(model.playback.currentTime, playbackTime, accuracy: 0.01)
@@ -10618,6 +11173,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.state, playbackState)
         XCTAssertEqual(model.playback.currentChapterIndex, playbackChapter)
         XCTAssertFalse(model.playback.isPlaybackRequested)
+        model.setLiveUpdatesActive(false)
         await model.playback.stop()
     }
 
@@ -19880,6 +20436,8 @@ private actor TestAppService: AppServicing {
     private let bookmarksGate: AsyncGate?
     private let bookProgressGate: AsyncGate?
     private let firstAllBookProgressGate: AsyncGate?
+    private var allBookProgressGate: AsyncGate?
+    private var bookProgressResults: [LibraryItemID: LibraryBookProgress] = [:]
     private let localSessionSyncGate: AsyncGate?
     private let bookDetailGate: AsyncGate?
     private let progressUpdateGate: AsyncGate?
@@ -21088,13 +21646,28 @@ private actor TestAppService: AppServicing {
         if let bookProgressGate {
             await bookProgressGate.enterAndWait()
         }
-        return nil
+        return bookProgressResults[itemID]
+    }
+
+    func setBookProgress(_ progress: LibraryBookProgress?) {
+        if let progress {
+            bookProgressResults[progress.libraryItemID] = progress
+        } else {
+            bookProgressResults = [:]
+        }
+    }
+
+    func setAllBookProgressGate(_ gate: AsyncGate?) {
+        allBookProgressGate = gate
     }
 
     func allBookProgress(
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibraryBookProgress] {
         recordedAllBookProgressRequests.append(account.id)
+        if let allBookProgressGate {
+            await allBookProgressGate.enterAndWait()
+        }
         let result: Result<[LibraryBookProgress], AppServiceError>
         if allBookProgressResults.count > 1 {
             result = allBookProgressResults.removeFirst()
@@ -21291,6 +21864,28 @@ private actor TestAppService: AppServicing {
 
     func bookmarkRequests() -> [BookmarkRequest] {
         recordedBookmarkRequests
+    }
+
+    struct LiveRefreshRequestCounts: Equatable {
+        var libraries: Int
+        var pages: Int
+        var shelves: Int
+        var searches: Int
+        var details: Int
+        var progress: Int
+        var allProgress: Int
+    }
+
+    func liveRefreshRequestCounts() -> LiveRefreshRequestCounts {
+        LiveRefreshRequestCounts(
+            libraries: libraryRequests, pages: recordedPageRequests.count,
+            shelves: recordedHomeRequests.count,
+            searches: recordedSearchRequests.count,
+            details: recordedBookDetailRequests.count
+                + recordedRefreshedBookDetailRequests.count,
+            progress: recordedBookProgressRequests.count,
+            allProgress: recordedAllBookProgressRequests.count
+        )
     }
 
     func bookProgressRequests() -> [LibraryItemID] {

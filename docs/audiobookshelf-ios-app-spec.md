@@ -567,7 +567,19 @@ true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
 starts one connection and one catch-up browse refresh. Duplicate path updates
 that do not cross the realtime-allowed boundary do not replace the active
-subscription. A path change immediately makes the primary server preferred
+subscription. Inactive scenes suspend both socket consumption and browse-refresh
+scheduling, including network-recovery notifications. Cancellation stops each
+subsequent stage of an in-flight live refresh; foreground return performs one
+catch-up refresh. Progress-only events patch the account-scoped finished state
+and reconcile the affected book's Continue Listening membership and ordering
+using one authoritative item-progress request, plus one item-detail request if
+its summary is absent locally. They never reload libraries, personalized shelves,
+all-progress, or search results. Only membership changes in an active progress
+filter re-query browse pages to preserve server sorting, counts, and collapsed
+series behavior. A locally prepared item triggers no progress refetch and retains
+local position authority whether streamed, downloaded, playing, or paused.
+Catalog events retain the broader refresh path. A path change immediately makes
+the primary server preferred
 while local reachability is unknown; the shared endpoint router promotes the
 local server only after its probe succeeds. Endpoint probes reconnect only a
 client that existed when the path changed. REST, cover, playback, download, and

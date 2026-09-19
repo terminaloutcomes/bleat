@@ -159,6 +159,7 @@ struct RootView: View {
             }
         #endif
         .task {
+            model.setLiveUpdatesActive(scenePhase == .active)
             model.setRemoteTelemetryForeground(scenePhase == .active)
             await model.start()
             if let route = deepLinkInbox.takePendingRoute() {
