@@ -781,10 +781,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(record.manifest.automaticCacheState, .cached)
         XCTAssertEqual(model.displayedDownloadedByteLength(for: record), 4)
         XCTAssertEqual(model.expectedByteLength(for: record), 4)
-        XCTAssertEqual(
-            model.pendingRecoveryDownloadIDsForTesting,
-            [downloadID]
-        )
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
         XCTAssertEqual(
             model.controlSnapshot(for: record),
             DownloadControlSnapshot(phase: .cached, actions: [.remove])
@@ -817,6 +814,281 @@ final class AppModelTests: XCTestCase {
             model.controlSnapshot(for: cleaned),
             DownloadControlSnapshot(phase: .cached, actions: [.remove])
         )
+        await model.removeAll()
+    }
+
+    func testRelaunchDoesNotScheduleTracksOutsideCachedAutomaticWindow()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCachedWindowRelaunch-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "cached-window-relaunch",
+                title: "Cached window relaunch",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let tracks = (0..<2).map { index in
+            DownloadTrackPlan(
+                index: index,
+                inode: "\(index)",
+                expectedByteLength: 4,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: String(format: "%05d.mp3", index)
+            )
+        }
+        let plan = DownloadPlan(itemID: detail.id, tracks: tracks)
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let downloadID = DownloadID(rawValue: "cached-window-relaunch")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [1]
+        )
+        let offWindowIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[0]
+        )
+        _ = try await storage.deferRetry(
+            offWindowIdentity,
+            until: Date(timeIntervalSinceNow: 3_600),
+            retryCount: 2
+        )
+        let cachedIdentity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: tracks[1]
+        )
+        let staged = root.appendingPathComponent("cached-window-track")
+        try Data(repeating: 0xAB, count: 4).write(to: staged)
+        _ = try await storage.commitChunk(
+            cachedIdentity,
+            temporaryURL: staged,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cached-window-relaunch.\(UUID().uuidString)"
+        )
+
+        await model.start(account: account)
+
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        let requestedIdentities =
+            await service.authorizedDownloadRequestIdentities()
+        XCTAssertTrue(descriptors.isEmpty)
+        XCTAssertTrue(requestedIdentities.isEmpty)
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        let record = try XCTUnwrap(model.records.first)
+        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+        XCTAssertEqual(record.manifest.entries[0].state, .queued)
+        XCTAssertEqual(record.manifest.entries[1].state, .complete)
+        await model.removeAll()
+    }
+
+    func testLateTransportFailureCannotRetryCompletedTrack() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCompletedTrackLateFailure-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "completed-track-late-failure",
+                title: "Completed track late failure",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let track = DownloadTrackPlan(
+            index: 0,
+            inode: "0",
+            expectedByteLength: 4,
+            mimeType: "audio/mpeg",
+            safeExtension: .mp3,
+            destinationEntry: "00000.mp3"
+        )
+        let plan = DownloadPlan(itemID: detail.id, tracks: [track])
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let downloadID = DownloadID(rawValue: "completed-track-late-failure")
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: track
+        )
+        let staged = root.appendingPathComponent("completed-track")
+        try Data(repeating: 0xAB, count: 4).write(to: staged)
+        _ = try await storage.commitChunk(
+            identity,
+            temporaryURL: staged,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request)
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.completed-track-late-failure.\(UUID().uuidString)"
+        )
+        await model.start(account: account)
+        let session = URLSession(configuration: .ephemeral)
+        let task = session.downloadTask(with: request)
+        task.taskDescription = try DownloadChunkTaskDescription(
+            identity: identity,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        ).encode()
+
+        model.urlSession(
+            session,
+            task: task,
+            didCompleteWithError: URLError(.cancelled)
+        )
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(model.records.first?.manifest.state, .complete)
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        XCTAssertNil(model.failure)
+        let requestedIdentities =
+            await service.authorizedDownloadRequestIdentities()
+        XCTAssertTrue(requestedIdentities.isEmpty)
+        session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testCompletionDuringRequestAuthorizationLeavesNoTransferTask()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCompletedDuringAuthorization-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "completed-during-authorization",
+                title: "Completed during authorization",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let track = DownloadTrackPlan(
+            index: 0,
+            inode: "0",
+            expectedByteLength: 4,
+            mimeType: "audio/mpeg",
+            safeExtension: .mp3,
+            destinationEntry: "00000.mp3"
+        )
+        let plan = DownloadPlan(itemID: detail.id, tracks: [track])
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root)
+        )
+        let downloadID = DownloadID(
+            rawValue: "completed-during-authorization"
+        )
+        _ = try await storage.create(
+            downloadID: downloadID,
+            accountID: account.id,
+            plan: plan,
+            detail: detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: downloadID,
+            accountID: account.id,
+            itemID: detail.id,
+            track: track
+        )
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio"))
+        )
+        let authorizationGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request),
+            authorizedDownloadRequestGate: authorizationGate
+        )
+        let tracer = RecordingRemoteTelemetryTracer()
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            remoteTelemetryTracer: tracer,
+            backgroundSessionIdentifier:
+                "bleat.tests.completed-during-authorization.\(UUID().uuidString)"
+        )
+        let startup = Task { await model.start(account: account) }
+        await authorizationGate.waitUntilEntered()
+
+        let staged = root.appendingPathComponent("completed-track")
+        try Data(repeating: 0xAB, count: 4).write(to: staged)
+        _ = try await storage.commitChunk(
+            identity,
+            temporaryURL: staged,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil
+        )
+        await authorizationGate.release()
+        await startup.value
+
+        XCTAssertEqual(model.records.first?.manifest.state, .complete)
+        let descriptors =
+            await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        for _ in 0..<100
+        where model.activeTransferAdmissionCountForTesting != 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+        XCTAssertTrue(tracer.spans.isEmpty)
         await model.removeAll()
     }
 
@@ -5229,9 +5501,21 @@ final class AppModelTests: XCTestCase {
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [account])
 
-        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
-        let resumedDescriptors =
+        var resumedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        // The callback's concurrency-queue drain may already own recovery.
+        // Wait for that recovery to finish and register its replacement task.
+        while clock.now < deadline,
+            !model.pendingRecoveryDownloadIDsForTesting.isEmpty
+                || resumedDescriptors.isEmpty
+        {
+            try await Task.sleep(for: .milliseconds(10))
+            resumedDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
         XCTAssertEqual(resumedDescriptors.count, 1)
         XCTAssertEqual(resumedDescriptors.first?.identity.trackIndex, 1)
         let resumedRecord = try XCTUnwrap(model.records.first)
@@ -5339,14 +5623,16 @@ final class AppModelTests: XCTestCase {
             )
         }
         var fallbackRequests: [URLRequest] = []
-        for _ in 0..<100 {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        repeat {
             fallbackRequests =
                 await model.scheduledTransferRequestsForTesting()
-            if fallbackRequests.count == 2 {
+            if fallbackRequests.count >= 2 {
                 break
             }
-            await Task.yield()
-        }
+            try await Task.sleep(for: .milliseconds(10))
+        } while clock.now < deadline
 
         XCTAssertEqual(fallbackRequests.count, 2)
         XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
@@ -6559,20 +6845,28 @@ final class AppModelTests: XCTestCase {
 
         await model.pause(try XCTUnwrap(model.records.first))
         await model.continueDownload(try XCTUnwrap(model.records.first))
-        let continuedDescriptors =
+        var continuedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
+        // Background-session enumeration can lag task creation. Observe the
+        // replacement before injecting the obsolete task's completion.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while continuedDescriptors.isEmpty, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+            continuedDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
         XCTAssertEqual(
             continuedDescriptors.count,
             1,
             "continued descriptors: \(continuedDescriptors)"
         )
         XCTAssertEqual(model.records.first?.manifest.state, .downloading)
-        if let continuedDescriptor = continuedDescriptors.first {
-            XCTAssertNotEqual(
-                continuedDescriptor.transferID,
-                oldDescriptor.transferID
-            )
-        }
+        let continuedDescriptor = try XCTUnwrap(continuedDescriptors.first)
+        XCTAssertNotEqual(
+            continuedDescriptor.transferID,
+            oldDescriptor.transferID
+        )
 
         let lateConfiguration = URLSessionConfiguration.ephemeral
         lateConfiguration.protocolClasses = [
@@ -6608,6 +6902,10 @@ final class AppModelTests: XCTestCase {
             finalDescriptors.count,
             1,
             "final descriptors: \(finalDescriptors)"
+        )
+        XCTAssertEqual(
+            finalDescriptors.first?.transferID,
+            continuedDescriptor.transferID
         )
         XCTAssertEqual(model.records.first?.manifest.state, .downloading)
         let identity = oldDescriptor.identity
@@ -15207,8 +15505,16 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(outcome, .started(source: .downloaded))
         await preparationGate.waitUntilEntered()
+        let preparationCompleted = expectation(
+            description: "Streaming continuation prepared before cached seek"
+        )
+        Self.fulfill(
+            preparationCompleted,
+            when: model.playback,
+            reaches: .prepared
+        )
         await preparationGate.release()
-        await Task.yield()
+        await fulfillment(of: [preparationCompleted], timeout: 2)
 
         await model.playback.seek(to: 1.25)
 
@@ -19529,6 +19835,7 @@ private actor TestAppService: AppServicing {
     private var downloadPlanGate: AsyncGate?
     private let authorizedDownloadRequestResult:
         Result<URLRequest, AppServiceError>?
+    private let authorizedDownloadRequestGate: AsyncGate?
     private let primaryFallbackURL: URL?
     private var removeAccountResult: Result<Void, AppServiceError>
     private var localDataResetResult: Result<Void, AppServiceError>
@@ -19751,6 +20058,7 @@ private actor TestAppService: AppServicing {
             )? = nil,
         authorizedDownloadRequest:
             Result<URLRequest, AppServiceError>? = nil,
+        authorizedDownloadRequestGate: AsyncGate? = nil,
         primaryFallbackURL: URL? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
         localDataReset: Result<Void, AppServiceError> = .success(()),
@@ -19826,6 +20134,7 @@ private actor TestAppService: AppServicing {
         downloadPlanResult = downloadPlan
         self.downloadPlanProvider = downloadPlanProvider
         authorizedDownloadRequestResult = authorizedDownloadRequest
+        self.authorizedDownloadRequestGate = authorizedDownloadRequestGate
         self.primaryFallbackURL = primaryFallbackURL
         removeAccountResult = removeAccount
         localDataResetResult = localDataReset
@@ -20646,6 +20955,9 @@ private actor TestAppService: AppServicing {
         identity: DownloadTaskIdentity
     ) async throws(AppServiceError) -> URLRequest {
         recordedAuthorizedDownloadRequests.append(identity)
+        if let authorizedDownloadRequestGate {
+            await authorizedDownloadRequestGate.enterAndWait()
+        }
         if let authorizedDownloadRequestResult {
             return try value(from: authorizedDownloadRequestResult)
         }

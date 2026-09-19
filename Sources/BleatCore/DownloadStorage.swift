@@ -868,6 +868,32 @@ public actor DownloadStorage {
         return record
     }
 
+    public func markDownloadingIfIncomplete(
+        _ identity: DownloadTaskIdentity,
+        observedByteLength: Int64,
+        validator: DownloadValidator?
+    ) throws(DownloadStorageError) -> DownloadedBookRecord? {
+        var record = try load(identity)
+        guard
+            record.manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.state != .complete
+        else {
+            return nil
+        }
+        do {
+            try record.manifest.markDownloading(
+                trackIndex: identity.trackIndex,
+                observedByteLength: observedByteLength,
+                validator: validator
+            )
+        } catch {
+            throw .trackNotFound
+        }
+        try persist(record)
+        return record
+    }
+
     public func markPaused(
         _ identity: DownloadTaskIdentity,
         observedByteLength: Int64
@@ -950,7 +976,29 @@ public actor DownloadStorage {
         until date: Date,
         retryCount: Int
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
+        if let record = try deferRetryIfIncomplete(
+            identity,
+            until: date,
+            retryCount: retryCount
+        ) {
+            return record
+        }
+        return try load(identity)
+    }
+
+    public func deferRetryIfIncomplete(
+        _ identity: DownloadTaskIdentity,
+        until date: Date,
+        retryCount: Int
+    ) throws(DownloadStorageError) -> DownloadedBookRecord? {
         var record = try load(identity)
+        guard
+            record.manifest.entries.first(where: {
+                $0.trackIndex == identity.trackIndex
+            })?.state != .complete
+        else {
+            return nil
+        }
         do {
             try record.manifest.deferRetry(
                 trackIndex: identity.trackIndex,
@@ -1009,6 +1057,9 @@ public actor DownloadStorage {
             if record.manifest.entries.allSatisfy({
                 $0.state == .complete
             }) {
+                if record.manifest.purpose == .automaticCache {
+                    record.manifest.promoteToManual()
+                }
                 try record.manifest.finish()
             }
         } catch {
@@ -1348,6 +1399,8 @@ public actor DownloadStorage {
                 if entry.state != .complete
                     || entry.placement != .finalized
                     || entry.observedByteLength != entry.expectedByteLength
+                    || entry.retryNotBefore != nil
+                    || entry.transferRetryCount != nil
                 {
                     do {
                         try record.manifest.markComplete(
@@ -1444,8 +1497,12 @@ public actor DownloadStorage {
         }
         if record.manifest.entries.allSatisfy({ $0.state == .complete }),
             record.manifest.state != .complete
+                || record.manifest.purpose == .automaticCache
         {
             do {
+                if record.manifest.purpose == .automaticCache {
+                    record.manifest.promoteToManual()
+                }
                 try record.manifest.finish()
             } catch {
                 throw .invalidStoredRecord

@@ -387,12 +387,15 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         retryCount: Int
     ) throws(DownloadManifestError) {
         let index = try entryIndex(for: trackIndex)
+        guard entries[index].state != .complete else {
+            throw .trackAlreadyComplete(trackIndex)
+        }
         entries[index].retryNotBefore = date
         entries[index].transferRetryCount = max(retryCount, 0)
     }
 
     public mutating func resetTransferRetryBudget() {
-        for index in entries.indices where entries[index].state != .complete {
+        for index in entries.indices {
             entries[index].retryNotBefore = nil
             entries[index].transferRetryCount = nil
         }

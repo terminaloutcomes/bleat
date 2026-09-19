@@ -3438,13 +3438,24 @@ final class BleatLiveUITests: XCTestCase {
 
         let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
-        XCTAssertTrue(
-            app.descendants(matching: .any)["book.detail.downloadStatus"]
-                .waitForExistence(timeout: 20)
-        )
         app.buttons["book.detail.play"].tap()
+
+        // Completed automatic downloads leave the transient transfer UI and
+        // appear in Home's fully downloaded collection.
+        tabButton("Home", in: app).tap()
+        let downloadedPlay = app.buttons.matching(
+            NSPredicate(
+                format:
+                    "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                "home.downloaded.",
+                ".play",
+                "Play multi-track"
+            )
+        ).firstMatch
+        XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 60))
+        tabButton("Library", in: app).tap()
         XCTAssertTrue(
-            app.staticTexts["Downloaded"].waitForExistence(timeout: 60)
+            app.buttons["book.detail.play"].waitForExistence(timeout: 20)
         )
         XCTAssertFalse(app.buttons["book.detail.download.start"].exists)
         app.buttons["book.detail.play"].tap()
@@ -3499,15 +3510,6 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(download.waitForExistence(timeout: 10))
         download.tap()
 
-        let downloadedPlay = app.buttons.matching(
-            NSPredicate(
-                format:
-                    "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
-                "home.downloaded.",
-                ".play",
-                "Play multi-track"
-            )
-        ).firstMatch
         XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 30))
         let downloadedOpen = app.buttons[
             String(downloadedPlay.identifier.dropLast(".play".count))
