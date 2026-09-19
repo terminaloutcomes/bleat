@@ -1,5 +1,5 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
@@ -18,7 +18,9 @@ extension DownloadStorageLayout {
     }
 }
 
-final class DownloadStorageTests: XCTestCase {
+@Suite(.serialized)
+final class DownloadStorageTests {
+    @Test
     func testCancellationPersistsIntentAndDiscardsPartialBytes()
         async throws
     {
@@ -86,32 +88,29 @@ final class DownloadStorageTests: XCTestCase {
 
         let recreated = DownloadStorage(layout: fixture.layout)
         let recreatedRecords = try await recreated.records()
-        let cancelled = try XCTUnwrap(recreatedRecords.first)
+        let cancelled = try #require(recreatedRecords.first)
         let partialByteLength = try await recreated.partialByteLength(
             incompleteIdentity
         )
-        XCTAssertEqual(cancelled.manifest.state, .cancelled)
-        XCTAssertEqual(cancelled.manifest.entries[0].state, .complete)
-        XCTAssertEqual(cancelled.manifest.entries[1].state, .cancelled)
-        XCTAssertEqual(partialByteLength, 0)
-        XCTAssertTrue(
+        #expect(cancelled.manifest.state == .cancelled)
+        #expect(cancelled.manifest.entries[0].state == .complete)
+        #expect(cancelled.manifest.entries[1].state == .cancelled)
+        #expect(partialByteLength == 0)
+        #expect(
             FileManager.default.fileExists(
                 atPath: fixture.layout.destinationURL(
                     for: completedIdentity
                 ).path
-            )
-        )
+            ))
 
         _ = try await recreated.prepareCancelledRetry(cancelled)
         let retryRecords = try await recreated.records()
-        let retried = try XCTUnwrap(retryRecords.first)
-        XCTAssertEqual(retried.manifest.state, .queued)
-        XCTAssertEqual(
-            retried.manifest.entries.map(\.state),
-            [.complete, .queued]
-        )
+        let retried = try #require(retryRecords.first)
+        #expect(retried.manifest.state == .queued)
+        #expect(retried.manifest.entries.map(\.state) == [.complete, .queued])
     }
 
+    @Test
     func testLateCancellationCleanupCannotDiscardRetriedBytes()
         async throws
     {
@@ -149,16 +148,17 @@ final class DownloadStorageTests: XCTestCase {
         let discarded = try await fixture.storage
             .discardFilesForPersistedCancellation(in: record)
         let records = try await fixture.storage.records()
-        let current = try XCTUnwrap(records.first)
+        let current = try #require(records.first)
         let partialByteLength = try await fixture.storage.partialByteLength(
             identity
         )
 
-        XCTAssertFalse(discarded)
-        XCTAssertEqual(current.manifest.state, .downloading)
-        XCTAssertEqual(partialByteLength, 2)
+        #expect(!(discarded))
+        #expect(current.manifest.state == .downloading)
+        #expect(partialByteLength == 2)
     }
 
+    @Test
     func testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled()
         async throws
     {
@@ -186,35 +186,27 @@ final class DownloadStorageTests: XCTestCase {
 
         let recreated = DownloadStorage(layout: fixture.layout)
         let deferredRecords = try await recreated.records()
-        let deferredRecord = try XCTUnwrap(deferredRecords.first)
-        XCTAssertEqual(
-            deferredRecord.manifest.entries.first?.retryNotBefore,
-            retryNotBefore
-        )
-        XCTAssertEqual(
-            deferredRecord.manifest.entries.first?.transferRetryCount,
-            1
-        )
+        let deferredRecord = try #require(deferredRecords.first)
+        #expect(
+            deferredRecord.manifest.entries.first?.retryNotBefore
+                == retryNotBefore)
+        #expect(deferredRecord.manifest.entries.first?.transferRetryCount == 1)
 
         _ = try await recreated.markDownloading(identity)
         let scheduledRecords = try await recreated.records()
-        let scheduledRecord = try XCTUnwrap(scheduledRecords.first)
-        XCTAssertNil(
-            scheduledRecord.manifest.entries.first?.retryNotBefore
-        )
-        XCTAssertEqual(
-            scheduledRecord.manifest.entries.first?.transferRetryCount,
-            1
-        )
+        let scheduledRecord = try #require(scheduledRecords.first)
+        #expect(scheduledRecord.manifest.entries.first?.retryNotBefore == nil)
+        #expect(scheduledRecord.manifest.entries.first?.transferRetryCount == 1)
 
         _ = try await recreated.resetTransferRetryBudget(scheduledRecord)
         let resetStorage = DownloadStorage(layout: fixture.layout)
         let resetRecords = try await resetStorage.records()
-        let resetRecord = try XCTUnwrap(resetRecords.first)
-        XCTAssertNil(resetRecord.manifest.entries.first?.retryNotBefore)
-        XCTAssertNil(resetRecord.manifest.entries.first?.transferRetryCount)
+        let resetRecord = try #require(resetRecords.first)
+        #expect(resetRecord.manifest.entries.first?.retryNotBefore == nil)
+        #expect(resetRecord.manifest.entries.first?.transferRetryCount == nil)
     }
 
+    @Test
     func testCompletedTrackRejectsAndRepairsRetryState() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -248,27 +240,24 @@ final class DownloadStorageTests: XCTestCase {
             until: Date(timeIntervalSince1970: 2_000_000_000),
             retryCount: 2
         )
-        XCTAssertNil(deferred)
+        #expect(deferred == nil)
         let restarted = try await fixture.storage.markDownloadingIfIncomplete(
             identity,
             observedByteLength: observed,
             validator: nil
         )
-        XCTAssertNil(restarted)
+        #expect(restarted == nil)
 
         let recordURL = fixture.layout.recordURL(
             accountID: fixture.accountID,
             itemID: fixture.itemID
         )
-        var object = try XCTUnwrap(
+        var object = try #require(
             JSONSerialization.jsonObject(
                 with: Data(contentsOf: recordURL)
-            ) as? [String: Any]
-        )
-        var manifest = try XCTUnwrap(object["manifest"] as? [String: Any])
-        var entries = try XCTUnwrap(
-            manifest["entries"] as? [[String: Any]]
-        )
+            ) as? [String: Any])
+        var manifest = try #require(object["manifest"] as? [String: Any])
+        var entries = try #require(manifest["entries"] as? [[String: Any]])
         entries[0]["retryNotBefore"] = 800_000_000.0
         entries[0]["transferRetryCount"] = 2
         manifest["entries"] = entries
@@ -279,12 +268,13 @@ final class DownloadStorageTests: XCTestCase {
         )
 
         let repairedRecords = try await fixture.storage.records()
-        let repaired = try XCTUnwrap(repairedRecords.first)
-        XCTAssertEqual(repaired.manifest.state, .complete)
-        XCTAssertNil(repaired.manifest.entries[0].retryNotBefore)
-        XCTAssertNil(repaired.manifest.entries[0].transferRetryCount)
+        let repaired = try #require(repairedRecords.first)
+        #expect(repaired.manifest.state == .complete)
+        #expect(repaired.manifest.entries[0].retryNotBefore == nil)
+        #expect(repaired.manifest.entries[0].transferRetryCount == nil)
     }
 
+    @Test
     func testConditionalFailureDoesNotOverwritePauseOrContinueState()
         async throws
     {
@@ -311,19 +301,17 @@ final class DownloadStorageTests: XCTestCase {
         let ignoredFailure = try await fixture.storage
             .markFailedIfDownloading(identity)
         let pausedRecords = try await fixture.storage.records()
-        XCTAssertNil(ignoredFailure)
-        XCTAssertEqual(
-            pausedRecords.first?.manifest.state,
-            .paused
-        )
+        #expect(ignoredFailure == nil)
+        #expect(pausedRecords.first?.manifest.state == .paused)
 
         _ = try await fixture.storage.markDownloading(identity)
         let failed = try await fixture.storage.markFailedIfDownloading(
             identity
         )
-        XCTAssertEqual(failed?.manifest.state, .failed)
+        #expect(failed?.manifest.state == .failed)
     }
 
+    @Test
     func testAccountIdentityMigrationMovesManifestAndMedia() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -359,28 +347,26 @@ final class DownloadStorageTests: XCTestCase {
         )
 
         let records = try await fixture.storage.records()
-        let migrated = try XCTUnwrap(records.first)
-        XCTAssertEqual(migrated.manifest.accountID, canonicalID)
+        let migrated = try #require(records.first)
+        #expect(migrated.manifest.accountID == canonicalID)
         let canonicalIdentity = try DownloadTaskIdentity(
             downloadID: fixture.downloadID,
             accountID: canonicalID,
             itemID: fixture.itemID,
             track: fixture.plan.tracks[0]
         )
-        XCTAssertEqual(
-            try fixture.layout.partialByteLength(for: canonicalIdentity),
-            2
-        )
-        XCTAssertFalse(
-            FileManager.default.fileExists(
+        #expect(
+            try fixture.layout.partialByteLength(for: canonicalIdentity) == 2)
+        #expect(
+            !(FileManager.default.fileExists(
                 atPath: fixture.layout.recordURL(
                     accountID: fixture.accountID,
                     itemID: fixture.itemID
                 ).path
-            )
-        )
+            )))
     }
 
+    @Test
     func testAccountIdentityMigrationResumesAfterDirectoryMove() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -411,9 +397,10 @@ final class DownloadStorageTests: XCTestCase {
         )
 
         let records = try await fixture.storage.records()
-        XCTAssertEqual(records.map(\.manifest.accountID), [canonicalID])
+        #expect(records.map(\.manifest.accountID) == [canonicalID])
     }
 
+    @Test
     func testFinalizedLateTrackKeepsRemainingTracksPaused() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -472,14 +459,13 @@ final class DownloadStorageTests: XCTestCase {
             finalized: true
         )
 
-        XCTAssertEqual(updated.manifest.state, .paused)
-        XCTAssertEqual(
+        #expect(updated.manifest.state == .paused)
+        #expect(
             updated.manifest.entries.first(where: { $0.trackIndex == 1 })?
-                .state,
-            .paused
-        )
+                .state == .paused)
     }
 
+    @Test
     func testDurableChunksSurviveRecreationAndFinalizeAtExactLength()
         async throws
     {
@@ -513,32 +499,30 @@ final class DownloadStorageTests: XCTestCase {
 
         let relaunched = DownloadStorage(layout: fixture.layout)
         let relaunchedRecords = try await relaunched.records()
-        let paused = try XCTUnwrap(relaunchedRecords.first)
+        let paused = try #require(relaunchedRecords.first)
         let relaunchedPartialLength = try await relaunched.partialByteLength(
             identity
         )
-        XCTAssertEqual(paused.manifest.state, .paused)
-        XCTAssertEqual(paused.manifest.storedByteLength, 2)
-        XCTAssertEqual(relaunchedPartialLength, 2)
+        #expect(paused.manifest.state == .paused)
+        #expect(paused.manifest.storedByteLength == 2)
+        #expect(relaunchedPartialLength == 2)
 
         let second = fixture.rootURL.appendingPathComponent("second.chunk")
         try Data([3, 4]).write(to: second)
-        XCTAssertEqual(
+        #expect(
             try fixture.layout.appendChunk(
                 from: second,
                 identity: identity,
                 expectedOffset: 2,
                 expectedChunkLength: 2
-            ),
-            4
-        )
-        XCTAssertEqual(try fixture.layout.finalizePartial(identity), 4)
-        XCTAssertEqual(
-            try Data(contentsOf: fixture.layout.destinationURL(for: identity)),
-            Data([1, 2, 3, 4])
-        )
+            ) == 4)
+        #expect(try fixture.layout.finalizePartial(identity) == 4)
+        #expect(
+            try Data(contentsOf: fixture.layout.destinationURL(for: identity))
+                == Data([1, 2, 3, 4]))
     }
 
+    @Test
     func testChunkAppendRejectsWrongOffsetAndOversizedResult() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -557,18 +541,20 @@ final class DownloadStorageTests: XCTestCase {
         let chunk = fixture.rootURL.appendingPathComponent("chunk")
         try Data([1, 2, 3]).write(to: chunk)
 
-        XCTAssertThrowsError(
-            try fixture.layout.appendChunk(
-                from: chunk,
-                identity: identity,
-                expectedOffset: 1,
-                expectedChunkLength: 3
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadStorageError,
-                .invalidPartialOffset(expected: 1, observed: 0)
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try fixture.layout.appendChunk(
+                    from: chunk,
+                    identity: identity,
+                    expectedOffset: 1,
+                    expectedChunkLength: 3
+                )
+            })
+        {
+            #expect(
+                error as? DownloadStorageError
+                    == .invalidPartialOffset(expected: 1, observed: 0))
         }
         _ = try fixture.layout.appendChunk(
             from: chunk,
@@ -576,16 +562,19 @@ final class DownloadStorageTests: XCTestCase {
             expectedOffset: 0,
             expectedChunkLength: 3
         )
-        XCTAssertThrowsError(
-            try fixture.layout.appendChunk(
-                from: chunk,
-                identity: identity,
-                expectedOffset: 3,
-                expectedChunkLength: 3
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try fixture.layout.appendChunk(
+                    from: chunk,
+                    identity: identity,
+                    expectedOffset: 3,
+                    expectedChunkLength: 3
+                )
+            })
     }
 
+    @Test
     func testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure()
         throws
     {
@@ -595,37 +584,40 @@ final class DownloadStorageTests: XCTestCase {
             plan: fixture.plan
         )
 
-        XCTAssertEqual(requirement.expectedBytes, 4)
-        XCTAssertEqual(
-            requirement.safetyMarginBytes,
-            DownloadStorageRequirement.minimumSafetyMarginBytes
-        )
-        XCTAssertEqual(
-            requirement.requiredBytes,
-            4 + DownloadStorageRequirement.minimumSafetyMarginBytes
-        )
-        XCTAssertNoThrow(
-            try requirement.validate(
-                availableBytes: requirement.requiredBytes
-            )
-        )
-        XCTAssertThrowsError(
-            try requirement.validate(
-                availableBytes: requirement.requiredBytes - 1
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadStorageError,
-                .insufficientSpace(
-                    requiredBytes: requirement.requiredBytes,
+        #expect(requirement.expectedBytes == 4)
+        #expect(
+            requirement.safetyMarginBytes
+                == DownloadStorageRequirement.minimumSafetyMarginBytes)
+        #expect(
+            requirement.requiredBytes == 4
+                + DownloadStorageRequirement.minimumSafetyMarginBytes)
+        #expect(
+            throws: Never.self,
+            performing: {
+                try requirement.validate(
+                    availableBytes: requirement.requiredBytes
+                )
+            })
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try requirement.validate(
                     availableBytes: requirement.requiredBytes - 1
                 )
-            )
+            })
+        {
+            #expect(
+                error as? DownloadStorageError
+                    == .insufficientSpace(
+                        requiredBytes: requirement.requiredBytes,
+                        availableBytes: requirement.requiredBytes - 1
+                    ))
         }
         let emptyRepair = try DownloadStorageRequirement(tracks: [])
-        XCTAssertEqual(emptyRepair.requiredBytes, 0)
+        #expect(emptyRepair.requiredBytes == 0)
     }
 
+    @Test
     func testStorageRequirementRejectsOverflow() {
         let tracks = [
             DownloadTrackPlan(
@@ -646,16 +638,15 @@ final class DownloadStorageTests: XCTestCase {
             ),
         ]
 
-        XCTAssertThrowsError(
-            try DownloadStorageRequirement(tracks: tracks)
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadStorageError,
-                .requirementOverflow
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try DownloadStorageRequirement(tracks: tracks) })
+        {
+            #expect(error as? DownloadStorageError == .requirementOverflow)
         }
     }
 
+    @Test
     func testStoragePreflightReadsCapacityFromVolume() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -664,10 +655,11 @@ final class DownloadStorageTests: XCTestCase {
             plan: fixture.plan
         )
 
-        XCTAssertEqual(requirement.expectedBytes, 4)
-        XCTAssertGreaterThan(requirement.requiredBytes, 4)
+        #expect(requirement.expectedBytes == 4)
+        #expect(requirement.requiredBytes > 4)
     }
 
+    @Test
     func testFinalizedFilesAndManifestSurviveStoreRecreation()
         async throws
     {
@@ -702,19 +694,18 @@ final class DownloadStorageTests: XCTestCase {
         let records = try await relaunched.records()
         let urls = try await relaunched.localTrackURLs(for: completed)
 
-        XCTAssertEqual(record.manifest.state, .queued)
-        XCTAssertEqual(completed.manifest.state, .complete)
-        XCTAssertEqual(completed.manifest.expectedByteLength, 4)
-        XCTAssertEqual(completed.manifest.storedByteLength, 4)
-        XCTAssertEqual(records, [completed])
-        XCTAssertEqual(urls.count, 1)
-        XCTAssertEqual(try Data(contentsOf: urls[0]), Data([1, 2, 3, 4]))
-        XCTAssertFalse(
-            urls[0].path.contains(fixture.accountID.rawValue)
-        )
-        XCTAssertFalse(urls[0].path.contains(fixture.itemID.rawValue))
+        #expect(record.manifest.state == .queued)
+        #expect(completed.manifest.state == .complete)
+        #expect(completed.manifest.expectedByteLength == 4)
+        #expect(completed.manifest.storedByteLength == 4)
+        #expect(records == [completed])
+        #expect(urls.count == 1)
+        #expect(try Data(contentsOf: urls[0]) == Data([1, 2, 3, 4]))
+        #expect(!(urls[0].path.contains(fixture.accountID.rawValue)))
+        #expect(!(urls[0].path.contains(fixture.itemID.rawValue)))
     }
 
+    @Test
     func testRejectsWrongLengthBeforeFinalPlacement() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -735,26 +726,28 @@ final class DownloadStorageTests: XCTestCase {
         )
         try Data([1, 2]).write(to: temporaryURL)
 
-        XCTAssertThrowsError(
-            try fixture.layout.placeCompleteTestFile(
-                from: temporaryURL,
-                identity: identity
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadStorageError,
-                .byteLengthMismatch(expected: 4, observed: 2)
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try fixture.layout.placeCompleteTestFile(
+                    from: temporaryURL,
+                    identity: identity
+                )
+            })
+        {
+            #expect(
+                error as? DownloadStorageError
+                    == .byteLengthMismatch(expected: 4, observed: 2))
         }
-        XCTAssertFalse(
-            FileManager.default.fileExists(
+        #expect(
+            !(FileManager.default.fileExists(
                 atPath: fixture.layout.destinationURL(
                     for: identity
                 ).path
-            )
-        )
+            )))
     }
 
+    @Test
     func testMissingCompletedFileBecomesRepairablePartial()
         async throws
     {
@@ -790,22 +783,20 @@ final class DownloadStorageTests: XCTestCase {
 
         let records = try await fixture.storage.records()
 
-        let repaired = try XCTUnwrap(records.first)
-        XCTAssertEqual(repaired.manifest.state, .partial)
-        XCTAssertEqual(repaired.manifest.entries[0].state, .partial)
-        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
-        XCTAssertEqual(
-            repaired.manifest.entries[0].placement,
-            .temporary
-        )
+        let repaired = try #require(records.first)
+        #expect(repaired.manifest.state == .partial)
+        #expect(repaired.manifest.entries[0].state == .partial)
+        #expect(repaired.manifest.entries[0].observedByteLength == 0)
+        #expect(repaired.manifest.entries[0].placement == .temporary)
         do {
             _ = try await fixture.storage.localTrackURLs(for: completed)
-            XCTFail("Expected the stale complete record to require repair")
+            Issue.record("Expected the stale complete record to require repair")
         } catch {
-            XCTAssertEqual(error, .invalidStoredRecord)
+            #expect(error == .invalidStoredRecord)
         }
     }
 
+    @Test
     func testCorruptCompletedFileBecomesRepairablePartial()
         async throws
     {
@@ -841,17 +832,17 @@ final class DownloadStorageTests: XCTestCase {
 
         let records = try await fixture.storage.records()
 
-        let repaired = try XCTUnwrap(records.first)
-        XCTAssertEqual(repaired.manifest.state, .partial)
-        XCTAssertEqual(repaired.manifest.entries[0].state, .partial)
-        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
-        XCTAssertFalse(
-            FileManager.default.fileExists(
+        let repaired = try #require(records.first)
+        #expect(repaired.manifest.state == .partial)
+        #expect(repaired.manifest.entries[0].state == .partial)
+        #expect(repaired.manifest.entries[0].observedByteLength == 0)
+        #expect(
+            !(FileManager.default.fileExists(
                 atPath: fixture.layout.destinationURL(for: identity).path
-            )
-        )
+            )))
     }
 
+    @Test
     func testFinalizedFileCompletesManifestAfterInterruptedPersistence()
         async throws
     {
@@ -877,13 +868,14 @@ final class DownloadStorageTests: XCTestCase {
         )
 
         let records = try await fixture.storage.records()
-        let record = try XCTUnwrap(records.first)
+        let record = try #require(records.first)
 
-        XCTAssertEqual(record.manifest.state, .complete)
-        XCTAssertEqual(record.manifest.entries[0].state, .complete)
-        XCTAssertEqual(record.manifest.entries[0].placement, .finalized)
+        #expect(record.manifest.state == .complete)
+        #expect(record.manifest.entries[0].state == .complete)
+        #expect(record.manifest.entries[0].placement == .finalized)
     }
 
+    @Test
     func testRemainingPreflightCountsOnlyMissingPartialBytes()
         async throws
     {
@@ -915,9 +907,10 @@ final class DownloadStorageTests: XCTestCase {
             tracks: fixture.plan.tracks
         )
 
-        XCTAssertEqual(requirement.expectedBytes, 2)
+        #expect(requirement.expectedBytes == 2)
     }
 
+    @Test
     func testOversizedPartialFailsOnlyItsOwnRecord() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -991,15 +984,15 @@ final class DownloadStorageTests: XCTestCase {
 
         let records = try await fixture.storage.records()
 
-        XCTAssertEqual(records.count, 2)
-        let repaired = try XCTUnwrap(
-            records.first { $0.manifest.downloadID == fixture.downloadID }
-        )
-        XCTAssertEqual(repaired.manifest.entries[0].state, .failed)
-        XCTAssertEqual(repaired.manifest.entries[0].observedByteLength, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+        #expect(records.count == 2)
+        let repaired = try #require(
+            records.first { $0.manifest.downloadID == fixture.downloadID })
+        #expect(repaired.manifest.entries[0].state == .failed)
+        #expect(repaired.manifest.entries[0].observedByteLength == 0)
+        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
     }
 
+    @Test
     func testMalformedRecordIsDeletedWithoutHidingHealthyRecords()
         async throws
     {
@@ -1024,12 +1017,12 @@ final class DownloadStorageTests: XCTestCase {
 
         let records = try await fixture.storage.records()
 
-        XCTAssertEqual(records.map(\.manifest.downloadID), [fixture.downloadID])
-        XCTAssertFalse(
-            FileManager.default.fileExists(atPath: invalidDirectory.path)
-        )
+        #expect(records.map(\.manifest.downloadID) == [fixture.downloadID])
+        #expect(
+            !(FileManager.default.fileExists(atPath: invalidDirectory.path)))
     }
 
+    @Test
     func testCompletedLegacyRecordWithoutInodeIsPreserved()
         async throws
     {
@@ -1062,15 +1055,12 @@ final class DownloadStorageTests: XCTestCase {
             accountID: fixture.accountID,
             itemID: fixture.itemID
         )
-        var object = try XCTUnwrap(
+        var object = try #require(
             JSONSerialization.jsonObject(
                 with: Data(contentsOf: recordURL)
-            ) as? [String: Any]
-        )
-        var manifest = try XCTUnwrap(object["manifest"] as? [String: Any])
-        var entries = try XCTUnwrap(
-            manifest["entries"] as? [[String: Any]]
-        )
+            ) as? [String: Any])
+        var manifest = try #require(object["manifest"] as? [String: Any])
+        var entries = try #require(manifest["entries"] as? [[String: Any]])
         entries[0].removeValue(forKey: "inode")
         manifest["entries"] = entries
         object["manifest"] = manifest
@@ -1080,14 +1070,15 @@ final class DownloadStorageTests: XCTestCase {
         )
 
         let records = try await fixture.storage.records()
-        let record = try XCTUnwrap(records.first)
+        let record = try #require(records.first)
 
-        XCTAssertEqual(record.manifest.state, .complete)
-        XCTAssertNil(record.manifest.entries[0].inode)
+        #expect(record.manifest.state == .complete)
+        #expect(record.manifest.entries[0].inode == nil)
         let urls = try await fixture.storage.localTrackURLs(for: record)
-        XCTAssertEqual(urls.count, 1)
+        #expect(urls.count == 1)
     }
 
+    @Test
     func testAutomaticCacheMetadataAndFullBookPromotionPersist()
         async throws
     {
@@ -1132,12 +1123,9 @@ final class DownloadStorageTests: XCTestCase {
             record,
             at: finishedAt
         )
-        XCTAssertEqual(record.manifest.purpose, .automaticCache)
-        XCTAssertEqual(record.manifest.bookFinishedAt, finishedAt)
-        XCTAssertEqual(
-            record.manifest.automaticTargetTrackIndexes,
-            [1]
-        )
+        #expect(record.manifest.purpose == .automaticCache)
+        #expect(record.manifest.bookFinishedAt == finishedAt)
+        #expect(record.manifest.automaticTargetTrackIndexes == [1])
 
         for (track, data) in [
             (plan.tracks[1], Data([5, 6])),
@@ -1162,77 +1150,60 @@ final class DownloadStorageTests: XCTestCase {
                 observedByteLength: observed
             )
             if track.index == 1 {
-                XCTAssertEqual(
-                    record.manifest.entries[1].startOffset,
-                    60
-                )
-                XCTAssertEqual(record.manifest.entries[1].duration, 60)
+                #expect(record.manifest.entries[1].startOffset == 60)
+                #expect(record.manifest.entries[1].duration == 60)
                 // A complete cached track plus queued missing work is
                 // actionable download work, so the aggregate remains queued.
-                XCTAssertEqual(record.manifest.state, .queued)
-                XCTAssertFalse(record.manifest.isFullBookComplete)
-                XCTAssertEqual(
-                    record.manifest.automaticCacheState,
-                    .cached
-                )
-                XCTAssertEqual(
-                    record.manifest.automaticExpectedByteLength,
-                    2
-                )
-                XCTAssertEqual(
-                    record.manifest.automaticStoredByteLength,
-                    2
-                )
+                #expect(record.manifest.state == .queued)
+                #expect(!(record.manifest.isFullBookComplete))
+                #expect(record.manifest.automaticCacheState == .cached)
+                #expect(record.manifest.automaticExpectedByteLength == 2)
+                #expect(record.manifest.automaticStoredByteLength == 2)
                 let localChapterFiles =
                     try await fixture.storage.localTrackURLs(
                         for: record,
                         trackIndexes: [1]
                     )
-                XCTAssertEqual(localChapterFiles.keys.sorted(), [1])
+                #expect(localChapterFiles.keys.sorted() == [1])
                 do {
                     _ = try await fixture.storage.localTrackURLs(
                         for: record,
                         trackIndexes: [0, 1]
                     )
-                    XCTFail("Expected the missing track to be rejected")
+                    Issue.record("Expected the missing track to be rejected")
                 } catch {
-                    XCTAssertEqual(error, .invalidStoredRecord)
+                    #expect(error == .invalidStoredRecord)
                 }
                 record = try await fixture.storage.updateAutomaticWindow(
                     record,
                     targetTrackIndexes: [0, 1]
                 )
-                XCTAssertEqual(
-                    record.manifest.automaticCacheState,
-                    .queued
-                )
-                XCTAssertEqual(
-                    record.manifest.automaticExpectedByteLength,
-                    6
-                )
+                #expect(record.manifest.automaticCacheState == .queued)
+                #expect(record.manifest.automaticExpectedByteLength == 6)
             }
         }
-        XCTAssertEqual(record.manifest.state, .complete)
-        XCTAssertTrue(record.manifest.isFullBookComplete)
-        XCTAssertEqual(record.manifest.purpose, .manual)
-        XCTAssertNil(record.manifest.automaticWindow)
-        XCTAssertNil(record.manifest.automaticCacheState)
-        XCTAssertNil(record.manifest.bookFinishedAt)
+        #expect(record.manifest.state == .complete)
+        #expect(record.manifest.isFullBookComplete)
+        #expect(record.manifest.purpose == .manual)
+        #expect(record.manifest.automaticWindow == nil)
+        #expect(record.manifest.automaticCacheState == nil)
+        #expect(record.manifest.bookFinishedAt == nil)
 
         let afterCleanup = try await fixture.storage.removeCompletedTracks(
             from: staleCache,
             trackIndexes: [0, 1]
         )
-        XCTAssertEqual(afterCleanup, record)
+        #expect(afterCleanup == record)
         let localFiles = try await fixture.storage.localTrackURLs(
             for: afterCleanup,
             trackIndexes: [0, 1]
         )
-        XCTAssertEqual(localFiles.keys.sorted(), [0, 1])
+        #expect(localFiles.keys.sorted() == [0, 1])
         let records = try await fixture.storage.records()
-        XCTAssertEqual(records, [record])
+        #expect(records == [record])
     }
 
+    @Test
     func testReconciledFullCacheSurvivesStaleChapterCleanup() async throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
@@ -1257,23 +1228,23 @@ final class DownloadStorageTests: XCTestCase {
             identity: identity
         )
         let reconciled = try await fixture.storage.records()
-        let promoted = try XCTUnwrap(reconciled.first)
-        XCTAssertEqual(promoted.manifest.purpose, .manual)
+        let promoted = try #require(reconciled.first)
+        #expect(promoted.manifest.purpose == .manual)
         let afterCleanup = try await fixture.storage.removeCompletedTracks(
             from: cached,
             trackIndexes: [0]
         )
-        XCTAssertEqual(afterCleanup, promoted)
-        XCTAssertEqual(
-            try Data(contentsOf: fixture.layout.destinationURL(for: identity)),
-            Data([1, 2, 3, 4])
-        )
+        #expect(afterCleanup == promoted)
+        #expect(
+            try Data(contentsOf: fixture.layout.destinationURL(for: identity))
+                == Data([1, 2, 3, 4]))
     }
 
+    @Test
     func testLegacyManifestDefaultsToManualPurpose() throws {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
-        var object = try XCTUnwrap(
+        var object = try #require(
             JSONSerialization.jsonObject(
                 with: JSONEncoder().encode(
                     try DownloadManifest(
@@ -1282,51 +1253,49 @@ final class DownloadStorageTests: XCTestCase {
                         plan: fixture.plan
                     )
                 )
-            ) as? [String: Any]
-        )
+            ) as? [String: Any])
         object["purpose"] = nil
         object["bookFinishedAt"] = nil
-        object["entries"] = try XCTUnwrap(
-            object["entries"] as? [[String: Any]]
-        ).map { entry in
-            var legacyEntry = entry
-            legacyEntry["retryNotBefore"] = nil
-            legacyEntry["transferRetryCount"] = nil
-            return legacyEntry
-        }
+        object["entries"] = try #require(object["entries"] as? [[String: Any]])
+            .map { entry in
+                var legacyEntry = entry
+                legacyEntry["retryNotBefore"] = nil
+                legacyEntry["transferRetryCount"] = nil
+                return legacyEntry
+            }
 
         let decoded = try JSONDecoder().decode(
             DownloadManifest.self,
             from: JSONSerialization.data(withJSONObject: object)
         )
 
-        XCTAssertEqual(decoded.purpose, .manual)
-        XCTAssertNil(decoded.bookFinishedAt)
-        XCTAssertTrue(
+        #expect(decoded.purpose == .manual)
+        #expect(decoded.bookFinishedAt == nil)
+        #expect(
             decoded.entries.allSatisfy {
                 $0.retryNotBefore == nil && $0.transferRetryCount == nil
-            }
-        )
+            })
     }
 
+    @Test
     func testAutomaticWindowValidationPromotionAndLegacyDetection()
         async throws
     {
         let fixture = try Fixture()
         defer { fixture.removeRoot() }
 
-        XCTAssertThrowsError(
-            try DownloadManifest(
-                downloadID: fixture.downloadID,
-                accountID: fixture.accountID,
-                plan: fixture.plan,
-                purpose: .automaticCache
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadManifestError,
-                .invalidAutomaticWindow
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try DownloadManifest(
+                    downloadID: fixture.downloadID,
+                    accountID: fixture.accountID,
+                    plan: fixture.plan,
+                    purpose: .automaticCache
+                )
+            })
+        {
+            #expect(error as? DownloadManifestError == .invalidAutomaticWindow)
         }
 
         do {
@@ -1337,9 +1306,9 @@ final class DownloadStorageTests: XCTestCase {
                 detail: fixture.detail,
                 purpose: .automaticCache
             )
-            XCTFail("Expected an automatic cache window")
+            Issue.record("Expected an automatic cache window")
         } catch {
-            XCTAssertEqual(error, .invalidAutomaticWindow)
+            #expect(error == .invalidAutomaticWindow)
         }
 
         let record = try await fixture.storage.create(
@@ -1352,9 +1321,9 @@ final class DownloadStorageTests: XCTestCase {
         )
         let promoted = try await fixture.storage.promoteToManual(record)
 
-        XCTAssertEqual(promoted.manifest.purpose, .manual)
-        XCTAssertNil(promoted.manifest.automaticWindow)
-        XCTAssertNil(promoted.manifest.automaticCacheState)
+        #expect(promoted.manifest.purpose == .manual)
+        #expect(promoted.manifest.automaticWindow == nil)
+        #expect(promoted.manifest.automaticCacheState == nil)
 
         let current = try DownloadManifest(
             downloadID: fixture.downloadID,
@@ -1363,19 +1332,19 @@ final class DownloadStorageTests: XCTestCase {
             purpose: .automaticCache,
             automaticTargetTrackIndexes: [0]
         )
-        var legacyObject = try XCTUnwrap(
+        var legacyObject = try #require(
             JSONSerialization.jsonObject(
                 with: JSONEncoder().encode(current)
-            ) as? [String: Any]
-        )
+            ) as? [String: Any])
         legacyObject["automaticWindow"] = nil
         let decoded = try JSONDecoder().decode(
             DownloadManifest.self,
             from: JSONSerialization.data(withJSONObject: legacyObject)
         )
-        XCTAssertTrue(decoded.isLegacyAutomaticCache)
+        #expect(decoded.isLegacyAutomaticCache)
     }
 
+    @Test
     func testAutomaticWindowIgnoresNonTargetCorruption()
         async throws
     {
@@ -1444,11 +1413,9 @@ final class DownloadStorageTests: XCTestCase {
         )
         let recordsAfterNonTargetCorruption =
             try await fixture.storage.records()
-        record = try XCTUnwrap(
-            recordsAfterNonTargetCorruption.first
-        )
-        XCTAssertEqual(record.manifest.state, .queued)
-        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
+        record = try #require(recordsAfterNonTargetCorruption.first)
+        #expect(record.manifest.state == .queued)
+        #expect(record.manifest.automaticCacheState == .cached)
 
         let secondIdentity = try DownloadTaskIdentity(
             downloadID: fixture.downloadID,
@@ -1461,12 +1428,11 @@ final class DownloadStorageTests: XCTestCase {
         )
         let recordsAfterTargetCorruption =
             try await fixture.storage.records()
-        record = try XCTUnwrap(
-            recordsAfterTargetCorruption.first
-        )
-        XCTAssertEqual(record.manifest.automaticCacheState, .failed)
+        record = try #require(recordsAfterTargetCorruption.first)
+        #expect(record.manifest.automaticCacheState == .failed)
     }
 
+    @Test
     func testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()
         async throws
     {
@@ -1484,12 +1450,11 @@ final class DownloadStorageTests: XCTestCase {
         try await fixture.storage.remove(record)
 
         let remaining = try await fixture.storage.records()
-        XCTAssertEqual(remaining, [])
-        XCTAssertTrue(
-            FileManager.default.fileExists(atPath: sibling.path)
-        )
+        #expect(remaining == [])
+        #expect(FileManager.default.fileExists(atPath: sibling.path))
     }
 
+    @Test
     func testRemoveTrackFilesDeletesPartialAndFinalFiles()
         async throws
     {
@@ -1566,23 +1531,23 @@ final class DownloadStorageTests: XCTestCase {
         let partial1 = destination1.deletingPathExtension()
             .appendingPathExtension("mp3.partial")
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: destination0.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial0.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial1.path))
+        #expect(FileManager.default.fileExists(atPath: destination0.path))
+        #expect(FileManager.default.fileExists(atPath: destination1.path))
+        #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
+        #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
 
         try await fixture.storage.removeTrackFiles(identity0)
 
-        XCTAssertFalse(
-            FileManager.default.fileExists(atPath: destination0.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: destination1.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial0.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial1.path))
+        #expect(!(FileManager.default.fileExists(atPath: destination0.path)))
+        #expect(FileManager.default.fileExists(atPath: destination1.path))
+        #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
+        #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
 
         let record = try await fixture.storage.records().first!
-        XCTAssertEqual(record.manifest.entries[1].state, .complete)
+        #expect(record.manifest.entries[1].state == .complete)
     }
 
+    @Test
     func testRemoveTrackFilesDeletesPartialFileWhenDownloadInProgress()
         async throws
     {
@@ -1630,15 +1595,16 @@ final class DownloadStorageTests: XCTestCase {
         try Data([1, 2]).write(to: partial)
 
         let destination = fixture.layout.destinationURL(for: identity)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: partial.path))
+        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+        #expect(FileManager.default.fileExists(atPath: partial.path))
 
         try await fixture.storage.removeTrackFiles(identity)
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
     }
 
+    @Test
     func testRemoveTrackFilesIgnoresMissingFiles()
         async throws
     {
@@ -1676,8 +1642,8 @@ final class DownloadStorageTests: XCTestCase {
         let destination = fixture.layout.destinationURL(for: identity)
         let partial = destination.deletingPathExtension()
             .appendingPathExtension("mp3.partial")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
     }
 }
 

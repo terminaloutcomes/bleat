@@ -1,40 +1,25 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class BackgroundDownloadTests: XCTestCase {
+@Suite(.serialized)
+final class BackgroundDownloadTests {
+    @Test
     func testMaximumConcurrentDownloadsTransitionsAndNormalization() throws {
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference.permittedValues,
-            Array(1...5) + Array(stride(from: 10, through: 100, by: 5))
-        )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(1).decremented.value,
-            1
-        )
-        XCTAssertFalse(MaximumConcurrentDownloadsPreference(1).canDecrement)
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(4).incremented.value,
-            5
-        )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(5).incremented.value,
-            10
-        )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(10).decremented.value,
-            5
-        )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(95).incremented.value,
-            100
-        )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference(100).incremented.value,
-            100
-        )
-        XCTAssertFalse(MaximumConcurrentDownloadsPreference(100).canIncrement)
+        #expect(
+            MaximumConcurrentDownloadsPreference.permittedValues == Array(1...5)
+                + Array(stride(from: 10, through: 100, by: 5)))
+        #expect(MaximumConcurrentDownloadsPreference(1).decremented.value == 1)
+        #expect(!(MaximumConcurrentDownloadsPreference(1).canDecrement))
+        #expect(MaximumConcurrentDownloadsPreference(4).incremented.value == 5)
+        #expect(MaximumConcurrentDownloadsPreference(5).incremented.value == 10)
+        #expect(MaximumConcurrentDownloadsPreference(10).decremented.value == 5)
+        #expect(
+            MaximumConcurrentDownloadsPreference(95).incremented.value == 100)
+        #expect(
+            MaximumConcurrentDownloadsPreference(100).incremented.value == 100)
+        #expect(!(MaximumConcurrentDownloadsPreference(100).canIncrement))
 
         let expected = [
             -10: 1,
@@ -48,74 +33,55 @@ final class BackgroundDownloadTests: XCTestCase {
             101: 100,
         ]
         for (input, normalized) in expected {
-            XCTAssertEqual(
-                MaximumConcurrentDownloadsPreference.normalize(input),
-                normalized
-            )
+            #expect(
+                MaximumConcurrentDownloadsPreference.normalize(input)
+                    == normalized)
         }
 
         let suite = "MaximumConcurrentDownloadsPreference.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
-            5
+        #expect(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value == 5
         )
         defaults.set(
             "invalid",
             forKey: MaximumConcurrentDownloadsPreference.defaultsKey
         )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
-            5
+        #expect(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value == 5
         )
-        XCTAssertEqual(
+        #expect(
             defaults.integer(
                 forKey: MaximumConcurrentDownloadsPreference.defaultsKey
-            ),
-            5
-        )
+            ) == 5)
         defaults.set(
             8,
             forKey: MaximumConcurrentDownloadsPreference.defaultsKey
         )
-        XCTAssertEqual(
-            MaximumConcurrentDownloadsPreference.load(from: defaults).value,
-            10
-        )
-        XCTAssertEqual(
+        #expect(
+            MaximumConcurrentDownloadsPreference.load(from: defaults).value
+                == 10)
+        #expect(
             defaults.integer(
                 forKey: MaximumConcurrentDownloadsPreference.defaultsKey
-            ),
-            10
-        )
+            ) == 10)
     }
 
+    @Test
     func testAutomaticDownloadLookaheadTransitionsAndPersistence() throws {
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.allCases,
-            [.one, .three, .five, .ten, .all]
-        )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.one.decremented,
-            .one
-        )
-        XCTAssertFalse(AutomaticDownloadLookaheadPreference.one.canDecrement)
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.one.incremented,
-            .three
-        )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.ten.incremented,
-            .all
-        )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.all.decremented,
-            .ten
-        )
-        XCTAssertFalse(AutomaticDownloadLookaheadPreference.all.canIncrement)
-        XCTAssertEqual(AutomaticDownloadLookaheadPreference.all.label, "All")
-        XCTAssertNil(AutomaticDownloadLookaheadPreference.all.limitedCount)
+        #expect(
+            AutomaticDownloadLookaheadPreference.allCases == [
+                .one, .three, .five, .ten, .all,
+            ])
+        #expect(AutomaticDownloadLookaheadPreference.one.decremented == .one)
+        #expect(!(AutomaticDownloadLookaheadPreference.one.canDecrement))
+        #expect(AutomaticDownloadLookaheadPreference.one.incremented == .three)
+        #expect(AutomaticDownloadLookaheadPreference.ten.incremented == .all)
+        #expect(AutomaticDownloadLookaheadPreference.all.decremented == .ten)
+        #expect(!(AutomaticDownloadLookaheadPreference.all.canIncrement))
+        #expect(AutomaticDownloadLookaheadPreference.all.label == "All")
+        #expect(AutomaticDownloadLookaheadPreference.all.limitedCount == nil)
         let expected: [(Int, AutomaticDownloadLookaheadPreference)] = [
             (Int.min, .one), (-2, .one), (-1, .one), (0, .one),
             (1, .one), (2, .one), (3, .three), (4, .three),
@@ -123,59 +89,47 @@ final class BackgroundDownloadTests: XCTestCase {
             (10, .ten), (11, .all), (20, .all), (99, .all), (Int.max, .all),
         ]
         for (input, preference) in expected {
-            XCTAssertEqual(
-                AutomaticDownloadLookaheadPreference.normalize(input),
-                preference,
-                "Input: \(input)"
-            )
+            #expect(
+                AutomaticDownloadLookaheadPreference.normalize(input)
+                    == preference, "Input: \(input)")
         }
 
         let suite =
             "AutomaticDownloadLookaheadPreference.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.load(from: defaults),
-            .five
-        )
+        #expect(
+            AutomaticDownloadLookaheadPreference.load(from: defaults) == .five)
         for preference in AutomaticDownloadLookaheadPreference.allCases {
             defaults.set(
                 preference.rawValue,
                 forKey: AutomaticDownloadLookaheadPreference.defaultsKey
             )
-            XCTAssertEqual(
-                AutomaticDownloadLookaheadPreference.load(from: defaults),
-                preference
-            )
+            #expect(
+                AutomaticDownloadLookaheadPreference.load(from: defaults)
+                    == preference)
         }
         defaults.set(
             true, forKey: AutomaticDownloadLookaheadPreference.defaultsKey)
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.load(from: defaults),
-            .five
-        )
+        #expect(
+            AutomaticDownloadLookaheadPreference.load(from: defaults) == .five)
         defaults.set(
             0, forKey: AutomaticDownloadLookaheadPreference.defaultsKey)
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.load(from: defaults),
-            .one
-        )
+        #expect(
+            AutomaticDownloadLookaheadPreference.load(from: defaults) == .one)
         defaults.set(
             4,
             forKey: AutomaticDownloadLookaheadPreference.defaultsKey
         )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.load(from: defaults),
-            .three
-        )
-        XCTAssertEqual(
+        #expect(
+            AutomaticDownloadLookaheadPreference.load(from: defaults) == .three)
+        #expect(
             defaults.integer(
                 forKey: AutomaticDownloadLookaheadPreference.defaultsKey
-            ),
-            3
-        )
+            ) == 3)
     }
 
+    @Test
     func testCancelledTrackMakesIncompleteBookDurablyCancelled() throws {
         let plan = DownloadPlan(
             itemID: LibraryItemID(rawValue: "item"),
@@ -199,11 +153,12 @@ final class BackgroundDownloadTests: XCTestCase {
         try manifest.markDownloading(trackIndex: 0)
         try manifest.markCancelled(trackIndex: 0)
 
-        XCTAssertEqual(manifest.state, .cancelled)
-        XCTAssertEqual(manifest.entries[0].state, .cancelled)
-        XCTAssertNil(manifest.entries[0].observedByteLength)
+        #expect(manifest.state == .cancelled)
+        #expect(manifest.entries[0].state == .cancelled)
+        #expect(manifest.entries[0].observedByteLength == nil)
     }
 
+    @Test
     func testRetryQueuesEveryCancelledTrackBeforeBoundedHandoff() throws {
         let tracks = (0..<3).map { index in
             DownloadTrackPlan(
@@ -234,11 +189,8 @@ final class BackgroundDownloadTests: XCTestCase {
 
         manifest.prepareCancelledRetry()
 
-        XCTAssertEqual(manifest.state, .queued)
-        XCTAssertEqual(
-            manifest.entries.map(\.state),
-            [.complete, .queued, .queued]
-        )
+        #expect(manifest.state == .queued)
+        #expect(manifest.entries.map(\.state) == [.complete, .queued, .queued])
 
         try manifest.markDownloading(trackIndex: 1)
         try manifest.markComplete(
@@ -247,10 +199,11 @@ final class BackgroundDownloadTests: XCTestCase {
             placement: .finalized
         )
 
-        XCTAssertEqual(manifest.state, .queued)
-        XCTAssertEqual(manifest.entries[2].state, .queued)
+        #expect(manifest.state == .queued)
+        #expect(manifest.entries[2].state == .queued)
     }
 
+    @Test
     func testFailedTrackDoesNotFailBookWhileAnotherTrackIsDownloading()
         throws
     {
@@ -284,29 +237,28 @@ final class BackgroundDownloadTests: XCTestCase {
 
         try manifest.markFailed(trackIndex: 0)
 
-        XCTAssertEqual(manifest.entries[0].state, .failed)
-        XCTAssertEqual(manifest.entries[1].state, .downloading)
-        XCTAssertEqual(manifest.state, .downloading)
+        #expect(manifest.entries[0].state == .failed)
+        #expect(manifest.entries[1].state == .downloading)
+        #expect(manifest.state == .downloading)
 
         try manifest.markFailed(trackIndex: 1)
-        XCTAssertEqual(manifest.state, .failed)
+        #expect(manifest.state == .failed)
     }
 
+    @Test
     func testRangeChunksBuildBoundedHeadersAndValidateResponses() throws {
-        let first = try XCTUnwrap(
-            DownloadByteRange.next(
+        let first = try #require(
+            try DownloadByteRange.next(
                 committedByteLength: 0,
                 expectedByteLength: 20,
                 chunkByteLength: 16
-            )
-        )
-        let final = try XCTUnwrap(
-            DownloadByteRange.next(
+            ))
+        let final = try #require(
+            try DownloadByteRange.next(
                 committedByteLength: 16,
                 expectedByteLength: 20,
                 chunkByteLength: 16
-            )
-        )
+            ))
         let validator = DownloadValidator.strongETag("\"version-1\"")
         let request = DownloadRangeRequest.applying(
             range: final,
@@ -314,44 +266,50 @@ final class BackgroundDownloadTests: XCTestCase {
             to: URLRequest(url: URL(string: "https://example.com/file")!)
         )
 
-        XCTAssertEqual(first, try DownloadByteRange(start: 0, endInclusive: 15))
-        XCTAssertEqual(
-            final, try DownloadByteRange(start: 16, endInclusive: 19))
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Range"), "bytes=16-19")
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "If-Range"), "\"version-1\"")
-        XCTAssertNoThrow(
-            try DownloadRangeResponseValidator.validate(
-                statusCode: 206,
-                contentRangeHeader: "bytes 16-19/20",
-                requestedRange: final,
-                expectedTotalByteLength: 20
-            )
-        )
-        XCTAssertThrowsError(
-            try DownloadRangeResponseValidator.validate(
-                statusCode: 206,
-                contentRangeHeader: "bytes 18-19/20",
-                requestedRange: final,
-                expectedTotalByteLength: 20
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadRangeError, .mismatchedContentRange)
+        #expect(first == (try DownloadByteRange(start: 0, endInclusive: 15)))
+        #expect(final == (try DownloadByteRange(start: 16, endInclusive: 19)))
+        #expect(request.value(forHTTPHeaderField: "Range") == "bytes=16-19")
+        #expect(
+            request.value(forHTTPHeaderField: "If-Range") == "\"version-1\"")
+        #expect(
+            throws: Never.self,
+            performing: {
+                try DownloadRangeResponseValidator.validate(
+                    statusCode: 206,
+                    contentRangeHeader: "bytes 16-19/20",
+                    requestedRange: final,
+                    expectedTotalByteLength: 20
+                )
+            })
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try DownloadRangeResponseValidator.validate(
+                    statusCode: 206,
+                    contentRangeHeader: "bytes 18-19/20",
+                    requestedRange: final,
+                    expectedTotalByteLength: 20
+                )
+            })
+        {
+            #expect(error as? DownloadRangeError == .mismatchedContentRange)
         }
-        XCTAssertThrowsError(
-            try DownloadRangeResponseValidator.validate(
-                statusCode: 200,
-                contentRangeHeader: nil,
-                requestedRange: final,
-                expectedTotalByteLength: 20
-            )
-        ) { error in
-            XCTAssertEqual(error as? DownloadRangeError, .unexpectedStatus(200))
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try DownloadRangeResponseValidator.validate(
+                    statusCode: 200,
+                    contentRangeHeader: nil,
+                    requestedRange: final,
+                    expectedTotalByteLength: 20
+                )
+            })
+        {
+            #expect(error as? DownloadRangeError == .unexpectedStatus(200))
         }
     }
 
+    @Test
     func testChunkDescriptionRoundTripsWithoutCredentials() throws {
         let descriptor = DownloadChunkTaskDescription(
             identity: try Self.identity(),
@@ -360,16 +318,15 @@ final class BackgroundDownloadTests: XCTestCase {
         )
         let encoded = try descriptor.encode()
 
-        XCTAssertEqual(
-            try DownloadChunkTaskDescription.decode(encoded), descriptor)
-        XCTAssertEqual(
-            try DownloadTaskIdentity.decodeTaskDescription(encoded),
-            descriptor.identity
-        )
-        XCTAssertFalse(encoded.contains("access-token"))
-        XCTAssertFalse(encoded.contains("example.com"))
+        #expect(try DownloadChunkTaskDescription.decode(encoded) == descriptor)
+        #expect(
+            try DownloadTaskIdentity.decodeTaskDescription(encoded)
+                == descriptor.identity)
+        #expect(!(encoded.contains("access-token")))
+        #expect(!(encoded.contains("example.com")))
     }
 
+    @Test
     func testChunkDescriptionRejectsSemanticallyInvalidIdentity() throws {
         let descriptor = DownloadChunkTaskDescription(
             identity: try Self.identity(),
@@ -380,13 +337,10 @@ final class BackgroundDownloadTests: XCTestCase {
         let payload = String(
             encoded.dropFirst(DownloadChunkTaskDescription.prefix.count)
         )
-        let data = try XCTUnwrap(Data(base64Encoded: payload))
-        var object = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
-        var identity = try XCTUnwrap(
-            object["identity"] as? [String: Any]
-        )
+        let data = try #require(Data(base64Encoded: payload))
+        var object = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var identity = try #require(object["identity"] as? [String: Any])
         identity["destinationEntry"] = "../escape.mp3"
         object["identity"] = identity
         let malformed =
@@ -394,40 +348,34 @@ final class BackgroundDownloadTests: XCTestCase {
             + (try JSONSerialization.data(withJSONObject: object))
             .base64EncodedString()
 
-        XCTAssertThrowsError(
-            try DownloadChunkTaskDescription.decode(malformed)
-        ) { error in
-            XCTAssertEqual(error as? DownloadRangeError, .invalidRange)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try DownloadChunkTaskDescription.decode(malformed) })
+        {
+            #expect(error as? DownloadRangeError == .invalidRange)
         }
     }
 
+    @Test
     func testExpandedItemBuildsSafeOrderedPerFilePlan() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Self.expandedItemJSON()
         )
 
-        XCTAssertEqual(plan.itemID.rawValue, "item")
-        XCTAssertEqual(plan.tracks.map(\.index), [0, 1, 2])
-        XCTAssertEqual(plan.tracks.map(\.inode), ["101", "102", "103"])
-        XCTAssertEqual(
-            plan.tracks.map(\.expectedByteLength),
-            [11, 22, 33]
-        )
-        XCTAssertEqual(
-            plan.tracks.map(\.destinationEntry),
-            ["00000.aac", "00001.m4b", "00002.mp3"]
-        )
-        XCTAssertEqual(
-            plan.tracks.map(\.safeExtension),
-            [.aac, .m4b, .mp3]
-        )
-        XCTAssertEqual(
-            plan.tracks.map(\.startOffset),
-            [0, 11, 33]
-        )
-        XCTAssertEqual(plan.tracks.map(\.duration), [11, 22, 33])
+        #expect(plan.itemID.rawValue == "item")
+        #expect(plan.tracks.map(\.index) == [0, 1, 2])
+        #expect(plan.tracks.map(\.inode) == ["101", "102", "103"])
+        #expect(plan.tracks.map(\.expectedByteLength) == [11, 22, 33])
+        #expect(
+            plan.tracks.map(\.destinationEntry) == [
+                "00000.aac", "00001.m4b", "00002.mp3",
+            ])
+        #expect(plan.tracks.map(\.safeExtension) == [.aac, .m4b, .mp3])
+        #expect(plan.tracks.map(\.startOffset) == [0, 11, 33])
+        #expect(plan.tracks.map(\.duration) == [11, 22, 33])
     }
 
+    @Test
     func testExpandedItemRejectsUnsafeOrUnexpectedFiles() {
         let cases: [(String, DownloadPlanError)] = [
             (
@@ -460,14 +408,18 @@ final class BackgroundDownloadTests: XCTestCase {
         ]
 
         for (json, expectedError) in cases {
-            XCTAssertThrowsError(
-                try DownloadPlan.decodeExpandedItem(from: Data(json.utf8))
-            ) { error in
-                XCTAssertEqual(error as? DownloadPlanError, expectedError)
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try DownloadPlan.decodeExpandedItem(from: Data(json.utf8))
+                })
+            {
+                #expect(error as? DownloadPlanError == expectedError)
             }
         }
     }
 
+    @Test
     func testDownloadRequestUsesExactRouteAndBearerHeader() async throws {
         let accountID = AccountID(rawValue: "account")
         let tokens = try AuthenticationTokens(
@@ -491,18 +443,18 @@ final class BackgroundDownloadTests: XCTestCase {
             server: server
         )
 
-        XCTAssertEqual(request.httpMethod, "GET")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/audiobookshelf/api/items/item/file/101/download"
+        #expect(request.httpMethod == "GET")
+        #expect(
+            request.url?.absoluteString
+                == "https://example.com/audiobookshelf/api/items/item/file/101/download"
         )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertNil(request.url?.query)
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(request.url?.query == nil)
     }
 
+    @Test
     func testUnauthorizedTaskGetsNewRequestAfterSingleFlightRefresh()
         async throws
     {
@@ -546,31 +498,26 @@ final class BackgroundDownloadTests: XCTestCase {
                 rejectedRequest: rejectedRequest
             )
 
-        XCTAssertEqual(
+        #expect(
             replacementRequest.value(
                 forHTTPHeaderField: "Authorization"
-            ),
-            "Bearer new-access"
-        )
-        XCTAssertNotEqual(
+            ) == "Bearer new-access")
+        #expect(
             replacementRequest.value(
                 forHTTPHeaderField: "Authorization"
-            ),
-            rejectedRequest.value(forHTTPHeaderField: "Authorization")
-        )
-        XCTAssertEqual(
-            replacementRequest.value(forHTTPHeaderField: "Range"),
-            "bytes=16-31"
-        )
-        XCTAssertEqual(
-            replacementRequest.value(forHTTPHeaderField: "If-Range"),
-            "\"version-1\""
-        )
-        XCTAssertNil(replacementRequest.url?.query)
+            ) != rejectedRequest.value(forHTTPHeaderField: "Authorization"))
+        #expect(
+            replacementRequest.value(forHTTPHeaderField: "Range")
+                == "bytes=16-31")
+        #expect(
+            replacementRequest.value(forHTTPHeaderField: "If-Range")
+                == "\"version-1\"")
+        #expect(replacementRequest.url?.query == nil)
         let refreshCount = await transport.refreshCount()
-        XCTAssertEqual(refreshCount, 1)
+        #expect(refreshCount == 1)
     }
 
+    @Test
     func testReplacementRejectsWrongRouteAndMissingBearer() async throws {
         let accountID = AccountID(rawValue: "account")
         let tokens = try AuthenticationTokens(
@@ -595,10 +542,9 @@ final class BackgroundDownloadTests: XCTestCase {
                 )
             )
         ) { error in
-            XCTAssertEqual(
-                error as? DownloadAuthorizationError,
-                .rejectedRequestDoesNotMatchDownload
-            )
+            #expect(
+                error as? DownloadAuthorizationError
+                    == .rejectedRequestDoesNotMatchDownload)
         }
 
         let correctURL = try AudiobookshelfRouteBuilder(server: server)
@@ -610,13 +556,13 @@ final class BackgroundDownloadTests: XCTestCase {
                 rejectedRequest: URLRequest(url: correctURL)
             )
         ) { error in
-            XCTAssertEqual(
-                error as? DownloadAuthorizationError,
-                .missingRejectedAuthorization
-            )
+            #expect(
+                error as? DownloadAuthorizationError
+                    == .missingRejectedAuthorization)
         }
     }
 
+    @Test
     func testManifestCannotCompletePartialTemporaryOrWrongLengthTrack()
         throws
     {
@@ -629,39 +575,40 @@ final class BackgroundDownloadTests: XCTestCase {
             plan: plan
         )
 
-        XCTAssertThrowsError(try manifest.finish()) { error in
-            XCTAssertEqual(
-                error as? DownloadManifestError,
-                .incompleteTrack(0)
-            )
+        if let error = #expect(
+            throws: (any Error).self, performing: { try manifest.finish() })
+        {
+            #expect(error as? DownloadManifestError == .incompleteTrack(0))
         }
-        XCTAssertThrowsError(
-            try manifest.markComplete(
-                trackIndex: 0,
-                observedByteLength: 10,
-                placement: .temporary
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadManifestError,
-                .trackNotFinalized(0)
-            )
-        }
-        XCTAssertThrowsError(
-            try manifest.markComplete(
-                trackIndex: 0,
-                observedByteLength: 9,
-                placement: .finalized
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? DownloadManifestError,
-                .byteLengthMismatch(
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try manifest.markComplete(
                     trackIndex: 0,
-                    expected: 10,
-                    observed: 9
+                    observedByteLength: 10,
+                    placement: .temporary
                 )
-            )
+            })
+        {
+            #expect(error as? DownloadManifestError == .trackNotFinalized(0))
+        }
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try manifest.markComplete(
+                    trackIndex: 0,
+                    observedByteLength: 9,
+                    placement: .finalized
+                )
+            })
+        {
+            #expect(
+                error as? DownloadManifestError
+                    == .byteLengthMismatch(
+                        trackIndex: 0,
+                        expected: 10,
+                        observed: 9
+                    ))
         }
 
         try manifest.markComplete(
@@ -670,9 +617,10 @@ final class BackgroundDownloadTests: XCTestCase {
             placement: .finalized
         )
         try manifest.finish()
-        XCTAssertEqual(manifest.state, .complete)
+        #expect(manifest.state == .complete)
     }
 
+    @Test
     func testDecoderRejectsCompleteManifestPointingAtPartialFile()
         throws
     {
@@ -690,29 +638,27 @@ final class BackgroundDownloadTests: XCTestCase {
             placement: .temporary
         )
         let data = try JSONEncoder().encode(manifest)
-        var object = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
+        var object = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any])
         object["state"] = "complete"
         let corrupted = try JSONSerialization.data(withJSONObject: object)
 
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(
-                DownloadManifest.self,
-                from: corrupted
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(
+                    DownloadManifest.self,
+                    from: corrupted
+                )
+            })
     }
 
+    @Test
     func testBackgroundSessionContractIsStableAndBounded() {
-        XCTAssertEqual(
-            bleatBackgroundDownloadSessionIdentifier,
-            "app.bleat.background-downloads.v1"
-        )
-        XCTAssertEqual(
-            bleatBackgroundDownloadMaximumConnectionsPerHost,
-            100
-        )
+        #expect(
+            bleatBackgroundDownloadSessionIdentifier
+                == "app.bleat.background-downloads.v1")
+        #expect(bleatBackgroundDownloadMaximumConnectionsPerHost == 100)
     }
 
     private static func identity(

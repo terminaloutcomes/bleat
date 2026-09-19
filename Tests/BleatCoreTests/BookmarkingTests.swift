@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class BookmarkingTests: XCTestCase {
+@Suite(.serialized)
+final class BookmarkingTests {
+    @Test
     func testBookmarkCRUDUsesAuthenticatedPrefixedContracts() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = BookmarkTestTransport(
@@ -75,37 +77,33 @@ final class BookmarkingTests: XCTestCase {
             time: 12.5
         )
 
-        XCTAssertEqual(bookmarks.map(\.title), ["Earlier", "Later"])
-        XCTAssertEqual(created.title, "Chapter")
-        XCTAssertEqual(renamed.title, "Renamed")
+        #expect(bookmarks.map(\.title) == ["Earlier", "Later"])
+        #expect(created.title == "Chapter")
+        #expect(renamed.title == "Renamed")
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(
-            requests.map(\.httpMethod),
-            ["GET", "POST", "PATCH", "DELETE"]
-        )
-        XCTAssertEqual(
-            requests.map { $0.url?.path },
-            [
+        #expect(
+            requests.map(\.httpMethod) == ["GET", "POST", "PATCH", "DELETE"])
+        #expect(
+            requests.map { $0.url?.path } == [
                 "/audiobookshelf/api/me/bookmarks/item",
                 "/audiobookshelf/api/me/item/item/bookmark",
                 "/audiobookshelf/api/me/item/item/bookmark",
                 "/audiobookshelf/api/me/item/item/bookmark/12.5",
-            ]
-        )
-        XCTAssertTrue(
+            ])
+        #expect(
             requests.allSatisfy {
                 $0.value(forHTTPHeaderField: "Authorization")
                     == "Bearer access-token"
             })
-        let createBody = try XCTUnwrap(requests[1].httpBody)
-        let object = try XCTUnwrap(
+        let createBody = try #require(requests[1].httpBody)
+        let object = try #require(
             JSONSerialization.jsonObject(with: createBody)
-                as? [String: Any]
-        )
-        XCTAssertEqual(object["time"] as? Double, 12.5)
-        XCTAssertEqual(object["title"] as? String, "Chapter")
+                as? [String: Any])
+        #expect(object["time"] as? Double == 12.5)
+        #expect(object["title"] as? String == "Chapter")
     }
 
+    @Test
     func testBookmarkValidationFailsBeforeTransport() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = BookmarkTestTransport(responses: [])
@@ -131,7 +129,7 @@ final class BookmarkingTests: XCTestCase {
                 mutation: .create
             )
         ) { error in
-            XCTAssertEqual(error as? BookmarkError, .invalidTime)
+            #expect(error as? BookmarkError == .invalidTime)
         }
         await assertThrowsErrorAsync(
             try await coordinator.mutateBookmark(
@@ -143,10 +141,10 @@ final class BookmarkingTests: XCTestCase {
                 mutation: .create
             )
         ) { error in
-            XCTAssertEqual(error as? BookmarkError, .emptyTitle)
+            #expect(error as? BookmarkError == .emptyTitle)
         }
         let requests = await transport.recordedRequests()
-        XCTAssertTrue(requests.isEmpty)
+        #expect(requests.isEmpty)
     }
 }
 
@@ -211,17 +209,5 @@ private actor BookmarkTestCredentialStore: AccountCredentialStore {
             return
         }
         storedCredentials = nil
-    }
-}
-
-private func assertThrowsErrorAsync<T>(
-    _ expression: @autoclosure () async throws -> T,
-    _ errorHandler: (Error) -> Void
-) async {
-    do {
-        _ = try await expression()
-        XCTFail("Expected error")
-    } catch {
-        errorHandler(error)
     }
 }

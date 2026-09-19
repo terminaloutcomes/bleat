@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class ChapterTranscriptCacheTests: XCTestCase {
+@Suite(.serialized)
+final class ChapterTranscriptCacheTests {
+    @Test
     func testTranscriptUpsertPersistsAndRemainsAccountBookScoped()
         async throws
     {
@@ -42,10 +44,11 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountA,
             itemID: bookA
         )
-        XCTAssertEqual(transcript.count, 1)
-        XCTAssertEqual(transcript.first?.segments.first?.text, "Replacement")
+        #expect(transcript.count == 1)
+        #expect(transcript.first?.segments.first?.text == "Replacement")
     }
 
+    @Test
     func testTranscriptsSortByChapterTimeline() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -73,9 +76,10 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountID,
             itemID: itemID
         )
-        XCTAssertEqual(transcripts.map(\.chapterID), [1, 2])
+        #expect(transcripts.map(\.chapterID) == [1, 2])
     }
 
+    @Test
     func testSearchMatchesEveryTermIgnoringCaseAndOrderAcrossChapters() {
         let transcripts = [
             Self.transcript(
@@ -91,39 +95,34 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             in: transcripts
         )
 
-        XCTAssertEqual(matches.map(\.chapterID), [1, 3])
-        XCTAssertEqual(
-            matches.map(\.segment.text),
-            ["The cat sat on the mat", "A MAT welcomed another CAT"]
-        )
-        XCTAssertEqual(
+        #expect(matches.map(\.chapterID) == [1, 3])
+        #expect(
+            matches.map(\.segment.text) == [
+                "The cat sat on the mat", "A MAT welcomed another CAT",
+            ])
+        #expect(
             CachedChapterTranscriptSearch.matches(
                 query: "cat cat",
                 in: transcripts
-            ).map(\.chapterID),
-            [1, 3]
-        )
-        XCTAssertEqual(
+            ).map(\.chapterID) == [1, 3])
+        #expect(
             CachedChapterTranscriptSearch.matches(
                 query: "nothing",
                 in: transcripts
-            ).map(\.chapterID),
-            [2]
-        )
-        XCTAssertTrue(
+            ).map(\.chapterID) == [2])
+        #expect(
             CachedChapterTranscriptSearch.matches(
                 query: "cat missing",
                 in: transcripts
-            ).isEmpty
-        )
-        XCTAssertTrue(
+            ).isEmpty)
+        #expect(
             CachedChapterTranscriptSearch.matches(
                 query: "   ",
                 in: transcripts
-            ).isEmpty
-        )
+            ).isEmpty)
     }
 
+    @Test
     func testTaskStatePersistsOutcomeFailureAndElapsedTime() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -154,9 +153,10 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountID,
             itemID: itemID
         )
-        XCTAssertEqual(restored, failed)
+        #expect(restored == failed)
     }
 
+    @Test
     func testTaskStateRejectsInvalidSuccess() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let invalid = CachedChapterTranscriptionTaskState(
@@ -177,12 +177,13 @@ final class ChapterTranscriptCacheTests: XCTestCase {
                 accountID: AccountID(rawValue: "account"),
                 itemID: LibraryItemID(rawValue: "book")
             )
-            XCTFail("Expected invalid task state rejection")
+            Issue.record("Expected invalid task state rejection")
         } catch {
-            XCTAssertEqual(error, .invalidTaskState)
+            #expect(error == .invalidTaskState)
         }
     }
 
+    @Test
     func testOlderTaskStateCannotReplaceNewerResult() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -211,9 +212,10 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountID,
             itemID: itemID
         )
-        XCTAssertEqual(restored, newer)
+        #expect(restored == newer)
     }
 
+    @Test
     func testRemovingAccountDeletesOnlyItsTranscripts() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let accountA = AccountID(rawValue: "account-a")
@@ -252,11 +254,12 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountA,
             itemID: itemID
         )
-        XCTAssertTrue(removed.isEmpty)
-        XCTAssertEqual(retained.first?.segments.first?.text, "B")
-        XCTAssertNil(removedTaskState)
+        #expect(removed.isEmpty)
+        #expect(retained.first?.segments.first?.text == "B")
+        #expect(removedTaskState == nil)
     }
 
+    @Test
     func testRemovingBookDeletesTranscriptAndTaskStateOnlyForExactScope()
         async throws
     {
@@ -290,7 +293,7 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountA,
             itemID: bookA
         )
-        XCTAssertTrue(containedBeforeDeletion)
+        #expect(containedBeforeDeletion)
         try await fixture.cache.removeBook(
             accountID: accountA,
             itemID: bookA
@@ -319,19 +322,17 @@ final class ChapterTranscriptCacheTests: XCTestCase {
             accountID: accountB,
             itemID: bookA
         )
-        XCTAssertFalse(containedAfterDeletion)
-        XCTAssertTrue(deletedTranscripts.isEmpty)
-        XCTAssertNil(deletedTaskState)
-        XCTAssertEqual(
-            otherBookTranscripts.first?.segments.first?.text,
-            "other book"
-        )
-        XCTAssertEqual(
-            otherAccountTranscripts.first?.segments.first?.text,
-            "other account"
-        )
+        #expect(!(containedAfterDeletion))
+        #expect(deletedTranscripts.isEmpty)
+        #expect(deletedTaskState == nil)
+        #expect(
+            otherBookTranscripts.first?.segments.first?.text == "other book")
+        #expect(
+            otherAccountTranscripts.first?.segments.first?.text
+                == "other account")
     }
 
+    @Test
     func testRejectsInvalidTranscript() async throws {
         let fixture = try ChapterTranscriptCacheFixture()
         let invalid = CachedChapterTranscript(
@@ -355,9 +356,9 @@ final class ChapterTranscriptCacheTests: XCTestCase {
                 accountID: AccountID(rawValue: "account"),
                 itemID: LibraryItemID(rawValue: "book")
             )
-            XCTFail("Expected invalid transcript rejection")
+            Issue.record("Expected invalid transcript rejection")
         } catch {
-            XCTAssertEqual(error, .invalidTranscript)
+            #expect(error == .invalidTranscript)
         }
     }
 

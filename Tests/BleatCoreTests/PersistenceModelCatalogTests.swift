@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class PersistenceModelCatalogTests: XCTestCase {
+@Suite(.serialized)
+final class PersistenceModelCatalogTests {
+    @Test
     func testCatalogListsEveryPersistentModelInCore() throws {
         let declared = try Self.declaredModelNames(
             in: Self.coreSourceDirectory()
@@ -22,24 +24,24 @@ final class PersistenceModelCatalogTests: XCTestCase {
             .sorted()
             .map { "\($0) (registered but not declared)" }
 
-        XCTAssertTrue(
+        #expect(
             missing.isEmpty && extra.isEmpty,
-            "Catalog and declared @Model types differ. "
-                + "Register new models in BleatPersistenceModelCatalog."
-                + (missing.isEmpty
-                    ? "" : "\nMissing: \(missing.joined(separator: ", "))")
-                + (extra.isEmpty
-                    ? "" : "\nExtra: \(extra.joined(separator: ", "))")
-        )
+            Comment(
+                rawValue: "Catalog and declared @Model types differ. "
+                    + "Register new models in BleatPersistenceModelCatalog."
+                    + (missing.isEmpty
+                        ? "" : "\nMissing: \(missing.joined(separator: ", "))")
+                    + (extra.isEmpty
+                        ? "" : "\nExtra: \(extra.joined(separator: ", "))")))
     }
 
+    @Test
     func testCatalogBuildsUsableSchema() throws {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
 
-        XCTAssertEqual(
-            schema.entities.count,
-            BleatPersistenceModelCatalog.allModelTypes.count
-        )
+        #expect(
+            schema.entities.count
+                == BleatPersistenceModelCatalog.allModelTypes.count)
         _ = try ModelContainer(
             for: schema,
             configurations: [
@@ -51,15 +53,15 @@ final class PersistenceModelCatalogTests: XCTestCase {
         )
     }
 
+    @Test
     func testSchemaRegistersEveryCatalogModelName() throws {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
 
         for type in BleatPersistenceModelCatalog.allModelTypes {
             let name = Schema.entityName(for: type)
-            XCTAssertNotNil(
-                schema.entitiesByName[name],
-                "Schema did not register catalog model \(name)"
-            )
+            #expect(
+                schema.entitiesByName[name] != nil,
+                "Schema did not register catalog model \(name)")
         }
     }
 

@@ -1,19 +1,23 @@
 import Darwin
 import Foundation
 @preconcurrency import OpenTelemetryApi
-import XCTest
+import Testing
 
 @testable import BleatCore
 @testable import OpenTelemetrySdk
 
-final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
+@Suite(.serialized)
+final class AuthenticatedOtlpSpanExporterTests {
+    @Test
     func testConfigurationRequiresHTTPSOriginAndPositiveTimeout() throws {
-        XCTAssertNoThrow(
-            try AuthenticatedOtlpSpanExporterConfiguration(
-                endpoint: XCTUnwrap(
-                    URL(string: "https://telemetry.example:4317"))
-            )
-        )
+        #expect(
+            throws: Never.self,
+            performing: {
+                try AuthenticatedOtlpSpanExporterConfiguration(
+                    endpoint: #require(
+                        URL(string: "https://telemetry.example:4317"))
+                )
+            })
         for endpoint in [
             "http://telemetry.example:4317",
             "https://user@telemetry.example:4317",
@@ -21,30 +25,36 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             "https://telemetry.example:4317?token=secret",
             "https://telemetry.example:4317#fragment",
         ] {
-            XCTAssertThrowsError(
-                try AuthenticatedOtlpSpanExporterConfiguration(
-                    endpoint: XCTUnwrap(URL(string: endpoint))
-                )
-            ) { error in
-                XCTAssertEqual(
-                    error as? AuthenticatedOtlpSpanExporterConfigurationError,
-                    .invalidEndpoint
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try AuthenticatedOtlpSpanExporterConfiguration(
+                        endpoint: #require(URL(string: endpoint))
+                    )
+                })
+            {
+                #expect(
+                    error as? AuthenticatedOtlpSpanExporterConfigurationError
+                        == .invalidEndpoint)
             }
         }
-        XCTAssertThrowsError(
-            try AuthenticatedOtlpSpanExporterConfiguration(
-                endpoint: XCTUnwrap(URL(string: "https://telemetry.example")),
-                timeout: 0
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedOtlpSpanExporterConfigurationError,
-                .invalidTimeout
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try AuthenticatedOtlpSpanExporterConfiguration(
+                    endpoint: #require(
+                        URL(string: "https://telemetry.example")),
+                    timeout: 0
+                )
+            })
+        {
+            #expect(
+                error as? AuthenticatedOtlpSpanExporterConfigurationError
+                    == .invalidTimeout)
         }
     }
 
+    @Test
     func testEachExportUsesExactlyOneCurrentBearerValue() async {
         let provider = SequenceTokenProvider(tokens: ["first", "second"])
         let client = RecordingOtlpClient(results: [.success, .success])
@@ -52,22 +62,21 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
 
         let first = await exporter.export(spans: [span()])
         let second = await exporter.export(spans: [span()])
-        XCTAssertEqual(first, .success)
-        XCTAssertEqual(second, .success)
+        #expect(first == .success)
+        #expect(second == .success)
 
-        XCTAssertEqual(
+        #expect(
             client.recordedMetadata.map {
                 $0.map { "\($0.0)=\($0.1)" }
-            },
-            [
+            } == [
                 ["authorization=Bearer first"],
                 ["authorization=Bearer second"],
-            ]
-        )
-        XCTAssertEqual(client.asynchronousExportCount, 2)
-        XCTAssertEqual(client.shutdownCount, 0)
+            ])
+        #expect(client.asynchronousExportCount == 2)
+        #expect(client.shutdownCount == 0)
     }
 
+    @Test
     func testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce()
         async
     {
@@ -78,17 +87,18 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         let exporter = exporter(provider: provider, client: client)
 
         let result = await exporter.export(spans: [span()])
-        XCTAssertEqual(result, .success)
-        XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.asynchronousExportCount, 2)
+        #expect(result == .success)
+        #expect(client.exportCount == 2)
+        #expect(client.asynchronousExportCount == 2)
         let invalidatedTokens = await provider.invalidatedTokens
-        XCTAssertEqual(invalidatedTokens, ["expired"])
-        XCTAssertEqual(
-            client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" },
-            ["authorization=Bearer renewed"]
-        )
+        #expect(invalidatedTokens == ["expired"])
+        #expect(
+            client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" } == [
+                "authorization=Bearer renewed"
+            ])
     }
 
+    @Test
     func testPersistentAuthenticationRejectionNeverLoops() async {
         let provider = SequenceTokenProvider(tokens: ["one", "two", "three"])
         let client = RecordingOtlpClient(
@@ -97,15 +107,16 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         let exporter = exporter(provider: provider, client: client)
 
         let result = await exporter.export(spans: [span()])
-        XCTAssertEqual(result, .failure)
-        XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.asynchronousExportCount, 2)
+        #expect(result == .failure)
+        #expect(client.exportCount == 2)
+        #expect(client.asynchronousExportCount == 2)
         let requestCount = await provider.requestCount
         let invalidatedTokens = await provider.invalidatedTokens
-        XCTAssertEqual(requestCount, 2)
-        XCTAssertEqual(invalidatedTokens, ["one", "two"])
+        #expect(requestCount == 2)
+        #expect(invalidatedTokens == ["one", "two"])
     }
 
+    @Test
     func testLogExporterRefreshesOnceAndDisableGatesQueuedRecords() async {
         let provider = SequenceTokenProvider(tokens: ["expired", "renewed"])
         let client = RecordingOtlpLogClient(
@@ -118,24 +129,25 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         )
 
         var result = await exporter.export(logRecords: [logRecord()])
-        XCTAssertEqual(result, .success)
-        XCTAssertEqual(client.exportCount, 2)
-        XCTAssertEqual(client.asynchronousExportCount, 2)
-        XCTAssertEqual(
-            client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" },
-            ["authorization=Bearer renewed"]
-        )
+        #expect(result == .success)
+        #expect(client.exportCount == 2)
+        #expect(client.asynchronousExportCount == 2)
+        #expect(
+            client.recordedMetadata.last?.map { "\($0.0)=\($0.1)" } == [
+                "authorization=Bearer renewed"
+            ])
         let invalidated = await provider.invalidatedTokens
-        XCTAssertEqual(invalidated, ["expired"])
+        #expect(invalidated == ["expired"])
 
         exporter.disable()
         result = await exporter.export(logRecords: [logRecord()])
-        XCTAssertEqual(result, .failure)
-        XCTAssertEqual(client.exportCount, 2)
+        #expect(result == .failure)
+        #expect(client.exportCount == 2)
         await exporter.shutdown()
-        XCTAssertEqual(client.shutdownCount, 1)
+        #expect(client.shutdownCount == 1)
     }
 
+    @Test
     func testCancellingAsyncExportCancelsTokenWaitBeforeRPC() async {
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [.success])
@@ -148,14 +160,15 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 explicitTimeout: 30
             )
         }
-        XCTAssertTrue(provider.waitUntilRequested(timeout: 2))
+        #expect(provider.waitUntilRequested(timeout: 2))
         exportTask.cancel()
 
         let result = await exportTask.value
-        XCTAssertEqual(result, .failure)
-        XCTAssertEqual(client.exportCount, 0)
+        #expect(result == .failure)
+        #expect(client.exportCount == 0)
     }
 
+    @Test
     func testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC() async {
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [.success])
@@ -168,15 +181,16 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 explicitTimeout: 30
             )
         }
-        XCTAssertTrue(provider.waitUntilRequested(timeout: 2))
+        #expect(provider.waitUntilRequested(timeout: 2))
         exporter.cancelActiveExports()
 
         let result = await exportTask.value
-        XCTAssertEqual(result, .failure)
-        XCTAssertEqual(client.exportCount, 0)
-        XCTAssertEqual(client.cancelCount, 1)
+        #expect(result == .failure)
+        #expect(client.exportCount == 0)
+        #expect(client.cancelCount == 1)
     }
 
+    @Test
     func testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider()
         async
     {
@@ -190,11 +204,12 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             explicitTimeout: 0.05
         )
 
-        XCTAssertEqual(result, .failure)
-        XCTAssertLessThan(started.duration(to: .now), .milliseconds(500))
-        XCTAssertEqual(client.exportCount, 0)
+        #expect(result == .failure)
+        #expect(started.duration(to: .now) < .milliseconds(500))
+        #expect(client.exportCount == 0)
     }
 
+    @Test
     func testAsyncLifecycleMethodsPreserveShutdownState() async {
         let provider = SequenceTokenProvider(tokens: [])
         let spanClient = RecordingOtlpClient(results: [])
@@ -211,24 +226,25 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
 
         var spanResult = await spanExporter.flush()
         var logResult = await logExporter.forceFlush()
-        XCTAssertEqual(spanResult, .success)
-        XCTAssertEqual(logResult, .success)
+        #expect(spanResult == .success)
+        #expect(logResult == .success)
 
         await spanExporter.shutdown()
         await logExporter.shutdown()
 
         spanResult = await spanExporter.flush()
         logResult = await logExporter.forceFlush()
-        XCTAssertEqual(spanResult, .failure)
-        XCTAssertEqual(logResult, .failure)
-        XCTAssertEqual(spanClient.shutdownCount, 1)
-        XCTAssertEqual(logClient.shutdownCount, 1)
-        XCTAssertEqual(spanClient.synchronousShutdownCount, 0)
-        XCTAssertEqual(spanClient.asynchronousShutdownCount, 1)
-        XCTAssertEqual(logClient.synchronousShutdownCount, 0)
-        XCTAssertEqual(logClient.asynchronousShutdownCount, 1)
+        #expect(spanResult == .failure)
+        #expect(logResult == .failure)
+        #expect(spanClient.shutdownCount == 1)
+        #expect(logClient.shutdownCount == 1)
+        #expect(spanClient.synchronousShutdownCount == 0)
+        #expect(spanClient.asynchronousShutdownCount == 1)
+        #expect(logClient.synchronousShutdownCount == 0)
+        #expect(logClient.asynchronousShutdownCount == 1)
     }
 
+    @Test
     func testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller() async {
         for result in [
             RemoteTelemetryOtlpExportResult.rejected,
@@ -240,13 +256,14 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             let exporter = exporter(provider: provider, client: client)
 
             let exportResult = await exporter.export(spans: [span()])
-            XCTAssertEqual(exportResult, .failure)
-            XCTAssertEqual(client.exportCount, 1)
+            #expect(exportResult == .failure)
+            #expect(client.exportCount == 1)
             let invalidatedTokens = await provider.invalidatedTokens
-            XCTAssertTrue(invalidatedTokens.isEmpty)
+            #expect(invalidatedTokens.isEmpty)
         }
     }
 
+    @Test
     func testConcurrentExportsUseProviderSafelyAndReuseOneClient() async {
         let provider = SingleFlightTokenProvider(token: "shared")
         let client = RecordingOtlpClient(
@@ -262,19 +279,20 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 }
             }
             for await result in group {
-                XCTAssertTrue(result)
+                #expect(result)
             }
         }
 
         let refreshCount = await provider.refreshCount
-        XCTAssertEqual(refreshCount, 1)
-        XCTAssertEqual(client.exportCount, 8)
-        XCTAssertEqual(
-            Set(client.recordedMetadata.flatMap { $0.map(\.1) }),
-            ["Bearer shared"]
-        )
+        #expect(refreshCount == 1)
+        #expect(client.exportCount == 8)
+        #expect(
+            Set(client.recordedMetadata.flatMap { $0.map(\.1) }) == [
+                "Bearer shared"
+            ])
     }
 
+    @Test
     func testCancellationUnblocksTokenWaitAndShutsTransportOnce() async {
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [])
@@ -287,19 +305,20 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 explicitTimeout: 30
             )
         }
-        XCTAssertTrue(provider.waitUntilRequested(timeout: 2))
+        #expect(provider.waitUntilRequested(timeout: 2))
         exporter.cancelActiveExports()
         let result = await exportTask.value
-        XCTAssertEqual(result, .failure)
+        #expect(result == .failure)
 
         await exporter.shutdown()
         await exporter.shutdown()
-        XCTAssertEqual(client.cancelCount, 2)
-        XCTAssertEqual(client.shutdownCount, 1)
-        XCTAssertEqual(client.synchronousShutdownCount, 0)
-        XCTAssertEqual(client.asynchronousShutdownCount, 1)
+        #expect(client.cancelCount == 2)
+        #expect(client.shutdownCount == 1)
+        #expect(client.synchronousShutdownCount == 0)
+        #expect(client.asynchronousShutdownCount == 1)
     }
 
+    @Test
     func testAsyncTransportShutdownWaitsForClosureCompletion() async {
         let gate = AsyncShutdownGate()
         let completion = AsyncCompletionState()
@@ -318,14 +337,15 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         }
         await gate.waitUntilEntered()
         let completedBeforeRelease = await completion.isCompleted
-        XCTAssertFalse(completedBeforeRelease)
+        #expect(!(completedBeforeRelease))
 
         await gate.release()
         await shutdown.value
         let completedAfterRelease = await completion.isCompleted
-        XCTAssertTrue(completedAfterRelease)
+        #expect(completedAfterRelease)
     }
 
+    @Test
     func testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport()
         async
     {
@@ -340,28 +360,28 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
                 explicitTimeout: 30
             )
         }
-        XCTAssertTrue(client.waitUntilFirstRPCWillRegister(timeout: 2))
+        #expect(client.waitUntilFirstRPCWillRegister(timeout: 2))
         exporter.cancelActiveExports()
         await client.allowFirstRPCToRegister()
         let result = await exportTask.value
 
-        XCTAssertEqual(result, .failure)
-        XCTAssertEqual(client.exportCount, 0)
+        #expect(result == .failure)
+        #expect(client.exportCount == 0)
         let laterResult = await exporter.export(spans: [span])
-        XCTAssertEqual(laterResult, .success)
-        XCTAssertEqual(client.exportCount, 1)
+        #expect(laterResult == .success)
+        #expect(client.exportCount == 1)
         let requestCount = await provider.requestCount
-        XCTAssertEqual(requestCount, 2)
+        #expect(requestCount == 2)
     }
 
+    @Test
     func testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies()
         async throws
     {
         let spanTransport = RecordingHTTPTransport(result: .success)
         let spanClient = HttpRemoteTelemetryOtlpClient(
-            endpoint: try XCTUnwrap(
-                URL(string: "https://telemetry.example/v1/traces")
-            ),
+            endpoint: try #require(
+                URL(string: "https://telemetry.example/v1/traces")),
             transport: spanTransport
         )
         let spanResult = await spanClient.export(
@@ -370,26 +390,23 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             timeout: 2,
             isActive: { true }
         )
-        XCTAssertEqual(spanResult, .success)
-        XCTAssertEqual(spanTransport.asynchronousRequestCount, 1)
-        let spanRequest = try XCTUnwrap(spanTransport.requests.first)
-        XCTAssertEqual(spanRequest.url?.path, "/v1/traces")
-        XCTAssertEqual(spanRequest.httpMethod, "POST")
-        XCTAssertEqual(
-            spanRequest.value(forHTTPHeaderField: "Content-Type"),
-            "application/x-protobuf"
-        )
-        XCTAssertEqual(
-            spanRequest.value(forHTTPHeaderField: "Authorization"),
-            "Bearer span-token"
-        )
-        XCTAssertFalse(try XCTUnwrap(spanRequest.httpBody).isEmpty)
+        #expect(spanResult == .success)
+        #expect(spanTransport.asynchronousRequestCount == 1)
+        let spanRequest = try #require(spanTransport.requests.first)
+        #expect(spanRequest.url?.path == "/v1/traces")
+        #expect(spanRequest.httpMethod == "POST")
+        #expect(
+            spanRequest.value(forHTTPHeaderField: "Content-Type")
+                == "application/x-protobuf")
+        #expect(
+            spanRequest.value(forHTTPHeaderField: "Authorization")
+                == "Bearer span-token")
+        #expect(!(try #require(spanRequest.httpBody).isEmpty))
 
         let logTransport = RecordingHTTPTransport(result: .success)
         let logClient = HttpRemoteTelemetryOtlpLogClient(
-            endpoint: try XCTUnwrap(
-                URL(string: "https://telemetry.example/v1/logs")
-            ),
+            endpoint: try #require(
+                URL(string: "https://telemetry.example/v1/logs")),
             transport: logTransport
         )
         let logResult = await logClient.export(
@@ -398,79 +415,66 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             timeout: 2,
             isActive: { true }
         )
-        XCTAssertEqual(logResult, .success)
-        XCTAssertEqual(logTransport.asynchronousRequestCount, 1)
-        let logRequest = try XCTUnwrap(logTransport.requests.first)
-        XCTAssertEqual(logRequest.url?.path, "/v1/logs")
-        XCTAssertEqual(
-            logRequest.value(forHTTPHeaderField: "Content-Type"),
-            "application/x-protobuf"
-        )
-        XCTAssertEqual(
-            logRequest.value(forHTTPHeaderField: "Authorization"),
-            "Bearer log-token"
-        )
-        XCTAssertFalse(try XCTUnwrap(logRequest.httpBody).isEmpty)
+        #expect(logResult == .success)
+        #expect(logTransport.asynchronousRequestCount == 1)
+        let logRequest = try #require(logTransport.requests.first)
+        #expect(logRequest.url?.path == "/v1/logs")
+        #expect(
+            logRequest.value(forHTTPHeaderField: "Content-Type")
+                == "application/x-protobuf")
+        #expect(
+            logRequest.value(forHTTPHeaderField: "Authorization")
+                == "Bearer log-token")
+        #expect(!(try #require(logRequest.httpBody).isEmpty))
 
         await spanClient.shutdown()
         await logClient.shutdown()
-        XCTAssertEqual(spanTransport.synchronousShutdownCount, 0)
-        XCTAssertEqual(spanTransport.asynchronousShutdownCount, 1)
-        XCTAssertEqual(logTransport.synchronousShutdownCount, 0)
-        XCTAssertEqual(logTransport.asynchronousShutdownCount, 1)
+        #expect(spanTransport.synchronousShutdownCount == 0)
+        #expect(spanTransport.asynchronousShutdownCount == 1)
+        #expect(logTransport.synchronousShutdownCount == 0)
+        #expect(logTransport.asynchronousShutdownCount == 1)
     }
 
+    @Test
     func testHTTPResponseStatusPreservesAuthenticationAndTransportFailures()
         throws
     {
-        let url = try XCTUnwrap(URL(string: "https://telemetry.example"))
+        let url = try #require(URL(string: "https://telemetry.example"))
         func response(_ status: Int) throws -> HTTPURLResponse {
-            try XCTUnwrap(
+            try #require(
                 HTTPURLResponse(
                     url: url,
                     statusCode: status,
                     httpVersion: "HTTP/2",
                     headerFields: nil
-                )
-            )
+                ))
         }
 
-        XCTAssertEqual(
+        #expect(
             RemoteTelemetryHTTPResponse.result(
-                response: try response(200), error: nil),
-            .success
-        )
-        XCTAssertEqual(
+                response: try response(200), error: nil) == .success)
+        #expect(
             RemoteTelemetryHTTPResponse.result(
-                response: try response(401), error: nil),
-            .unauthenticated
-        )
-        XCTAssertEqual(
+                response: try response(401), error: nil) == .unauthenticated)
+        #expect(
             RemoteTelemetryHTTPResponse.result(
-                response: try response(403), error: nil),
-            .rejected
-        )
-        XCTAssertEqual(
+                response: try response(403), error: nil) == .rejected)
+        #expect(
             RemoteTelemetryHTTPResponse.result(
-                response: try response(429), error: nil),
-            .failure
-        )
-        XCTAssertEqual(
+                response: try response(429), error: nil) == .failure)
+        #expect(
             RemoteTelemetryHTTPResponse.result(
                 response: nil,
                 error: URLError(.cancelled)
-            ),
-            .cancelled
-        )
-        XCTAssertEqual(
+            ) == .cancelled)
+        #expect(
             RemoteTelemetryHTTPResponse.result(
                 response: nil,
                 error: URLError(.cannotConnectToHost)
-            ),
-            .failure
-        )
+            ) == .failure)
     }
 
+    @Test
     func testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry()
         async
     {
@@ -482,22 +486,23 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
         }
 
         var exportResult = await exporter.export(spans: [span()])
-        XCTAssertEqual(exportResult, .failure)
-        XCTAssertEqual(client.exportCount, 1)
+        #expect(exportResult == .failure)
+        #expect(client.exportCount == 1)
         var requestCount = await provider.requestCount
         var invalidatedTokens = await provider.invalidatedTokens
-        XCTAssertEqual(requestCount, 1)
-        XCTAssertTrue(invalidatedTokens.isEmpty)
+        #expect(requestCount == 1)
+        #expect(invalidatedTokens.isEmpty)
 
         exportResult = await exporter.export(spans: [span()])
-        XCTAssertEqual(exportResult, .success)
-        XCTAssertEqual(client.exportCount, 2)
+        #expect(exportResult == .success)
+        #expect(client.exportCount == 2)
         requestCount = await provider.requestCount
         invalidatedTokens = await provider.invalidatedTokens
-        XCTAssertEqual(requestCount, 2)
-        XCTAssertTrue(invalidatedTokens.isEmpty)
+        #expect(requestCount == 2)
+        #expect(invalidatedTokens.isEmpty)
     }
 
+    @Test
     func testBearerNeverAppearsInExporterOrFailureDescriptions() async {
         let secret = "private-bearer-material"
         let provider = SequenceTokenProvider(tokens: [secret])
@@ -506,7 +511,7 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
 
         let exportResult = await exporter.export(spans: [span()])
         let flushResult = await exporter.flush()
-        XCTAssertEqual(exportResult, .failure)
+        #expect(exportResult == .failure)
         let externallyVisible = [
             String(describing: RemoteTelemetryRuntimeFailure.exportFailed),
             String(
@@ -516,10 +521,11 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             ),
             String(describing: flushResult),
         ].joined(separator: "\n")
-        XCTAssertFalse(externallyVisible.contains(secret))
-        XCTAssertFalse(String(describing: span()).contains(secret))
+        #expect(!(externallyVisible.contains(secret)))
+        #expect(!(String(describing: span()).contains(secret)))
     }
 
+    @Test
     func testBearerNeverAppearsInCapturedProcessLogs() async throws {
         let secret = "captured-private-bearer-material"
         let provider = SequenceTokenProvider(tokens: [secret])
@@ -534,10 +540,10 @@ final class AuthenticatedOtlpSpanExporterTests: XCTestCase {
             _ = await exporter.export(spans: [span()])
         }
 
-        XCTAssertTrue(captured.contains("stdout capture sentinel"))
-        XCTAssertTrue(captured.contains("stderr capture sentinel"))
-        XCTAssertFalse(captured.contains(secret))
-        XCTAssertFalse(captured.contains("Bearer \(secret)"))
+        #expect(captured.contains("stdout capture sentinel"))
+        #expect(captured.contains("stderr capture sentinel"))
+        #expect(!(captured.contains(secret)))
+        #expect(!(captured.contains("Bearer \(secret)")))
     }
 
     private func exporter(

@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class TelemetryAuthenticationTests: XCTestCase {
+@Suite(.serialized)
+final class TelemetryAuthenticationTests {
+    @Test
     func testCachedTokenAvailabilityDoesNotRefresh() async throws {
         let clock = TestClock(Date(timeIntervalSince1970: 2_000_000_000))
         let transport = FakeTelemetryTransport(clock: clock)
@@ -15,35 +17,36 @@ final class TelemetryAuthenticationTests: XCTestCase {
         )
 
         let disabledAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(disabledAvailability, .disabled)
+        #expect(disabledAvailability == .disabled)
         let disabledRequestCount = await transport.requestCount
-        XCTAssertEqual(disabledRequestCount, 0)
+        #expect(disabledRequestCount == 0)
 
         await provider.setEnabled(true)
         let missingAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(missingAvailability, .missing)
+        #expect(missingAvailability == .missing)
         let missingRequestCount = await transport.requestCount
-        XCTAssertEqual(missingRequestCount, 0)
+        #expect(missingRequestCount == 0)
 
         _ = try await provider.currentToken()
         let currentAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(currentAvailability, .available)
+        #expect(currentAvailability == .available)
         let currentRequestCount = await transport.requestCount
-        XCTAssertEqual(currentRequestCount, 4)
+        #expect(currentRequestCount == 4)
 
         clock.advance(by: 481)
         let expiringAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(expiringAvailability, .expiring)
+        #expect(expiringAvailability == .expiring)
         let expiringRequestCount = await transport.requestCount
-        XCTAssertEqual(expiringRequestCount, 4)
+        #expect(expiringRequestCount == 4)
 
         clock.advance(by: 120)
         let expiredAvailability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(expiredAvailability, .expired)
+        #expect(expiredAvailability == .expired)
         let expiredRequestCount = await transport.requestCount
-        XCTAssertEqual(expiredRequestCount, 4)
+        #expect(expiredRequestCount == 4)
     }
 
+    @Test
     func testCachedTokenAvailabilityPreservesFailureCause() async {
         let unsupported = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(isSupported: false),
@@ -53,10 +56,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         await unsupported.setEnabled(true)
         let unsupportedAvailability =
             await unsupported.cachedTokenAvailability()
-        XCTAssertEqual(
-            unsupportedAvailability,
-            .failed(.attesterUnavailable)
-        )
+        #expect(unsupportedAvailability == .failed(.attesterUnavailable))
 
         let rejected = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
@@ -68,10 +68,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         await rejected.setEnabled(true)
         _ = try? await rejected.currentToken()
         let rejectedAvailability = await rejected.cachedTokenAvailability()
-        XCTAssertEqual(
-            rejectedAvailability,
-            .failed(.authenticationRejected)
-        )
+        #expect(rejectedAvailability == .failed(.authenticationRejected))
 
         let invalidConfiguration = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
@@ -86,10 +83,9 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         let invalidConfigurationAvailability =
             await invalidConfiguration.cachedTokenAvailability()
-        XCTAssertEqual(
-            invalidConfigurationAvailability,
-            .failed(.authenticationConfigurationInvalid)
-        )
+        #expect(
+            invalidConfigurationAvailability
+                == .failed(.authenticationConfigurationInvalid))
 
         let invalidResponse = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
@@ -104,10 +100,9 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         let invalidResponseAvailability =
             await invalidResponse.cachedTokenAvailability()
-        XCTAssertEqual(
-            invalidResponseAvailability,
-            .failed(.authenticationResponseInvalid)
-        )
+        #expect(
+            invalidResponseAvailability
+                == .failed(.authenticationResponseInvalid))
 
         let rateLimited = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
@@ -122,7 +117,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         let rateLimitedAvailability =
             await rateLimited.cachedTokenAvailability()
-        XCTAssertEqual(rateLimitedAvailability, .failed(.rateLimited))
+        #expect(rateLimitedAvailability == .failed(.rateLimited))
 
         let unavailableClock = TestClock(
             Date(timeIntervalSince1970: 2_000_000_000)
@@ -141,19 +136,14 @@ final class TelemetryAuthenticationTests: XCTestCase {
         _ = try? await unavailable.currentToken()
         let unavailableAvailability =
             await unavailable.cachedTokenAvailability()
-        XCTAssertEqual(
-            unavailableAvailability,
-            .failed(.retryBackoff)
-        )
+        #expect(unavailableAvailability == .failed(.retryBackoff))
         unavailableClock.advance(by: 1.1)
         let retryableAvailability =
             await unavailable.cachedTokenAvailability()
-        XCTAssertEqual(
-            retryableAvailability,
-            .failed(.temporarilyUnavailable)
-        )
+        #expect(retryableAvailability == .failed(.temporarilyUnavailable))
     }
 
+    @Test
     func testCachedTokenAvailabilityReportsActiveAcquisition() async {
         let transport = FakeTelemetryTransport(tokenDelay: .seconds(5))
         let provider = TelemetryTokenProvider(
@@ -168,12 +158,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
 
         let availability = await provider.cachedTokenAvailability()
-        XCTAssertEqual(availability, .acquiring)
+        #expect(availability == .acquiring)
 
         acquisition.cancel()
         _ = try? await acquisition.value
     }
 
+    @Test
     func testConsentEnablementIsLazyAndFirstTokenEnrolls() async throws {
         let attester = FakeTelemetryAttester()
         let transport = FakeTelemetryTransport()
@@ -191,38 +182,36 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         await provider.setEnabled(true)
         let requestsBeforeToken = await transport.requestCount
-        XCTAssertEqual(requestsBeforeToken, 0)
-        XCTAssertEqual(attester.callCount, 0)
+        #expect(requestsBeforeToken == 0)
+        #expect(attester.callCount == 0)
 
         let token = try await provider.currentToken()
         let requestsAfterToken = await transport.requestCount
         let storedEnrollment = await store.value
-        XCTAssertEqual(token, "token-1")
-        XCTAssertEqual(requestsAfterToken, 4)
-        XCTAssertEqual(attester.generateKeyCount, 1)
-        XCTAssertEqual(attester.attestationCount, 1)
-        XCTAssertEqual(attester.assertionCount, 1)
-        XCTAssertEqual(
-            tracer.startedOperations,
-            [
+        #expect(token == "token-1")
+        #expect(requestsAfterToken == 4)
+        #expect(attester.generateKeyCount == 1)
+        #expect(attester.attestationCount == 1)
+        #expect(attester.assertionCount == 1)
+        #expect(
+            tracer.startedOperations == [
                 .telemetryAuthentication,
                 .telemetryChallenge,
                 .telemetryEnrolment,
                 .telemetryChallenge,
                 .telemetryToken,
-            ]
-        )
-        XCTAssertEqual(
-            tracer.completedOutcomes, Array(repeating: .succeeded, count: 5))
-        XCTAssertEqual(
-            storedEnrollment,
-            TelemetryEnrollment(
-                keyID: "generated-key",
-                installationID: FakeTelemetryTransport.installationID
-            )
-        )
+            ])
+        #expect(
+            tracer.completedOutcomes == Array(repeating: .succeeded, count: 5))
+        #expect(
+            storedEnrollment
+                == TelemetryEnrollment(
+                    keyID: "generated-key",
+                    installationID: FakeTelemetryTransport.installationID
+                ))
     }
 
+    @Test
     func testUnsupportedAttesterPerformsNoWork() async {
         let attester = FakeTelemetryAttester(isSupported: false)
         let transport = FakeTelemetryTransport()
@@ -237,10 +226,11 @@ final class TelemetryAuthenticationTests: XCTestCase {
             try await provider.currentToken()
         }
         let requestCount = await transport.requestCount
-        XCTAssertEqual(requestCount, 0)
-        XCTAssertEqual(attester.callCount, 0)
+        #expect(requestCount == 0)
+        #expect(attester.callCount == 0)
     }
 
+    @Test
     func testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly()
         async throws
     {
@@ -259,9 +249,9 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let firstToken = try await first.currentToken()
         let reusedToken = try await first.currentToken()
         let firstRequestCount = await firstTransport.requestCount
-        XCTAssertEqual(firstToken, "token-1")
-        XCTAssertEqual(reusedToken, "token-1")
-        XCTAssertEqual(firstRequestCount, 2)
+        #expect(firstToken == "token-1")
+        #expect(reusedToken == "token-1")
+        #expect(firstRequestCount == 2)
 
         let relaunchedTransport = FakeTelemetryTransport()
         let relaunched = TelemetryTokenProvider(
@@ -272,10 +262,11 @@ final class TelemetryAuthenticationTests: XCTestCase {
         await relaunched.setEnabled(true)
         let relaunchedToken = try await relaunched.currentToken()
         let relaunchedRequestCount = await relaunchedTransport.requestCount
-        XCTAssertEqual(relaunchedToken, "token-1")
-        XCTAssertEqual(relaunchedRequestCount, 2)
+        #expect(relaunchedToken == "token-1")
+        #expect(relaunchedRequestCount == 2)
     }
 
+    @Test
     func testTokenWithinRefreshWindowIsRenewedWithoutReenrollment()
         async throws
     {
@@ -301,12 +292,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         clock.advance(by: 481)
         let secondToken = try await provider.currentToken()
         let tokenChallengeCount = await transport.tokenChallengeCount
-        XCTAssertEqual(firstToken, "token-1")
-        XCTAssertEqual(secondToken, "token-2")
-        XCTAssertEqual(tokenChallengeCount, 2)
-        XCTAssertEqual(attester.generateKeyCount, 0)
+        #expect(firstToken == "token-1")
+        #expect(secondToken == "token-2")
+        #expect(tokenChallengeCount == 2)
+        #expect(attester.generateKeyCount == 0)
     }
 
+    @Test
     func testConcurrentRefreshIsSingleFlight() async throws {
         let transport = FakeTelemetryTransport(tokenDelay: .milliseconds(100))
         let attester = FakeTelemetryAttester()
@@ -332,12 +324,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         let tokenChallengeCount = await transport.tokenChallengeCount
         let tokenCount = await transport.tokenCount
-        XCTAssertEqual(Set(tokens), ["token-1"])
-        XCTAssertEqual(tokenChallengeCount, 1)
-        XCTAssertEqual(tokenCount, 1)
-        XCTAssertEqual(attester.assertionCount, 1)
+        #expect(Set(tokens) == ["token-1"])
+        #expect(tokenChallengeCount == 1)
+        #expect(tokenCount == 1)
+        #expect(attester.assertionCount == 1)
     }
 
+    @Test
     func testCancellingOnlyWaiterCancelsUnderlyingRefresh() async {
         let transport = FakeTelemetryTransport(tokenDelay: .seconds(30))
         let provider = TelemetryTokenProvider(
@@ -365,9 +358,10 @@ final class TelemetryAuthenticationTests: XCTestCase {
             await Task.yield()
         }
         let cancellationCount = await transport.tokenCancellationCount
-        XCTAssertEqual(cancellationCount, 1)
+        #expect(cancellationCount == 1)
     }
 
+    @Test
     func testCancellingOneWaiterPreservesRefreshForConcurrentWaiter()
         async throws
     {
@@ -400,11 +394,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let token = try await survivingWaiter.value
         let tokenCount = await transport.tokenCount
         let cancellationCount = await transport.tokenCancellationCount
-        XCTAssertEqual(token, "token-1")
-        XCTAssertEqual(tokenCount, 1)
-        XCTAssertEqual(cancellationCount, 0)
+        #expect(token == "token-1")
+        #expect(tokenCount == 1)
+        #expect(cancellationCount == 0)
     }
 
+    @Test
     func testInvalidStoredKeyClearsEnrollmentAndRestartsOnce() async throws {
         let attester = FakeTelemetryAttester(invalidateFirstAssertion: true)
         let store = MemoryEnrollmentStore(
@@ -423,12 +418,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let token = try await provider.currentToken()
         let deleteCount = await store.deleteCount
         let replacementKeyID = await store.value?.keyID
-        XCTAssertEqual(token, "token-1")
-        XCTAssertEqual(attester.generateKeyCount, 1)
-        XCTAssertEqual(deleteCount, 1)
-        XCTAssertEqual(replacementKeyID, "generated-key")
+        #expect(token == "token-1")
+        #expect(attester.generateKeyCount == 1)
+        #expect(deleteCount == 1)
+        #expect(replacementKeyID == "generated-key")
     }
 
+    @Test
     func testServerRejectionDoesNotReplaceDisabledInstallation() async {
         let attester = FakeTelemetryAttester()
         let store = MemoryEnrollmentStore(
@@ -455,11 +451,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         let deleteCount = await store.deleteCount
         let tokenChallengeCount = await transport.tokenChallengeCount
-        XCTAssertEqual(deleteCount, 0)
-        XCTAssertEqual(attester.generateKeyCount, 0)
-        XCTAssertEqual(tokenChallengeCount, 1)
+        #expect(deleteCount == 0)
+        #expect(attester.generateKeyCount == 0)
+        #expect(tokenChallengeCount == 1)
     }
 
+    @Test
     func testEnrollmentRejectionStopsRetriesUntilReenabled() async {
         let attester = FakeTelemetryAttester()
         let transport = FakeTelemetryTransport(
@@ -479,9 +476,9 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         var challengeCount = await transport.attestationChallengeCount
         var enrollmentCount = await transport.enrollmentCount
-        XCTAssertEqual(challengeCount, 1)
-        XCTAssertEqual(enrollmentCount, 1)
-        XCTAssertEqual(attester.generateKeyCount, 1)
+        #expect(challengeCount == 1)
+        #expect(enrollmentCount == 1)
+        #expect(attester.generateKeyCount == 1)
 
         await provider.setEnabled(false)
         await provider.setEnabled(true)
@@ -490,11 +487,12 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         challengeCount = await transport.attestationChallengeCount
         enrollmentCount = await transport.enrollmentCount
-        XCTAssertEqual(challengeCount, 2)
-        XCTAssertEqual(enrollmentCount, 2)
-        XCTAssertEqual(attester.generateKeyCount, 2)
+        #expect(challengeCount == 2)
+        #expect(enrollmentCount == 2)
+        #expect(attester.generateKeyCount == 2)
     }
 
+    @Test
     func testInvalidationOnlyClearsTheTokenThatWasRejected() async throws {
         let transport = FakeTelemetryTransport()
         let provider = TelemetryTokenProvider(
@@ -516,12 +514,13 @@ final class TelemetryAuthenticationTests: XCTestCase {
         let refreshed = try await provider.currentToken()
         let tokenChallengeCount = await transport.tokenChallengeCount
 
-        XCTAssertEqual(first, "token-1")
-        XCTAssertEqual(unchanged, first)
-        XCTAssertEqual(refreshed, "token-2")
-        XCTAssertEqual(tokenChallengeCount, 2)
+        #expect(first == "token-1")
+        #expect(unchanged == first)
+        #expect(refreshed == "token-2")
+        #expect(tokenChallengeCount == 2)
     }
 
+    @Test
     func testDisablingCancelsRefreshAndClearsMemoryToken() async throws {
         let transport = FakeTelemetryTransport(tokenDelay: .seconds(5))
         let provider = TelemetryTokenProvider(
@@ -543,15 +542,16 @@ final class TelemetryAuthenticationTests: XCTestCase {
 
         do {
             _ = try await refresh.value
-            XCTFail("cancelled refresh unexpectedly returned a token")
+            Issue.record("cancelled refresh unexpectedly returned a token")
         } catch let error as TelemetryTokenProviderError {
-            XCTAssertTrue(error == .cancelled || error == .disabled)
+            #expect(error == .cancelled || error == .disabled)
         }
         await assertThrowsTelemetryError(.disabled) {
             try await provider.currentToken()
         }
     }
 
+    @Test
     func testTransientFailureAppliesBoundedLazyBackoff() async {
         let clock = TestClock(Date(timeIntervalSince1970: 2_000_000_000))
         let transport = FakeTelemetryTransport(
@@ -574,7 +574,7 @@ final class TelemetryAuthenticationTests: XCTestCase {
             try await provider.currentToken()
         }
         let challengeCount = await transport.attestationChallengeCount
-        XCTAssertEqual(challengeCount, 1)
+        #expect(challengeCount == 1)
         clock.advance(by: 1.1)
         await assertThrowsTelemetryError(.temporarilyUnavailable) {
             try await provider.currentToken()
@@ -585,9 +585,10 @@ final class TelemetryAuthenticationTests: XCTestCase {
         }
         clock.advance(by: 0.2)
         let token = try? await provider.currentToken()
-        XCTAssertEqual(token, "token-1")
+        #expect(token == "token-1")
     }
 
+    @Test
     func testRateLimitRetryAfterDelaysTheNextChallengeAttempt() async {
         let clock = TestClock(Date(timeIntervalSince1970: 2_000_000_000))
         let transport = FakeTelemetryTransport(
@@ -612,21 +613,22 @@ final class TelemetryAuthenticationTests: XCTestCase {
             try await provider.currentToken()
         }
         let firstChallengeCount = await transport.attestationChallengeCount
-        XCTAssertEqual(firstChallengeCount, 1)
+        #expect(firstChallengeCount == 1)
         clock.advance(by: 0.2)
         await assertThrowsTelemetryError(.rateLimited(retryAfterSeconds: 60)) {
             try await provider.currentToken()
         }
         let secondChallengeCount = await transport.attestationChallengeCount
-        XCTAssertEqual(secondChallengeCount, 2)
+        #expect(secondChallengeCount == 2)
     }
 
+    @Test
     func testErrorsContainNoChallengeKeyOrTokenMaterial() async {
         let values = TelemetryTokenProviderError.allTestValues
             .map(String.init(describing:))
             .joined(separator: "\n")
         for sensitive in ["challenge-value", "generated-key", "token-1"] {
-            XCTAssertFalse(values.contains(sensitive))
+            #expect(!(values.contains(sensitive)))
         }
     }
 }
@@ -685,11 +687,11 @@ private func assertThrowsTelemetryError(
 ) async {
     do {
         _ = try await operation()
-        XCTFail("operation unexpectedly succeeded")
+        Issue.record("operation unexpectedly succeeded")
     } catch let error as TelemetryTokenProviderError {
-        XCTAssertEqual(error, expected)
+        #expect(error == expected)
     } catch {
-        XCTFail("unexpected error type: \(type(of: error))")
+        Issue.record("unexpected error type: \(type(of: error))")
     }
 }
 

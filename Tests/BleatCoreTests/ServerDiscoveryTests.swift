@@ -1,34 +1,33 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class ServerDiscoveryTests: XCTestCase {
+@Suite(.serialized)
+final class ServerDiscoveryTests {
+    @Test
     func testDecodesPinnedLiveStatusFixture() throws {
-        let fixtureURL = try XCTUnwrap(
+        let fixtureURL = try #require(
             Bundle.module.url(
                 forResource: "status-initialized",
                 withExtension: "json"
-            )
-        )
+            ))
         let status = try JSONDecoder().decode(
             ServerStatusResponse.self,
             from: Data(contentsOf: fixtureURL)
         )
 
-        XCTAssertEqual(status.app, "audiobookshelf")
-        XCTAssertEqual(status.serverVersion, "2.36.0")
-        XCTAssertTrue(status.isInitialized)
-        XCTAssertEqual(status.language, "en-us")
-        XCTAssertEqual(status.authenticationMethods, [.local])
-        XCTAssertEqual(
-            status.authenticationFormData?.loginCustomMessage,
-            ""
-        )
-        XCTAssertNil(status.authenticationFormData?.openIDButtonText)
-        XCTAssertNil(status.authenticationFormData?.openIDAutoLaunch)
+        #expect(status.app == "audiobookshelf")
+        #expect(status.serverVersion == "2.36.0")
+        #expect(status.isInitialized)
+        #expect(status.language == "en-us")
+        #expect(status.authenticationMethods == [.local])
+        #expect(status.authenticationFormData?.loginCustomMessage == "")
+        #expect(status.authenticationFormData?.openIDButtonText == nil)
+        #expect(status.authenticationFormData?.openIDAutoLaunch == nil)
     }
 
+    @Test
     func testDiscoversInitializedSupportedServer() async throws {
         let transport = StubHTTPTransport(
             responses: [
@@ -44,26 +43,24 @@ final class ServerDiscoveryTests: XCTestCase {
             NormalizedServerURL("https://example.com/prefix")
         )
 
-        XCTAssertEqual(
-            discovered.baseURL.url.absoluteString,
-            "https://example.com/prefix"
-        )
-        XCTAssertEqual(discovered.version.original, "2.36.0")
-        XCTAssertEqual(discovered.language, "en-us")
-        XCTAssertEqual(discovered.authenticationMethods, [.local, .openID])
-        XCTAssertEqual(
-            discovered.authenticationFormData?.openIDButtonText,
-            "Continue with SSO"
-        )
+        #expect(
+            discovered.baseURL.url.absoluteString
+                == "https://example.com/prefix")
+        #expect(discovered.version.original == "2.36.0")
+        #expect(discovered.language == "en-us")
+        #expect(discovered.authenticationMethods == [.local, .openID])
+        #expect(
+            discovered.authenticationFormData?.openIDButtonText
+                == "Continue with SSO")
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(
-            requests.first?.url?.absoluteString,
-            "https://example.com/prefix/status"
-        )
-        XCTAssertEqual(requests.first?.httpMethod, "GET")
+        #expect(requests.count == 1)
+        #expect(
+            requests.first?.url?.absoluteString
+                == "https://example.com/prefix/status")
+        #expect(requests.first?.httpMethod == "GET")
     }
 
+    @Test
     func testUnknownAuthenticationMethodIsPreserved() throws {
         let data = Data(
             """
@@ -83,29 +80,24 @@ final class ServerDiscoveryTests: XCTestCase {
             from: data
         )
 
-        XCTAssertEqual(
-            status.authenticationMethods,
-            [.unknown("future-auth")]
-        )
+        #expect(status.authenticationMethods == [.unknown("future-auth")])
 
         let encoded = try JSONEncoder().encode(
             status.authenticationMethods
         )
-        XCTAssertEqual(
+        #expect(
             try JSONDecoder().decode(
                 [AuthenticationMethod].self,
                 from: encoded
-            ),
-            [.unknown("future-auth")]
-        )
-        XCTAssertEqual(AuthenticationMethod.local.rawValue, "local")
-        XCTAssertEqual(AuthenticationMethod.openID.rawValue, "openid")
-        XCTAssertEqual(
-            AuthenticationMethod.unknown("future-auth").rawValue,
-            "future-auth"
-        )
+            ) == [.unknown("future-auth")])
+        #expect(AuthenticationMethod.local.rawValue == "local")
+        #expect(AuthenticationMethod.openID.rawValue == "openid")
+        #expect(
+            AuthenticationMethod.unknown("future-auth").rawValue
+                == "future-auth")
     }
 
+    @Test
     func testFollowsOneSameOriginRedirectAndUpdatesBasePath() async throws {
         let redirectURL = URL(
             string: "https://example.com/audiobookshelf/status"
@@ -127,24 +119,21 @@ final class ServerDiscoveryTests: XCTestCase {
             NormalizedServerURL("https://example.com")
         )
 
-        XCTAssertEqual(
-            discovered.baseURL.url.absoluteString,
-            "https://example.com/audiobookshelf"
-        )
+        #expect(
+            discovered.baseURL.url.absoluteString
+                == "https://example.com/audiobookshelf")
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(
-            requests.map(\.url?.absoluteString),
-            [
+        #expect(
+            requests.map(\.url?.absoluteString) == [
                 "https://example.com/status",
                 "https://example.com/audiobookshelf/status",
-            ]
-        )
+            ])
     }
 
+    @Test
     func testRequiresConfirmationForCrossOriginRedirect() async throws {
-        let target = try XCTUnwrap(
-            URL(string: "https://other.example/audiobookshelf/status")
-        )
+        let target = try #require(
+            URL(string: "https://other.example/audiobookshelf/status"))
         let transport = StubHTTPTransport(
             responses: [
                 HTTPResponse(
@@ -162,15 +151,15 @@ final class ServerDiscoveryTests: XCTestCase {
                 NormalizedServerURL("https://example.com")
             )
         ) { error in
-            XCTAssertEqual(
-                error as? ServerDiscoveryError,
-                .redirectRequiresConfirmation(target)
-            )
+            #expect(
+                error as? ServerDiscoveryError
+                    == .redirectRequiresConfirmation(target))
         }
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 1)
+        #expect(requests.count == 1)
     }
 
+    @Test
     func testTreatsExplicitDefaultHTTPSPortAsSameOrigin() async throws {
         let redirectURL = URL(
             string: "https://example.com:443/audiobookshelf/status"
@@ -181,7 +170,7 @@ final class ServerDiscoveryTests: XCTestCase {
                     data: Data(),
                     statusCode: 302,
                     headers: [
-                        "Location": try XCTUnwrap(redirectURL).absoluteString
+                        "Location": try #require(redirectURL).absoluteString
                     ],
                     url: URL(string: "https://example.com/status")
                 ),
@@ -194,29 +183,25 @@ final class ServerDiscoveryTests: XCTestCase {
             NormalizedServerURL("https://example.com")
         )
 
-        XCTAssertEqual(
-            discovered.baseURL.url.absoluteString,
-            "https://example.com:443/audiobookshelf"
-        )
+        #expect(
+            discovered.baseURL.url.absoluteString
+                == "https://example.com:443/audiobookshelf")
     }
 
+    @Test
     func testRejectsInvalidRedirects() async throws {
         let scenarios: [(String?, ServerDiscoveryError)] = [
             (nil, .redirectMissingLocation),
             (
                 "http://example.com/status",
                 .invalidRedirect(
-                    try XCTUnwrap(
-                        URL(string: "http://example.com/status")
-                    )
+                    try #require(URL(string: "http://example.com/status"))
                 )
             ),
             (
                 "https://user@example.com/status",
                 .invalidRedirect(
-                    try XCTUnwrap(
-                        URL(string: "https://user@example.com/status")
-                    )
+                    try #require(URL(string: "https://user@example.com/status"))
                 )
             ),
         ]
@@ -240,14 +225,12 @@ final class ServerDiscoveryTests: XCTestCase {
                     NormalizedServerURL("https://example.com")
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? ServerDiscoveryError,
-                    expectedError
-                )
+                #expect(error as? ServerDiscoveryError == expectedError)
             }
         }
     }
 
+    @Test
     func testRejectsSecondRedirect() async throws {
         let transport = StubHTTPTransport(
             responses: [
@@ -268,13 +251,11 @@ final class ServerDiscoveryTests: XCTestCase {
                 NormalizedServerURL("https://example.com")
             )
         ) { error in
-            XCTAssertEqual(
-                error as? ServerDiscoveryError,
-                .tooManyRedirects
-            )
+            #expect(error as? ServerDiscoveryError == .tooManyRedirects)
         }
     }
 
+    @Test
     func testRejectsInvalidServerResponses() async throws {
         let cases: [(Data, Int, ServerDiscoveryError)] = [
             (Data(), 503, .unexpectedHTTPStatus(503)),
@@ -318,25 +299,21 @@ final class ServerDiscoveryTests: XCTestCase {
                     NormalizedServerURL("https://example.com")
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? ServerDiscoveryError,
-                    expectedError
-                )
+                #expect(error as? ServerDiscoveryError == expectedError)
             }
         }
     }
 
+    @Test
     func testServerVersionOrderingAndPrereleaseParsing() throws {
-        let minimum = try XCTUnwrap(AudiobookshelfServerVersion("2.26.0"))
-        let newer = try XCTUnwrap(
-            AudiobookshelfServerVersion("2.36.0-beta.1")
-        )
+        let minimum = try #require(AudiobookshelfServerVersion("2.26.0"))
+        let newer = try #require(AudiobookshelfServerVersion("2.36.0-beta.1"))
 
-        XCTAssertLessThan(minimum, newer)
-        XCTAssertEqual(newer.description, "2.36.0-beta.1")
-        XCTAssertNil(AudiobookshelfServerVersion("2.36"))
-        XCTAssertNil(AudiobookshelfServerVersion("2.x.0"))
-        XCTAssertNil(AudiobookshelfServerVersion(""))
+        #expect(minimum < newer)
+        #expect(newer.description == "2.36.0-beta.1")
+        #expect(AudiobookshelfServerVersion("2.36") == nil)
+        #expect(AudiobookshelfServerVersion("2.x.0") == nil)
+        #expect(AudiobookshelfServerVersion("") == nil)
     }
 
     private static let validStatus = statusJSON()

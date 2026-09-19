@@ -1,41 +1,38 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class MetadataEditingTests: XCTestCase {
+@Suite(.serialized)
+final class MetadataEditingTests {
+    @Test
     func testBookDetailSummaryMapsAvailableDomainFields() {
         let detail = fixtureDetail()
         let summary = detail.summary
 
-        XCTAssertEqual(summary.id, detail.id)
-        XCTAssertEqual(summary.libraryID, detail.libraryID)
-        XCTAssertEqual(summary.title, detail.title)
-        XCTAssertEqual(summary.subtitle, detail.subtitle)
-        XCTAssertEqual(summary.authorName, detail.authors.first?.name)
-        XCTAssertEqual(summary.narratorName, detail.narrators.first)
-        XCTAssertEqual(summary.seriesName, detail.series.first?.name)
-        XCTAssertEqual(summary.authors, detail.authors)
-        XCTAssertEqual(summary.series, detail.series)
-        XCTAssertNil(summary.collapsedSeries)
-        XCTAssertEqual(summary.genres, detail.genres)
-        XCTAssertEqual(summary.publisher, detail.publisher)
-        XCTAssertEqual(summary.publishedYear, detail.publishedYear)
-        XCTAssertEqual(summary.duration, detail.duration)
-        XCTAssertEqual(summary.trackCount, detail.trackCount)
-        XCTAssertEqual(summary.chapterCount, detail.chapters.count)
-        XCTAssertEqual(
-            summary.addedAtMilliseconds,
-            detail.addedAtMilliseconds
-        )
-        XCTAssertEqual(
-            summary.updatedAtMilliseconds,
-            detail.updatedAtMilliseconds
-        )
-        XCTAssertEqual(summary.isExplicit, detail.isExplicit)
-        XCTAssertEqual(summary.isAbridged, detail.isAbridged)
+        #expect(summary.id == detail.id)
+        #expect(summary.libraryID == detail.libraryID)
+        #expect(summary.title == detail.title)
+        #expect(summary.subtitle == detail.subtitle)
+        #expect(summary.authorName == detail.authors.first?.name)
+        #expect(summary.narratorName == detail.narrators.first)
+        #expect(summary.seriesName == detail.series.first?.name)
+        #expect(summary.authors == detail.authors)
+        #expect(summary.series == detail.series)
+        #expect(summary.collapsedSeries == nil)
+        #expect(summary.genres == detail.genres)
+        #expect(summary.publisher == detail.publisher)
+        #expect(summary.publishedYear == detail.publishedYear)
+        #expect(summary.duration == detail.duration)
+        #expect(summary.trackCount == detail.trackCount)
+        #expect(summary.chapterCount == detail.chapters.count)
+        #expect(summary.addedAtMilliseconds == detail.addedAtMilliseconds)
+        #expect(summary.updatedAtMilliseconds == detail.updatedAtMilliseconds)
+        #expect(summary.isExplicit == detail.isExplicit)
+        #expect(summary.isAbridged == detail.isAbridged)
     }
 
+    @Test
     func testPatchEncodesOnlyChangedFieldsAndExplicitNulls() throws {
         let detail = fixtureDetail()
         var draft = BookMetadataDraft(detail: detail)
@@ -48,30 +45,25 @@ final class MetadataEditingTests: XCTestCase {
             baseline: detail,
             draft: draft
         )
-        let object = try XCTUnwrap(
+        let object = try #require(
             JSONSerialization.jsonObject(
                 with: JSONEncoder().encode(patch)
-            ) as? [String: Any]
-        )
-        let metadata = try XCTUnwrap(
-            object["metadata"] as? [String: Any]
-        )
+            ) as? [String: Any])
+        let metadata = try #require(object["metadata"] as? [String: Any])
 
-        XCTAssertFalse(patch.isEmpty)
-        XCTAssertEqual(Set(object.keys), ["metadata", "tags"])
-        XCTAssertEqual(
-            Set(metadata.keys),
-            ["title", "subtitle", "authors"]
-        )
-        XCTAssertEqual(metadata["title"] as? String, "Updated title")
-        XCTAssertTrue(metadata["subtitle"] is NSNull)
-        XCTAssertEqual(
-            metadata["authors"] as? [[String: String]],
-            [["name": "Second Author"]]
-        )
-        XCTAssertEqual(object["tags"] as? [String], ["favorite"])
+        #expect(!(patch.isEmpty))
+        #expect(Set(object.keys) == ["metadata", "tags"])
+        #expect(Set(metadata.keys) == ["title", "subtitle", "authors"])
+        #expect(metadata["title"] as? String == "Updated title")
+        #expect(metadata["subtitle"] is NSNull)
+        #expect(
+            metadata["authors"] as? [[String: String]] == [
+                ["name": "Second Author"]
+            ])
+        #expect(object["tags"] as? [String] == ["favorite"])
     }
 
+    @Test
     func testPatchDetectsChangedServerRevision() throws {
         let detail = fixtureDetail()
         var draft = BookMetadataDraft(detail: detail)
@@ -109,10 +101,11 @@ final class MetadataEditingTests: XCTestCase {
             progress: detail.progress
         )
 
-        XCTAssertFalse(patch.isStale(comparedTo: detail))
-        XCTAssertTrue(patch.isStale(comparedTo: latest))
+        #expect(!(patch.isStale(comparedTo: detail)))
+        #expect(patch.isStale(comparedTo: latest))
     }
 
+    @Test
     func testUpdateSendsAuthenticatedPatchToPrefixedRoute() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = MetadataTestTransport(
@@ -150,35 +143,28 @@ final class MetadataEditingTests: XCTestCase {
         )
 
         let recordedRequest = await transport.recordedRequest()
-        let request = try XCTUnwrap(recordedRequest)
-        XCTAssertEqual(request.httpMethod, "PATCH")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://books.example/audiobookshelf/api/items/item-1/media"
+        let request = try #require(recordedRequest)
+        #expect(request.httpMethod == "PATCH")
+        #expect(
+            request.url?.absoluteString
+                == "https://books.example/audiobookshelf/api/items/item-1/media"
         )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Content-Type"),
-            "application/json"
-        )
-        let body = try XCTUnwrap(request.httpBody)
-        let object = try XCTUnwrap(
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(
+            request.value(forHTTPHeaderField: "Content-Type")
+                == "application/json")
+        let body = try #require(request.httpBody)
+        let object = try #require(
             JSONSerialization.jsonObject(with: body)
-                as? [String: Any]
-        )
-        let metadata = try XCTUnwrap(
-            object["metadata"] as? [String: Any]
-        )
-        XCTAssertEqual(Set(metadata.keys), ["publisher"])
-        XCTAssertEqual(
-            metadata["publisher"] as? String,
-            "New Publisher"
-        )
+                as? [String: Any])
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        #expect(Set(metadata.keys) == ["publisher"])
+        #expect(metadata["publisher"] as? String == "New Publisher")
     }
 
+    @Test
     func testCoverUploadUsesAuthenticatedMultipartContract() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = MetadataTestTransport(
@@ -212,36 +198,34 @@ final class MetadataEditingTests: XCTestCase {
         )
 
         let recordedRequest = await transport.recordedRequest()
-        let request = try XCTUnwrap(recordedRequest)
-        let contentType = try XCTUnwrap(
-            request.value(forHTTPHeaderField: "Content-Type")
+        let request = try #require(recordedRequest)
+        let contentType = try #require(
+            request.value(forHTTPHeaderField: "Content-Type"))
+        let body = try #require(request.httpBody)
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.url?.absoluteString
+                == "https://books.example/audiobookshelf/api/items/item-1/cover"
         )
-        let body = try XCTUnwrap(request.httpBody)
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://books.example/audiobookshelf/api/items/item-1/cover"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertTrue(
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(
             contentType.hasPrefix(
                 "multipart/form-data; boundary=Bleat-"
             ))
-        XCTAssertNotNil(
+        #expect(
             body.range(
                 of: Data(
                     ("Content-Disposition: form-data; "
                         + "name=\"cover\"; filename=\"cover.jpg\"\r\n"
                         + "Content-Type: image/jpeg\r\n\r\n").utf8
                 )
-            )
-        )
-        XCTAssertNotNil(body.range(of: jpeg))
+            ) != nil)
+        #expect(body.range(of: jpeg) != nil)
     }
 
+    @Test
     func testBookDeletionUsesAuthenticatedPrefixedContract() async throws {
         for (mode, expectedURL) in [
             (
@@ -279,17 +263,17 @@ final class MetadataEditingTests: XCTestCase {
             )
 
             let recordedRequest = await transport.recordedRequest()
-            let request = try XCTUnwrap(recordedRequest)
-            XCTAssertEqual(request.httpMethod, "DELETE")
-            XCTAssertEqual(request.url?.absoluteString, expectedURL)
-            XCTAssertEqual(
-                request.value(forHTTPHeaderField: "Authorization"),
-                "Bearer access-token"
-            )
-            XCTAssertNil(request.httpBody)
+            let request = try #require(recordedRequest)
+            #expect(request.httpMethod == "DELETE")
+            #expect(request.url?.absoluteString == expectedURL)
+            #expect(
+                request.value(forHTTPHeaderField: "Authorization")
+                    == "Bearer access-token")
+            #expect(request.httpBody == nil)
         }
     }
 
+    @Test
     func testBookDeletionMapsPermissionAndMissingItemStatuses() async throws {
         for (status, expectedError) in [
             (403, BookDeletionError.permissionDenied),
@@ -321,9 +305,9 @@ final class MetadataEditingTests: XCTestCase {
                     itemID: LibraryItemID(rawValue: "item-1"),
                     mode: .libraryRecordOnly
                 )
-                XCTFail("Expected deletion to fail for status \(status)")
+                Issue.record("Expected deletion to fail for status \(status)")
             } catch let error as BookDeletionError {
-                XCTAssertEqual(error, expectedError)
+                #expect(error == expectedError)
             }
         }
     }

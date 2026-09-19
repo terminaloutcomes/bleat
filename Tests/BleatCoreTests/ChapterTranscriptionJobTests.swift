@@ -1,13 +1,15 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class ChapterTranscriptionJobTests: XCTestCase {
+@Suite(.serialized)
+final class ChapterTranscriptionJobTests {
     private let account = AccountID(rawValue: "account")
     private let item = LibraryItemID(rawValue: "book")
 
+    @Test
     func testDiskReopenRetainsRunningSelectionAndAtomicCompletion() async throws
     {
         let directory = FileManager.default.temporaryDirectory
@@ -45,17 +47,18 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         let reopened = ChapterTranscriptCache(
             modelContainer: try container(url: url))
         let restored = try await reopened.job(accountID: account, itemID: item)
-        XCTAssertEqual(restored, saved)
-        XCTAssertEqual(restored?.completedChapterIDs, [1])
-        XCTAssertEqual(restored?.unfinishedChapters.map(\.id), [3])
+        #expect(restored == saved)
+        #expect(restored?.completedChapterIDs == [1])
+        #expect(restored?.unfinishedChapters.map(\.id) == [3])
         let transcripts = try await reopened.transcripts(
             accountID: account, itemID: item)
-        XCTAssertEqual(
+        #expect(
             CachedChapterTranscriptSearch.matches(
                 query: "saved", in: transcripts
-            ).count, 1)
+            ).count == 1)
     }
 
+    @Test
     func testRejectsCompletionWithoutTranscriptAndStaleWrites() async throws {
         let cache = ChapterTranscriptCache(modelContainer: try container())
         let initial = Self.job()
@@ -68,20 +71,21 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         do {
             try await cache.saveJob(
                 next, replacing: initial, accountID: account, itemID: item)
-            XCTFail("Completion must require its transcript")
-        } catch { XCTAssertEqual(error, .job(.invalidCheckpoint)) }
+            Issue.record("Completion must require its transcript")
+        } catch { #expect(error == .job(.invalidCheckpoint)) }
         let retained = try await cache.job(accountID: account, itemID: item)
-        XCTAssertEqual(retained, initial)
+        #expect(retained == initial)
         next.chapters[0].state = .running
         try await cache.saveJob(
             next, replacing: initial, accountID: account, itemID: item)
         do {
             try await cache.saveJob(
                 next, replacing: initial, accountID: account, itemID: item)
-            XCTFail("Stale writes must be rejected")
-        } catch { XCTAssertEqual(error, .job(.staleRevision)) }
+            Issue.record("Stale writes must be rejected")
+        } catch { #expect(error == .job(.staleRevision)) }
     }
 
+    @Test
     func testBookAndAccountRemovalDeleteJobsOnlyInTheirScope() async throws {
         let cache = ChapterTranscriptCache(modelContainer: try container())
         let other = AccountID(rawValue: "other")
@@ -91,18 +95,19 @@ final class ChapterTranscriptionJobTests: XCTestCase {
             Self.job(), replacing: nil, accountID: other, itemID: item)
         let present = try await cache.containsData(
             accountID: account, itemID: item)
-        XCTAssertTrue(present)
+        #expect(present)
         try await cache.removeBook(accountID: account, itemID: item)
         let removed = try await cache.job(accountID: account, itemID: item)
         let retained = try await cache.job(accountID: other, itemID: item)
-        XCTAssertNil(removed)
-        XCTAssertNotNil(retained)
+        #expect(removed == nil)
+        #expect(retained != nil)
         try await cache.removeAccount(other)
         let absent = try await cache.containsData(
             accountID: other, itemID: item)
-        XCTAssertFalse(absent)
+        #expect(!(absent))
     }
 
+    @Test
     func testCurrentStoreUpgradesWithoutInventingLegacyJobs() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -137,13 +142,14 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         let job = try await cache.job(accountID: account, itemID: item)
         let transcripts = try await cache.transcripts(
             accountID: account, itemID: item)
-        XCTAssertEqual(legacy?.completedChapterIDs, [1])
-        XCTAssertNil(job)
-        XCTAssertEqual(transcripts.count, 1)
+        #expect(legacy?.completedChapterIDs == [1])
+        #expect(job == nil)
+        #expect(transcripts.count == 1)
         try await cache.saveJob(
             Self.job(), replacing: nil, accountID: account, itemID: item)
     }
 
+    @Test
     func testReadOnlyCommitFailureRollsBackTranscriptAndCheckpoint()
         async throws
     {
@@ -187,23 +193,24 @@ final class ChapterTranscriptionJobTests: XCTestCase {
                     completed, replacing: running,
                     transcript: Self.transcript(), accountID: account,
                     itemID: item)
-                XCTFail("Read-only store must reject the transaction")
-            } catch { XCTAssertEqual(error, .persistenceFailed) }
+                Issue.record("Read-only store must reject the transaction")
+            } catch { #expect(error == .persistenceFailed) }
             let job = try await cache.job(accountID: account, itemID: item)
             let transcripts = try await cache.transcripts(
                 accountID: account, itemID: item)
-            XCTAssertEqual(job, running)
-            XCTAssertTrue(transcripts.isEmpty)
+            #expect(job == running)
+            #expect(transcripts.isEmpty)
         }
         let cache = ChapterTranscriptCache(
             modelContainer: try container(url: url))
         let job = try await cache.job(accountID: account, itemID: item)
         let transcripts = try await cache.transcripts(
             accountID: account, itemID: item)
-        XCTAssertEqual(job, running)
-        XCTAssertTrue(transcripts.isEmpty)
+        #expect(job == running)
+        #expect(transcripts.isEmpty)
     }
 
+    @Test
     func testIdentityMigrationMovesJobAndPreservesConflictingJobs() async throws
     {
         let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
@@ -223,8 +230,8 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         ])
         let moved = try await cache.job(accountID: canonical, itemID: item)
         let old = try await cache.job(accountID: account, itemID: item)
-        XCTAssertEqual(moved, original)
-        XCTAssertNil(old)
+        #expect(moved == original)
+        #expect(old == nil)
         let secondLegacy = AccountID(rawValue: "second-legacy")
         let conflicting = Self.job()
         try await cache.saveJob(
@@ -236,10 +243,11 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         let preserved = try await cache.job(
             accountID: secondLegacy, itemID: item)
         let unchanged = try await cache.job(accountID: canonical, itemID: item)
-        XCTAssertEqual(preserved, conflicting)
-        XCTAssertEqual(unchanged, original)
+        #expect(preserved == conflicting)
+        #expect(unchanged == original)
     }
 
+    @Test
     func testStaleCheckpointCannotRecreateDeletedJob() async throws {
         let cache = ChapterTranscriptCache(modelContainer: try container())
         let original = Self.job()
@@ -251,10 +259,11 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         do {
             try await cache.saveJob(
                 next, replacing: original, accountID: account, itemID: item)
-            XCTFail("Deleted job must not be recreated by a stale update")
-        } catch { XCTAssertEqual(error, .job(.staleRevision)) }
+            Issue.record("Deleted job must not be recreated by a stale update")
+        } catch { #expect(error == .job(.staleRevision)) }
     }
 
+    @Test
     func testRejectsMalformedCheckpointWithoutHidingTranscriptText()
         async throws
     {
@@ -274,33 +283,35 @@ final class ChapterTranscriptionJobTests: XCTestCase {
         try context.save()
         do {
             _ = try await cache.job(accountID: account, itemID: item)
-            XCTFail("Incomplete checkpoint must be rejected")
-        } catch { XCTAssertEqual(error, .job(.invalidCheckpoint)) }
+            Issue.record("Incomplete checkpoint must be rejected")
+        } catch { #expect(error == .job(.invalidCheckpoint)) }
         let transcripts = try await cache.transcripts(
             accountID: account, itemID: item)
-        XCTAssertEqual(transcripts.count, 1)
+        #expect(transcripts.count == 1)
     }
 
     @MainActor
+    @Test
     func testPersistenceOperationsStayOffMainThreadWhenCreatedOnMainActor()
         async throws
     {
         let cache = ChapterTranscriptCache(modelContainer: try container())
         let wasMain = try await cache.saveJobAndInspectThread(
             Self.job(), accountID: account, itemID: item)
-        XCTAssertFalse(wasMain)
+        #expect(!(wasMain))
     }
 
+    @Test
     func testRejectsExhaustedRevisionWithoutOverflow() async throws {
         let cache = ChapterTranscriptCache(modelContainer: try container())
         var job = Self.job()
         job.revision = Int.max
-        XCTAssertFalse(job.isValid)
+        #expect(!(job.isValid))
         do {
             try await cache.saveJob(
                 job, replacing: nil, accountID: account, itemID: item)
-            XCTFail("Exhausted revisions must be rejected")
-        } catch { XCTAssertEqual(error, .job(.invalidCheckpoint)) }
+            Issue.record("Exhausted revisions must be rejected")
+        } catch { #expect(error == .job(.invalidCheckpoint)) }
     }
 
     private func container(url: URL? = nil) throws -> ModelContainer {

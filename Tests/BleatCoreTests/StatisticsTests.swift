@@ -1,26 +1,26 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class StatisticsTests: XCTestCase {
+@Suite(.serialized)
+final class StatisticsTests {
+    @Test
     func testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()
         throws
     {
         var accumulator = ListeningAccumulator()
         let start = Date(timeIntervalSince1970: 1_000)
 
-        XCTAssertEqual(
+        #expect(
             try accumulator.ingest(
                 sample(
                     observedAt: start,
                     monotonicTime: 10,
                     position: 20
                 )
-            ),
-            []
-        )
+            ) == [])
         let slices = try accumulator.ingest(
             sample(
                 observedAt: start.addingTimeInterval(6),
@@ -28,9 +28,9 @@ final class StatisticsTests: XCTestCase {
                 position: 29
             )
         )
-        XCTAssertEqual(slices.count, 1)
-        XCTAssertEqual(slices[0].realSeconds, 6, accuracy: 0.001)
-        XCTAssertEqual(slices[0].audiobookSeconds, 9, accuracy: 0.001)
+        #expect(slices.count == 1)
+        #expect(abs((slices[0].realSeconds) - (6)) <= 0.001)
+        #expect(abs((slices[0].audiobookSeconds) - (9)) <= 0.001)
 
         _ = try accumulator.ingest(
             sample(
@@ -40,9 +40,10 @@ final class StatisticsTests: XCTestCase {
                 generation: 2
             )
         )
-        XCTAssertTrue(accumulator.finish().isEmpty)
+        #expect(accumulator.finish().isEmpty)
     }
 
+    @Test
     func testRepositorySummarizesAndAccountsForDeliveredTime()
         async throws
     {
@@ -78,9 +79,9 @@ final class StatisticsTests: XCTestCase {
         let summary = try await repository.summary(
             query: StatisticsQuery(accountID: accountID)
         )
-        XCTAssertEqual(summary.realSeconds, 0, accuracy: 0.001)
-        XCTAssertEqual(summary.booksCompleted, 1)
-        XCTAssertEqual(summary.finishedRuntime, 3_600, accuracy: 0.001)
+        #expect(abs((summary.realSeconds) - (0)) <= 0.001)
+        #expect(summary.booksCompleted == 1)
+        #expect(abs((summary.finishedRuntime) - (3_600)) <= 0.001)
 
         try await repository.record(
             sample(
@@ -101,7 +102,7 @@ final class StatisticsTests: XCTestCase {
             accountID: accountID,
             sessionID: sessionID
         )
-        XCTAssertEqual(pending, 6, accuracy: 0.001)
+        #expect(abs((pending) - (6)) <= 0.001)
         try await repository.confirmSync(
             accountID: accountID,
             sessionID: sessionID,
@@ -111,9 +112,10 @@ final class StatisticsTests: XCTestCase {
             accountID: accountID,
             sessionID: sessionID
         )
-        XCTAssertEqual(remaining, 0, accuracy: 0.001)
+        #expect(abs((remaining) - (0)) <= 0.001)
     }
 
+    @Test
     func testSessionIdentityIncludesAccount() async throws {
         let repository = try repository()
         let start = Date(timeIntervalSince1970: 2_000)
@@ -150,10 +152,11 @@ final class StatisticsTests: XCTestCase {
 
         let summary = try await repository.summary()
 
-        XCTAssertEqual(summary.sessions, 2)
-        XCTAssertEqual(summary.realSeconds, 12, accuracy: 0.001)
+        #expect(summary.sessions == 2)
+        #expect(abs((summary.realSeconds) - (12)) <= 0.001)
     }
 
+    @Test
     func testAmbiguousSyncKeepsExactLocalTimeAndBoundsAllDevices()
         async throws
     {
@@ -179,10 +182,10 @@ final class StatisticsTests: XCTestCase {
             accountID: accountID, sessionID: sessionID, realSeconds: 2
         )
         let uncertain = try await repository.summary()
-        XCTAssertEqual(uncertain.localRealSeconds, 6)
-        XCTAssertEqual(uncertain.allDeviceBounds.lower, 4)
-        XCTAssertEqual(uncertain.allDeviceBounds.upper, 6)
-        XCTAssertEqual(uncertain.realTimeCoverage, .approximate)
+        #expect(uncertain.localRealSeconds == 6)
+        #expect(uncertain.allDeviceBounds.lower == 4)
+        #expect(uncertain.allDeviceBounds.upper == 6)
+        #expect(uncertain.realTimeCoverage == .approximate)
 
         try await repository.upsertRemoteSessions([
             RemoteListeningSession(
@@ -193,10 +196,11 @@ final class StatisticsTests: XCTestCase {
             )
         ])
         let reconciled = try await repository.summary()
-        XCTAssertEqual(reconciled.allDeviceBounds.lower, 6)
-        XCTAssertEqual(reconciled.allDeviceBounds.upper, 6)
+        #expect(reconciled.allDeviceBounds.lower == 6)
+        #expect(reconciled.allDeviceBounds.upper == 6)
     }
 
+    @Test
     func testInvalidArchiveLeavesLedgerUnchanged() async throws {
         let repository = try repository()
         let invalid = RemoteListeningSession(
@@ -210,14 +214,15 @@ final class StatisticsTests: XCTestCase {
                 StatisticsArchive(
                     slices: [], completions: [], remoteSessions: [invalid]
                 ))
-            XCTFail("Invalid archive should fail")
+            Issue.record("Invalid archive should fail")
         } catch let error {
-            XCTAssertEqual(error, .invalidArchive)
+            #expect(error == .invalidArchive)
         }
         let archive = try await repository.archive()
-        XCTAssertTrue(archive.remoteSessions.isEmpty)
+        #expect(archive.remoteSessions.isEmpty)
     }
 
+    @Test
     func testPortableArchiveHidesSessionIDsAndReimportDoesNotDuplicate()
         async throws
     {
@@ -233,27 +238,28 @@ final class StatisticsTests: XCTestCase {
         try await repository.upsertRemoteSessions([remote])
         let portable = try await repository.archive().portableRedacted()
         let json = try JSONEncoder().encode(portable)
-        XCTAssertFalse(
-            String(decoding: json, as: UTF8.self)
-                .contains(rawSession.rawValue))
-        XCTAssertTrue(
+        #expect(
+            !(String(decoding: json, as: UTF8.self)
+                .contains(rawSession.rawValue)))
+        #expect(
             portable.remoteSessions[0].id.rawValue
                 .hasPrefix("portable:"))
         try await repository.importArchive(portable)
         try await repository.importArchive(portable)
         let result = try await repository.archive()
-        XCTAssertEqual(result.remoteSessions.count, 1)
-        XCTAssertEqual(result.remoteSessions.first?.id, rawSession)
+        #expect(result.remoteSessions.count == 1)
+        #expect(result.remoteSessions.first?.id == rawSession)
 
         let cleanRepository = try self.repository()
         try await cleanRepository.importArchive(portable)
         try await cleanRepository.upsertRemoteSessions([remote])
         let cleanArchive = try await cleanRepository.archive()
-        XCTAssertEqual(cleanArchive.remoteSessions.count, 1)
+        #expect(cleanArchive.remoteSessions.count == 1)
         let cleanSummary = try await cleanRepository.summary()
-        XCTAssertEqual(cleanSummary.realSeconds, 10)
+        #expect(cleanSummary.realSeconds == 10)
     }
 
+    @Test
     func testRangeResetPreservesOtherSessionAccounting() async throws {
         let repository = try repository()
         let early = Date(timeIntervalSince1970: 5_000)
@@ -291,11 +297,12 @@ final class StatisticsTests: XCTestCase {
         let pending = try await repository.pendingRealSeconds(
             accountID: accountID, sessionID: otherSession
         )
-        XCTAssertEqual(pending, 0)
+        #expect(pending == 0)
         let retained = try await repository.archive()
-        XCTAssertEqual(retained.slices.count, 1)
+        #expect(retained.slices.count == 1)
     }
 
+    @Test
     func testRangeResetRejectsPartiallySyncedSplitSession() async throws {
         let repository = try repository()
         let early = Date(timeIntervalSince1970: 7_000)
@@ -326,18 +333,20 @@ final class StatisticsTests: XCTestCase {
                 query: StatisticsQuery(
                     accountID: accountID, start: early, end: later
                 ))
-            XCTFail("Expected an ambiguous split-session reset to be rejected")
+            Issue.record(
+                "Expected an ambiguous split-session reset to be rejected")
         } catch let error {
-            XCTAssertEqual(error, .partialSessionResetRequiresFullSession)
+            #expect(error == .partialSessionResetRequiresFullSession)
         }
         let pending = try await repository.pendingRealSeconds(
             accountID: accountID, sessionID: sessionID
         )
-        XCTAssertEqual(pending, 10)
+        #expect(pending == 10)
         let archive = try await repository.archive()
-        XCTAssertEqual(archive.slices.count, 2)
+        #expect(archive.slices.count == 2)
     }
 
+    @Test
     func testRangeResetRejectsMixedConfirmedAndUncertainSplitSession()
         async throws
     {
@@ -373,14 +382,16 @@ final class StatisticsTests: XCTestCase {
                     accountID: accountID, start: later,
                     end: later.addingTimeInterval(86_400)
                 ))
-            XCTFail("Expected an ambiguous split-session reset to be rejected")
+            Issue.record(
+                "Expected an ambiguous split-session reset to be rejected")
         } catch let error {
-            XCTAssertEqual(error, .partialSessionResetRequiresFullSession)
+            #expect(error == .partialSessionResetRequiresFullSession)
         }
         let archive = try await repository.archive()
-        XCTAssertEqual(archive.slices.count, 2)
+        #expect(archive.slices.count == 2)
     }
 
+    @Test
     func testRangeResetCannotResendConfirmedRetainedTime() async throws {
         let repository = try repository()
         let early = Date(timeIntervalSince1970: 11_000)
@@ -411,16 +422,16 @@ final class StatisticsTests: XCTestCase {
                     accountID: accountID, start: later,
                     end: later.addingTimeInterval(86_400)
                 ))
-            XCTFail("Expected a split-session reset to be rejected")
+            Issue.record("Expected a split-session reset to be rejected")
         } catch let error {
-            XCTAssertEqual(error, .partialSessionResetRequiresFullSession)
+            #expect(error == .partialSessionResetRequiresFullSession)
         }
         let archive = try await repository.archive()
         let pending = try await repository.pendingRealSeconds(
             accountID: accountID, sessionID: sessionID
         )
-        XCTAssertEqual(archive.slices.count, 2)
-        XCTAssertEqual(pending, 10)
+        #expect(archive.slices.count == 2)
+        #expect(pending == 10)
     }
 
     private let accountID = AccountID(rawValue: "account")

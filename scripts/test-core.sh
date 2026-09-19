@@ -69,7 +69,7 @@ bleat_require_boolean BLEAT_SKIP_SIMULATOR "${bleat_skip_simulator}"
 
 if [[ "${bleat_skip_host}" == "0" ]]; then
     "${bleat_script_dir}/test-build-number.sh"
-    swift test --enable-code-coverage
+    "${bleat_script_dir}/test-host.sh"
     swift build -c release
     "${bleat_script_dir}/test-paid-developer-build-modes.sh"
 fi

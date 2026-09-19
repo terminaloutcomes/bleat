@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class PersistenceMigrationTests: XCTestCase {
+@Suite(.serialized)
+final class PersistenceMigrationTests {
+    @Test
     func testReleasedStoreFixturesOpenWithCurrentCatalog() throws {
         for version in [
             BleatPersistenceSchemaVersion.version011,
@@ -65,14 +67,12 @@ final class PersistenceMigrationTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(accounts.map(\.accountID), fixture.accounts.map(\.id))
-        XCTAssertEqual(collections.map(\.accountID), fixture.accounts.map(\.id))
-        XCTAssertEqual(
+        #expect(accounts.map(\.accountID) == fixture.accounts.map(\.id))
+        #expect(collections.map(\.accountID) == fixture.accounts.map(\.id))
+        #expect(
             try currentContext.fetchCount(
                 FetchDescriptor<CachedChapterTranscriptionTaskRecord>()
-            ),
-            version == .version011 ? 0 : 1
-        )
+            ) == (version == .version011 ? 0 : 1))
     }
 
     private func container(
@@ -146,12 +146,11 @@ final class PersistenceMigrationTests: XCTestCase {
         for version: BleatPersistenceSchemaVersion
     ) throws -> PersistenceMigrationFixture {
         let filename = "\(version.rawValue).json"
-        let url = try XCTUnwrap(
+        let url = try #require(
             Bundle.module.urls(
                 forResourcesWithExtension: "json",
                 subdirectory: nil
-            )?.first(where: { $0.lastPathComponent == filename })
-        )
+            )?.first(where: { $0.lastPathComponent == filename }))
         return try JSONDecoder().decode(
             PersistenceMigrationFixture.self,
             from: Data(contentsOf: url)

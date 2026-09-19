@@ -1,96 +1,102 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class ServerURLTests: XCTestCase {
+@Suite(.serialized)
+final class ServerURLTests {
+    @Test
     func testCodableRoundTripRevalidatesStoredURL() throws {
         let server = try NormalizedServerURL(
             "https://Example.COM/audiobookshelf/"
         )
         let data = try JSONEncoder().encode(server)
 
-        XCTAssertEqual(
+        #expect(
             try JSONDecoder().decode(
                 NormalizedServerURL.self,
                 from: data
-            ),
-            server
-        )
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(
-                NormalizedServerURL.self,
-                from: Data("\"http://example.com\"".utf8)
-            )
-        )
+            ) == server)
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(
+                    NormalizedServerURL.self,
+                    from: Data("\"http://example.com\"".utf8)
+                )
+            })
     }
 
+    @Test
     func testNormalizesHostAndFinalTrailingSlash() throws {
         let server = try NormalizedServerURL(
             "  HTTPS://example.com:8443/audiobookshelf/  "
         )
 
-        XCTAssertEqual(
-            server.url.absoluteString,
-            "https://example.com:8443/audiobookshelf"
-        )
+        #expect(
+            server.url.absoluteString
+                == "https://example.com:8443/audiobookshelf")
     }
 
+    @Test
     func testRemovesQueryAndFragment() throws {
         let server = try NormalizedServerURL(
             "https://example.com/prefix?token=discard#fragment"
         )
 
-        XCTAssertEqual(
-            server.url.absoluteString,
-            "https://example.com/prefix"
-        )
+        #expect(server.url.absoluteString == "https://example.com/prefix")
     }
 
+    @Test
     func testRootPathNormalizesWithoutTrailingSlash() throws {
         let server = try NormalizedServerURL("https://example.com/")
 
-        XCTAssertEqual(server.url.absoluteString, "https://example.com")
+        #expect(server.url.absoluteString == "https://example.com")
     }
 
+    @Test
     func testRemovesOnlyOneFinalTrailingSlash() throws {
         let server = try NormalizedServerURL(
             "https://example.com/audiobookshelf//"
         )
 
-        XCTAssertEqual(
-            server.url.absoluteString,
-            "https://example.com/audiobookshelf/"
-        )
+        #expect(
+            server.url.absoluteString == "https://example.com/audiobookshelf/")
     }
 
+    @Test
     func testPreservesEncodedPathPrefix() throws {
         let server = try NormalizedServerURL(
             "https://example.com/audio%20books/"
         )
 
-        XCTAssertEqual(
-            server.url.absoluteString,
-            "https://example.com/audio%20books"
-        )
+        #expect(
+            server.url.absoluteString == "https://example.com/audio%20books")
     }
 
+    @Test
     func testRejectsEmptyInput() {
-        XCTAssertThrowsError(
-            try NormalizedServerURL(" \n ")
-        ) { error in
-            XCTAssertEqual(error as? ServerURLValidationError, .empty)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try NormalizedServerURL(" \n ") })
+        {
+            #expect(error as? ServerURLValidationError == .empty)
         }
     }
 
+    @Test
     func testRejectsMalformedInput() {
-        XCTAssertThrowsError(
-            try NormalizedServerURL("https://[not-an-ipv6-address")
-        ) { error in
-            XCTAssertEqual(error as? ServerURLValidationError, .malformed)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try NormalizedServerURL("https://[not-an-ipv6-address")
+            })
+        {
+            #expect(error as? ServerURLValidationError == .malformed)
         }
     }
 
+    @Test
     func testRejectsNonHTTPSAndMissingScheme() {
         assertValidationError(
             "http://example.com",
@@ -102,6 +108,7 @@ final class ServerURLTests: XCTestCase {
         )
     }
 
+    @Test
     func testRejectsMissingHost() {
         assertValidationError(
             "https:///audiobookshelf",
@@ -109,6 +116,7 @@ final class ServerURLTests: XCTestCase {
         )
     }
 
+    @Test
     func testRejectsEmbeddedCredentials() {
         assertValidationError(
             "https://user@example.com",
@@ -123,20 +131,15 @@ final class ServerURLTests: XCTestCase {
     private func assertValidationError(
         _ input: String,
         equals expected: ServerURLValidationError,
-        file: StaticString = #filePath,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        XCTAssertThrowsError(
-            try NormalizedServerURL(input),
-            file: file,
-            line: line
-        ) { error in
-            XCTAssertEqual(
-                error as? ServerURLValidationError,
-                expected,
-                file: file,
-                line: line
-            )
+        if let error = #expect(
+            throws: (any Error).self, sourceLocation: sourceLocation,
+            performing: { try NormalizedServerURL(input) })
+        {
+            #expect(
+                error as? ServerURLValidationError == expected,
+                sourceLocation: sourceLocation)
         }
     }
 }

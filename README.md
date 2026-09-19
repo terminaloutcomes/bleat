@@ -249,8 +249,8 @@ open Bleat.xcodeproj
 
 Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 **Product → Run** to launch the app or **Product → Test** to run the application
-unit and UI suites. Core package tests run through `swift test` or
-`scripts/test-core.sh`.
+unit and UI suites. Core package tests use Swift Testing through `scripts/test-host.sh` (including
+verified coverage export), or the full `scripts/test-core.sh` gate.
 
 If `xcodebuild -scheme Bleat` resolves to the Swift package's tests instead of
 the app suites, a locally generated scheme is shadowing the project scheme.
@@ -969,10 +969,10 @@ single-flight rotation, retry limits, 403 behavior, typed failures, and
 account isolation:
 
 ```sh
-swift test --filter AuthenticatedRequestTests
-swift test --filter LogoutTests
-swift test --filter AccountStoreTests
-swift test --filter AudiobookshelfAPITests
+swift test --disable-xctest --no-parallel --filter AuthenticatedRequestTests
+swift test --disable-xctest --no-parallel --filter LogoutTests
+swift test --disable-xctest --no-parallel --filter AccountStoreTests
+swift test --disable-xctest --no-parallel --filter AudiobookshelfAPITests
 ```
 
 The library persistence and repository suites cover relaunch, empty snapshots,
@@ -982,10 +982,10 @@ account/user-scoped expanded-detail offline reads, online persistence,
 fallback, cancellation, and typed cache/remote failures:
 
 ```sh
-swift test --filter LibraryCacheTests
-swift test --filter LibraryRepositoryTests
-swift test --filter LibrarySearchCoordinatorTests
-swift test --filter BookActionPolicyTests
+swift test --disable-xctest --no-parallel --filter LibraryCacheTests
+swift test --disable-xctest --no-parallel --filter LibraryRepositoryTests
+swift test --disable-xctest --no-parallel --filter LibrarySearchCoordinatorTests
+swift test --disable-xctest --no-parallel --filter BookActionPolicyTests
 ```
 
 The playback unit suite covers exact request fields, typed session decoding,
@@ -993,8 +993,8 @@ direct/HLS route resolution, durable local-session batches, path prefixes,
 unsafe returned paths, and typed failures:
 
 ```sh
-swift test --filter PlaybackSessionTests
-swift test --filter LocalPlaybackSessionTests
+swift test --disable-xctest --no-parallel --filter PlaybackSessionTests
+swift test --disable-xctest --no-parallel --filter LocalPlaybackSessionTests
 ```
 
 The metadata suite covers changed-field patch generation, replacement arrays,
@@ -1002,7 +1002,7 @@ explicit nulls, server revision detection, prefix-safe bearer authentication,
 and the exact update route:
 
 ```sh
-swift test --filter MetadataEditingTests
+swift test --disable-xctest --no-parallel --filter MetadataEditingTests
 ```
 
 The background-download foundation covers expanded-item plan decoding, safe
@@ -1011,8 +1011,8 @@ opaque account/book storage paths, protected atomic records, byte-exact final
 placement, relaunch reconciliation, invalid-state cleanup, and scoped deletion:
 
 ```sh
-swift test --filter BackgroundDownloadTests
-swift test --filter DownloadStorageTests
+swift test --disable-xctest --no-parallel --filter BackgroundDownloadTests
+swift test --disable-xctest --no-parallel --filter DownloadStorageTests
 ```
 
 The OIDC flow uses the server-provided button label and the registered

@@ -1,18 +1,18 @@
 import AuthenticationServices
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class OpenIDAuthenticationTests: XCTestCase {
+@Suite(.serialized)
+final class OpenIDAuthenticationTests {
     @MainActor
+    @Test
     func testSystemBrowserFactoryMapsProviderCompletions() throws {
-        let authorizationURL = try XCTUnwrap(
-            URL(string: "https://identity.example/authorize")
-        )
-        let callbackURL = try XCTUnwrap(
-            URL(string: "com.example.bleat://oauth-callback")
-        )
+        let authorizationURL = try #require(
+            URL(string: "https://identity.example/authorize"))
+        let callbackURL = try #require(
+            URL(string: "com.example.bleat://oauth-callback"))
         let cases:
             [(
                 URL?,
@@ -49,8 +49,8 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 )
             }
             let result = recorder.result()
-            XCTAssertEqual(result.callbackURL, expectedURL)
-            XCTAssertEqual(result.error, expectedError)
+            #expect(result.callbackURL == expectedURL)
+            #expect(result.error == expectedError)
         }
 
         let systemFactory =
@@ -59,9 +59,7 @@ final class OpenIDAuthenticationTests: XCTestCase {
             url: authorizationURL,
             callbackScheme: "com.example.bleat"
         ) { _, _ in }
-        XCTAssertTrue(
-            session is ASWebAuthenticationSession
-        )
+        #expect(session is ASWebAuthenticationSession)
 
         let anchor = ASPresentationAnchor()
         _ = SystemOpenIDBrowserSession(
@@ -70,18 +68,17 @@ final class OpenIDAuthenticationTests: XCTestCase {
     }
 
     @MainActor
+    @Test
     func testSystemBrowserSessionCompletesAndConfiguresSession()
         async throws
     {
-        let authorizationURL = try XCTUnwrap(
-            URL(string: "https://identity.example/authorize?opaque=1")
-        )
-        let callbackURL = try XCTUnwrap(
+        let authorizationURL = try #require(
+            URL(string: "https://identity.example/authorize?opaque=1"))
+        let callbackURL = try #require(
             URL(
                 string:
                     "com.example.bleat://oauth-callback?code=code&state=state"
-            )
-        )
+            ))
         let anchor = ASPresentationAnchor()
         let factory = OpenIDWebSessionFactory(
             behavior: .complete(callbackURL, nil)
@@ -96,36 +93,31 @@ final class OpenIDAuthenticationTests: XCTestCase {
             callbackScheme: "com.example.bleat"
         )
 
-        XCTAssertEqual(result, callbackURL)
-        let session = try XCTUnwrap(factory.sessions.first)
-        XCTAssertEqual(session.authorizationURL, authorizationURL)
-        XCTAssertEqual(
-            session.callbackScheme,
-            "com.example.bleat"
-        )
-        XCTAssertTrue(session.didStart)
-        XCTAssertFalse(session.prefersEphemeralWebBrowserSession)
+        #expect(result == callbackURL)
+        let session = try #require(factory.sessions.first)
+        #expect(session.authorizationURL == authorizationURL)
+        #expect(session.callbackScheme == "com.example.bleat")
+        #expect(session.didStart)
+        #expect(!(session.prefersEphemeralWebBrowserSession))
         let presentationSession = ASWebAuthenticationSession(
             url: authorizationURL,
             callbackURLScheme: "com.example.bleat"
         ) { _, _ in }
-        let presentationContext = try XCTUnwrap(
-            session.presentationContextProvider
-        )
-        XCTAssertTrue(
+        let presentationContext = try #require(
+            session.presentationContextProvider)
+        #expect(
             presentationContext.presentationAnchor(
                 for: presentationSession
-            ) === anchor
-        )
+            ) === anchor)
     }
 
     @MainActor
+    @Test
     func testSystemBrowserSessionRejectsMissingPresentationAnchor()
         async throws
     {
-        let authorizationURL = try XCTUnwrap(
-            URL(string: "https://identity.example/authorize")
-        )
+        let authorizationURL = try #require(
+            URL(string: "https://identity.example/authorize"))
         let factory = OpenIDWebSessionFactory(behavior: .wait)
         let browser = SystemOpenIDBrowserSession(
             anchorProvider: { nil },
@@ -137,23 +129,21 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 at: authorizationURL,
                 callbackScheme: "com.example.bleat"
             )
-            XCTFail("Expected missing presentation anchor failure")
+            Issue.record("Expected missing presentation anchor failure")
         } catch {
-            XCTAssertEqual(
-                error as? OpenIDBrowserError,
-                .presentationAnchorUnavailable
-            )
+            #expect(
+                error as? OpenIDBrowserError == .presentationAnchorUnavailable)
         }
-        XCTAssertTrue(factory.sessions.isEmpty)
+        #expect(factory.sessions.isEmpty)
     }
 
     @MainActor
+    @Test
     func testSystemBrowserSessionMapsCancellationAndFailure()
         async throws
     {
-        let authorizationURL = try XCTUnwrap(
-            URL(string: "https://identity.example/authorize")
-        )
+        let authorizationURL = try #require(
+            URL(string: "https://identity.example/authorize"))
         let cases: [(OpenIDWebSessionBehavior, OpenIDBrowserError)] = [
             (.complete(nil, .cancelled), .cancelled),
             (.complete(nil, .failed), .failed),
@@ -175,23 +165,20 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     at: authorizationURL,
                     callbackScheme: "com.example.bleat"
                 )
-                XCTFail("Expected system browser failure")
+                Issue.record("Expected system browser failure")
             } catch {
-                XCTAssertEqual(
-                    error as? OpenIDBrowserError,
-                    expectedError
-                )
+                #expect(error as? OpenIDBrowserError == expectedError)
             }
         }
     }
 
     @MainActor
+    @Test
     func testSystemBrowserSessionRejectsASecondActiveSession()
         async throws
     {
-        let authorizationURL = try XCTUnwrap(
-            URL(string: "https://identity.example/authorize")
-        )
+        let authorizationURL = try #require(
+            URL(string: "https://identity.example/authorize"))
         let factory = OpenIDWebSessionFactory(behavior: .wait)
         let browser = SystemOpenIDBrowserSession(
             anchorProvider: { ASPresentationAnchor() },
@@ -209,12 +196,9 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 at: authorizationURL,
                 callbackScheme: "com.example.bleat"
             )
-            XCTFail("Expected active-session rejection")
+            Issue.record("Expected active-session rejection")
         } catch {
-            XCTAssertEqual(
-                error as? OpenIDBrowserError,
-                .alreadyActive
-            )
+            #expect(error as? OpenIDBrowserError == .alreadyActive)
         }
 
         factory.sessions[0].finish(
@@ -223,23 +207,19 @@ final class OpenIDAuthenticationTests: XCTestCase {
         )
         do {
             _ = try await firstCallback
-            XCTFail("Expected cancellation")
+            Issue.record("Expected cancellation")
         } catch {
-            XCTAssertEqual(
-                error as? OpenIDBrowserError,
-                .cancelled
-            )
+            #expect(error as? OpenIDBrowserError == .cancelled)
         }
     }
 
+    @Test
     func testPKCEUsesRFC7636ChallengeAndSecureShapes() throws {
-        XCTAssertEqual(
+        #expect(
             PKCEGenerator.challenge(
                 for:
                     "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-            ),
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-        )
+            ) == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
 
         let attempt = try PKCEGenerator().makeAttempt(
             callbackURL: Self.callbackURL
@@ -249,26 +229,23 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         )
 
-        XCTAssertEqual(attempt.verifier.count, 43)
-        XCTAssertEqual(attempt.state.count, 43)
-        XCTAssertEqual(attempt.challenge.count, 43)
-        XCTAssertNotEqual(attempt.verifier, attempt.state)
-        XCTAssertNil(
+        #expect(attempt.verifier.count == 43)
+        #expect(attempt.state.count == 43)
+        #expect(attempt.challenge.count == 43)
+        #expect(attempt.verifier != attempt.state)
+        #expect(
             attempt.verifier.rangeOfCharacter(
                 from: allowed.inverted
-            )
-        )
-        XCTAssertNil(
+            ) == nil)
+        #expect(
             attempt.state.rangeOfCharacter(
                 from: allowed.inverted
-            )
-        )
-        XCTAssertEqual(
-            attempt.challenge,
-            PKCEGenerator.challenge(for: attempt.verifier)
-        )
+            ) == nil)
+        #expect(
+            attempt.challenge == PKCEGenerator.challenge(for: attempt.verifier))
     }
 
+    @Test
     func testPKCERandomFailureRemainsTyped() async throws {
         let transport = OpenIDTestTransport()
         let store = OpenIDCredentialStore()
@@ -291,24 +268,20 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 generator: generator
             )
         ) { error in
-            XCTAssertEqual(
-                error as? OpenIDAuthenticationError,
-                .randomGenerationFailed(-50)
-            )
+            #expect(
+                error as? OpenIDAuthenticationError
+                    == .randomGenerationFailed(-50))
         }
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 0)
+        #expect(requests.count == 0)
     }
 
+    @Test
     func testCallbackURLValidation() throws {
-        XCTAssertEqual(
-            Self.callbackURL.url.absoluteString,
-            "com.example.bleat://oauth-callback"
-        )
-        XCTAssertEqual(
-            Self.callbackURL.callbackScheme,
-            "com.example.bleat"
-        )
+        #expect(
+            Self.callbackURL.url.absoluteString
+                == "com.example.bleat://oauth-callback")
+        #expect(Self.callbackURL.callbackScheme == "com.example.bleat")
 
         let cases: [(String, OpenIDCallbackURLValidationError)] = [
             ("not a url", .malformed),
@@ -331,31 +304,30 @@ final class OpenIDAuthenticationTests: XCTestCase {
         ]
 
         for (value, expectedError) in cases {
-            XCTAssertThrowsError(
-                try OpenIDCallbackURL(value)
-            ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDCallbackURLValidationError,
-                    expectedError
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try OpenIDCallbackURL(value) })
+            {
+                #expect(
+                    error as? OpenIDCallbackURLValidationError == expectedError)
             }
         }
     }
 
+    @Test
     func testCallbackRequiresExactURLStateAndCode() throws {
         let expectedState = "expected-state"
-        let valid = try XCTUnwrap(
+        let valid = try #require(
             URL(
                 string:
                     "com.example.bleat://oauth-callback?code=code&state=expected-state"
-            )
-        )
+            ))
         let values = try Self.callbackURL.authorizationValues(
             from: valid,
             expectedState: expectedState
         )
-        XCTAssertEqual(values.code, "code")
-        XCTAssertEqual(values.state, expectedState)
+        #expect(values.code == "code")
+        #expect(values.state == expectedState)
 
         let invalidURLs: [(String, OpenIDAuthenticationError)] = [
             (
@@ -401,21 +373,22 @@ final class OpenIDAuthenticationTests: XCTestCase {
         ]
 
         for (value, expectedError) in invalidURLs {
-            let callback = try XCTUnwrap(URL(string: value))
-            XCTAssertThrowsError(
-                try Self.callbackURL.authorizationValues(
-                    from: callback,
-                    expectedState: expectedState
-                )
-            ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+            let callback = try #require(URL(string: value))
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try Self.callbackURL.authorizationValues(
+                        from: callback,
+                        expectedState: expectedState
+                    )
+                })
+            {
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
         }
     }
 
+    @Test
     func testCompleteCookieBoundFlowValidatesThenPersists() async throws {
         let random = DeterministicRandomData()
         let transport = OpenIDTestTransport(
@@ -446,24 +419,19 @@ final class OpenIDAuthenticationTests: XCTestCase {
             userID: UserID(rawValue: "fixture-user")
         )
 
-        XCTAssertEqual(account.id, canonicalID)
-        XCTAssertEqual(account.server, server)
-        XCTAssertEqual(account.user.username, "fixture-root")
-        XCTAssertEqual(
-            account.user.id,
-            UserID(rawValue: "fixture-user")
-        )
+        #expect(account.id == canonicalID)
+        #expect(account.server == server)
+        #expect(account.user.username == "fixture-root")
+        #expect(account.user.id == UserID(rawValue: "fixture-user"))
 
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 3)
-        XCTAssertEqual(
-            requests.map(\.url?.path),
-            [
+        #expect(requests.count == 3)
+        #expect(
+            requests.map(\.url?.path) == [
                 "/audiobookshelf/auth/openid",
                 "/audiobookshelf/auth/openid/callback",
                 "/audiobookshelf/api/authorize",
-            ]
-        )
+            ])
 
         let beginItems = try Self.queryItems(from: requests[0])
         let verifier = Self.base64URL(
@@ -472,9 +440,8 @@ final class OpenIDAuthenticationTests: XCTestCase {
         let state = Self.base64URL(
             Data((32..<64).map(UInt8.init))
         )
-        XCTAssertEqual(
-            beginItems,
-            [
+        #expect(
+            beginItems == [
                 "code_challenge": PKCEGenerator.challenge(
                     for: verifier
                 ),
@@ -484,44 +451,40 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 "response_type": "code",
                 "state": state,
                 "client_id": "Bleat",
-            ]
-        )
-        XCTAssertEqual(requests[0].httpMethod, "GET")
+            ])
+        #expect(requests[0].httpMethod == "GET")
 
         let exchangeItems = try Self.queryItems(from: requests[1])
-        XCTAssertEqual(
-            exchangeItems,
-            [
+        #expect(
+            exchangeItems == [
                 "state": state,
                 "code": "authorization-code",
                 "code_verifier": verifier,
-            ]
-        )
-        XCTAssertEqual(requests[1].httpMethod, "GET")
-        XCTAssertEqual(
-            requests[2].value(forHTTPHeaderField: "Authorization"),
-            "Bearer fixture-access-token"
-        )
-        XCTAssertNil(requests[2].url?.query)
+            ])
+        #expect(requests[1].httpMethod == "GET")
+        #expect(
+            requests[2].value(forHTTPHeaderField: "Authorization")
+                == "Bearer fixture-access-token")
+        #expect(requests[2].url?.query == nil)
 
         let stored = await store.credentials(for: canonicalID)
-        XCTAssertEqual(
-            stored,
-            try AuthenticationTokens(
-                accessToken: "fixture-access-token",
-                refreshToken: "fixture-refresh-token"
-            )
-        )
+        #expect(
+            stored
+                == (try AuthenticationTokens(
+                    accessToken: "fixture-access-token",
+                    refreshToken: "fixture-refresh-token"
+                )))
         let provisionalStored = await store.credentials(for: accountID)
-        XCTAssertNil(provisionalStored)
+        #expect(provisionalStored == nil)
         let clearCount = await transport.clearCount()
         let hasCookieSession = await transport.hasCookieSession()
         let openIDAttempt = await coordinator.openIDAttempt
-        XCTAssertEqual(clearCount, 2)
-        XCTAssertFalse(hasCookieSession)
-        XCTAssertNil(openIDAttempt)
+        #expect(clearCount == 2)
+        #expect(!(hasCookieSession))
+        #expect(openIDAttempt == nil)
     }
 
+    @Test
     func testBeginRejectsInvalidResponsesAndCleansUp() async throws {
         let cases:
             [(
@@ -569,20 +532,18 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     )
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
             let clearCount = await transport.clearCount()
             let openIDAttempt = await coordinator.openIDAttempt
             let saveCount = await store.saveCount()
-            XCTAssertEqual(clearCount, 2)
-            XCTAssertNil(openIDAttempt)
-            XCTAssertEqual(saveCount, 0)
+            #expect(clearCount == 2)
+            #expect(openIDAttempt == nil)
+            #expect(saveCount == 0)
         }
     }
 
+    @Test
     func testBrowserCancellationAndFailureCleanUp() async throws {
         let cases: [(OpenIDBrowserError, OpenIDAuthenticationError)] = [
             (.cancelled, .browserCancelled),
@@ -612,17 +573,14 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     )
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
             let clearCount = await transport.clearCount()
             let hasCookieSession = await transport.hasCookieSession()
             let saveCount = await store.saveCount()
-            XCTAssertEqual(clearCount, 2)
-            XCTAssertFalse(hasCookieSession)
-            XCTAssertEqual(saveCount, 0)
+            #expect(clearCount == 2)
+            #expect(!(hasCookieSession))
+            #expect(saveCount == 0)
         }
 
         let transport = OpenIDTestTransport()
@@ -638,40 +596,35 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 browser: OpenIDTestBrowser(result: .unexpectedFailure)
             )
         ) { error in
-            XCTAssertEqual(
-                error as? OpenIDAuthenticationError,
-                .browserFailed
-            )
+            #expect(error as? OpenIDAuthenticationError == .browserFailed)
         }
     }
 
+    @Test
     func testInvalidBrowserCallbacksNeverReachExchange() async throws {
         let callbacks: [(URL, OpenIDAuthenticationError)] = [
             (
-                try XCTUnwrap(
+                try #require(
                     URL(
                         string:
                             "other.scheme:/oauth/callback?code=code&state=state"
-                    )
-                ),
+                    )),
                 .invalidCallbackURL
             ),
             (
-                try XCTUnwrap(
+                try #require(
                     URL(
                         string:
                             "com.example.bleat://oauth-callback?code=code"
-                    )
-                ),
+                    )),
                 .missingState
             ),
             (
-                try XCTUnwrap(
+                try #require(
                     URL(
                         string:
                             "com.example.bleat://oauth-callback?code=code&state=wrong"
-                    )
-                ),
+                    )),
                 .stateMismatch
             ),
         ]
@@ -694,21 +647,19 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     )
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
 
             let requests = await transport.recordedRequests()
             let clearCount = await transport.clearCount()
             let saveCount = await store.saveCount()
-            XCTAssertEqual(requests.count, 1)
-            XCTAssertEqual(clearCount, 2)
-            XCTAssertEqual(saveCount, 0)
+            #expect(requests.count == 1)
+            #expect(clearCount == 2)
+            #expect(saveCount == 0)
         }
     }
 
+    @Test
     func testCallbackWithoutCodeNeverReachesExchange() async throws {
         let transport = OpenIDTestTransport()
         let store = OpenIDCredentialStore()
@@ -727,18 +678,18 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 )
             )
         ) { error in
-            XCTAssertEqual(
-                error as? OpenIDAuthenticationError,
-                .missingAuthorizationCode
+            #expect(
+                error as? OpenIDAuthenticationError == .missingAuthorizationCode
             )
         }
 
         let requests = await transport.recordedRequests()
         let clearCount = await transport.clearCount()
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(clearCount, 2)
+        #expect(requests.count == 1)
+        #expect(clearCount == 2)
     }
 
+    @Test
     func testConcurrentAttemptIsRejectedWithoutDisturbingActiveFlow()
         async throws
     {
@@ -771,9 +722,8 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 )
             )
         ) { error in
-            XCTAssertEqual(
-                error as? OpenIDAuthenticationError,
-                .attemptAlreadyInProgress
+            #expect(
+                error as? OpenIDAuthenticationError == .attemptAlreadyInProgress
             )
         }
 
@@ -787,12 +737,13 @@ final class OpenIDAuthenticationTests: XCTestCase {
         let clearCount = await transport.clearCount()
         let requests = await transport.recordedRequests()
         let openIDAttempt = await coordinator.openIDAttempt
-        XCTAssertEqual(firstError, .browserCancelled)
-        XCTAssertEqual(clearCount, 2)
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertNil(openIDAttempt)
+        #expect(firstError == .browserCancelled)
+        #expect(clearCount == 2)
+        #expect(requests.count == 1)
+        #expect(openIDAttempt == nil)
     }
 
+    @Test
     func testExchangeFailuresNeverPersistAndAlwaysCleanUp() async throws {
         let loginData = try Self.fixture(named: "login-tokens")
         let cases:
@@ -860,18 +811,16 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     )
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
             let clearCount = await transport.clearCount()
             let saveCount = await store.saveCount()
-            XCTAssertEqual(clearCount, 2)
-            XCTAssertEqual(saveCount, 0)
+            #expect(clearCount == 2)
+            #expect(saveCount == 0)
         }
     }
 
+    @Test
     func testAuthorizationAndPersistenceFailuresRemainTyped() async throws {
         let loginData = try Self.fixture(named: "login-tokens")
         let authorizationData = try Self.fixture(named: "authorize")
@@ -941,20 +890,18 @@ final class OpenIDAuthenticationTests: XCTestCase {
                     )
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? OpenIDAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? OpenIDAuthenticationError == expectedError)
             }
             let clearCount = await transport.clearCount()
-            XCTAssertEqual(clearCount, 2)
+            #expect(clearCount == 2)
             let stored = await store.credentials(
                 for: AccountID(rawValue: "account")
             )
-            XCTAssertNil(stored)
+            #expect(stored == nil)
         }
     }
 
+    @Test
     func testInvalidAccountDoesNotTouchAttemptOrCookies() async throws {
         let transport = OpenIDTestTransport()
         let store = OpenIDCredentialStore()
@@ -973,15 +920,12 @@ final class OpenIDAuthenticationTests: XCTestCase {
                 )
             )
         ) { error in
-            XCTAssertEqual(
-                error as? OpenIDAuthenticationError,
-                .invalidAccountID
-            )
+            #expect(error as? OpenIDAuthenticationError == .invalidAccountID)
         }
         let clearCount = await transport.clearCount()
         let openIDAttempt = await coordinator.openIDAttempt
-        XCTAssertEqual(clearCount, 0)
-        XCTAssertNil(openIDAttempt)
+        #expect(clearCount == 0)
+        #expect(openIDAttempt == nil)
     }
 
     private static let callbackURL = try! OpenIDCallbackURL(
@@ -991,28 +935,26 @@ final class OpenIDAuthenticationTests: XCTestCase {
     private static func queryItems(
         from request: URLRequest
     ) throws -> [String: String] {
-        let url = try XCTUnwrap(request.url)
-        let components = try XCTUnwrap(
+        let url = try #require(request.url)
+        let components = try #require(
             URLComponents(
                 url: url,
                 resolvingAgainstBaseURL: false
-            )
-        )
+            ))
         return Dictionary(
-            uniqueKeysWithValues: try XCTUnwrap(components.queryItems)
+            uniqueKeysWithValues: try #require(components.queryItems)
                 .map { ($0.name, $0.value ?? "") }
         )
     }
 
     private static func fixture(named name: String) throws -> Data {
-        let url = try XCTUnwrap(
+        let url = try #require(
             Bundle.module.urls(
                 forResourcesWithExtension: "json",
                 subdirectory: nil
             )?.first {
                 $0.lastPathComponent == "\(name).json"
-            }
-        )
+            })
         return try Data(contentsOf: url)
     }
 

@@ -1,6 +1,7 @@
 import Foundation
+import QuartzCore
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
@@ -145,7 +146,8 @@ enum LibraryCachePerformanceFixture {
 /// (stored as 200 JSON-blob pages at limit 50) stay off the main actor and
 /// complete in bounded time. Timings and storage totals are printed as
 /// machine-readable `perf-summary` lines for release evidence retention.
-final class LibraryCachePerformanceTests: XCTestCase {
+@Suite(.serialized)
+final class LibraryCachePerformanceTests {
     static let totalBooks = 10_000
     static let pageLimit = 50
     static let pageCount = totalBooks / pageLimit  // 200
@@ -181,6 +183,7 @@ final class LibraryCachePerformanceTests: XCTestCase {
     /// Saving 200 pages (10,000 books) into an in-memory cache must complete
     /// in bounded time. Each save encodes one page to JSON and upserts one
     /// `CachedLibraryPageRecord` inside the `LibraryCache` actor (off-main).
+    @Test
     func testTenKBooksCacheWritePerformance() async throws {
         let (_, cache) = try LibraryCachePerformanceFixture.memory()
         let accountID = AccountID(rawValue: "perf-account")
@@ -199,10 +202,10 @@ final class LibraryCachePerformanceTests: XCTestCase {
         }
         let elapsed = CACurrentMediaTime() - start
 
-        XCTAssertGreaterThan(elapsed, 0)
+        #expect(elapsed > 0)
         // Loose upper bound: 200 page upserts should stay well under 10s on
         // any modern host. Recorded as evidence; not a release gate.
-        XCTAssertLessThan(elapsed, 10.0, "200-page write exceeded 10s")
+        #expect(elapsed < 10.0, "200-page write exceeded 10s")
         print(
             "perf-summary cache.write.10kBooks.seconds="
                 + String(format: "%.6f", elapsed)
@@ -214,6 +217,7 @@ final class LibraryCachePerformanceTests: XCTestCase {
     /// Reading 200 cached pages (10,000 books) back from an in-memory cache
     /// must complete in bounded time. Decode happens inside the `LibraryCache`
     /// actor, off the main actor.
+    @Test
     func testTenKBooksCacheReadPerformance() async throws {
         let (_, cache) = try LibraryCachePerformanceFixture.memory()
         let accountID = AccountID(rawValue: "perf-account")
@@ -241,13 +245,13 @@ final class LibraryCachePerformanceTests: XCTestCase {
                 libraryID: libraryID,
                 accountID: accountID
             )
-            XCTAssertNotNil(snapshot, "every seeded page must decode back")
-            XCTAssertEqual(snapshot?.page.items.count, Self.pageLimit)
+            #expect(snapshot != nil, "every seeded page must decode back")
+            #expect(snapshot?.page.items.count == Self.pageLimit)
         }
         let elapsed = CACurrentMediaTime() - start
 
-        XCTAssertGreaterThan(elapsed, 0)
-        XCTAssertLessThan(elapsed, 10.0, "200-page read exceeded 10s")
+        #expect(elapsed > 0)
+        #expect(elapsed < 10.0, "200-page read exceeded 10s")
         print(
             "perf-summary cache.read.10kBooks.seconds="
                 + String(format: "%.6f", elapsed)
@@ -260,6 +264,7 @@ final class LibraryCachePerformanceTests: XCTestCase {
     /// `LibraryCache` actor runs `page(...)` off-main; this test evidences
     /// that by confirming a main-actor heartbeat keeps advancing while 200
     /// cache reads run concurrently.
+    @Test
     func testCacheReadsDoNotBlockTheMainActor() async throws {
         let (_, cache) = try LibraryCachePerformanceFixture.memory()
         let accountID = AccountID(rawValue: "perf-account")
@@ -305,10 +310,9 @@ final class LibraryCachePerformanceTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 1_000_000)
         }
         let readsStarted = await probe.isStarted()
-        XCTAssertTrue(
+        #expect(
             readsStarted,
-            "detached read workload must start before heartbeat is measured"
-        )
+            "detached read workload must start before heartbeat is measured")
 
         var mainActorTicks = 0
         let deadline = Date().addingTimeInterval(30)
@@ -327,11 +331,9 @@ final class LibraryCachePerformanceTests: XCTestCase {
         }
         try await readsTask.value
 
-        XCTAssertGreaterThan(
-            mainActorTicks,
-            0,
-            "main-actor heartbeat must advance while cache reads are underway"
-        )
+        #expect(
+            mainActorTicks > 0,
+            "main-actor heartbeat must advance while cache reads are underway")
         print(
             "perf-summary cache.read.mainActorHeartbeatTicks=\(mainActorTicks)"
         )
@@ -341,6 +343,7 @@ final class LibraryCachePerformanceTests: XCTestCase {
 
     /// Evidence: on-disk SwiftData store holding 10,000 cached books (200
     /// JSON-blob pages) records its file size for the release baseline.
+    @Test
     func testTenKBooksOnDiskStorageSize() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("bleat-perf-\(UUID().uuidString)")
@@ -379,8 +382,8 @@ final class LibraryCachePerformanceTests: XCTestCase {
         let shmBytes = fileBytes(at: shmURL)
         let totalBytes = mainBytes + walBytes + shmBytes
 
-        XCTAssertGreaterThan(
-            mainBytes, 0, "SQLite store file must exist after 10k-book seed")
+        #expect(
+            mainBytes > 0, "SQLite store file must exist after 10k-book seed")
         print(
             "perf-summary cache.storage.10kBooks.sqliteBytes=\(mainBytes)"
         )

@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LibraryRepositoryTests: XCTestCase {
+@Suite(.serialized)
+final class LibraryRepositoryTests {
+    @Test
     func testRemoteResultsPersistForCacheOnlyRelaunch() async throws {
         let fixture = try LibraryRepositoryFixture()
         let accountID = AccountID(rawValue: "account")
@@ -33,15 +35,12 @@ final class LibraryRepositoryTests: XCTestCase {
             policy: .remoteOnly
         )
 
-        XCTAssertEqual(remoteLibraries.value, [library])
-        XCTAssertEqual(remoteLibraries.source, .remote)
-        XCTAssertEqual(
-            remoteLibraries.correlationID,
-            librariesCorrelation
-        )
-        XCTAssertEqual(remotePage.value, page)
-        XCTAssertEqual(remotePage.source, .remote)
-        XCTAssertEqual(remotePage.correlationID, pageCorrelation)
+        #expect(remoteLibraries.value == [library])
+        #expect(remoteLibraries.source == .remote)
+        #expect(remoteLibraries.correlationID == librariesCorrelation)
+        #expect(remotePage.value == page)
+        #expect(remotePage.source == .remote)
+        #expect(remotePage.correlationID == pageCorrelation)
 
         let relaunchedCache = LibraryCache(
             modelContainer: fixture.container
@@ -65,22 +64,20 @@ final class LibraryRepositoryTests: XCTestCase {
             policy: .cacheOnly
         )
 
-        XCTAssertEqual(cachedLibraries.value, [library])
-        XCTAssertEqual(cachedLibraries.source, .cache)
-        XCTAssertNil(cachedLibraries.correlationID)
-        XCTAssertEqual(
-            cachedLibraries.refreshedAt,
-            remoteLibraries.refreshedAt
-        )
-        XCTAssertEqual(cachedPage.value, page)
-        XCTAssertEqual(cachedPage.source, .cache)
-        XCTAssertNil(cachedPage.correlationID)
-        XCTAssertEqual(cachedPage.refreshedAt, remotePage.refreshedAt)
+        #expect(cachedLibraries.value == [library])
+        #expect(cachedLibraries.source == .cache)
+        #expect(cachedLibraries.correlationID == nil)
+        #expect(cachedLibraries.refreshedAt == remoteLibraries.refreshedAt)
+        #expect(cachedPage.value == page)
+        #expect(cachedPage.source == .cache)
+        #expect(cachedPage.correlationID == nil)
+        #expect(cachedPage.refreshedAt == remotePage.refreshedAt)
         let calls = await offline.callCounts()
-        XCTAssertEqual(calls.libraries, 0)
-        XCTAssertEqual(calls.pages, 0)
+        #expect(calls.libraries == 0)
+        #expect(calls.pages == 0)
     }
 
+    @Test
     func testRemoteElseCacheFallsBackForLibrariesAndExactPage()
         async throws
     {
@@ -118,12 +115,13 @@ final class LibraryRepositoryTests: XCTestCase {
             request: request
         )
 
-        XCTAssertEqual(libraries.value, [library])
-        XCTAssertEqual(libraries.source, .cache)
-        XCTAssertEqual(items.value, page)
-        XCTAssertEqual(items.source, .cache)
+        #expect(libraries.value == [library])
+        #expect(libraries.source == .cache)
+        #expect(items.value == page)
+        #expect(items.source == .cache)
     }
 
+    @Test
     func testCacheMissPreservesRemoteFailureAndCacheOnlyIsTyped()
         async throws
     {
@@ -141,19 +139,20 @@ final class LibraryRepositoryTests: XCTestCase {
 
         do {
             _ = try await repository.libraries()
-            XCTFail("Expected remote failure")
+            Issue.record("Expected remote failure")
         } catch {
-            XCTAssertEqual(error, .remote(remoteError))
+            #expect(error == .remote(remoteError))
         }
 
         do {
             _ = try await repository.libraries(policy: .cacheOnly)
-            XCTFail("Expected cache miss")
+            Issue.record("Expected cache miss")
         } catch {
-            XCTAssertEqual(error, .noCachedValue)
+            #expect(error == .noCachedValue)
         }
     }
 
+    @Test
     func testRemoteOnlyDoesNotReadExistingCache() async throws {
         let fixture = try LibraryRepositoryFixture()
         let accountID = AccountID(rawValue: "account")
@@ -173,12 +172,13 @@ final class LibraryRepositoryTests: XCTestCase {
 
         do {
             _ = try await repository.libraries(policy: .remoteOnly)
-            XCTFail("Expected remote-only failure")
+            Issue.record("Expected remote-only failure")
         } catch {
-            XCTAssertEqual(error, .remote(remoteError))
+            #expect(error == .remote(remoteError))
         }
     }
 
+    @Test
     func testCancellationNeverReturnsStaleCache() async throws {
         let fixture = try LibraryRepositoryFixture()
         let accountID = AccountID(rawValue: "account")
@@ -197,12 +197,13 @@ final class LibraryRepositoryTests: XCTestCase {
 
         do {
             _ = try await repository.libraries()
-            XCTFail("Expected cancellation")
+            Issue.record("Expected cancellation")
         } catch {
-            XCTAssertEqual(error, .cancelled)
+            #expect(error == .cancelled)
         }
     }
 
+    @Test
     func testSearchPersistsExactQueryAndFallsBackAfterRelaunch()
         async throws
     {
@@ -236,9 +237,9 @@ final class LibraryRepositoryTests: XCTestCase {
             request: request,
             policy: .remoteOnly
         )
-        XCTAssertEqual(remote.value.books, items)
-        XCTAssertEqual(remote.source, .remote)
-        XCTAssertEqual(remote.correlationID, correlationID)
+        #expect(remote.value.books == items)
+        #expect(remote.source == .remote)
+        #expect(remote.correlationID == correlationID)
 
         let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
         let offline = RepositoryRemote(
@@ -254,10 +255,10 @@ final class LibraryRepositoryTests: XCTestCase {
             in: libraryID,
             request: request
         )
-        XCTAssertEqual(fallback.value.books, items)
-        XCTAssertEqual(fallback.source, .cache)
-        XCTAssertNil(fallback.correlationID)
-        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
+        #expect(fallback.value.books == items)
+        #expect(fallback.source == .cache)
+        #expect(fallback.correlationID == nil)
+        #expect(fallback.refreshedAt == remote.refreshedAt)
 
         let widerRequest = try LibrarySearchRequest(
             query: "book",
@@ -268,12 +269,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 in: libraryID,
                 request: widerRequest
             )
-            XCTFail("Expected exact-query cache miss")
+            Issue.record("Expected exact-query cache miss")
         } catch {
-            XCTAssertEqual(error, .remote(offlineError))
+            #expect(error == .remote(offlineError))
         }
     }
 
+    @Test
     func testSearchCancellationNeverReturnsCachedResults()
         async throws
     {
@@ -308,12 +310,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 in: libraryID,
                 request: request
             )
-            XCTFail("Expected search cancellation")
+            Issue.record("Expected search cancellation")
         } catch {
-            XCTAssertEqual(error, .cancelled)
+            #expect(error == .cancelled)
         }
     }
 
+    @Test
     func testHomeShelvesPersistExactRequestAndFallbackAfterRelaunch()
         async throws
     {
@@ -338,9 +341,9 @@ final class LibraryRepositoryTests: XCTestCase {
             request: request,
             policy: .remoteOnly
         )
-        XCTAssertEqual(remote.value, shelves)
-        XCTAssertEqual(remote.source, .remote)
-        XCTAssertEqual(remote.correlationID, correlationID)
+        #expect(remote.value == shelves)
+        #expect(remote.source == .remote)
+        #expect(remote.correlationID == correlationID)
 
         let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
         let offline = RepositoryRemote(
@@ -356,10 +359,10 @@ final class LibraryRepositoryTests: XCTestCase {
             in: libraryID,
             request: request
         )
-        XCTAssertEqual(fallback.value, shelves)
-        XCTAssertEqual(fallback.source, .cache)
-        XCTAssertNil(fallback.correlationID)
-        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
+        #expect(fallback.value == shelves)
+        #expect(fallback.source == .cache)
+        #expect(fallback.correlationID == nil)
+        #expect(fallback.refreshedAt == remote.refreshedAt)
 
         let widerRequest = try LibraryHomeRequest(limit: 2)
         do {
@@ -367,12 +370,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 in: libraryID,
                 request: widerRequest
             )
-            XCTFail("Expected exact home-request cache miss")
+            Issue.record("Expected exact home-request cache miss")
         } catch {
-            XCTAssertEqual(error, .remote(offlineError))
+            #expect(error == .remote(offlineError))
         }
     }
 
+    @Test
     func testHomeCancellationNeverReturnsCachedShelves()
         async throws
     {
@@ -400,12 +404,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 in: libraryID,
                 request: request
             )
-            XCTFail("Expected home cancellation")
+            Issue.record("Expected home cancellation")
         } catch {
-            XCTAssertEqual(error, .cancelled)
+            #expect(error == .cancelled)
         }
     }
 
+    @Test
     func testBookDetailPersistsUserScopedAndFallsBackAfterRelaunch()
         async throws
     {
@@ -431,9 +436,9 @@ final class LibraryRepositoryTests: XCTestCase {
             in: libraryID,
             policy: .remoteOnly
         )
-        XCTAssertEqual(remote.value, detail)
-        XCTAssertEqual(remote.source, .remote)
-        XCTAssertEqual(remote.correlationID, correlationID)
+        #expect(remote.value == detail)
+        #expect(remote.source == .remote)
+        #expect(remote.correlationID == correlationID)
 
         let offlineError = AudiobookshelfAPIError.unexpectedStatus(503)
         let relaunched = LibraryRepository(
@@ -448,10 +453,10 @@ final class LibraryRepositoryTests: XCTestCase {
             for: itemID,
             in: libraryID
         )
-        XCTAssertEqual(fallback.value, detail)
-        XCTAssertEqual(fallback.source, .cache)
-        XCTAssertEqual(fallback.refreshedAt, remote.refreshedAt)
-        XCTAssertNil(fallback.correlationID)
+        #expect(fallback.value == detail)
+        #expect(fallback.source == .cache)
+        #expect(fallback.refreshedAt == remote.refreshedAt)
+        #expect(fallback.correlationID == nil)
 
         let otherUser = LibraryRepository(
             accountID: accountID,
@@ -465,12 +470,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 in: libraryID,
                 policy: .cacheOnly
             )
-            XCTFail("Expected user-scoped detail cache miss")
+            Issue.record("Expected user-scoped detail cache miss")
         } catch {
-            XCTAssertEqual(error, .noCachedValue)
+            #expect(error == .noCachedValue)
         }
     }
 
+    @Test
     func testBookDetailCancellationNeverReturnsCachedProgress()
         async throws
     {
@@ -495,12 +501,13 @@ final class LibraryRepositoryTests: XCTestCase {
                 for: detail.id,
                 in: detail.libraryID
             )
-            XCTFail("Expected detail cancellation")
+            Issue.record("Expected detail cancellation")
         } catch {
-            XCTAssertEqual(error, .cancelled)
+            #expect(error == .cancelled)
         }
     }
 
+    @Test
     func testInvalidRemoteValueAndCorruptFallbackRemainTyped()
         async throws
     {
@@ -527,9 +534,9 @@ final class LibraryRepositoryTests: XCTestCase {
             _ = try await invalidRepository.libraries(
                 policy: .remoteOnly
             )
-            XCTFail("Expected invalid cache value")
+            Issue.record("Expected invalid cache value")
         } catch {
-            XCTAssertEqual(error, .cache(.invalidLibrary))
+            #expect(error == .cache(.invalidLibrary))
         }
 
         let context = ModelContext(fixture.container)
@@ -559,17 +566,16 @@ final class LibraryRepositoryTests: XCTestCase {
         )
         do {
             _ = try await corruptRepository.libraries()
-            XCTFail("Expected corrupt fallback")
+            Issue.record("Expected corrupt fallback")
         } catch {
-            XCTAssertEqual(
-                error,
-                .fallbackCache(
-                    remote: remoteError,
-                    cache: .invalidStoredLibrary(
-                        LibraryID(rawValue: "library")
-                    )
-                )
-            )
+            #expect(
+                error
+                    == .fallbackCache(
+                        remote: remoteError,
+                        cache: .invalidStoredLibrary(
+                            LibraryID(rawValue: "library")
+                        )
+                    ))
         }
     }
 

@@ -1,16 +1,19 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class IdentifiersTests: XCTestCase {
+@Suite(.serialized)
+final class IdentifiersTests {
+    @Test
     func testRawValueAndDescriptionArePreserved() {
         let accountID = AccountID(rawValue: "account-1")
 
-        XCTAssertEqual(accountID.rawValue, "account-1")
-        XCTAssertEqual(accountID.description, "account-1")
+        #expect(accountID.rawValue == "account-1")
+        #expect(accountID.description == "account-1")
     }
 
+    @Test
     func testRoundTripsThroughCodable() throws {
         let original = LibraryItemID(rawValue: "opaque/not-a-uuid")
 
@@ -20,16 +23,18 @@ final class IdentifiersTests: XCTestCase {
             from: data
         )
 
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
+    @Test
     func testDifferentKindsCanUseTheSameOpaqueValue() {
         let libraryID = LibraryID(rawValue: "same")
         let itemID = LibraryItemID(rawValue: "same")
 
-        XCTAssertEqual(libraryID.rawValue, itemID.rawValue)
+        #expect(libraryID.rawValue == itemID.rawValue)
     }
 
+    @Test
     func testCanonicalAccountIdentityUsesPrimaryServerAndRemoteUser() throws {
         let server = try NormalizedServerURL(
             "https://EXAMPLE.com/audiobookshelf/"
@@ -39,34 +44,37 @@ final class IdentifiersTests: XCTestCase {
         )
         let user = UserID(rawValue: "remote-user")
 
-        XCTAssertEqual(
-            AccountID.canonical(server: server, userID: user),
-            AccountID.canonical(server: equivalent, userID: user)
-        )
-        XCTAssertNotEqual(
-            AccountID.canonical(server: server, userID: user),
-            AccountID.canonical(
-                server: server,
-                userID: UserID(rawValue: "another-user")
-            )
-        )
+        #expect(
+            AccountID.canonical(server: server, userID: user)
+                == AccountID.canonical(server: equivalent, userID: user))
+        #expect(
+            AccountID.canonical(server: server, userID: user)
+                != AccountID.canonical(
+                    server: server,
+                    userID: UserID(rawValue: "another-user")
+                ))
     }
 
+    @Test
     func testAuthorAndSeriesIDsRejectEmptyAndControlCharacters() throws {
-        XCTAssertNil(AuthorID(rawValue: ""))
-        XCTAssertNil(AuthorID(rawValue: "author\n1"))
-        XCTAssertNil(SeriesID(rawValue: ""))
-        XCTAssertNil(SeriesID(rawValue: "series\u{0000}1"))
+        #expect(AuthorID(rawValue: "") == nil)
+        #expect(AuthorID(rawValue: "author\n1") == nil)
+        #expect(SeriesID(rawValue: "") == nil)
+        #expect(SeriesID(rawValue: "series\u{0000}1") == nil)
 
-        XCTAssertEqual(AuthorID(rawValue: "author-1")?.rawValue, "author-1")
-        XCTAssertEqual(SeriesID(rawValue: "series-1")?.rawValue, "series-1")
+        #expect(AuthorID(rawValue: "author-1")?.rawValue == "author-1")
+        #expect(SeriesID(rawValue: "series-1")?.rawValue == "series-1")
 
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(AuthorID.self, from: Data("\"\"".utf8))
-        )
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(
-                SeriesID.self, from: Data("\"series\\n1\"".utf8))
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(AuthorID.self, from: Data("\"\"".utf8))
+            })
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(
+                    SeriesID.self, from: Data("\"series\\n1\"".utf8))
+            })
     }
 }

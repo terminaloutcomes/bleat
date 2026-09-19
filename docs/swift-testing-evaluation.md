@@ -1,238 +1,158 @@
-# Host Swift Testing evaluation
+# Host Swift Testing migration
 
-Issue [#125](https://github.com/terminaloutcomes/bleat/issues/125), evaluated
-on 2026-09-20 with Xcode 27.0 (27A266a), Swift 6.4, Testing 2084, and
-macOS 26.6.2 on Apple Silicon. Initial diagnostic evidence uses `c00b05b0`;
-the changes were subsequently rebased onto main at `28daa1fb`.
+Issue [#125](https://github.com/terminaloutcomes/bleat/issues/125), evaluated and
+converted on 2026-09-20 with Xcode 27.0 (27A266a), Swift 6.4, Testing 2084, and
+macOS 26.6.2 on Apple Silicon. The conversion is based on `28daa1fb`.
 
-## Decision
+## Runner and scope
 
-Use SwiftPM's explicit Swift Testing-only runner for migrated host unit tests:
+Run `scripts/test-host.sh`. All 37 core suites and their 467 original test
+identities now use Swift Testing. Four new cleanup regression tests and the five
+existing transcription tests bring the verified inventory to 476 tests across
+40 suites. One transcription test retains its three parameterized cases.
 
-```sh
-swift test --disable-xctest --enable-code-coverage
-```
+The wrapper explicitly uses `--disable-xctest --no-parallel`. This avoids the
+XCTest discovery path while preserving global serialization for shared
+URLProtocol state and timing-sensitive fixtures. Individual converted suites
+also have `.serialized` traits. Explicit concurrency tests still exercise their
+original tasks and actors.
 
-The prototype supports a phased host migration with this runner choice. In both
-ordinary and coverage runs, it executes the runnable tests without calling
-XCTest subclass discovery, initializing Contacts, or entering the XPC-store
-initializer. XCTestCore still loads; avoiding its discovery path is the measured
-benefit. No SwiftPM fork, private framework setting, or diagnostic suppression
-is needed.
+SwiftPM's current SwiftBuild backend produces one test product per target. A
+single `--xunit-output` path can consequently be overwritten by a later empty
+target. The wrapper builds once, selects each host product with `--test-product`,
+and combines reports before checking every identity against
+`TestSupport/HostTests/inventory.json`. Missing, duplicate, failed, unexpectedly
+skipped, and zero-test reports fail validation. Update the inventory whenever
+host tests are added, renamed, or removed.
 
-The initial recommendation to retain XCTest gave too much weight to default
-execution. **Default SwiftPM still initializes Contacts, but the supported
-`--disable-xctest` option avoids the observed path in the prototype.** Choose
-that option deliberately rather than treating the default as a migration blocker.
+The wrapper also handles the package-wide product produced by the native
+backend used by Swift 6.2. Both product layouts were exercised on Swift 6.4;
+execution on a Swift 6.2 toolchain remains unverified locally. The implementation
+uses Swift Testing APIs available before Swift 6.4, including asynchronous
+condition traits rather than the newer runtime cancellation API. SwiftPM 6.2's
+[command source](https://github.com/swiftlang/swift-package-manager/blob/swift-6.2-RELEASE/Sources/Commands/SwiftTestCommand.swift)
+defines the product-selection, coverage, serialization, and XCTest-disable
+workflow. No fork, private framework configuration, or diagnostic suppression
+is needed. The native backend experiment emitted a deprecation warning on Swift
+6.4; the final wrapper leaves backend selection to SwiftPM.
 
-The host migration is not implemented by this prototype. Keep the existing root
-gate during conversion; switching it immediately would silently omit the current
-467 core XCTest tests. Once every host test has been converted and equivalent
-individual outcomes verified, switch the host coverage command to the explicit
-runner above. Keep live XCTest execution in `scripts/test-live.sh`, which already
-uses `swift test --filter BleatCoreLiveTests`, and keep app/UI execution in Xcode.
-The final migration must also verify the complete converted workload's diagnostic
-behavior and preserve the live target's existing checks in that separate workflow.
+Live tests remain XCTest under `scripts/test-live.sh`. Their environment checks
+and fixture-dependent skips are unchanged. The telemetry gate runs converted
+host suites with XCTest disabled and keeps its live configuration checks on
+XCTest. App-hosted and UI tests retain their Xcode runners and attachments.
 
-## Current source and prototype
+## Assertions, lifecycle, and coverage
 
-The original issue's counts and coverage-only symptom are historical. The tested
-revision contains 37 core XCTestCase suites / 464 methods, 16 live XCTestCase
-suites / 21 methods, and two Swift Testing transcription suites. The app and UI
-targets remain separate Xcode test targets. Host tests do not override XCTest
-setup/teardown, use XCTest expectations, `measure`, or attachments. Their
-performance tests use explicit elapsed-time bounds and `perf-summary` output.
-
-A pre-publication source check of main at `28daa1fb` found 37 core XCTestCase
-suites / 467 methods and the same two Swift Testing transcription suites. The
-root package manifest, dependency pins, `scripts/test-core.sh`, transcription
-tests, and `ChapterTranscriptCache` implementation are unchanged from the tested
-revision. The runner finding remains current. Initial and rebased validation
-results are distinguished below.
-
-The isolated package imports the real BleatCore product without linking any of
-the root package's test targets. Its runner copies the root package's generated
-`Package.resolved` and uses `--force-resolved-versions`, so transitive dependency
-drift does not confound the comparison. It contains seven independently named
-tests:
-
-| Test | Behavior exercised |
+| Existing behavior | Converted behavior |
 | --- | --- |
-| `synchronousIdentity` | Synchronous domain equality |
-| `typedThrowingValidation` | Exact typed URL-validation failure |
-| `bundledFixture` | Resource lookup, throwing fixture decode, normalized URLs |
-| `concurrentActorCalls` | 100 task-group calls to an isolated actor |
-| `intentionalSkip` | Disabled trait, with a body that fails if incorrectly run |
-| `swiftDataAccountIsolation` | Real cache write/read across actors; another account remains empty |
-| `timedTranscriptRoundTrip` | 10,000 segments through the real SwiftData cache with structural equality and elapsed-time bounds |
+| Equality, nil, ordering, booleans | Native `#expect`, with structural equality and diagnostic comments |
+| Floating-point tolerance | Same finite-value workloads and explicit absolute-error bounds |
+| Required optional values | Throwing `#require`; nested requirements are evaluated separately |
+| Typed synchronous errors | `#expect(throws:)` plus the original typed cause assertions |
+| Typed asynchronous errors | Shared async assertion helper records failures through Swift Testing |
+| Async methods and actor isolation | Original async/throwing signatures and actor annotations retained |
+| Versioned fixtures and persistence | Original resources, stored shapes, and account-isolation checks retained |
+| Manual performance bounds | Same workload, clocks, bounds, and performance summaries |
+| Keychain teardown | Awaited cleanup on success and thrown failure; synchronous Security fixture cleanup uses `defer` |
+| Entitlement skips | Typed asynchronous preflight enables the iCloud case or records an explicit skip; unexpected errors fail trait evaluation |
 
-The SwiftData fixture is in-memory with CloudKit explicitly disabled. No Contacts
-APIs are called by the prototype. No permissions, private defaults, message
-filters, or framework hooks are used. The timing case demonstrates portable
-timing assertions, not equivalence to the existing 10,000-book benchmark or an
-XCTest performance baseline. No existing tests were converted or removed.
+There were no core setup/teardown overrides or XCTest expectation APIs, but
+there were six `addTeardownBlock` registrations. They are now explicit cleanup
+scopes. The entitlement probe uses uniquely scoped synthetic credentials and
+awaits deletion. Four regression tests cover successful cleanup, operation
+failure, cleanup failure, and simultaneous failures. The last intentionally
+records one known cleanup issue while asserting the original propagated error
+outside that expected-issue scope.
+
+SwiftPM clears its coverage directory for each instrumented run. The wrapper
+copies each product's fresh profile before starting the next, merges profiles
+with `llvm-profdata`, and exports all test binaries through `llvm-cov`. The
+normalizer keeps project-relative production sources only and rejects missing
+or entirely unexecuted BleatCore or BleatTranscription coverage. Reports are:
+
+- `.build/host-results/tests.xml`: verified combined individual outcomes.
+- `.build/coverage/swift-host/lcov.info`: production LCOV for Coveralls.
+
+CI adds a host job and the `swift-host` Coveralls flag. Existing Slather smoke
+coverage (`swift-smoke`) and Rust coverage (`rust-full`) are preserved. The
+parallel report is finalized after all three upload attempts. Fork PRs generate
+artifacts without uploading, and upload failures retain the existing warning
+policy. Eight verifier tests cover empty/overwritten XML, identity mismatches,
+duplicates, failures, unexpected skips, and absent/zero/duplicate coverage.
 
 ## Diagnostic evidence
 
-LLDB observes entry to `+[XCTestCase(RuntimeUtilities) _allSubclasses]`,
-`+[CNContactStore initialize]`, and `-[NSXPCStoreConnection initForStore:]`.
-Breakpoints automatically continue; backtraces and final hit counts are retained.
-`image list -b` records loaded frameworks without publishing local paths.
+LLDB observes `+[XCTestCase(RuntimeUtilities) _allSubclasses]`,
+`+[CNContactStore initialize]`, and `-[NSXPCStoreConnection initForStore:]`,
+using `TestSupport/SwiftTestingPrototype/trace.lldb`. Breakpoints continue
+automatically; test outcomes, inferior exit, resolved locations, hit counts,
+and loaded images are checked separately.
 
-| Process | Instrumentation | XCTestCore loaded | Discovery hits | Contacts initializer hits | XPC-store initializer hits |
-| --- | --- | --- | ---: | ---: | ---: |
-| Existing BleatCoreTests at `c00b05b0`, XCTest runner | Ordinary | Yes | 1 | 3 | 4 |
-| Existing BleatCoreTests at `c00b05b0`, XCTest runner | Coverage | Yes | 1 | 3 | 4 |
-| Isolated prototype, default XCTest runner | Ordinary | Yes | 1 | 1 | 0 |
-| Isolated prototype, default XCTest runner | Coverage | Yes | 1 | 1 | 0 |
-| Isolated prototype, Swift Testing helper | Ordinary | Yes | 0 | 0 | 0 |
-| Isolated prototype, Swift Testing helper | Coverage | Yes | 0 | 0 | 0 |
+| Workload / runner | Instrumentation | Discovery | Contacts init | XPC-store init |
+| --- | --- | ---: | ---: | ---: |
+| Original core XCTest at `c00b05b0` | Ordinary and coverage | 1 | 3 | 4 |
+| Isolated prototype, default SwiftPM | Ordinary and coverage | 1 | 1 | 0 |
+| Isolated prototype, explicit Swift Testing helper | Ordinary and coverage | 0 | 0 | 0 |
+| Converted complete core suite, explicit Swift Testing helper | Coverage | 0 | 0 | 0 |
 
-The prototype's default runner executes zero XCTest cases **and then all seven
-Swift Testing tests**. Zero XCTest cases do not mean discovery was avoided.
-The Contacts backtrace goes through ContactsUICore, Swift metadata realization,
-`objc_copyClassList`, and XCTest's subclass discovery. The existing suite's
-XPC-store backtrace goes through ContactsPersistence's
-`CNPersistentStoreBuilder addRemoteStoreWithURL:options:`. These are framework
-side effects, not evidence of a failed Bleat store.
+XCTestCore still loads. Avoiding its subclass discovery is the measured benefit;
+merely converting assertions while retaining default mixed-runner execution
+would still initialize Contacts. The full converted trace executes 471 core
+tests (470 passed, one entitlement skip), resolves all three breakpoints, and
+exits successfully. Ordinary host execution and coverage execution also pass.
 
-Ordinary and coverage host logs both reproduce `Failed to create NSXPCConnection`
-on this host. The shorter prototype records no XPC-store initializer hits; that
-does **not** prove it eliminates asynchronous Contacts retries. The positive
-discovery/Contacts hits already disprove the proposed automatic benefit. Tests
-were not shortened, sharded, or kept alive artificially to alter warning timing.
-Normal CoreData maintenance messages remain visible.
+The original XPC-store backtrace enters ContactsPersistence through
+`CNPersistentStoreBuilder addRemoteStoreWithURL:options:`. It does not indicate
+a failed Bleat persistence store. Normal SwiftData messages remain visible,
+including the intentionally read-only store failure exercised by
+`testReadOnlyCommitFailureRollsBackTranscriptAndCheckpoint`.
 
-Direct helper-launch troubleshooting initially used a bundle directory instead
-of its executable, then omitted runtime library search paths and the
-`--testing-library swift-testing` argument. Those crashed or zero-test launches
-are excluded from evidence. The supplied runner uses the corrected invocation
-and rejects debugger runs without a successful inferior exit and seven tests.
+A direct debugger launch of the native aggregate executable was denied by macOS
+attach permissions despite normal host access. It is excluded from evidence;
+the successful full-suite trace uses the same SwiftPM helper as the final
+SwiftBuild runner. That debugger run also emitted a distinct
+`com.apple.linkd.autoShortcut` connection warning. Its cause remains unresolved;
+it is not a Contacts discovery hit or a failed test and was not suppressed.
 
-## Migration feature map and possible batches
+## Validation and limitations
 
-Apple's [migration guide](https://developer.apple.com/documentation/testing/migratingfromxctest)
-documents assertions, traits, lifecycle, and concurrency differences. Its
-[XCTest guidance](https://developer.apple.com/documentation/xctest) retains
-XCTest for UI automation and performance APIs.
+The final host wrapper verifies 475 passes and one permitted entitlement skip,
+and exports executed production coverage for both libraries. The native backend
+experiment independently verified the same 476 identities. Eight report-tool
+regression tests pass. Review preserved every original assertion/unwrap check
+and found no P0/P1 migration defect. A cleanup-test review finding was fixed by
+moving the propagated-error assertion outside `withKnownIssue`.
 
-| Repository usage | Migration treatment |
+The full simulator gate already failed on unmodified `28daa1fb`: 422 app tests,
+418 passed and four failed. A focused rerun passed the lookahead case and
+repeated the other three failures. These are baseline results, not evidence for
+the converted revision:
+
+| AppModelTests case | Baseline full-gate assertion |
 | --- | --- |
-| Equality, nil, ordering, booleans | `#expect`; retain structural comparisons and diagnostic context |
-| Floating-point `accuracy:` | Explicit absolute-error bound; preserve the existing tolerance |
-| `XCTUnwrap`, `XCTFail`, typed throw assertions | `try #require`, `Issue.record`, `#expect(throws:)`; retain typed causes |
-| Throwing and async test methods | Throwing/async `@Test`; preserve actor isolation and explicit concurrency tests |
-| Private fixture helpers and Bundle.module | Keep local fixtures and versioned resources; demonstrated by prototype |
-| `XCTSkip` after entitlement or live-environment checks | Do not replace with successful early returns. Use preflight condition traits where possible; runtime cancellation needs separate toolchain and reporting verification |
-| XCTest setup/teardown and expectations | No core-host usages to convert. App/UI usages stay on XCTest; future conversions require per-test initialization/cleanup and async confirmations with verified completion semantics |
-| Manual performance bounds | Preserve workloads, clocks, thresholds, and summaries; serialize performance suites to prevent default parallelism from changing meaning |
-| XCTest measurement APIs / attachments | No core-host usage. App/UI attachments and XCUITest behavior remain in their Xcode targets |
+| `testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup` | Scheduled indexes `[]` instead of `[1]` |
+| `testAutomaticCachedDownloadUsesPersistedAccessWhileOffline` | Playback request count 0 instead of 1 |
+| `testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow` | Playback request count 0 instead of 1 |
+| `testThreeHundredTrackDownloadRepairAndPublicationStayResponsive` | Scheduled indexes `[150, 150]` instead of `[150]` |
 
-Proceed in five reviewable batches: (1) identifiers/URLs/routes/policies;
-(2) API/authentication/transport tests and fixtures; (3) actor-based playback,
-progress, bookmarks, downloads and telemetry; (4) SwiftData, migration and
-performance suites; (5) entitlement-dependent Keychain cases and the final
-host-runner switch, retaining the separate live XCTest workflow. Subdivide large
-files such as API and private-cloud-sync tests rather than converting hundreds of assertions in one
-review. Default parallelism, shared process state, timing bounds, and runtime
-skips require behavioral review, not search-and-replace.
+The two playback assertions inspect service calls before an unstructured
+continuation task necessarily runs. Lookahead/background-task timing and the
+repair test's manual completion need further investigation; those two causes
+remain unproven. The baseline UI stage was not reached. Earlier superseded
+validation at `c00b05b0` passed 402 app tests but failed a stale UI download-menu
+expectation subsequently corrected on main; it does not validate this revision.
+The simulator emitted debugger-version lookup warnings whose tooling cause
+remains unresolved. No physical-device validation is claimed.
 
-Each batch must retain every test identity/outcome and assertion, pass the
-complete `scripts/test-core.sh` gate, and run disposable live suites if their
-contracts change. Default mixed-runner execution cannot establish discovery
-removal; verify the explicit runner on the complete converted host workload.
-
-Transitional retention: core XCTest suites remain until their conversion and
-execution verification are complete. Live XCTest suites retain environment-dependent
-skips and the disposable-server workflow; simulator app tests retain their hosted Apple
-API coverage and attachments; XCUITest retains required UI automation APIs.
-No app-hosted test is claimed inherently impossible to migrate merely because
-it runs in an app process.
-
-## Reproduction and validation
-
-From the repository root, run:
+The isolated seven-test prototype remains available for comparing the default
+and explicit runners independently of the root test graph:
 
 ```sh
-python3 -m unittest discover -s TestSupport/SwiftTestingPrototype -p test_verify_results.py -v
+python3 -m unittest discover -s TestSupport/SwiftTestingPrototype
 BLEAT_PROTOTYPE_TRACE=1 TestSupport/SwiftTestingPrototype/run.sh
-./scripts/test-core.sh
 ```
 
-Omit `BLEAT_PROTOTYPE_TRACE=1` for just the four ordinary/coverage ×
-default/Swift-Testing-only runs. Results stay under
-`TestSupport/SwiftTestingPrototype/.build/evidence`. Review raw logs locally;
-they can include local paths. Do not publish them without redaction. The XML
-verifier requires all seven distinct identifiers, six passes, and exactly the
-intentional skip; missing, duplicate, failed, and unexpectedly skipped cases
-fail validation. Aggregate XML counts are not trusted: this Testing version
-reports `tests="6"` despite listing seven cases including the skip.
-
-The same `trace.lldb` can inspect the root core bundle with
-`xcrun lldb --batch -s TestSupport/SwiftTestingPrototype/trace.lldb -- "$(xcrun --find xctest)" .build/debug/BleatCoreTests.xctest`
-after ordinary and coverage host builds. This runs the complete core suite.
-
-Initial validation at `c00b05b0`: ordinary and coverage root runs each execute 464 core
-tests (463 passed; the iCloud-Keychain entitlement case skipped), 21 live-target
-tests (3 local checks passed, 18 fixture-dependent cases skipped), and five
-transcription tests. These host runs are not disposable-server integration or
-device evidence. Seven verifier regression tests pass. The reproducible matrix
-and its four debugger runs each confirm all six runnable prototype tests pass
-and the intentional test is skipped. The initial simulator app result bundle
-confirms 402 tests passed with no failures or skips.
-
-The initial full gate did not pass: UI test
-`testContextDownloadAndRemovalAreMutuallyExclusive` failed at
-`Tests/BleatUITests/BleatUITests.swift:1053` because it expected a Download action
-for an already-downloaded book. Main already corrected that stale expectation
-by removing the download first. The superseded UI run was interrupted after
-retaining its failure evidence (gate exit 75). No product or existing test fix
-was added to this change; the branch was rebased onto `28daa1fb` for a fresh
-ordinary host run, prototype matrix, and full gate.
-
-Rebased validation at `28daa1fb`: ordinary and coverage host runs each execute
-467 core tests (466 passed, one entitlement-related skip), the same 21
-live-target tests (three passed, 18 fixture-dependent skips), and five passing
-transcription tests. The Release build passes. All four prototype runs verify
-six passes and one intentional skip, and all four debugger runs retain the hit
-counts in the table.
-
-The rebased full gate exits 65 at the app stage. The result bundle contains 422
-individual app tests: 418 passed, four failed, no skips. A single focused rerun
-of all four also exits 65, with one pass and three failures:
-
-| AppModelTests case | Full gate assertion | Focused rerun |
-| --- | --- | --- |
-| `testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup` | Scheduled indexes `[]` instead of `[1]` | Passed |
-| `testAutomaticCachedDownloadUsesPersistedAccessWhileOffline` | Playback request count 0 instead of 1 | Failed |
-| `testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow` | Playback request count 0 instead of 1 | Failed |
-| `testThreeHundredTrackDownloadRepairAndPublicationStayResponsive` | Scheduled indexes `[150, 150]` instead of `[150]` | Failed |
-
-Both bundles were inspected for exact identifiers and individual outcomes. The
-rebased UI stage was not reached. Neither full-gate attempt is represented as
-a pass, and the earlier 402 passing app tests do not validate the newer main
-revision. No disposable live-server suite or physical-device validation ran.
-
-Read-only review found a concrete scheduling race in the two playback-count
-assertions: `PlaybackModel.prepareStreamingContinuation` launches an unstructured
-task, while the tests inspect service calls immediately after playback starts.
-The lookahead test samples running/suspended background URLSession tasks after
-resuming a request, so task-state timing is a plausible explanation for its
-intermittent result. The repair test mixes manual completion with a real
-background task and asynchronous reconciliation; distinguishing an observation
-race from duplicate scheduling requires further task/callback evidence. These
-last two causes remain unproven. The prototype is not in the root test graph,
-and this change modifies no app source, existing test, root manifest, or gate.
-The baseline failures remain follow-up validation issues rather than evidence
-of a Swift Testing regression.
-
-An earlier matrix invocation was superseded after editing the running shell
-script caused a parse error at its end; the finalized script was rerun from
-start to finish successfully, including after the review fix. Review identified
-one P3 fixture-bounds failure path: a throwing `#require` assertion now prevents
-indexing an undersized decoded fixture. Re-review found no outstanding P0–P3.
-
-The UI runner also emitted Xcode `IDELaunchParametersSnapshot` debugger-version
-lookup / `noURL` warnings. Their tooling cause remains unresolved in this
-evaluation; they are recorded separately from test outcomes and were not
-suppressed or worked around.
+Its individual-result verifier requires six passes and one intentional skip in
+each ordinary/coverage run. Earlier crashed/zero-test helper invocations and an
+interrupted script-edit run are excluded; the finalized matrix was rerun and
+verified. Raw debugger logs can contain local paths and should stay local.

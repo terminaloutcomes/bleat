@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LibrarySearchCoordinatorTests: XCTestCase {
+@Suite(.serialized)
+final class LibrarySearchCoordinatorTests {
+    @Test
     func testDefaultSleeperRunsZeroDurationSearch() async throws {
         let service = SearchTestService()
         let coordinator = LibrarySearchCoordinator(
@@ -16,9 +18,10 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
             operation: service.search
         )
 
-        XCTAssertEqual(result.source, .remote)
+        #expect(result.source == .remote)
     }
 
+    @Test
     func testDebouncesForConfiguredDurationBeforeSearching()
         async throws
     {
@@ -45,16 +48,17 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         }
         let initialCallCount = await service.callCount()
         let requestedDurations = await sleeper.requestedDurations()
-        XCTAssertEqual(initialCallCount, 0)
-        XCTAssertEqual(requestedDurations, [.milliseconds(300)])
+        #expect(initialCallCount == 0)
+        #expect(requestedDurations == [.milliseconds(300)])
 
         await sleeper.resumeAll()
         let result = try await task.value
         let finalCallCount = await service.callCount()
-        XCTAssertEqual(result.source, .remote)
-        XCTAssertEqual(finalCallCount, 1)
+        #expect(result.source == .remote)
+        #expect(finalCallCount == 1)
     }
 
+    @Test
     func testNewQuerySupersedesPendingDebounce() async throws {
         let sleeper = SearchTestSleeper()
         let service = SearchTestService()
@@ -98,12 +102,14 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         let secondResult = await second.value
         Self.assertFailure(firstResult, equals: .superseded)
         guard case .success = secondResult else {
-            return XCTFail("Expected second search to succeed")
+            Issue.record("Expected second search to succeed")
+            return
         }
         let calls = await service.calls()
-        XCTAssertEqual(calls.map(\.request.query), ["second"])
+        #expect(calls.map(\.request.query) == ["second"])
     }
 
+    @Test
     func testAccountAndLibraryChangeCancelsInFlightSearch()
         async throws
     {
@@ -157,18 +163,17 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         let secondResult = await second.value
         Self.assertFailure(firstResult, equals: .superseded)
         guard case .success = secondResult else {
-            return XCTFail("Expected replacement search to succeed")
+            Issue.record("Expected replacement search to succeed")
+            return
         }
         let calls = await service.calls()
         let cancelledCallCount =
             await service.cancelledCallCount()
-        XCTAssertEqual(
-            calls.map(\.context),
-            [firstContext, secondContext]
-        )
-        XCTAssertEqual(cancelledCallCount, 1)
+        #expect(calls.map(\.context) == [firstContext, secondContext])
+        #expect(cancelledCallCount == 1)
     }
 
+    @Test
     func testCallerCancellationStopsPendingDebounce() async throws {
         let sleeper = SearchTestSleeper()
         let service = SearchTestService()
@@ -196,9 +201,10 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         let result = await task.value
         let callCount = await service.callCount()
         Self.assertFailure(result, equals: .cancelled)
-        XCTAssertEqual(callCount, 0)
+        #expect(callCount == 0)
     }
 
+    @Test
     func testCancelledOperationCannotPublishWhenDependencyIgnoresIt()
         async throws
     {
@@ -236,6 +242,7 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         Self.assertFailure(result, equals: .cancelled)
     }
 
+    @Test
     func testRepositoryFailuresRemainTyped() async throws {
         let sleeper = SearchTestSleeper()
         let remoteError = AudiobookshelfAPIError.unexpectedStatus(503)
@@ -270,6 +277,7 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
         )
     }
 
+    @Test
     func testRepositoryCancellationMapsToCoordinatorCancellation()
         async throws
     {
@@ -315,23 +323,19 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
             LibrarySearchCoordinatorError
         >,
         equals expected: LibrarySearchCoordinatorError,
-        file: StaticString = #filePath,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
         guard case .failure(let error) = result else {
-            return XCTFail(
-                "Expected failure \(expected)",
-                file: file,
-                line: line
-            )
+            Issue.record(
+                "Expected failure \(expected)", sourceLocation: sourceLocation)
+            return
         }
-        XCTAssertEqual(error, expected, file: file, line: line)
+        #expect(error == expected, sourceLocation: sourceLocation)
     }
 
     private func waitUntil(
         _ condition: () async -> Bool,
-        file: StaticString = #filePath,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         for _ in 0..<1_000 {
             if await condition() {
@@ -339,11 +343,9 @@ final class LibrarySearchCoordinatorTests: XCTestCase {
             }
             await Task.yield()
         }
-        XCTFail(
+        Issue.record(
             "Timed out waiting for asynchronous condition",
-            file: file,
-            line: line
-        )
+            sourceLocation: sourceLocation)
         throw SearchTestError.timeout
     }
 }

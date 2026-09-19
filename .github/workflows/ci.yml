@@ -62,6 +62,31 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  host:
+    name: Swift host tests and coverage
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Prepare CI environment file
+        run: touch .envrc
+      - name: Verify host report tooling
+        run: python3 -m unittest discover -s TestSupport/HostTests
+      - name: Run host tests and export coverage
+        run: zsh scripts/test-host.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: swift-host-coverage
+          path: .build/coverage/swift-host/lcov.info
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: swift-host-results
+          path: .build/host-results/tests.xml
+          if-no-files-found: warn
+          retention-days: 7
+
   rust:
     name: Rust lint, tests and coverage
     runs-on: ubuntu-latest
@@ -96,7 +121,7 @@ jobs:
 
   coverage:
     name: Publish coverage
-    needs: [ios, rust]
+    needs: [ios, host, rust]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -114,6 +139,15 @@ jobs:
           file: coverage/swift-coverage/cobertura.xml
           flag-name: swift-smoke
           parallel: true
+      - name: Publish Swift host coverage
+        id: host
+        continue-on-error: true
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        with:
+          github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          file: coverage/swift-host-coverage/lcov.info
+          flag-name: swift-host
+          parallel: true
       - name: Publish full Rust coverage
         id: rust
         continue-on-error: true
@@ -130,5 +164,5 @@ jobs:
         with:
           github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           parallel-finished: true
-      - if: steps.swift.outcome == 'failure' || steps.rust.outcome == 'failure' || steps.finish.outcome == 'failure'
+      - if: steps.swift.outcome == 'failure' || steps.host.outcome == 'failure' || steps.rust.outcome == 'failure' || steps.finish.outcome == 'failure'
         run: echo "::warning::Coveralls upload failed; test results remain available."

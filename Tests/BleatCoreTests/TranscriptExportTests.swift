@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class TranscriptExportTests: XCTestCase {
+@Suite(.serialized)
+final class TranscriptExportTests {
+    @Test
     func testWebVTTUsesWholeBookTimestampsAndEscapesCueText() throws {
         let data = try TranscriptExporter.export(
             transcripts: [
@@ -22,19 +24,18 @@ final class TranscriptExportTests: XCTestCase {
             format: .webVTT
         )
 
-        XCTAssertEqual(
-            String(decoding: data, as: UTF8.self),
-            """
-            WEBVTT
+        #expect(
+            String(decoding: data, as: UTF8.self) == """
+                WEBVTT
 
-            01:01:01.002 --> 01:01:02.345
-            Café &amp; &lt;friends&gt;
-            next line
+                01:01:01.002 --> 01:01:02.345
+                Café &amp; &lt;friends&gt;
+                next line
 
-            """
-        )
+                """)
     }
 
+    @Test
     func testSubRipSortsSegmentsAndUsesSequentialCueIdentifiers() throws {
         let data = try TranscriptExporter.export(
             transcripts: [
@@ -57,13 +58,13 @@ final class TranscriptExportTests: XCTestCase {
             format: .subRip
         )
 
-        XCTAssertEqual(
-            String(decoding: data, as: UTF8.self),
-            "1\r\n00:00:00,999 --> 00:00:01,001\r\nFirst --> cue\r\n\r\n"
-                + "2\r\n02:00:00,100 --> 02:00:01,999\r\nSecond\r\n\r\n"
-        )
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == "1\r\n00:00:00,999 --> 00:00:01,001\r\nFirst --> cue\r\n\r\n"
+                + "2\r\n02:00:00,100 --> 02:00:01,999\r\nSecond\r\n\r\n")
     }
 
+    @Test
     func testWebVTTSeparatesAdjacentCueBlocks() throws {
         let data = try TranscriptExporter.export(
             transcripts: [
@@ -79,13 +80,13 @@ final class TranscriptExportTests: XCTestCase {
             format: .webVTT
         )
 
-        XCTAssertEqual(
-            String(decoding: data, as: UTF8.self),
-            "WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nFirst\n\n"
-                + "00:00:00.500 --> 00:00:01.000\nSecond\n"
-        )
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == "WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nFirst\n\n"
+                + "00:00:00.500 --> 00:00:01.000\nSecond\n")
     }
 
+    @Test
     func testCanonicalTranscriptExportHasSourceIndependentSemantics() throws {
         let canonical = [
             transcript(
@@ -106,9 +107,10 @@ final class TranscriptExportTests: XCTestCase {
             format: .webVTT
         )
 
-        XCTAssertEqual(locallyGenerated, imported)
+        #expect(locallyGenerated == imported)
     }
 
+    @Test
     func testPartialCanonicalTranscriptCanBeExported() throws {
         let data = try TranscriptExporter.export(
             transcripts: [
@@ -125,10 +127,11 @@ final class TranscriptExportTests: XCTestCase {
             format: .subRip
         )
 
-        XCTAssertTrue(
+        #expect(
             String(decoding: data, as: UTF8.self).contains("Available chapter"))
     }
 
+    @Test
     func testCueTextCannotTerminateItsOwnCueWithBlankLines() throws {
         let transcript = transcript(
             chapterID: 1,
@@ -151,55 +154,66 @@ final class TranscriptExportTests: XCTestCase {
             format: .subRip
         )
 
-        XCTAssertEqual(
-            String(decoding: webVTT, as: UTF8.self),
-            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nLine one\nLine two\n"
+        #expect(
+            String(decoding: webVTT, as: UTF8.self)
+                == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nLine one\nLine two\n"
         )
-        XCTAssertEqual(
-            String(decoding: subRip, as: UTF8.self),
-            "1\r\n00:00:00,000 --> 00:00:01,000\r\nLine one\r\nLine two\r\n\r\n"
+        #expect(
+            String(decoding: subRip, as: UTF8.self)
+                == "1\r\n00:00:00,000 --> 00:00:01,000\r\nLine one\r\nLine two\r\n\r\n"
         )
     }
 
+    @Test
     func testExportRejectsMissingAndInvalidSegments() {
-        XCTAssertThrowsError(
-            try TranscriptExporter.export(transcripts: [], format: .webVTT)
-        ) { error in
-            XCTAssertEqual(error as? TranscriptExportError, .noSegments)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try TranscriptExporter.export(transcripts: [], format: .webVTT)
+            })
+        {
+            #expect(error as? TranscriptExportError == .noSegments)
         }
 
-        XCTAssertThrowsError(
-            try TranscriptExporter.export(
-                transcripts: [
-                    transcript(
-                        chapterID: 1,
-                        chapterStartMilliseconds: 0,
-                        segments: [
-                            segment(start: 2_000, end: 1_000, text: "Invalid")
-                        ]
-                    )
-                ],
-                format: .subRip
-            )
-        ) { error in
-            XCTAssertEqual(error as? TranscriptExportError, .invalidSegment)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try TranscriptExporter.export(
+                    transcripts: [
+                        transcript(
+                            chapterID: 1,
+                            chapterStartMilliseconds: 0,
+                            segments: [
+                                segment(
+                                    start: 2_000, end: 1_000, text: "Invalid")
+                            ]
+                        )
+                    ],
+                    format: .subRip
+                )
+            })
+        {
+            #expect(error as? TranscriptExportError == .invalidSegment)
         }
 
-        XCTAssertThrowsError(
-            try TranscriptExporter.export(
-                transcripts: [
-                    transcript(
-                        chapterID: 1,
-                        chapterStartMilliseconds: 0,
-                        segments: [
-                            segment(start: 1_000, end: 1_000, text: "Zero")
-                        ]
-                    )
-                ],
-                format: .webVTT
-            )
-        ) { error in
-            XCTAssertEqual(error as? TranscriptExportError, .invalidSegment)
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try TranscriptExporter.export(
+                    transcripts: [
+                        transcript(
+                            chapterID: 1,
+                            chapterStartMilliseconds: 0,
+                            segments: [
+                                segment(start: 1_000, end: 1_000, text: "Zero")
+                            ]
+                        )
+                    ],
+                    format: .webVTT
+                )
+            })
+        {
+            #expect(error as? TranscriptExportError == .invalidSegment)
         }
     }
 

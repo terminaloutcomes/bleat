@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class AudiobookshelfAPITests: XCTestCase {
+@Suite(.serialized)
+final class AudiobookshelfAPITests {
+    @Test
     func testListeningSessionsUseZeroIndexedPrefixedRouteAndPinnedShape()
         async throws
     {
@@ -15,26 +17,25 @@ final class AudiobookshelfAPITests: XCTestCase {
         ])
         let result = try await fixture.api.listeningSessions(page: 0)
         let requests = await fixture.transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
-        let components = try XCTUnwrap(
+        let request = try #require(requests.first)
+        let requiredURL1 = try #require(request.url)
+        let components = try #require(
             URLComponents(
-                url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false
+                url: requiredURL1, resolvingAgainstBaseURL: false
             ))
-        XCTAssertEqual(
-            components.path, "/audiobookshelf/api/me/listening-sessions")
-        XCTAssertEqual(
-            components.queryItems,
-            [
+        #expect(components.path == "/audiobookshelf/api/me/listening-sessions")
+        #expect(
+            components.queryItems == [
                 URLQueryItem(name: "itemsPerPage", value: "500"),
                 URLQueryItem(name: "page", value: "0"),
             ])
-        XCTAssertEqual(result.value.total, 2)
-        XCTAssertEqual(result.value.sessions.count, 1)
-        XCTAssertEqual(
-            result.value.sessions.first?.itemID.rawValue, "book-item-1")
-        XCTAssertEqual(result.value.sessions.first?.realSeconds, 60)
+        #expect(result.value.total == 2)
+        #expect(result.value.sessions.count == 1)
+        #expect(result.value.sessions.first?.itemID.rawValue == "book-item-1")
+        #expect(result.value.sessions.first?.realSeconds == 60)
     }
 
+    @Test
     func testListeningSessionsRootHostedRoute() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -47,11 +48,10 @@ final class AudiobookshelfAPITests: XCTestCase {
         )
         _ = try await fixture.api.listeningSessions(page: 0)
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertEqual(
-            requests.first?.url?.path,
-            "/api/me/listening-sessions")
+        #expect(requests.first?.url?.path == "/api/me/listening-sessions")
     }
 
+    @Test
     func testBookDetailUsesNativeAccountAndMapsExpandedContract()
         async throws
     {
@@ -69,66 +69,61 @@ final class AudiobookshelfAPITests: XCTestCase {
             in: LibraryID(rawValue: "library")
         )
         let requests = await fixture.transport.recordedRequests()
-        let sent = try XCTUnwrap(requests.first)
-        let components = try XCTUnwrap(
+        let sent = try #require(requests.first)
+        let requiredURL2 = try #require(sent.url)
+        let components = try #require(
             URLComponents(
-                url: try XCTUnwrap(sent.url),
+                url: requiredURL2,
                 resolvingAgainstBaseURL: false
             ))
         let detail = result.value
 
-        XCTAssertEqual(
-            components.path,
-            "/audiobookshelf/api/items/item"
-        )
-        XCTAssertEqual(
-            components.queryItems,
-            [
+        #expect(components.path == "/audiobookshelf/api/items/item")
+        #expect(
+            components.queryItems == [
                 URLQueryItem(name: "expanded", value: "1"),
                 URLQueryItem(name: "include", value: "progress"),
             ])
-        XCTAssertEqual(
-            sent.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(detail.id, LibraryItemID(rawValue: "item"))
-        XCTAssertEqual(detail.libraryID, LibraryID(rawValue: "library"))
-        XCTAssertEqual(detail.bookID, BookID(rawValue: "book"))
-        XCTAssertEqual(detail.title, "Expanded Book")
-        XCTAssertEqual(detail.subtitle, "A Subtitle")
-        XCTAssertEqual(
-            detail.authors,
-            [
+        #expect(
+            sent.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(detail.id == LibraryItemID(rawValue: "item"))
+        #expect(detail.libraryID == LibraryID(rawValue: "library"))
+        #expect(detail.bookID == BookID(rawValue: "book"))
+        #expect(detail.title == "Expanded Book")
+        #expect(detail.subtitle == "A Subtitle")
+        #expect(
+            detail.authors == [
                 LibraryBookContributor(
                     id: AuthorID(rawValue: "author")!,
                     name: "An Author"
                 )
             ])
-        XCTAssertEqual(detail.narrators, ["A Narrator"])
-        XCTAssertEqual(
-            detail.series,
-            [
+        #expect(detail.narrators == ["A Narrator"])
+        #expect(
+            detail.series == [
                 LibraryBookSeries(
                     id: SeriesID(rawValue: "series")!,
                     name: "A Series",
                     sequence: "2"
                 )
             ])
-        XCTAssertEqual(detail.genres, ["Fiction"])
-        XCTAssertEqual(detail.tags, ["Favourite"])
-        XCTAssertEqual(detail.descriptionPlain, "Safe description")
-        XCTAssertEqual(detail.duration, 120)
-        XCTAssertEqual(detail.trackCount, 1)
-        XCTAssertEqual(detail.audioFileCount, 1)
-        XCTAssertEqual(detail.chapters.count, 2)
-        XCTAssertEqual(detail.chapters[1].title, "Second")
-        XCTAssertEqual(detail.progress?.userID, UserID(rawValue: "user"))
-        XCTAssertEqual(detail.progress?.bookID, BookID(rawValue: "book"))
-        XCTAssertEqual(detail.progress?.currentTime, 30)
-        XCTAssertEqual(detail.progress?.progress, 0.25)
-        XCTAssertEqual(requests.count, 1)
+        #expect(detail.genres == ["Fiction"])
+        #expect(detail.tags == ["Favourite"])
+        #expect(detail.descriptionPlain == "Safe description")
+        #expect(detail.duration == 120)
+        #expect(detail.trackCount == 1)
+        #expect(detail.audioFileCount == 1)
+        #expect(detail.chapters.count == 2)
+        #expect(detail.chapters[1].title == "Second")
+        #expect(detail.progress?.userID == UserID(rawValue: "user"))
+        #expect(detail.progress?.bookID == BookID(rawValue: "book"))
+        #expect(detail.progress?.currentTime == 30)
+        #expect(detail.progress?.progress == 0.25)
+        #expect(requests.count == 1)
     }
 
+    @Test
     func testBookDetailFailuresRemainTyped() async throws {
         let invalidCases: [(String, String)] = [
             ("\"id\": \"item\"", "\"id\": \"other\""),
@@ -147,7 +142,7 @@ final class AudiobookshelfAPITests: XCTestCase {
             ("\"progress\": 0.25", "\"progress\": 1.25"),
             ("\"numTracks\": 1", "\"numTracks\": 0"),
         ]
-        let valid = try XCTUnwrap(
+        let valid = try #require(
             String(
                 data: Self.expandedBookDetailJSON(),
                 encoding: .utf8
@@ -172,9 +167,9 @@ final class AudiobookshelfAPITests: XCTestCase {
                     for: LibraryItemID(rawValue: "item"),
                     in: LibraryID(rawValue: "library")
                 )
-                XCTFail("Expected invalid expanded book detail")
+                Issue.record("Expected invalid expanded book detail")
             } catch {
-                XCTAssertEqual(error, .invalidBookDetail)
+                #expect(error == .invalidBookDetail)
             }
         }
 
@@ -186,9 +181,9 @@ final class AudiobookshelfAPITests: XCTestCase {
                 for: LibraryItemID(rawValue: "item"),
                 in: LibraryID(rawValue: "library")
             )
-            XCTFail("Expected malformed expanded book detail")
+            Issue.record("Expected malformed expanded book detail")
         } catch {
-            XCTAssertEqual(error, .malformedResponse)
+            #expect(error == .malformedResponse)
         }
 
         for (itemID, libraryID, expected) in [
@@ -201,31 +196,29 @@ final class AudiobookshelfAPITests: XCTestCase {
                     for: LibraryItemID(rawValue: itemID),
                     in: LibraryID(rawValue: libraryID)
                 )
-                XCTFail("Expected invalid request identity")
+                Issue.record("Expected invalid request identity")
             } catch {
-                XCTAssertEqual(error, expected)
+                #expect(error == expected)
             }
             let requests = await fixture.transport.recordedRequests()
-            XCTAssertTrue(requests.isEmpty)
+            #expect(requests.isEmpty)
         }
     }
 
+    @Test
     func testHomeRequestValidationAndExactQueryContract() throws {
         for limit in [0, 101] {
-            XCTAssertThrowsError(
-                try LibraryHomeRequest(limit: limit)
-            ) { error in
-                XCTAssertEqual(
-                    error as? LibraryHomeRequestError,
-                    .invalidLimit
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try LibraryHomeRequest(limit: limit) })
+            {
+                #expect(error as? LibraryHomeRequestError == .invalidLimit)
             }
         }
 
         let request = try LibraryHomeRequest(limit: 12)
-        XCTAssertEqual(
-            request.queryItems,
-            [
+        #expect(
+            request.queryItems == [
                 URLQueryItem(name: "limit", value: "12"),
                 URLQueryItem(name: "include", value: "progress"),
             ])
@@ -233,25 +226,21 @@ final class AudiobookshelfAPITests: XCTestCase {
         let expandedRequest = try LibraryItemsPageRequest(
             page: 0,
             filter: LibraryItemFilter(
-                authorID: try XCTUnwrap(
-                    AuthorID(rawValue: "author-1")
-                )),
+                authorID: try #require(AuthorID(rawValue: "author-1"))),
             collapseSeries: false,
             minified: false
         )
-        XCTAssertEqual(
-            expandedRequest.queryItems.first { $0.name == "minified" }?.value,
-            "0"
-        )
-        XCTAssertEqual(
+        #expect(
+            expandedRequest.queryItems.first { $0.name == "minified" }?.value
+                == "0")
+        #expect(
             try LibraryHomeRequest(
                 limit: 8,
                 includeProgress: false
-            ).queryItems,
-            [URLQueryItem(name: "limit", value: "8")]
-        )
+            ).queryItems == [URLQueryItem(name: "limit", value: "8")])
     }
 
+    @Test
     func testPersonalizedShelvesMapOnlyAudioBooksAndExactRoute()
         async throws
     {
@@ -310,38 +299,34 @@ final class AudiobookshelfAPITests: XCTestCase {
             request: request
         )
         let requests = await fixture.transport.recordedRequests()
-        let sent = try XCTUnwrap(requests.first)
-        let components = try XCTUnwrap(
+        let sent = try #require(requests.first)
+        let requiredURL3 = try #require(sent.url)
+        let components = try #require(
             URLComponents(
-                url: try XCTUnwrap(sent.url),
+                url: requiredURL3,
                 resolvingAgainstBaseURL: false
-            )
-        )
+            ))
 
-        XCTAssertEqual(result.value.count, 1)
-        XCTAssertEqual(result.value.first?.id, "recently-added")
-        XCTAssertEqual(result.value.first?.label, "Recently Added")
-        XCTAssertEqual(
-            result.value.first?.labelLocalizationKey,
-            "LabelRecentlyAdded"
-        )
-        XCTAssertEqual(result.value.first?.total, 2)
-        XCTAssertEqual(result.value.first?.items.count, 1)
-        XCTAssertEqual(
-            result.value.first?.items.first?.id,
-            LibraryItemID(rawValue: "audio")
-        )
-        XCTAssertEqual(
-            components.path,
-            "/audiobookshelf/api/libraries/library/personalized"
-        )
-        XCTAssertEqual(components.queryItems, request.queryItems)
-        XCTAssertEqual(
-            sent.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
+        #expect(result.value.count == 1)
+        #expect(result.value.first?.id == "recently-added")
+        #expect(result.value.first?.label == "Recently Added")
+        #expect(
+            result.value.first?.labelLocalizationKey == "LabelRecentlyAdded")
+        #expect(result.value.first?.total == 2)
+        #expect(result.value.first?.items.count == 1)
+        #expect(
+            result.value.first?.items.first?.id
+                == LibraryItemID(rawValue: "audio"))
+        #expect(
+            components.path
+                == "/audiobookshelf/api/libraries/library/personalized")
+        #expect(components.queryItems == request.queryItems)
+        #expect(
+            sent.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
     }
 
+    @Test
     func testContinueListeningLoadsTenItemsWithoutProgressRequests()
         async throws
     {
@@ -365,15 +350,16 @@ final class AudiobookshelfAPITests: XCTestCase {
                 let result = try await fixture.api.personalizedShelves(
                     in: LibraryID(rawValue: "library"),
                     request: try LibraryHomeRequest(limit: 10))
-                XCTAssertEqual(
-                    result.value.first?.items.map(\.id.rawValue),
-                    (0..<10).map { "item-\($0)" })
+                #expect(
+                    result.value.first?.items.map(\.id.rawValue)
+                        == (0..<10).map { "item-\($0)" })
             }
             let requests = await fixture.transport.recordedRequests()
-            XCTAssertEqual(requests.compactMap { $0.url?.path }, [path, path])
+            #expect(requests.compactMap { $0.url?.path } == [path, path])
         }
     }
 
+    @Test
     func testPersonalizedShelfFailuresRemainTyped() async throws {
         let book = Self.bookItemJSON(
             id: "book",
@@ -438,9 +424,9 @@ final class AudiobookshelfAPITests: XCTestCase {
                     in: LibraryID(rawValue: "library"),
                     request: request
                 )
-                XCTFail("Expected typed personalized-shelf failure")
+                Issue.record("Expected typed personalized-shelf failure")
             } catch {
-                XCTAssertEqual(error, expectedError)
+                #expect(error == expectedError)
             }
         }
 
@@ -451,38 +437,37 @@ final class AudiobookshelfAPITests: XCTestCase {
                 in: LibraryID(rawValue: ""),
                 request: defaultRequest
             )
-            XCTFail("Expected invalid library")
+            Issue.record("Expected invalid library")
         } catch {
-            XCTAssertEqual(error, .invalidLibrary)
+            #expect(error == .invalidLibrary)
         }
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertTrue(requests.isEmpty)
+        #expect(requests.isEmpty)
     }
 
+    @Test
     func testSearchRequestValidationAndExactQueryContract() throws {
         for query in [
             "", " \n ", "bad\nquery", String(repeating: "a", count: 201),
         ] {
-            XCTAssertThrowsError(
-                try LibrarySearchRequest(query: query)
-            ) { error in
-                XCTAssertEqual(
-                    error as? LibrarySearchRequestError,
-                    .invalidQuery
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try LibrarySearchRequest(query: query) })
+            {
+                #expect(error as? LibrarySearchRequestError == .invalidQuery)
             }
         }
         for limit in [0, 101] {
-            XCTAssertThrowsError(
-                try LibrarySearchRequest(
-                    query: "book",
-                    limit: limit
-                )
-            ) { error in
-                XCTAssertEqual(
-                    error as? LibrarySearchRequestError,
-                    .invalidLimit
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try LibrarySearchRequest(
+                        query: "book",
+                        limit: limit
+                    )
+                })
+            {
+                #expect(error as? LibrarySearchRequestError == .invalidLimit)
             }
         }
 
@@ -490,15 +475,15 @@ final class AudiobookshelfAPITests: XCTestCase {
             query: "  one & two  ",
             limit: 12
         )
-        XCTAssertEqual(request.query, "one & two")
-        XCTAssertEqual(
-            request.queryItems,
-            [
+        #expect(request.query == "one & two")
+        #expect(
+            request.queryItems == [
                 URLQueryItem(name: "q", value: "one & two"),
                 URLQueryItem(name: "limit", value: "12"),
             ])
     }
 
+    @Test
     func testSearchMapsExpandedBookMatchesAndExactRoute() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -521,31 +506,28 @@ final class AudiobookshelfAPITests: XCTestCase {
             request: request
         )
         let requests = await fixture.transport.recordedRequests()
-        let sent = try XCTUnwrap(requests.first)
-        let queryItems = try XCTUnwrap(
+        let sent = try #require(requests.first)
+        let requiredURL4 = try #require(sent.url)
+        let queryItems = try #require(
             URLComponents(
-                url: try XCTUnwrap(sent.url),
+                url: requiredURL4,
                 resolvingAgainstBaseURL: false
-            )?.queryItems
-        )
+            )?.queryItems)
 
-        XCTAssertEqual(result.value.books.count, 1)
-        XCTAssertEqual(
-            result.value.books.first?.id,
-            LibraryItemID(rawValue: "search-item-0")
-        )
-        XCTAssertEqual(result.value.books.first?.title, "Search Book 0")
-        XCTAssertEqual(
-            result.value.books.first?.libraryID,
-            LibraryID(rawValue: "library")
-        )
-        XCTAssertEqual(
-            sent.url?.path,
-            "/audiobookshelf/api/libraries/library/search"
-        )
-        XCTAssertEqual(queryItems, request.queryItems)
+        #expect(result.value.books.count == 1)
+        #expect(
+            result.value.books.first?.id
+                == LibraryItemID(rawValue: "search-item-0"))
+        #expect(result.value.books.first?.title == "Search Book 0")
+        #expect(
+            result.value.books.first?.libraryID
+                == LibraryID(rawValue: "library"))
+        #expect(
+            sent.url?.path == "/audiobookshelf/api/libraries/library/search")
+        #expect(queryItems == request.queryItems)
     }
 
+    @Test
     func testSearchMapsTypedAuthorAndSeriesGroups() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -576,27 +558,24 @@ final class AudiobookshelfAPITests: XCTestCase {
             request: request
         )
 
-        XCTAssertEqual(result.value.books, [])
-        XCTAssertEqual(
-            result.value.authors,
-            [
+        #expect(result.value.books == [])
+        #expect(
+            result.value.authors == [
                 LibrarySearchAuthorMatch(
-                    id: try XCTUnwrap(AuthorID(rawValue: "author-1")),
+                    id: try #require(AuthorID(rawValue: "author-1")),
                     name: "First Author"
                 )
-            ]
-        )
-        XCTAssertEqual(
-            result.value.series,
-            [
+            ])
+        #expect(
+            result.value.series == [
                 LibrarySearchSeriesMatch(
-                    id: try XCTUnwrap(SeriesID(rawValue: "series-1")),
+                    id: try #require(SeriesID(rawValue: "series-1")),
                     name: "First Series"
                 )
-            ]
-        )
+            ])
     }
 
+    @Test
     func testSearchFailuresRemainTyped() async throws {
         let request = try LibrarySearchRequest(
             query: "book",
@@ -633,9 +612,9 @@ final class AudiobookshelfAPITests: XCTestCase {
                     in: LibraryID(rawValue: "library"),
                     request: request
                 )
-                XCTFail("Expected typed search failure")
+                Issue.record("Expected typed search failure")
             } catch {
-                XCTAssertEqual(error, expectedError)
+                #expect(error == expectedError)
             }
         }
 
@@ -645,40 +624,37 @@ final class AudiobookshelfAPITests: XCTestCase {
                 in: LibraryID(rawValue: ""),
                 request: request
             )
-            XCTFail("Expected invalid library")
+            Issue.record("Expected invalid library")
         } catch {
-            XCTAssertEqual(error, .invalidLibrary)
+            #expect(error == .invalidLibrary)
         }
         let sent = await fixture.transport.recordedRequests()
-        XCTAssertTrue(sent.isEmpty)
+        #expect(sent.isEmpty)
     }
 
+    @Test
     func testPageRequestValidationAndExactQueryContract() throws {
-        XCTAssertThrowsError(
-            try LibraryItemsPageRequest(page: -1)
-        ) { error in
-            XCTAssertEqual(
-                error as? LibraryPageRequestError,
-                .invalidPage
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try LibraryItemsPageRequest(page: -1) })
+        {
+            #expect(error as? LibraryPageRequestError == .invalidPage)
         }
         for limit in [0, 101] {
-            XCTAssertThrowsError(
-                try LibraryItemsPageRequest(page: 0, limit: limit)
-            ) { error in
-                XCTAssertEqual(
-                    error as? LibraryPageRequestError,
-                    .invalidLimit
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try LibraryItemsPageRequest(page: 0, limit: limit)
+                })
+            {
+                #expect(error as? LibraryPageRequestError == .invalidLimit)
             }
         }
-        XCTAssertThrowsError(
-            try LibraryItemFilter("bad\nfilter")
-        ) { error in
-            XCTAssertEqual(
-                error as? LibraryPageRequestError,
-                .invalidFilter
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try LibraryItemFilter("bad\nfilter") })
+        {
+            #expect(error as? LibraryPageRequestError == .invalidFilter)
         }
 
         let filter = try LibraryItemFilter("genres.Fiction & Fantasy")
@@ -689,9 +665,8 @@ final class AudiobookshelfAPITests: XCTestCase {
             descending: true,
             filter: filter
         )
-        XCTAssertEqual(
-            request.queryItems,
-            [
+        #expect(
+            request.queryItems == [
                 URLQueryItem(name: "limit", value: "50"),
                 URLQueryItem(name: "page", value: "2"),
                 URLQueryItem(
@@ -725,9 +700,8 @@ final class AudiobookshelfAPITests: XCTestCase {
                 .first { $0.name == "sort" }?
                 .value
         }
-        XCTAssertEqual(
-            sortValues,
-            [
+        #expect(
+            sortValues == [
                 "media.metadata.title",
                 "media.metadata.authorNameLF",
                 "addedAt",
@@ -735,31 +709,26 @@ final class AudiobookshelfAPITests: XCTestCase {
                 "media.duration",
                 "sequence",
             ])
-        XCTAssertEqual(
+        #expect(
             LibraryProgressFilter.allCases.map {
                 LibraryItemFilter(progress: $0).rawValue
-            },
-            [
+            } == [
                 "progress.ZmluaXNoZWQ=",
                 "progress.aW4tcHJvZ3Jlc3M=",
                 "progress.bm90LXN0YXJ0ZWQ=",
                 "progress.bm90LWZpbmlzaGVk",
-            ]
-        )
-        XCTAssertEqual(
+            ])
+        #expect(
             LibraryItemFilter(
-                authorID: try XCTUnwrap(AuthorID(rawValue: "author-1"))
-            ).rawValue,
-            "authors.YXV0aG9yLTE="
-        )
-        XCTAssertEqual(
+                authorID: try #require(AuthorID(rawValue: "author-1"))
+            ).rawValue == "authors.YXV0aG9yLTE=")
+        #expect(
             LibraryItemFilter(
-                seriesID: try XCTUnwrap(SeriesID(rawValue: "series-1"))
-            ).rawValue,
-            "series.c2VyaWVzLTE="
-        )
+                seriesID: try #require(SeriesID(rawValue: "series-1"))
+            ).rawValue == "series.c2VyaWVzLTE=")
     }
 
+    @Test
     func testLibraryItemsMapsPinnedFixtureAndPagination() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -783,45 +752,43 @@ final class AudiobookshelfAPITests: XCTestCase {
         )
         let recordedRequests =
             await fixture.transport.recordedRequests()
-        let sent = try XCTUnwrap(recordedRequests.first)
-        let queryItems = try XCTUnwrap(
+        let sent = try #require(recordedRequests.first)
+        let requiredURL5 = try #require(sent.url)
+        let queryItems = try #require(
             URLComponents(
-                url: try XCTUnwrap(sent.url),
+                url: requiredURL5,
                 resolvingAgainstBaseURL: false
-            )?.queryItems
-        )
+            )?.queryItems)
 
-        XCTAssertEqual(result.value.total, 3)
-        XCTAssertEqual(result.value.page, 0)
-        XCTAssertEqual(result.value.limit, 2)
-        XCTAssertTrue(result.value.hasNextPage)
-        XCTAssertEqual(result.value.items.count, 2)
+        #expect(result.value.total == 3)
+        #expect(result.value.page == 0)
+        #expect(result.value.limit == 2)
+        #expect(result.value.hasNextPage)
+        #expect(result.value.items.count == 2)
         let first = result.value.items[0]
-        XCTAssertEqual(first.id, LibraryItemID(rawValue: "item-one"))
-        XCTAssertEqual(first.libraryID, LibraryID(rawValue: "library"))
-        XCTAssertEqual(first.title, "The First Book")
-        XCTAssertEqual(first.subtitle, nil)
-        XCTAssertEqual(first.authorName, "First Author")
-        XCTAssertEqual(first.narratorName, nil)
-        XCTAssertEqual(first.seriesName, "A Series #1")
-        XCTAssertEqual(first.genres, ["Fiction"])
-        XCTAssertEqual(first.publisher, nil)
-        XCTAssertEqual(first.publishedYear, "2024")
-        XCTAssertEqual(first.duration, 7200.5)
-        XCTAssertEqual(first.trackCount, 2)
-        XCTAssertEqual(first.chapterCount, 4)
-        XCTAssertFalse(first.isExplicit)
-        XCTAssertFalse(first.isAbridged)
-        XCTAssertEqual(result.value.items[1].title, "Second Book")
-        XCTAssertTrue(result.value.items[1].isExplicit)
-        XCTAssertTrue(result.value.items[1].isAbridged)
-        XCTAssertEqual(
-            sent.url?.path,
-            "/audiobookshelf/api/libraries/library/items"
-        )
-        XCTAssertEqual(queryItems, request.queryItems)
+        #expect(first.id == LibraryItemID(rawValue: "item-one"))
+        #expect(first.libraryID == LibraryID(rawValue: "library"))
+        #expect(first.title == "The First Book")
+        #expect(first.subtitle == nil)
+        #expect(first.authorName == "First Author")
+        #expect(first.narratorName == nil)
+        #expect(first.seriesName == "A Series #1")
+        #expect(first.genres == ["Fiction"])
+        #expect(first.publisher == nil)
+        #expect(first.publishedYear == "2024")
+        #expect(first.duration == 7200.5)
+        #expect(first.trackCount == 2)
+        #expect(first.chapterCount == 4)
+        #expect(!(first.isExplicit))
+        #expect(!(first.isAbridged))
+        #expect(result.value.items[1].title == "Second Book")
+        #expect(result.value.items[1].isExplicit)
+        #expect(result.value.items[1].isAbridged)
+        #expect(sent.url?.path == "/audiobookshelf/api/libraries/library/items")
+        #expect(queryItems == request.queryItems)
     }
 
+    @Test
     func testLibraryItemsMapsCollapsedSeriesBrowseEntry() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -871,22 +838,21 @@ final class AudiobookshelfAPITests: XCTestCase {
             in: LibraryID(rawValue: "library"),
             request: request
         )
-        let entry = try XCTUnwrap(result.value.browseEntries.first)
+        let entry = try #require(result.value.browseEntries.first)
         guard
             case .series(let series, representative: let representative) = entry
         else {
-            return XCTFail("Expected a collapsed series browse entry")
+            Issue.record("Expected a collapsed series browse entry")
+            return
         }
-        XCTAssertEqual(
-            series.id,
-            try XCTUnwrap(SeriesID(rawValue: "series-1"))
-        )
-        XCTAssertEqual(series.name, "A Series")
-        XCTAssertEqual(series.numBooks, 2)
-        XCTAssertEqual(series.sequenceList, ["1, 2"])
-        XCTAssertEqual(representative.id, LibraryItemID(rawValue: "item-1"))
+        #expect(series.id == (try #require(SeriesID(rawValue: "series-1"))))
+        #expect(series.name == "A Series")
+        #expect(series.numBooks == 2)
+        #expect(series.sequenceList == ["1, 2"])
+        #expect(representative.id == LibraryItemID(rawValue: "item-1"))
     }
 
+    @Test
     func testSeriesFilteredExpandedPageMapsTheMatchingSequence() async throws {
         let fixture = try APIFixture(
             responses: [
@@ -929,7 +895,7 @@ final class AudiobookshelfAPITests: XCTestCase {
                 )
             ]
         )
-        let seriesID = try XCTUnwrap(SeriesID(rawValue: "series-1"))
+        let seriesID = try #require(SeriesID(rawValue: "series-1"))
         let request = try LibraryItemsPageRequest(
             page: 0,
             limit: 1,
@@ -944,18 +910,17 @@ final class AudiobookshelfAPITests: XCTestCase {
             request: request
         )
 
-        XCTAssertEqual(
-            result.value.items.first?.series,
-            [
+        #expect(
+            result.value.items.first?.series == [
                 LibraryBookSeries(
                     id: seriesID,
                     name: "A Series",
                     sequence: "1"
                 )
-            ]
-        )
+            ])
     }
 
+    @Test
     func testLibraryItemPageAndItemFailuresRemainTyped() async throws {
         let invalidCases: [(Data, AudiobookshelfAPIError)] = [
             (
@@ -1012,9 +977,9 @@ final class AudiobookshelfAPITests: XCTestCase {
                     in: LibraryID(rawValue: "library"),
                     request: request
                 )
-                XCTFail("Expected invalid page or item")
+                Issue.record("Expected invalid page or item")
             } catch {
-                XCTAssertEqual(error, expectedError)
+                #expect(error == expectedError)
             }
         }
 
@@ -1025,15 +990,16 @@ final class AudiobookshelfAPITests: XCTestCase {
                 in: LibraryID(rawValue: ""),
                 request: request
             )
-            XCTFail("Expected invalid library")
+            Issue.record("Expected invalid library")
         } catch {
-            XCTAssertEqual(error, .invalidLibrary)
+            #expect(error == .invalidLibrary)
         }
         let recordedRequests =
             await fixture.transport.recordedRequests()
-        XCTAssertTrue(recordedRequests.isEmpty)
+        #expect(recordedRequests.isEmpty)
     }
 
+    @Test
     func testLibrariesUsesNativeAccountAndMapsForwardCompatibleDTOs()
         async throws
     {
@@ -1064,14 +1030,12 @@ final class AudiobookshelfAPITests: XCTestCase {
 
         let result = try await fixture.api.libraries()
         let requests = await fixture.transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
-        let correlationHeader = try XCTUnwrap(
-            request.value(forHTTPHeaderField: "X-Bleat-Request-ID")
-        )
+        let request = try #require(requests.first)
+        let correlationHeader = try #require(
+            request.value(forHTTPHeaderField: "X-Bleat-Request-ID"))
 
-        XCTAssertEqual(
-            result.value,
-            [
+        #expect(
+            result.value == [
                 LibrarySummary(
                     id: LibraryID(rawValue: "books"),
                     name: "Audiobooks",
@@ -1083,22 +1047,20 @@ final class AudiobookshelfAPITests: XCTestCase {
                     mediaType: .unknown("spoken-word-v2")
                 ),
             ])
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/audiobookshelf/api/libraries"
+        #expect(
+            request.url?.absoluteString
+                == "https://example.com/audiobookshelf/api/libraries")
+        #expect(request.httpMethod == "GET")
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(
+            UUID(uuidString: correlationHeader) == result.correlationID.rawValue
         )
-        XCTAssertEqual(request.httpMethod, "GET")
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(
-            UUID(uuidString: correlationHeader),
-            result.correlationID.rawValue
-        )
-        XCTAssertEqual(requests.count, 1)
+        #expect(requests.count == 1)
     }
 
+    @Test
     func testLibraryFailuresRemainTyped() async throws {
         let cases: [(HTTPResponse, AudiobookshelfAPIError)] = [
             (
@@ -1152,13 +1114,14 @@ final class AudiobookshelfAPITests: XCTestCase {
             let fixture = try APIFixture(responses: [response])
             do {
                 _ = try await fixture.api.libraries()
-                XCTFail("Expected typed API failure")
+                Issue.record("Expected typed API failure")
             } catch {
-                XCTAssertEqual(error, expectedError)
+                #expect(error == expectedError)
             }
         }
     }
 
+    @Test
     func testMissingCredentialsRemainTyped() async throws {
         let fixture = try APIFixture(
             responses: [],
@@ -1167,17 +1130,15 @@ final class AudiobookshelfAPITests: XCTestCase {
 
         do {
             _ = try await fixture.api.libraries()
-            XCTFail("Expected missing credentials")
+            Issue.record("Expected missing credentials")
         } catch {
-            XCTAssertEqual(
-                error,
-                .authentication(.missingCredentials)
-            )
+            #expect(error == .authentication(.missingCredentials))
         }
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertTrue(requests.isEmpty)
+        #expect(requests.isEmpty)
     }
 
+    @Test
     func testCancellationRemainsTypedAndSendsNoRequest() async throws {
         let fixture = try APIFixture(responses: [])
         let task = Task {
@@ -1187,26 +1148,22 @@ final class AudiobookshelfAPITests: XCTestCase {
 
         do {
             _ = try await task.value
-            XCTFail("Expected cancellation")
+            Issue.record("Expected cancellation")
         } catch {
-            XCTAssertEqual(
-                error as? AudiobookshelfAPIError,
-                .cancelled
-            )
+            #expect(error as? AudiobookshelfAPIError == .cancelled)
         }
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertTrue(requests.isEmpty)
+        #expect(requests.isEmpty)
     }
 
     private static func fixture(named name: String) throws -> Data {
-        let url = try XCTUnwrap(
+        let url = try #require(
             Bundle.module.urls(
                 forResourcesWithExtension: "json",
                 subdirectory: nil
             )?.first {
                 $0.lastPathComponent == "\(name).json"
-            }
-        )
+            })
         return try Data(contentsOf: url)
     }
 
