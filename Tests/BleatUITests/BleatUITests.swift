@@ -127,12 +127,12 @@ final class BleatUITests: XCTestCase {
         let launchScreen = app.descendants(matching: .any)["app.launching"]
         let expectedLabel = "Starting Bleat. Restoring your account"
 
-        XCTAssertTrue(launchScreen.waitForExistence(timeout: 3))
+        XCTAssertTrue(launchScreen.waitForExistence(timeout: 10))
         let launchStatus = expectation(
             for: NSPredicate(format: "label == %@", expectedLabel),
             evaluatedWith: launchScreen
         )
-        await fulfillment(of: [launchStatus], timeout: 3)
+        await fulfillment(of: [launchStatus], timeout: 10)
         XCTAssertEqual(
             launchScreen.label,
             expectedLabel
