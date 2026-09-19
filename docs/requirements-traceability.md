@@ -152,10 +152,11 @@ by `APP-OIDC-001` and [GitHub issue #2](https://github.com/terminaloutcomes/blea
 ## Host test runner diagnostic evidence
 
 The [Swift Testing evaluation](swift-testing-evaluation.md) records the isolated
-prototype, exact outcomes, debugger comparison, and decision to retain existing
-XCTest suites. Default SwiftPM discovery still initializes Contacts on the
-evaluated toolchain, even in the Swift Testing-only prototype. This evidence
-does not replace any host, simulator, live-server, or device requirement.
+prototype, exact outcomes, debugger comparison, and recommendation to migrate
+host tests using the explicit `--disable-xctest` runner. Default SwiftPM discovery
+still initializes Contacts on the evaluated toolchain; explicit Swift Testing-only
+execution avoids that path in the prototype. Host conversion remains pending.
+This evidence does not replace any host, simulator, live-server, or device requirement.
 
 ## Issue #151 download storage evidence
 

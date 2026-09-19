@@ -7,17 +7,32 @@ the changes were subsequently rebased onto main at `28daa1fb`.
 
 ## Decision
 
-Retain the existing XCTest host suites. Implement the isolated, reproducible
-prototype in `TestSupport/SwiftTestingPrototype`, but do not start a mechanical
-migration. **Replacing XCTestCase tests alone does not remove XCTest discovery
-or incidental Contacts initialization in the default runner on this toolchain.**
-Explicit Swift Testing-only execution avoids those calls in the prototype,
-but applying `--disable-xctest` to the root package would silently omit its
-existing core and live XCTest suites. Do not change the repository gate to use it.
+Use SwiftPM's explicit Swift Testing-only runner for migrated host unit tests:
 
-The investigation is complete; whole-suite migration is not recommended by this
-evidence. This is a runner-specific finding, not a claim that Swift Testing
-lacks value for new tests. The transcription target already uses it.
+```sh
+swift test --disable-xctest --enable-code-coverage
+```
+
+The prototype supports a phased host migration with this runner choice. In both
+ordinary and coverage runs, it executes the runnable tests without calling
+XCTest subclass discovery, initializing Contacts, or entering the XPC-store
+initializer. XCTestCore still loads; avoiding its discovery path is the measured
+benefit. No SwiftPM fork, private framework setting, or diagnostic suppression
+is needed.
+
+The initial recommendation to retain XCTest gave too much weight to default
+execution. **Default SwiftPM still initializes Contacts, but the supported
+`--disable-xctest` option avoids the observed path in the prototype.** Choose
+that option deliberately rather than treating the default as a migration blocker.
+
+The host migration is not implemented by this prototype. Keep the existing root
+gate during conversion; switching it immediately would silently omit the current
+467 core XCTest tests. Once every host test has been converted and equivalent
+individual outcomes verified, switch the host coverage command to the explicit
+runner above. Keep live XCTest execution in `scripts/test-live.sh`, which already
+uses `swift test --filter BleatCoreLiveTests`, and keep app/UI execution in Xcode.
+The final migration must also verify the complete converted workload's diagnostic
+behavior and preserve the live target's existing checks in that separate workflow.
 
 ## Current source and prototype
 
@@ -113,24 +128,23 @@ XCTest for UI automation and performance APIs.
 | Manual performance bounds | Preserve workloads, clocks, thresholds, and summaries; serialize performance suites to prevent default parallelism from changing meaning |
 | XCTest measurement APIs / attachments | No core-host usage. App/UI attachments and XCUITest behavior remain in their Xcode targets |
 
-If a future runner change or a separate product decision justifies migration,
-estimate five reviewable batches: (1) identifiers/URLs/routes/policies;
+Proceed in five reviewable batches: (1) identifiers/URLs/routes/policies;
 (2) API/authentication/transport tests and fixtures; (3) actor-based playback,
 progress, bookmarks, downloads and telemetry; (4) SwiftData, migration and
-performance suites; (5) entitlement-dependent Keychain cases and a separate
-decision about live-target discovery. Subdivide large files such as API and
-private-cloud-sync tests rather than converting hundreds of assertions in one
+performance suites; (5) entitlement-dependent Keychain cases and the final
+host-runner switch, retaining the separate live XCTest workflow. Subdivide large
+files such as API and private-cloud-sync tests rather than converting hundreds of assertions in one
 review. Default parallelism, shared process state, timing bounds, and runtime
 skips require behavioral review, not search-and-replace.
 
 Each batch must retain every test identity/outcome and assertion, pass the
 complete `scripts/test-core.sh` gate, and run disposable live suites if their
-contracts change. Re-run this diagnostic comparison after the last XCTest
-target/runner decision; a mixed target cannot establish discovery removal.
+contracts change. Default mixed-runner execution cannot establish discovery
+removal; verify the explicit runner on the complete converted host workload.
 
-Intentional retention: core XCTest suites lack the demonstrated runner benefit
-required by #125; live XCTest suites retain environment-dependent skips and
-the disposable-server workflow; simulator app tests retain their hosted Apple
+Transitional retention: core XCTest suites remain until their conversion and
+execution verification are complete. Live XCTest suites retain environment-dependent
+skips and the disposable-server workflow; simulator app tests retain their hosted Apple
 API coverage and attachments; XCUITest retains required UI automation APIs.
 No app-hosted test is claimed inherently impossible to migrate merely because
 it runs in an app process.

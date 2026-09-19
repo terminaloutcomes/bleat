@@ -82,10 +82,11 @@ Run the host test suite with code coverage:
 swift test --enable-code-coverage
 ```
 
-The [Swift Testing evaluation](swift-testing-evaluation.md) records why the
-existing XCTest suites remain and provides an isolated runner/diagnostics
-prototype. Do not use `--disable-xctest` on the root package: it omits the
-existing core and live XCTest tests.
+The [Swift Testing evaluation](swift-testing-evaluation.md) recommends an
+explicit Swift Testing-only runner after host test migration and provides an
+isolated runner/diagnostics prototype. Do not switch the root gate to
+`--disable-xctest` before converting its host XCTest tests: the flag omits them.
+The live XCTest suite retains its separate `scripts/test-live.sh` workflow.
 
 Run the core tests with coverage, Release build, and iOS Simulator application
 unit and UI tests:
