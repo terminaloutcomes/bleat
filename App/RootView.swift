@@ -446,7 +446,10 @@ private struct CloudConfigurationConflictView: View {
     }
 
     private func fileCount(_ count: Int) -> String {
-        "\(count) file\(count == 1 ? "" : "s")"
+        if count == AutomaticDownloadLookaheadPreference.all.rawValue {
+            return "All"
+        }
+        return "\(count) file\(count == 1 ? "" : "s")"
     }
 
     private func networkPolicy(_ value: String) -> String {
@@ -5649,19 +5652,29 @@ private struct SettingsView: View {
                         "settings.downloads.maximumConcurrent"
                     )
 
+                    let lookahead = model.downloads.automaticLookahead
                     Stepper(
-                        "Files Ahead: \(model.downloads.automaticLookaheadCount)",
-                        value: Binding(
-                            get: {
-                                model.downloads.automaticLookaheadCount
-                            },
-                            set: { value in
-                                model.downloads
-                                    .setAutomaticLookaheadCount(value)
-                            }
-                        ),
-                        in: 1...20
+                        label: {
+                            LabeledContent(
+                                "Files Ahead",
+                                value: lookahead.label
+                            )
+                        },
+                        onIncrement: lookahead.canIncrement
+                            ? {
+                                model.downloads.setAutomaticLookahead(
+                                    lookahead.incremented
+                                )
+                            } : nil,
+                        onDecrement: lookahead.canDecrement
+                            ? {
+                                model.downloads.setAutomaticLookahead(
+                                    lookahead.decremented
+                                )
+                            } : nil
                     )
+                    .accessibilityLabel("Files Ahead")
+                    .accessibilityValue(lookahead.label)
                     .accessibilityIdentifier(
                         "settings.downloads.filesAhead"
                     )

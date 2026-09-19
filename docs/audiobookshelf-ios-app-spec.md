@@ -249,8 +249,9 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - Downloads resume after app suspension, process termination, connectivity loss, or access-token refresh.
 - I can restrict downloads to Wi-Fi/non-expensive networks.
 - Starting playback automatically caches complete source files for the current
-  position and a configurable lookahead, defaulting to five files/chapters
-  ahead; a single-file book caches that complete file.
+  position and a configurable lookahead of 1, 3, 5, or 10 files/chapters,
+  defaulting to five; selecting All attempts to cache the full book, and a
+  single-file book caches that complete file.
 - Automatic cache progress, target bytes, and `queued`, `downloading`,
   `cached`, or `failed` state describe only the active window. A cached window
   does not make a multi-file book an offline download.
@@ -1136,8 +1137,9 @@ Requirements:
 - playback-driven automatic caching of whole files: use source-file timing to
   cover the current and configured following chapter window, otherwise retain
   the current file plus the configured number of following files;
-- default automatic lookahead of five, with a single-file book downloading the
-  complete file once;
+- automatic lookahead choices of 1, 3, 5, 10, or All, defaulting to five; All
+  targets every source file, while a single-file book downloads the complete
+  file once;
 - automatic cache transfers wait for stable streamed playback, use background
   network priority, and suspend whenever the player needs bandwidth;
 - distinguish automatic cache records from explicit downloads so automatic

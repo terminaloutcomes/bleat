@@ -104,6 +104,23 @@ final class AppModelTests: XCTestCase {
             MaximumConcurrentDownloadsPreference.permittedValues.map(
                 String.init)
         )
+
+        let lookahead = try XCTUnwrap(
+            specifiers.first {
+                $0["Key"] as? String
+                    == AutomaticDownloadLookaheadPreference.defaultsKey
+            }
+        )
+        XCTAssertEqual(lookahead["Type"] as? String, "PSMultiValueSpecifier")
+        XCTAssertEqual(lookahead["DefaultValue"] as? Int, 5)
+        XCTAssertEqual(
+            lookahead["Values"] as? [Int],
+            AutomaticDownloadLookaheadPreference.allCases.map(\.rawValue)
+        )
+        XCTAssertEqual(
+            lookahead["Titles"] as? [String],
+            AutomaticDownloadLookaheadPreference.allCases.map(\.label)
+        )
     }
 
     func testDownloadModelQueuesAndAdmitsBooksAtConfiguredMaximum()
@@ -773,7 +790,7 @@ final class AppModelTests: XCTestCase {
             DownloadControlSnapshot(phase: .cached, actions: [.remove])
         )
 
-        model.setAutomaticLookaheadCount(1)
+        model.setAutomaticLookahead(.one)
         await model.handleAutomaticPlaybackActivity(
             AutomaticDownloadActivity(
                 kind: .progress,
@@ -7723,25 +7740,27 @@ final class AppModelTests: XCTestCase {
         let service = TestAppService(activeAccount: .success(nil))
         let first = DownloadModel(service: service, defaults: defaults)
 
-        XCTAssertEqual(first.automaticLookaheadCount, 5)
+        XCTAssertEqual(first.automaticLookahead, .five)
         XCTAssertEqual(first.maximumConcurrentDownloads, 5)
         XCTAssertEqual(
             first.automaticCleanupPolicy,
             .afterTwentyFourHours
         )
 
-        first.setAutomaticLookaheadCount(9)
+        first.setAutomaticLookahead(.all)
         first.setMaximumConcurrentDownloads(8)
         first.setAutomaticCleanupPolicy(.afterChapter)
         let restored = DownloadModel(service: service, defaults: defaults)
-        XCTAssertEqual(restored.automaticLookaheadCount, 9)
+        XCTAssertEqual(restored.automaticLookahead, .all)
         XCTAssertEqual(restored.maximumConcurrentDownloads, 10)
         XCTAssertEqual(restored.automaticCleanupPolicy, .afterChapter)
 
-        restored.setAutomaticLookaheadCount(0)
-        XCTAssertEqual(restored.automaticLookaheadCount, 1)
-        restored.setAutomaticLookaheadCount(99)
-        XCTAssertEqual(restored.automaticLookaheadCount, 20)
+        defaults.set(
+            4,
+            forKey: AutomaticDownloadLookaheadPreference.defaultsKey
+        )
+        restored.reloadSyncedPreferences()
+        XCTAssertEqual(restored.automaticLookahead, .three)
 
         defaults.set(
             3,
@@ -7795,7 +7814,7 @@ final class AppModelTests: XCTestCase {
             AutomaticDownloadPlanner.targetTrackIndexes(
                 plan: plan,
                 activity: activity,
-                lookaheadCount: 5
+                lookahead: .five
             ),
             [0, 1, 2]
         )
@@ -7858,7 +7877,7 @@ final class AppModelTests: XCTestCase {
             AutomaticDownloadPlanner.targetTrackIndexes(
                 plan: plan,
                 activity: activity,
-                lookaheadCount: 5
+                lookahead: .five
             ),
             [2, 3, 4, 5, 6, 7]
         )
@@ -7871,9 +7890,18 @@ final class AppModelTests: XCTestCase {
             AutomaticDownloadPlanner.targetTrackIndexes(
                 plan: singleFile,
                 activity: activity,
-                lookaheadCount: 5
+                lookahead: .five
             ),
             [0]
+        )
+
+        XCTAssertEqual(
+            AutomaticDownloadPlanner.targetTrackIndexes(
+                plan: plan,
+                activity: activity,
+                lookahead: .all
+            ),
+            Set(0..<10)
         )
     }
 

@@ -91,6 +91,76 @@ final class BackgroundDownloadTests: XCTestCase {
         )
     }
 
+    func testAutomaticDownloadLookaheadTransitionsAndPersistence() throws {
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.allCases,
+            [.one, .three, .five, .ten, .all]
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.one.decremented,
+            .one
+        )
+        XCTAssertFalse(AutomaticDownloadLookaheadPreference.one.canDecrement)
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.one.incremented,
+            .three
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.ten.incremented,
+            .all
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.all.decremented,
+            .ten
+        )
+        XCTAssertFalse(AutomaticDownloadLookaheadPreference.all.canIncrement)
+        XCTAssertEqual(AutomaticDownloadLookaheadPreference.all.label, "All")
+        XCTAssertNil(AutomaticDownloadLookaheadPreference.all.limitedCount)
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.normalize(4),
+            .three
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.normalize(99),
+            .ten
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.normalize(Int.min),
+            .one
+        )
+
+        let suite =
+            "AutomaticDownloadLookaheadPreference.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.load(from: defaults),
+            .five
+        )
+        defaults.set(
+            AutomaticDownloadLookaheadPreference.all.rawValue,
+            forKey: AutomaticDownloadLookaheadPreference.defaultsKey
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.load(from: defaults),
+            .all
+        )
+        defaults.set(
+            4,
+            forKey: AutomaticDownloadLookaheadPreference.defaultsKey
+        )
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.load(from: defaults),
+            .three
+        )
+        XCTAssertEqual(
+            defaults.integer(
+                forKey: AutomaticDownloadLookaheadPreference.defaultsKey
+            ),
+            3
+        )
+    }
+
     func testCancelledTrackMakesIncompleteBookDurablyCancelled() throws {
         let plan = DownloadPlan(
             itemID: LibraryItemID(rawValue: "item"),

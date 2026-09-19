@@ -702,9 +702,11 @@ from one through five advance by one, then advance by five through 100.
 Starting streamed playback also creates an automatic whole-file cache. Bleat
 keeps the current file plus enough following files to cover the next configured
 chapter window when file timing is available, and otherwise keeps the
-configured number of files ahead. The default is five files ahead; a single
-M4B is downloaded once in full. Automatic transfers wait for stable playback,
-run at background priority, and suspend whenever the player needs bandwidth.
+configured number of files ahead. Settings offers 1, 3, 5, 10, or **All**;
+**All** attempts to cache the full book, and the default is five files ahead.
+A single M4B is downloaded once in full. Automatic transfers wait for stable
+playback, run at background priority, and suspend whenever the player needs
+bandwidth.
 Their status and displayed byte count cover only the active file window, so a
 fully cached window reads **Downloaded** at 100% and offers no further per-book
 Download action, without changing the whole-book offline guarantee. Play starts

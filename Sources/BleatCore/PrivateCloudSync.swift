@@ -536,7 +536,10 @@ public struct CloudConfigurationSnapshot:
             MaximumConcurrentDownloadsPreference.normalize(
                 maximumConcurrentDownloads
             )
-        self.automaticDownloadLookahead = automaticDownloadLookahead
+        self.automaticDownloadLookahead =
+            AutomaticDownloadLookaheadPreference.normalize(
+                automaticDownloadLookahead
+            ).rawValue
         self.automaticDownloadCleanupPolicy =
             automaticDownloadCleanupPolicy
     }
@@ -593,10 +596,13 @@ public struct CloudConfigurationSnapshot:
                     forKey: .maximumConcurrentDownloads
                 ) ?? MaximumConcurrentDownloadsPreference.defaultValue
             )
-        automaticDownloadLookahead = try container.decode(
-            Int.self,
-            forKey: .automaticDownloadLookahead
-        )
+        automaticDownloadLookahead =
+            AutomaticDownloadLookaheadPreference.normalize(
+                try container.decode(
+                    Int.self,
+                    forKey: .automaticDownloadLookahead
+                )
+            ).rawValue
         automaticDownloadCleanupPolicy = try container.decode(
             String.self,
             forKey: .automaticDownloadCleanupPolicy
@@ -623,7 +629,7 @@ public actor CloudConfigurationStore {
         static let maximumConcurrentDownloads =
             MaximumConcurrentDownloadsPreference.defaultsKey
         static let automaticDownloadLookahead =
-            "bleat.downloads.automaticLookahead.v1"
+            AutomaticDownloadLookaheadPreference.defaultsKey
         static let automaticDownloadCleanupPolicy =
             "bleat.downloads.automaticCleanupPolicy.v1"
     }
@@ -679,13 +685,10 @@ public actor CloudConfigurationStore {
                 MaximumConcurrentDownloadsPreference.load(
                     from: defaults
                 ).value,
-            automaticDownloadLookahead: defaults.object(
-                forKey: Key.automaticDownloadLookahead
-            ) == nil
-                ? 5
-                : defaults.integer(
-                    forKey: Key.automaticDownloadLookahead
-                ),
+            automaticDownloadLookahead:
+                AutomaticDownloadLookaheadPreference.load(
+                    from: defaults
+                ).rawValue,
             automaticDownloadCleanupPolicy: defaults.string(
                 forKey: Key.automaticDownloadCleanupPolicy
             ) ?? "afterTwentyFourHours"
@@ -704,7 +707,9 @@ public actor CloudConfigurationStore {
             [5, 10, 15, 30, 45, 60].contains(
                 snapshot.skipForwardSeconds
             ),
-            (1...20).contains(snapshot.automaticDownloadLookahead),
+            AutomaticDownloadLookaheadPreference(
+                rawValue: snapshot.automaticDownloadLookahead
+            ) != nil,
             ["wifiOnly", "allowCellular"].contains(
                 snapshot.downloadNetworkPolicy
             ),
@@ -751,7 +756,9 @@ public actor CloudConfigurationStore {
             forKey: Key.maximumConcurrentDownloads
         )
         defaults.set(
-            snapshot.automaticDownloadLookahead,
+            AutomaticDownloadLookaheadPreference.normalize(
+                snapshot.automaticDownloadLookahead
+            ).rawValue,
             forKey: Key.automaticDownloadLookahead
         )
         defaults.set(

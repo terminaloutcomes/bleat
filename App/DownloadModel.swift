@@ -111,10 +111,13 @@ enum AutomaticDownloadPlanner {
     static func targetTrackIndexes(
         plan: DownloadPlan,
         activity: AutomaticDownloadActivity,
-        lookaheadCount: Int
+        lookahead: AutomaticDownloadLookaheadPreference
     ) -> Set<Int> {
         guard !plan.tracks.isEmpty else {
             return []
+        }
+        guard let lookaheadCount = lookahead.limitedCount else {
+            return Set(plan.tracks.map(\.index))
         }
         if plan.tracks.count == 1 {
             return [plan.tracks[0].index]
@@ -659,8 +662,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         @MainActor @Sendable () async throws -> Void
     private let defaults: UserDefaults
     private let networkPolicyKey = "bleat.downloads.networkPolicy.v1"
-    private let automaticLookaheadKey =
-        "bleat.downloads.automaticLookahead.v1"
     private let automaticCleanupPolicyKey =
         "bleat.downloads.automaticCleanupPolicy.v1"
     private var transferAdmission: DownloadTransferAdmissionController
@@ -743,7 +744,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var failureDownloadID: DownloadID?
     private(set) var networkPolicy: DownloadNetworkPolicy
     private(set) var maximumConcurrentDownloads: Int
-    private(set) var automaticLookaheadCount: Int
+    private(set) var automaticLookahead: AutomaticDownloadLookaheadPreference
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
     private var queuedCellularDownloads: [PendingCellularDownload] = []
@@ -912,10 +913,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         transferAdmission = DownloadTransferAdmissionController(
             limit: loadedMaximumConcurrentDownloads
         )
-        automaticLookaheadCount = Self.normalizedLookaheadCount(
-            defaults.object(forKey: automaticLookaheadKey) == nil
-                ? 5
-                : defaults.integer(forKey: automaticLookaheadKey)
+        automaticLookahead = AutomaticDownloadLookaheadPreference.load(
+            from: defaults
         )
         automaticCleanupPolicy =
             defaults.string(forKey: automaticCleanupPolicyKey)
@@ -1764,11 +1763,13 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         scheduleConcurrencyQueueDrain()
     }
 
-    func setAutomaticLookaheadCount(_ count: Int) {
-        automaticLookaheadCount = Self.normalizedLookaheadCount(count)
+    func setAutomaticLookahead(
+        _ preference: AutomaticDownloadLookaheadPreference
+    ) {
+        automaticLookahead = preference
         defaults.set(
-            automaticLookaheadCount,
-            forKey: automaticLookaheadKey
+            preference.rawValue,
+            forKey: AutomaticDownloadLookaheadPreference.defaultsKey
         )
     }
 
@@ -1788,10 +1789,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             MaximumConcurrentDownloadsPreference.load(from: defaults).value
         maximumConcurrentDownloads = storedMaximum
         transferAdmission.updateLimit(storedMaximum)
-        automaticLookaheadCount = Self.normalizedLookaheadCount(
-            defaults.object(forKey: automaticLookaheadKey) == nil
-                ? 5
-                : defaults.integer(forKey: automaticLookaheadKey)
+        automaticLookahead = AutomaticDownloadLookaheadPreference.load(
+            from: defaults
         )
         automaticCleanupPolicy =
             defaults.string(forKey: automaticCleanupPolicyKey)
@@ -2308,7 +2307,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let targets = AutomaticDownloadPlanner.targetTrackIndexes(
                 plan: plan,
                 activity: activity,
-                lookaheadCount: automaticLookaheadCount
+                lookahead: automaticLookahead
             )
             guard !targets.isEmpty else {
                 return
@@ -2489,10 +2488,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             await self?.cleanupExpiredAutomaticDownloads()
             self?.scheduleAutomaticCleanup()
         }
-    }
-
-    private static func normalizedLookaheadCount(_ count: Int) -> Int {
-        min(max(count, 1), 20)
     }
 
     private func discardInvalidLegacyDownloads() async {
