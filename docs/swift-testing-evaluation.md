@@ -2,13 +2,14 @@
 
 Issue [#125](https://github.com/terminaloutcomes/bleat/issues/125), evaluated and
 converted on 2026-09-20 with Xcode 27.0 (27A266a), Swift 6.4, Testing 2084, and
-macOS 26.6.2 on Apple Silicon. The conversion is based on `28daa1fb`.
+macOS 26.6.2 on Apple Silicon. The conversion began on `28daa1fb` and was rebased onto `8e26a7b3`,
+preserving three additional upstream HTTP telemetry tests.
 
 ## Runner and scope
 
-Run `scripts/test-host.sh`. All 37 core suites and their 467 original test
+Run `scripts/test-host.sh`. All 37 core suites and their 470 original test
 identities now use Swift Testing. Four new cleanup regression tests and the five
-existing transcription tests bring the verified inventory to 476 tests across
+existing transcription tests bring the verified inventory to 479 tests across
 40 suites. One transcription test retains its three parameterized cases.
 
 The wrapper explicitly uses `--disable-xctest --no-parallel`. This avoids the
@@ -97,8 +98,8 @@ and loaded images are checked separately.
 
 XCTestCore still loads. Avoiding its subclass discovery is the measured benefit;
 merely converting assertions while retaining default mixed-runner execution
-would still initialize Contacts. The full converted trace executes 471 core
-tests (470 passed, one entitlement skip), resolves all three breakpoints, and
+would still initialize Contacts. The full converted trace executes 474 core
+tests (473 passed, one entitlement skip), resolves all three breakpoints, and
 exits successfully. Ordinary host execution and coverage execution also pass.
 
 The original XPC-store backtrace enters ContactsPersistence through
@@ -116,17 +117,20 @@ it is not a Contacts discovery hit or a failed test and was not suppressed.
 
 ## Validation and limitations
 
-The final host wrapper verifies 475 passes and one permitted entitlement skip,
+The final host wrapper verifies 478 passes and one permitted entitlement skip,
 and exports executed production coverage for both libraries. The native backend
-experiment independently verified the same 476 identities. Eight report-tool
+experiment independently verified the 476 identities present before the final
+upstream rebase. All 39 affected telemetry tests pass after preserving and
+converting the three new upstream tests. Eight report-tool
 regression tests pass. Review preserved every original assertion/unwrap check
 and found no P0/P1 migration defect. A cleanup-test review finding was fixed by
 moving the propagated-error assertion outside `withKnownIssue`.
 
 The full simulator gate already failed on unmodified `28daa1fb`: 422 app tests,
 418 passed and four failed. A focused rerun passed the lookahead case and
-repeated the other three failures. These are baseline results, not evidence for
-the converted revision:
+repeated the other three failures. The first converted full gate on the same base reproduced exactly the same
+418 passes and four failures (exit 65); its UI stage was not reached. These
+results precede the final upstream rebase:
 
 | AppModelTests case | Baseline full-gate assertion |
 | --- | --- |
