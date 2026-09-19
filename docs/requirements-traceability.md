@@ -149,6 +149,14 @@ by `APP-OIDC-001` and [GitHub issue #2](https://github.com/terminaloutcomes/blea
 | PERSISTENCE-MIGRATION-001 | 13, 16, 17 | Every shipped SwiftData schema migrates to the current schema through versioned fixtures, with upgrade, backup/restore, account-removal, and app-data-reset journeys | `Sources/BleatCore/BleatPersistenceSchemaHistory.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/RootView.swift`, [GitHub issue #47](https://github.com/terminaloutcomes/bleat/issues/47) | `PersistenceMigrationTests.testReleasedStoreFixturesOpenWithCurrentCatalog` exercises the released 0.1.1, 0.1.2, and 0.1.3 store inventories using redacted two-account fixtures; `TokenVaultTests.testDeleteAllCredentialsRemovesEveryAccountAndCredentialKind` covers account-wide credential deletion; `AppModelTests.testResetLocalDataClearsRealStorageAndSurvivesRelaunch` and `testRemovingOneOfTwoRealAccountsSurvivesRelaunch` exercise the real SwiftData, Keychain, and download stores across two-account reset/removal and model/service reconstruction; reset failure tests cover typed terminal states; `BleatUITests.testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch` confirms the destructive UI journey and relaunch. Backup/restore and signed-device lifecycle evidence remain required. | in-progress |
 | PERFORMANCE-001 | 19 | Browsing, search, and cache behavior remain responsive with 10,000 books without main-actor bulk work, with launch, memory, energy, and storage results recorded | [GitHub issue #46](https://github.com/terminaloutcomes/bleat/issues/46), `App/LibraryPageMerger.swift`, `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift`, `Tests/BleatAppTests/AppModelTests.swift` (`testTenKBooksLoadNextBooksPagePerformance`), `Tests/BleatUITests/BleatPerformanceUITests.swift`, `Tests/BleatCoreLiveTests/LibraryRepositoryLiveTests.swift`, `docs/release-evidence/performance-baseline.md`, [GitHub issue #95](https://github.com/terminaloutcomes/bleat/issues/95) | Host cache, off-main AppModel paging, Release Simulator launch/browsing/search with memory snapshots, and live 10k paged-load/cache fallback verified; #95 separately tracks physical-device energy evidence | implemented |
 
+## Host test runner diagnostic evidence
+
+The [Swift Testing evaluation](swift-testing-evaluation.md) records the isolated
+prototype, exact outcomes, debugger comparison, and decision to retain existing
+XCTest suites. Default SwiftPM discovery still initializes Contacts on the
+evaluated toolchain, even in the Swift Testing-only prototype. This evidence
+does not replace any host, simulator, live-server, or device requirement.
+
 ## Issue #151 download storage evidence
 
 `scripts/test-download-performance.sh` runs the two app-hosted Issue #151 tests

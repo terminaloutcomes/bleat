@@ -82,6 +82,11 @@ Run the host test suite with code coverage:
 swift test --enable-code-coverage
 ```
 
+The [Swift Testing evaluation](swift-testing-evaluation.md) records why the
+existing XCTest suites remain and provides an isolated runner/diagnostics
+prototype. Do not use `--disable-xctest` on the root package: it omits the
+existing core and live XCTest tests.
+
 Run the core tests with coverage, Release build, and iOS Simulator application
 unit and UI tests:
 

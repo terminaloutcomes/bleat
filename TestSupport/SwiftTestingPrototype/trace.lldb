@@ -1,0 +1,10 @@
+# Observe only; do not call Contacts APIs or change Apple-framework behavior.
+breakpoint set -n '+[XCTestCase(RuntimeUtilities) _allSubclasses]' --auto-continue true
+breakpoint command add 1 -o 'bt 24'
+breakpoint set -n '+[CNContactStore initialize]' --auto-continue true
+breakpoint command add 2 -o 'bt 24'
+breakpoint set -n '-[NSXPCStoreConnection initForStore:]' --auto-continue true
+breakpoint command add 3 -o 'bt 24'
+run
+breakpoint list
+image list -b
