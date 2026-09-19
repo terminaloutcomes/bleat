@@ -571,14 +571,35 @@ struct DownloadTransferAdmissionController: Equatable {
     }
 }
 
+struct DownloadHTTPTransaction: Sendable {
+    let fetchType: URLSessionTaskMetrics.ResourceFetchType
+    let method: DiagnosticHTTPMethod
+    let statusCode: Int?
+    let requestStart: Date?
+    let fetchStart: Date?
+    let responseEnd: Date?
+}
+
 private final class DownloadSessionDelegateProxy: NSObject,
     URLSessionDownloadDelegate,
     @unchecked Sendable
 {
+    private let metricsLock = NSLock()
+    private var completedMetrics: [ObjectIdentifier: URLSessionTaskMetrics] =
+        [:]
     weak var owner: DownloadModel?
 
     init(owner: DownloadModel) {
         self.owner = owner
+    }
+
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        didFinishCollecting metrics: URLSessionTaskMetrics
+    ) {
+        metricsLock.withLock {
+            completedMetrics[ObjectIdentifier(task)] = metrics
+        }
     }
 
     func urlSession(
@@ -598,6 +619,11 @@ private final class DownloadSessionDelegateProxy: NSObject,
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
+        if let metrics = metricsLock.withLock({
+            completedMetrics.removeValue(forKey: ObjectIdentifier(task))
+        }) {
+            owner?.recordHTTPMetrics(metrics, error: error)
+        }
         owner?.urlSession(
             session,
             task: task,
@@ -5658,6 +5684,61 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 after: identity,
                 storage: storage
             )
+        }
+    }
+
+    nonisolated func recordHTTPMetrics(
+        _ metrics: URLSessionTaskMetrics, error: (any Error)?
+    ) {
+        recordHTTPTransactions(
+            metrics.transactionMetrics.map { transaction in
+                DownloadHTTPTransaction(
+                    fetchType: transaction.resourceFetchType,
+                    method: DiagnosticHTTPMethod(
+                        transaction.request.httpMethod),
+                    statusCode: (transaction.response as? HTTPURLResponse)?
+                        .statusCode,
+                    requestStart: transaction.requestStartDate,
+                    fetchStart: transaction.fetchStartDate,
+                    responseEnd: transaction.responseEndDate)
+            }, interval: metrics.taskInterval, error: error)
+    }
+
+    nonisolated func recordHTTPTransactions(
+        _ transactions: [DownloadHTTPTransaction], interval: DateInterval,
+        error: (any Error)?
+    ) {
+        // URLSession reports one transaction per actual network attempt, including
+        // redirects. Cache hits and tasks cancelled before dispatch are not calls.
+        let calls = transactions.enumerated().compactMap {
+            index, transaction -> (RemoteTelemetryHTTPCall, Date, Date)? in
+            guard transaction.fetchType == .networkLoad else { return nil }
+            let start =
+                transaction.requestStart ?? transaction.fetchStart
+                ?? interval.start
+            let result: RemoteTelemetryHTTPResult
+            if index == transactions.count - 1, let error {
+                result = .failure(error)
+            } else if let status = transaction.statusCode {
+                result = .response(statusCode: status)
+            } else if let error {
+                result = .failure(error)
+            } else {
+                result = .transportFailure
+            }
+            return (
+                RemoteTelemetryHTTPCall(
+                    endpoint: .audiobookshelf(.downloadFile),
+                    method: transaction.method, result: result),
+                start, transaction.responseEnd ?? interval.end
+            )
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for (call, start, end) in calls {
+                remoteTelemetryTracer.recordHTTPCall(
+                    call, startedAt: start, endedAt: end)
+            }
         }
     }
 

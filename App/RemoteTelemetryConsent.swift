@@ -309,7 +309,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
             let transport = try? URLSessionTelemetryAuthenticationTransport(
                 baseURL: baseURL,
                 allowsInsecureLoopback: allowsInsecureLoopback,
-                installationID: InstallationIdentifierStore().uuid
+                installationID: InstallationIdentifierStore().uuid,
+                tracer: tracer
             )
         else {
             return .failed(.authenticationConfigurationInvalid)

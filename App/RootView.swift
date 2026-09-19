@@ -1412,7 +1412,7 @@ private struct DiagnosticsView: View {
 
             Section("Network") {
                 NavigationLink {
-                    BonjourTroubleshooterView()
+                    BonjourTroubleshooterView(model: model)
                 } label: {
                     Label(
                         "Bonjour Troubleshooter",

@@ -669,6 +669,7 @@ private final class RedirectBlockingDelegate:
 }
 
 public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
+    private let tracer: any RemoteTelemetryTracing
     private let session: URLSession
     private let diagnostics: any DiagnosticRecording
     private let endpointRouter: ServerEndpointRouter?
@@ -678,14 +679,16 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         configuration: URLSessionConfiguration = .ephemeral,
         diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
         endpointRouter: ServerEndpointRouter? = nil,
-        routesRequests: Bool = true
+        routesRequests: Bool = true,
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer()
     ) {
         self.init(
             configuration: configuration,
             cookieStorage: nil,
             diagnostics: diagnostics,
             endpointRouter: endpointRouter,
-            routesRequests: routesRequests
+            routesRequests: routesRequests,
+            tracer: tracer
         )
     }
 
@@ -694,7 +697,8 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         cookieStorage: HTTPCookieStorage?,
         diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared,
         endpointRouter: ServerEndpointRouter? = nil,
-        routesRequests: Bool = true
+        routesRequests: Bool = true,
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer()
     ) {
         configuration.httpShouldSetCookies = cookieStorage != nil
         configuration.httpCookieStorage = cookieStorage
@@ -707,6 +711,7 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             delegate: RedirectBlockingDelegate(),
             delegateQueue: nil
         )
+        self.tracer = tracer
         self.diagnostics = diagnostics
         self.endpointRouter = endpointRouter
         self.routesRequests = routesRequests
@@ -771,6 +776,14 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         var request = tracedRequest.request
         request.url = requestURL
         let method = DiagnosticHTTPMethod(request.httpMethod)
+        let span = tracer.beginSpan(operation: .httpRequest)
+        var telemetryResult: RemoteTelemetryHTTPResult = .nonHTTPResponse
+        defer {
+            span.endHTTPCall(
+                RemoteTelemetryHTTPCall(
+                    endpoint: .audiobookshelf(tracedRequest.endpoint),
+                    method: method, result: telemetryResult))
+        }
         await diagnostics.record(
             .started(
                 .httpRequest,
@@ -787,6 +800,7 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            telemetryResult = .failure(error)
             await diagnostics.record(
                 .failed(
                     .httpRequest,
@@ -822,6 +836,7 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             throw HTTPTransportError.nonHTTPResponse
         }
 
+        telemetryResult = .response(statusCode: response.statusCode)
         let headers = response.allHeaderFields.reduce(
             into: [String: String]()
         ) { result, header in

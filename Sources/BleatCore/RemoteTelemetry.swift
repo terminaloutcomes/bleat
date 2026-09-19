@@ -4,6 +4,9 @@ import Foundation
 /// The application-facing tracing boundary. It deliberately exposes no raw
 /// OpenTelemetry span names or attribute dictionaries.
 public protocol RemoteTelemetryTracing: Sendable {
+    func recordHTTPCall(
+        _ call: RemoteTelemetryHTTPCall, startedAt: Date, endedAt: Date)
+
     func beginSpan(
         operation: RemoteTelemetryOperation,
         source: RemoteTelemetrySource?,
@@ -17,6 +20,12 @@ public protocol RemoteTelemetryTracing: Sendable {
 }
 
 extension RemoteTelemetryTracing {
+    public func recordHTTPCall(
+        _ call: RemoteTelemetryHTTPCall, startedAt: Date, endedAt: Date
+    ) {
+        beginSpan(operation: .httpRequest).endHTTPCall(call)
+    }
+
     public func beginSpan(
         operation: RemoteTelemetryOperation,
         source: RemoteTelemetrySource? = nil,
@@ -47,7 +56,8 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
         (
             @Sendable (
                 RemoteTelemetryOutcome,
-                RemoteTelemetryTranscriptionInput?
+                RemoteTelemetryTranscriptionInput?,
+                RemoteTelemetryHTTPCall?
             ) -> Void
         )?
     private let contextProvider: @Sendable () -> SpanContext?
@@ -55,7 +65,7 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
     public init(
         endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void
     ) {
-        self.endAction = { outcome, _ in endAction(outcome) }
+        self.endAction = { outcome, _, _ in endAction(outcome) }
         contextProvider = { nil }
     }
 
@@ -66,7 +76,9 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
                 RemoteTelemetryTranscriptionInput?
             ) -> Void
     ) {
-        endAction = transcriptionEndAction
+        endAction = { outcome, input, _ in
+            transcriptionEndAction(outcome, input)
+        }
         contextProvider = { nil }
     }
 
@@ -74,19 +86,20 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
         endAction: @escaping @Sendable (RemoteTelemetryOutcome) -> Void,
         contextProvider: @escaping @Sendable () -> SpanContext?
     ) {
-        self.endAction = { outcome, _ in endAction(outcome) }
+        self.endAction = { outcome, _, _ in endAction(outcome) }
         self.contextProvider = contextProvider
     }
 
-    init(
-        transcriptionEndAction:
+    public init(
+        completionAction:
             @escaping @Sendable (
                 RemoteTelemetryOutcome,
-                RemoteTelemetryTranscriptionInput?
+                RemoteTelemetryTranscriptionInput?,
+                RemoteTelemetryHTTPCall?
             ) -> Void,
-        contextProvider: @escaping @Sendable () -> SpanContext?
+        contextProvider: @escaping @Sendable () -> SpanContext? = { nil }
     ) {
-        endAction = transcriptionEndAction
+        endAction = completionAction
         self.contextProvider = contextProvider
     }
 
@@ -96,14 +109,19 @@ public final class RemoteTelemetrySpan: @unchecked Sendable {
 
     public func end(
         _ outcome: RemoteTelemetryOutcome,
-        transcriptionInput: RemoteTelemetryTranscriptionInput?
+        transcriptionInput: RemoteTelemetryTranscriptionInput?,
+        httpCall: RemoteTelemetryHTTPCall? = nil
     ) {
         let action = lock.withLock {
             let action = endAction
             endAction = nil
             return action
         }
-        action?(outcome, transcriptionInput)
+        action?(outcome, transcriptionInput, httpCall)
+    }
+
+    public func endHTTPCall(_ call: RemoteTelemetryHTTPCall) {
+        end(call.result.outcome, transcriptionInput: nil, httpCall: call)
     }
 
     var spanContext: SpanContext? { contextProvider() }
@@ -149,6 +167,7 @@ public struct InactiveRemoteTelemetryTracer: RemoteTelemetryTracing {
 /// Adding a case changes Bleat's remote telemetry contract and requires a
 /// privacy review. Callers cannot supply arbitrary span names.
 public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
+    case httpRequest = "bleat.http.request"
     case appLaunch = "bleat.app.launch"
     case accountConnection = "bleat.account.connection"
     case liveUpdateConnection = "bleat.live_update.connection"
@@ -171,7 +190,7 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
             .app
         case .accountConnection, .liveUpdateConnection:
             .authentication
-        case .libraryRefresh:
+        case .libraryRefresh, .httpRequest:
             .library
         case .playbackPreparation, .playbackStart:
             .playback
@@ -189,7 +208,8 @@ public enum RemoteTelemetryOperation: String, CaseIterable, Sendable {
 
     var spanKind: SpanKind {
         switch self {
-        case .telemetryChallenge, .telemetryEnrolment, .telemetryToken:
+        case .httpRequest, .telemetryChallenge, .telemetryEnrolment,
+            .telemetryToken:
             .client
         default:
             .internal

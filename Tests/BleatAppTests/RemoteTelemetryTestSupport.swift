@@ -6,6 +6,7 @@ struct RecordedRemoteTelemetrySpan: Equatable {
     let source: RemoteTelemetrySource?
     let retryBucket: RemoteTelemetryRetryBucket
     var outcome: RemoteTelemetryOutcome?
+    var httpCall: RemoteTelemetryHTTPCall? = nil
     var transcriptionInput: RemoteTelemetryTranscriptionInput? = nil
 }
 
@@ -37,12 +38,14 @@ final class RecordingRemoteTelemetryTracer: RemoteTelemetryTracing,
                 outcome: nil
             )
         }
-        return RemoteTelemetrySpan { [weak self] outcome, transcriptionInput in
+        return RemoteTelemetrySpan(completionAction: {
+            [weak self] outcome, transcriptionInput, httpCall in
             self?.lock.withLock {
                 self?.records[id]?.outcome = outcome
                 self?.records[id]?.transcriptionInput = transcriptionInput
+                self?.records[id]?.httpCall = httpCall
             }
-        }
+        })
     }
 }
 

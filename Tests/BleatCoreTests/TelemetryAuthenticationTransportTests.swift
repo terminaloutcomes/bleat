@@ -34,6 +34,7 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         let installationID = try XCTUnwrap(
             UUID(uuidString: "fc6f46f0-d92c-4d37-9137-851070df369d")
         )
+        let httpTracer = HTTPTraceRecorder()
         let recorder = TelemetryURLProtocolRecorder()
         TelemetryURLProtocolStub.setHandler { request in
             let body: String
@@ -73,7 +74,8 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         let transport = try URLSessionTelemetryAuthenticationTransport(
             baseURL: XCTUnwrap(URL(string: "https://auth.example/auth")),
             installationID: installationID,
-            configuration: configuration
+            configuration: configuration,
+            tracer: httpTracer
         )
 
         let context = SpanContext.create(
@@ -153,6 +155,19 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
             tokenJSON["installation_id"] as? String,
             installationID.uuidString.uppercased()
         )
+        XCTAssertEqual(
+            httpTracer.recordedCalls.map(\.endpoint),
+            [
+                .attestationChallenge, .attestationEnroll, .tokenChallenge,
+                .token,
+            ])
+        XCTAssertEqual(
+            httpTracer.recordedCalls.map(\.result),
+            [
+                .response(statusCode: 201), .response(statusCode: 201),
+                .response(statusCode: 201), .response(statusCode: 200),
+            ])
+
     }
 
     func testAuthenticationRejectionMapsWithoutResponseBodyDisclosure()

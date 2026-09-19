@@ -1786,10 +1786,14 @@ final class AppModel {
         }
     }
 
+    func makeNearbyServerDiscovery() -> BonjourNearbyServerDiscovery {
+        BonjourNearbyServerDiscovery(tracer: remoteTelemetryTracer)
+    }
+
     func startNearbyServerDiscovery() {
         let discovery =
             nearbyServerDiscovery
-            ?? BonjourNearbyServerDiscovery()
+            ?? makeNearbyServerDiscovery()
         nearbyServerDiscovery = discovery
         discovery.start { [weak self] state in
             self?.nearbyServerDiscoveryState = state
@@ -1888,6 +1892,7 @@ final class AppModel {
         )
 
         do {
+            await BookCoverImageLoader.shared.setTracer(remoteTelemetryTracer)
             if let endpointRouter = await service.serverEndpointRouter() {
                 await BookCoverImageLoader.shared.setEndpointRouter(
                     endpointRouter
