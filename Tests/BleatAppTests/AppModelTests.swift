@@ -5229,9 +5229,21 @@ final class AppModelTests: XCTestCase {
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [account])
 
-        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
-        let resumedDescriptors =
+        var resumedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        // The callback's concurrency-queue drain may already own recovery.
+        // Wait for that recovery to finish and register its replacement task.
+        while clock.now < deadline,
+            !model.pendingRecoveryDownloadIDsForTesting.isEmpty
+                || resumedDescriptors.isEmpty
+        {
+            try await Task.sleep(for: .milliseconds(10))
+            resumedDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
+        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
         XCTAssertEqual(resumedDescriptors.count, 1)
         XCTAssertEqual(resumedDescriptors.first?.identity.trackIndex, 1)
         let resumedRecord = try XCTUnwrap(model.records.first)
@@ -5339,14 +5351,16 @@ final class AppModelTests: XCTestCase {
             )
         }
         var fallbackRequests: [URLRequest] = []
-        for _ in 0..<100 {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        repeat {
             fallbackRequests =
                 await model.scheduledTransferRequestsForTesting()
-            if fallbackRequests.count == 2 {
+            if fallbackRequests.count >= 2 {
                 break
             }
-            await Task.yield()
-        }
+            try await Task.sleep(for: .milliseconds(10))
+        } while clock.now < deadline
 
         XCTAssertEqual(fallbackRequests.count, 2)
         XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
@@ -6559,20 +6573,28 @@ final class AppModelTests: XCTestCase {
 
         await model.pause(try XCTUnwrap(model.records.first))
         await model.continueDownload(try XCTUnwrap(model.records.first))
-        let continuedDescriptors =
+        var continuedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
+        // Background-session enumeration can lag task creation. Observe the
+        // replacement before injecting the obsolete task's completion.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while continuedDescriptors.isEmpty, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+            continuedDescriptors =
+                await model.scheduledTransferDescriptorsForTesting()
+        }
         XCTAssertEqual(
             continuedDescriptors.count,
             1,
             "continued descriptors: \(continuedDescriptors)"
         )
         XCTAssertEqual(model.records.first?.manifest.state, .downloading)
-        if let continuedDescriptor = continuedDescriptors.first {
-            XCTAssertNotEqual(
-                continuedDescriptor.transferID,
-                oldDescriptor.transferID
-            )
-        }
+        let continuedDescriptor = try XCTUnwrap(continuedDescriptors.first)
+        XCTAssertNotEqual(
+            continuedDescriptor.transferID,
+            oldDescriptor.transferID
+        )
 
         let lateConfiguration = URLSessionConfiguration.ephemeral
         lateConfiguration.protocolClasses = [
@@ -6608,6 +6630,10 @@ final class AppModelTests: XCTestCase {
             finalDescriptors.count,
             1,
             "final descriptors: \(finalDescriptors)"
+        )
+        XCTAssertEqual(
+            finalDescriptors.first?.transferID,
+            continuedDescriptor.transferID
         )
         XCTAssertEqual(model.records.first?.manifest.state, .downloading)
         let identity = oldDescriptor.identity
@@ -15207,8 +15233,16 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(outcome, .started(source: .downloaded))
         await preparationGate.waitUntilEntered()
+        let preparationCompleted = expectation(
+            description: "Streaming continuation prepared before cached seek"
+        )
+        Self.fulfill(
+            preparationCompleted,
+            when: model.playback,
+            reaches: .prepared
+        )
         await preparationGate.release()
-        await Task.yield()
+        await fulfillment(of: [preparationCompleted], timeout: 2)
 
         await model.playback.seek(to: 1.25)
 
