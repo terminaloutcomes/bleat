@@ -1133,6 +1133,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             let futureRetries: [(DownloadTaskIdentity, Date)] =
                 record.manifest.entries.compactMap { entry in
                     guard entry.state != .complete,
+                        Self.trackIsEligibleForRecovery(
+                            entry.trackIndex,
+                            in: record
+                        ),
                         let retryNotBefore = entry.retryNotBefore,
                         retryNotBefore > Date(),
                         let identity = Self.identity(for: entry, record: record)
@@ -1168,6 +1172,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         let entry = record.manifest.entries.first(where: {
                             $0.trackIndex == track.index
                         }), entry.state != .complete,
+                        Self.trackIsEligibleForRecovery(
+                            track.index,
+                            in: record
+                        ),
                         let identity = try? DownloadTaskIdentity(
                             downloadID: downloadID,
                             accountID: record.manifest.accountID,
@@ -1257,10 +1265,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    private static func trackIsEligibleForRecovery(
+        _ trackIndex: Int,
+        in record: DownloadedBookRecord
+    ) -> Bool {
+        guard record.manifest.purpose == .automaticCache else {
+            return true
+        }
+        return record.manifest.automaticTargetTrackIndexes?.contains(
+            trackIndex
+        ) == true
+    }
+
     private func restoreDeferredRetryState() {
         for record in records {
             for entry in record.manifest.entries
-            where entry.state != .complete {
+            where entry.state != .complete
+                && Self.trackIsEligibleForRecovery(
+                    entry.trackIndex,
+                    in: record
+                )
+            {
                 guard let identity = Self.identity(for: entry, record: record)
                 else { continue }
                 let key = AutomaticDownloadTaskKey(identity)
@@ -2718,6 +2743,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             request.networkServiceType = .background
         }
         let encodedTaskDescription = try taskDescription.encode()
+        guard
+            try await storage.markDownloadingIfIncomplete(
+                identity,
+                observedByteLength: committed,
+                validator: validator
+            ) != nil
+        else {
+            clearCompletedTransferState(for: identity)
+            return false
+        }
         let task = session.downloadTask(
             with: networkPolicy.applying(to: request)
         )
@@ -2730,11 +2765,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             identity,
             stage: .taskScheduled,
             state: .started
-        )
-        _ = try await storage.markDownloading(
-            identity,
-            observedByteLength: committed,
-            validator: validator
         )
         let currentContext = transferContext(
             for: identity,
@@ -3935,6 +3965,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             failure = .storageUnavailable
             return
         }
+        if trackIsComplete(identity) {
+            clearCompletedTransferState(for: identity)
+            finishTransferSpan(identity, outcome: .succeeded)
+            return
+        }
         var context = transferContext(
             for: identity,
             taskDescription: taskDescription
@@ -4022,12 +4057,14 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     state: .succeeded
                 )
                 let taskKey = AutomaticDownloadTaskKey(identity)
-                transferRetryCounts[taskKey] = nil
-                cancelDeferredRetryWake(for: taskKey)
-                terminalTransferTaskKeys.remove(
-                    AutomaticDownloadTaskKey(identity)
-                )
-                clearTransferredBytes(for: identity)
+                if finalized {
+                    clearCompletedTransferState(for: identity)
+                } else {
+                    transferRetryCounts[taskKey] = nil
+                    cancelDeferredRetryWake(for: taskKey)
+                    terminalTransferTaskKeys.remove(taskKey)
+                    clearTransferredBytes(for: identity)
+                }
                 await refresh()
                 context = transferContext(
                     for: identity,
@@ -4090,6 +4127,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                             pendingRecoveryTaskKeys.filter {
                                 $0.downloadID != identity.downloadID
                             }
+                        resetTransferRetryBudget(
+                            for: identity.downloadID
+                        )
                     }
                     recordDownloadTelemetry(
                         identity,
@@ -4503,11 +4543,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
         let retryNotBefore = Date().addingTimeInterval(retryDelaySeconds)
         do {
-            _ = try await storage.deferRetry(
-                identity,
-                until: retryNotBefore,
-                retryCount: nextRetryCount
-            )
+            guard
+                try await storage.deferRetryIfIncomplete(
+                    identity,
+                    until: retryNotBefore,
+                    retryCount: nextRetryCount
+                ) != nil
+            else {
+                clearCompletedTransferState(for: identity)
+                return
+            }
             await refresh()
         } catch {
             recordDownloadTelemetry(
@@ -4539,6 +4584,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         guard pendingRecoveryTaskKeys.contains(key),
+            !trackIsComplete(identity),
             networkPathState.availability == .satisfied
         else {
             return
@@ -4599,6 +4645,29 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }) {
             pendingRecoveryDownloadIDs.remove(identity.downloadID)
         }
+    }
+
+    private func clearCompletedTransferState(
+        for identity: DownloadTaskIdentity
+    ) {
+        let key = AutomaticDownloadTaskKey(identity)
+        pendingRecoveryTaskKeys.remove(key)
+        transferRetryCounts[key] = nil
+        terminalTransferTaskKeys.remove(key)
+        cancelDeferredRetryWake(for: key)
+        clearTransferredBytes(for: identity)
+        if !pendingRecoveryTaskKeys.contains(where: {
+            $0.downloadID == identity.downloadID
+        }) {
+            pendingRecoveryDownloadIDs.remove(identity.downloadID)
+        }
+    }
+
+    private func trackIsComplete(_ identity: DownloadTaskIdentity) -> Bool {
+        record(downloadID: identity.downloadID)?.manifest.entries.first(where: {
+            $0.trackIndex == identity.trackIndex
+                && $0.destinationEntry == identity.destinationEntry
+        })?.state == .complete
     }
 
     private func advanceAutomaticDownload(
@@ -4796,13 +4865,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         else { return false }
         do {
             let committed = try await storage.partialByteLength(identity)
-            _ = try await storage.markDownloading(
-                identity,
-                observedByteLength: committed,
-                validator: currentRecord.manifest.entries.first(where: {
-                    $0.trackIndex == identity.trackIndex
-                })?.validator
-            )
+            guard
+                try await storage.markDownloadingIfIncomplete(
+                    identity,
+                    observedByteLength: committed,
+                    validator: currentRecord.manifest.entries.first(where: {
+                        $0.trackIndex == identity.trackIndex
+                    })?.validator
+                ) != nil
+            else {
+                clearCompletedTransferState(for: identity)
+                return false
+            }
             failure = nil
         } catch {
             failure = .transferFailed
@@ -5356,6 +5430,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 $0.trackIndex == identity.trackIndex
             }),
             entry.state != .complete,
+            Self.trackIsEligibleForRecovery(
+                identity.trackIndex,
+                in: record
+            ),
             entry.inode == identity.inode,
             entry.expectedByteLength == identity.expectedByteLength,
             entry.destinationEntry == identity.destinationEntry,

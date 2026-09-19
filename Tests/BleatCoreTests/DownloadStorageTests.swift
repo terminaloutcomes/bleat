@@ -215,6 +215,76 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertNil(resetRecord.manifest.entries.first?.transferRetryCount)
     }
 
+    func testCompletedTrackRejectsAndRepairsRetryState() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let temporaryURL = fixture.rootURL.appendingPathComponent(
+            "completed-retry"
+        )
+        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        let observed = try fixture.layout.placeCompleteTestFile(
+            from: temporaryURL,
+            identity: identity
+        )
+        _ = try await fixture.storage.markComplete(
+            identity,
+            observedByteLength: observed
+        )
+
+        let deferred = try await fixture.storage.deferRetryIfIncomplete(
+            identity,
+            until: Date(timeIntervalSince1970: 2_000_000_000),
+            retryCount: 2
+        )
+        XCTAssertNil(deferred)
+        let restarted = try await fixture.storage.markDownloadingIfIncomplete(
+            identity,
+            observedByteLength: observed,
+            validator: nil
+        )
+        XCTAssertNil(restarted)
+
+        let recordURL = fixture.layout.recordURL(
+            accountID: fixture.accountID,
+            itemID: fixture.itemID
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(contentsOf: recordURL)
+            ) as? [String: Any]
+        )
+        var manifest = try XCTUnwrap(object["manifest"] as? [String: Any])
+        var entries = try XCTUnwrap(
+            manifest["entries"] as? [[String: Any]]
+        )
+        entries[0]["retryNotBefore"] = 800_000_000.0
+        entries[0]["transferRetryCount"] = 2
+        manifest["entries"] = entries
+        object["manifest"] = manifest
+        try JSONSerialization.data(withJSONObject: object).write(
+            to: recordURL,
+            options: .atomic
+        )
+
+        let repairedRecords = try await fixture.storage.records()
+        let repaired = try XCTUnwrap(repairedRecords.first)
+        XCTAssertEqual(repaired.manifest.state, .complete)
+        XCTAssertNil(repaired.manifest.entries[0].retryNotBefore)
+        XCTAssertNil(repaired.manifest.entries[0].transferRetryCount)
+    }
+
     func testConditionalFailureDoesNotOverwritePauseOrContinueState()
         async throws
     {
@@ -1018,7 +1088,7 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertEqual(urls.count, 1)
     }
 
-    func testAutomaticCacheMetadataAndTrackRemovalPersist()
+    func testAutomaticCacheMetadataAndFullBookPromotionPersist()
         async throws
     {
         let fixture = try Fixture()
@@ -1143,23 +1213,10 @@ final class DownloadStorageTests: XCTestCase {
         }
         XCTAssertEqual(record.manifest.state, .complete)
         XCTAssertTrue(record.manifest.isFullBookComplete)
-        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
-
-        record = try await fixture.storage.updateAutomaticWindow(
-            record,
-            targetTrackIndexes: [1]
-        )
-
-        record = try await fixture.storage.removeCompletedTracks(
-            from: record,
-            trackIndexes: [0]
-        )
-        XCTAssertEqual(record.manifest.state, .queued)
-        XCTAssertEqual(record.manifest.entries[0].state, .queued)
-        XCTAssertEqual(record.manifest.entries[1].state, .complete)
-        XCTAssertEqual(record.manifest.storedByteLength, 2)
-        XCTAssertEqual(record.manifest.automaticCacheState, .cached)
-        XCTAssertEqual(record.manifest.automaticStoredByteLength, 2)
+        XCTAssertEqual(record.manifest.purpose, .manual)
+        XCTAssertNil(record.manifest.automaticWindow)
+        XCTAssertNil(record.manifest.automaticCacheState)
+        XCTAssertNil(record.manifest.bookFinishedAt)
 
         let records = try await fixture.storage.records()
         XCTAssertEqual(records, [record])
@@ -1306,8 +1363,7 @@ final class DownloadStorageTests: XCTestCase {
             automaticTargetTrackIndexes: [1]
         )
         for (track, data) in [
-            (plan.tracks[0], Data([1, 2, 3, 4])),
-            (plan.tracks[1], Data([5, 6])),
+            (plan.tracks[1], Data([5, 6]))
         ] {
             let identity = try DownloadTaskIdentity(
                 downloadID: fixture.downloadID,
@@ -1343,7 +1399,7 @@ final class DownloadStorageTests: XCTestCase {
         record = try XCTUnwrap(
             recordsAfterNonTargetCorruption.first
         )
-        XCTAssertEqual(record.manifest.state, .partial)
+        XCTAssertEqual(record.manifest.state, .queued)
         XCTAssertEqual(record.manifest.automaticCacheState, .cached)
 
         let secondIdentity = try DownloadTaskIdentity(
