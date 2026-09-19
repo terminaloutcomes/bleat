@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 public let bleatBackgroundDownloadSessionIdentifier =
@@ -66,6 +67,87 @@ public struct MaximumConcurrentDownloadsPreference: Equatable, Sendable {
 
     public var canDecrement: Bool {
         value > (Self.permittedValues.first ?? value)
+    }
+}
+
+public enum AutomaticDownloadLookaheadPreference:
+    Int, CaseIterable, Equatable, Sendable
+{
+    case one = 1
+    case three = 3
+    case five = 5
+    case ten = 10
+    case all = 11
+
+    public static let defaultsKey =
+        "bleat.downloads.automaticLookahead.v1"
+    public static let defaultValue = Self.five
+
+    public static func load(from defaults: UserDefaults) -> Self {
+        guard let stored = defaults.object(forKey: defaultsKey) else {
+            return defaultValue
+        }
+        guard CFGetTypeID(stored as CFTypeRef) != CFBooleanGetTypeID(),
+            let value = stored as? Int
+        else {
+            defaults.set(defaultValue.rawValue, forKey: defaultsKey)
+            return defaultValue
+        }
+        let preference = normalize(value)
+        if preference.rawValue != value {
+            defaults.set(preference.rawValue, forKey: defaultsKey)
+        }
+        return preference
+    }
+
+    public static func normalize(_ value: Int) -> Self {
+        switch value {
+        case ...2: .one
+        case 3...4: .three
+        case 5...9: .five
+        case 10: .ten
+        default: .all
+        }
+    }
+
+    public var incremented: Self {
+        guard let index = Self.allCases.firstIndex(of: self),
+            index + 1 < Self.allCases.count
+        else { return self }
+        return Self.allCases[index + 1]
+    }
+
+    public var decremented: Self {
+        guard let index = Self.allCases.firstIndex(of: self),
+            index > Self.allCases.startIndex
+        else { return self }
+        return Self.allCases[index - 1]
+    }
+
+    public var canIncrement: Bool {
+        self != Self.allCases.last
+    }
+
+    public var canDecrement: Bool {
+        self != Self.allCases.first
+    }
+
+    public var label: String {
+        switch self {
+        case .one, .three, .five, .ten:
+            String(rawValue)
+        case .all:
+            "All"
+        }
+    }
+
+    public var limitedCount: Int? {
+        switch self {
+        case .one, .three, .five, .ten:
+            rawValue
+        case .all:
+            nil
+        }
     }
 }
 

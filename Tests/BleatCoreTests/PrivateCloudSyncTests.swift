@@ -360,7 +360,9 @@ final class PrivateCloudSyncTests: XCTestCase {
             makeSnapshot(
                 previousCommandAction: .previousChapter,
                 nextCommandAction: .nextChapter,
-                maximumConcurrentDownloads: 15
+                maximumConcurrentDownloads: 15,
+                automaticDownloadLookahead:
+                    AutomaticDownloadLookaheadPreference.all.rawValue
             )
         )
 
@@ -376,6 +378,41 @@ final class PrivateCloudSyncTests: XCTestCase {
         XCTAssertEqual(restored.previousCommandAction, .previousChapter)
         XCTAssertEqual(restored.nextCommandAction, .nextChapter)
         XCTAssertEqual(restored.maximumConcurrentDownloads, 15)
+        XCTAssertEqual(
+            restored.automaticDownloadLookahead,
+            AutomaticDownloadLookaheadPreference.all.rawValue
+        )
+    }
+
+    func testConfigurationNormalizesLookaheadBeforeApplying() async throws {
+        let suite = makeSuite()
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let store = try makeStore(suite: suite)
+        let cases: [(Int, AutomaticDownloadLookaheadPreference)] = [
+            (Int.min, .one), (-1, .one), (0, .one), (2, .one),
+            (4, .three), (8, .five), (10, .ten), (11, .all), (Int.max, .all),
+        ]
+        for (input, expected) in cases {
+            let payload = LegacyCloudConfigurationSnapshot(
+                defaultPlaybackRate: 1,
+                resumeRewindSeconds: 10,
+                skipBackwardSeconds: 15,
+                skipForwardSeconds: 30,
+                downloadNetworkPolicy: "wifiOnly",
+                automaticDownloadLookahead: input,
+                automaticDownloadCleanupPolicy: "afterTwentyFourHours"
+            )
+            let decoded = try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self,
+                from: JSONEncoder().encode(payload)
+            )
+            XCTAssertEqual(
+                decoded.automaticDownloadLookahead, expected.rawValue)
+            try await store.apply(decoded)
+            let restored = await store.snapshot()
+            XCTAssertEqual(
+                restored.automaticDownloadLookahead, expected.rawValue)
+        }
     }
 
     func testLegacyConfigurationDefaultsMissingHeadphoneCommands() throws {
@@ -1915,7 +1952,8 @@ final class PrivateCloudSyncTests: XCTestCase {
     private func makeSnapshot(
         previousCommandAction: HeadphoneCommandAction,
         nextCommandAction: HeadphoneCommandAction,
-        maximumConcurrentDownloads: Int = 5
+        maximumConcurrentDownloads: Int = 5,
+        automaticDownloadLookahead: Int = 5
     ) -> CloudConfigurationSnapshot {
         CloudConfigurationSnapshot(
             defaultPlaybackRate: 1,
@@ -1926,7 +1964,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             nextCommandAction: nextCommandAction,
             downloadNetworkPolicy: "wifiOnly",
             maximumConcurrentDownloads: maximumConcurrentDownloads,
-            automaticDownloadLookahead: 5,
+            automaticDownloadLookahead: automaticDownloadLookahead,
             automaticDownloadCleanupPolicy: "afterTwentyFourHours"
         )
     }
