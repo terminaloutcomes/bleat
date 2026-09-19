@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026.09.18 - 2026-09-18
+
+### Added
+
+- Added listening-history import and export and portable listening statistics.
+- Added transcript export, playback-position navigation, and interrupted
+  transcription continuation.
+- Added series downloads and configurable concurrent downloads.
+- Expanded CarPlay playback controls and accessibility coverage.
+
+### Improved
+
+- Improved download recovery across connectivity loss, relaunches, background
+  transfers, cancellations, retries, and removal.
+- Improved transcription retry handling, chapter slicing, caching, sharing,
+  deletion, and memory use.
+- Improved CloudKit migration, synchronization, diagnostics, and account
+  restoration.
+- Improved book details, playback presentation, local-server routing, and
+  telemetry reliability.
+- Adopted date-based marketing versions alongside UTC timestamp build numbers.
+
+### Fixed
+
+- Fixed stale retry state overriding cached automatic-download status.
+- Fixed playback state persisting across account switches and downloaded
+  chapter playback losing its library context.
+- Fixed transcript current-position lookup and chapter navigation.
+
 ## 0.1.3 - 2026-08-24
 
 ### Added

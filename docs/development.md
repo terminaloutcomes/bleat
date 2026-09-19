@@ -326,8 +326,10 @@ authorizes the managed CarPlay Audio App entitlement; set the mode to
 
 Every archive defaults to one UTC build number in `YYYYMMDD.HHmm.SS` format,
 generated once and reused for the complete archive, inspection, export, and
-evidence chain. `MARKETING_VERSION` remains the user-facing application
-version. Set `BLEAT_BUILD_NUMBER` to a valid one-to-three-component numeric
+evidence chain. `MARKETING_VERSION` uses the release date in `YYYY.MM.DD`
+format, with zero-padded month and day (for example, `2026.09.18`). Add a
+matching dated changelog section and regenerate the Xcode project when changing
+it. Set `BLEAT_BUILD_NUMBER` to a valid one-to-three-component numeric
 value only when a reproducible or otherwise explicit build identifier is
 required; the supplied value is propagated unchanged.
 
