@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 public let bleatBackgroundDownloadSessionIdentifier =
@@ -76,7 +77,7 @@ public enum AutomaticDownloadLookaheadPreference:
     case three = 3
     case five = 5
     case ten = 10
-    case all = -1
+    case all = 11
 
     public static let defaultsKey =
         "bleat.downloads.automaticLookahead.v1"
@@ -86,7 +87,9 @@ public enum AutomaticDownloadLookaheadPreference:
         guard let stored = defaults.object(forKey: defaultsKey) else {
             return defaultValue
         }
-        guard !(stored is Bool), let value = stored as? Int else {
+        guard CFGetTypeID(stored as CFTypeRef) != CFBooleanGetTypeID(),
+            let value = stored as? Int
+        else {
             defaults.set(defaultValue.rawValue, forKey: defaultsKey)
             return defaultValue
         }
@@ -98,17 +101,13 @@ public enum AutomaticDownloadLookaheadPreference:
     }
 
     public static func normalize(_ value: Int) -> Self {
-        if value == Self.all.rawValue {
-            return .all
+        switch value {
+        case ...2: .one
+        case 3...4: .three
+        case 5...9: .five
+        case 10: .ten
+        default: .all
         }
-        let clamped = min(max(value, Self.one.rawValue), Self.ten.rawValue)
-        return [.one, .three, .five, .ten].min { left, right in
-            let leftDistance = abs(left.rawValue - clamped)
-            let rightDistance = abs(right.rawValue - clamped)
-            return leftDistance == rightDistance
-                ? left.rawValue < right.rawValue
-                : leftDistance < rightDistance
-        } ?? defaultValue
     }
 
     public var incremented: Self {

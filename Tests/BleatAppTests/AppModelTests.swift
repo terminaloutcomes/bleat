@@ -7729,6 +7729,203 @@ final class AppModelTests: XCTestCase {
         _ = await model.removeAllForLocalDataReset()
     }
 
+    func testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup()
+        async throws
+    {
+        for existingCache in [false, true] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("AllLookahead-\(UUID().uuidString)")
+            let suite = "AllLookahead.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer {
+                defaults.removePersistentDomain(forName: suite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            defaults.set(
+                AutomaticDownloadCleanupPolicy.afterChapter.rawValue,
+                forKey: "bleat.downloads.automaticCleanupPolicy.v1"
+            )
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+            )
+            let tracks = (0..<3).map { index in
+                DownloadTrackPlan(
+                    index: index,
+                    inode: "\(index)",
+                    expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: String(format: "%05d.mp3", index),
+                    startOffset: Double(index * 60),
+                    duration: 60
+                )
+            }
+            let plan = DownloadPlan(itemID: detail.id, tracks: tracks)
+            let cacheID = DownloadID(rawValue: "all-lookahead-cache")
+            if existingCache {
+                let storage = DownloadStorage(
+                    layout: try DownloadStorageLayout(rootURL: root)
+                )
+                _ = try await storage.create(
+                    downloadID: cacheID,
+                    accountID: account.id,
+                    plan: plan,
+                    detail: detail,
+                    purpose: .automaticCache,
+                    automaticTargetTrackIndexes: [0]
+                )
+                let identity = try DownloadTaskIdentity(
+                    downloadID: cacheID,
+                    accountID: account.id,
+                    itemID: detail.id,
+                    track: tracks[0]
+                )
+                let staged = root.appendingPathComponent("cached-track")
+                try Data(repeating: 0xAB, count: 4).write(to: staged)
+                _ = try await storage.commitChunk(
+                    identity,
+                    temporaryURL: staged,
+                    range: try DownloadByteRange(start: 0, endInclusive: 3),
+                    validator: nil
+                )
+            }
+            let service = TestAppService(
+                activeAccount: .success(nil),
+                downloadPlan: .success(plan),
+                authorizedDownloadRequest: .success(
+                    URLRequest(
+                        url: try XCTUnwrap(
+                            URL(string: "https://192.0.2.1/audio.mp3"))
+                    )
+                )
+            )
+            let model = DownloadModel(
+                service: service,
+                defaults: defaults,
+                storageRootURL: root,
+                backgroundSessionIdentifier: backgroundSessionIdentifier(
+                    "all-lookahead")
+            )
+            await model.start(account: nil)
+            model.setAutomaticLookahead(.all)
+            let activity = AutomaticDownloadActivity(
+                kind: .progress,
+                detail: detail,
+                account: account,
+                currentTime: 65,
+                chapters: (0..<3).map { index in
+                    PlaybackChapter(
+                        id: index,
+                        start: Double(index * 60),
+                        end: Double((index + 1) * 60),
+                        title: "Chapter \(index)"
+                    )
+                },
+                fileRanges: []
+            )
+            await model.handleAutomaticPlaybackActivity(activity)
+
+            XCTAssertNil(model.failure)
+            let record = try XCTUnwrap(model.records.first)
+            XCTAssertEqual(record.manifest.purpose, .manual)
+            XCTAssertNil(record.manifest.automaticTargetTrackIndexes)
+            XCTAssertEqual(model.expectedByteLength(for: record), 12)
+            if existingCache {
+                XCTAssertEqual(record.manifest.downloadID, cacheID)
+                XCTAssertEqual(record.manifest.entries[0].state, .complete)
+                XCTAssertEqual(record.manifest.entries[0].observedByteLength, 4)
+            }
+            let scheduled = await model.scheduledTransferDescriptorsForTesting()
+            XCTAssertEqual(
+                scheduled.map(\.identity.trackIndex), [existingCache ? 1 : 0])
+
+            await model.pause(record)
+            let requestsBeforeRepeatedActivity =
+                await service.downloadPlanRequests()
+            await model.handleAutomaticPlaybackActivity(activity)
+            await model.handleAutomaticPlaybackActivity(
+                AutomaticDownloadActivity(
+                    kind: .bookFinished,
+                    detail: detail,
+                    account: account,
+                    currentTime: 180,
+                    chapters: activity.chapters,
+                    fileRanges: []
+                )
+            )
+            let retained = try XCTUnwrap(model.records.first)
+            XCTAssertEqual(retained.manifest.purpose, .manual)
+            XCTAssertEqual(retained.manifest.state, .paused)
+            XCTAssertNil(retained.manifest.bookFinishedAt)
+            let planRequests = await service.downloadPlanRequests()
+            XCTAssertEqual(planRequests, requestsBeforeRepeatedActivity)
+            _ = await model.removeAllForLocalDataReset()
+        }
+    }
+
+    func testAllLookaheadRequiresLargeCellularDownloadConfirmation()
+        async throws
+    {
+        guard DownloadModel.supportsNetworkPolicySelection else { return }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AllLookaheadCellular-\(UUID().uuidString)")
+        let suite = "AllLookaheadCellular.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0]
+        )
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "large",
+                    expectedByteLength: DownloadModel
+                        .largeDownloadThresholdBytes,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil), downloadPlan: .success(plan))
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "all-cellular")
+        )
+        model.setNetworkPolicy(.allowCellular)
+        model.setAutomaticLookahead(.all)
+        let activity = AutomaticDownloadActivity(
+            kind: .progress,
+            detail: detail,
+            account: account,
+            currentTime: 0,
+            chapters: [],
+            fileRanges: []
+        )
+        await model.handleAutomaticPlaybackActivity(activity)
+        await model.handleAutomaticPlaybackActivity(activity)
+
+        XCTAssertEqual(model.pendingCellularDownload?.kind, .create)
+        XCTAssertEqual(model.pendingCellularDownload?.detail.id, detail.id)
+        XCTAssertTrue(model.records.isEmpty)
+        let requests = await service.authorizedDownloadRequestIdentities()
+        XCTAssertTrue(requests.isEmpty)
+        let planRequests = await service.downloadPlanRequests()
+        XCTAssertEqual(planRequests, [detail.id])
+        _ = await model.removeAllForLocalDataReset()
+    }
+
     func testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist()
         throws
     {

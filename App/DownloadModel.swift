@@ -2245,6 +2245,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private func applyAutomaticPlaybackActivity(
         _ activity: AutomaticDownloadActivity
     ) async {
+        if automaticLookahead == .all, activity.kind == .progress {
+            await download(detail: activity.detail, account: activity.account)
+            return
+        }
         let availability = BookActionAvailability(
             user: activity.account.user,
             detail: activity.detail

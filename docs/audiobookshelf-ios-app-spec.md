@@ -250,8 +250,9 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 - I can restrict downloads to Wi-Fi/non-expensive networks.
 - Starting playback automatically caches complete source files for the current
   position and a configurable lookahead of 1, 3, 5, or 10 files/chapters,
-  defaulting to five; selecting All attempts to cache the full book, and a
-  single-file book caches that complete file.
+  defaulting to five; selecting All starts a normal full-book download during
+  playback, promoting an existing cache and excluding it from automatic
+  cleanup. A single-file book caches that complete file.
 - Automatic cache progress, target bytes, and `queued`, `downloading`,
   `cached`, or `failed` state describe only the active window. A cached window
   does not make a multi-file book an offline download.
@@ -1137,8 +1138,12 @@ Requirements:
 - playback-driven automatic caching of whole files: use source-file timing to
   cover the current and configured following chapter window, otherwise retain
   the current file plus the configured number of following files;
-- automatic lookahead choices of 1, 3, 5, 10, or All, defaulting to five; All
-  targets every source file, while a single-file book downloads the complete
+- automatic lookahead choices of 1, 3, 5, 10, or All, defaulting to five;
+  normalize numeric preferences by rounding down to a permitted count, mapping
+  values below 1 to 1 and values above 10 to All;
+- All uses the normal full-book download path, including cache promotion,
+  network policy and cellular confirmation, and excludes the resulting manual
+  download from automatic cleanup; a single-file book downloads the complete
   file once;
 - automatic cache transfers wait for stable streamed playback, use background
   network priority, and suspend whenever the player needs bandwidth;

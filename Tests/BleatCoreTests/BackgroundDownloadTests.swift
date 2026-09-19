@@ -116,18 +116,19 @@ final class BackgroundDownloadTests: XCTestCase {
         XCTAssertFalse(AutomaticDownloadLookaheadPreference.all.canIncrement)
         XCTAssertEqual(AutomaticDownloadLookaheadPreference.all.label, "All")
         XCTAssertNil(AutomaticDownloadLookaheadPreference.all.limitedCount)
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.normalize(4),
-            .three
-        )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.normalize(99),
-            .ten
-        )
-        XCTAssertEqual(
-            AutomaticDownloadLookaheadPreference.normalize(Int.min),
-            .one
-        )
+        let expected: [(Int, AutomaticDownloadLookaheadPreference)] = [
+            (Int.min, .one), (-2, .one), (-1, .one), (0, .one),
+            (1, .one), (2, .one), (3, .three), (4, .three),
+            (5, .five), (6, .five), (7, .five), (8, .five), (9, .five),
+            (10, .ten), (11, .all), (20, .all), (99, .all), (Int.max, .all),
+        ]
+        for (input, preference) in expected {
+            XCTAssertEqual(
+                AutomaticDownloadLookaheadPreference.normalize(input),
+                preference,
+                "Input: \(input)"
+            )
+        }
 
         let suite =
             "AutomaticDownloadLookaheadPreference.\(UUID().uuidString)"
@@ -137,13 +138,27 @@ final class BackgroundDownloadTests: XCTestCase {
             AutomaticDownloadLookaheadPreference.load(from: defaults),
             .five
         )
+        for preference in AutomaticDownloadLookaheadPreference.allCases {
+            defaults.set(
+                preference.rawValue,
+                forKey: AutomaticDownloadLookaheadPreference.defaultsKey
+            )
+            XCTAssertEqual(
+                AutomaticDownloadLookaheadPreference.load(from: defaults),
+                preference
+            )
+        }
         defaults.set(
-            AutomaticDownloadLookaheadPreference.all.rawValue,
-            forKey: AutomaticDownloadLookaheadPreference.defaultsKey
-        )
+            true, forKey: AutomaticDownloadLookaheadPreference.defaultsKey)
         XCTAssertEqual(
             AutomaticDownloadLookaheadPreference.load(from: defaults),
-            .all
+            .five
+        )
+        defaults.set(
+            0, forKey: AutomaticDownloadLookaheadPreference.defaultsKey)
+        XCTAssertEqual(
+            AutomaticDownloadLookaheadPreference.load(from: defaults),
+            .one
         )
         defaults.set(
             4,
