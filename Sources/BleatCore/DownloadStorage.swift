@@ -803,6 +803,9 @@ public actor DownloadStorage {
         trackIndexes: Set<Int>
     ) throws(DownloadStorageError) -> DownloadedBookRecord {
         var record = try load(storedRecord)
+        guard record.manifest.purpose == .automaticCache else {
+            return record
+        }
         let directory = layout.bookDirectory(
             accountID: record.manifest.accountID,
             itemID: record.manifest.itemID
