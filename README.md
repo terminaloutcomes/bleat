@@ -489,7 +489,9 @@ author context. Pull down on Home to refresh the current library page and its
 personalized shelves. Refresh keeps the loaded shelves visible and replaces
 them only when the normalized content changes. **Continue Listening** is
 ordered by the most recently updated listening progress, with stable book-ID
-ordering when progress timestamps are equal.
+ordering when progress timestamps are equal. Ordering reuses the loaded account
+progress snapshot; shelf loads never fetch progress separately for each book.
+If the snapshot lacks a shelf item, the server's order is retained.
 
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
@@ -844,7 +846,15 @@ Foreground Socket.IO updates are suspended while the current path is marked
 constrained by Low Data Mode and resume with a catch-up refresh when the path
 becomes unconstrained. REST requests, downloads, covers, and playback remain
 independent of that optional realtime connection, and socket progress never
-changes the foreground player's timeline.
+changes the foreground player's timeline. Progress events reconcile only the
+affected book's progress and Continue Listening membership/order. The locally prepared
+book (streamed or downloaded, playing or paused) never triggers a progress
+refetch. Other books request just their progress and, if their summary is not
+loaded, that single item's detail. Progress-filtered browse pages refresh only
+when the changed progress alters membership; libraries, personalized shelves,
+all-progress, and searches are not reloaded for progress events. Inactive scenes
+cancel queued live refreshes and stop follow-up requests from an in-flight
+refresh; foreground return performs a catch-up refresh.
 **About** shows the app icon, version, build timestamp, developer,
 and bundle identifier.
 Diagnostics shows live, privacy-safe operational status and keeps the

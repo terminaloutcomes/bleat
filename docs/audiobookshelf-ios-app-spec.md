@@ -567,7 +567,19 @@ true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
 starts one connection and one catch-up browse refresh. Duplicate path updates
 that do not cross the realtime-allowed boundary do not replace the active
-subscription. A path change immediately makes the primary server preferred
+subscription. Inactive scenes suspend both socket consumption and browse-refresh
+scheduling, including network-recovery notifications. Cancellation stops each
+subsequent stage of an in-flight live refresh; foreground return performs one
+catch-up refresh. Progress-only events patch the account-scoped finished state
+and reconcile the affected book's Continue Listening membership and ordering
+using one authoritative item-progress request, plus one item-detail request if
+its summary is absent locally. They never reload libraries, personalized shelves,
+all-progress, or search results. Only membership changes in an active progress
+filter re-query browse pages to preserve server sorting, counts, and collapsed
+series behavior. A locally prepared item triggers no progress refetch and retains
+local position authority whether streamed, downloaded, playing, or paused.
+Catalog events retain the broader refresh path. A path change immediately makes
+the primary server preferred
 while local reachability is unknown; the shared endpoint router promotes the
 local server only after its probe succeeds. Endpoint probes reconnect only a
 client that existed when the path changed. REST, cover, playback, download, and
@@ -776,7 +788,11 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   refresh failure retains usable content and presents a compact typed retry.
 - Normalize Continue Listening by progress `lastUpdate` descending, then opaque
   library-item ID ascending when timestamps are equal. Preserve server order
-  for other personalized shelves.
+  for other personalized shelves. Reuse the account progress snapshot already
+  loaded for browsing; do not fetch individual progress records to sort shelves.
+  If any shelf item lacks a snapshot, retain the server order. The pinned
+  server's minified personalized entities omit progress even with `include=progress`
+  ([source](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/server/utils/queries/libraryFilters.js#L38-L71)).
 - Do not preload expanded details for every item.
 - Cache cover thumbnails separately from original cover images.
 

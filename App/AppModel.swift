@@ -1359,6 +1359,11 @@ final class AppModel {
     private var liveUpdatesAreActive = true
     private var pendingLiveLibraryRefresh = false
     private var pendingLiveItemIDs: Set<LibraryItemID> = []
+    private var pendingLiveProgressItemIDs: Set<LibraryItemID> = []
+    private var pendingLiveFilteredPageRefresh = false
+    private var liveRefreshGeneration: UInt64 = 0
+    private var bookProgressSnapshots: [LibraryItemID: LibraryBookProgress] =
+        [:]
     private var pendingLocalSessionSyncAccounts: [AccountID: ServerAccount] =
         [:]
     @ObservationIgnored
@@ -2404,7 +2409,8 @@ final class AppModel {
                 .filter { library in
                     library.mediaType == .book
                 }
-            guard operationGeneration == librariesGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == librariesGeneration,
                 self.account?.id == account.id
             else {
                 return
@@ -2435,7 +2441,8 @@ final class AppModel {
             }
             await selectLibrary(library)
         } catch let error {
-            guard operationGeneration == librariesGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == librariesGeneration,
                 self.account?.id == account.id
             else {
                 return
@@ -2457,6 +2464,7 @@ final class AppModel {
         if let account {
             await refreshBookProgress(for: account)
         }
+        guard !Task.isCancelled else { return }
         await refreshLibrariesContent()
     }
 
@@ -2479,6 +2487,7 @@ final class AppModel {
     }
 
     private func refreshLibrariesContent() async {
+        guard !Task.isCancelled else { return }
         librariesGeneration &+= 1
         let operationGeneration = librariesGeneration
         guard let account else {
@@ -2500,7 +2509,8 @@ final class AppModel {
                 for: account
             )
             .filter { $0.mediaType == .book }
-            guard operationGeneration == librariesGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == librariesGeneration,
                 self.account?.id == account.id
             else {
                 return
@@ -2552,7 +2562,8 @@ final class AppModel {
             }
             await refreshSelectedLibraryContent()
         } catch let error {
-            guard operationGeneration == librariesGeneration,
+            guard !Task.isCancelled,
+                operationGeneration == librariesGeneration,
                 self.account?.id == account.id
             else {
                 return
@@ -2624,7 +2635,7 @@ final class AppModel {
             else {
                 return
             }
-            let loadedState = ResourceState.loaded(shelves)
+            let loadedState = ResourceState.loaded(orderedHomeShelves(shelves))
             if homeShelves != loadedState {
                 homeShelves = loadedState
             }
@@ -2659,6 +2670,7 @@ final class AppModel {
         if let account {
             await refreshBookProgress(for: account)
         }
+        guard !Task.isCancelled else { return }
         await refreshSelectedLibraryContent()
     }
 
@@ -2681,6 +2693,7 @@ final class AppModel {
     }
 
     private func refreshSelectedLibraryContent() async {
+        guard !Task.isCancelled else { return }
         homeShelvesGeneration &+= 1
         let operationGeneration = homeShelvesGeneration
         guard let account, let library = selectedLibrary else {
@@ -2713,7 +2726,7 @@ final class AppModel {
             else {
                 return
             }
-            let loadedState = ResourceState.loaded(shelves)
+            let loadedState = ResourceState.loaded(orderedHomeShelves(shelves))
             if homeShelves != loadedState {
                 homeShelves = loadedState
             }
@@ -4343,6 +4356,7 @@ final class AppModel {
         )
         let updatedDetail = detail.replacingProgress(with: progress)
         bookFinishedStates[detail.id] = isFinished
+        bookProgressSnapshots[detail.id] = progress
         if selectedBookID == detail.id {
             bookDetail = .loaded(updatedDetail)
         }
@@ -6001,7 +6015,9 @@ final class AppModel {
             guard let self else { return }
             let updates = await service.liveUpdates(for: account)
             for await update in updates {
-                guard !Task.isCancelled, self.account?.id == accountID else {
+                guard !Task.isCancelled, liveUpdatesAreActive,
+                    self.account?.id == accountID
+                else {
                     return
                 }
                 switch update {
@@ -6026,10 +6042,19 @@ final class AppModel {
                     case .playbackProgress(let progress):
                         bookFinishedStates[progress.itemID] =
                             progress.isFinished
-                        scheduleLiveRefresh(
-                            libraryChanged: false,
-                            itemIDs: [progress.itemID]
-                        )
+                        if progress.isFinished {
+                            removeFromContinueListening(progress.itemID)
+                        }
+                        // Local playback owns its position, including downloaded
+                        // and paused playback. Server echoes must not fetch it.
+                        if playback.isPrepared(
+                            accountID: accountID, itemID: progress.itemID
+                        ) {
+                            applyLocalLiveProgress(progress, account: account)
+                            continue
+                        }
+                        pendingLiveProgressItemIDs.insert(progress.itemID)
+                        scheduleLiveRefresh(libraryChanged: false, itemIDs: [])
                     }
                 }
             }
@@ -6071,6 +6096,11 @@ final class AppModel {
         liveUpdateConnectionState = .disconnected
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
+        liveRefreshGeneration &+= 1
+        pendingLiveLibraryRefresh = false
+        pendingLiveItemIDs = []
+        pendingLiveProgressItemIDs = []
+        pendingLiveFilteredPageRefresh = false
     }
 
     private func cancelLiveUpdateConnectionSpans() {
@@ -6112,46 +6142,316 @@ final class AppModel {
         libraryChanged: Bool,
         itemIDs: Set<LibraryItemID>
     ) {
+        guard liveUpdatesAreActive, networkPathState.allowsRealtimeUpdates
+        else {
+            return
+        }
         pendingLiveLibraryRefresh =
             pendingLiveLibraryRefresh || libraryChanged
         pendingLiveItemIDs.formUnion(itemIDs)
-        liveRefreshTask?.cancel()
+        // New events join the next batch instead of cancelling catalog work
+        // whose pending scope has already been drained by the current batch.
+        guard liveRefreshTask == nil else { return }
+        liveRefreshGeneration &+= 1
+        let generation = liveRefreshGeneration
         liveRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            await self?.performLiveRefresh()
+            guard let self else { return }
+            defer {
+                if liveRefreshGeneration == generation { liveRefreshTask = nil }
+            }
+            repeat {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await performLiveRefresh()
+            } while !Task.isCancelled
+                && (pendingLiveLibraryRefresh
+                    || !pendingLiveItemIDs.isEmpty
+                    || !pendingLiveProgressItemIDs.isEmpty
+                    || pendingLiveFilteredPageRefresh)
         }
     }
 
     private func performLiveRefresh() async {
-        guard let account else { return }
+        guard !Task.isCancelled, liveUpdatesAreActive,
+            networkPathState.allowsRealtimeUpdates, let account
+        else { return }
         let librariesChanged = pendingLiveLibraryRefresh
         let itemIDs = pendingLiveItemIDs
+        let progressItemIDs = pendingLiveProgressItemIDs
+        let filteredPageChanged = pendingLiveFilteredPageRefresh
+        pendingLiveFilteredPageRefresh = false
         pendingLiveLibraryRefresh = false
         pendingLiveItemIDs = []
+        pendingLiveProgressItemIDs = []
+        let libraryID = selectedLibrary?.id
+        let detailGeneration = bookDetailGeneration
+        let catalogChanged = librariesChanged || !itemIDs.isEmpty
 
         if librariesChanged {
             await refreshLibraries()
-        } else {
+        } else if catalogChanged {
             await refreshSelectedLibrary()
         }
+        guard !Task.isCancelled, liveUpdatesAreActive,
+            self.account?.id == account.id,
+            selectedLibrary?.id == libraryID
+        else { return }
 
-        if let selectedBookID,
-            librariesChanged || itemIDs.contains(selectedBookID),
-            let selectedLibrary,
-            let detail = try? await service.bookDetail(
-                for: account,
-                libraryID: selectedLibrary.id,
-                itemID: selectedBookID
-            )
+        if let selectedBookID, let selectedLibrary,
+            detailGeneration == bookDetailGeneration
         {
-            bookDetail = .loaded(detail)
+            if librariesChanged || itemIDs.contains(selectedBookID) {
+                if let detail = try? await service.bookDetail(
+                    for: account,
+                    libraryID: selectedLibrary.id,
+                    itemID: selectedBookID
+                ), !Task.isCancelled, liveUpdatesAreActive,
+                    self.account?.id == account.id,
+                    detailGeneration == bookDetailGeneration
+                {
+                    bookDetail = .loaded(detail)
+                }
+            }
         }
-        if !searchQuery.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ).isEmpty {
+        await refreshLiveProgress(
+            progressItemIDs, account: account, libraryID: libraryID)
+        guard !Task.isCancelled, liveUpdatesAreActive,
+            self.account?.id == account.id,
+            selectedLibrary?.id == libraryID
+        else { return }
+        if filteredPageChanged, !catalogChanged {
+            await reloadBooks(preservingLoadedContent: true)
+        }
+        guard !Task.isCancelled, liveUpdatesAreActive,
+            self.account?.id == account.id, selectedLibrary?.id == libraryID
+        else { return }
+        if catalogChanged,
+            !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             await search(query: searchQuery)
         }
+    }
+
+    private func applyLocalLiveProgress(
+        _ event: AudiobookshelfLivePlaybackProgress, account: ServerAccount
+    ) {
+        guard let detail = playback.preparedBookDetail,
+            detail.id == event.itemID, detail.libraryID == selectedLibrary?.id
+        else { return }
+        let previous = bookProgressSnapshots[event.itemID] ?? detail.progress
+        let position = playback.currentTime
+        let progress = LibraryBookProgress(
+            id: previous?.id ?? "local-\(detail.id.rawValue)",
+            userID: account.user.id, libraryItemID: detail.id,
+            bookID: detail.bookID,
+            duration: detail.duration,
+            progress: event.isFinished
+                ? 1
+                : (detail.duration > 0
+                    ? min(1, position / detail.duration) : 0),
+            currentTime: position, isFinished: event.isFinished,
+            hideFromContinueListening: previous?.hideFromContinueListening
+                ?? false,
+            lastUpdateMilliseconds: event.lastUpdateMilliseconds,
+            startedAtMilliseconds: previous?.startedAtMilliseconds
+                ?? event.lastUpdateMilliseconds,
+            finishedAtMilliseconds: event.isFinished
+                ? event.lastUpdateMilliseconds : nil
+        )
+        bookProgressSnapshots[event.itemID] = progress
+        if selectedBookID == event.itemID,
+            case .loaded(let selected) = bookDetail
+        {
+            bookDetail = .loaded(selected.replacingProgress(with: progress))
+        }
+        if !progress.isFinished, !progress.hideFromContinueListening,
+            progress.currentTime > 0
+        {
+            updateContinueListening(detail.summary)
+        } else {
+            removeFromContinueListening(event.itemID)
+        }
+        if case .progress(let filter) = libraryBrowseFilter,
+            progressMatches(filter, progress: previous)
+                != progressMatches(filter, progress: progress)
+        {
+            pendingLiveFilteredPageRefresh = true
+            scheduleLiveRefresh(libraryChanged: false, itemIDs: [])
+        }
+    }
+
+    private func refreshLiveProgress(
+        _ itemIDs: Set<LibraryItemID>, account: ServerAccount,
+        libraryID: LibraryID?
+    ) async {
+        var filteredPageChanged = false
+        for itemID in itemIDs {
+            guard !Task.isCancelled, liveUpdatesAreActive,
+                self.account?.id == account.id, selectedLibrary?.id == libraryID
+            else { return }
+            guard !playback.isPrepared(accountID: account.id, itemID: itemID)
+            else {
+                continue
+            }
+            let detailGeneration = bookDetailGeneration
+            do {
+                let progress = try await service.bookProgress(
+                    for: account, itemID: itemID)
+                guard !Task.isCancelled, liveUpdatesAreActive,
+                    self.account?.id == account.id,
+                    selectedLibrary?.id == libraryID,
+                    !playback.isPrepared(accountID: account.id, itemID: itemID)
+                else { continue }
+                if case .progress(let filter) = libraryBrowseFilter {
+                    filteredPageChanged =
+                        filteredPageChanged
+                        || progressMatches(
+                            filter, progress: bookProgressSnapshots[itemID])
+                            != progressMatches(filter, progress: progress)
+                }
+                bookProgressSnapshots[itemID] = progress
+                bookFinishedStates[itemID] = progress?.isFinished ?? false
+                if selectedBookID == itemID,
+                    detailGeneration == bookDetailGeneration,
+                    case .loaded(let detail) = bookDetail
+                {
+                    bookDetail = .loaded(
+                        detail.replacingProgress(with: progress))
+                }
+                if let progress, !progress.isFinished,
+                    !progress.hideFromContinueListening,
+                    progress.currentTime > 0,
+                    let libraryID
+                {
+                    let summary: LibraryBookSummary
+                    if let known = liveProgressSummary(itemID) {
+                        summary = known
+                    } else {
+                        let detail = try await service.refreshedBookDetail(
+                            for: account, libraryID: libraryID, itemID: itemID
+                        )
+                        summary = detail.summary
+                    }
+                    guard !Task.isCancelled, liveUpdatesAreActive,
+                        self.account?.id == account.id,
+                        selectedLibrary?.id == libraryID,
+                        summary.libraryID == libraryID
+                    else { continue }
+                    updateContinueListening(summary)
+                } else {
+                    removeFromContinueListening(itemID)
+                }
+            } catch let error {
+                guard !Task.isCancelled else { return }
+                let failure = AppFailure(
+                    operation: .loadBook, serviceError: error)
+                await diagnostics.record(
+                    .failed(
+                        .loadBook, category: .api,
+                        failureCode: failure.diagnosticFailureCode
+                    ))
+            }
+        }
+        // Only a membership transition in the active progress filter needs its
+        // pages re-queried to preserve server sorting, totals and series groups.
+        if filteredPageChanged, !Task.isCancelled, liveUpdatesAreActive,
+            self.account?.id == account.id, selectedLibrary?.id == libraryID
+        {
+            await reloadBooks(preservingLoadedContent: true)
+        }
+    }
+
+    private func progressMatches(
+        _ filter: LibraryProgressFilter, progress: LibraryBookProgress?
+    ) -> Bool {
+        // Pinned audio progress predicates:
+        // https://github.com/advplyr/audiobookshelf/blob/v2.36.0/server/utils/queries/libraryItemsBookFilters.js
+        let finished = progress?.isFinished ?? false
+        let started = (progress?.currentTime ?? 0) > 0
+        return switch filter {
+        case .finished: finished
+        case .notFinished: !finished
+        case .inProgress: started && !finished
+        case .notStarted: !started && !finished
+        }
+    }
+
+    private func liveProgressSummary(_ itemID: LibraryItemID)
+        -> LibraryBookSummary?
+    {
+        if case .loaded(let detail) = bookDetail, detail.id == itemID {
+            return detail.summary
+        }
+        if case .loaded(let page) = books,
+            let book = page.items.first(where: { $0.id == itemID })
+        {
+            return book
+        }
+        if case .loaded(let shelves) = homeShelves,
+            let book = shelves.lazy.flatMap(\.items).first(where: {
+                $0.id == itemID
+            })
+        {
+            return book
+        }
+        if case .loaded(let results) = searchResults {
+            return results.books.first(where: { $0.id == itemID })
+        }
+        return nil
+    }
+
+    private func orderedHomeShelves(_ shelves: [LibraryBookShelf])
+        -> [LibraryBookShelf]
+    {
+        shelves.map { shelf in
+            guard shelf.id == "continue-listening",
+                shelf.items.allSatisfy({ bookProgressSnapshots[$0.id] != nil })
+            else { return shelf }
+            return LibraryBookShelf(
+                id: shelf.id, label: shelf.label,
+                labelLocalizationKey: shelf.labelLocalizationKey,
+                items: orderedContinueListening(shelf.items), total: shelf.total
+            )
+        }
+    }
+
+    private func orderedContinueListening(_ items: [LibraryBookSummary])
+        -> [LibraryBookSummary]
+    {
+        items.sorted {
+            let left =
+                bookProgressSnapshots[$0.id]?.lastUpdateMilliseconds ?? -1
+            let right =
+                bookProgressSnapshots[$1.id]?.lastUpdateMilliseconds ?? -1
+            if left != right { return left > right }
+            return $0.id.rawValue < $1.id.rawValue
+        }
+    }
+
+    private func updateContinueListening(_ book: LibraryBookSummary) {
+        guard book.trackCount > 0, case .loaded(var shelves) = homeShelves
+        else { return }
+        let index = shelves.firstIndex(where: { $0.id == "continue-listening" })
+        let previous = index.map { shelves[$0] }
+        var items = previous?.items.filter { $0.id != book.id } ?? []
+        items.append(book)
+        items = orderedContinueListening(items)
+        let updated = LibraryBookShelf(
+            id: "continue-listening",
+            label: previous?.label ?? "Continue Listening",
+            labelLocalizationKey: previous?.labelLocalizationKey
+                ?? "LabelContinueListening",
+            items: Array(items.prefix(10)),
+            total: max(previous?.total ?? 0, items.count)
+        )
+        if let index {
+            shelves[index] = updated
+        } else {
+            shelves.insert(updated, at: 0)
+        }
+        homeShelves = .loaded(shelves)
     }
 
     private func makeLibraryItemsPageRequest(
@@ -6211,6 +6511,9 @@ final class AppModel {
         var items = firstPage.items
         var itemIDs = Set(items.map(\.id))
         for pageNumber in 1...lastPageToRefresh {
+            guard !Task.isCancelled else {
+                throw .libraryRepository(.cancelled)
+            }
             let request = try makeLibraryItemsPageRequest(
                 page: pageNumber,
                 limit: firstPage.limit,
@@ -6329,6 +6632,7 @@ final class AppModel {
         homeShelvesRefreshState = .idle
         bookProgressGeneration &+= 1
         bookFinishedStates = [:]
+        bookProgressSnapshots = [:]
         clearEntityBrowseFilter()
         resetSearch()
         resetBookDetail()
@@ -6348,11 +6652,15 @@ final class AppModel {
         let generation = bookProgressGeneration
         do {
             let progress = try await service.allBookProgress(for: account)
-            guard generation == bookProgressGeneration,
+            guard !Task.isCancelled, generation == bookProgressGeneration,
                 self.account?.id == account.id
             else {
                 return
             }
+            bookProgressSnapshots = Dictionary(
+                uniqueKeysWithValues: progress.map {
+                    ($0.libraryItemID, $0)
+                })
             bookFinishedStates = Dictionary(
                 uniqueKeysWithValues: progress.map {
                     ($0.libraryItemID, $0.isFinished)

@@ -419,6 +419,7 @@ final class PlaybackModel {
     private var lastAttemptedSyncTime: Double = 0
     private var lastPersistedLocalTime: Double = 0
     private var activeDownloadDetail: LibraryBookDetail?
+    private var localBookDetail: LibraryBookDetail?
     private var lastAutomaticDownloadSignal: AutomaticDownloadSignal?
     private var automaticDownloadPlaybackGate =
         AutomaticDownloadPlaybackGate()
@@ -476,6 +477,10 @@ final class PlaybackModel {
 
     var accountID: AccountID? {
         preparingAccountID ?? localAccountID ?? activeAccount?.id
+    }
+
+    var preparedBookDetail: LibraryBookDetail? {
+        activeDownloadDetail ?? localBookDetail
     }
 
     var libraryID: LibraryID? {
@@ -786,6 +791,7 @@ final class PlaybackModel {
         preparingAccountID = account.id
         preparation = nil
         activeDownloadDetail = nil
+        localBookDetail = nil
         lastAutomaticDownloadSignal = nil
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
@@ -883,6 +889,7 @@ final class PlaybackModel {
             preparingAccountID = nil
             preparation = nil
             activeDownloadDetail = nil
+            localBookDetail = nil
             resetPlayer()
             let failure = AppFailure(
                 operation: .openPlayback, serviceError: error)
@@ -904,6 +911,7 @@ final class PlaybackModel {
             preparingAccountID = nil
             preparation = nil
             activeDownloadDetail = nil
+            localBookDetail = nil
             resetPlayer()
             state = .failed(.mediaUnavailable)
             telemetryOutcome = .failed(.media)
@@ -979,6 +987,7 @@ final class PlaybackModel {
         preparingAccountID = accountID
         preparation = nil
         activeDownloadDetail = nil
+        localBookDetail = nil
         lastAutomaticDownloadSignal = nil
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
@@ -1069,6 +1078,7 @@ final class PlaybackModel {
             activeDownloadDetail =
                 automaticCachedWindow == nil
                 ? nil : detail
+            localBookDetail = automaticCachedWindow == nil ? detail : nil
             duration = prepared.duration
             if let initialTime {
                 currentTime = min(max(initialTime, 0), prepared.duration)
@@ -1895,6 +1905,7 @@ final class PlaybackModel {
         preparingAccountID = nil
         preparation = nil
         activeDownloadDetail = nil
+        localBookDetail = nil
         lastAutomaticDownloadSignal = nil
         automaticDownloadPlaybackGate =
             AutomaticDownloadPlaybackGate()
