@@ -147,6 +147,10 @@ private final class LiveTLSDelegate: NSObject, URLSessionDelegate,
             lock.withLock {
                 capturedCallbackURL = url
             }
+            // End the native async request with a cancellation error. Merely
+            // refusing this custom-scheme redirect can make Foundation finish
+            // with neither data nor an error and trap in its async bridge.
+            task.cancel()
             completionHandler(nil)
             return
         }
@@ -350,12 +354,16 @@ private final class LiveKeycloakBrowser: OpenIDBrowserSession,
             using: .utf8
         )
 
+        try Task.checkCancellation()
         do {
             _ = try await session.data(for: loginRequest)
-        } catch let error as URLError where error.code == .cancelled {
-            // The redirect delegate cancels the request when the private
-            // callback URL is reached.
+        } catch let error as URLError
+            where error.code == .cancelled && delegate.callbackURL != nil
+        {
+            // Only the captured redirect is an expected transport cancellation.
+            // Cancellation of the caller must still terminate authentication.
         }
+        try Task.checkCancellation()
         guard let callbackURL = delegate.callbackURL else {
             throw OpenIDBrowserError.failed
         }
