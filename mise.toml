@@ -55,7 +55,7 @@ run = "./scripts/coverage-bleat-api.sh"
 [tasks."api:validate"]
 description = "Run every bleat-api validation gate"
 depends = ["api:check", "api:clippy", "api:test"]
-run = ["cargo build --manifest-path bleat-api/Cargo.toml --release"]
+run = ["cargo build -p bleat-api --release"]
 
 [tasks."api:run"]
 description = "Run bleat-api and PostgreSQL locally"
