@@ -109,17 +109,20 @@ final class BonjourNearbyServerDiscovery: NearbyServerDiscovering {
     init(
         browser: BonjourServiceBrowser = BonjourServiceBrowser(),
         resolver: BonjourServiceResolver = BonjourServiceResolver(),
-        verifier:
-            @escaping @Sendable (NormalizedServerURL) async throws
-            -> DiscoveredServer = { server in
-                try await ServerDiscoveryClient(
-                    transport: URLSessionHTTPTransport(routesRequests: false)
-                ).discover(server)
-            }
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer(),
+        verifier: (
+            @Sendable (NormalizedServerURL) async throws -> DiscoveredServer
+        )? = nil
     ) {
         self.browser = browser
         self.resolver = resolver
-        self.verifier = verifier
+        self.verifier =
+            verifier ?? { server in
+                try await ServerDiscoveryClient(
+                    transport: URLSessionHTTPTransport(
+                        routesRequests: false, tracer: tracer)
+                ).discover(server)
+            }
     }
 
     func start(

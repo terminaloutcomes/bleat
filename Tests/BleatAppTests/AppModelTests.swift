@@ -587,6 +587,64 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    func testDownloadHTTPMetricsAreRecordedOffMainActorWithoutCacheHits()
+        async throws
+    {
+        let tracer = RecordingRemoteTelemetryTracer()
+        let downloads = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            remoteTelemetryTracer: tracer)
+        let interval = DateInterval(
+            start: Date().addingTimeInterval(-1), duration: 1)
+        let transactions = [
+            DownloadHTTPTransaction(
+                fetchType: .networkLoad, method: .get, statusCode: 302,
+                requestStart: interval.start, fetchStart: interval.start,
+                responseEnd: interval.end),
+            DownloadHTTPTransaction(
+                fetchType: .localCache, method: .get, statusCode: 200,
+                requestStart: interval.start, fetchStart: interval.start,
+                responseEnd: interval.end),
+            DownloadHTTPTransaction(
+                fetchType: .networkLoad, method: .get, statusCode: 206,
+                requestStart: interval.start, fetchStart: interval.start,
+                responseEnd: nil),
+        ]
+        await Task.detached {
+            downloads.recordHTTPTransactions(
+                transactions, interval: interval, error: URLError(.cancelled))
+            downloads.recordHTTPTransactions(
+                [
+                    DownloadHTTPTransaction(
+                        fetchType: .networkLoad, method: .get, statusCode: nil,
+                        requestStart: nil, fetchStart: interval.start,
+                        responseEnd: nil)
+                ],
+                interval: interval, error: URLError(.cannotFindHost))
+        }.value
+        for _ in 0..<100 {
+            if tracer.spans.count == 3 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(
+            tracer.spans.compactMap(\.httpCall).filter {
+                $0.result == .response(statusCode: 302)
+            }.count, 1)
+        XCTAssertEqual(
+            tracer.spans.compactMap(\.httpCall).filter {
+                $0.result == .cancelled
+            }.count, 1)
+        XCTAssertEqual(
+            tracer.spans.compactMap(\.httpCall).filter {
+                $0.result == .urlError(.cannotFindHost)
+            }.count, 1)
+        XCTAssertTrue(
+            tracer.spans.compactMap(\.httpCall).allSatisfy {
+                $0.endpoint == .audiobookshelf(.downloadFile)
+            })
+        XCTAssertEqual(tracer.spans.count, 3)
+    }
+
     func testManualDownloadSchedulingAndCancellationEmitTaskSpans()
         async throws
     {
@@ -3815,8 +3873,10 @@ final class AppModelTests: XCTestCase {
             let primary = try NormalizedServerURL("https://books.example")
             let local = try NormalizedServerURL("https://books.home")
             await router.configure(primary: primary, local: local)
+            let tracer = RecordingRemoteTelemetryTracer()
             let loader = BookCoverImageLoader(
                 diskCapacity: 0,
+                tracer: tracer,
                 fetch: { request in
                     try await fetcher.fetch(request)
                 }
@@ -3845,6 +3905,23 @@ final class AppModelTests: XCTestCase {
                     purpose: .cover
                 )
             )
+            XCTAssertEqual(
+                tracer.spans.map(\.httpCall),
+                [
+                    RemoteTelemetryHTTPCall(
+                        endpoint: .audiobookshelf(.cover), method: .get,
+                        result: .response(statusCode: 503)),
+                    RemoteTelemetryHTTPCall(
+                        endpoint: .audiobookshelf(.cover), method: .get,
+                        result: .response(statusCode: 200)),
+                ])
+            _ = await loader.image(
+                for: url,
+                accountID: AccountID(rawValue: "cover-routing-account"))
+            XCTAssertEqual(
+                tracer.spans.count, 2,
+                "Memory cache hits must not emit HTTP calls")
+
         }
     #endif
 

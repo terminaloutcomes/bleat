@@ -7,6 +7,7 @@ import Foundation
 public final class URLSessionTelemetryAuthenticationTransport:
     TelemetryAuthenticationTransport, @unchecked Sendable
 {
+    private let tracer: any RemoteTelemetryTracing
     private let baseURL: URL
     private let session: URLSession
     private let encoder: JSONEncoder
@@ -17,7 +18,8 @@ public final class URLSessionTelemetryAuthenticationTransport:
         baseURL: URL,
         allowsInsecureLoopback: Bool = false,
         installationID: UUID? = nil,
-        configuration: URLSessionConfiguration = .ephemeral
+        configuration: URLSessionConfiguration = .ephemeral,
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer()
     ) throws(TelemetryAuthenticationTransportError) {
         guard
             Self.isValid(
@@ -27,6 +29,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
         else {
             throw .invalidConfiguration
         }
+        self.tracer = tracer
         self.baseURL = baseURL.appending(path: "")
         self.installationID = installationID
         configuration.timeoutIntervalForRequest = 10
@@ -43,7 +46,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
         -> TelemetryChallenge
     {
         let response: ChallengeDTO = try await post(
-            path: "v1/attestation/challenge",
+            endpoint: .attestationChallenge,
             body: EmptyRequest(),
             expectedStatus: 201
         )
@@ -56,7 +59,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
         attestationObject: Data
     ) async throws(TelemetryAuthenticationTransportError) -> UUID {
         let response: EnrollmentResponseDTO = try await post(
-            path: "v1/attestation/enroll",
+            endpoint: .attestationEnroll,
             body: EnrollmentRequestDTO(
                 challengeID: challenge.id,
                 challenge: challenge.value,
@@ -74,7 +77,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
         -> TelemetryChallenge
     {
         let response: ChallengeDTO = try await post(
-            path: "v1/token/challenge",
+            endpoint: .tokenChallenge,
             body: TokenChallengeRequestDTO(installationID: installationID),
             expectedStatus: 201
         )
@@ -89,7 +92,7 @@ public final class URLSessionTelemetryAuthenticationTransport:
         -> TelemetryBearerToken
     {
         let response: TokenResponseDTO = try await post(
-            path: "v1/token",
+            endpoint: .token,
             body: TokenRequestDTO(
                 installationID: installationID,
                 challengeID: challenge.id,
@@ -111,10 +114,18 @@ public final class URLSessionTelemetryAuthenticationTransport:
     }
 
     private func post<RequestBody: Encodable, ResponseBody: Decodable>(
-        path: String,
+        endpoint: RemoteTelemetryHTTPEndpoint,
         body: RequestBody,
         expectedStatus: Int
     ) async throws(TelemetryAuthenticationTransportError) -> ResponseBody {
+        let path: String
+        switch endpoint {
+        case .attestationChallenge: path = "v1/attestation/challenge"
+        case .attestationEnroll: path = "v1/attestation/enroll"
+        case .tokenChallenge: path = "v1/token/challenge"
+        case .token: path = "v1/token"
+        case .audiobookshelf: throw .invalidConfiguration
+        }
         let url = baseURL.appending(path: path)
         guard url.scheme == baseURL.scheme, url.host == baseURL.host else {
             throw .invalidConfiguration
@@ -140,18 +151,26 @@ public final class URLSessionTelemetryAuthenticationTransport:
             throw .malformedResponse
         }
 
+        let span = tracer.beginSpan(operation: .httpRequest)
+        var result: RemoteTelemetryHTTPResult = .nonHTTPResponse
+        defer {
+            span.endHTTPCall(
+                RemoteTelemetryHTTPCall(
+                    endpoint: endpoint, method: .post, result: result))
+        }
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
-        } catch is CancellationError {
-            throw .cancelled
         } catch {
+            result = .failure(error)
+            if result == .cancelled { throw .cancelled }
             throw .temporarilyUnavailable
         }
         guard let response = response as? HTTPURLResponse else {
             throw .malformedResponse
         }
+        result = .response(statusCode: response.statusCode)
         guard data.count <= 65_536 else {
             throw .malformedResponse
         }

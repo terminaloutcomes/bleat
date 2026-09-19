@@ -5,12 +5,164 @@ import XCTest
 @testable import BleatCore
 
 final class RemoteTelemetryTests: XCTestCase {
+    func testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome()
+        async throws
+    {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let exporter = RecordingSpanExporter()
+        let tracer = RemoteTelemetryTracer()
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1.2.3", build: "45"),
+            storageURL: directory,
+            tracerFacade: tracer, downstreamExporter: exporter)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HTTPTraceURLProtocol.self]
+        let transport = URLSessionHTTPTransport(
+            configuration: configuration, tracer: tracer)
+        let outcomes: [(String, RemoteTelemetryHTTPResult)] = [
+            ("200", .response(statusCode: 200)),
+            ("503", .response(statusCode: 503)),
+            ("transport", .urlError(.cannotConnectToHost)),
+            ("cancelled", .cancelled),
+            ("non-http", .nonHTTPResponse),
+        ]
+        for endpoint in DiagnosticEndpoint.allCases {
+            for (scenario, _) in outcomes {
+                var request = URLRequest(
+                    url: try XCTUnwrap(
+                        URL(
+                            string:
+                                "https://private.example/prefix/api/items/private-book?token=private-token"
+                        )))
+                request.httpMethod = "GET"
+                request.setValue(
+                    scenario, forHTTPHeaderField: "X-Test-Scenario")
+                request.setValue(
+                    "Bearer private-token", forHTTPHeaderField: "Authorization")
+                _ = try? await transport.send(
+                    TracedHTTPRequest(request: request, endpoint: endpoint))
+            }
+        }
+        await pipeline.flush(timeout: 5)
+        let spans = exporter.recordedSpans
+        XCTAssertEqual(
+            spans.count, DiagnosticEndpoint.allCases.count * outcomes.count)
+        for endpoint in DiagnosticEndpoint.allCases {
+            let matching = spans.filter {
+                $0.attributes["bleat.http.endpoint"]?.description
+                    == endpoint.rawValue
+            }
+            XCTAssertEqual(matching.count, outcomes.count)
+            for (_, result) in outcomes {
+                let expected = RemoteTelemetryHTTPCall(
+                    endpoint: .audiobookshelf(endpoint), method: .get,
+                    result: result)
+                XCTAssertEqual(
+                    matching.filter { span in
+                        expected.attributes.allSatisfy {
+                            span.attributes[$0.key]?.description == $0.value
+                        }
+                    }.count, 1)
+            }
+        }
+        for span in spans {
+            XCTAssertEqual(span.name, "bleat.http.request")
+            XCTAssertEqual(span.kind, .client)
+            XCTAssertEqual(span.events.count, 1)
+            XCTAssertEqual(span.events.first?.name, "bleat.http.completed")
+            XCTAssertEqual(
+                span.events.first?.attributes["bleat.http.endpoint"],
+                span.attributes["bleat.http.endpoint"])
+            let encoded =
+                String(describing: span.attributes)
+                + String(describing: span.events)
+            for secret in [
+                "private.example", "private-book", "private-token",
+                "Authorization", "prefix",
+            ] {
+                XCTAssertFalse(encoded.contains(secret))
+            }
+        }
+        pipeline.deactivate()
+        pipeline.purge()
+    }
+
+    func testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint() async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://primary.example/prefix")
+        await router.configure(
+            primary: primary,
+            local: try NormalizedServerURL("https://local.example/prefix"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HTTPTraceURLProtocol.self]
+        let recorder = HTTPTraceRecorder()
+        let transport = URLSessionHTTPTransport(
+            configuration: configuration, endpointRouter: router,
+            tracer: recorder)
+        _ = try await transport.send(
+            TracedHTTPRequest(
+                request: URLRequest(
+                    url: try XCTUnwrap(
+                        URL(
+                            string:
+                                "https://primary.example/prefix/api/me/progress/private-id"
+                        ))), endpoint: .progress))
+        XCTAssertEqual(
+            recorder.recordedCalls,
+            [
+                RemoteTelemetryHTTPCall(
+                    endpoint: .audiobookshelf(.progress), method: .get,
+                    result: .urlError(.cannotConnectToHost)),
+                RemoteTelemetryHTTPCall(
+                    endpoint: .audiobookshelf(.progress), method: .get,
+                    result: .response(statusCode: 200)),
+            ])
+    }
+
+    func testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes()
+        async throws
+    {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let exporter = RecordingSpanExporter()
+        let tracer = RemoteTelemetryTracer()
+        tracer.prepareForActivation()
+        let call = RemoteTelemetryHTTPCall(
+            endpoint: .audiobookshelf(.downloadFile), method: .get,
+            result: .response(statusCode: 206))
+        let start = Date().addingTimeInterval(-2)
+        let end = start.addingTimeInterval(1)
+        tracer.recordHTTPCall(call, startedAt: start, endedAt: end)
+        let span = tracer.beginSpan(operation: .httpRequest)
+        span.endHTTPCall(call)
+        span.endHTTPCall(call)
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory, tracerFacade: tracer,
+            downstreamExporter: exporter)
+        await pipeline.flush(timeout: 2)
+        let spans = exporter.recordedSpans
+        XCTAssertEqual(spans.count, 2)
+        XCTAssertTrue(spans.allSatisfy { $0.events.count == 1 })
+        let timed = try XCTUnwrap(
+            spans.first { abs($0.startTime.timeIntervalSince(start)) < 0.001 })
+        XCTAssertEqual(timed.endTime.timeIntervalSince(end), 0, accuracy: 0.001)
+        pipeline.deactivate()
+        tracer.recordHTTPCall(call, startedAt: start, endedAt: end)
+        await pipeline.flush(timeout: 2)
+        XCTAssertEqual(exporter.recordedSpans.count, 2)
+        pipeline.purge()
+    }
+
     func testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes() {
         let allowedNames = Set(
             RemoteTelemetryOperation.allCases.map(\.rawValue))
         XCTAssertEqual(
             allowedNames,
             [
+                "bleat.http.request",
                 "bleat.app.launch",
                 "bleat.account.connection",
                 "bleat.live_update.connection",

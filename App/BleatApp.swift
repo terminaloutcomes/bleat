@@ -23,10 +23,12 @@ enum AppLaunchMode: Equatable {
             : .standard
     }
 
-    func makeNearbyServerDiscovery() -> any NearbyServerDiscovering {
+    func makeNearbyServerDiscovery(
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer()
+    ) -> any NearbyServerDiscovering {
         switch self {
         case .standard:
-            BonjourNearbyServerDiscovery()
+            BonjourNearbyServerDiscovery(tracer: tracer)
         case .releaseScreenshot:
             NoResultsNearbyServerDiscovery()
         }
@@ -85,6 +87,7 @@ final class AppBootstrap {
         do {
             model = AppModel(
                 service: try LiveAppService(
+                    remoteTelemetryTracer: remoteTelemetry.tracer,
                     diagnostics: diagnostics,
                     privateCloudEvents:
                         CompositePrivateCloudSyncEventRecorder([
@@ -120,7 +123,8 @@ final class AppBootstrap {
                         )
                     }
                 ),
-                nearbyServerDiscovery: launchMode.makeNearbyServerDiscovery(),
+                nearbyServerDiscovery: launchMode.makeNearbyServerDiscovery(
+                    tracer: remoteTelemetry.tracer),
                 diagnostics: diagnostics,
                 remoteTelemetryConsentController: remoteTelemetry,
                 remoteTelemetryTracer: remoteTelemetry.tracer,

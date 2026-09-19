@@ -31,6 +31,7 @@ actor BookCoverImageLoader {
     private static let memoryCapacity = 32 * 1_024 * 1_024
     private static let diskCapacity = 128 * 1_024 * 1_024
 
+    private var tracer: any RemoteTelemetryTracing
     private let fetch: Fetch
     private let diskCapacity: Int
     private let cacheRoot: URL?
@@ -43,6 +44,7 @@ actor BookCoverImageLoader {
     init(
         diskCapacity: Int = BookCoverImageLoader.diskCapacity,
         cacheRoot: URL? = nil,
+        tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer(),
         fetch: @escaping Fetch = { request in
             #if DEBUG || BLEAT_UI_TESTING
                 if let response = try UITestAppService.coverImageResponse(
@@ -57,6 +59,7 @@ actor BookCoverImageLoader {
         self.diskCapacity = max(0, diskCapacity)
         self.cacheRoot = cacheRoot
         self.fetch = fetch
+        self.tracer = tracer
         memory.totalCostLimit = Self.memoryCapacity
         memory.countLimit = 256
     }
@@ -76,7 +79,8 @@ actor BookCoverImageLoader {
                     cachePolicy: .reloadIgnoringLocalCacheData
                 ),
                 using: fetch,
-                endpointRouter: endpointRouter
+                endpointRouter: endpointRouter,
+                tracer: tracer
             )?.image
         }
         let key = BookCoverCacheKey(accountID: accountID, url: url)
@@ -102,11 +106,13 @@ actor BookCoverImageLoader {
         }
 
         let endpointRouter = endpointRouter
+        let tracer = tracer
         let task = Task { [fetch] in
             await Self.fetchImage(
                 request,
                 using: fetch,
-                endpointRouter: endpointRouter
+                endpointRouter: endpointRouter,
+                tracer: tracer
             )
         }
         inFlight[key] = task
@@ -141,6 +147,10 @@ actor BookCoverImageLoader {
         memoryKeys = [:]
     }
 
+    func setTracer(_ tracer: any RemoteTelemetryTracing) {
+        self.tracer = tracer
+    }
+
     func setEndpointRouter(_ endpointRouter: ServerEndpointRouter?) {
         self.endpointRouter = endpointRouter
     }
@@ -170,7 +180,8 @@ actor BookCoverImageLoader {
     private static func fetchImage(
         _ request: URLRequest,
         using fetch: Fetch,
-        endpointRouter: ServerEndpointRouter?
+        endpointRouter: ServerEndpointRouter?,
+        tracer: any RemoteTelemetryTracing
     ) async -> LoadedBookCover? {
         let candidates: [ServerEndpointCandidate]
         if let endpointRouter, let url = request.url {
@@ -187,10 +198,21 @@ actor BookCoverImageLoader {
             candidates = []
         }
         for candidate in candidates {
+            let span = tracer.beginSpan(operation: .httpRequest)
+            var result: RemoteTelemetryHTTPResult = .nonHTTPResponse
+            defer {
+                span.endHTTPCall(
+                    RemoteTelemetryHTTPCall(
+                        endpoint: .audiobookshelf(.cover), method: .get,
+                        result: result))
+            }
             do {
                 var routedRequest = request
                 routedRequest.url = candidate.url
                 let (data, response) = try await fetch(routedRequest)
+                if let http = response as? HTTPURLResponse {
+                    result = .response(statusCode: http.statusCode)
+                }
                 guard
                     let response = response as? HTTPURLResponse,
                     (200...299).contains(response.statusCode),
@@ -212,6 +234,7 @@ actor BookCoverImageLoader {
                     image: image
                 )
             } catch {
+                result = .failure(error)
                 if candidate.isLocal {
                     await endpointRouter?.markLocalUnavailable(candidate)
                     continue

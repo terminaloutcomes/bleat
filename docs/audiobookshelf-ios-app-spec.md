@@ -2001,6 +2001,23 @@ backend's access and retention controls; raw forwarding chains are not exported
 or normally logged. Temporary local forwarding diagnostics require explicit
 configuration and remain excluded from OTLP logs.
 
+Opted-in HTTP telemetry emits one `bleat.http.request` client span with one
+`bleat.http.completed` event per controlled network attempt. The closed
+`RemoteTelemetryHTTPEndpoint` enum reuses `DiagnosticEndpoint` for Audiobookshelf
+and names the four telemetry authentication endpoints separately. Only the
+endpoint name, bounded HTTP method, numeric response status or typed failure
+code, failure stage, and numeric URLSession error code are added; no identifier or URL is parsed into telemetry. API retries and
+local-to-primary fallbacks count separately. Cover cache hits and downloaded
+media cache hits do not count. Download transaction metrics preserve request
+start/end times, redirects, cancellation after headers, and pre-request network
+failures. The existing installation resource identifies the client.
+
+OTLP export requests are excluded to prevent recursive telemetry emission.
+HTTP transfers owned internally by AVFoundation and Apple services are not
+observable through the app's HTTP boundary. This coverage must not be presented
+as a packet-level count of all device traffic. Remote consent and withdrawal
+apply to HTTP spans and their buffered events.
+
 Client-originated remote telemetry must never contain credentials, tokens,
 cookies, authorization headers, playback session routes, App Attest evidence,
 backend

@@ -857,6 +857,13 @@ cancel queued live refreshes and stop follow-up requests from an in-flight
 refresh; foreground return performs a catch-up refresh.
 **About** shows the app icon, version, build timestamp, developer,
 and bundle identifier.
+Opted-in HTTP tracing identifies endpoints with a closed, identifier-free enum
+and emits one completion event per app-controlled HTTP attempt, including API
+requests, cover fetches, nearby-server verification, authentication, and download
+transactions. Cache hits do not count. OTLP uploads are excluded to prevent
+recursive reporting; AVFoundation and Apple-service internal traffic is outside
+this HTTP boundary.
+
 Diagnostics shows live, privacy-safe operational status and keeps the
 **Share diagnostic telemetry** control and Bonjour troubleshooter available.
 Bleat emits typed diagnostic events through the system log; it does not create

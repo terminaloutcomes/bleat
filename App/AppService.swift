@@ -1312,6 +1312,8 @@ actor LiveAppService: AppServicing {
     private let searchCoordinator = LibrarySearchCoordinator()
 
     init(
+        remoteTelemetryTracer: any RemoteTelemetryTracing =
+            InactiveRemoteTelemetryTracer(),
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
         privateCloudEvents: (
@@ -1363,11 +1365,13 @@ actor LiveAppService: AppServicing {
         directTransport = URLSessionHTTPTransport(
             diagnostics: diagnostics,
             endpointRouter: endpointRouter,
-            routesRequests: false
+            routesRequests: false,
+            tracer: remoteTelemetryTracer
         )
         transport = URLSessionHTTPTransport(
             diagnostics: diagnostics,
-            endpointRouter: endpointRouter
+            endpointRouter: endpointRouter,
+            tracer: remoteTelemetryTracer
         )
         let privateCloudAvailable =
             suppliedPrivateCloudAvailable

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BonjourTroubleshooterView: View {
+    let model: AppModel
     @State private var state: NearbyServerDiscoveryState = .idle
     @State private var discovery: BonjourNearbyServerDiscovery?
 
@@ -86,7 +87,7 @@ struct BonjourTroubleshooterView: View {
     }
 
     private func start() {
-        let discovery = self.discovery ?? BonjourNearbyServerDiscovery()
+        let discovery = self.discovery ?? model.makeNearbyServerDiscovery()
         self.discovery = discovery
         discovery.start { state in
             self.state = state

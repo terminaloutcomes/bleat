@@ -24,6 +24,17 @@ Both producers ultimately write the standard ClickHouse OpenTelemetry tables
 queried by HyperDX. Neither producer sends telemetry to the HyperDX API or the
 ClickStack-managed Collector.
 
+The [HTTP calls per minute per client dashboard](https://bleat-logs.terminaloutcomes.com/dashboards/6aaf06527866d206d22b612d)
+groups `bleat.http.request` spans by installation, endpoint, and build. Its
+charts normalize counts to calls per minute at any selected bucket size; the
+table averages over the selected time range. Each request span contains one
+`bleat.http.completed` event with a closed endpoint name, HTTP method, response
+status or typed failure, and processing stage. Numeric URLSession failure codes
+are retained without error descriptions. These fields contain no URL or remote
+identifier. Older builds do not emit these spans, so an empty chart does not
+establish that a client made no calls. OTLP uploads and HTTP traffic managed
+internally by Apple services or AVFoundation are outside this count.
+
 ## Control plane and data plane
 
 Telemetry authentication and telemetry delivery are separate protocols.
