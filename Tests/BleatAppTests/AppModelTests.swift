@@ -15159,7 +15159,7 @@ final class AppModelTests: XCTestCase {
             account: account,
             detail: detail,
             purpose: .automaticCache,
-            includeTimelineMetadata: false
+            includeUncachedTrack: true
         )
         let playbackGate = AsyncGate()
         let remotePreparation = playbackPreparation(
@@ -15227,7 +15227,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
@@ -15267,7 +15268,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(corrupt)
     }
 
-    func testAutomaticCachedWindowRecoversSingleFileBookTiming()
+    func testCompleteSingleFileCachePromotesToDownloadedPlayback()
         async throws
     {
         let root = FileManager.default.temporaryDirectory
@@ -15308,10 +15309,11 @@ final class AppModelTests: XCTestCase {
             containing: requestedTime
         )
 
-        XCTAssertEqual(window?.trackIndexes, [0])
-        XCTAssertEqual(window?.startTime, 0)
-        XCTAssertEqual(window?.endTime, detail.duration)
-        model.releaseAutomaticCachePin(window?.pin)
+        XCTAssertEqual(record.manifest.purpose, .manual)
+        XCTAssertTrue(model.isFullyDownloaded(for: record))
+        XCTAssertNil(window)
+        let urls = try await model.localTrackURLs(for: record)
+        XCTAssertEqual(urls.count, 1)
     }
 
     func testAutomaticCachedWindowDoesNotInferMultiFileTiming()
@@ -15336,7 +15338,8 @@ final class AppModelTests: XCTestCase {
             account: account,
             detail: singleFileDetail,
             purpose: .automaticCache,
-            includeTimelineMetadata: false
+            includeTimelineMetadata: false,
+            includeUncachedTrack: true
         )
         let model = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
@@ -15391,7 +15394,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: cachedDetail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let closeGate = AsyncGate()
         let service = TestAppService(
@@ -15467,7 +15471,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let remote = AppPlaybackPreparation(
             sessionID: PlaybackSessionID(rawValue: "prepared-continuation"),
@@ -15548,7 +15553,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let remote = AppPlaybackPreparation(
             sessionID: PlaybackSessionID(rawValue: "retried-continuation"),
@@ -15617,7 +15623,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let remote = AppPlaybackPreparation(
             sessionID: PlaybackSessionID(rawValue: "paused-continuation"),
@@ -15668,7 +15675,6 @@ final class AppModelTests: XCTestCase {
             model.playback.cachedContinuationPhase,
             .waitingForPreparation
         )
-        XCTAssertGreaterThanOrEqual(model.playback.currentTime, 0.99)
 
         model.playback.pause()
         XCTAssertEqual(model.playback.state, .paused)
@@ -15702,6 +15708,7 @@ final class AppModelTests: XCTestCase {
         )
         model.playback.play()
         await fulfillment(of: [continuationFinished], timeout: 2)
+        XCTAssertGreaterThanOrEqual(model.playback.currentTime, 0.99)
         XCTAssertTrue(model.playback.isPlaybackRequested)
         XCTAssertTrue(
             model.playback.state == .buffering
@@ -15733,7 +15740,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: detail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let downloads = DownloadModel(
             service: TestAppService(activeAccount: .success(account)),
@@ -19215,7 +19223,8 @@ final class AppModelTests: XCTestCase {
         detail: LibraryBookDetail,
         purpose: DownloadPurpose = .manual,
         complete: Bool = true,
-        includeTimelineMetadata: Bool = true
+        includeTimelineMetadata: Bool = true,
+        includeUncachedTrack: Bool = false
     ) async throws {
         let source = root.appendingPathComponent(
             "source.wav",
@@ -19256,9 +19265,24 @@ final class AppModelTests: XCTestCase {
             startOffset: includeTimelineMetadata ? 0 : nil,
             duration: includeTimelineMetadata ? 1 : nil
         )
+        var tracks = [track]
+        if includeUncachedTrack {
+            tracks.append(
+                DownloadTrackPlan(
+                    index: 1,
+                    inode: "uncached-track",
+                    expectedByteLength: size,
+                    mimeType: "audio/wav",
+                    safeExtension: .wav,
+                    destinationEntry: "00001.wav",
+                    startOffset: includeTimelineMetadata ? 1 : nil,
+                    duration: includeTimelineMetadata ? 1 : nil
+                )
+            )
+        }
         let plan = DownloadPlan(
             itemID: detail.id,
-            tracks: [track]
+            tracks: tracks
         )
         let layout = try DownloadStorageLayout(rootURL: root)
         let storage = DownloadStorage(layout: layout)

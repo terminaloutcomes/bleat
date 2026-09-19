@@ -1126,6 +1126,7 @@ final class DownloadStorageTests: XCTestCase {
             purpose: .automaticCache,
             automaticTargetTrackIndexes: [1]
         )
+        let staleCache = record
         let finishedAt = Date(timeIntervalSince1970: 123)
         record = try await fixture.storage.markBookFinished(
             record,
@@ -1218,8 +1219,55 @@ final class DownloadStorageTests: XCTestCase {
         XCTAssertNil(record.manifest.automaticCacheState)
         XCTAssertNil(record.manifest.bookFinishedAt)
 
+        let afterCleanup = try await fixture.storage.removeCompletedTracks(
+            from: staleCache,
+            trackIndexes: [0, 1]
+        )
+        XCTAssertEqual(afterCleanup, record)
+        let localFiles = try await fixture.storage.localTrackURLs(
+            for: afterCleanup,
+            trackIndexes: [0, 1]
+        )
+        XCTAssertEqual(localFiles.keys.sorted(), [0, 1])
         let records = try await fixture.storage.records()
         XCTAssertEqual(records, [record])
+    }
+
+    func testReconciledFullCacheSurvivesStaleChapterCleanup() async throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let cached = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            plan: fixture.plan,
+            detail: fixture.detail,
+            purpose: .automaticCache,
+            automaticTargetTrackIndexes: [0]
+        )
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID,
+            itemID: fixture.itemID,
+            track: fixture.plan.tracks[0]
+        )
+        let staged = fixture.rootURL.appendingPathComponent("staged")
+        try Data([1, 2, 3, 4]).write(to: staged)
+        _ = try fixture.layout.placeCompleteTestFile(
+            from: staged,
+            identity: identity
+        )
+        let reconciled = try await fixture.storage.records()
+        let promoted = try XCTUnwrap(reconciled.first)
+        XCTAssertEqual(promoted.manifest.purpose, .manual)
+        let afterCleanup = try await fixture.storage.removeCompletedTracks(
+            from: cached,
+            trackIndexes: [0]
+        )
+        XCTAssertEqual(afterCleanup, promoted)
+        XCTAssertEqual(
+            try Data(contentsOf: fixture.layout.destinationURL(for: identity)),
+            Data([1, 2, 3, 4])
+        )
     }
 
     func testLegacyManifestDefaultsToManualPurpose() throws {
