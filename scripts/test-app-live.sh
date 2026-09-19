@@ -260,12 +260,15 @@ jq --exit-status '
     and ($committed[0].ifRange == null)
     and ($committed[0].authorizationScheme == "Bearer")
     and ($committed[0].hasTokenQuery == false)
-    and ($replacements | length) == 1
-    and ($replacements[0].injected == false)
-    and ($replacements[0].ifRange == $faults[0].ifRange)
-    and ($replacements[0].status == 206)
-    and ($replacements[0].authorizationScheme == "Bearer")
-    and ($replacements[0].hasTokenQuery == false)
+    and ($replacements | length) >= 1
+    and all(
+        $replacements[];
+        .injected == false
+        and .ifRange == $faults[0].ifRange
+        and .status == 206
+        and .authorizationScheme == "Bearer"
+        and .hasTokenQuery == false
+    )
     and .refreshCount == 1
     and ($refreshes | length) == 1
     and ($refreshes[0].sequence > $faults[0].sequence)

@@ -17,22 +17,28 @@ final class AccountStoreLiveTests: XCTestCase {
             )
         }
 
+        var canonicalAccountIDs: [AccountID] = []
         for (index, liveURL) in [rootURL, prefixURL].enumerated() {
-            try await verifyAccountPersistence(
-                server: secureLiveServerURL(for: liveURL),
-                accountID: AccountID(rawValue: "persisted-\(index)"),
-                username: username,
-                password: password
+            canonicalAccountIDs.append(
+                try await verifyAccountPersistence(
+                    server: secureLiveServerURL(for: liveURL),
+                    provisionalAccountID: AccountID(
+                        rawValue: "persisted-\(index)"
+                    ),
+                    username: username,
+                    password: password
+                )
             )
         }
+        XCTAssertEqual(Set(canonicalAccountIDs).count, 2)
     }
 
     private func verifyAccountPersistence(
         server: NormalizedServerURL,
-        accountID: AccountID,
+        provisionalAccountID: AccountID,
         username: String,
         password: String
-    ) async throws {
+    ) async throws -> AccountID {
         let transport = LocalDockerHTTPTransport()
         let discovered = try await ServerDiscoveryClient(
             transport: transport
@@ -58,16 +64,29 @@ final class AccountStoreLiveTests: XCTestCase {
         let store = AccountStore(modelContainer: container)
 
         let account = try await authCoordinator.loginAndPersistAccount(
-            accountID: accountID,
+            accountID: provisionalAccountID,
             discoveredServer: discovered,
             username: username,
             password: password,
             accountStore: store
         )
+        let canonicalAccountID = AccountID.canonical(
+            server: discovered.baseURL,
+            userID: account.user.id
+        )
         let relaunched = AccountStore(modelContainer: container)
         let active = try await relaunched.activeAccount()
         let storedCredentials = await credentials.credentials(
-            for: accountID
+            for: canonicalAccountID
+        )
+        let storedNativeLogin = await credentials.nativeLoginCredentials(
+            for: canonicalAccountID
+        )
+        let provisionalCredentials = await credentials.credentials(
+            for: provisionalAccountID
+        )
+        let provisionalNativeLogin = await credentials.nativeLoginCredentials(
+            for: provisionalAccountID
         )
         let api = AudiobookshelfAPI(
             account: account,
@@ -171,10 +190,15 @@ final class AccountStoreLiveTests: XCTestCase {
         )
 
         XCTAssertEqual(account.server, discovered.baseURL)
+        XCTAssertEqual(account.id, canonicalAccountID)
         XCTAssertEqual(account.user.username, username)
         XCTAssertEqual(account.connectionState, .connected)
         XCTAssertEqual(active, account)
         XCTAssertNotNil(storedCredentials)
+        XCTAssertEqual(storedNativeLogin?.userID, account.user.id)
+        XCTAssertEqual(storedNativeLogin?.username, username)
+        XCTAssertNil(provisionalCredentials)
+        XCTAssertNil(provisionalNativeLogin)
         XCTAssertEqual(firstPage.value.items.count, 2)
         XCTAssertEqual(firstPage.value.total, 2)
         XCTAssertFalse(firstPage.value.hasNextPage)
@@ -244,5 +268,6 @@ final class AccountStoreLiveTests: XCTestCase {
                     }
             }
         )
+        return canonicalAccountID
     }
 }

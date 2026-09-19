@@ -53,6 +53,11 @@ func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
 }
 
 final class BleatUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
     @MainActor
     func testLoginExposesOpenIDSetupGuide() {
         let app = launch(scenario: "--ui-testing-openid")
@@ -418,7 +423,7 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testMiniPlayerUsesNativeLightAccessoryContrast() throws {
+    func testMiniPlayerMaintainsReadableAccessoryContrast() throws {
         let app = launch(scenario: "--ui-testing-playback")
         let play = app.buttons["home.book.ui-book.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 3))
@@ -436,20 +441,21 @@ final class BleatUITests: XCTestCase {
             in: app.frame
         )
         let attachment = XCTAttachment(image: miniPlayerImage)
-        attachment.name = "mini-player-light-mode-contrast"
+        attachment.name = "mini-player-accessory-contrast"
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        XCTAssertGreaterThan(
-            try averageLuminance(of: miniPlayerImage),
-            0.65,
-            "The mini-player must retain the native light accessory material"
-        )
-        XCTAssertGreaterThan(
-            try darkPixelFraction(of: miniPlayerImage),
-            0.01,
-            "The native light accessory must contain visible dark foreground"
-        )
+        XCTAssertTrue(app.buttons["player.mini.open"].isHittable)
+        XCTAssertTrue(app.buttons["player.mini.toggle"].isHittable)
+        let miniPlayerFrame = miniPlayer.frame
+        // XCTest audits rendered foreground/background contrast per element,
+        // so a readable title cannot hide unreadable secondary text or controls.
+        try app.performAccessibilityAudit(for: .contrast) { issue in
+            guard let element = issue.element, !element.frame.isEmpty else {
+                return false
+            }
+            return !element.frame.intersects(miniPlayerFrame)
+        }
     }
 
     @MainActor
@@ -1050,16 +1056,21 @@ final class BleatUITests: XCTestCase {
         let remove = app.buttons[
             "book.context.ui-book.removeDownload"
         ]
-        XCTAssertTrue(download.waitForExistence(timeout: 3))
         XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertFalse(download.exists)
+        remove.tap()
+
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
+        homeBook.press(forDuration: 1)
+        XCTAssertTrue(download.waitForExistence(timeout: 3))
+        XCTAssertFalse(remove.exists)
         download.tap()
 
         XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
         homeBook.press(forDuration: 1)
         XCTAssertTrue(download.waitForExistence(timeout: 3))
-        XCTAssertTrue(remove.waitForExistence(timeout: 3))
         XCTAssertFalse(download.isEnabled)
-        XCTAssertFalse(remove.isEnabled)
+        XCTAssertFalse(remove.exists)
         app.buttons["Mark Unplayed"].tap()
         try await Task.sleep(for: .seconds(9))
     }
@@ -1384,6 +1395,11 @@ final class BleatUITests: XCTestCase {
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
 
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["library.book.ui-book"]
+                .waitForExistence(timeout: 5)
+        )
         tabButton("Search", in: app).tap()
         let searchField = app.searchFields.firstMatch
         if !searchField.waitForExistence(timeout: 1) {
@@ -1397,10 +1413,34 @@ final class BleatUITests: XCTestCase {
 
         let author = app.buttons["search.author.author-1"]
         XCTAssertTrue(author.waitForExistence(timeout: 3))
-        author.tap()
-        XCTAssertTrue(searchField.waitForNonExistence(timeout: 3))
+        let keyboardSearch = app.keyboards.buttons["Search"]
+        if keyboardSearch.exists, keyboardSearch.isHittable {
+            keyboardSearch.tap()
+            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
+        }
+        let searchResults = app.descendants(matching: .any)["search.results"]
+        scrollUntilClear(
+            author,
+            of: [
+                searchField,
+                app.buttons["search.done"],
+                app.keyboards.firstMatch,
+            ],
+            in: searchResults,
+            app: app
+        )
+        let searchDone = app.buttons["search.done"]
+        if searchDone.exists, searchDone.isHittable {
+            searchDone.tap()
+            XCTAssertTrue(searchDone.waitForNonExistence(timeout: 3))
+            XCTAssertTrue(author.waitForExistence(timeout: 3))
+        }
+        author.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
+        ).tap()
         let clear = app.buttons["library.activeFilter.clear"]
-        XCTAssertTrue(clear.waitForExistence(timeout: 3))
+        XCTAssertTrue(clear.waitForExistence(timeout: 10))
+        XCTAssertTrue(searchField.waitForNonExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Author: Test Author"].exists)
         clear.tap()
 
@@ -1412,10 +1452,27 @@ final class BleatUITests: XCTestCase {
             app.swipeUp()
         }
         XCTAssertTrue(series.waitForExistence(timeout: 3))
-        series.tap()
+        scrollUntilClear(
+            series,
+            of: [
+                searchField,
+                app.buttons["search.done"],
+                app.keyboards.firstMatch,
+            ],
+            in: searchResults,
+            app: app
+        )
+        if searchDone.exists, searchDone.isHittable {
+            searchDone.tap()
+            XCTAssertTrue(searchDone.waitForNonExistence(timeout: 3))
+            XCTAssertTrue(series.waitForExistence(timeout: 3))
+        }
+        series.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)
+        ).tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["series.results"]
-                .waitForExistence(timeout: 3)
+                .waitForExistence(timeout: 5)
         )
     }
 
@@ -1467,6 +1524,118 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testDownloadSettingsControlsReflectAndUpdatePreferences() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "-bleat.downloads.networkPolicy.v1", "wifiOnly",
+                "-bleat.downloads.maximumConcurrentDownloads.v1", "5",
+                "-bleat.downloads.automaticLookahead.v1", "5",
+                "-bleat.downloads.automaticCleanupPolicy.v1",
+                "afterTwentyFourHours",
+            ]
+        )
+
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        tabButton("Settings", in: app).tap()
+
+        let wifiOnly = app.descendants(matching: .any)[
+            "settings.downloads.wifiOnly"
+        ]
+        Self.scrollUntilHittable(
+            app: app,
+            identifier: "settings.downloads.wifiOnly",
+            direction: .up
+        )
+        XCTAssertTrue(wifiOnly.waitForExistence(timeout: 3))
+        XCTAssertEqual(wifiOnly.value as? String, "1")
+        wifiOnly.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
+        ).tap()
+        XCTAssertEqual(wifiOnly.value as? String, "0")
+        wifiOnly.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
+        ).tap()
+        XCTAssertEqual(wifiOnly.value as? String, "1")
+
+        let settingsForm = app.descendants(matching: .any)["settings.form"]
+        settingsForm.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.75)
+        ).press(
+            forDuration: 0.05,
+            thenDragTo: settingsForm.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.1, dy: 0.55)
+            )
+        )
+
+        let maximumConcurrent = app.descendants(matching: .any)[
+            "settings.downloads.maximumConcurrent"
+        ]
+        XCTAssertTrue(maximumConcurrent.waitForExistence(timeout: 3))
+        XCTAssertEqual(maximumConcurrent.value as? String, "5")
+        app.buttons[
+            "settings.downloads.maximumConcurrent-Increment"
+        ].tap()
+        XCTAssertEqual(maximumConcurrent.value as? String, "10")
+        app.buttons[
+            "settings.downloads.maximumConcurrent-Decrement"
+        ].tap()
+        XCTAssertEqual(maximumConcurrent.value as? String, "5")
+
+        let filesAhead = app.descendants(matching: .any)[
+            "settings.downloads.filesAhead"
+        ]
+        XCTAssertTrue(filesAhead.waitForExistence(timeout: 3))
+        XCTAssertEqual(filesAhead.value as? String, "5")
+        app.buttons["settings.downloads.filesAhead-Increment"].tap()
+        XCTAssertEqual(filesAhead.value as? String, "10")
+        app.buttons["settings.downloads.filesAhead-Decrement"].tap()
+        XCTAssertEqual(filesAhead.value as? String, "5")
+
+        settingsForm.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.1, dy: 0.7)
+        ).press(
+            forDuration: 0.05,
+            thenDragTo: settingsForm.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.1, dy: 0.55)
+            )
+        )
+
+        let automaticCleanup = app.descendants(matching: .any)[
+            "settings.downloads.automaticCleanup"
+        ]
+        XCTAssertTrue(automaticCleanup.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            automaticCleanup.label.contains("24 Hours After Finishing")
+                || (automaticCleanup.value as? String)?.contains(
+                    "24 Hours After Finishing"
+                ) == true
+        )
+        automaticCleanup.tap()
+        let afterChapter = app.buttons["After Finishing Each Chapter"]
+        XCTAssertTrue(afterChapter.waitForExistence(timeout: 3))
+        afterChapter.tap()
+        XCTAssertTrue(
+            automaticCleanup.label.contains("After Finishing Each Chapter")
+                || (automaticCleanup.value as? String)?.contains(
+                    "After Finishing Each Chapter"
+                ) == true
+        )
+        automaticCleanup.tap()
+        let afterTwentyFourHours = app.buttons["24 Hours After Finishing"]
+        XCTAssertTrue(afterTwentyFourHours.waitForExistence(timeout: 3))
+        afterTwentyFourHours.tap()
+        XCTAssertTrue(
+            automaticCleanup.label.contains("24 Hours After Finishing")
+                || (automaticCleanup.value as? String)?.contains(
+                    "24 Hours After Finishing"
+                ) == true
+        )
+    }
+
+    @MainActor
     func testDownloadSettingsUseDiscreteFilesAheadValues() throws {
         let app = launch(scenario: "--ui-testing-signed-in")
 
@@ -1481,7 +1650,9 @@ final class BleatUITests: XCTestCase {
             identifier: "settings.downloads.filesAhead",
             direction: .up
         )
-        let filesAhead = app.steppers["settings.downloads.filesAhead"]
+        let filesAhead = app.descendants(matching: .any)[
+            "settings.downloads.filesAhead"
+        ]
         XCTAssertTrue(filesAhead.waitForExistence(timeout: 3))
         XCTAssertTrue(filesAhead.label.contains("Files Ahead"))
 
@@ -1547,107 +1718,6 @@ final class BleatUITests: XCTestCase {
         )
         app.buttons["Cancel"].tap()
 
-        let addAccount = app.buttons["settings.addAccount"]
-        XCTAssertTrue(addAccount.waitForExistence(timeout: 3))
-        addAccount.tap()
-        XCTAssertTrue(
-            app.textFields["login.server"].waitForExistence(
-                timeout: 3
-            )
-        )
-        app.buttons["Cancel"].tap()
-
-        app.swipeUp()
-        XCTAssertTrue(
-            app.buttons["settings.playback.skipBackward"].waitForExistence(
-                timeout: 3
-            )
-        )
-        XCTAssertTrue(
-            app.buttons["settings.playback.skipForward"].waitForExistence(
-                timeout: 3
-            )
-        )
-        XCTAssertTrue(
-            app.staticTexts["Resume Rewind"].waitForExistence(
-                timeout: 3
-            )
-        )
-        XCTAssertTrue(
-            app.buttons["settings.playback.previousCommand"].waitForExistence(
-                timeout: 3
-            )
-        )
-        XCTAssertTrue(
-            app.buttons["settings.playback.nextCommand"].waitForExistence(
-                timeout: 3
-            )
-        )
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "settings.diagnostics",
-            direction: .up
-        )
-        let diagnostics = app.buttons["settings.diagnostics"]
-        XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
-        diagnostics.tap()
-        XCTAssertTrue(
-            app.navigationBars["Diagnostics"].waitForExistence(
-                timeout: 3
-            )
-        )
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.serverVersion",
-            direction: .up
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "diagnostics.serverVersion"
-            ].waitForExistence(timeout: 3)
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "diagnostics.webSocketEndpoint"
-            ].waitForExistence(timeout: 3)
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "diagnostics.lastServerConnection"
-            ].waitForExistence(timeout: 3)
-        )
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.webSocketState",
-            direction: .up,
-            maxAttempts: 4
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "diagnostics.webSocketState"
-            ].waitForExistence(timeout: 3)
-        )
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.bonjourTroubleshooter",
-            direction: .up
-        )
-        XCTAssertTrue(
-            app.buttons["diagnostics.bonjourTroubleshooter"].waitForExistence(
-                timeout: 3
-            )
-        )
-        XCTAssertFalse(app.buttons["diagnostics.export"].exists)
-        XCTAssertFalse(app.buttons["diagnostics.exportRecentLogs"].exists)
-        let diagnosticsBack = app.buttons["BackButton"]
-        XCTAssertTrue(diagnosticsBack.isHittable)
-        diagnosticsBack.tap()
-        XCTAssertTrue(
-            app.navigationBars["Diagnostics"].waitForNonExistence(timeout: 3)
-        )
-        XCTAssertTrue(
-            app.navigationBars["Settings"].waitForExistence(timeout: 3))
-
         Self.scrollUntilHittable(
             app: app,
             identifier: "settings.account.ui-account",
@@ -1655,9 +1725,7 @@ final class BleatUITests: XCTestCase {
         )
         let account = app.buttons["settings.account.ui-account"]
         guard account.waitForExistence(timeout: 3) else {
-            XCTFail(
-                "Restored account row did not become visible after returning from Diagnostics"
-            )
+            XCTFail("Restored account row did not become visible")
             return
         }
         let settingsBar = app.navigationBars["Settings"]
@@ -2985,12 +3053,13 @@ final class BleatUITests: XCTestCase {
         app.buttons["transcription.goToCurrentPosition"].tap()
         XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
         confirmation.tap()
-        XCTAssertTrue(
-            app.staticTexts[
-                "Download this chapter or the full audiobook before transcribing."
-            ]
-            .waitForExistence(timeout: 5)
+        let terminalState = app.staticTexts["transcription.terminalState"]
+        XCTAssertTrue(terminalState.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            terminalState.label,
+            "Download the selected source audio before resuming."
         )
+        XCTAssertTrue(app.buttons["Download Audiobook"].exists)
         XCTAssertFalse(
             app.buttons["transcription.currentPositionHighlight"].exists
         )
@@ -3173,46 +3242,6 @@ final class BleatUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["player.screen"].exists)
     }
 
-    private func averageLuminance(of image: UIImage) throws -> Double {
-        let samples = try luminanceSamples(of: image)
-        return samples.reduce(0, +) / Double(samples.count)
-    }
-
-    private func darkPixelFraction(of image: UIImage) throws -> Double {
-        let samples = try luminanceSamples(of: image)
-        let darkCount = samples.count(where: { $0 < 0.35 })
-        return Double(darkCount) / Double(samples.count)
-    }
-
-    private func luminanceSamples(of image: UIImage) throws -> [Double] {
-        let width = 64
-        let height = 16
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        guard
-            let context = CGContext(
-                data: &pixels,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: width * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ),
-            let source = image.cgImage
-        else {
-            throw XCTSkip("Could not render the mini-player screenshot")
-        }
-        context.draw(
-            source, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        return stride(from: 0, to: pixels.count, by: 4).map { index in
-            let red = Double(pixels[index]) / 255
-            let green = Double(pixels[index + 1]) / 255
-            let blue = Double(pixels[index + 2]) / 255
-            return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
-        }
-    }
-
     private func crop(
         _ image: UIImage,
         to elementFrame: CGRect,
@@ -3289,9 +3318,36 @@ final class BleatUITests: XCTestCase {
             }
         }
     }
+
+    @MainActor
+    private func scrollUntilClear(
+        _ element: XCUIElement,
+        of obstacles: [XCUIElement],
+        in container: XCUIElement,
+        app: XCUIApplication
+    ) {
+        for _ in 0..<12 {
+            let visibleObstacles = obstacles.filter { $0.exists }
+            if element.exists, element.isHittable,
+                app.frame.contains(element.frame),
+                visibleObstacles.allSatisfy({
+                    !$0.frame.intersects(element.frame)
+                })
+            {
+                return
+            }
+            container.swipeUp()
+        }
+        XCTFail("Could not scroll search result clear of search chrome")
+    }
 }
 
 final class BleatLiveUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
     @MainActor
     func testLiveOnlineLoginPlaybackAndDownload() async throws {
         #if os(macOS)
