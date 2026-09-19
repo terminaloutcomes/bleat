@@ -788,7 +788,11 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   refresh failure retains usable content and presents a compact typed retry.
 - Normalize Continue Listening by progress `lastUpdate` descending, then opaque
   library-item ID ascending when timestamps are equal. Preserve server order
-  for other personalized shelves.
+  for other personalized shelves. Reuse the account progress snapshot already
+  loaded for browsing; do not fetch individual progress records to sort shelves.
+  If any shelf item lacks a snapshot, retain the server order. The pinned
+  server's minified personalized entities omit progress even with `include=progress`
+  ([source](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/server/utils/queries/libraryFilters.js#L38-L71)).
 - Do not preload expanded details for every item.
 - Cache cover thumbnails separately from original cover images.
 

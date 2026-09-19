@@ -11010,6 +11010,54 @@ final class AppModelTests: XCTestCase {
         await model.playback.stop()
     }
 
+    func testHomeShelfOrderingReusesLoadedProgressAndPreservesUnknownOrder()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let item = try XCTUnwrap(fixturePage(libraryID: library.id).items.first)
+        let other = fixtureBook(
+            id: "item-2", title: "Other", libraryID: library.id)
+        let first = fixtureBookProgress(progress: 0.25, isFinished: false)
+        let newer = LibraryBookProgress(
+            id: "progress-2", userID: account.user.id, libraryItemID: other.id,
+            bookID: BookID(rawValue: "book-2"), duration: 100, progress: 0.25,
+            currentTime: 25, isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: 200, startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil)
+        for progress in [[first, newer], [first], []] {
+            let shelves = ["continue-listening", "recently-added"].map {
+                LibraryBookShelf(
+                    id: $0, label: $0, labelLocalizationKey: nil,
+                    items: [item, other], total: 2)
+            }
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(fixturePage(libraryID: library.id)),
+                homeShelves: .success(shelves),
+                allBookProgress: [.success(progress)])
+            let model = AppModel(service: service)
+            await model.start()
+            for refresh in [false, true] {
+                if refresh { await model.refreshLibraries() }
+                guard case .loaded(let loaded) = model.homeShelves else {
+                    return XCTFail("Expected shelves")
+                }
+                XCTAssertEqual(
+                    loaded[0].items,
+                    progress.count == 2 ? [other, item] : [item, other])
+                XCTAssertEqual(loaded[1].items, [item, other])
+                let requests = await service.liveRefreshRequestCounts()
+                XCTAssertEqual(requests.progress, 0)
+                XCTAssertEqual(requests.allProgress, refresh ? 2 : 1)
+                XCTAssertEqual(requests.shelves, refresh ? 2 : 1)
+            }
+            model.setLiveUpdatesActive(false)
+        }
+    }
+
     func testLiveProgressKeepsStableOrderForEqualTimestamps() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -11033,12 +11081,18 @@ final class AppModelTests: XCTestCase {
                 LibraryBookShelf(
                     id: "continue-listening", label: "Continue Listening",
                     labelLocalizationKey: nil,
-                    items: [item, other], total: 2
+                    items: [other, item], total: 2
                 )
             ]), allBookProgress: [.success([firstProgress, secondProgress])]
         )
         let model = AppModel(service: service)
         try await startLiveRefreshTest(model, service: service)
+        guard case .loaded(let initialShelves) = model.homeShelves else {
+            return XCTFail("Expected initial shelves")
+        }
+        XCTAssertEqual(initialShelves.first?.items, [item, other])
+        let initialRequests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(initialRequests.progress, 0)
         await service.setBookProgress(firstProgress)
         for _ in 0..<2 {
             await service.emitLiveUpdate(liveProgress(item.id))

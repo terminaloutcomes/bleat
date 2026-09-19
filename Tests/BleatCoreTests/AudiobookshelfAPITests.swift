@@ -342,172 +342,35 @@ final class AudiobookshelfAPITests: XCTestCase {
         )
     }
 
-    func testContinueListeningUsesStableProgressOrder() async throws {
-        let alpha = Self.bookItemJSON(
-            id: "alpha",
-            libraryID: "library",
-            title: "Alpha",
-            trackCount: 1
-        )
-        let beta = Self.bookItemJSON(
-            id: "beta",
-            libraryID: "library",
-            title: "Beta",
-            trackCount: 1
-        )
-        let newest = Self.bookItemJSON(
-            id: "newest",
-            libraryID: "library",
-            title: "Newest",
-            trackCount: 1
-        )
-        let personalized = HTTPResponse(
+    func testContinueListeningLoadsTenItemsWithoutProgressRequests()
+        async throws
+    {
+        let items = (0..<10).map { index in
+            Self.bookItemJSON(
+                id: "item-\(index)", libraryID: "library",
+                title: "Book \(index)", trackCount: 1)
+        }.joined(separator: ",")
+        let response = HTTPResponse(
             data: Data(
                 """
-                [
-                  {
-                    "id": "continue-listening",
-                    "label": "Continue Listening",
-                    "type": "book",
-                    "entities": [\(beta), \(newest), \(alpha)],
-                    "total": 3
-                  },
-                  {
-                    "id": "recently-added",
-                    "label": "Recently Added",
-                    "type": "book",
-                    "entities": [\(beta), \(alpha)],
-                    "total": 2
-                  }
-                ]
-                """.utf8
-            ),
-            statusCode: 200
-        )
-        let reorderedPersonalized = HTTPResponse(
-            data: Data(
-                """
-                [
-                  {
-                    "id": "continue-listening",
-                    "label": "Continue Listening",
-                    "type": "book",
-                    "entities": [\(alpha), \(beta), \(newest)],
-                    "total": 3
-                  },
-                  {
-                    "id": "recently-added",
-                    "label": "Recently Added",
-                    "type": "book",
-                    "entities": [\(alpha), \(beta)],
-                    "total": 2
-                  }
-                ]
-                """.utf8
-            ),
-            statusCode: 200
-        )
-        let fixture = try APIFixture(
-            responsesByPath: [
-                "/audiobookshelf/api/libraries/library/personalized": [
-                    personalized,
-                    reorderedPersonalized,
-                ],
-                "/audiobookshelf/api/me/progress/alpha": [
-                    Self.progressResponse(itemID: "alpha", lastUpdate: 100),
-                    Self.progressResponse(itemID: "alpha", lastUpdate: 100),
-                ],
-                "/audiobookshelf/api/me/progress/beta": [
-                    Self.progressResponse(itemID: "beta", lastUpdate: 100),
-                    Self.progressResponse(itemID: "beta", lastUpdate: 100),
-                ],
-                "/audiobookshelf/api/me/progress/newest": [
-                    Self.progressResponse(itemID: "newest", lastUpdate: 200),
-                    Self.progressResponse(itemID: "newest", lastUpdate: 200),
-                ],
-            ],
-            delayProgressResponses: true
-        )
-
-        let result = try await fixture.api.personalizedShelves(
-            in: LibraryID(rawValue: "library"),
-            request: try LibraryHomeRequest(limit: 10)
-        )
-        let reorderedResult = try await fixture.api.personalizedShelves(
-            in: LibraryID(rawValue: "library"),
-            request: try LibraryHomeRequest(limit: 10)
-        )
-
-        XCTAssertEqual(
-            result.value[0].items.map(\.id.rawValue),
-            ["newest", "alpha", "beta"]
-        )
-        XCTAssertEqual(
-            result.value[1].items.map(\.id.rawValue),
-            ["beta", "alpha"]
-        )
-        XCTAssertEqual(result.value[0], reorderedResult.value[0])
-        XCTAssertEqual(
-            reorderedResult.value[1].items.map(\.id.rawValue),
-            ["alpha", "beta"]
-        )
-        let paths = await fixture.transport.recordedRequests()
-            .compactMap { $0.url?.path }
-        XCTAssertEqual(
-            Set(paths),
-            Set([
-                "/audiobookshelf/api/libraries/library/personalized",
-                "/audiobookshelf/api/me/progress/alpha",
-                "/audiobookshelf/api/me/progress/beta",
-                "/audiobookshelf/api/me/progress/newest",
-            ])
-        )
-        let maximumConcurrentProgressRequests =
-            await fixture.transport.maximumConcurrentProgressRequests()
-        XCTAssertEqual(maximumConcurrentProgressRequests, 3)
-    }
-
-    func testContinueListeningProgressFailureRemainsTyped() async throws {
-        let book = Self.bookItemJSON(
-            id: "book",
-            libraryID: "library",
-            title: "Book",
-            trackCount: 1
-        )
-        let personalized = HTTPResponse(
-            data: Data(
-                """
-                [{
-                  "id": "continue-listening",
-                  "label": "Continue Listening",
-                  "type": "book",
-                  "entities": [\(book)],
-                  "total": 1
-                }]
-                """.utf8
-            ),
-            statusCode: 200
-        )
-        let fixture = try APIFixture(
-            responsesByPath: [
-                "/audiobookshelf/api/libraries/library/personalized": [
-                    personalized
-                ],
-                "/audiobookshelf/api/me/progress/book": [
-                    HTTPResponse(data: Data(), statusCode: 503)
-                ],
-            ]
-        )
-        let request = try LibraryHomeRequest(limit: 10)
-
-        do {
-            _ = try await fixture.api.personalizedShelves(
-                in: LibraryID(rawValue: "library"),
-                request: request
-            )
-            XCTFail("Expected typed progress request failure")
-        } catch {
-            XCTAssertEqual(error, .unexpectedStatus(503))
+                [{"id":"continue-listening","label":"Continue Listening",
+                  "type":"book","entities":[\(items)],"total":10}]
+                """.utf8), statusCode: 200)
+        for prefix in ["", "/audiobookshelf"] {
+            let path = "\(prefix)/api/libraries/library/personalized"
+            let fixture = try APIFixture(
+                responsesByPath: [path: [response, response]],
+                serverAddress: "https://example.com\(prefix)")
+            for _ in 0..<2 {
+                let result = try await fixture.api.personalizedShelves(
+                    in: LibraryID(rawValue: "library"),
+                    request: try LibraryHomeRequest(limit: 10))
+                XCTAssertEqual(
+                    result.value.first?.items.map(\.id.rawValue),
+                    (0..<10).map { "item-\($0)" })
+            }
+            let requests = await fixture.transport.recordedRequests()
+            XCTAssertEqual(requests.compactMap { $0.url?.path }, [path, path])
         }
     }
 
@@ -519,6 +382,11 @@ final class AudiobookshelfAPITests: XCTestCase {
             trackCount: 1
         )
         let cases: [Data] = [
+            Data(
+                """
+                [{"id":"continue-listening","label":"Continue Listening",
+                  "type":"book","entities":[\(book),\(book)],"total":2}]
+                """.utf8),
             Data("{\"not\":\"an array\"}".utf8),
             Data(
                 """
@@ -553,11 +421,12 @@ final class AudiobookshelfAPITests: XCTestCase {
             ),
         ]
         let expected: [AudiobookshelfAPIError] = [
+            .invalidPersonalizedShelves,
             .malformedResponse,
             .invalidPersonalizedShelves,
             .invalidPersonalizedShelves,
         ]
-        let request = try LibraryHomeRequest(limit: 1)
+        let request = try LibraryHomeRequest(limit: 10)
         for (data, expectedError) in zip(cases, expected) {
             let fixture = try APIFixture(
                 responses: [
@@ -1453,35 +1322,6 @@ final class AudiobookshelfAPITests: XCTestCase {
         """
     }
 
-    private static func progressResponse(
-        itemID: String,
-        lastUpdate: Int64
-    ) -> HTTPResponse {
-        HTTPResponse(
-            data: Data(
-                """
-                {
-                  "id": "progress-\(itemID)",
-                  "userId": "user",
-                  "libraryItemId": "\(itemID)",
-                  "episodeId": null,
-                  "mediaItemId": "book-\(itemID)",
-                  "mediaItemType": "book",
-                  "duration": 100,
-                  "progress": 0.5,
-                  "currentTime": 50,
-                  "isFinished": false,
-                  "hideFromContinueListening": false,
-                  "lastUpdate": \(lastUpdate),
-                  "startedAt": 1,
-                  "finishedAt": null
-                }
-                """.utf8
-            ),
-            statusCode: 200
-        )
-    }
-
     private static func expandedBookDetailJSON() -> Data {
         Data(
             """
@@ -1568,14 +1408,12 @@ private struct APIFixture {
     init(
         responses: [HTTPResponse] = [],
         responsesByPath: [String: [HTTPResponse]] = [:],
-        delayProgressResponses: Bool = false,
         includeCredentials: Bool = true,
         serverAddress: String = "https://example.com/audiobookshelf"
     ) throws {
         transport = APIScriptTransport(
             responses: responses,
-            responsesByPath: responsesByPath,
-            delayProgressResponses: delayProgressResponses
+            responsesByPath: responsesByPath
         )
         let credentials = APICredentialStore(
             credentials: includeCredentials
@@ -1647,19 +1485,14 @@ private actor APICredentialStore: AccountCredentialStore {
 private actor APIScriptTransport: HTTPTransport {
     private var responses: [HTTPResponse]
     private var responsesByPath: [String: [HTTPResponse]]
-    private let delayProgressResponses: Bool
     private var requests: [URLRequest] = []
-    private var progressRequestsInFlight = 0
-    private var maximumProgressRequestsInFlight = 0
 
     init(
         responses: [HTTPResponse],
-        responsesByPath: [String: [HTTPResponse]] = [:],
-        delayProgressResponses: Bool = false
+        responsesByPath: [String: [HTTPResponse]] = [:]
     ) {
         self.responses = responses
         self.responsesByPath = responsesByPath
-        self.delayProgressResponses = delayProgressResponses
     }
 
     func send(
@@ -1668,19 +1501,6 @@ private actor APIScriptTransport: HTTPTransport {
         let request = tracedRequest.request
         try Task.checkCancellation()
         requests.append(request)
-        if delayProgressResponses,
-            request.url?.path.contains("/api/me/progress/") == true
-        {
-            progressRequestsInFlight += 1
-            maximumProgressRequestsInFlight = max(
-                maximumProgressRequestsInFlight,
-                progressRequestsInFlight
-            )
-            defer {
-                progressRequestsInFlight -= 1
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        }
         if let path = request.url?.path,
             var pathResponses = responsesByPath[path],
             !pathResponses.isEmpty
@@ -1699,9 +1519,6 @@ private actor APIScriptTransport: HTTPTransport {
         requests
     }
 
-    func maximumConcurrentProgressRequests() -> Int {
-        maximumProgressRequestsInFlight
-    }
 }
 
 private enum APITestError: Error {

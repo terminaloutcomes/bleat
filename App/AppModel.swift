@@ -2635,7 +2635,7 @@ final class AppModel {
             else {
                 return
             }
-            let loadedState = ResourceState.loaded(shelves)
+            let loadedState = ResourceState.loaded(orderedHomeShelves(shelves))
             if homeShelves != loadedState {
                 homeShelves = loadedState
             }
@@ -2726,7 +2726,7 @@ final class AppModel {
             else {
                 return
             }
-            let loadedState = ResourceState.loaded(shelves)
+            let loadedState = ResourceState.loaded(orderedHomeShelves(shelves))
             if homeShelves != loadedState {
                 homeShelves = loadedState
             }
@@ -6402,14 +6402,25 @@ final class AppModel {
         return nil
     }
 
-    private func updateContinueListening(_ book: LibraryBookSummary) {
-        guard book.trackCount > 0, case .loaded(var shelves) = homeShelves
-        else { return }
-        let index = shelves.firstIndex(where: { $0.id == "continue-listening" })
-        let previous = index.map { shelves[$0] }
-        var items = previous?.items.filter { $0.id != book.id } ?? []
-        items.append(book)
-        items.sort {
+    private func orderedHomeShelves(_ shelves: [LibraryBookShelf])
+        -> [LibraryBookShelf]
+    {
+        shelves.map { shelf in
+            guard shelf.id == "continue-listening",
+                shelf.items.allSatisfy({ bookProgressSnapshots[$0.id] != nil })
+            else { return shelf }
+            return LibraryBookShelf(
+                id: shelf.id, label: shelf.label,
+                labelLocalizationKey: shelf.labelLocalizationKey,
+                items: orderedContinueListening(shelf.items), total: shelf.total
+            )
+        }
+    }
+
+    private func orderedContinueListening(_ items: [LibraryBookSummary])
+        -> [LibraryBookSummary]
+    {
+        items.sorted {
             let left =
                 bookProgressSnapshots[$0.id]?.lastUpdateMilliseconds ?? -1
             let right =
@@ -6417,6 +6428,16 @@ final class AppModel {
             if left != right { return left > right }
             return $0.id.rawValue < $1.id.rawValue
         }
+    }
+
+    private func updateContinueListening(_ book: LibraryBookSummary) {
+        guard book.trackCount > 0, case .loaded(var shelves) = homeShelves
+        else { return }
+        let index = shelves.firstIndex(where: { $0.id == "continue-listening" })
+        let previous = index.map { shelves[$0] }
+        var items = previous?.items.filter { $0.id != book.id } ?? []
+        items.append(book)
+        items = orderedContinueListening(items)
         let updated = LibraryBookShelf(
             id: "continue-listening",
             label: previous?.label ?? "Continue Listening",

@@ -489,7 +489,9 @@ author context. Pull down on Home to refresh the current library page and its
 personalized shelves. Refresh keeps the loaded shelves visible and replaces
 them only when the normalized content changes. **Continue Listening** is
 ordered by the most recently updated listening progress, with stable book-ID
-ordering when progress timestamps are equal.
+ordering when progress timestamps are equal. Ordering reuses the loaded account
+progress snapshot; shelf loads never fetch progress separately for each book.
+If the snapshot lacks a shelf item, the server's order is retained.
 
 The Library tab loads 50 books at a time. Its controls sort server-side by
 title, author, recently added, recently updated, or duration in either
