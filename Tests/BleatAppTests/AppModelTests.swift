@@ -694,7 +694,7 @@ final class AppModelTests: XCTestCase {
         await downloads.cancel(record)
 
         XCTAssertEqual(
-            tracer.spans,
+            tracer.spans.filter { $0.operation == .downloadTransfer },
             [
                 RecordedRemoteTelemetrySpan(
                     operation: .downloadTransfer,
@@ -6080,6 +6080,74 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(descriptors.count, 1)
         XCTAssertEqual(descriptors.first?.range.start, 5)
         session.invalidateAndCancel()
+        await model.removeAll()
+    }
+
+    func testRepairAndNetworkRecoveryScheduleOneTransferPerBook() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RepairRecovery-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1",
+                title: "Repair recovery",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root,
+            account: account,
+            detail: detail,
+            downloadID: "repair-recovery",
+            committedByteCount: 5
+        )
+        let authorizationGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(503))),
+            authorizedDownloadRequest: .success(
+                URLRequest(
+                    url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio")))
+            ),
+            authorizedDownloadRequestGate: authorizationGate
+        )
+        let model = DownloadModel(
+            service: service,
+            storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "repair-recovery")
+        )
+        await model.start(account: account)
+        let record = try XCTUnwrap(model.records.first)
+        await service.setDownloadPlan(.success(plan))
+        let repair = Task { await model.repair(record, account: account) }
+        let entered = await authorizationGate.waitUntilEntered(
+            timeout: .seconds(2))
+        XCTAssertTrue(entered)
+        let initialRequests =
+            await service.authorizedDownloadRequestIdentities()
+        XCTAssertEqual(initialRequests.count, 1)
+        // Recovery overlaps repair while authorization has not yet returned a task.
+        let recoveryCompletion = AsyncGate()
+        let recovery = Task {
+            await model.recoverAfterNetworkChange(for: [account])
+            await recoveryCompletion.enterAndWait()
+        }
+        let recovered = await recoveryCompletion.waitUntilEntered(
+            timeout: .seconds(2))
+        XCTAssertTrue(recovered)
+        await authorizationGate.release()
+        await recoveryCompletion.release()
+        await repair.value
+        await recovery.value
+
+        let scheduled = await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertEqual(scheduled.count, 1)
+        XCTAssertEqual(scheduled.map(\.identity), initialRequests)
+        let finalRequests = await service.authorizedDownloadRequestIdentities()
+        XCTAssertEqual(finalRequests, initialRequests)
+        XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
         await model.removeAll()
     }
 
@@ -17407,7 +17475,8 @@ final class AppModelTests: XCTestCase {
                 account: account,
                 detail: detail,
                 purpose: testCase.purpose,
-                complete: testCase.complete
+                complete: testCase.complete,
+                includeUncachedTrack: testCase.purpose == .automaticCache
             )
             let service = TestAppService(
                 activeAccount: .success(account),
@@ -17433,6 +17502,10 @@ final class AppModelTests: XCTestCase {
                 account: account,
                 position: .absoluteTime(0.75)
             )
+            let requestedPlayback = await waitUntil(timeout: .seconds(2)) {
+                await service.playbackOpenRequests().count == 1
+            }
+            XCTAssertTrue(requestedPlayback)
             let playbackRequests = await service.playbackOpenRequests()
             let detailRequests = await service.bookDetailRequests()
 
@@ -17481,7 +17554,8 @@ final class AppModelTests: XCTestCase {
             root: root,
             account: account,
             detail: persistedDetail,
-            purpose: .automaticCache
+            purpose: .automaticCache,
+            includeUncachedTrack: true
         )
         let positionStore = PlaybackPositionStore(defaults: fixture.defaults)
         try positionStore.save(
@@ -17525,6 +17599,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.01)
         let detailRequests = await service.bookDetailRequests()
         XCTAssertTrue(detailRequests.isEmpty)
+        let requestedPlayback = await waitUntil(timeout: .seconds(2)) {
+            await service.playbackOpenRequests().count == 1
+        }
+        XCTAssertTrue(requestedPlayback)
         let playbackRequests = await service.playbackOpenRequests()
         XCTAssertEqual(playbackRequests.count, 1)
         await model.playback.stop()
@@ -20006,17 +20084,17 @@ final class AppModelTests: XCTestCase {
 
     private func waitUntil(
         timeout: Duration,
-        condition: @MainActor () -> Bool
+        condition: @MainActor () async -> Bool
     ) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
         while clock.now < deadline {
-            if condition() {
+            if await condition() {
                 return true
             }
             try? await Task.sleep(for: .milliseconds(20))
         }
-        return condition()
+        return await condition()
     }
 
     private static func fulfill(

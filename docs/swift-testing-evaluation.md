@@ -157,22 +157,49 @@ outcomes were inspected with `xcresulttool`. The four failures above recur,
 and `testManualDownloadSchedulingAndCancellationEmitTaskSpans` also fails: its
 whole-span-array assertion expects only a cancelled `.downloadTransfer` span,
 but receives that span plus a cancelled `.httpRequest` span. Both the new HTTP
-instrumentation and this assertion come from upstream; this PR changes no app
-source or app tests relative to the rebased main. The host coverage gate,
+instrumentation and this assertion come from upstream. At that revision there
+were no app source or app test changes relative to rebased main. The host coverage gate,
 Release builds, and strict Swift lint pass. The UI stage is not reached.
 
 The separate live XCTest target executes all 21 named cases: three local
 configuration checks pass and 18 fixture-dependent cases skip. This verifies
 that the target remains runnable, not disposable-server integration behavior.
 
-The two playback assertions inspect service calls before an unstructured
-continuation task necessarily runs. Lookahead/background-task timing and the
-repair test's manual completion need further investigation; those two causes
-remain unproven. The baseline UI stage was not reached. Earlier superseded
-validation at `c00b05b0` passed 402 app tests but failed a stale UI download-menu
-expectation subsequently corrected on main; it does not validate this revision.
-The simulator emitted debugger-version lookup warnings whose tooling cause
-remains unresolved. No physical-device validation is claimed.
+The follow-up fixes address these failures separately from the runner conversion:
+
+- Promotion publishes the persisted manual record before scheduling its new
+  tracks, so transfer validation does not reject them against the old automatic
+  cache target indexes.
+- Chunk scheduling reserves a book across suspension points and checks for a
+  surviving task before authorization. Repair and background recovery cannot
+  register duplicate tasks or competing tracks for that book. A gated regression overlaps those
+  operations while authorization is suspended.
+- The two cached-window tests now include an uncached track. Their former
+  single-track fixtures were correctly promoted to complete manual downloads,
+  which do not need streaming continuation. The corrected tests also await the
+  asynchronous continuation request with a bounded deadline.
+- The download telemetry assertion checks download-transfer spans independently
+  of HTTP spans, whose presence depends on whether cancellation follows actual
+  network dispatch. The separate HTTP-metrics regression retains that contract.
+
+The follow-up full gate passes all **424 app tests**, including the five
+original failures and the new gated concurrency regression; individual outcomes
+were verified from the result bundle. Its host stage passes **478 tests with
+one expected entitlement skip**, exports LCOV, and passes Release builds. Strict
+Swift lint also passes.
+
+Both disposable-server app journeys pass: online login/playback/download and
+offline cached playback/local progress, one named test each, verified from their
+result bundles. The first `scripts/test-app-live.sh` attempt exited 1 during
+harness setup before creating a Simulator or running a test, with no diagnostic
+explaining the exit. A repeat with a shell failure-location trap passed and
+cleaned up its disposable resources; the initial setup exit remains unexplained.
+
+Earlier superseded validation at
+`c00b05b0` passed 402 app tests but failed a stale UI download-menu expectation
+subsequently corrected on main; it does not validate this revision. The
+simulator emitted debugger-version lookup warnings whose tooling cause remains
+unresolved. No physical-device validation is claimed.
 
 The isolated seven-test prototype remains available for comparing the default
 and explicit runners independently of the root test graph:
