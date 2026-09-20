@@ -67,6 +67,10 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Report Apple toolchain
+        run: |
+          swift --version
+          xcodebuild -version
       - name: Prepare CI environment file
         run: touch .envrc
       - name: Verify host report tooling
@@ -83,7 +87,7 @@ jobs:
         if: always()
         with:
           name: swift-host-results
-          path: .build/host-results/tests.xml
+          path: .build/host-results/*.xml
           if-no-files-found: warn
           retention-days: 7
 

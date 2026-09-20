@@ -76,7 +76,8 @@ or entirely unexecuted BleatCore or BleatTranscription coverage. Reports are:
 
 CI adds a host job and the `swift-host` Coveralls flag. Existing Slather smoke
 coverage (`swift-smoke`) and Rust coverage (`rust-full`) are preserved. The
-parallel report is finalized after all three upload attempts. Fork PRs generate
+parallel report is finalized after all three upload attempts. Per-product XML
+is retained even when a failed test prevents combined-report generation. Fork PRs generate
 artifacts without uploading, and upload failures retain the existing warning
 policy. Eight verifier tests cover empty/overwritten XML, identity mismatches,
 duplicates, failures, unexpected skips, and absent/zero/duplicate coverage.
@@ -125,6 +126,17 @@ converting the three new upstream tests. Eight report-tool
 regression tests pass. Review preserved every original assertion/unwrap check
 and found no P0/P1 migration defect. A cleanup-test review finding was fixed by
 moving the propagated-error assertion outside `withKnownIssue`.
+
+The first CI host run compiled and executed all 479 tests using the native
+aggregate product, but one timeout test failed. Its final manual deadline check
+returned false after the background watchdog had already recorded the timeout.
+The assertion now checks the exact recorded typed failure instead of which
+caller first expired the callback. Review also identified that the original
+timings did not distinguish a reset deadline from the original deadline; the
+intermediate check now falls between those deadlines and requires both no new
+expiration and no recorded failure. No production clock or timeout behavior was
+changed. This failed CI attempt is retained as evidence rather than treated as
+a passing run.
 
 The full simulator gate already failed on unmodified `28daa1fb`: 422 app tests,
 418 passed and four failed. A focused rerun passed the lookahead case and

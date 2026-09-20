@@ -94,14 +94,24 @@ final class PrivateCloudSyncTests {
     func testFetchedCallbackProgressResetsNoProgressDeadline() async throws {
         let run = PrivateCloudSyncRun(deadline: .seconds(1))
         let callback = await run.beginCallback {}
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(600))
         try await run.checkCallback(callback)
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(600))
         let expiredAfterProgress = await run.checkDeadline(for: callback)
         #expect(!(expiredAfterProgress))
-        try await Task.sleep(for: .milliseconds(950))
-        let expiredWithoutProgress = await run.checkDeadline(for: callback)
-        #expect(expiredWithoutProgress)
+        let failureAfterProgress = await run.failure()
+        #expect(failureAfterProgress == nil)
+        try await Task.sleep(for: .milliseconds(600))
+        // The watchdog can record the timeout before this manual check. Verify
+        // the recorded outcome, not which caller first noticed expiration.
+        _ = await run.checkDeadline(for: callback)
+        let failure = await run.failure()
+        #expect(
+            failure
+                == PrivateCloudSyncFailure(
+                    operation: .applyFetchedChanges,
+                    cause: .callbackTimedOut
+                ))
         await run.endCallback(callback)
     }
 
