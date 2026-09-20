@@ -1,0 +1,29 @@
+name: BleatHostRunner
+options:
+  deploymentTarget:
+    macOS: '26.0'
+targets:
+  BleatHostRunner:
+    type: application
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.Bleat.HostTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: $(SRCROOT)/Runner.entitlements
+        ENABLE_HARDENED_RUNTIME: NO
+    preBuildScripts:
+      - name: Install Swift Testing host
+        script: |
+          set -eu
+          swift_bin="$(xcrun --find swift)"
+          helper="${swift_bin%/bin/swift}/libexec/swift/pm/swiftpm-testing-helper"
+          mkdir -p "${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}"
+          cp "${helper}" "${TARGET_BUILD_DIR}/${EXECUTABLE_PATH}"
+        basedOnDependencyAnalysis: false
+schemes:
+  BleatHostRunner:
+    build:
+      targets:
+        BleatHostRunner: all

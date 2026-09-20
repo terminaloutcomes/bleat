@@ -63,7 +63,7 @@ jobs:
           if-no-files-found: warn
 
   host:
-    name: Swift host tests and coverage
+    name: Unsigned Swift host tests and coverage
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -75,7 +75,9 @@ jobs:
         run: touch .envrc
       - name: Verify host report tooling
         run: python3 -m unittest discover -s TestSupport/HostTests
-      - name: Run host tests and export coverage
+      - name: Run unsigned host coverage (signed Keychain test excluded)
+        env:
+          BLEAT_HOST_SIGNING: unsigned
         run: zsh scripts/test-host.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

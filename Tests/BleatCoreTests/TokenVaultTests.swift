@@ -144,9 +144,11 @@ final class TokenVaultTests {
     }
 
     @Test(
-        .enabled("Requires an iCloud Keychain entitlement") {
-            try await synchronizedKeychainAvailable()
-        })
+        .enabled(
+            if: keychainHostAvailable
+                && ProcessInfo.processInfo.environment["BLEAT_HOST_SIGNING"]
+                    != "unsigned",
+            "Synchronizable Keychain requires the signed host lane"))
     func
         testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled()
         async throws

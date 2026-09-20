@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from reports import ENTITLEMENT_SKIP, normalize_lcov, verify_results
+from reports import SIGNED_KEYCHAIN_TEST, normalize_lcov, verify_results
 
 
 class ResultTests(unittest.TestCase):
@@ -15,9 +15,9 @@ class ResultTests(unittest.TestCase):
         self.inventory.write_text(json.dumps({"Module.Suite": ["one()"]}))
         self.report = self.root / "results.xml"
 
-    def verify(self, cases):
+    def verify(self, cases, *, unsigned=False):
         self.report.write_text(f"<testsuites><testsuite>{cases}</testsuite></testsuites>")
-        return verify_results(self.report, self.inventory)
+        return verify_results(self.report, self.inventory, allow_unsigned_keychain_skip=unsigned)
 
     def test_exact_success(self):
         self.assertEqual(self.verify('<testcase classname="Module.Suite" name="one()"/>'), (1, 0))
@@ -34,17 +34,21 @@ class ResultTests(unittest.TestCase):
 
     def test_failure_error_and_unexpected_skip(self):
         for child in ("failure", "error", "skipped"):
-            with self.subTest(child=child), self.assertRaises(ValueError):
-                self.verify(f'<testcase classname="Module.Suite" name="one()"><{child}/></testcase>')
+            for unsigned in (False, True):
+                with self.subTest(child=child, unsigned=unsigned), self.assertRaises(ValueError):
+                    self.verify(f'<testcase classname="Module.Suite" name="one()"><{child}/></testcase>', unsigned=unsigned)
 
-    def test_entitlement_skip_or_pass(self):
-        suite, name = ENTITLEMENT_SKIP
+    def test_keychain_skip_requires_explicit_unsigned_lane(self):
+        suite, name = SIGNED_KEYCHAIN_TEST
         self.inventory.write_text(json.dumps({suite: [name]}))
         case = f'<testcase classname="{suite}" name="{name}">'
         self.assertEqual(self.verify(case + '</testcase>'), (1, 0))
-        self.assertEqual(self.verify(case + '<skipped>Requires an iCloud Keychain entitlement</skipped></testcase>'), (0, 1))
+        skipped = case + '<skipped>Synchronizable Keychain requires the signed host lane</skipped></testcase>'
         with self.assertRaises(ValueError):
-            self.verify(case + '<skipped>unrelated condition</skipped></testcase>')
+            self.verify(skipped)
+        self.assertEqual(self.verify(skipped, unsigned=True), (0, 1))
+        with self.assertRaises(ValueError):
+            self.verify(case + '<skipped>unrelated condition</skipped></testcase>', unsigned=True)
 
 
 class CoverageTests(unittest.TestCase):

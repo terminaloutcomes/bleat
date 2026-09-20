@@ -250,7 +250,9 @@ open Bleat.xcodeproj
 Select the `Bleat` scheme and an iPhone or iPad simulator, then use
 **Product → Run** to launch the app or **Product → Test** to run the application
 unit and UI suites. Core package tests use Swift Testing through `scripts/test-host.sh` (including
-verified coverage export), or the full `scripts/test-core.sh` gate.
+verified coverage export), or the full `scripts/test-core.sh` gate. Local host
+tests require the configured `BLEAT_DEVELOPMENT_TEAM` and a provisioned signing
+identity; see [host validation](docs/development.md#local-validation).
 
 If `xcodebuild -scheme Bleat` resolves to the Swift package's tests instead of
 the app suites, a locally generated scheme is shadowing the project scheme.

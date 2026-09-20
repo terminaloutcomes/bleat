@@ -29,36 +29,3 @@ func withTestCleanup<T>(
 #else
     let keychainHostAvailable = true
 #endif
-
-/// Probe only synthetic, uniquely scoped credentials; unexpected failures fail
-/// trait evaluation instead of being misreported as an entitlement skip.
-func synchronizedKeychainAvailable() async throws -> Bool {
-    guard keychainHostAvailable else { return false }
-    let suffix = UUID().uuidString
-    let store = TokenVault(
-        tokenService: "com.terminaloutcomes.bleat.tests.probe.token.\(suffix)",
-        nativeLoginService:
-            "com.terminaloutcomes.bleat.tests.probe.login.\(suffix)",
-        legacyService: nil,
-        synchronizesNativeLogin: true
-    )
-    return try await withTestCleanup(
-        { try await store.deleteAllCredentials() },
-        operation: {
-            do {
-                try await store.save(
-                    AuthenticationTokens(
-                        accessToken: "probe", refreshToken: "probe"),
-                    nativeLogin: NativeLoginCredentials(
-                        userID: UserID(rawValue: "probe"),
-                        username: "probe",
-                        password: "probe"
-                    ),
-                    for: AccountID(rawValue: "probe")
-                )
-                return true
-            } catch TokenVaultError.missingEntitlement {
-                return false
-            }
-        })
-}

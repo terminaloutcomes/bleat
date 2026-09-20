@@ -7,13 +7,13 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
-ENTITLEMENT_SKIP = (
+SIGNED_KEYCHAIN_TEST = (
     "BleatCoreTests.TokenVaultTests",
     "testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled()",
 )
 
 
-def verify_results(report: Path, inventory: Path) -> tuple[int, int]:
+def verify_results(report: Path, inventory: Path, *, allow_unsigned_keychain_skip: bool = False) -> tuple[int, int]:
     expected = Counter(
         (suite, name)
         for suite, names in json.loads(inventory.read_text()).items()
@@ -35,7 +35,7 @@ def verify_results(report: Path, inventory: Path) -> tuple[int, int]:
         skip = case.find("skipped")
         if skip is not None:
             identity = (case.get("classname"), case.get("name"))
-            if identity != ENTITLEMENT_SKIP or "iCloud Keychain entitlement" not in (skip.text or ""):
+            if not allow_unsigned_keychain_skip or identity != SIGNED_KEYCHAIN_TEST or "requires the signed host lane" not in (skip.text or ""):
                 raise ValueError(f"Unexpected skip: {identity}")
             skipped += 1
     return len(cases) - skipped, skipped
@@ -97,6 +97,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     results = sub.add_parser("results")
+    results.add_argument("--allow-unsigned-keychain-skip", action="store_true")
     results.add_argument("inventory", type=Path)
     results.add_argument("output", type=Path)
     results.add_argument("reports", nargs="+", type=Path)
@@ -111,8 +112,9 @@ def main() -> None:
             for report in args.reports:
                 combined.extend(ET.parse(report).getroot())
             ET.ElementTree(combined).write(args.output, encoding="utf-8", xml_declaration=True)
-            passed, skipped = verify_results(args.output, args.inventory)
-            print(f"Verified host tests: {passed} passed, {skipped} entitlement skips")
+            passed, skipped = verify_results(args.output, args.inventory, allow_unsigned_keychain_skip=args.allow_unsigned_keychain_skip)
+            lane = "unsigned" if args.allow_unsigned_keychain_skip else "signed"
+            print(f"Verified host tests: {passed} passed, {skipped} skipped ({lane} lane)")
         else:
             normalized = normalize_lcov(args.raw.read_text(), args.repository)
             args.output.write_text(normalized)

@@ -6,12 +6,16 @@ CoreSimulator, SwiftPM caches, Docker, local ports, and network resources.
 
 ## Focused tests
 
-Run the narrowest relevant test first. SwiftPM covers `BleatCoreTests`:
+Run the narrowest relevant test first. Direct SwiftPM runs use the explicitly
+unsigned lane and exclude synchronizable-Keychain validation:
 
 ```sh
-swift test --disable-xctest --no-parallel --filter BleatCoreTests
-swift test --disable-xctest --no-parallel --filter TokenVaultTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter BleatCoreTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter TokenVaultTests
 ```
+
+For complete Keychain coverage, run `./scripts/test-host.sh` with the configured
+development team; this uses the provisioned signed host and accepts no skips.
 
 `BleatAppTests` is an app-hosted Xcode target, not a SwiftPM target. Run focused
 app tests through the `Bleat` scheme and verify the requested test identifiers
@@ -84,15 +88,31 @@ Run the host test suite with code coverage:
 ./scripts/test-host.sh
 ```
 
-The host gate uses `--disable-xctest --no-parallel` and selects each built test
-product explicitly. This avoids XCTest subclass discovery and prevents a later
-empty target from overwriting another target's XML report. It supports the
-package-wide product from the native backend and per-target SwiftBuild products.
-`scripts/test-live.sh` retains XCTest; app and UI targets remain on Xcode/XCTest.
+The local host gate requires `BLEAT_DEVELOPMENT_TEAM`, an available Apple
+Development identity, and Xcode provisioning access. It generates a dedicated
+`BleatHostRunner` macOS app under `.build/`, copies the selected toolchain's
+Swift Testing helper into it, and lets Xcode sign and provision that app with
+its own Keychain access group. It verifies the signature, embedded profile, and
+entitlements before running tests. It never changes the installed Xcode helper
+or exports signing keys. A missing signing configuration fails the gate.
+
+The host uses Swift Testing with global serialization and selects each built
+test product explicitly. This avoids XCTest subclass discovery and prevents a
+later empty target from overwriting another target's XML report. It supports
+the package-wide product from the native backend and per-target SwiftBuild
+products. `scripts/test-live.sh` retains XCTest; app and UI targets remain on
+Xcode/XCTest.
+
+GitHub's unsigned coverage jobs explicitly set `BLEAT_HOST_SIGNING=unsigned`.
+That lane uses SwiftPM with `--disable-xctest --no-parallel` and excludes only
+the synchronizable-Keychain test. It is not signed-Keychain validation. Local
+signing is required by default; there is no automatic fallback to this lane.
 
 The gate verifies every test identity against `TestSupport/HostTests/inventory.json`.
-Update that inventory when adding, renaming, or removing host tests. It permits
-only the typed iCloud-Keychain entitlement skip. It merges each product's fresh
+Update that inventory when adding, renaming, or removing host tests. The signed
+lane rejects every skip. Only the explicitly unsigned lane permits the named
+Keychain exclusion; a runtime entitlement failure is never converted to a skip.
+It merges each product's fresh
 LLVM profile before exporting `.build/coverage/swift-host/lcov.info`, keeps only
 project-relative production paths, and requires executed lines in both libraries.
 The XML report is `.build/host-results/tests.xml`. Coveralls receives the host

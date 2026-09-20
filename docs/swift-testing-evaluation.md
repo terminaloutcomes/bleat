@@ -12,7 +12,9 @@ identities now use Swift Testing. Four new cleanup regression tests and the five
 existing transcription tests bring the verified inventory to 479 tests across
 40 suites. One transcription test retains its three parameterized cases.
 
-The wrapper explicitly uses `--disable-xctest --no-parallel`. This avoids the
+The wrapper now defaults to a provisioned, signed copy of the toolchain's Swift
+Testing helper with `--testing-library swift-testing --no-parallel`. The explicit
+unsigned CI lane uses `--disable-xctest --no-parallel`. This avoids the
 XCTest discovery path while preserving global serialization for shared
 URLProtocol state and timing-sensitive fixtures. Individual converted suites
 also have `.serialized` traits. Explicit concurrency tests still exercise their
@@ -20,7 +22,7 @@ original tasks and actors.
 
 SwiftPM's current SwiftBuild backend produces one test product per target. A
 single `--xunit-output` path can consequently be overwritten by a later empty
-target. The wrapper builds once, selects each host product with `--test-product`,
+target. The wrapper builds once, selects each host product explicitly,
 and combines reports before checking every identity against
 `TestSupport/HostTests/inventory.json`. Missing, duplicate, failed, unexpectedly
 skipped, and zero-test reports fail validation. Update the inventory whenever
@@ -29,12 +31,11 @@ host tests are added, renamed, or removed.
 The wrapper also handles the package-wide product produced by the native
 backend used by Swift 6.2. Both product layouts were exercised on Swift 6.4;
 execution on a Swift 6.2 toolchain remains unverified locally. The implementation
-uses Swift Testing APIs available before Swift 6.4, including asynchronous
-condition traits rather than the newer runtime cancellation API. SwiftPM 6.2's
+uses Swift Testing APIs available before Swift 6.4, without the newer runtime cancellation API. SwiftPM 6.2's
 [command source](https://github.com/swiftlang/swift-package-manager/blob/swift-6.2-RELEASE/Sources/Commands/SwiftTestCommand.swift)
 defines the product-selection, coverage, serialization, and XCTest-disable
-workflow. No fork, private framework configuration, or diagnostic suppression
-is needed. The native backend experiment emitted a deprecation warning on Swift
+workflow. The signed host uses the same helper and framework search paths,
+without modifying Xcode or suppressing diagnostics. The native backend experiment emitted a deprecation warning on Swift
 6.4; the final wrapper leaves backend selection to SwiftPM.
 
 Live tests remain XCTest under `scripts/test-live.sh`. Their environment checks
@@ -55,18 +56,19 @@ XCTest. App-hosted and UI tests retain their Xcode runners and attachments.
 | Versioned fixtures and persistence | Original resources, stored shapes, and account-isolation checks retained |
 | Manual performance bounds | Same workload, clocks, bounds, and performance summaries |
 | Keychain teardown | Awaited cleanup on success and thrown failure; synchronous Security fixture cleanup uses `defer` |
-| Entitlement skips | Typed asynchronous preflight enables the iCloud case or records an explicit skip; unexpected errors fail trait evaluation |
+| Keychain signing | Signed local host runs the synchronizable case and rejects all skips; explicitly unsigned CI excludes that named test |
 
 There were no core setup/teardown overrides or XCTest expectation APIs, but
 there were six `addTeardownBlock` registrations. They are now explicit cleanup
-scopes. The entitlement probe uses uniquely scoped synthetic credentials and
-awaits deletion. Four regression tests cover successful cleanup, operation
+scopes. Keychain tests use uniquely scoped synthetic credentials and await
+deletion. Four regression tests cover successful cleanup, operation
 failure, cleanup failure, and simultaneous failures. The last intentionally
 records one known cleanup issue while asserting the original propagated error
 outside that expected-issue scope.
 
-SwiftPM clears its coverage directory for each instrumented run. The wrapper
-copies each product's fresh profile before starting the next, merges profiles
+SwiftPM clears its coverage directory for each unsigned instrumented run. The
+unsigned wrapper copies each product's fresh profile before starting the next.
+The signed lane writes fresh per-product raw profiles directly. Both merge profiles
 with `llvm-profdata`, and exports all test binaries through `llvm-cov`. The
 normalizer keeps project-relative production sources only and rejects missing
 or entirely unexecuted BleatCore or BleatTranscription coverage. Reports are:
@@ -118,7 +120,8 @@ it is not a Contacts discovery hit or a failed test and was not suppressed.
 
 ## Validation and limitations
 
-The final host wrapper verifies 478 passes and one permitted entitlement skip,
+Before the signed-host correction, the wrapper verified 478 passes and one
+permitted entitlement skip,
 and exports executed production coverage for both libraries. The native backend
 experiment independently verified the 476 identities present before the final
 upstream rebase. All 39 affected telemetry tests pass after preserving and
@@ -182,7 +185,7 @@ The follow-up fixes address these failures separately from the runner conversion
   of HTTP spans, whose presence depends on whether cancellation follows actual
   network dispatch. The separate HTTP-metrics regression retains that contract.
 
-The follow-up full gate passes all **424 app tests**, including the five
+The download-fix follow-up gate passed all **424 app tests**, including the five
 original failures and the new gated concurrency regression; individual outcomes
 were verified from the result bundle. Its host stage passes **478 tests with
 one expected entitlement skip**, exports LCOV, and passes Release builds. Strict
@@ -213,3 +216,38 @@ Its individual-result verifier requires six passes and one intentional skip in
 each ordinary/coverage run. Earlier crashed/zero-test helper invocations and an
 interrupted script-edit run are excluded; the finalized matrix was rerun and
 verified. Raw debugger logs can contain local paths and should stay local.
+
+## Signed host correction
+
+The earlier permitted entitlement skip was a coverage gap. Inspection found
+that SwiftPM's installed helper was ad-hoc signed with only `get-task-allow` and
+no application identity or Keychain access group. The app's own signing settings
+do not apply to that separate process. Apple's [macOS Keychain guidance](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)
+explains why synchronizable items need provisioned data-protection access.
+
+`TestSupport/HostTests/project.yml` now defines a dedicated, automatically
+provisioned macOS application that hosts a copy of the Swift Testing helper.
+The configured development team and certificate stay local. The host receives
+its own application identity and Keychain access group; the installed toolchain
+and the production app's Keychain group are untouched. The local gate requires
+this host and rejects every skipped test. The entitlement probe was removed:
+a Keychain error in the signed lane is a test failure.
+
+The unsigned CI lane is selected explicitly and named accordingly. It excludes
+only `testDeleteAllCredentialsRemovesNativeLoginAfterICloudKeychainIsDisabled`;
+the report verifier requires an explicit unsigned-lane flag to accept that
+omission. It must not be reported as signed-Keychain validation. Both lanes
+continue to verify the same inventory and export production LCOV for Coveralls.
+
+The formerly skipped test passed in isolation in the provisioned host. The
+complete signed gate then verified **479 passed, zero skips**, with executed
+production LCOV for both libraries. The explicit unsigned lane verified
+**478 passed and its one declared Keychain exclusion**, with production coverage
+for both libraries. Eight report-verifier tests, strict Swift lint, actionlint,
+workflow/project YAML parsing, shell syntax, and whitespace checks pass.
+
+The signed helper was also traced across all **474 core/cleanup tests**, with
+zero skips and a successful inferior exit. All three breakpoints resolved with
+zero hits: XCTest subclass discovery, Contacts initialization, and Core Data
+XPC-store initialization. The intentional cleanup-failure fixture remains one
+known issue. Signing did not reintroduce the original Contacts path.

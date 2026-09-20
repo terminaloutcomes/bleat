@@ -154,9 +154,11 @@ by `APP-OIDC-001` and [GitHub issue #2](https://github.com/terminaloutcomes/blea
 The [Swift Testing evaluation](swift-testing-evaluation.md) records conversion
 of all 470 core host tests, four asynchronous-cleanup regression tests, the
 explicit Swift Testing runner, and diagnostic evidence. `scripts/test-host.sh`
-verifies the complete core/transcription inventory and exports merged production
-LCOV for Coveralls alongside existing smoke and Rust reports. Simulator and
-live-server tests retain their separate XCTest workflows. This evidence does
+requires a provisioned signed local host, rejects all local skips, verifies
+the complete core/transcription inventory, and exports merged production LCOV for Coveralls alongside existing smoke and Rust reports. Simulator and
+live-server tests retain their separate XCTest workflows. CI explicitly runs
+the unsigned coverage lane, which excludes the synchronizable-Keychain test
+and does not supply signed-Keychain evidence. This evidence does
 not replace simulator, live-server, or device requirements.
 
 ## Issue #151 download storage evidence
