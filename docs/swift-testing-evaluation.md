@@ -139,6 +139,20 @@ results precede the final upstream rebase:
 | `testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow` | Playback request count 0 instead of 1 |
 | `testThreeHundredTrackDownloadRepairAndPublicationStayResponsive` | Scheduled indexes `[150, 150]` instead of `[150]` |
 
+After rebasing onto `8e26a7b3`, the complete local gate again exits 65 at the
+app stage: **423 app tests, 418 passed, five failed, no skips**. Individual
+outcomes were inspected with `xcresulttool`. The four failures above recur,
+and `testManualDownloadSchedulingAndCancellationEmitTaskSpans` also fails: its
+whole-span-array assertion expects only a cancelled `.downloadTransfer` span,
+but receives that span plus a cancelled `.httpRequest` span. Both the new HTTP
+instrumentation and this assertion come from upstream; this PR changes no app
+source or app tests relative to the rebased main. The host coverage gate,
+Release builds, and strict Swift lint pass. The UI stage is not reached.
+
+The separate live XCTest target executes all 21 named cases: three local
+configuration checks pass and 18 fixture-dependent cases skip. This verifies
+that the target remains runnable, not disposable-server integration behavior.
+
 The two playback assertions inspect service calls before an unstructured
 continuation task necessarily runs. Lookahead/background-task timing and the
 repair test's manual completion need further investigation; those two causes
