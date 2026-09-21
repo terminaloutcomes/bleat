@@ -6,12 +6,16 @@ CoreSimulator, SwiftPM caches, Docker, local ports, and network resources.
 
 ## Focused tests
 
-Run the narrowest relevant test first. SwiftPM covers `BleatCoreTests`:
+Run the narrowest relevant test first. Direct SwiftPM runs use the explicitly
+unsigned lane and exclude synchronizable-Keychain validation:
 
 ```sh
-swift test --filter BleatCoreTests
-swift test --filter TokenVaultTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter BleatCoreTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter TokenVaultTests
 ```
+
+For complete Keychain coverage, run `./scripts/test-host.sh` with the configured
+development team; this uses the provisioned signed host and accepts no skips.
 
 `BleatAppTests` is an app-hosted Xcode target, not a SwiftPM target. Run focused
 app tests through the `Bleat` scheme and verify the requested test identifiers
@@ -44,7 +48,9 @@ five-second fixture timeout before inspecting the startup label.
 Run the same smoke gate locally with `zsh scripts/test-ci-smoke.sh`. It uses
 `BLEAT_SIMULATOR_DESTINATION` when set. Run `bundle install` followed by
 `bundle exec slather coverage` to export coverage from that build. Swift
-coverage reflects only the smoke tests, not full behavioral coverage.
+smoke coverage reflects only those UI journeys. The separate host job runs
+`scripts/test-host.sh` and exports full host-suite LCOV for BleatCore and
+BleatTranscription.
 
 The Linux job checks Rust formatting and Clippy, then runs Tarpaulin with all
 features and targets, including PostgreSQL container integration tests. Docker
@@ -53,7 +59,7 @@ Run this coverage suite locally with `mise run api:coverage`.
 `main.rs` is excluded from Tarpaulin coverage and its generated LCOV report
 uploaded to Coveralls.
 
-Swift and Rust coverage artifacts are sent together to Coveralls using the
+Swift smoke, Swift host, and Rust coverage artifacts are sent together to Coveralls using the
 `COVERALLS_REPO_TOKEN` repository secret. Fork pull requests still generate
 reports but do not upload them to Coveralls. Upload failures are warnings, not
 test failures. No custom job timeout is imposed; GitHub's runner limits apply.
@@ -79,8 +85,42 @@ individual stage with `mise run test:local`, `mise run test:live`, or
 Run the host test suite with code coverage:
 
 ```sh
-swift test --enable-code-coverage
+./scripts/test-host.sh
 ```
+
+The local host gate requires `BLEAT_DEVELOPMENT_TEAM`, an available Apple
+Development identity, and Xcode provisioning access. It generates a dedicated
+`BleatHostRunner` macOS app under `.build/`, copies the selected toolchain's
+Swift Testing helper into it, and lets Xcode sign and provision that app with
+its own Keychain access group. It verifies the signature, embedded profile, and
+entitlements before running tests. It never changes the installed Xcode helper
+or exports signing keys. A missing signing configuration fails the gate.
+
+The host uses Swift Testing with global serialization and selects each built
+test product explicitly. This avoids XCTest subclass discovery and prevents a
+later empty target from overwriting another target's XML report. It supports
+the package-wide product from the native backend and per-target SwiftBuild
+products. `scripts/test-live.sh` retains XCTest; app and UI targets remain on
+Xcode/XCTest.
+
+GitHub's unsigned coverage jobs explicitly set `BLEAT_HOST_SIGNING=unsigned`.
+That lane uses SwiftPM with `--disable-xctest --no-parallel` and excludes only
+the synchronizable-Keychain test. It is not signed-Keychain validation. Local
+signing is required by default; there is no automatic fallback to this lane.
+
+The gate verifies every test identity against `TestSupport/HostTests/inventory.json`.
+Update that inventory when adding, renaming, or removing host tests. The signed
+lane rejects every skip. Only the explicitly unsigned lane permits the named
+Keychain exclusion; a runtime entitlement failure is never converted to a skip.
+It merges each product's fresh
+LLVM profile before exporting `.build/coverage/swift-host/lcov.info`, keeps only
+project-relative production paths, and requires executed lines in both libraries.
+The XML report is `.build/host-results/tests.xml`. Coveralls receives the host
+report under `swift-host`, alongside existing `swift-smoke` and `rust-full` flags.
+
+See the [Swift Testing evaluation](swift-testing-evaluation.md) for migration,
+diagnostic evidence, and validation limitations. Test the report verifier with
+`python3 -m unittest discover -s TestSupport/HostTests`.
 
 Run the core tests with coverage, Release build, and iOS Simulator application
 unit and UI tests:

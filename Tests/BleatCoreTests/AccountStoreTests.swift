@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class AccountStoreTests: XCTestCase {
+@Suite(.serialized)
+final class AccountStoreTests {
+    @Test
     func testStoresMultipleUsersAndServersWithOneActiveContext()
         async throws
     {
@@ -34,22 +36,22 @@ final class AccountStoreTests: XCTestCase {
 
         let accounts = try await fixture.store.accounts()
         let active = try await fixture.store.activeAccount()
-        XCTAssertEqual(
-            Set(accounts.map(\.id)),
-            [
+        #expect(
+            Set(accounts.map(\.id)) == [
                 first.id,
                 second.id,
                 third.id,
             ])
-        XCTAssertEqual(active?.id, third.id)
+        #expect(active?.id == third.id)
 
         let relaunched = AccountStore(modelContainer: fixture.container)
         let relaunchedActive = try await relaunched.activeAccount()
         let relaunchedAccounts = try await relaunched.accounts()
-        XCTAssertEqual(relaunchedActive?.id, third.id)
-        XCTAssertEqual(relaunchedAccounts.count, 3)
+        #expect(relaunchedActive?.id == third.id)
+        #expect(relaunchedAccounts.count == 3)
     }
 
+    @Test
     func testRejectsDuplicateRemoteUserOnSameNormalizedServer()
         async throws
     {
@@ -70,19 +72,19 @@ final class AccountStoreTests: XCTestCase {
 
         do {
             try await fixture.store.save(duplicate)
-            XCTFail("Expected duplicate remote account rejection")
+            Issue.record("Expected duplicate remote account rejection")
         } catch {
-            XCTAssertEqual(
-                error,
-                .duplicateRemoteAccount(
-                    existingAccountID: existing.id
-                )
-            )
+            #expect(
+                error
+                    == .duplicateRemoteAccount(
+                        existingAccountID: existing.id
+                    ))
         }
         let storedAccounts = try await fixture.store.accounts()
-        XCTAssertEqual(storedAccounts, [existing])
+        #expect(storedAccounts == [existing])
     }
 
+    @Test
     func testConnectionStateAndActiveSelectionPersistAcrossStoreActors()
         async throws
     {
@@ -111,13 +113,11 @@ final class AccountStoreTests: XCTestCase {
         let relaunched = AccountStore(modelContainer: fixture.container)
         let relaunchedSecond = try await relaunched.account(id: second.id)
         let relaunchedActive = try await relaunched.activeAccount()
-        XCTAssertEqual(
-            relaunchedSecond?.connectionState,
-            .reauthenticationRequired
-        )
-        XCTAssertEqual(relaunchedActive?.id, second.id)
+        #expect(relaunchedSecond?.connectionState == .reauthenticationRequired)
+        #expect(relaunchedActive?.id == second.id)
     }
 
+    @Test
     func testLegacyIdentityMigrationRekeysAccountAndStatistics()
         async throws
     {
@@ -166,22 +166,21 @@ final class AccountStoreTests: XCTestCase {
         )
         let removedLegacy = try await fixture.store.account(id: legacy.id)
         let migratedAccount = try await fixture.store.account(id: canonicalID)
-        XCTAssertNil(removedLegacy)
-        XCTAssertEqual(migratedAccount?.id, canonicalID)
+        #expect(removedLegacy == nil)
+        #expect(migratedAccount?.id == canonicalID)
         let archive = try await statistics.privateCloudArchive()
-        XCTAssertEqual(archive.slices.map(\.accountID), [canonicalID])
+        #expect(archive.slices.map(\.accountID) == [canonicalID])
         let aliases = try await fixture.store.identityAliases()
-        XCTAssertEqual(
-            aliases,
-            [
+        #expect(
+            aliases == [
                 AccountIdentityMigration(
                     legacyID: legacy.id,
                     canonicalID: canonicalID
                 )
-            ]
-        )
+            ])
     }
 
+    @Test
     func testPendingRestoredAccountSurvivesRelaunchInactive() async throws {
         let fixture = try StoreFixture()
         let restored = try Self.account(
@@ -195,11 +194,12 @@ final class AccountStoreTests: XCTestCase {
 
         let relaunched = AccountStore(modelContainer: fixture.container)
         let pending = try await relaunched.account(id: restored.id)
-        XCTAssertEqual(pending?.connectionState, .reauthenticationRequired)
+        #expect(pending?.connectionState == .reauthenticationRequired)
         let active = try await relaunched.activeAccount()
-        XCTAssertNil(active)
+        #expect(active == nil)
     }
 
+    @Test
     func testContradictoryAliasIsTypedAndPreservesOriginal() async throws {
         let fixture = try StoreFixture()
         let legacy = try Self.account(
@@ -221,23 +221,23 @@ final class AccountStoreTests: XCTestCase {
                     canonicalID: AccountID(rawValue: "canonical-two")
                 )
             ])
-            XCTFail("Expected contradictory alias failure")
+            Issue.record("Expected contradictory alias failure")
         } catch {
-            XCTAssertEqual(
-                error,
-                .contradictoryIdentityAlias(
-                    legacyID: legacy.id,
-                    existingCanonicalID: first,
-                    requestedCanonicalID: AccountID(
-                        rawValue: "canonical-two"
-                    )
-                )
-            )
+            #expect(
+                error
+                    == .contradictoryIdentityAlias(
+                        legacyID: legacy.id,
+                        existingCanonicalID: first,
+                        requestedCanonicalID: AccountID(
+                            rawValue: "canonical-two"
+                        )
+                    ))
         }
         let aliases = try await fixture.store.identityAliases()
-        XCTAssertEqual(aliases.first?.canonicalID, first)
+        #expect(aliases.first?.canonicalID == first)
     }
 
+    @Test
     func testLocalServerPersistsWithoutChangingPrimaryIdentity() async throws {
         let fixture = try StoreFixture()
         let account = try Self.account(
@@ -256,12 +256,13 @@ final class AccountStoreTests: XCTestCase {
         )
 
         let storedAccount = try await fixture.store.account(id: account.id)
-        let stored = try XCTUnwrap(storedAccount)
-        XCTAssertEqual(stored.server, account.server)
-        XCTAssertEqual(stored.localServer, local)
-        XCTAssertTrue(stored.localServerValidated)
+        let stored = try #require(storedAccount)
+        #expect(stored.server == account.server)
+        #expect(stored.localServer == local)
+        #expect(stored.localServerValidated)
     }
 
+    @Test
     func testReplacingPrimaryServerRekeysExistingAccountData() async throws {
         let fixture = try StoreFixture()
         let original = try Self.account(
@@ -294,11 +295,12 @@ final class AccountStoreTests: XCTestCase {
             id: replacementID
         )
         let activeAccount = try await fixture.store.activeAccount()
-        XCTAssertNil(removedAccount)
-        XCTAssertEqual(storedReplacement, replacement)
-        XCTAssertEqual(activeAccount?.id, replacementID)
+        #expect(removedAccount == nil)
+        #expect(storedReplacement == replacement)
+        #expect(activeAccount?.id == replacementID)
     }
 
+    @Test
     func testRemovingActiveAccountSelectsDeterministicReplacement()
         async throws
     {
@@ -322,37 +324,39 @@ final class AccountStoreTests: XCTestCase {
         let active = try await fixture.store.activeAccount()
         let removedAgain = try await fixture.store.removeAccount(id: b.id)
         let accounts = try await fixture.store.accounts()
-        XCTAssertTrue(removed)
-        XCTAssertEqual(active?.id, a.id)
-        XCTAssertFalse(removedAgain)
-        XCTAssertEqual(accounts, [a])
+        #expect(removed)
+        #expect(active?.id == a.id)
+        #expect(!(removedAgain))
+        #expect(accounts == [a])
     }
 
+    @Test
     func testMissingAccountOperationsRemainTyped() async throws {
         let fixture = try StoreFixture()
         let missing = AccountID(rawValue: "missing")
 
         do {
             try await fixture.store.setActiveAccount(id: missing)
-            XCTFail("Expected missing account error")
+            Issue.record("Expected missing account error")
         } catch {
-            XCTAssertEqual(error, .accountNotFound(missing))
+            #expect(error == .accountNotFound(missing))
         }
         do {
             try await fixture.store.setConnectionState(
                 .offline,
                 for: missing
             )
-            XCTFail("Expected missing account error")
+            Issue.record("Expected missing account error")
         } catch {
-            XCTAssertEqual(error, .accountNotFound(missing))
+            #expect(error == .accountNotFound(missing))
         }
         let missingAccount = try await fixture.store.account(id: missing)
         let active = try await fixture.store.activeAccount()
-        XCTAssertNil(missingAccount)
-        XCTAssertNil(active)
+        #expect(missingAccount == nil)
+        #expect(active == nil)
     }
 
+    @Test
     func testCorruptStoredProfileIsRejectedWithoutLeakingPayload()
         async throws
     {
@@ -370,17 +374,17 @@ final class AccountStoreTests: XCTestCase {
 
         do {
             _ = try await fixture.store.accounts()
-            XCTFail("Expected invalid stored account")
+            Issue.record("Expected invalid stored account")
         } catch {
-            XCTAssertEqual(
-                error,
-                .invalidStoredAccount(
-                    AccountID(rawValue: "corrupt")
-                )
-            )
+            #expect(
+                error
+                    == .invalidStoredAccount(
+                        AccountID(rawValue: "corrupt")
+                    ))
         }
     }
 
+    @Test
     func testServerAccountValidationAndCodableExcludeCredentials()
         throws
     {
@@ -391,17 +395,17 @@ final class AccountStoreTests: XCTestCase {
             username: "Reader"
         )
         let data = try JSONEncoder().encode(valid)
-        let encoded = try XCTUnwrap(String(data: data, encoding: .utf8))
+        let encoded = try #require(String(data: data, encoding: .utf8))
         let decoded = try JSONDecoder().decode(
             ServerAccount.self,
             from: data
         )
 
-        XCTAssertEqual(decoded, valid)
-        XCTAssertTrue(valid.supportsLocalAuthentication)
-        XCTAssertFalse(encoded.contains("access-token"))
-        XCTAssertFalse(encoded.contains("refresh-token"))
-        XCTAssertFalse(encoded.contains("password"))
+        #expect(decoded == valid)
+        #expect(valid.supportsLocalAuthentication)
+        #expect(!(encoded.contains("access-token")))
+        #expect(!(encoded.contains("refresh-token")))
+        #expect(!(encoded.contains("password")))
         let invalidData = try JSONEncoder().encode(
             UncheckedServerAccount(
                 id: AccountID(rawValue: ""),
@@ -412,40 +416,43 @@ final class AccountStoreTests: XCTestCase {
                 connectionState: valid.connectionState
             )
         )
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(
-                ServerAccount.self,
-                from: invalidData
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(
+                    ServerAccount.self,
+                    from: invalidData
+                )
+            })
 
-        XCTAssertThrowsError(
-            try ServerAccount(
-                id: AccountID(rawValue: ""),
-                server: valid.server,
-                serverVersion: "2.36.0",
-                authenticationMethods: [.local],
-                user: valid.user
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? ServerAccountValidationError,
-                .invalidAccountID
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try ServerAccount(
+                    id: AccountID(rawValue: ""),
+                    server: valid.server,
+                    serverVersion: "2.36.0",
+                    authenticationMethods: [.local],
+                    user: valid.user
+                )
+            })
+        {
+            #expect(error as? ServerAccountValidationError == .invalidAccountID)
         }
-        XCTAssertThrowsError(
-            try ServerAccount(
-                id: valid.id,
-                server: valid.server,
-                serverVersion: "not-a-version",
-                authenticationMethods: [.local],
-                user: valid.user
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? ServerAccountValidationError,
-                .invalidServerVersion
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try ServerAccount(
+                    id: valid.id,
+                    server: valid.server,
+                    serverVersion: "not-a-version",
+                    authenticationMethods: [.local],
+                    user: valid.user
+                )
+            })
+        {
+            #expect(
+                error as? ServerAccountValidationError == .invalidServerVersion)
         }
         let openIDOnly = try ServerAccount(
             id: valid.id,
@@ -454,10 +461,11 @@ final class AccountStoreTests: XCTestCase {
             authenticationMethods: [.openID],
             user: valid.user
         )
-        XCTAssertFalse(openIDOnly.supportsLocalAuthentication)
-        XCTAssertTrue(openIDOnly.supportsOpenIDAuthentication)
+        #expect(!(openIDOnly.supportsLocalAuthentication))
+        #expect(openIDOnly.supportsOpenIDAuthentication)
     }
 
+    @Test
     func testLoginPersistsAccountAndCredentialsTransactionally()
         async throws
     {
@@ -482,24 +490,24 @@ final class AccountStoreTests: XCTestCase {
             server: account.server,
             userID: account.user.id
         )
-        XCTAssertEqual(account.id, canonicalID)
-        XCTAssertEqual(account.user.id.rawValue, "remote-user")
+        #expect(account.id == canonicalID)
+        #expect(account.user.id.rawValue == "remote-user")
         let active = try await fixture.store.activeAccount()
         let storedCredentials = await credentialStore.credentials(
             for: canonicalID
         )
         let deleteCount = await credentialStore.deleteCount()
-        XCTAssertEqual(active, account)
-        XCTAssertEqual(
-            storedCredentials,
-            try AuthenticationTokens(
-                accessToken: "access-token",
-                refreshToken: "refresh-token"
-            )
-        )
-        XCTAssertEqual(deleteCount, 0)
+        #expect(active == account)
+        #expect(
+            storedCredentials
+                == (try AuthenticationTokens(
+                    accessToken: "access-token",
+                    refreshToken: "refresh-token"
+                )))
+        #expect(deleteCount == 0)
     }
 
+    @Test
     func testDuplicateOnboardingRollsBackOnlyNewCredentials()
         async throws
     {
@@ -526,16 +534,15 @@ final class AccountStoreTests: XCTestCase {
                 password: "correct",
                 accountStore: fixture.store
             )
-            XCTFail("Expected duplicate account persistence failure")
+            Issue.record("Expected duplicate account persistence failure")
         } catch {
-            XCTAssertEqual(
-                error as? AccountOnboardingError,
-                .accountPersistenceFailed(
-                    .duplicateRemoteAccount(
-                        existingAccountID: existing.id
-                    )
-                )
-            )
+            #expect(
+                error as? AccountOnboardingError
+                    == .accountPersistenceFailed(
+                        .duplicateRemoteAccount(
+                            existingAccountID: existing.id
+                        )
+                    ))
         }
 
         let canonicalID = AccountID.canonical(
@@ -545,11 +552,12 @@ final class AccountStoreTests: XCTestCase {
         let newCredentials = await credentialStore.credentials(for: canonicalID)
         let deleteCount = await credentialStore.deleteCount()
         let accounts = try await fixture.store.accounts()
-        XCTAssertNil(newCredentials)
-        XCTAssertEqual(deleteCount, 1)
-        XCTAssertEqual(accounts, [existing])
+        #expect(newCredentials == nil)
+        #expect(deleteCount == 1)
+        #expect(accounts == [existing])
     }
 
+    @Test
     func testOnboardingRejectsNonLocalServerBeforeTransport()
         async throws
     {
@@ -572,16 +580,17 @@ final class AccountStoreTests: XCTestCase {
                 password: "password",
                 accountStore: fixture.store
             )
-            XCTFail("Expected local authentication requirement")
+            Issue.record("Expected local authentication requirement")
         } catch {
-            XCTAssertEqual(error, .localAuthenticationUnavailable)
+            #expect(error == .localAuthenticationUnavailable)
         }
         let requestCount = await transport.requestCount()
         let accounts = try await fixture.store.accounts()
-        XCTAssertEqual(requestCount, 0)
-        XCTAssertTrue(accounts.isEmpty)
+        #expect(requestCount == 0)
+        #expect(accounts.isEmpty)
     }
 
+    @Test
     func testOnboardingReportsCredentialRollbackFailure() async throws {
         let fixture = try StoreFixture()
         let existing = try Self.account(
@@ -608,12 +617,10 @@ final class AccountStoreTests: XCTestCase {
                 password: "correct",
                 accountStore: fixture.store
             )
-            XCTFail("Expected credential rollback failure")
+            Issue.record("Expected credential rollback failure")
         } catch {
-            XCTAssertEqual(
-                error as? AccountOnboardingError,
-                .credentialRollbackFailed
-            )
+            #expect(
+                error as? AccountOnboardingError == .credentialRollbackFailed)
         }
         let canonicalID = AccountID.canonical(
             server: existing.server,
@@ -623,10 +630,11 @@ final class AccountStoreTests: XCTestCase {
             for: canonicalID
         )
         let accounts = try await fixture.store.accounts()
-        XCTAssertNotNil(remainingCredentials)
-        XCTAssertEqual(accounts, [existing])
+        #expect(remainingCredentials != nil)
+        #expect(accounts == [existing])
     }
 
+    @Test
     func testPersistedSignOutAndRemovalUseStoredServerAndClearCredentials()
         async throws
     {
@@ -656,14 +664,11 @@ final class AccountStoreTests: XCTestCase {
         let signedOutCredentials = await credentials.credentials(
             for: canonicalID
         )
-        XCTAssertEqual(signOut.remoteStatus, .completed)
-        XCTAssertEqual(
-            signedOutAccount?.connectionState,
-            .reauthenticationRequired
-        )
-        XCTAssertNil(signedOutCredentials)
+        #expect(signOut.remoteStatus == .completed)
+        #expect(signedOutAccount?.connectionState == .reauthenticationRequired)
+        #expect(signedOutCredentials == nil)
         let firstLogoutTokens = await transport.logoutRefreshTokens()
-        XCTAssertEqual(firstLogoutTokens, ["refresh-token"])
+        #expect(firstLogoutTokens == ["refresh-token"])
 
         _ = try await coordinator.loginAndPersistAccount(
             accountID: accountID,
@@ -678,16 +683,14 @@ final class AccountStoreTests: XCTestCase {
         )
         let removedAccount = try await fixture.store.account(id: canonicalID)
         let removedCredentials = await credentials.credentials(for: canonicalID)
-        XCTAssertEqual(removal.remoteStatus, .completed)
-        XCTAssertNil(removedAccount)
-        XCTAssertNil(removedCredentials)
+        #expect(removal.remoteStatus == .completed)
+        #expect(removedAccount == nil)
+        #expect(removedCredentials == nil)
         let allLogoutTokens = await transport.logoutRefreshTokens()
-        XCTAssertEqual(
-            allLogoutTokens,
-            ["refresh-token", "refresh-token"]
-        )
+        #expect(allLogoutTokens == ["refresh-token", "refresh-token"])
     }
 
+    @Test
     func testPersistedLifecycleRejectsUnknownAccountBeforeLogout()
         async throws
     {
@@ -704,15 +707,12 @@ final class AccountStoreTests: XCTestCase {
                 accountID: missing,
                 accountStore: fixture.store
             )
-            XCTFail("Expected missing persisted account")
+            Issue.record("Expected missing persisted account")
         } catch {
-            XCTAssertEqual(
-                error,
-                .accountNotFound(missing)
-            )
+            #expect(error == .accountNotFound(missing))
         }
         let requestCount = await transport.requestCount()
-        XCTAssertEqual(requestCount, 0)
+        #expect(requestCount == 0)
     }
 
     private static func account(
@@ -759,9 +759,7 @@ final class AccountStoreTests: XCTestCase {
     ) throws -> DiscoveredServer {
         DiscoveredServer(
             baseURL: try NormalizedServerURL("https://example.com"),
-            version: try XCTUnwrap(
-                AudiobookshelfServerVersion("2.36.0")
-            ),
+            version: try #require(AudiobookshelfServerVersion("2.36.0")),
             language: "en-us",
             authenticationMethods: authenticationMethods,
             authenticationFormData: nil

@@ -1,10 +1,12 @@
 import CloudKit
 @preconcurrency import OpenTelemetrySdk
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class RemoteTelemetryTests: XCTestCase {
+@Suite(.serialized)
+final class RemoteTelemetryTests {
+    @Test
     func testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome()
         async throws
     {
@@ -30,7 +32,7 @@ final class RemoteTelemetryTests: XCTestCase {
         for endpoint in DiagnosticEndpoint.allCases {
             for (scenario, _) in outcomes {
                 var request = URLRequest(
-                    url: try XCTUnwrap(
+                    url: try #require(
                         URL(
                             string:
                                 "https://private.example/prefix/api/items/private-book?token=private-token"
@@ -46,34 +48,34 @@ final class RemoteTelemetryTests: XCTestCase {
         }
         await pipeline.flush(timeout: 5)
         let spans = exporter.recordedSpans
-        XCTAssertEqual(
-            spans.count, DiagnosticEndpoint.allCases.count * outcomes.count)
+        #expect(
+            spans.count == DiagnosticEndpoint.allCases.count * outcomes.count)
         for endpoint in DiagnosticEndpoint.allCases {
             let matching = spans.filter {
                 $0.attributes["bleat.http.endpoint"]?.description
                     == endpoint.rawValue
             }
-            XCTAssertEqual(matching.count, outcomes.count)
+            #expect(matching.count == outcomes.count)
             for (_, result) in outcomes {
                 let expected = RemoteTelemetryHTTPCall(
                     endpoint: .audiobookshelf(endpoint), method: .get,
                     result: result)
-                XCTAssertEqual(
+                #expect(
                     matching.filter { span in
                         expected.attributes.allSatisfy {
                             span.attributes[$0.key]?.description == $0.value
                         }
-                    }.count, 1)
+                    }.count == 1)
             }
         }
         for span in spans {
-            XCTAssertEqual(span.name, "bleat.http.request")
-            XCTAssertEqual(span.kind, .client)
-            XCTAssertEqual(span.events.count, 1)
-            XCTAssertEqual(span.events.first?.name, "bleat.http.completed")
-            XCTAssertEqual(
-                span.events.first?.attributes["bleat.http.endpoint"],
-                span.attributes["bleat.http.endpoint"])
+            #expect(span.name == "bleat.http.request")
+            #expect(span.kind == .client)
+            #expect(span.events.count == 1)
+            #expect(span.events.first?.name == "bleat.http.completed")
+            #expect(
+                span.events.first?.attributes["bleat.http.endpoint"]
+                    == span.attributes["bleat.http.endpoint"])
             let encoded =
                 String(describing: span.attributes)
                 + String(describing: span.events)
@@ -81,12 +83,14 @@ final class RemoteTelemetryTests: XCTestCase {
                 "private.example", "private-book", "private-token",
                 "Authorization", "prefix",
             ] {
-                XCTAssertFalse(encoded.contains(secret))
+                #expect(!(encoded.contains(secret)))
             }
         }
         pipeline.deactivate()
         pipeline.purge()
     }
+
+    @Test
 
     func testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint() async throws
     {
@@ -104,14 +108,13 @@ final class RemoteTelemetryTests: XCTestCase {
         _ = try await transport.send(
             TracedHTTPRequest(
                 request: URLRequest(
-                    url: try XCTUnwrap(
+                    url: try #require(
                         URL(
                             string:
                                 "https://primary.example/prefix/api/me/progress/private-id"
                         ))), endpoint: .progress))
-        XCTAssertEqual(
-            recorder.recordedCalls,
-            [
+        #expect(
+            recorder.recordedCalls == [
                 RemoteTelemetryHTTPCall(
                     endpoint: .audiobookshelf(.progress), method: .get,
                     result: .urlError(.cannotConnectToHost)),
@@ -120,6 +123,8 @@ final class RemoteTelemetryTests: XCTestCase {
                     result: .response(statusCode: 200)),
             ])
     }
+
+    @Test
 
     func testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes()
         async throws
@@ -144,24 +149,25 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: exporter)
         await pipeline.flush(timeout: 2)
         let spans = exporter.recordedSpans
-        XCTAssertEqual(spans.count, 2)
-        XCTAssertTrue(spans.allSatisfy { $0.events.count == 1 })
-        let timed = try XCTUnwrap(
+        #expect(spans.count == 2)
+        #expect(spans.allSatisfy { $0.events.count == 1 })
+        let timed = try #require(
             spans.first { abs($0.startTime.timeIntervalSince(start)) < 0.001 })
-        XCTAssertEqual(timed.endTime.timeIntervalSince(end), 0, accuracy: 0.001)
+        #expect(abs((timed.endTime.timeIntervalSince(end)) - (0)) <= 0.001)
         pipeline.deactivate()
         tracer.recordHTTPCall(call, startedAt: start, endedAt: end)
         await pipeline.flush(timeout: 2)
-        XCTAssertEqual(exporter.recordedSpans.count, 2)
+        #expect(exporter.recordedSpans.count == 2)
         pipeline.purge()
     }
+
+    @Test
 
     func testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes() {
         let allowedNames = Set(
             RemoteTelemetryOperation.allCases.map(\.rawValue))
-        XCTAssertEqual(
-            allowedNames,
-            [
+        #expect(
+            allowedNames == [
                 "bleat.http.request",
                 "bleat.app.launch",
                 "bleat.account.connection",
@@ -178,8 +184,7 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.telemetry.challenge",
                 "bleat.telemetry.enrolment",
                 "bleat.telemetry.token",
-            ]
-        )
+            ])
 
         for operation in RemoteTelemetryOperation.allCases {
             let encoded = RemoteTelemetrySpanDescriptor(
@@ -188,24 +193,21 @@ final class RemoteTelemetryTests: XCTestCase {
                 source: .offline,
                 retryBucket: .threeOrMore
             ).encodedSpan
-            XCTAssertTrue(allowedNames.contains(encoded.name))
-            XCTAssertEqual(
-                Set(encoded.attributes.keys),
-                [
+            #expect(allowedNames.contains(encoded.name))
+            #expect(
+                Set(encoded.attributes.keys) == [
                     "bleat.subsystem",
                     "bleat.outcome",
                     "bleat.failure.category",
                     "bleat.source",
                     "bleat.retry.bucket",
-                ]
-            )
-            XCTAssertEqual(encoded.attributes["bleat.outcome"], "failed")
-            XCTAssertEqual(
-                encoded.attributes["bleat.failure.category"],
-                "transport"
-            )
+                ])
+            #expect(encoded.attributes["bleat.outcome"] == "failed")
+            #expect(encoded.attributes["bleat.failure.category"] == "transport")
         }
     }
+
+    @Test
 
     func testBufferedTelemetryAuthenticationRequestSpansShareParentTrace()
         async throws
@@ -240,25 +242,26 @@ final class RemoteTelemetryTests: XCTestCase {
         await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
-        XCTAssertEqual(spans.count, 4)
-        let parent = try XCTUnwrap(
-            spans.first { $0.name == "bleat.telemetry.authentication" }
-        )
-        XCTAssertEqual(parent.kind, .internal)
+        #expect(spans.count == 4)
+        let parent = try #require(
+            spans.first { $0.name == "bleat.telemetry.authentication" })
+        #expect(parent.kind == .internal)
         for name in [
             "bleat.telemetry.challenge",
             "bleat.telemetry.enrolment",
             "bleat.telemetry.token",
         ] {
-            let child = try XCTUnwrap(spans.first { $0.name == name })
-            XCTAssertEqual(child.kind, .client)
-            XCTAssertEqual(child.traceId, parent.traceId)
-            XCTAssertEqual(child.parentSpanId, parent.spanId)
+            let child = try #require(spans.first { $0.name == name })
+            #expect(child.kind == .client)
+            #expect(child.traceId == parent.traceId)
+            #expect(child.parentSpanId == parent.spanId)
         }
         pipeline.deactivate()
         pipeline.purge()
         await pipeline.shutdown()
     }
+
+    @Test
 
     func testBufferedChapterSpanExportsMeasurementsUnderBatchParent()
         async throws
@@ -268,7 +271,7 @@ final class RemoteTelemetryTests: XCTestCase {
         let exporter = RecordingSpanExporter()
         let tracer = RemoteTelemetryTracer()
         tracer.prepareForActivation()
-        let input = try XCTUnwrap(
+        let input = try #require(
             RemoteTelemetryTranscriptionInput(
                 durationMilliseconds: 12_345,
                 byteCount: 67_890,
@@ -277,8 +280,7 @@ final class RemoteTelemetryTests: XCTestCase {
                 codec: .aac,
                 sampleRateHz: 44_100,
                 channelCount: 2
-            )
-        )
+            ))
 
         let batch = tracer.beginSpan(
             operation: .transcription,
@@ -299,17 +301,14 @@ final class RemoteTelemetryTests: XCTestCase {
         await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
-        let batchSpan = try XCTUnwrap(
-            spans.first { $0.name == "bleat.transcription.run" }
-        )
-        let chapterSpan = try XCTUnwrap(
-            spans.first { $0.name == "bleat.transcription.chapter" }
-        )
-        XCTAssertEqual(chapterSpan.traceId, batchSpan.traceId)
-        XCTAssertEqual(chapterSpan.parentSpanId, batchSpan.spanId)
-        XCTAssertEqual(
-            Set(chapterSpan.attributes.keys),
-            [
+        let batchSpan = try #require(
+            spans.first { $0.name == "bleat.transcription.run" })
+        let chapterSpan = try #require(
+            spans.first { $0.name == "bleat.transcription.chapter" })
+        #expect(chapterSpan.traceId == batchSpan.traceId)
+        #expect(chapterSpan.parentSpanId == batchSpan.spanId)
+        #expect(
+            Set(chapterSpan.attributes.keys) == [
                 "bleat.subsystem",
                 "bleat.outcome",
                 "bleat.retry.bucket",
@@ -320,26 +319,23 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.transcription.audio.codec",
                 "bleat.transcription.audio.sample_rate_hz",
                 "bleat.transcription.audio.channels",
-            ]
-        )
-        XCTAssertEqual(
+            ])
+        #expect(
             chapterSpan.attributes[
                 "bleat.transcription.input.duration_ms"
-            ],
-            .string("12345")
-        )
-        XCTAssertEqual(
-            chapterSpan.attributes["bleat.transcription.input.bytes"],
-            .string("67890")
-        )
-        XCTAssertEqual(
-            chapterSpan.attributes["bleat.transcription.audio.codec"],
-            .string("aac")
-        )
+            ] == .string("12345"))
+        #expect(
+            chapterSpan.attributes["bleat.transcription.input.bytes"]
+                == .string("67890"))
+        #expect(
+            chapterSpan.attributes["bleat.transcription.audio.codec"]
+                == .string("aac"))
         pipeline.deactivate()
         pipeline.purge()
         await pipeline.shutdown()
     }
+
+    @Test
 
     func testCloudKitLifecycleProducesReviewedLogsAndSpan() async throws {
         let directory = temporaryDirectory()
@@ -389,44 +385,37 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         await pipeline.flush(timeout: 2)
 
-        let span = try XCTUnwrap(spanExporter.recordedSpans.first)
-        XCTAssertEqual(
-            span.name,
-            RemoteTelemetryOperation.privateCloudSync.rawValue
-        )
+        let span = try #require(spanExporter.recordedSpans.first)
+        #expect(span.name == RemoteTelemetryOperation.privateCloudSync.rawValue)
         let logs = logExporter.recordedLogs
-        XCTAssertEqual(logs.count, 2)
-        XCTAssertEqual(logExporter.synchronousExportCount, 0)
-        XCTAssertEqual(logExporter.asynchronousExportCount, 1)
+        #expect(logs.count == 2)
+        #expect(logExporter.synchronousExportCount == 0)
+        #expect(logExporter.asynchronousExportCount == 1)
         for log in logs {
-            let context = try XCTUnwrap(log.spanContext)
-            XCTAssertEqual(context.traceId, span.traceId)
-            XCTAssertEqual(context.spanId, span.spanId)
+            let context = try #require(log.spanContext)
+            #expect(context.traceId == span.traceId)
+            #expect(context.spanId == span.spanId)
         }
-        let failed = try XCTUnwrap(logs.last)
-        XCTAssertEqual(failed.eventName, "bleat.cloudkit.sync.failed")
-        XCTAssertEqual(
-            failed.body, .string("CloudKit synchronization lifecycle"))
-        XCTAssertEqual(
-            failed.attributes["bleat.cloudkit.operation"],
-            .string("synchronize")
-        )
-        XCTAssertEqual(
-            failed.attributes["bleat.cloudkit.code"],
-            .string("request_rate_limited")
-        )
-        XCTAssertEqual(failed.attributes["bleat.retryable"], .bool(true))
-        XCTAssertEqual(failed.attributes["bleat.retry_after_ms"], .int(1_250))
-        XCTAssertEqual(failed.attributes["bleat.duration_ms"], .int(42))
-        XCTAssertEqual(
-            failed.attributes["bleat.cloudkit.record_count"],
-            .int(17)
-        )
-        XCTAssertNil(failed.attributes["error.description"])
+        let failed = try #require(logs.last)
+        #expect(failed.eventName == "bleat.cloudkit.sync.failed")
+        #expect(failed.body == .string("CloudKit synchronization lifecycle"))
+        #expect(
+            failed.attributes["bleat.cloudkit.operation"]
+                == .string("synchronize"))
+        #expect(
+            failed.attributes["bleat.cloudkit.code"]
+                == .string("request_rate_limited"))
+        #expect(failed.attributes["bleat.retryable"] == .bool(true))
+        #expect(failed.attributes["bleat.retry_after_ms"] == .int(1_250))
+        #expect(failed.attributes["bleat.duration_ms"] == .int(42))
+        #expect(failed.attributes["bleat.cloudkit.record_count"] == .int(17))
+        #expect(failed.attributes["error.description"] == nil)
         pipeline.deactivate()
         pipeline.purge()
         await pipeline.shutdown()
     }
+
+    @Test
 
     func testDownloadLifecycleProducesTypedCorrelatedLogs() async throws {
         let directory = temporaryDirectory()
@@ -476,70 +465,60 @@ final class RemoteTelemetryTests: XCTestCase {
         span.end(.failed(.invalidResponse))
         await pipeline.flush(timeout: 2)
 
-        let exportedSpan = try XCTUnwrap(spanExporter.recordedSpans.first)
+        let exportedSpan = try #require(spanExporter.recordedSpans.first)
         let logs = logExporter.recordedLogs
-        XCTAssertEqual(logs.count, 3)
+        #expect(logs.count == 3)
         for log in logs {
-            let context = try XCTUnwrap(log.spanContext)
-            XCTAssertEqual(context.traceId, exportedSpan.traceId)
-            XCTAssertEqual(context.spanId, exportedSpan.spanId)
-            XCTAssertEqual(
-                log.body,
-                .string("Download transfer lifecycle")
-            )
+            let context = try #require(log.spanContext)
+            #expect(context.traceId == exportedSpan.traceId)
+            #expect(context.spanId == exportedSpan.spanId)
+            #expect(log.body == .string("Download transfer lifecycle"))
         }
         let retry = logs[1]
-        XCTAssertEqual(
-            retry.attributes["bleat.download.retry_delay_seconds"],
-            .int(120)
-        )
-        XCTAssertEqual(
-            retry.attributes["bleat.download.retry_delay_source"],
-            .string("server_retry_after")
-        )
-        XCTAssertNil(retry.attributes["http.request.header.retry_after"])
-        let failure = try XCTUnwrap(logs.last)
-        XCTAssertEqual(
-            failure.eventName,
-            "bleat.download.transfer.range_validation"
-        )
-        XCTAssertEqual(
-            failure.attributes["bleat.download.stage"],
-            .string("range_validation")
-        )
-        XCTAssertEqual(
-            failure.attributes["bleat.download.failure_code"],
-            .string("mismatched_content_range")
-        )
-        XCTAssertEqual(failure.attributes["bleat.outcome"], .string("failed"))
-        XCTAssertNil(failure.attributes["url.full"])
-        XCTAssertNil(failure.attributes["file.path"])
+        #expect(
+            retry.attributes["bleat.download.retry_delay_seconds"] == .int(120))
+        #expect(
+            retry.attributes["bleat.download.retry_delay_source"]
+                == .string("server_retry_after"))
+        #expect(retry.attributes["http.request.header.retry_after"] == nil)
+        let failure = try #require(logs.last)
+        #expect(failure.eventName == "bleat.download.transfer.range_validation")
+        #expect(
+            failure.attributes["bleat.download.stage"]
+                == .string("range_validation"))
+        #expect(
+            failure.attributes["bleat.download.failure_code"]
+                == .string("mismatched_content_range"))
+        #expect(failure.attributes["bleat.outcome"] == .string("failed"))
+        #expect(failure.attributes["url.full"] == nil)
+        #expect(failure.attributes["file.path"] == nil)
     }
+
+    @Test
 
     func testOutcomeEncodingNeverIncludesRawErrorText() {
         let successful = RemoteTelemetrySpanDescriptor(
             operation: .libraryRefresh,
             outcome: .succeeded
         ).encodedSpan
-        XCTAssertEqual(successful.attributes["bleat.outcome"], "succeeded")
-        XCTAssertNil(successful.attributes["bleat.failure.category"])
+        #expect(successful.attributes["bleat.outcome"] == "succeeded")
+        #expect(successful.attributes["bleat.failure.category"] == nil)
 
         let cancelled = RemoteTelemetrySpanDescriptor(
             operation: .transcription,
             outcome: .cancelled
         ).encodedSpan
-        XCTAssertEqual(cancelled.attributes["bleat.outcome"], "cancelled")
-        XCTAssertNil(cancelled.attributes["bleat.failure.category"])
+        #expect(cancelled.attributes["bleat.outcome"] == "cancelled")
+        #expect(cancelled.attributes["bleat.failure.category"] == nil)
 
         for category in RemoteTelemetryFailureCategory.allCases {
             let encoded = RemoteTelemetrySpanDescriptor(
                 operation: .accountConnection,
                 outcome: .failed(category)
             ).encodedSpan
-            XCTAssertEqual(
-                encoded.attributes["bleat.failure.category"],
-                category.rawValue
-            )
+            #expect(
+                encoded.attributes["bleat.failure.category"]
+                    == category.rawValue)
         }
 
         let liveUpdateFailure = RemoteTelemetrySpanDescriptor(
@@ -554,9 +533,8 @@ final class RemoteTelemetryTests: XCTestCase {
             source: .localServer,
             retryBucket: .one
         ).encodedSpan
-        XCTAssertEqual(
-            liveUpdateFailure.attributes,
-            [
+        #expect(
+            liveUpdateFailure.attributes == [
                 "bleat.subsystem": "authentication",
                 "bleat.outcome": "failed",
                 "bleat.failure.category": "invalid_response",
@@ -567,10 +545,12 @@ final class RemoteTelemetryTests: XCTestCase {
             ])
     }
 
+    @Test
+
     func testChapterTranscriptionSpanEncodesReviewedInputMeasurements()
         throws
     {
-        let input = try XCTUnwrap(
+        let input = try #require(
             RemoteTelemetryTranscriptionInput(
                 durationMilliseconds: 65_432,
                 byteCount: 1_234_567,
@@ -579,18 +559,16 @@ final class RemoteTelemetryTests: XCTestCase {
                 codec: .aac,
                 sampleRateHz: 48_000,
                 channelCount: 2
-            )
-        )
+            ))
         let encoded = RemoteTelemetrySpanDescriptor(
             operation: .transcriptionChapter,
             outcome: .succeeded,
             transcriptionInput: input
         ).encodedSpan
 
-        XCTAssertEqual(encoded.name, "bleat.transcription.chapter")
-        XCTAssertEqual(
-            encoded.attributes,
-            [
+        #expect(encoded.name == "bleat.transcription.chapter")
+        #expect(
+            encoded.attributes == [
                 "bleat.subsystem": "transcription",
                 "bleat.outcome": "succeeded",
                 "bleat.retry.bucket": "none",
@@ -601,24 +579,21 @@ final class RemoteTelemetryTests: XCTestCase {
                 "bleat.transcription.audio.codec": "aac",
                 "bleat.transcription.audio.sample_rate_hz": "48000",
                 "bleat.transcription.audio.channels": "2",
-            ]
-        )
+            ])
     }
 
+    @Test
+
     func testRetryCountsAreBounded() {
-        XCTAssertEqual(RemoteTelemetryRetryBucket(retryCount: -1), .none)
-        XCTAssertEqual(RemoteTelemetryRetryBucket(retryCount: 0), .none)
-        XCTAssertEqual(RemoteTelemetryRetryBucket(retryCount: 1), .one)
-        XCTAssertEqual(RemoteTelemetryRetryBucket(retryCount: 2), .two)
-        XCTAssertEqual(
-            RemoteTelemetryRetryBucket(retryCount: 3),
-            .threeOrMore
-        )
-        XCTAssertEqual(
-            RemoteTelemetryRetryBucket(retryCount: .max),
-            .threeOrMore
-        )
+        #expect(RemoteTelemetryRetryBucket(retryCount: -1) == .none)
+        #expect(RemoteTelemetryRetryBucket(retryCount: 0) == .none)
+        #expect(RemoteTelemetryRetryBucket(retryCount: 1) == .one)
+        #expect(RemoteTelemetryRetryBucket(retryCount: 2) == .two)
+        #expect(RemoteTelemetryRetryBucket(retryCount: 3) == .threeOrMore)
+        #expect(RemoteTelemetryRetryBucket(retryCount: .max) == .threeOrMore)
     }
+
+    @Test
 
     func testResourceEncodingContainsOnlyStableTechnicalValues() throws {
         let resource = try RemoteTelemetryResource(
@@ -632,9 +607,8 @@ final class RemoteTelemetryTests: XCTestCase {
                 uuidString: "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa"
             )!
         )
-        XCTAssertEqual(
-            resource.encodedAttributes,
-            [
+        #expect(
+            resource.encodedAttributes == [
                 "service.name": "bleat",
                 "service.version": "0.1.1",
                 "bleat.app.build": "42",
@@ -642,68 +616,71 @@ final class RemoteTelemetryTests: XCTestCase {
                 "os.version": "26.3.1",
                 "service.instance.id":
                     "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa",
-            ]
-        )
-        XCTAssertFalse(resource.encodedAttributes.keys.contains("device.model"))
+            ])
+        #expect(!(resource.encodedAttributes.keys.contains("device.model")))
     }
 
+    @Test
+
     func testResourceAcceptsIntegerAndDottedNumericBuilds() throws {
-        XCTAssertEqual(
+        #expect(
             try resource(version: "1.2.3", build: "00042")
-                .applicationBuild,
-            "42"
-        )
-        XCTAssertEqual(
+                .applicationBuild == "42")
+        #expect(
             try resource(
                 version: "1.2.3",
                 build: "20260901.0033.10"
-            ).applicationBuild,
-            "20260901.33.10"
-        )
+            ).applicationBuild == "20260901.33.10")
     }
 
+    @Test
+
     func testResourceRejectsArbitraryOrUnboundedStrings() throws {
-        XCTAssertThrowsError(
-            try resource(version: "reader", build: "1")
-        ) { error in
-            XCTAssertEqual(
-                error as? RemoteTelemetryResourceError,
-                .invalidApplicationVersion
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try resource(version: "reader", build: "1") })
+        {
+            #expect(
+                error as? RemoteTelemetryResourceError
+                    == .invalidApplicationVersion)
         }
-        XCTAssertThrowsError(
-            try resource(version: "1.0", build: "books.example")
-        ) { error in
-            XCTAssertEqual(
-                error as? RemoteTelemetryResourceError,
-                .invalidApplicationBuild
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try resource(version: "1.0", build: "books.example") }
+        ) {
+            #expect(
+                error as? RemoteTelemetryResourceError
+                    == .invalidApplicationBuild)
         }
         for build in ["1..2", "1.2.3.4", "1.2-beta", "4294967296"] {
-            XCTAssertThrowsError(
-                try resource(version: "1.0", build: build)
-            ) { error in
-                XCTAssertEqual(
-                    error as? RemoteTelemetryResourceError,
-                    .invalidApplicationBuild
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try resource(version: "1.0", build: build) })
+            {
+                #expect(
+                    error as? RemoteTelemetryResourceError
+                        == .invalidApplicationBuild)
             }
         }
-        XCTAssertThrowsError(
-            try resource(version: "1.999999", build: "1")
-        )
-        XCTAssertThrowsError(
-            try RemoteTelemetryResource(
-                applicationVersion: "1.0",
-                applicationBuild: "1",
-                platform: .iOS,
-                operatingSystemMajorVersion: -1,
-                operatingSystemMinorVersion: 0,
-                operatingSystemPatchVersion: 0,
-                installationID: UUID()
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: { try resource(version: "1.999999", build: "1") })
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try RemoteTelemetryResource(
+                    applicationVersion: "1.0",
+                    applicationBuild: "1",
+                    platform: .iOS,
+                    operatingSystemMajorVersion: -1,
+                    operatingSystemMinorVersion: 0,
+                    operatingSystemPatchVersion: 0,
+                    installationID: UUID()
+                )
+            })
     }
+
+    @Test
 
     func testRepresentativeEncodingContainsNoSensitiveValues() throws {
         let resource = try resource(version: "1.2.3", build: "45")
@@ -731,25 +708,31 @@ final class RemoteTelemetryTests: XCTestCase {
             "/public/session/opaque-id",
         ]
         for value in prohibited {
-            XCTAssertFalse(encoded.localizedCaseInsensitiveContains(value))
+            #expect(!(encoded.localizedCaseInsensitiveContains(value)))
         }
     }
 
+    @Test
+
     func testDefaultCollectionPolicyMatchesReviewedBounds() {
         let policy = RemoteTelemetryCollectionPolicy.default
-        XCTAssertEqual(policy.samplingRatio, 1)
-        XCTAssertEqual(policy.maximumBufferedAge, 2 * 60 * 60)
-        XCTAssertEqual(policy.maximumBufferedBytes, 128 * 1_024 * 1_024)
-        XCTAssertNil(policy.maximumBufferedSpanCount)
-        XCTAssertEqual(policy.overflowPolicy, .dropOldest)
+        #expect(policy.samplingRatio == 1)
+        #expect(policy.maximumBufferedAge == 2 * 60 * 60)
+        #expect(policy.maximumBufferedBytes == 128 * 1_024 * 1_024)
+        #expect(policy.maximumBufferedSpanCount == nil)
+        #expect(policy.overflowPolicy == .dropOldest)
     }
+
+    @Test
 
     func testInactiveTracerProducesNoExportableSpan() {
         let exporter = RecordingSpanExporter()
         let tracer = InactiveRemoteTelemetryTracer()
         tracer.beginSpan(operation: .appLaunch).end(.succeeded)
-        XCTAssertTrue(exporter.recordedSpans.isEmpty)
+        #expect(exporter.recordedSpans.isEmpty)
     }
+
+    @Test
 
     func testPipelineBatchesReviewedSpansWithExactResource() async throws {
         let directory = temporaryDirectory()
@@ -775,15 +758,14 @@ final class RemoteTelemetryTests: XCTestCase {
         await pipeline.flush(timeout: 2)
 
         let spans = exporter.recordedSpans
-        XCTAssertEqual(spans.count, 2)
-        XCTAssertEqual(
-            Set(spans.map(\.name)),
-            ["bleat.library.refresh", "bleat.playback.start"]
-        )
+        #expect(spans.count == 2)
+        #expect(
+            Set(spans.map(\.name)) == [
+                "bleat.library.refresh", "bleat.playback.start",
+            ])
         for span in spans {
-            XCTAssertEqual(
-                span.resource.attributes.mapValues(\.description),
-                [
+            #expect(
+                span.resource.attributes.mapValues(\.description) == [
                     "service.name": "bleat",
                     "service.version": "1.2.3",
                     "bleat.app.build": "45",
@@ -791,17 +773,18 @@ final class RemoteTelemetryTests: XCTestCase {
                     "os.version": "26.0.0",
                     "service.instance.id":
                         "c12a1d3e-b1ea-44b2-955f-9b7bd5ea21aa",
-                ]
-            )
-            XCTAssertTrue(span.events.isEmpty)
-            XCTAssertTrue(span.links.isEmpty)
+                ])
+            #expect(span.events.isEmpty)
+            #expect(span.links.isEmpty)
         }
-        XCTAssertTrue(exporter.batchSizes.contains(2))
-        XCTAssertEqual(exporter.synchronousExportCount, 0)
-        XCTAssertEqual(exporter.asynchronousExportCount, 1)
+        #expect(exporter.batchSizes.contains(2))
+        #expect(exporter.synchronousExportCount == 0)
+        #expect(exporter.asynchronousExportCount == 1)
         pipeline.deactivate()
         pipeline.purge()
     }
+
+    @Test
 
     func testSpansStartedDuringAsynchronousInitializationAreExported()
         async throws
@@ -821,13 +804,15 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         await pipeline.flush(timeout: 2)
 
-        XCTAssertEqual(
-            exporter.recordedSpans.map(\.name),
-            [RemoteTelemetryOperation.appLaunch.rawValue]
-        )
+        #expect(
+            exporter.recordedSpans.map(\.name) == [
+                RemoteTelemetryOperation.appLaunch.rawValue
+            ])
         pipeline.deactivate()
         pipeline.purge()
     }
+
+    @Test
 
     func testFailedExportIsRetainedAndDrainedAfterRelaunch() async throws {
         let directory = temporaryDirectory()
@@ -841,7 +826,7 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         firstTracer.beginSpan(operation: .appLaunch).end(.succeeded)
         await first.flush(timeout: 2)
-        XCTAssertFalse(batchFiles(in: directory).isEmpty)
+        #expect(!(batchFiles(in: directory).isEmpty))
         first.deactivate()
         await first.shutdown()
 
@@ -853,11 +838,13 @@ final class RemoteTelemetryTests: XCTestCase {
             downstreamExporter: exporter
         )
         await second.flush(timeout: 2)
-        XCTAssertEqual(exporter.recordedSpans.map(\.name), ["bleat.app.launch"])
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(exporter.recordedSpans.map(\.name) == ["bleat.app.launch"])
+        #expect(batchFiles(in: directory).isEmpty)
         second.deactivate()
         second.purge()
     }
+
+    @Test
 
     func testPersistencePrunesExpiredAndCorruptBatches() async throws {
         let sourceDirectory = temporaryDirectory()
@@ -872,7 +859,7 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         tracer.beginSpan(operation: .transcription).end(.succeeded)
         await source.flush(timeout: 2)
-        let span = try XCTUnwrap(recording.recordedSpans.first)
+        let span = try #require(recording.recordedSpans.first)
         source.deactivate()
         source.purge()
 
@@ -887,8 +874,8 @@ final class RemoteTelemetryTests: XCTestCase {
             now: { clock.value }
         )
         let initialExport = await exporter.export(spans: [span])
-        XCTAssertEqual(initialExport, .success)
-        XCTAssertFalse(batchFiles(in: directory).isEmpty)
+        #expect(initialExport == .success)
+        #expect(!(batchFiles(in: directory).isEmpty))
         try Data("not-json".utf8).write(
             to: directory.appendingPathComponent("batch-corrupt.json")
         )
@@ -900,8 +887,10 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default,
             now: { clock.value }
         )
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(batchFiles(in: directory).isEmpty)
     }
+
+    @Test
 
     func testPersistenceNeverExceedsConfiguredByteLimit() async throws {
         let span = try await makeRecordedSpan()
@@ -927,10 +916,12 @@ final class RemoteTelemetryTests: XCTestCase {
                 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?
                     .fileSize ?? 0)
         }
-        XCTAssertLessThanOrEqual(bytes, policy.maximumBufferedBytes)
-        XCTAssertNil(policy.maximumBufferedSpanCount)
+        #expect(bytes <= policy.maximumBufferedBytes)
+        #expect(policy.maximumBufferedSpanCount == nil)
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testByteLimitEvictsOnlyTheOldestRequiredSpans() async throws {
         let oldest = try await makeRecordedSpan(operation: .appLaunch)
@@ -939,7 +930,7 @@ final class RemoteTelemetryTests: XCTestCase {
         let firstBatch = try JSONEncoder().encode([oldest, middle])
         let retainedFirstBatch = try JSONEncoder().encode([middle])
         let secondBatch = try JSONEncoder().encode([newest])
-        XCTAssertGreaterThan(firstBatch.count, retainedFirstBatch.count)
+        #expect(firstBatch.count > retainedFirstBatch.count)
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let policy = RemoteTelemetryCollectionPolicy(
@@ -958,8 +949,8 @@ final class RemoteTelemetryTests: XCTestCase {
 
         let firstExport = await exporter.export(spans: [oldest, middle])
         let secondExport = await exporter.export(spans: [newest])
-        XCTAssertEqual(firstExport, .success)
-        XCTAssertEqual(secondExport, .success)
+        #expect(firstExport == .success)
+        #expect(secondExport == .success)
 
         let retained = try batchFiles(in: directory).flatMap {
             try JSONDecoder().decode(
@@ -967,12 +958,14 @@ final class RemoteTelemetryTests: XCTestCase {
                 from: Data(contentsOf: $0)
             )
         }
-        XCTAssertEqual(
-            retained.sorted { $0.endTime < $1.endTime }.map(\.name),
-            [middle.name, newest.name]
-        )
+        #expect(
+            retained.sorted { $0.endTime < $1.endTime }.map(\.name) == [
+                middle.name, newest.name,
+            ])
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testPersistenceStoresOnlySpanDataAndHasNoCountCap() async throws {
         let span = try await makeRecordedSpan()
@@ -987,18 +980,21 @@ final class RemoteTelemetryTests: XCTestCase {
         let exportResult = await exporter.export(
             spans: Array(repeating: span, count: 200)
         )
-        XCTAssertEqual(exportResult, .success)
+        #expect(exportResult == .success)
 
-        let file = try XCTUnwrap(batchFiles(in: directory).first)
+        let file = try #require(batchFiles(in: directory).first)
         let persisted = try JSONDecoder().decode(
             [SpanData].self,
             from: Data(contentsOf: file)
         )
-        XCTAssertEqual(persisted.count, 200)
-        XCTAssertNil(
-            RemoteTelemetryCollectionPolicy.default.maximumBufferedSpanCount)
+        #expect(persisted.count == 200)
+        #expect(
+            RemoteTelemetryCollectionPolicy.default.maximumBufferedSpanCount
+                == nil)
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testPersistenceDrainsOldestSpanFirstAfterRelaunch() async throws {
         let oldest = try await makeRecordedSpan(operation: .appLaunch)
@@ -1013,8 +1009,8 @@ final class RemoteTelemetryTests: XCTestCase {
         failed.setForeground(false)
         let newestResult = await failed.export(spans: [newest])
         let oldestResult = await failed.export(spans: [oldest])
-        XCTAssertEqual(newestResult, .success)
-        XCTAssertEqual(oldestResult, .success)
+        #expect(newestResult == .success)
+        #expect(oldestResult == .success)
         failed.disable()
 
         let recording = RecordingSpanExporter()
@@ -1024,13 +1020,13 @@ final class RemoteTelemetryTests: XCTestCase {
             policy: .default
         )
         let flushResult = await recovered.flush(explicitTimeout: 2)
-        XCTAssertEqual(flushResult, .success)
-        XCTAssertEqual(
-            recording.recordedSpans.map(\.name),
-            [oldest.name, newest.name]
-        )
+        #expect(flushResult == .success)
+        #expect(
+            recording.recordedSpans.map(\.name) == [oldest.name, newest.name])
         recovered.disableAndPurge()
     }
+
+    @Test
 
     func testOversizedBatchDropsOldestSpansWithoutExceedingLimit()
         async throws
@@ -1053,10 +1049,12 @@ final class RemoteTelemetryTests: XCTestCase {
 
         let span = try await makeRecordedSpan()
         let exportResult = await exporter.export(spans: [span])
-        XCTAssertEqual(exportResult, .success)
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(exportResult == .success)
+        #expect(batchFiles(in: directory).isEmpty)
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testSpanEndDoesNotWaitForBlockedDownstreamExport() throws {
         let directory = temporaryDirectory()
@@ -1072,10 +1070,12 @@ final class RemoteTelemetryTests: XCTestCase {
         let started = ContinuousClock.now
         tracer.beginSpan(operation: .appLaunch).end(.succeeded)
         let elapsed = started.duration(to: .now)
-        XCTAssertLessThan(elapsed, .milliseconds(100))
+        #expect(elapsed < .milliseconds(100))
         pipeline.deactivate()
         pipeline.purge()
     }
+
+    @Test
 
     func testSynchronousSpanWitnessReturnsBeforePersistenceAndAsyncFlushWaits()
         async throws
@@ -1102,8 +1102,8 @@ final class RemoteTelemetryTests: XCTestCase {
         let started = ContinuousClock.now
         let exportResult = synchronousExport(exporter, spans: [span])
         let elapsed = started.duration(to: .now)
-        XCTAssertEqual(exportResult, .success)
-        XCTAssertLessThan(elapsed, .milliseconds(100))
+        #expect(exportResult == .success)
+        #expect(elapsed < .milliseconds(100))
 
         let completion = TestCompletionFlag()
         let flush = Task {
@@ -1112,15 +1112,17 @@ final class RemoteTelemetryTests: XCTestCase {
             return result
         }
         try await Task.sleep(for: .milliseconds(50))
-        XCTAssertFalse(completion.isComplete)
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(!(completion.isComplete))
+        #expect(batchFiles(in: directory).isEmpty)
 
         persistenceGate.signal()
         let flushResult = await flush.value
-        XCTAssertEqual(flushResult, .success)
-        XCTAssertTrue(completion.isComplete)
-        XCTAssertFalse(batchFiles(in: directory).isEmpty)
+        #expect(flushResult == .success)
+        #expect(completion.isComplete)
+        #expect(!(batchFiles(in: directory).isEmpty))
     }
+
+    @Test
 
     func testConcurrentLogShutdownCallersAwaitSharedCompletion() async {
         let downstream = GatedShutdownLogExporter()
@@ -1141,17 +1143,19 @@ final class RemoteTelemetryTests: XCTestCase {
         }
         try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertFalse(firstCompletion.isComplete)
-        XCTAssertFalse(secondCompletion.isComplete)
-        XCTAssertEqual(downstream.shutdownCount, 1)
+        #expect(!(firstCompletion.isComplete))
+        #expect(!(secondCompletion.isComplete))
+        #expect(downstream.shutdownCount == 1)
 
         downstream.completeShutdown()
         await first.value
         await second.value
-        XCTAssertTrue(firstCompletion.isComplete)
-        XCTAssertTrue(secondCompletion.isComplete)
-        XCTAssertEqual(downstream.shutdownCount, 1)
+        #expect(firstCompletion.isComplete)
+        #expect(secondCompletion.isComplete)
+        #expect(downstream.shutdownCount == 1)
     }
+
+    @Test
 
     func testBackgroundStyleFlushReturnsAtItsDeadline() async throws {
         let directory = temporaryDirectory()
@@ -1169,10 +1173,12 @@ final class RemoteTelemetryTests: XCTestCase {
         await pipeline.flush(timeout: 0.05)
         let elapsed = started.duration(to: .now)
 
-        XCTAssertLessThan(elapsed, .milliseconds(250))
+        #expect(elapsed < .milliseconds(250))
         pipeline.deactivate()
         pipeline.purge()
     }
+
+    @Test
 
     func testBackgroundFlushAttemptsOneDrainWhileBackgrounded() async throws {
         let span = try await makeRecordedSpan()
@@ -1186,16 +1192,18 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         exporter.setForeground(false)
         let exportResult = await exporter.export(spans: [span])
-        XCTAssertEqual(exportResult, .success)
+        #expect(exportResult == .success)
 
         let flushResult = await exporter.flush(
             explicitTimeout: 2,
             allowWhileBackgrounded: true
         )
-        XCTAssertEqual(flushResult, .success)
-        XCTAssertEqual(recording.recordedSpans.map(\.name), [span.name])
+        #expect(flushResult == .success)
+        #expect(recording.recordedSpans.map(\.name) == [span.name])
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testWithdrawalCancelsAnActiveDownstreamExport() async throws {
         let span = try await makeRecordedSpan()
@@ -1209,14 +1217,16 @@ final class RemoteTelemetryTests: XCTestCase {
         )
 
         let exportResult = await exporter.export(spans: [span])
-        XCTAssertEqual(exportResult, .success)
-        XCTAssertEqual(downstream.waitUntilStarted(timeout: 2), .success)
+        #expect(exportResult == .success)
+        #expect(downstream.waitUntilStarted(timeout: 2) == .success)
         exporter.disable()
-        XCTAssertEqual(downstream.waitUntilFinished(timeout: 2), .success)
+        #expect(downstream.waitUntilFinished(timeout: 2) == .success)
 
-        XCTAssertTrue(downstream.recordedSpans.isEmpty)
+        #expect(downstream.recordedSpans.isEmpty)
         exporter.disableAndPurge()
     }
+
+    @Test
 
     func testWithdrawalStopsNewSpansAndPurgesRetainedData() async throws {
         let directory = temporaryDirectory()
@@ -1230,14 +1240,16 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         tracer.beginSpan(operation: .appLaunch).end(.succeeded)
         await pipeline.flush(timeout: 2)
-        XCTAssertFalse(batchFiles(in: directory).isEmpty)
+        #expect(!(batchFiles(in: directory).isEmpty))
 
         pipeline.deactivate()
         pipeline.purge()
         tracer.beginSpan(operation: .libraryRefresh).end(.succeeded)
 
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(batchFiles(in: directory).isEmpty)
     }
+
+    @Test
 
     func testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration()
         async throws
@@ -1259,9 +1271,11 @@ final class RemoteTelemetryTests: XCTestCase {
         active.end(.succeeded)
         await pipeline.shutdown()
 
-        XCTAssertTrue(recording.recordedSpans.isEmpty)
-        XCTAssertTrue(batchFiles(in: directory).isEmpty)
+        #expect(recording.recordedSpans.isEmpty)
+        #expect(batchFiles(in: directory).isEmpty)
     }
+
+    @Test
 
     func testRapidReenableExportsOnlyCleanGeneration() async throws {
         let directory = temporaryDirectory()
@@ -1290,11 +1304,11 @@ final class RemoteTelemetryTests: XCTestCase {
         await current.flush(timeout: 2)
         await withdrawn.shutdown()
 
-        XCTAssertTrue(withdrawnExporter.recordedSpans.isEmpty)
-        XCTAssertEqual(
-            currentExporter.recordedSpans.map(\.name),
-            [RemoteTelemetryOperation.libraryRefresh.rawValue]
-        )
+        #expect(withdrawnExporter.recordedSpans.isEmpty)
+        #expect(
+            currentExporter.recordedSpans.map(\.name) == [
+                RemoteTelemetryOperation.libraryRefresh.rawValue
+            ])
         current.deactivate()
         current.purge()
     }
@@ -1338,7 +1352,7 @@ final class RemoteTelemetryTests: XCTestCase {
         )
         tracer.beginSpan(operation: operation).end(.succeeded)
         await pipeline.flush(timeout: 2)
-        let span = try XCTUnwrap(recording.recordedSpans.first)
+        let span = try #require(recording.recordedSpans.first)
         pipeline.deactivate()
         pipeline.purge()
         return span

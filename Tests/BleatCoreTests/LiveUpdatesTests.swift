@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LiveUpdatesTests: XCTestCase {
+@Suite(.serialized)
+final class LiveUpdatesTests {
+    @Test
     func testConnectionAttemptReportsEndpointRoleAndTypedFailure()
         async throws
     {
@@ -35,37 +37,38 @@ final class LiveUpdatesTests: XCTestCase {
         }
         await client.stop()
 
-        XCTAssertEqual(attempts.count, 2)
-        let started = try XCTUnwrap(attempts.first)
-        let failed = try XCTUnwrap(attempts.last)
-        XCTAssertEqual(started.id, failed.id)
-        XCTAssertEqual(started.usage, .local)
-        XCTAssertEqual(started.retryBucket, .none)
-        XCTAssertEqual(started.phase, .started)
-        XCTAssertEqual(failed.usage, .local)
-        XCTAssertEqual(
-            failed.phase,
-            .failed(
-                AudiobookshelfLiveConnectionFailure(
-                    cause: .credentialsUnavailable,
-                    stage: .credentialRetrieval
-                )
-            )
-        )
+        #expect(attempts.count == 2)
+        let started = try #require(attempts.first)
+        let failed = try #require(attempts.last)
+        #expect(started.id == failed.id)
+        #expect(started.usage == .local)
+        #expect(started.retryBucket == .none)
+        #expect(started.phase == .started)
+        #expect(failed.usage == .local)
+        #expect(
+            failed.phase
+                == .failed(
+                    AudiobookshelfLiveConnectionFailure(
+                        cause: .credentialsUnavailable,
+                        stage: .credentialRetrieval
+                    )
+                ))
     }
 
+    @Test
     func testSocketRequestDisallowsConstrainedNetworkAccess() throws {
         let request = try AudiobookshelfSocketCodec().socketRequest(
             for: NormalizedServerURL("https://example.test/prefix")
         )
 
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "wss://example.test/prefix/socket.io/?EIO=4&transport=websocket"
+        #expect(
+            request.url?.absoluteString
+                == "wss://example.test/prefix/socket.io/?EIO=4&transport=websocket"
         )
-        XCTAssertFalse(request.allowsConstrainedNetworkAccess)
+        #expect(!(request.allowsConstrainedNetworkAccess))
     }
 
+    @Test
     func testSocketURLPreservesRootAndServerPrefix() throws {
         let codec = AudiobookshelfSocketCodec()
         let root = try codec.socketURL(
@@ -77,97 +80,93 @@ final class LiveUpdatesTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(root.scheme, "wss")
-        XCTAssertTrue(root.absoluteString.contains("/socket.io/?"))
-        XCTAssertTrue(
+        #expect(root.scheme == "wss")
+        #expect(root.absoluteString.contains("/socket.io/?"))
+        #expect(
             prefixed.absoluteString.contains(
                 "/audiobookshelf/socket.io/?"
-            )
-        )
-        XCTAssertEqual(
+            ))
+        #expect(
             URLComponents(
                 url: prefixed,
                 resolvingAgainstBaseURL: false
-            )?.queryItems,
-            [
+            )?.queryItems == [
                 URLQueryItem(name: "EIO", value: "4"),
                 URLQueryItem(name: "transport", value: "websocket"),
-            ]
-        )
+            ])
     }
 
+    @Test
     func testCodecDecodesLibraryItemAndProgressEvents() throws {
         let codec = AudiobookshelfSocketCodec()
 
-        XCTAssertEqual(
+        #expect(
             try codec.decode(
                 #"42["item_updated",{"id":"item","libraryId":"library","unknown":true}]"#
-            ),
-            .event(
-                .itemsChanged(
-                    AudiobookshelfLiveItemChange(
-                        libraryIDs: [LibraryID(rawValue: "library")],
-                        itemIDs: [LibraryItemID(rawValue: "item")]
-                    )
-                ))
-        )
-        XCTAssertEqual(
+            )
+                == .event(
+                    .itemsChanged(
+                        AudiobookshelfLiveItemChange(
+                            libraryIDs: [LibraryID(rawValue: "library")],
+                            itemIDs: [LibraryItemID(rawValue: "item")]
+                        )
+                    )))
+        #expect(
             try codec.decode(
                 #"42["user_item_progress_updated",{"sessionId":"session","deviceDescription":"Other Phone","data":{"libraryItemId":"item","duration":100,"currentTime":25,"isFinished":false,"lastUpdate":123,"unknown":true}}]"#
-            ),
-            .event(
-                .playbackProgress(
-                    AudiobookshelfLivePlaybackProgress(
-                        itemID: LibraryItemID(rawValue: "item"),
-                        sessionID: PlaybackSessionID(rawValue: "session"),
-                        deviceDescription: "Other Phone",
-                        currentTime: 25,
-                        duration: 100,
-                        isFinished: false,
-                        lastUpdateMilliseconds: 123
-                    )
-                ))
-        )
+            )
+                == .event(
+                    .playbackProgress(
+                        AudiobookshelfLivePlaybackProgress(
+                            itemID: LibraryItemID(rawValue: "item"),
+                            sessionID: PlaybackSessionID(rawValue: "session"),
+                            deviceDescription: "Other Phone",
+                            currentTime: 25,
+                            duration: 100,
+                            isFinished: false,
+                            lastUpdateMilliseconds: 123
+                        )
+                    )))
     }
 
+    @Test
     func testCodecHandlesProtocolPacketsAndRejectsMalformedPayloads()
         throws
     {
         let codec = AudiobookshelfSocketCodec()
 
-        XCTAssertEqual(try codec.decode("0{}"), .engineOpen)
-        XCTAssertEqual(try codec.decode("40{}"), .namespaceConnected)
-        XCTAssertEqual(try codec.decode("2"), .ping(""))
-        XCTAssertEqual(
-            try codec.decode(#"42["init",{"userId":"user"}]"#),
-            .initialized
-        )
-        XCTAssertEqual(
-            try codec.decode(#"42["future_event",{"secret":"value"}]"#),
-            .ignored
-        )
-        XCTAssertThrowsError(
-            try codec.decode(
-                #"42["item_updated",{"id":"","libraryId":"library"}]"#
-            )
-        ) {
-            XCTAssertEqual(
-                $0 as? AudiobookshelfLiveUpdateFailure,
-                .malformedPacket
-            )
+        #expect(try codec.decode("0{}") == .engineOpen)
+        #expect(try codec.decode("40{}") == .namespaceConnected)
+        #expect(try codec.decode("2") == .ping(""))
+        #expect(
+            try codec.decode(#"42["init",{"userId":"user"}]"#) == .initialized)
+        #expect(
+            try codec.decode(#"42["future_event",{"secret":"value"}]"#)
+                == .ignored)
+        if let caughtError = #expect(
+            throws: (any Error).self,
+            performing: {
+                try codec.decode(
+                    #"42["item_updated",{"id":"","libraryId":"library"}]"#
+                )
+            })
+        {
+            #expect(
+                caughtError as? AudiobookshelfLiveUpdateFailure
+                    == .malformedPacket)
         }
     }
 
+    @Test
     func testAuthenticationPacketKeepsTokenOutOfSocketURL() throws {
         let codec = AudiobookshelfSocketCodec()
         let url = try codec.socketURL(
             for: NormalizedServerURL("https://books.example")
         )
 
-        XCTAssertFalse(url.absoluteString.contains("secret-token"))
-        XCTAssertEqual(
-            codec.authenticationPacket(accessToken: "secret-token"),
-            #"42["auth","secret-token"]"#
-        )
+        #expect(!(url.absoluteString.contains("secret-token")))
+        #expect(
+            codec.authenticationPacket(accessToken: "secret-token")
+                == #"42["auth","secret-token"]"#)
     }
 }

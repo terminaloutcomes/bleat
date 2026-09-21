@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class AuthenticatedRequestTests: XCTestCase {
+@Suite(.serialized)
+final class AuthenticatedRequestTests {
+    @Test
     func testTwentyUnauthorizedRequestsShareOneRotatingRefresh() async throws {
         let accountID = AccountID(rawValue: "concurrent-account")
         let server = try NormalizedServerURL("https://example.com/prefix")
@@ -50,44 +52,40 @@ final class AuthenticatedRequestTests: XCTestCase {
             return responses
         }
 
-        XCTAssertEqual(
-            responses.map(\HTTPResponse.statusCode),
-            Array(repeating: 200, count: 20)
-        )
+        #expect(
+            responses.map(\HTTPResponse.statusCode)
+                == Array(repeating: 200, count: 20))
         let counts = await transport.counts()
         let storedTokens = try await store.credentials(for: accountID)
         let saveCount = await store.saveCount()
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
         let recordedRefreshRequest = await transport.refreshRequest()
-        XCTAssertEqual(counts.oldAccessRequests, 20)
-        XCTAssertEqual(counts.newAccessRequests, 20)
-        XCTAssertEqual(counts.refreshRequests, 1)
+        #expect(counts.oldAccessRequests == 20)
+        #expect(counts.newAccessRequests == 20)
+        #expect(counts.refreshRequests == 1)
         let correlations = await transport.requestCorrelations()
-        XCTAssertEqual(Set(correlations).count, 20)
-        XCTAssertTrue(
+        #expect(Set(correlations).count == 20)
+        #expect(
             Dictionary(grouping: correlations, by: { $0 })
-                .values.allSatisfy { $0.count == 2 }
-        )
-        XCTAssertEqual(storedTokens, newTokens)
-        XCTAssertEqual(saveCount, 1)
-        XCTAssertFalse(requiresReauthentication)
+                .values.allSatisfy { $0.count == 2 })
+        #expect(storedTokens == newTokens)
+        #expect(saveCount == 1)
+        #expect(!(requiresReauthentication))
 
-        let refreshRequest = try XCTUnwrap(recordedRefreshRequest)
-        XCTAssertEqual(refreshRequest.httpMethod, "POST")
-        XCTAssertEqual(
-            refreshRequest.url?.absoluteString,
-            "https://example.com/prefix/auth/refresh"
-        )
-        XCTAssertEqual(
-            refreshRequest.value(forHTTPHeaderField: "x-refresh-token"),
-            "old-refresh"
-        )
-        XCTAssertNil(
-            refreshRequest.value(forHTTPHeaderField: "Authorization")
-        )
+        let refreshRequest = try #require(recordedRefreshRequest)
+        #expect(refreshRequest.httpMethod == "POST")
+        #expect(
+            refreshRequest.url?.absoluteString
+                == "https://example.com/prefix/auth/refresh")
+        #expect(
+            refreshRequest.value(forHTTPHeaderField: "x-refresh-token")
+                == "old-refresh")
+        #expect(
+            refreshRequest.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
+    @Test
     func testTwentyUnauthorizedRequestsShareOneRejectedRefresh() async throws {
         let accountID = AccountID(rawValue: "concurrent-rejection")
         let server = try NormalizedServerURL("https://example.com")
@@ -137,15 +135,15 @@ final class AuthenticatedRequestTests: XCTestCase {
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(
-            errors.compactMap { $0 },
-            Array(repeating: .refreshRejected, count: 20)
-        )
-        XCTAssertEqual(counts.ordinaryRequests, 20)
-        XCTAssertEqual(counts.refreshRequests, 1)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(
+            errors.compactMap { $0 }
+                == Array(repeating: .refreshRejected, count: 20))
+        #expect(counts.ordinaryRequests == 20)
+        #expect(counts.refreshRequests == 1)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead()
         async throws
     {
@@ -209,14 +207,15 @@ final class AuthenticatedRequestTests: XCTestCase {
         let counts = await transport.counts()
         let storedTokens = try await store.credentials(for: accountID)
 
-        XCTAssertEqual(responseA.statusCode, 200)
-        XCTAssertEqual(responseB.statusCode, 200)
-        XCTAssertEqual(counts.refreshRequests, 1)
-        XCTAssertEqual(counts.midAccessRequests, 0)
-        XCTAssertEqual(counts.finalAccessRequests, 2)
-        XCTAssertEqual(storedTokens, finalTokens)
+        #expect(responseA.statusCode == 200)
+        #expect(responseB.statusCode == 200)
+        #expect(counts.refreshRequests == 1)
+        #expect(counts.midAccessRequests == 0)
+        #expect(counts.finalAccessRequests == 2)
+        #expect(storedTokens == finalTokens)
     }
 
+    @Test
     func testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh()
         async throws
     {
@@ -272,22 +271,16 @@ final class AuthenticatedRequestTests: XCTestCase {
         await transport.releaseMidSave()
 
         await assertThrowsErrorAsync(try await taskA.value) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
         await assertThrowsErrorAsync(try await taskB.value) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
 
         let recordedToken = await coordinator.completedRefreshes[
             accountID
         ]?.rejectedAccessToken
-        XCTAssertEqual(recordedToken, "old-access")
+        #expect(recordedToken == "old-access")
 
         await assertThrowsErrorAsync(
             try await coordinator.recoverAccessToken(
@@ -296,15 +289,13 @@ final class AuthenticatedRequestTests: XCTestCase {
                 rejectedAccessToken: "old-access"
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
         let counts = await transport.counts()
-        XCTAssertEqual(counts.refreshRequests, 1)
+        #expect(counts.refreshRequests == 1)
     }
 
+    @Test
     func testConcurrentRejectionJoinsFailingInFlightRefresh() async throws {
         let accountID = AccountID(rawValue: "join-failing-refresh")
         let server = try NormalizedServerURL("https://example.com")
@@ -362,26 +353,21 @@ final class AuthenticatedRequestTests: XCTestCase {
         await transport.releaseMidSave()
 
         await assertThrowsErrorAsync(try await taskA.value) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
         await assertThrowsErrorAsync(try await taskB.value) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
         let counts = await transport.counts()
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(counts.refreshRequests, 1)
-        XCTAssertEqual(counts.midAccessRequests, 0)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(counts.refreshRequests == 1)
+        #expect(counts.midAccessRequests == 0)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery()
         async throws
     {
@@ -437,18 +423,16 @@ final class AuthenticatedRequestTests: XCTestCase {
         let counts = await transport.counts()
         let storedTokens = try await store.credentials(for: accountID)
 
-        XCTAssertEqual(
-            responses.map(\.statusCode),
-            Array(repeating: 200, count: 20)
-        )
-        XCTAssertEqual(counts.oldAccessRequests, 20)
-        XCTAssertEqual(counts.refreshRequests, 1)
-        XCTAssertEqual(counts.loginRequests, 1)
-        XCTAssertEqual(counts.authorizationRequests, 1)
-        XCTAssertEqual(counts.newAccessRequests, 20)
-        XCTAssertEqual(storedTokens, newTokens)
+        #expect(responses.map(\.statusCode) == Array(repeating: 200, count: 20))
+        #expect(counts.oldAccessRequests == 20)
+        #expect(counts.refreshRequests == 1)
+        #expect(counts.loginRequests == 1)
+        #expect(counts.authorizationRequests == 1)
+        #expect(counts.newAccessRequests == 20)
+        #expect(storedTokens == newTokens)
     }
 
+    @Test
     func testRejectedRefreshUsesSavedPasswordAndRetriesRequest() async throws {
         let accountID = AccountID(rawValue: "saved-login")
         let server = try NormalizedServerURL("https://example.com/prefix")
@@ -500,42 +484,36 @@ final class AuthenticatedRequestTests: XCTestCase {
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(
-            requests.map(\.url?.path),
-            [
+        #expect(response.statusCode == 200)
+        #expect(
+            requests.map(\.url?.path) == [
                 "/prefix/api/libraries",
                 "/prefix/auth/refresh",
                 "/prefix/login",
                 "/prefix/api/authorize",
                 "/prefix/api/libraries",
-            ]
-        )
-        let loginBody = try XCTUnwrap(requests[2].httpBody)
-        let loginObject = try XCTUnwrap(
+            ])
+        let loginBody = try #require(requests[2].httpBody)
+        let loginObject = try #require(
             JSONSerialization.jsonObject(with: loginBody)
-                as? [String: String]
-        )
-        XCTAssertEqual(
-            loginObject,
-            [
+                as? [String: String])
+        #expect(
+            loginObject == [
                 "username": "reader",
                 "password": "saved-password",
-            ]
-        )
-        XCTAssertEqual(
-            requests[3].value(forHTTPHeaderField: "Authorization"),
-            "Bearer new-access"
-        )
-        XCTAssertEqual(
-            requests[4].value(forHTTPHeaderField: "Authorization"),
-            "Bearer new-access"
-        )
-        XCTAssertEqual(savedTokens, newTokens)
-        XCTAssertEqual(savedNativeLogin, nativeLogin)
-        XCTAssertFalse(requiresReauthentication)
+            ])
+        #expect(
+            requests[3].value(forHTTPHeaderField: "Authorization")
+                == "Bearer new-access")
+        #expect(
+            requests[4].value(forHTTPHeaderField: "Authorization")
+                == "Bearer new-access")
+        #expect(savedTokens == newTokens)
+        #expect(savedNativeLogin == nativeLogin)
+        #expect(!(requiresReauthentication))
     }
 
+    @Test
     func testRefreshContractFailuresUseSavedPasswordAndRetryRequest()
         async throws
     {
@@ -617,26 +595,24 @@ final class AuthenticatedRequestTests: XCTestCase {
                     for: fixture.accountID
                 )
 
-            XCTAssertEqual(response.statusCode, 200, scenario.name)
-            XCTAssertEqual(
-                requests.map(\.url?.path),
-                SavedLoginRecoveryFixture.successfulRequestPaths,
-                scenario.name
-            )
-            XCTAssertEqual(
-                storedTokens,
-                fixture.recoveredTokens,
-                scenario.name
-            )
-            XCTAssertEqual(
-                storedNativeLogin,
-                fixture.nativeLogin,
-                scenario.name
-            )
-            XCTAssertFalse(requiresReauthentication, scenario.name)
+            #expect(
+                response.statusCode == 200, Comment(rawValue: scenario.name))
+            #expect(
+                requests.map(\.url?.path)
+                    == SavedLoginRecoveryFixture.successfulRequestPaths,
+                Comment(rawValue: scenario.name))
+            #expect(
+                storedTokens == fixture.recoveredTokens,
+                Comment(rawValue: scenario.name))
+            #expect(
+                storedNativeLogin == fixture.nativeLogin,
+                Comment(rawValue: scenario.name))
+            #expect(
+                !(requiresReauthentication), Comment(rawValue: scenario.name))
         }
     }
 
+    @Test
     func testSavedPasswordRejectionRemainsTyped() async throws {
         let accountID = AccountID(rawValue: "rejected-saved-login")
         let server = try NormalizedServerURL("https://example.com")
@@ -672,10 +648,9 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .automaticReauthenticationFailed(.invalidCredentials)
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .automaticReauthenticationFailed(.invalidCredentials))
         }
         await assertThrowsErrorAsync(
             try await coordinator.sendAuthenticated(
@@ -685,10 +660,9 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .automaticReauthenticationFailed(.invalidCredentials)
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .automaticReauthenticationFailed(.invalidCredentials))
         }
         let savedTokens = try await store.credentials(for: accountID)
         let savedNativeLogin = try await store.nativeLoginCredentials(
@@ -698,18 +672,17 @@ final class AuthenticatedRequestTests: XCTestCase {
             await coordinator.requiresReauthentication(for: accountID)
         let refreshCount = await transport.refreshCount()
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(savedTokens, oldTokens)
-        XCTAssertEqual(savedNativeLogin, nativeLogin)
-        XCTAssertTrue(requiresReauthentication)
-        XCTAssertEqual(refreshCount, 1)
-        XCTAssertEqual(
+        #expect(savedTokens == oldTokens)
+        #expect(savedNativeLogin == nativeLogin)
+        #expect(requiresReauthentication)
+        #expect(refreshCount == 1)
+        #expect(
             requests.filter {
                 $0.url?.path == "/login"
-            }.count,
-            1
-        )
+            }.count == 1)
     }
 
+    @Test
     func testSavedLoginCannotChangeRemoteUserIdentity() async throws {
         let accountID = AccountID(rawValue: "identity-change")
         let server = try NormalizedServerURL("https://example.com")
@@ -751,23 +724,23 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .automaticReauthenticationFailed(
-                    .authorizedUserMismatch(
-                        expected: "user-id",
-                        actual: "other-user"
-                    )
-                )
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .automaticReauthenticationFailed(
+                        .authorizedUserMismatch(
+                            expected: "user-id",
+                            actual: "other-user"
+                        )
+                    ))
         }
         let retainedTokens = try await store.credentials(for: accountID)
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
-        XCTAssertEqual(retainedTokens, tokens)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(retainedTokens == tokens)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testSavedLoginAuthorizationRejectionRequiresReauthentication()
         async throws
     {
@@ -812,19 +785,19 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .automaticReauthenticationFailed(.tokenValidationFailed)
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .automaticReauthenticationFailed(.tokenValidationFailed))
         }
         let retainedTokens = try await store.credentials(for: accountID)
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(retainedTokens, oldTokens)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(retainedTokens == oldTokens)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testForbiddenResponseDoesNotRefresh() async throws {
         let fixture = try Fixture(
             responses: [.success(.init(data: Data(), statusCode: 403))]
@@ -838,12 +811,13 @@ final class AuthenticatedRequestTests: XCTestCase {
                 for: fixture.accountID
             )
 
-        XCTAssertEqual(response.statusCode, 403)
-        XCTAssertEqual(requestCount, 1)
-        XCTAssertEqual(refreshCount, 0)
-        XCTAssertFalse(requiresReauthentication)
+        #expect(response.statusCode == 403)
+        #expect(requestCount == 1)
+        #expect(refreshCount == 0)
+        #expect(!(requiresReauthentication))
     }
 
+    @Test
     func testAuthenticationEndpointsNeverEnterRefresh() async throws {
         let fixture = try Fixture(responses: [])
         let routes: [AudiobookshelfRoute] = [
@@ -868,17 +842,17 @@ final class AuthenticatedRequestTests: XCTestCase {
                     server: fixture.server
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? AuthenticatedRequestError,
-                    .authenticationEndpoint
-                )
+                #expect(
+                    error as? AuthenticatedRequestError
+                        == .authenticationEndpoint)
             }
         }
 
         let requestCount = await fixture.transport.requestCount()
-        XCTAssertEqual(requestCount, 0)
+        #expect(requestCount == 0)
     }
 
+    @Test
     func testOrdinaryRequestRetriesOnlyOnce() async throws {
         let fixture = try Fixture(
             responses: [
@@ -896,10 +870,9 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await fixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .retriedRequestUnauthorized
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .retriedRequestUnauthorized)
         }
 
         let requestCount = await fixture.transport.requestCount()
@@ -908,11 +881,12 @@ final class AuthenticatedRequestTests: XCTestCase {
             await fixture.coordinator.requiresReauthentication(
                 for: fixture.accountID
             )
-        XCTAssertEqual(requestCount, 3)
-        XCTAssertEqual(refreshCount, 1)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(requestCount == 3)
+        #expect(refreshCount == 1)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testRefreshFailuresAreTypedAndAccountScoped() async throws {
         let scenarios:
             [(
@@ -994,22 +968,17 @@ final class AuthenticatedRequestTests: XCTestCase {
             await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
-                XCTAssertEqual(
-                    error as? AuthenticatedRequestError,
-                    expectedError
-                )
+                #expect(error as? AuthenticatedRequestError == expectedError)
             }
             let requiresReauthentication =
                 await fixture.coordinator.requiresReauthentication(
                     for: fixture.accountID
                 )
-            XCTAssertEqual(
-                requiresReauthentication,
-                expectedReauthentication
-            )
+            #expect(requiresReauthentication == expectedReauthentication)
         }
     }
 
+    @Test
     func testRefreshTransportFailureIsNotCachedAndRetries() async throws {
         let fixture = try Fixture(
             responses: [
@@ -1031,10 +1000,8 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await fixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshTransportFailed
-            )
+            #expect(
+                error as? AuthenticatedRequestError == .refreshTransportFailed)
         }
         let requiresReauthenticationAfterFailure =
             await fixture.coordinator.requiresReauthentication(
@@ -1047,21 +1014,20 @@ final class AuthenticatedRequestTests: XCTestCase {
                 for: fixture.accountID
             )
 
-        XCTAssertFalse(requiresReauthenticationAfterFailure)
-        XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(
-            requests.map(\.url?.path),
-            [
+        #expect(!(requiresReauthenticationAfterFailure))
+        #expect(response.statusCode == 200)
+        #expect(
+            requests.map(\.url?.path) == [
                 "/api/libraries",
                 "/auth/refresh",
                 "/api/libraries",
                 "/auth/refresh",
                 "/api/libraries",
-            ]
-        )
-        XCTAssertFalse(requiresReauthenticationAfterRetry)
+            ])
+        #expect(!(requiresReauthenticationAfterRetry))
     }
 
+    @Test
     func testMissingSavedCredentialsMemoizesConclusiveFailure() async throws {
         let fixture = try Fixture(
             responses: [
@@ -1075,10 +1041,9 @@ final class AuthenticatedRequestTests: XCTestCase {
             await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
-                XCTAssertEqual(
-                    error as? AuthenticatedRequestError,
-                    .unexpectedRefreshStatus(503)
-                )
+                #expect(
+                    error as? AuthenticatedRequestError
+                        == .unexpectedRefreshStatus(503))
             }
         }
         let requests = await fixture.transport.recordedRequests()
@@ -1087,17 +1052,16 @@ final class AuthenticatedRequestTests: XCTestCase {
                 for: fixture.accountID
             )
 
-        XCTAssertEqual(
-            requests.map(\.url?.path),
-            [
+        #expect(
+            requests.map(\.url?.path) == [
                 "/api/libraries",
                 "/auth/refresh",
                 "/api/libraries",
-            ]
-        )
-        XCTAssertTrue(requiresReauthentication)
+            ])
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testTransientSavedLoginFailuresAreNotCachedAndRetry()
         async throws
     {
@@ -1157,11 +1121,10 @@ final class AuthenticatedRequestTests: XCTestCase {
             await assertThrowsErrorAsync(
                 try await fixture.send()
             ) { error in
-                XCTAssertEqual(
-                    error as? AuthenticatedRequestError,
-                    scenario.expectedError,
-                    scenario.name
-                )
+                #expect(
+                    error as? AuthenticatedRequestError
+                        == scenario.expectedError,
+                    Comment(rawValue: scenario.name))
             }
             let requiresReauthenticationAfterFailure =
                 await fixture.coordinator.requiresReauthentication(
@@ -1177,30 +1140,25 @@ final class AuthenticatedRequestTests: XCTestCase {
                     for: fixture.accountID
                 )
 
-            XCTAssertFalse(
-                requiresReauthenticationAfterFailure,
-                scenario.name
-            )
-            XCTAssertEqual(response.statusCode, 200, scenario.name)
-            XCTAssertEqual(
+            #expect(
+                !(requiresReauthenticationAfterFailure),
+                Comment(rawValue: scenario.name))
+            #expect(
+                response.statusCode == 200, Comment(rawValue: scenario.name))
+            #expect(
                 requests.filter {
                     $0.url?.path == "/auth/refresh"
-                }.count,
-                2,
-                scenario.name
-            )
-            XCTAssertEqual(
-                storedTokens,
-                fixture.recoveredTokens,
-                scenario.name
-            )
-            XCTAssertFalse(
-                requiresReauthenticationAfterRetry,
-                scenario.name
-            )
+                }.count == 2, Comment(rawValue: scenario.name))
+            #expect(
+                storedTokens == fixture.recoveredTokens,
+                Comment(rawValue: scenario.name))
+            #expect(
+                !(requiresReauthenticationAfterRetry),
+                Comment(rawValue: scenario.name))
         }
     }
 
+    @Test
     func testMissingSessionTokensUseSynchronizedNativeLogin() async throws {
         let accountID = AccountID(rawValue: "cloud-account")
         let server = try NormalizedServerURL("https://example.com")
@@ -1249,16 +1207,14 @@ final class AuthenticatedRequestTests: XCTestCase {
             await coordinator
             .requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(
-            requestPaths,
-            ["/login", "/api/authorize", "/api/libraries"]
-        )
-        XCTAssertEqual(storedTokens, recoveredTokens)
-        XCTAssertEqual(storedNativeLogin, nativeLogin)
-        XCTAssertFalse(requiresReauthentication)
+        #expect(response.statusCode == 200)
+        #expect(requestPaths == ["/login", "/api/authorize", "/api/libraries"])
+        #expect(storedTokens == recoveredTokens)
+        #expect(storedNativeLogin == nativeLogin)
+        #expect(!(requiresReauthentication))
     }
 
+    @Test
     func testCredentialFailuresAreTyped() async throws {
         let missingFixture = try Fixture(
             responses: [],
@@ -1267,16 +1223,13 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await missingFixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .missingCredentials
-            )
+            #expect(error as? AuthenticatedRequestError == .missingCredentials)
         }
         let missingRequiresReauthentication =
             await missingFixture.coordinator.requiresReauthentication(
                 for: missingFixture.accountID
             )
-        XCTAssertTrue(missingRequiresReauthentication)
+        #expect(missingRequiresReauthentication)
 
         let readFailureFixture = try Fixture(
             responses: [],
@@ -1285,16 +1238,14 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await readFailureFixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .credentialsReadFailed
-            )
+            #expect(
+                error as? AuthenticatedRequestError == .credentialsReadFailed)
         }
         let readFailureRequiresReauthentication =
             await readFailureFixture.coordinator.requiresReauthentication(
                 for: readFailureFixture.accountID
             )
-        XCTAssertFalse(readFailureRequiresReauthentication)
+        #expect(!(readFailureRequiresReauthentication))
 
         let saveFailureFixture = try Fixture(
             responses: [
@@ -1311,18 +1262,18 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await saveFailureFixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .credentialPersistenceFailed
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .credentialPersistenceFailed)
         }
         let saveFailureRequiresReauthentication =
             await saveFailureFixture.coordinator.requiresReauthentication(
                 for: saveFailureFixture.accountID
             )
-        XCTAssertTrue(saveFailureRequiresReauthentication)
+        #expect(saveFailureRequiresReauthentication)
     }
 
+    @Test
     func testRequestValidationAndTransportFailuresAreTyped() async throws {
         let fixture = try Fixture(responses: [])
         await assertThrowsErrorAsync(
@@ -1333,10 +1284,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .invalidAccountID
-            )
+            #expect(error as? AuthenticatedRequestError == .invalidAccountID)
         }
 
         await assertThrowsErrorAsync(
@@ -1347,9 +1295,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .requestDoesNotMatchRoute
+            #expect(
+                error as? AuthenticatedRequestError == .requestDoesNotMatchRoute
             )
         }
 
@@ -1366,9 +1313,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .requestDoesNotMatchRoute
+            #expect(
+                error as? AuthenticatedRequestError == .requestDoesNotMatchRoute
             )
         }
 
@@ -1383,9 +1329,8 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .requestDoesNotMatchRoute
+            #expect(
+                error as? AuthenticatedRequestError == .requestDoesNotMatchRoute
             )
         }
 
@@ -1394,7 +1339,7 @@ final class AuthenticatedRequestTests: XCTestCase {
             server: fixture.server
         )
         tokenQueryRequest.url = URL(
-            string: "\(try XCTUnwrap(tokenQueryRequest.url))?token=secret"
+            string: "\(try #require(tokenQueryRequest.url))?token=secret"
         )
         await assertThrowsErrorAsync(
             try await fixture.coordinator.sendAuthenticated(
@@ -1404,10 +1349,9 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .authorizationFailed(.tokenBearingURL)
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .authorizationFailed(.tokenBearingURL))
         }
 
         let transportFailureFixture = try Fixture(
@@ -1416,19 +1360,18 @@ final class AuthenticatedRequestTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await transportFailureFixture.send()
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .requestTransportFailed
-            )
+            #expect(
+                error as? AuthenticatedRequestError == .requestTransportFailed)
         }
         let transportFailureRequiresReauthentication =
             await transportFailureFixture.coordinator
             .requiresReauthentication(
                 for: transportFailureFixture.accountID
             )
-        XCTAssertFalse(transportFailureRequiresReauthentication)
+        #expect(!(transportFailureRequiresReauthentication))
     }
 
+    @Test
     func testAlreadyRotatedCredentialsAvoidAnotherRefresh() async throws {
         let accountID = AccountID(rawValue: "externally-rotated")
         let server = try NormalizedServerURL("https://example.com")
@@ -1462,12 +1405,13 @@ final class AuthenticatedRequestTests: XCTestCase {
         )
         let counts = await transport.counts()
 
-        XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(counts.oldAccessRequests, 1)
-        XCTAssertEqual(counts.newAccessRequests, 1)
-        XCTAssertEqual(counts.refreshRequests, 0)
+        #expect(response.statusCode == 200)
+        #expect(counts.oldAccessRequests == 1)
+        #expect(counts.newAccessRequests == 1)
+        #expect(counts.refreshRequests == 0)
     }
 
+    @Test
     func testCompletedRotationCoversAStaleCredentialRead() async throws {
         let accountID = AccountID(rawValue: "stale-read")
         let server = try NormalizedServerURL("https://example.com")
@@ -1509,18 +1453,18 @@ final class AuthenticatedRequestTests: XCTestCase {
         let refreshCount = await transport.refreshCount()
         let savedCredentials = await store.savedCredentials()
 
-        XCTAssertEqual(firstResponse.statusCode, 200)
-        XCTAssertEqual(secondResponse.statusCode, 200)
-        XCTAssertEqual(refreshCount, 1)
-        XCTAssertEqual(
-            savedCredentials,
-            try AuthenticationTokens(
-                accessToken: "new-access",
-                refreshToken: "new-refresh"
-            )
-        )
+        #expect(firstResponse.statusCode == 200)
+        #expect(secondResponse.statusCode == 200)
+        #expect(refreshCount == 1)
+        #expect(
+            savedCredentials
+                == (try AuthenticationTokens(
+                    accessToken: "new-access",
+                    refreshToken: "new-refresh"
+                )))
     }
 
+    @Test
     func testRefreshFailureDoesNotAffectAnotherAccount() async throws {
         let failedAccount = AccountID(rawValue: "failed")
         let healthyAccount = AccountID(rawValue: "healthy")
@@ -1550,10 +1494,7 @@ final class AuthenticatedRequestTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .refreshRejected
-            )
+            #expect(error as? AuthenticatedRequestError == .refreshRejected)
         }
         let healthyResponse = try await coordinator.sendAuthenticated(
             request,
@@ -1566,9 +1507,9 @@ final class AuthenticatedRequestTests: XCTestCase {
         let healthyRequiresReauthentication =
             await coordinator.requiresReauthentication(for: healthyAccount)
 
-        XCTAssertEqual(healthyResponse.statusCode, 200)
-        XCTAssertTrue(failedRequiresReauthentication)
-        XCTAssertFalse(healthyRequiresReauthentication)
+        #expect(healthyResponse.statusCode == 200)
+        #expect(failedRequiresReauthentication)
+        #expect(!(healthyRequiresReauthentication))
     }
 
     private static func request(

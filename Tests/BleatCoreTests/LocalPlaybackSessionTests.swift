@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LocalPlaybackSessionTests: XCTestCase {
+@Suite(.serialized)
+final class LocalPlaybackSessionTests {
+    @Test
     func testBatchUsesExactAuthenticatedContractAndListeningTime()
         async throws
     {
@@ -37,42 +39,34 @@ final class LocalPlaybackSessionTests: XCTestCase {
             deviceInfo: Self.deviceInfo
         )
 
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(results[0].id, session.id)
-        XCTAssertTrue(results[0].success)
-        XCTAssertTrue(results[0].progressSynced)
+        #expect(results.count == 1)
+        #expect(results[0].id == session.id)
+        #expect(results[0].success)
+        #expect(results[0].progressSynced)
         let requests = await transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(
-            request.url?.path,
-            "/audiobookshelf/api/session/local-all"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access"
-        )
-        let body = try XCTUnwrap(request.httpBody)
-        let object = try XCTUnwrap(
+        let request = try #require(requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/audiobookshelf/api/session/local-all")
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access")
+        let body = try #require(request.httpBody)
+        let object = try #require(
             JSONSerialization.jsonObject(with: body)
-                as? [String: Any]
-        )
-        let sessions = try XCTUnwrap(
-            object["sessions"] as? [[String: Any]]
-        )
-        let encoded = try XCTUnwrap(sessions.first)
-        XCTAssertEqual(encoded["id"] as? String, session.id.rawValue)
-        XCTAssertEqual(encoded["playMethod"] as? Int, 3)
-        XCTAssertEqual(encoded["timeListening"] as? Double, 12.5)
-        XCTAssertEqual(encoded["currentTime"] as? Double, 25)
-        XCTAssertEqual(encoded["updatedAt"] as? Int, 2_000)
-        XCTAssertEqual(
+                as? [String: Any])
+        let sessions = try #require(object["sessions"] as? [[String: Any]])
+        let encoded = try #require(sessions.first)
+        #expect(encoded["id"] as? String == session.id.rawValue)
+        #expect(encoded["playMethod"] as? Int == 3)
+        #expect(encoded["timeListening"] as? Double == 12.5)
+        #expect(encoded["currentTime"] as? Double == 25)
+        #expect(encoded["updatedAt"] as? Int == 2_000)
+        #expect(
             (object["deviceInfo"] as? [String: Any])?["deviceId"]
-                as? String,
-            "device"
-        )
+                as? String == "device")
     }
 
+    @Test
     func testUpdatingPreservesUUIDAndSessionStart() throws {
         let original = try Self.session()
 
@@ -81,14 +75,15 @@ final class LocalPlaybackSessionTests: XCTestCase {
             now: Date(timeIntervalSince1970: 3)
         )
 
-        XCTAssertEqual(updated.id, original.id)
-        XCTAssertEqual(updated.startTime, 10)
-        XCTAssertEqual(updated.startedAtMilliseconds, 1_000)
-        XCTAssertEqual(updated.currentTime, 40)
-        XCTAssertEqual(updated.updatedAtMilliseconds, 3_000)
-        XCTAssertEqual(updated.timeListening, 0)
+        #expect(updated.id == original.id)
+        #expect(updated.startTime == 10)
+        #expect(updated.startedAtMilliseconds == 1_000)
+        #expect(updated.currentTime == 40)
+        #expect(updated.updatedAtMilliseconds == 3_000)
+        #expect(updated.timeListening == 0)
     }
 
+    @Test
     func testFailedResultWithoutProgressFlagRemainsTyped() async throws {
         let accountID = AccountID(rawValue: "account")
         let session = try Self.session()
@@ -118,11 +113,12 @@ final class LocalPlaybackSessionTests: XCTestCase {
             deviceInfo: Self.deviceInfo
         )[0]
 
-        XCTAssertFalse(result.success)
-        XCTAssertFalse(result.progressSynced)
-        XCTAssertEqual(result.error, "Media item not found")
+        #expect(!(result.success))
+        #expect(!(result.progressSynced))
+        #expect(result.error == "Media item not found")
     }
 
+    @Test
     func testRejectsDuplicateIDsAndMismatchedResponse() async throws {
         let accountID = AccountID(rawValue: "account")
         let session = try Self.session()
@@ -139,12 +135,9 @@ final class LocalPlaybackSessionTests: XCTestCase {
                 sessions: [session, session],
                 deviceInfo: Self.deviceInfo
             )
-            XCTFail("Expected duplicate session rejection")
+            Issue.record("Expected duplicate session rejection")
         } catch let error {
-            XCTAssertEqual(
-                error as? LocalPlaybackSessionError,
-                .duplicateSessionID
-            )
+            #expect(error as? LocalPlaybackSessionError == .duplicateSessionID)
         }
 
         let responseCoordinator = AuthCoordinator(
@@ -170,33 +163,29 @@ final class LocalPlaybackSessionTests: XCTestCase {
                 sessions: [session],
                 deviceInfo: Self.deviceInfo
             )
-            XCTFail("Expected mismatched result rejection")
+            Issue.record("Expected mismatched result rejection")
         } catch let error {
-            XCTAssertEqual(
-                error as? LocalPlaybackSessionError,
-                .malformedResponse
-            )
+            #expect(error as? LocalPlaybackSessionError == .malformedResponse)
         }
     }
 
+    @Test
     func testSessionValidationRejectsNonV4IDAndInvalidPosition() throws {
-        XCTAssertThrowsError(
-            try Self.session(
-                id: "00000000-0000-0000-0000-000000000000"
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? LocalPlaybackSessionError,
-                .invalidSessionID
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try Self.session(
+                    id: "00000000-0000-0000-0000-000000000000"
+                )
+            })
+        {
+            #expect(error as? LocalPlaybackSessionError == .invalidSessionID)
         }
-        XCTAssertThrowsError(
-            try Self.session(currentTime: 101)
-        ) { error in
-            XCTAssertEqual(
-                error as? LocalPlaybackSessionError,
-                .invalidPosition
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try Self.session(currentTime: 101) })
+        {
+            #expect(error as? LocalPlaybackSessionError == .invalidPosition)
         }
     }
 

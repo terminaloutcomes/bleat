@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   host:
-    name: Host tests and coverage
+    name: Unsigned host tests and coverage
     runs-on: macos-26
     steps:
       - name: Check out repository
@@ -24,6 +24,7 @@ jobs:
       - name: Run host validation
         env:
           BLEAT_SKIP_SIMULATOR: "1"
+          BLEAT_HOST_SIGNING: unsigned
         run: ./scripts/test-core.sh
 
   simulator:

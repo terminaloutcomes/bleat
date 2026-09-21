@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class HTTPTransportTests: XCTestCase {
+@Suite(.serialized)
+final class HTTPTransportTests {
+    @Test
     func testEndpointRouterUsesLocalServerAndPreservesPathPrefix() async throws
     {
         let router = ServerEndpointRouter()
@@ -15,20 +17,19 @@ final class HTTPTransportTests: XCTestCase {
         )
         await router.configure(primary: primary, local: local)
 
-        let requestURL = try XCTUnwrap(
-            URL(string: "https://books.example/audiobookshelf/api/libraries")
-        )
+        let requestURL = try #require(
+            URL(string: "https://books.example/audiobookshelf/api/libraries"))
         let candidates = await router.candidates(for: requestURL)
 
-        XCTAssertEqual(candidates.count, 2)
-        XCTAssertEqual(
-            candidates.first?.url.absoluteString,
-            "https://books.home/audiobookshelf/api/libraries"
-        )
-        XCTAssertTrue(candidates.first?.isLocal == true)
-        XCTAssertEqual(candidates.last?.url, requestURL)
+        #expect(candidates.count == 2)
+        #expect(
+            candidates.first?.url.absoluteString
+                == "https://books.home/audiobookshelf/api/libraries")
+        #expect(candidates.first?.isLocal == true)
+        #expect(candidates.last?.url == requestURL)
     }
 
+    @Test
     func testEndpointRouterTemporarilySkipsFailedLocalServer() async throws {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL("https://books.example")
@@ -36,16 +37,16 @@ final class HTTPTransportTests: XCTestCase {
         await router.configure(primary: primary, local: local)
         await router.markLocalUnavailable(for: primary, duration: 60)
 
-        let requestURL = try XCTUnwrap(
-            URL(string: "https://books.example/api/libraries")
-        )
+        let requestURL = try #require(
+            URL(string: "https://books.example/api/libraries"))
         let candidates = await router.candidates(for: requestURL)
 
-        XCTAssertEqual(candidates.count, 1)
-        XCTAssertFalse(candidates[0].isLocal)
-        XCTAssertEqual(candidates[0].url, requestURL)
+        #expect(candidates.count == 1)
+        #expect(!(candidates[0].isLocal))
+        #expect(candidates[0].url == requestURL)
     }
 
+    @Test
     func testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange()
         async throws
     {
@@ -58,16 +59,16 @@ final class HTTPTransportTests: XCTestCase {
         let failedPreferredServer = await router.preferredServer(
             for: primary
         )
-        XCTAssertEqual(failedPreferredServer.server, primary)
+        #expect(failedPreferredServer.server == primary)
 
         let pathGeneration = await router.networkPathDidChange()
 
         let pendingPreferredServer = await router.preferredServer(
             for: primary
         )
-        XCTAssertEqual(pendingPreferredServer.server, primary)
+        #expect(pendingPreferredServer.server == primary)
         let pendingAvailability = await router.localAvailability(for: primary)
-        XCTAssertEqual(pendingAvailability, .unknown)
+        #expect(pendingAvailability == .unknown)
 
         await router.markLocalAvailable(
             for: primary,
@@ -77,9 +78,10 @@ final class HTTPTransportTests: XCTestCase {
 
         let recoveredPreferredServer = await router.preferredServer(
             for: primary)
-        XCTAssertEqual(recoveredPreferredServer.server, local)
+        #expect(recoveredPreferredServer.server == local)
     }
 
+    @Test
     func testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated()
         async throws
     {
@@ -91,7 +93,7 @@ final class HTTPTransportTests: XCTestCase {
         await router.configure(primary: primary, local: local)
 
         var selection = await router.preferredServer(for: primary)
-        XCTAssertEqual(selection.server, primary)
+        #expect(selection.server == primary)
 
         await router.markLocalAvailable(
             for: primary,
@@ -100,9 +102,10 @@ final class HTTPTransportTests: XCTestCase {
         await router.finishNetworkPathEvaluation(pathGeneration)
 
         selection = await router.preferredServer(for: primary)
-        XCTAssertEqual(selection.server, local)
+        #expect(selection.server == local)
     }
 
+    @Test
     func testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation()
         async throws
     {
@@ -110,21 +113,21 @@ final class HTTPTransportTests: XCTestCase {
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        let requestURL = try XCTUnwrap(
-            URL(string: "https://books.example/api/libraries")
-        )
+        let requestURL = try #require(
+            URL(string: "https://books.example/api/libraries"))
         let candidates = await router.candidates(for: requestURL)
-        let oldCandidate = try XCTUnwrap(candidates.first)
+        let oldCandidate = try #require(candidates.first)
 
         _ = await router.networkPathDidChange()
         await router.recordSuccessfulUse(oldCandidate, endpoint: .libraries)
 
         let selection = await router.preferredServer(for: primary)
-        XCTAssertEqual(selection.server, primary)
+        #expect(selection.server == primary)
         let availability = await router.localAvailability(for: primary)
-        XCTAssertEqual(availability, .unknown)
+        #expect(availability == .unknown)
     }
 
+    @Test
     func testURLOnlyCompletionCannotMutateCurrentPathSelection()
         async throws
     {
@@ -132,9 +135,8 @@ final class HTTPTransportTests: XCTestCase {
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        let localURL = try XCTUnwrap(
-            URL(string: "https://books.home/audio/file.m4b")
-        )
+        let localURL = try #require(
+            URL(string: "https://books.home/audio/file.m4b"))
 
         let pathGeneration = await router.networkPathDidChange()
         await router.markLocalAvailable(
@@ -148,11 +150,12 @@ final class HTTPTransportTests: XCTestCase {
         await router.recordConnection(reconstructed, purpose: .download)
 
         let selection = await router.preferredServer(for: primary)
-        XCTAssertEqual(selection.server, local)
+        #expect(selection.server == local)
         let availability = await router.localAvailability(for: primary)
-        XCTAssertEqual(availability, .available)
+        #expect(availability == .available)
     }
 
+    @Test
     func testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable()
         async throws
     {
@@ -165,11 +168,12 @@ final class HTTPTransportTests: XCTestCase {
         await router.finishNetworkPathEvaluation(pathGeneration)
 
         let selection = await router.preferredServer(for: primary)
-        XCTAssertEqual(selection.server, primary)
+        #expect(selection.server == primary)
         let availability = await router.localAvailability(for: primary)
-        XCTAssertEqual(availability, .temporarilyUnavailable)
+        #expect(availability == .temporarilyUnavailable)
     }
 
+    @Test
     func testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL()
         async throws
     {
@@ -181,22 +185,21 @@ final class HTTPTransportTests: XCTestCase {
             "https://books.home/local-books"
         )
         await router.configure(primary: primary, local: local)
-        let failedURL = try XCTUnwrap(
-            URL(string: "https://books.home/local-books/audio/file.m4b")
-        )
+        let failedURL = try #require(
+            URL(string: "https://books.home/local-books/audio/file.m4b"))
 
         let fallback = await router.primaryFallback(
             forResolvedURL: failedURL
         )
 
-        XCTAssertEqual(
-            fallback?.url.absoluteString,
-            "https://books.example/audiobookshelf/audio/file.m4b"
-        )
-        XCTAssertEqual(fallback?.primary, primary)
-        XCTAssertFalse(fallback?.isLocal == true)
+        #expect(
+            fallback?.url.absoluteString
+                == "https://books.example/audiobookshelf/audio/file.m4b")
+        #expect(fallback?.primary == primary)
+        #expect(!(fallback?.isLocal == true))
     }
 
+    @Test
     func testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy()
         async throws
     {
@@ -204,9 +207,8 @@ final class HTTPTransportTests: XCTestCase {
         let primary = try NormalizedServerURL("https://books.example/prefix")
         let local = try NormalizedServerURL("https://books.home/local")
         await router.configure(primary: primary, local: local)
-        let localURL = try XCTUnwrap(
-            URL(string: "https://books.home/local/items/book/download")
-        )
+        let localURL = try #require(
+            URL(string: "https://books.home/local/items/book/download"))
         var request = URLRequest(url: localURL)
         request.httpMethod = "GET"
         request.setValue("Bearer opaque", forHTTPHeaderField: "Authorization")
@@ -215,21 +217,20 @@ final class HTTPTransportTests: XCTestCase {
 
         let fallback = await router.primaryFallbackRequest(for: request)
 
-        XCTAssertEqual(
-            fallback?.url?.absoluteString,
-            "https://books.example/prefix/items/book/download"
-        )
-        XCTAssertEqual(fallback?.httpMethod, "GET")
-        XCTAssertEqual(
-            fallback?.value(forHTTPHeaderField: "Authorization"),
-            "Bearer opaque"
-        )
-        XCTAssertFalse(fallback?.allowsConstrainedNetworkAccess == true)
-        XCTAssertFalse(fallback?.allowsExpensiveNetworkAccess == true)
+        #expect(
+            fallback?.url?.absoluteString
+                == "https://books.example/prefix/items/book/download")
+        #expect(fallback?.httpMethod == "GET")
+        #expect(
+            fallback?.value(forHTTPHeaderField: "Authorization")
+                == "Bearer opaque")
+        #expect(!(fallback?.allowsConstrainedNetworkAccess == true))
+        #expect(!(fallback?.allowsExpensiveNetworkAccess == true))
         let availability = await router.localAvailability(for: primary)
-        XCTAssertEqual(availability, .unknown)
+        #expect(availability == .unknown)
     }
 
+    @Test
     func testSuccessfulLocalUseClearsLocalCooldown() async throws {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL("https://books.example")
@@ -240,9 +241,10 @@ final class HTTPTransportTests: XCTestCase {
         await router.markLocalAvailable(for: primary)
 
         let preferredServer = await router.preferredServer(for: primary)
-        XCTAssertEqual(preferredServer.server, local)
+        #expect(preferredServer.server == local)
     }
 
+    @Test
     func testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()
         async throws
     {
@@ -250,12 +252,11 @@ final class HTTPTransportTests: XCTestCase {
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        let requestURL = try XCTUnwrap(
-            URL(string: "https://books.example/api/libraries")
-        )
+        let requestURL = try #require(
+            URL(string: "https://books.example/api/libraries"))
         let candidates = await router.candidates(for: requestURL)
-        let localCandidate = try XCTUnwrap(candidates.first)
-        let primaryCandidate = try XCTUnwrap(candidates.last)
+        let localCandidate = try #require(candidates.first)
+        let primaryCandidate = try #require(candidates.last)
 
         await router.recordSuccessfulUse(
             localCandidate,
@@ -269,10 +270,11 @@ final class HTTPTransportTests: XCTestCase {
         let apiUsage = await router.lastSuccessfulUse(for: primary)
         let authenticationUsage =
             await router.lastAuthenticationUse(for: primary)
-        XCTAssertEqual(apiUsage, .local)
-        XCTAssertEqual(authenticationUsage, .primary)
+        #expect(apiUsage == .local)
+        #expect(authenticationUsage == .primary)
     }
 
+    @Test
     func testEndpointRouterStreamsEveryServerConnectionPurpose()
         async throws
     {
@@ -283,45 +285,38 @@ final class HTTPTransportTests: XCTestCase {
         let updates = await router.activityUpdates(for: primary)
         var iterator = updates.makeAsyncIterator()
         let initialUpdate = await iterator.next()
-        XCTAssertEqual(
-            initialUpdate,
-            ServerEndpointActivitySnapshot()
-        )
-        let requestURL = try XCTUnwrap(
-            URL(string: "https://books.example/audio/file.mp3")
-        )
+        #expect(initialUpdate == ServerEndpointActivitySnapshot())
+        let requestURL = try #require(
+            URL(string: "https://books.example/audio/file.mp3"))
         let candidates = await router.candidates(for: requestURL)
 
         await router.recordConnection(
-            try XCTUnwrap(candidates.first),
+            try #require(candidates.first),
             purpose: .playback
         )
 
         let nextPlaybackUpdate = await iterator.next()
-        let playbackUpdate = try XCTUnwrap(nextPlaybackUpdate)
-        XCTAssertEqual(
-            playbackUpdate.lastConnection,
-            ServerConnectionActivity(
-                usage: .local,
-                purpose: .playback
-            )
-        )
-        XCTAssertNil(playbackUpdate.api)
+        let playbackUpdate = try #require(nextPlaybackUpdate)
+        #expect(
+            playbackUpdate.lastConnection
+                == ServerConnectionActivity(
+                    usage: .local,
+                    purpose: .playback
+                ))
+        #expect(playbackUpdate.api == nil)
 
         await router.recordConnection(
-            try XCTUnwrap(candidates.last),
+            try #require(candidates.last),
             purpose: .webSocket
         )
 
         let nextWebSocketUpdate = await iterator.next()
-        let webSocketUpdate = try XCTUnwrap(nextWebSocketUpdate)
-        XCTAssertEqual(webSocketUpdate.webSocket, .primary)
-        XCTAssertEqual(
-            webSocketUpdate.lastConnection?.purpose,
-            .webSocket
-        )
+        let webSocketUpdate = try #require(nextWebSocketUpdate)
+        #expect(webSocketUpdate.webSocket == .primary)
+        #expect(webSocketUpdate.lastConnection?.purpose == .webSocket)
     }
 
+    @Test
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(
@@ -344,23 +339,21 @@ final class HTTPTransportTests: XCTestCase {
         let transport = URLSessionHTTPTransport(
             configuration: configuration
         )
-        let url = try XCTUnwrap(URL(string: "https://example.com/status"))
+        let url = try #require(URL(string: "https://example.com/status"))
 
         let response = try await transport.send(
             TracedHTTPRequest(request: URLRequest(url: url), endpoint: .status)
         )
 
-        XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(response.data, Data(#"{"ok":true}"#.utf8))
-        XCTAssertEqual(response.url, url)
-        XCTAssertEqual(response.header(named: "x-contract"), "pinned")
-        XCTAssertEqual(
-            response.header(named: "CONTENT-TYPE"),
-            "application/json"
-        )
-        XCTAssertNil(response.header(named: "missing"))
+        #expect(response.statusCode == 200)
+        #expect(response.data == Data(#"{"ok":true}"#.utf8))
+        #expect(response.url == url)
+        #expect(response.header(named: "x-contract") == "pinned")
+        #expect(response.header(named: "CONTENT-TYPE") == "application/json")
+        #expect(response.header(named: "missing") == nil)
     }
 
+    @Test
     func testURLSessionTransportRejectsNonHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = URLResponse(
@@ -380,7 +373,7 @@ final class HTTPTransportTests: XCTestCase {
         let transport = URLSessionHTTPTransport(
             configuration: configuration
         )
-        let url = try XCTUnwrap(URL(string: "https://example.com/status"))
+        let url = try #require(URL(string: "https://example.com/status"))
 
         await assertThrowsErrorAsync(
             try await transport.send(
@@ -390,13 +383,11 @@ final class HTTPTransportTests: XCTestCase {
                 )
             )
         ) { error in
-            XCTAssertEqual(
-                error as? HTTPTransportError,
-                .nonHTTPResponse
-            )
+            #expect(error as? HTTPTransportError == .nonHTTPResponse)
         }
     }
 
+    @Test
     func testURLSessionTransportRecordsTypedRequestOutcome() async throws {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(
@@ -420,9 +411,8 @@ final class HTTPTransportTests: XCTestCase {
         )
         let correlationID = UUID()
         var request = URLRequest(
-            url: try XCTUnwrap(
-                URL(string: "https://secret.example/api/items/private")
-            )
+            url: try #require(
+                URL(string: "https://secret.example/api/items/private"))
         )
         request.httpMethod = "PATCH"
 
@@ -435,19 +425,19 @@ final class HTTPTransportTests: XCTestCase {
         )
 
         let events = await recorder.events()
-        XCTAssertEqual(events.count, 2)
-        XCTAssertEqual(
-            events.map(\.correlationID),
-            [
+        #expect(events.count == 2)
+        #expect(
+            events.map(\.correlationID) == [
                 correlationID, correlationID,
             ])
-        XCTAssertEqual(events.map(\.endpoint), [.metadata, .metadata])
-        XCTAssertEqual(events.map(\.method), [.patch, .patch])
-        XCTAssertEqual(events.last?.statusCode, 204)
-        XCTAssertFalse(events.map(\.text).joined().contains("secret"))
-        XCTAssertFalse(events.map(\.text).joined().contains("private"))
+        #expect(events.map(\.endpoint) == [.metadata, .metadata])
+        #expect(events.map(\.method) == [.patch, .patch])
+        #expect(events.last?.statusCode == 204)
+        #expect(!(events.map(\.text).joined().contains("secret")))
+        #expect(!(events.map(\.text).joined().contains("private")))
     }
 
+    @Test
     func testOpenIDTransportKeepsThenClearsSessionCookies() async throws {
         let recorder = CookieFlowRecorder()
         URLProtocolStub.setHandler { request in
@@ -487,19 +477,15 @@ final class HTTPTransportTests: XCTestCase {
 
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
-        let cookieStorage = try XCTUnwrap(
-            configuration.httpCookieStorage
-        )
+        let cookieStorage = try #require(configuration.httpCookieStorage)
         let transport = URLSessionOpenIDTransport(
             configuration: configuration,
             cookieStorage: cookieStorage
         )
-        let beginURL = try XCTUnwrap(
-            URL(string: "https://example.com/auth/openid")
-        )
-        let callbackURL = try XCTUnwrap(
-            URL(string: "https://example.com/auth/openid/callback")
-        )
+        let beginURL = try #require(
+            URL(string: "https://example.com/auth/openid"))
+        let callbackURL = try #require(
+            URL(string: "https://example.com/auth/openid/callback"))
 
         let beginResponse = try await transport.send(
             TracedHTTPRequest(
@@ -507,12 +493,11 @@ final class HTTPTransportTests: XCTestCase {
                 endpoint: .openIDSession
             )
         )
-        XCTAssertEqual(beginResponse.statusCode, 302)
-        XCTAssertEqual(
-            beginResponse.header(named: "Location"),
-            "https://identity.example/authorize?opaque=1"
-        )
-        XCTAssertEqual(transport.cookieCount, 2)
+        #expect(beginResponse.statusCode == 302)
+        #expect(
+            beginResponse.header(named: "Location")
+                == "https://identity.example/authorize?opaque=1")
+        #expect(transport.cookieCount == 2)
 
         let callbackResponse = try await transport.send(
             TracedHTTPRequest(
@@ -520,29 +505,24 @@ final class HTTPTransportTests: XCTestCase {
                 endpoint: .openIDSession
             )
         )
-        XCTAssertEqual(callbackResponse.statusCode, 200)
-        let callbackCookie = try XCTUnwrap(
-            recorder.callbackCookie()
-        )
-        XCTAssertTrue(
-            callbackCookie.contains("connect.sid=fixture-session")
-        )
-        XCTAssertTrue(
-            callbackCookie.contains("auth_method=openid-mobile")
-        )
+        #expect(callbackResponse.statusCode == 200)
+        let callbackCookie = try #require(recorder.callbackCookie())
+        #expect(callbackCookie.contains("connect.sid=fixture-session"))
+        #expect(callbackCookie.contains("auth_method=openid-mobile"))
 
         await transport.clearSession()
-        XCTAssertEqual(transport.cookieCount, 0)
+        #expect(transport.cookieCount == 0)
     }
 
+    @Test
     func testOpenIDTransportDefaultConfigurationIsInitiallyEmpty()
         async throws
     {
         let transport = try URLSessionOpenIDTransport()
 
-        XCTAssertEqual(transport.cookieCount, 0)
+        #expect(transport.cookieCount == 0)
         await transport.clearSession()
-        XCTAssertEqual(transport.cookieCount, 0)
+        #expect(transport.cookieCount == 0)
     }
 }
 

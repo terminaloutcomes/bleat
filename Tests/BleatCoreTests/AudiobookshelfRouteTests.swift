@@ -1,9 +1,10 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class AudiobookshelfRouteTests: XCTestCase {
+@Suite(.serialized)
+final class AudiobookshelfRouteTests {
     private static let builder: AudiobookshelfRouteBuilder = {
         do {
             let server = try NormalizedServerURL(
@@ -15,6 +16,7 @@ final class AudiobookshelfRouteTests: XCTestCase {
         }
     }()
 
+    @Test
     func testBuildsEveryAuditedRouteUnderServerPrefix() throws {
         let libraryID = LibraryID(rawValue: "library")
         let itemID = LibraryItemID(rawValue: "item")
@@ -65,14 +67,14 @@ final class AudiobookshelfRouteTests: XCTestCase {
         ]
 
         for (route, path) in routes {
-            XCTAssertEqual(
-                try Self.builder.url(for: route).absoluteString,
-                "https://example.com/audiobookshelf\(path)",
-                "Unexpected URL for \(route)"
-            )
+            #expect(
+                try Self.builder.url(for: route).absoluteString
+                    == "https://example.com/audiobookshelf\(path)",
+                "Unexpected URL for \(route)")
         }
     }
 
+    @Test
     func testDiagnosticEndpointsDiscardEveryOpaqueRouteValue() {
         let secret = "must-not-appear"
         let libraryID = LibraryID(rawValue: secret)
@@ -94,63 +96,66 @@ final class AudiobookshelfRouteTests: XCTestCase {
             .cover(itemID), .metadata(itemID),
         ]
 
-        XCTAssertEqual(
-            Set(routes.map(\.diagnosticEndpoint)),
-            Set(DiagnosticEndpoint.allCases).subtracting([.openIDSession])
-        )
-        XCTAssertTrue(
+        #expect(
+            Set(routes.map(\.diagnosticEndpoint))
+                == Set(DiagnosticEndpoint.allCases).subtracting([.openIDSession]
+                ))
+        #expect(
             routes.allSatisfy {
                 !$0.diagnosticEndpoint.rawValue.contains(secret)
-            }
-        )
+            })
     }
 
+    @Test
     func testPercentEncodesOpaquePathComponents() throws {
         let itemID = LibraryItemID(rawValue: "item/with space?#%")
 
         let url = try Self.builder.url(for: .item(itemID))
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/api/items/item%2Fwith%20space%3F%23%25"
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/api/items/item%2Fwith%20space%3F%23%25"
         )
     }
 
+    @Test
     func testEncodesTraversalLikeOpaqueIDWithoutChangingRoute() throws {
         let itemID = LibraryItemID(rawValue: "..")
 
         let url = try Self.builder.url(for: .item(itemID))
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/api/items/%2E%2E"
-        )
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/api/items/%2E%2E")
     }
 
+    @Test
     func testEncodesSingleDotOpaqueIDWithoutChangingRoute() throws {
         let itemID = LibraryItemID(rawValue: ".")
 
         let url = try Self.builder.url(for: .item(itemID))
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/api/items/%2E"
-        )
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/api/items/%2E")
     }
 
+    @Test
     func testRejectsEmptyOpaquePathComponent() {
-        XCTAssertThrowsError(
-            try Self.builder.url(
-                for: .item(LibraryItemID(rawValue: ""))
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? RouteConstructionError,
-                .invalidPathComponent("")
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try Self.builder.url(
+                    for: .item(LibraryItemID(rawValue: ""))
+                )
+            })
+        {
+            #expect(
+                error as? RouteConstructionError == .invalidPathComponent(""))
         }
     }
 
+    @Test
     func testDoesNotAddDuplicateSlashToRetainedPrefixSlash() throws {
         let server = try NormalizedServerURL(
             "https://example.com/audiobookshelf//"
@@ -159,12 +164,11 @@ final class AudiobookshelfRouteTests: XCTestCase {
 
         let url = try builder.url(for: .status)
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/status"
-        )
+        #expect(
+            url.absoluteString == "https://example.com/audiobookshelf/status")
     }
 
+    @Test
     func testBuildsQueryItemsWithoutDroppingPrefix() throws {
         let url = try Self.builder.url(
             for: .search(LibraryID(rawValue: "library")),
@@ -174,61 +178,67 @@ final class AudiobookshelfRouteTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/api/libraries/library/search?q=one%20%26%20two&limit=50"
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/api/libraries/library/search?q=one%20%26%20two&limit=50"
         )
     }
 
+    @Test
     func testRejectsTokenQueryItems() {
         for tokenName in ["token", "TOKEN", "access_token"] {
-            XCTAssertThrowsError(
-                try Self.builder.url(
-                    for: .status,
-                    queryItems: [URLQueryItem(name: tokenName, value: "secret")]
-                )
-            ) { error in
-                XCTAssertEqual(
-                    error as? RouteConstructionError,
-                    .tokenBearingURL
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try Self.builder.url(
+                        for: .status,
+                        queryItems: [
+                            URLQueryItem(name: tokenName, value: "secret")
+                        ]
+                    )
+                })
+            {
+                #expect(error as? RouteConstructionError == .tokenBearingURL)
             }
         }
     }
 
+    @Test
     func testAppendsReturnedHLSPathUnderServerPrefix() throws {
         let url = try Self.builder.serverRelativeContentURL(
             "/hls/session/output.m3u8"
         )
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/hls/session/output.m3u8"
-        )
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/hls/session/output.m3u8")
     }
 
+    @Test
     func testReturnedPathMayOmitLeadingSlashAndPreserveSafeQuery() throws {
         let url = try Self.builder.serverRelativeContentURL(
             "hls/session/output.m3u8?quality=high%20quality"
         )
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/hls/session/output.m3u8?quality=high%20quality"
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/hls/session/output.m3u8?quality=high%20quality"
         )
     }
 
+    @Test
     func testReturnedPathPreservesEncodedSegments() throws {
         let url = try Self.builder.serverRelativeContentURL(
             "/hls/session%2Fopaque/output.m3u8"
         )
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/hls/session%2Fopaque/output.m3u8"
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/hls/session%2Fopaque/output.m3u8"
         )
     }
 
+    @Test
     func testRejectsUnsafeReturnedPaths() {
         let invalidPaths = [
             "",
@@ -241,56 +251,58 @@ final class AudiobookshelfRouteTests: XCTestCase {
         ]
 
         for path in invalidPaths {
-            XCTAssertThrowsError(
-                try Self.builder.serverRelativeContentURL(path),
-                "Expected rejection for \(path)"
-            )
+            #expect(
+                throws: (any Error).self, "Expected rejection for \(path)",
+                performing: { try Self.builder.serverRelativeContentURL(path) })
         }
     }
 
+    @Test
     func testRejectsTokenBearingReturnedPaths() {
         for path in [
             "/hls/output.m3u8?token=secret",
             "/hls/output.m3u8?ACCESS_TOKEN=secret",
         ] {
-            XCTAssertThrowsError(
-                try Self.builder.serverRelativeContentURL(path)
-            ) { error in
-                XCTAssertEqual(
-                    error as? RouteConstructionError,
-                    .tokenBearingURL
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try Self.builder.serverRelativeContentURL(path) })
+            {
+                #expect(error as? RouteConstructionError == .tokenBearingURL)
             }
         }
     }
 
+    @Test
     func testRejectsInvalidTrackIndexAndBookmarkTime() {
-        XCTAssertThrowsError(
-            try Self.builder.url(
-                for: .directPlay(
-                    sessionID: PlaybackSessionID(rawValue: "session"),
-                    trackIndex: -1
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try Self.builder.url(
+                    for: .directPlay(
+                        sessionID: PlaybackSessionID(rawValue: "session"),
+                        trackIndex: -1
+                    )
                 )
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? RouteConstructionError,
-                .invalidTrackIndex(-1)
-            )
+            })
+        {
+            #expect(error as? RouteConstructionError == .invalidTrackIndex(-1))
         }
 
         for time in [-1.0, .infinity, .nan] {
-            XCTAssertThrowsError(
-                try Self.builder.url(
-                    for: .deleteBookmark(
-                        itemID: LibraryItemID(rawValue: "item"),
-                        time: time
+            #expect(
+                throws: (any Error).self,
+                performing: {
+                    try Self.builder.url(
+                        for: .deleteBookmark(
+                            itemID: LibraryItemID(rawValue: "item"),
+                            time: time
+                        )
                     )
-                )
-            )
+                })
         }
     }
 
+    @Test
     func testFormatsWholeSecondBookmarkWithoutDecimalSuffix() throws {
         let url = try Self.builder.url(
             for: .deleteBookmark(
@@ -299,9 +311,9 @@ final class AudiobookshelfRouteTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/audiobookshelf/api/me/item/item/bookmark/12"
+        #expect(
+            url.absoluteString
+                == "https://example.com/audiobookshelf/api/me/item/item/bookmark/12"
         )
     }
 }

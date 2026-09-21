@@ -701,6 +701,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var transferRetryCounts: [AutomaticDownloadTaskKey: Int] = [:]
     private var terminalTransferTaskKeys: Set<AutomaticDownloadTaskKey> = []
     private var retrySchedulingDownloadIDs: Set<DownloadID> = []
+    private var schedulingDownloadIDs: Set<DownloadID> = []
     private var deferredRetryWakeTasks:
         [AutomaticDownloadTaskKey: Task<Void, Never>] = [:]
     private var isRecoveringInterruptedTransfers = false
@@ -2271,6 +2272,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         storage: DownloadStorage
     ) async throws {
         let promoted = try await storage.promoteToManual(record)
+        // Scheduling must see the promoted scope before checking track eligibility.
+        if let index = records.firstIndex(where: {
+            $0.manifest.downloadID == promoted.manifest.downloadID
+        }) {
+            records[index] = promoted
+        }
         guard !tracks.isEmpty else {
             return
         }
@@ -2727,6 +2734,21 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         purpose: DownloadPurpose,
         storage: DownloadStorage
     ) async throws -> Bool {
+        // Repair and background reconciliation can interleave at any await.
+        // Reserve the book until its task is registered, preserving one active
+        // range per book even when competing planners select different tracks.
+        let downloadID = identity.downloadID
+        guard schedulingDownloadIDs.insert(downloadID).inserted else {
+            return false
+        }
+        defer { schedulingDownloadIDs.remove(downloadID) }
+        guard
+            !(await activeTransferTaskKeys()).contains(where: {
+                $0.downloadID == downloadID
+            })
+        else {
+            return false
+        }
         let committed = try await storage.partialByteLength(identity)
         guard
             let range = try DownloadByteRange.next(

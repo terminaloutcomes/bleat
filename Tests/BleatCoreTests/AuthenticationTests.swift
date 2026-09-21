@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class AuthenticationTests: XCTestCase {
+@Suite(.serialized)
+final class AuthenticationTests {
+    @Test
     func testPinnedAuthenticationFixturesCompleteTransaction() async throws {
         let transport = AuthenticationHTTPTransport(
             responses: [
@@ -29,29 +31,25 @@ final class AuthenticationTests: XCTestCase {
             for: accountID
         )
 
-        XCTAssertEqual(
-            account.user.id,
-            UserID(rawValue: "fixture-user")
-        )
-        XCTAssertEqual(account.user.username, "fixture-root")
-        XCTAssertEqual(account.user.type, .root)
-        XCTAssertEqual(
-            storedCredentials,
-            try AuthenticationTokens(
-                accessToken: "fixture-access-token",
-                refreshToken: "fixture-refresh-token"
-            )
-        )
-        XCTAssertEqual(
-            storedNativeLogin,
-            try NativeLoginCredentials(
-                userID: UserID(rawValue: "fixture-user"),
-                username: "fixture-root",
-                password: "test-password"
-            )
-        )
+        #expect(account.user.id == UserID(rawValue: "fixture-user"))
+        #expect(account.user.username == "fixture-root")
+        #expect(account.user.type == .root)
+        #expect(
+            storedCredentials
+                == (try AuthenticationTokens(
+                    accessToken: "fixture-access-token",
+                    refreshToken: "fixture-refresh-token"
+                )))
+        #expect(
+            storedNativeLogin
+                == (try NativeLoginCredentials(
+                    userID: UserID(rawValue: "fixture-user"),
+                    username: "fixture-root",
+                    password: "test-password"
+                )))
     }
 
+    @Test
     func testLocalLoginValidatesBeforePersistingCredentials() async throws {
         let transport = AuthenticationHTTPTransport(
             responses: [
@@ -81,56 +79,44 @@ final class AuthenticationTests: XCTestCase {
             password: "test-password"
         )
 
-        XCTAssertEqual(account.id, accountID)
-        XCTAssertEqual(account.server, server)
-        XCTAssertEqual(
-            account.user.id,
-            UserID(rawValue: "user-id")
-        )
-        XCTAssertEqual(account.user.username, "reader")
-        XCTAssertEqual(account.user.type, .root)
-        XCTAssertTrue(account.user.permissions.download)
-        XCTAssertEqual(account.user.accessibleLibraryIDs, [])
-        XCTAssertEqual(account.user.selectedItemTags, [])
+        #expect(account.id == accountID)
+        #expect(account.server == server)
+        #expect(account.user.id == UserID(rawValue: "user-id"))
+        #expect(account.user.username == "reader")
+        #expect(account.user.type == .root)
+        #expect(account.user.permissions.download)
+        #expect(account.user.accessibleLibraryIDs == [])
+        #expect(account.user.selectedItemTags == [])
 
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 2)
-        XCTAssertEqual(
-            requests[0].url?.absoluteString,
-            "https://example.com/audiobookshelf/login"
-        )
-        XCTAssertEqual(requests[0].httpMethod, "POST")
-        XCTAssertEqual(
-            requests[0].value(forHTTPHeaderField: "Content-Type"),
-            "application/json"
-        )
-        XCTAssertEqual(
-            requests[0].value(forHTTPHeaderField: "x-return-tokens"),
-            "true"
-        )
-        let loginBody = try XCTUnwrap(requests[0].httpBody)
-        let loginObject = try XCTUnwrap(
+        #expect(requests.count == 2)
+        #expect(
+            requests[0].url?.absoluteString
+                == "https://example.com/audiobookshelf/login")
+        #expect(requests[0].httpMethod == "POST")
+        #expect(
+            requests[0].value(forHTTPHeaderField: "Content-Type")
+                == "application/json")
+        #expect(
+            requests[0].value(forHTTPHeaderField: "x-return-tokens") == "true")
+        let loginBody = try #require(requests[0].httpBody)
+        let loginObject = try #require(
             JSONSerialization.jsonObject(with: loginBody)
-                as? [String: String]
-        )
-        XCTAssertEqual(
-            loginObject,
-            [
+                as? [String: String])
+        #expect(
+            loginObject == [
                 "username": "reader",
                 "password": "test-password",
-            ]
-        )
+            ])
 
-        XCTAssertEqual(
-            requests[1].url?.absoluteString,
-            "https://example.com/audiobookshelf/api/authorize"
-        )
-        XCTAssertEqual(requests[1].httpMethod, "POST")
-        XCTAssertEqual(
-            requests[1].value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertNil(requests[1].url?.query)
+        #expect(
+            requests[1].url?.absoluteString
+                == "https://example.com/audiobookshelf/api/authorize")
+        #expect(requests[1].httpMethod == "POST")
+        #expect(
+            requests[1].value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(requests[1].url?.query == nil)
 
         let storedCredentials = await store.credentials(for: accountID)
         let expectedCredentials = try AuthenticationTokens(
@@ -138,10 +124,11 @@ final class AuthenticationTests: XCTestCase {
             refreshToken: "refresh-token"
         )
         let saveCount = await store.saveCount()
-        XCTAssertEqual(storedCredentials, expectedCredentials)
-        XCTAssertEqual(saveCount, 1)
+        #expect(storedCredentials == expectedCredentials)
+        #expect(saveCount == 1)
     }
 
+    @Test
     func testCredentialValidationRequiresSameUserWithoutPersisting()
         async throws
     {
@@ -174,11 +161,12 @@ final class AuthenticationTests: XCTestCase {
         let storedTokens = await store.credentials(for: accountID)
         let storedLogin = await store.nativeLoginCredentials(for: accountID)
         let saveCount = await store.saveCount()
-        XCTAssertNil(storedTokens)
-        XCTAssertNil(storedLogin)
-        XCTAssertEqual(saveCount, 0)
+        #expect(storedTokens == nil)
+        #expect(storedLogin == nil)
+        #expect(saveCount == 0)
     }
 
+    @Test
     func testCredentialValidationRejectsADifferentSavedUser() async throws {
         let transport = AuthenticationHTTPTransport(
             responses: [
@@ -206,19 +194,19 @@ final class AuthenticationTests: XCTestCase {
                 expectedUserID: UserID(rawValue: "different-user")
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .authorizedUserMismatch(
-                    expected: "different-user",
-                    actual: "user-id"
-                )
-            )
+            #expect(
+                error as? LocalAuthenticationError
+                    == .authorizedUserMismatch(
+                        expected: "different-user",
+                        actual: "user-id"
+                    ))
         }
 
         let saveCount = await store.saveCount()
-        XCTAssertEqual(saveCount, 0)
+        #expect(saveCount == 0)
     }
 
+    @Test
     func testStoredSessionValidationDoesNotReplaceCredentials() async throws {
         let transport = AuthenticationHTTPTransport(
             responses: [.json(Self.authenticationJSON())]
@@ -241,23 +229,22 @@ final class AuthenticationTests: XCTestCase {
             expectedUserID: UserID(rawValue: "user-id")
         )
 
-        XCTAssertEqual(authenticated.user.username, "reader")
+        #expect(authenticated.user.username == "reader")
         let storedTokens = await store.credentials(for: accountID)
         let saveCount = await store.saveCount()
-        XCTAssertEqual(storedTokens, tokens)
-        XCTAssertEqual(saveCount, 1)
+        #expect(storedTokens == tokens)
+        #expect(saveCount == 1)
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(
-            requests[0].url?.absoluteString,
-            "https://new.example/api/authorize"
-        )
-        XCTAssertEqual(
-            requests[0].value(forHTTPHeaderField: "Authorization"),
-            "Bearer stored-access"
-        )
+        #expect(requests.count == 1)
+        #expect(
+            requests[0].url?.absoluteString
+                == "https://new.example/api/authorize")
+        #expect(
+            requests[0].value(forHTTPHeaderField: "Authorization")
+                == "Bearer stored-access")
     }
 
+    @Test
     func testStoredAuthenticationFallsBackWithoutReplacingPassword()
         async throws
     {
@@ -303,11 +290,12 @@ final class AuthenticationTests: XCTestCase {
         let retainedTokens = await store.credentials(for: accountID)
         let retainedLogin = await store.nativeLoginCredentials(for: accountID)
         let saveCount = await store.saveCount()
-        XCTAssertEqual(retainedTokens, storedTokens)
-        XCTAssertEqual(retainedLogin, storedLogin)
-        XCTAssertEqual(saveCount, 1)
+        #expect(retainedTokens == storedTokens)
+        #expect(retainedLogin == storedLogin)
+        #expect(saveCount == 1)
     }
 
+    @Test
     func testSavedNativeLoginValidatesAnUntrustedEndpointWithoutBearerToken()
         async throws
     {
@@ -350,30 +338,26 @@ final class AuthenticationTests: XCTestCase {
         )
 
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 2)
-        XCTAssertEqual(
-            requests[0].url?.absoluteString,
-            "https://local.example/prefix/login"
-        )
-        XCTAssertNil(
-            requests[0].value(forHTTPHeaderField: "Authorization")
-        )
-        XCTAssertEqual(
-            requests[1].url?.absoluteString,
-            "https://local.example/prefix/api/authorize"
-        )
-        XCTAssertEqual(
-            requests[1].value(forHTTPHeaderField: "Authorization"),
-            "Bearer temporary-access"
-        )
+        #expect(requests.count == 2)
+        #expect(
+            requests[0].url?.absoluteString
+                == "https://local.example/prefix/login")
+        #expect(requests[0].value(forHTTPHeaderField: "Authorization") == nil)
+        #expect(
+            requests[1].url?.absoluteString
+                == "https://local.example/prefix/api/authorize")
+        #expect(
+            requests[1].value(forHTTPHeaderField: "Authorization")
+                == "Bearer temporary-access")
         let retainedTokens = await store.credentials(for: accountID)
         let retainedLogin = await store.nativeLoginCredentials(for: accountID)
         let saveCount = await store.saveCount()
-        XCTAssertEqual(retainedTokens, storedTokens)
-        XCTAssertEqual(retainedLogin, storedLogin)
-        XCTAssertEqual(saveCount, 1)
+        #expect(retainedTokens == storedTokens)
+        #expect(retainedLogin == storedLogin)
+        #expect(saveCount == 1)
     }
 
+    @Test
     func testLocalLoginRejectsInvalidLoginResultsWithoutPersisting()
         async throws
     {
@@ -434,16 +418,14 @@ final class AuthenticationTests: XCTestCase {
                     password: "incorrect"
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? LocalAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? LocalAuthenticationError == expectedError)
             }
             let saveCount = await store.saveCount()
-            XCTAssertEqual(saveCount, 0)
+            #expect(saveCount == 0)
         }
     }
 
+    @Test
     func testLocalLoginRejectsInvalidAuthorizationWithoutPersisting()
         async throws
     {
@@ -497,16 +479,14 @@ final class AuthenticationTests: XCTestCase {
                     password: "test-password"
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? LocalAuthenticationError,
-                    expectedError
-                )
+                #expect(error as? LocalAuthenticationError == expectedError)
             }
             let saveCount = await store.saveCount()
-            XCTAssertEqual(saveCount, 0)
+            #expect(saveCount == 0)
         }
     }
 
+    @Test
     func testLocalLoginRejectsEmptyAccountAndPersistenceFailure() async throws {
         let emptyAccountTransport = AuthenticationHTTPTransport(responses: [])
         let emptyAccountStore = RecordingCredentialStore()
@@ -523,14 +503,11 @@ final class AuthenticationTests: XCTestCase {
                 password: "test-password"
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .invalidAccountID
-            )
+            #expect(error as? LocalAuthenticationError == .invalidAccountID)
         }
         let emptyAccountRequests =
             await emptyAccountTransport.recordedRequests()
-        XCTAssertEqual(emptyAccountRequests.count, 0)
+        #expect(emptyAccountRequests.count == 0)
 
         let transport = AuthenticationHTTPTransport(
             responses: [
@@ -559,17 +536,17 @@ final class AuthenticationTests: XCTestCase {
                 password: "test-password"
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .credentialPersistenceFailed
-            )
+            #expect(
+                error as? LocalAuthenticationError
+                    == .credentialPersistenceFailed)
         }
         let failedCredentials = await failingStore.credentials(
             for: AccountID(rawValue: "account")
         )
-        XCTAssertNil(failedCredentials)
+        #expect(failedCredentials == nil)
     }
 
+    @Test
     func testMissingKeychainEntitlementHasDistinctAuthenticationError()
         async throws
     {
@@ -600,21 +577,20 @@ final class AuthenticationTests: XCTestCase {
                 password: "test-password"
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .credentialStorageUnavailable
-            )
+            #expect(
+                error as? LocalAuthenticationError
+                    == .credentialStorageUnavailable)
         }
         let storedCredentials = await store.credentials(
             for: AccountID(rawValue: "account")
         )
-        XCTAssertNil(storedCredentials)
+        #expect(storedCredentials == nil)
     }
 
+    @Test
     func testBearerAuthorizerAddsHeaderWithoutChangingURL() throws {
-        let url = try XCTUnwrap(
-            URL(string: "https://example.com/api/libraries?sort=title")
-        )
+        let url = try #require(
+            URL(string: "https://example.com/api/libraries?sort=title"))
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
 
@@ -623,20 +599,17 @@ final class AuthenticationTests: XCTestCase {
             accessToken: "access-token"
         )
 
-        XCTAssertEqual(authorized.url, url)
-        XCTAssertEqual(
-            authorized.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(
-            authorized.url?.query,
-            "sort=title"
-        )
+        #expect(authorized.url == url)
+        #expect(
+            authorized.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(authorized.url?.query == "sort=title")
     }
 
+    @Test
     func testBearerAuthorizerRejectsUnsafeRequestOrToken() throws {
         var missingURL = URLRequest(
-            url: try XCTUnwrap(URL(string: "https://example.com"))
+            url: try #require(URL(string: "https://example.com"))
         )
         missingURL.url = nil
 
@@ -644,48 +617,43 @@ final class AuthenticationTests: XCTestCase {
             (missingURL, "access", .missingURL),
             (
                 URLRequest(
-                    url: try XCTUnwrap(
-                        URL(string: "http://example.com/api/libraries")
-                    )
+                    url: try #require(
+                        URL(string: "http://example.com/api/libraries"))
                 ),
                 "access",
                 .insecureURL
             ),
             (
                 URLRequest(
-                    url: try XCTUnwrap(
-                        URL(string: "https://user@example.com/api/libraries")
-                    )
+                    url: try #require(
+                        URL(string: "https://user@example.com/api/libraries"))
                 ),
                 "access",
                 .embeddedCredentials
             ),
             (
                 URLRequest(
-                    url: try XCTUnwrap(
+                    url: try #require(
                         URL(
                             string:
                                 "https://example.com/api/libraries?TOKEN=secret"
-                        )
-                    )
+                        ))
                 ),
                 "access",
                 .tokenBearingURL
             ),
             (
                 URLRequest(
-                    url: try XCTUnwrap(
-                        URL(string: "https://example.com/api/libraries")
-                    )
+                    url: try #require(
+                        URL(string: "https://example.com/api/libraries"))
                 ),
                 "",
                 .invalidAccessToken
             ),
             (
                 URLRequest(
-                    url: try XCTUnwrap(
-                        URL(string: "https://example.com/api/libraries")
-                    )
+                    url: try #require(
+                        URL(string: "https://example.com/api/libraries"))
                 ),
                 "bad\nheader",
                 .invalidAccessToken
@@ -693,58 +661,57 @@ final class AuthenticationTests: XCTestCase {
         ]
 
         for (request, token, expectedError) in scenarios {
-            XCTAssertThrowsError(
-                try BearerRequestAuthorizer().authorize(
-                    request,
-                    accessToken: token
-                )
-            ) { error in
-                XCTAssertEqual(
-                    error as? BearerAuthorizationError,
-                    expectedError
-                )
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try BearerRequestAuthorizer().authorize(
+                        request,
+                        accessToken: token
+                    )
+                })
+            {
+                #expect(error as? BearerAuthorizationError == expectedError)
             }
         }
     }
 
+    @Test
     func testAuthenticationTokensAndUnknownUserTypeValidation() throws {
-        XCTAssertThrowsError(
-            try AuthenticationTokens(
-                accessToken: "",
-                refreshToken: "refresh"
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? AuthenticationTokenError,
-                .invalidAccessToken
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try AuthenticationTokens(
+                    accessToken: "",
+                    refreshToken: "refresh"
+                )
+            })
+        {
+            #expect(error as? AuthenticationTokenError == .invalidAccessToken)
         }
-        XCTAssertThrowsError(
-            try AuthenticationTokens(
-                accessToken: "access",
-                refreshToken: "bad token"
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? AuthenticationTokenError,
-                .invalidRefreshToken
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: {
+                try AuthenticationTokens(
+                    accessToken: "access",
+                    refreshToken: "bad token"
+                )
+            })
+        {
+            #expect(error as? AuthenticationTokenError == .invalidRefreshToken)
         }
 
         let encoded = try JSONEncoder().encode(
             AudiobookshelfUserType.unknown("future-type")
         )
-        XCTAssertEqual(
+        #expect(
             try JSONDecoder().decode(
                 AudiobookshelfUserType.self,
                 from: encoded
-            ),
-            .unknown("future-type")
-        )
-        XCTAssertEqual(AudiobookshelfUserType.root.rawValue, "root")
-        XCTAssertEqual(AudiobookshelfUserType.admin.rawValue, "admin")
-        XCTAssertEqual(AudiobookshelfUserType.user.rawValue, "user")
-        XCTAssertEqual(AudiobookshelfUserType.guest.rawValue, "guest")
+            ) == .unknown("future-type"))
+        #expect(AudiobookshelfUserType.root.rawValue == "root")
+        #expect(AudiobookshelfUserType.admin.rawValue == "admin")
+        #expect(AudiobookshelfUserType.user.rawValue == "user")
+        #expect(AudiobookshelfUserType.guest.rawValue == "guest")
 
         let decodedTypes = try JSONDecoder().decode(
             [AudiobookshelfUserType].self,
@@ -752,46 +719,47 @@ final class AuthenticationTests: XCTestCase {
                 #"["root","admin","user","guest","future-type"]"#.utf8
             )
         )
-        XCTAssertEqual(
-            decodedTypes,
-            [.root, .admin, .user, .guest, .unknown("future-type")]
-        )
+        #expect(
+            decodedTypes == [
+                .root, .admin, .user, .guest, .unknown("future-type"),
+            ])
 
         let tokens = try AuthenticationTokens(
             accessToken: "access",
             refreshToken: "refresh"
         )
-        XCTAssertEqual(
+        #expect(
             try JSONDecoder().decode(
                 AuthenticationTokens.self,
                 from: JSONEncoder().encode(tokens)
-            ),
-            tokens
-        )
+            ) == tokens)
 
         for invalidJSON in [
             #"{"accessToken":"bad token","refreshToken":"refresh"}"#,
             #"{"accessToken":"access","refreshToken":"bad token"}"#,
         ] {
-            XCTAssertThrowsError(
-                try JSONDecoder().decode(
-                    AuthenticationTokens.self,
-                    from: Data(invalidJSON.utf8)
-                )
-            )
+            #expect(
+                throws: (any Error).self,
+                performing: {
+                    try JSONDecoder().decode(
+                        AuthenticationTokens.self,
+                        from: Data(invalidJSON.utf8)
+                    )
+                })
         }
     }
 
+    @Test
     func testUserPermissionsDefaultsMissingKeysToFalse() throws {
         // Older accounts may be missing newly added permissions.
         let empty = try JSONDecoder().decode(
             UserPermissions.self,
             from: Data("{}".utf8)
         )
-        XCTAssertFalse(empty.download)
-        XCTAssertFalse(empty.createEReader)
-        XCTAssertFalse(empty.accessAllLibraries)
-        XCTAssertFalse(empty.selectedTagsNotAccessible)
+        #expect(!(empty.download))
+        #expect(!(empty.createEReader))
+        #expect(!(empty.accessAllLibraries))
+        #expect(!(empty.selectedTagsNotAccessible))
 
         // This Audiobookshelf 2.36 example predates `createEreader`.
         let legacy = try JSONDecoder().decode(
@@ -811,14 +779,15 @@ final class AuthenticationTests: XCTestCase {
                 """.utf8
             )
         )
-        XCTAssertTrue(legacy.download)
-        XCTAssertTrue(legacy.accessAllLibraries)
-        XCTAssertTrue(legacy.accessAllTags)
-        XCTAssertTrue(legacy.accessExplicitContent)
-        XCTAssertFalse(legacy.update)
-        XCTAssertFalse(legacy.createEReader)
+        #expect(legacy.download)
+        #expect(legacy.accessAllLibraries)
+        #expect(legacy.accessAllTags)
+        #expect(legacy.accessExplicitContent)
+        #expect(!(legacy.update))
+        #expect(!(legacy.createEReader))
     }
 
+    @Test
     func testLoginSucceedsWhenPermissionKeyMissing() async throws {
         // A missing permission must not prevent login.
         let payload = Data(
@@ -860,9 +829,9 @@ final class AuthenticationTests: XCTestCase {
             username: "reader",
             password: "test-password"
         )
-        XCTAssertEqual(account.user.username, "reader")
-        XCTAssertFalse(account.user.permissions.createEReader)
-        XCTAssertTrue(account.user.permissions.accessAllLibraries)
+        #expect(account.user.username == "reader")
+        #expect(!(account.user.permissions.createEReader))
+        #expect(account.user.permissions.accessAllLibraries)
     }
 
     private static func authenticationJSON(
@@ -907,14 +876,13 @@ final class AuthenticationTests: XCTestCase {
     }
 
     private static func fixture(named name: String) throws -> Data {
-        let url = try XCTUnwrap(
+        let url = try #require(
             Bundle.module.urls(
                 forResourcesWithExtension: "json",
                 subdirectory: nil
             )?.first {
                 $0.lastPathComponent == "\(name).json"
-            }
-        )
+            })
         return try Data(contentsOf: url)
     }
 }

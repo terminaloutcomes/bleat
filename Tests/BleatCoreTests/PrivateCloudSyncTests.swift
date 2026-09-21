@@ -1,11 +1,13 @@
 import CloudKit
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class PrivateCloudSyncTests: XCTestCase {
+@Suite(.serialized)
+final class PrivateCloudSyncTests {
+    @Test
     func testEveryPrivateCloudErrorPreservesDiagnosticFailureCode() {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
             (.disabled, .privateCloudDisabled),
@@ -27,31 +29,31 @@ final class PrivateCloudSyncTests: XCTestCase {
             ),
         ]
         for (error, expected) in cases {
-            XCTAssertEqual(error.diagnosticFailureCode, expected)
+            #expect(error.diagnosticFailureCode == expected)
             let event = DiagnosticEvent.privateCloudFailed(
                 failure: PrivateCloudSyncFailure(
                     operation: .synchronize, cause: error),
                 correlationID: UUID(),
                 durationMilliseconds: 0
             )
-            XCTAssertEqual(event.failureCode, expected)
+            #expect(event.failureCode == expected)
         }
     }
 
+    @Test
     func testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope() {
-        XCTAssertNil(
+        #expect(
             PrivateCloudSyncCoordinator.configurationFailure(for: .private)
-        )
-        XCTAssertEqual(
-            PrivateCloudSyncCoordinator.configurationFailure(for: .public),
-            .nonPrivateDatabase
-        )
-        XCTAssertEqual(
-            PrivateCloudSyncCoordinator.configurationFailure(for: .shared),
-            .nonPrivateDatabase
-        )
+                == nil)
+        #expect(
+            PrivateCloudSyncCoordinator.configurationFailure(for: .public)
+                == .nonPrivateDatabase)
+        #expect(
+            PrivateCloudSyncCoordinator.configurationFailure(for: .shared)
+                == .nonPrivateDatabase)
     }
 
+    @Test
     func testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain()
         async throws
     {
@@ -61,23 +63,24 @@ final class PrivateCloudSyncTests: XCTestCase {
         let callback = await run.beginCallback {}
         try await Task.sleep(for: .milliseconds(50))
         let expiredInBackground = await run.checkDeadline(for: callback)
-        XCTAssertFalse(expiredInBackground)
+        #expect(!(expiredInBackground))
 
         await lifecycle.setForeground(true)
         try await Task.sleep(for: .milliseconds(50))
         let expiredInForeground = await run.checkDeadline(for: callback)
-        XCTAssertTrue(expiredInForeground)
+        #expect(expiredInForeground)
         let result = await run.waitForResult()
         guard case .failure(let failure) = result else {
-            return XCTFail("Expected a typed callback timeout")
+            Issue.record("Expected a typed callback timeout")
+            return
         }
-        XCTAssertEqual(failure.operation, .applyFetchedChanges)
-        XCTAssertEqual(failure.cause, .callbackTimedOut)
+        #expect(failure.operation == .applyFetchedChanges)
+        #expect(failure.cause == .callbackTimedOut)
         do {
             _ = try await lifecycle.begin()
-            XCTFail("Retry must wait for the old callback")
+            Issue.record("Retry must wait for the old callback")
         } catch {
-            XCTAssertEqual(error, .stopping)
+            #expect(error == .stopping)
         }
 
         await run.endCallback(callback)
@@ -87,20 +90,32 @@ final class PrivateCloudSyncTests: XCTestCase {
         _ = try await lifecycle.begin()
     }
 
+    @Test
     func testFetchedCallbackProgressResetsNoProgressDeadline() async throws {
         let run = PrivateCloudSyncRun(deadline: .seconds(1))
         let callback = await run.beginCallback {}
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(600))
         try await run.checkCallback(callback)
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(600))
         let expiredAfterProgress = await run.checkDeadline(for: callback)
-        XCTAssertFalse(expiredAfterProgress)
-        try await Task.sleep(for: .milliseconds(950))
-        let expiredWithoutProgress = await run.checkDeadline(for: callback)
-        XCTAssertTrue(expiredWithoutProgress)
+        #expect(!(expiredAfterProgress))
+        let failureAfterProgress = await run.failure()
+        #expect(failureAfterProgress == nil)
+        try await Task.sleep(for: .milliseconds(600))
+        // The watchdog can record the timeout before this manual check. Verify
+        // the recorded outcome, not which caller first noticed expiration.
+        _ = await run.checkDeadline(for: callback)
+        let failure = await run.failure()
+        #expect(
+            failure
+                == PrivateCloudSyncFailure(
+                    operation: .applyFetchedChanges,
+                    cause: .callbackTimedOut
+                ))
         await run.endCallback(callback)
     }
 
+    @Test
     func testFetchedCallbackFailureOverridesSuccessfulEngineCompletion()
         async throws
     {
@@ -113,11 +128,13 @@ final class PrivateCloudSyncTests: XCTestCase {
         await run.complete(.success(()))
         let result = await run.waitForResult()
         guard case .failure(let reported) = result else {
-            return XCTFail("A failed callback must fail the overall sync")
+            Issue.record("A failed callback must fail the overall sync")
+            return
         }
-        XCTAssertEqual(reported, failure)
+        #expect(reported == failure)
     }
 
+    @Test
     func testInterruptedFetchedBatchCanReconcileOnRetry() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -140,18 +157,19 @@ final class PrivateCloudSyncTests: XCTestCase {
                 records,
                 checkActive: { try await checkpoint.check() }
             )
-            XCTFail("Expected the interrupted batch to stop")
+            Issue.record("Expected the interrupted batch to stop")
         } catch let error as PrivateCloudSyncError {
-            XCTAssertEqual(error, .callbackTimedOut)
+            #expect(error == .callbackTimedOut)
         }
         let beforeRetry = try await fixture.statistics.archive()
-        XCTAssertTrue(beforeRetry.slices.isEmpty)
+        #expect(beforeRetry.slices.isEmpty)
 
         _ = try await fixture.store.applyFetchedRecords(records)
         let afterRetry = try await fixture.statistics.archive()
-        XCTAssertEqual(afterRetry.slices.count, 3)
+        #expect(afterRetry.slices.count == 3)
     }
 
+    @Test
     func testNonPrivateDatabaseHasSpecificDiagnosticCode() {
         let event = DiagnosticEvent.privateCloudFailed(
             failure: PrivateCloudSyncFailure(
@@ -162,17 +180,13 @@ final class PrivateCloudSyncTests: XCTestCase {
             durationMilliseconds: 0
         )
 
-        XCTAssertEqual(
-            event.failureCode,
-            .privateCloudNonPrivateDatabase
-        )
-        XCTAssertEqual(
+        #expect(event.failureCode == .privateCloudNonPrivateDatabase)
+        #expect(
             PrivateCloudSyncError.nonPrivateDatabase
-                .remoteTelemetryFailureCategory,
-            .sourceBug
-        )
+                .remoteTelemetryFailureCategory == .sourceBug)
     }
 
+    @Test
     func testCloudKitFailurePreservesExactCodeRetryAndPartialCodes() {
         let error = CKError(
             .partialFailure,
@@ -188,15 +202,16 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         let failure = CloudKitFailure(error)
 
-        XCTAssertEqual(failure.code, .partialFailure)
-        XCTAssertEqual(
-            failure.partialFailureCodes,
-            [.networkFailure, .permissionFailure]
-        )
-        XCTAssertEqual(failure.retryAfterSeconds, 2.5)
-        XCTAssertTrue(failure.isRetryable)
+        #expect(failure.code == .partialFailure)
+        #expect(
+            failure.partialFailureCodes == [
+                .networkFailure, .permissionFailure,
+            ])
+        #expect(failure.retryAfterSeconds == 2.5)
+        #expect(failure.isRetryable)
     }
 
+    @Test
     func testOnlyConflictPartialFailureAllowsOneReconciliationRetry() {
         let conflict = CloudKitFailure(
             CKError(
@@ -221,38 +236,31 @@ final class PrivateCloudSyncTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(conflict.canRetryAfterConflictReconciliation)
-        XCTAssertFalse(mixed.canRetryAfterConflictReconciliation)
-        XCTAssertEqual(
+        #expect(conflict.canRetryAfterConflictReconciliation)
+        #expect(!(mixed.canRetryAfterConflictReconciliation))
+        #expect(
             conflict.sendRecovery(
                 hasPendingConfigurationConflict: true,
                 attempt: 0
-            ),
-            .awaitUserResolution
-        )
-        XCTAssertEqual(
+            ) == .awaitUserResolution)
+        #expect(
             conflict.sendRecovery(
                 hasPendingConfigurationConflict: false,
                 attempt: 0
-            ),
-            .retry
-        )
-        XCTAssertEqual(
+            ) == .retry)
+        #expect(
             conflict.sendRecovery(
                 hasPendingConfigurationConflict: false,
                 attempt: 1
-            ),
-            .fail
-        )
-        XCTAssertEqual(
+            ) == .fail)
+        #expect(
             mixed.sendRecovery(
                 hasPendingConfigurationConflict: true,
                 attempt: 0
-            ),
-            .fail
-        )
+            ) == .fail)
     }
 
+    @Test
     func testCloudKitDiagnosticIncludesOperationAndTypedFailureDetails() {
         let correlationID = UUID()
         let failure = PrivateCloudSyncFailure(
@@ -274,24 +282,18 @@ final class PrivateCloudSyncTests: XCTestCase {
             recordCount: 23
         )
 
-        XCTAssertEqual(event.operation, .privateCloudSync)
-        XCTAssertEqual(event.failureCode, .privateCloudKitFailed)
-        XCTAssertEqual(event.privateCloud?.operation, .applyFetchedChanges)
-        XCTAssertEqual(
-            event.privateCloud?.cloudKitCode,
-            "request_rate_limited"
-        )
-        XCTAssertEqual(event.privateCloud?.retryAfterMilliseconds, 1_250)
-        XCTAssertEqual(event.count, 23)
-        XCTAssertTrue(
-            event.text.contains("cloud_operation=apply_fetched_changes")
-        )
-        XCTAssertTrue(
-            event.text.contains("cloudkit_code=request_rate_limited")
-        )
-        XCTAssertFalse(event.text.contains("localizedDescription"))
+        #expect(event.operation == .privateCloudSync)
+        #expect(event.failureCode == .privateCloudKitFailed)
+        #expect(event.privateCloud?.operation == .applyFetchedChanges)
+        #expect(event.privateCloud?.cloudKitCode == "request_rate_limited")
+        #expect(event.privateCloud?.retryAfterMilliseconds == 1_250)
+        #expect(event.count == 23)
+        #expect(event.text.contains("cloud_operation=apply_fetched_changes"))
+        #expect(event.text.contains("cloudkit_code=request_rate_limited"))
+        #expect(!(event.text.contains("localizedDescription")))
     }
 
+    @Test
     func testFailedCloudKitEventRecorderPreservesRecordCount() async throws {
         let diagnostics = PrivateCloudDiagnosticRecorderSpy()
         let recorder = DiagnosticPrivateCloudSyncEventRecorder(
@@ -313,12 +315,13 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
 
         let events = await diagnostics.events()
-        let event = try XCTUnwrap(events.first)
-        XCTAssertEqual(event.privateCloud?.operation, .uploadChanges)
-        XCTAssertEqual(event.count, 17)
-        XCTAssertTrue(event.text.contains("count=17"))
+        let event = try #require(events.first)
+        #expect(event.privateCloud?.operation == .uploadChanges)
+        #expect(event.count == 17)
+        #expect(event.text.contains("count=17"))
     }
 
+    @Test
     func testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount() {
         let event = DiagnosticEvent.privateCloudCompleted(
             operation: .prepareLocalChanges,
@@ -327,13 +330,12 @@ final class PrivateCloudSyncTests: XCTestCase {
             recordCount: 17
         )
 
-        XCTAssertTrue(
-            event.text.contains("cloud_operation=prepare_local_changes")
-        )
-        XCTAssertTrue(event.text.contains("duration_ms=23"))
-        XCTAssertTrue(event.text.contains("count=17"))
+        #expect(event.text.contains("cloud_operation=prepare_local_changes"))
+        #expect(event.text.contains("duration_ms=23"))
+        #expect(event.text.contains("count=17"))
     }
 
+    @Test
     func testConfigurationSnapshotDefaultsHeadphoneCommands() async throws {
         let suite = makeSuite()
         defer {
@@ -343,10 +345,11 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         let snapshot = await store.snapshot()
 
-        XCTAssertEqual(snapshot.previousCommandAction, .skipBackward)
-        XCTAssertEqual(snapshot.nextCommandAction, .skipForward)
+        #expect(snapshot.previousCommandAction == .skipBackward)
+        #expect(snapshot.nextCommandAction == .skipForward)
     }
 
+    @Test
     func testConfigurationSnapshotRoundTripsHeadphoneCommands() async throws {
         let sourceSuite = makeSuite()
         let targetSuite = makeSuite()
@@ -375,15 +378,15 @@ final class PrivateCloudSyncTests: XCTestCase {
         try await target.apply(decoded)
         let restored = await target.snapshot()
 
-        XCTAssertEqual(restored.previousCommandAction, .previousChapter)
-        XCTAssertEqual(restored.nextCommandAction, .nextChapter)
-        XCTAssertEqual(restored.maximumConcurrentDownloads, 15)
-        XCTAssertEqual(
-            restored.automaticDownloadLookahead,
-            AutomaticDownloadLookaheadPreference.all.rawValue
-        )
+        #expect(restored.previousCommandAction == .previousChapter)
+        #expect(restored.nextCommandAction == .nextChapter)
+        #expect(restored.maximumConcurrentDownloads == 15)
+        #expect(
+            restored.automaticDownloadLookahead
+                == AutomaticDownloadLookaheadPreference.all.rawValue)
     }
 
+    @Test
     func testConfigurationNormalizesLookaheadBeforeApplying() async throws {
         let suite = makeSuite()
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
@@ -406,15 +409,14 @@ final class PrivateCloudSyncTests: XCTestCase {
                 CloudConfigurationSnapshot.self,
                 from: JSONEncoder().encode(payload)
             )
-            XCTAssertEqual(
-                decoded.automaticDownloadLookahead, expected.rawValue)
+            #expect(decoded.automaticDownloadLookahead == expected.rawValue)
             try await store.apply(decoded)
             let restored = await store.snapshot()
-            XCTAssertEqual(
-                restored.automaticDownloadLookahead, expected.rawValue)
+            #expect(restored.automaticDownloadLookahead == expected.rawValue)
         }
     }
 
+    @Test
     func testLegacyConfigurationDefaultsMissingHeadphoneCommands() throws {
         let legacy = LegacyCloudConfigurationSnapshot(
             defaultPlaybackRate: 1.25,
@@ -432,11 +434,12 @@ final class PrivateCloudSyncTests: XCTestCase {
             from: data
         )
 
-        XCTAssertEqual(decoded.previousCommandAction, .skipBackward)
-        XCTAssertEqual(decoded.nextCommandAction, .skipForward)
-        XCTAssertEqual(decoded.maximumConcurrentDownloads, 5)
+        #expect(decoded.previousCommandAction == .skipBackward)
+        #expect(decoded.nextCommandAction == .skipForward)
+        #expect(decoded.maximumConcurrentDownloads == 5)
     }
 
+    @Test
     func testConfigurationRejectsInvalidHeadphoneCommand() throws {
         let invalid = InvalidCloudConfigurationSnapshot(
             defaultPlaybackRate: 1,
@@ -451,14 +454,17 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(invalid)
 
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(
-                CloudConfigurationSnapshot.self,
-                from: data
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self,
+                    from: data
+                )
+            })
     }
 
+    @Test
     func testRejectingFetchedAccountChangePreservesAndReturnsLocalEdit()
         async throws
     {
@@ -476,9 +482,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let cloudAccountRecord = try XCTUnwrap(
-            records.first { $0.recordType == "ServerAccount" }
-        )
+        let cloudAccountRecord = try #require(
+            records.first { $0.recordType == "ServerAccount" })
 
         let edited = try makeAccount(
             server: "https://remote.example",
@@ -491,36 +496,30 @@ final class PrivateCloudSyncTests: XCTestCase {
         let preserved = try await fixture.accounts.account(id: edited.id)
         let pending = await fixture.store
             .pendingServerConfigurationChanges()
-        XCTAssertEqual(preserved, edited)
-        XCTAssertEqual(
-            pending,
-            [
+        #expect(preserved == edited)
+        #expect(
+            pending == [
                 CloudServerConfigurationChange(
                     current: edited,
                     incoming: original
                 )
-            ]
-        )
+            ])
         let rejected = try await fixture.store
             .rejectServerConfigurationChange(
                 accountID: edited.id,
                 zoneID: fixture.zoneID
             )
-        let preparedAccountRecord = try XCTUnwrap(
-            rejected
-        )
-        let data = try XCTUnwrap(
-            preparedAccountRecord[PrivateCloudSyncStore.payloadKey] as? Data
-        )
-        XCTAssertEqual(
+        let preparedAccountRecord = try #require(rejected)
+        let data = try #require(
+            preparedAccountRecord[PrivateCloudSyncStore.payloadKey] as? Data)
+        #expect(
             try JSONDecoder().decode(
                 CloudServerAccountRecordPayload.self,
                 from: data
-            ).account,
-            edited
-        )
+            ).account == edited)
     }
 
+    @Test
     func testDelayedSupersededAccountGenerationDoesNotPromptOrRevert()
         async throws
     {
@@ -538,12 +537,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let initialRecords = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let initialRecord = try XCTUnwrap(
-            initialRecords.first { $0.recordType == "ServerAccount" }
-        )
-        let initialData = try XCTUnwrap(
-            initialRecord[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        let initialRecord = try #require(
+            initialRecords.first { $0.recordType == "ServerAccount" })
+        let initialData = try #require(
+            initialRecord[PrivateCloudSyncStore.payloadKey] as? Data)
         let initialPayload = try JSONDecoder().decode(
             CloudServerAccountRecordPayload.self,
             from: initialData
@@ -564,9 +561,8 @@ final class PrivateCloudSyncTests: XCTestCase {
             edited,
             zoneID: fixture.zoneID
         )
-        let pushedData = try XCTUnwrap(
-            pushedRecord[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        let pushedData = try #require(
+            pushedRecord[PrivateCloudSyncStore.payloadKey] as? Data)
         let pushedPayload = try JSONDecoder().decode(
             CloudServerAccountRecordPayload.self,
             from: pushedData
@@ -581,21 +577,19 @@ final class PrivateCloudSyncTests: XCTestCase {
         let retainedRecordValue = await fixture.store.record(
             for: pushedRecord.recordID
         )
-        let retainedRecord = try XCTUnwrap(retainedRecordValue)
-        let retainedData = try XCTUnwrap(
-            retainedRecord[PrivateCloudSyncStore.payloadKey] as? Data
-        )
-        XCTAssertEqual(stored, edited)
-        XCTAssertTrue(pending.isEmpty)
-        XCTAssertEqual(retainedData, pushedData)
-        XCTAssertEqual(pushedPayload.account, edited)
-        XCTAssertEqual(
-            pushedPayload.supersededGenerationID,
-            initialPayload.generationID
-        )
-        XCTAssertNotNil(pushedPayload.supersededPayloadDigest)
+        let retainedRecord = try #require(retainedRecordValue)
+        let retainedData = try #require(
+            retainedRecord[PrivateCloudSyncStore.payloadKey] as? Data)
+        #expect(stored == edited)
+        #expect(pending.isEmpty)
+        #expect(retainedData == pushedData)
+        #expect(pushedPayload.account == edited)
+        #expect(
+            pushedPayload.supersededGenerationID == initialPayload.generationID)
+        #expect(pushedPayload.supersededPayloadDigest != nil)
     }
 
+    @Test
     func testFetchedAccountUpdateRequiresConfirmationBeforeApplying()
         async throws
     {
@@ -613,9 +607,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let baseline = try XCTUnwrap(
-            records.first { $0.recordType == "ServerAccount" }
-        )
+        let baseline = try #require(
+            records.first { $0.recordType == "ServerAccount" })
         let incoming = CKRecord(
             recordType: baseline.recordType,
             recordID: baseline.recordID
@@ -633,16 +626,14 @@ final class PrivateCloudSyncTests: XCTestCase {
         let pending = await fixture.store
             .pendingServerConfigurationChanges()
 
-        XCTAssertEqual(stored, original)
-        XCTAssertEqual(
-            pending,
-            [
+        #expect(stored == original)
+        #expect(
+            pending == [
                 CloudServerConfigurationChange(
                     current: original,
                     incoming: remoteUpdate
                 )
-            ]
-        )
+            ])
 
         _ = try await fixture.store.acceptServerConfigurationChange(
             accountID: remoteUpdate.id,
@@ -652,9 +643,10 @@ final class PrivateCloudSyncTests: XCTestCase {
             id: remoteUpdate.id
         )
 
-        XCTAssertEqual(accepted, remoteUpdate)
+        #expect(accepted == remoteUpdate)
     }
 
+    @Test
     func testFetchedCloudOnlyAccountRequiresConfirmationBeforeAdding()
         async throws
     {
@@ -684,18 +676,17 @@ final class PrivateCloudSyncTests: XCTestCase {
         let stored = try await fixture.accounts.account(id: incoming.id)
         let pending = await fixture.store
             .pendingServerConfigurationChanges()
-        XCTAssertNil(stored)
-        XCTAssertEqual(
-            pending,
-            [
+        #expect(stored == nil)
+        #expect(
+            pending == [
                 CloudServerConfigurationChange(
                     current: nil,
                     incoming: incoming
                 )
-            ]
-        )
+            ])
     }
 
+    @Test
     func testTwoLegacyDeviceAccountsConvergeWithoutDuplicatePrompts()
         async throws
     {
@@ -740,17 +731,15 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
         let savedValue = await fixture.store.record(for: canonicalRecordID)
-        let saved = try XCTUnwrap(savedValue)
+        let saved = try #require(savedValue)
 
-        XCTAssertTrue(changes.isEmpty)
-        XCTAssertEqual(
+        #expect(changes.isEmpty)
+        #expect(
             Set(
                 pending.compactMap {
                     if case .saveRecord(let recordID) = $0 { return recordID }
                     return nil
-                }),
-            [canonicalRecordID]
-        )
+                }) == [canonicalRecordID])
 
         let followUp = try await fixture.store.reconcileSentRecordZoneChanges(
             savedRecords: [saved],
@@ -758,14 +747,12 @@ final class PrivateCloudSyncTests: XCTestCase {
             failedRecordSaves: [],
             failedRecordDeletes: [:]
         )
-        XCTAssertEqual(
+        #expect(
             Set(
                 followUp.compactMap {
                     if case .deleteRecord(let recordID) = $0 { return recordID }
                     return nil
-                }),
-            [firstRecord.recordID, secondRecord.recordID]
-        )
+                }) == [firstRecord.recordID, secondRecord.recordID])
         let restoredStore = PrivateCloudSyncStore(
             statistics: fixture.statistics,
             accounts: fixture.accounts,
@@ -776,14 +763,12 @@ final class PrivateCloudSyncTests: XCTestCase {
         let restoredDeletions =
             try await restoredStore
             .prepareDeletionChanges(zoneID: fixture.zoneID)
-        XCTAssertEqual(
+        #expect(
             Set(
                 restoredDeletions.compactMap {
                     if case .deleteRecord(let recordID) = $0 { return recordID }
                     return nil
-                }),
-            [firstRecord.recordID, secondRecord.recordID]
-        )
+                }) == [firstRecord.recordID, secondRecord.recordID])
         _ = try await restoredStore.reconcileSentRecordZoneChanges(
             savedRecords: [],
             deletedRecordIDs: [firstRecord.recordID, secondRecord.recordID],
@@ -793,21 +778,18 @@ final class PrivateCloudSyncTests: XCTestCase {
         let confirmedDeletions =
             try await restoredStore
             .prepareDeletionChanges(zoneID: fixture.zoneID)
-        XCTAssertTrue(confirmedDeletions.isEmpty)
-        let data = try XCTUnwrap(
-            saved[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        #expect(confirmedDeletions.isEmpty)
+        let data = try #require(
+            saved[PrivateCloudSyncStore.payloadKey] as? Data)
         let payload = try JSONDecoder().decode(
             CloudServerAccountRecordPayload.self,
             from: data
         )
-        XCTAssertEqual(payload.account, canonical)
-        XCTAssertEqual(
-            payload.legacyAccountIDs,
-            [firstLegacy.id, secondLegacy.id]
-        )
+        #expect(payload.account == canonical)
+        #expect(payload.legacyAccountIDs == [firstLegacy.id, secondLegacy.id])
     }
 
+    @Test
     func testFetchedConfigurationConflictWaitsForUserDecision()
         async throws
     {
@@ -820,9 +802,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let cloudConfigurationRecord = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let cloudConfigurationRecord = try #require(
+            records.first { $0.recordType == "Configuration" })
         let localEdit = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -836,19 +817,19 @@ final class PrivateCloudSyncTests: XCTestCase {
         let preserved = await fixture.configuration.snapshot()
         let conflict = await fixture.store.configurationConflict()
 
-        XCTAssertEqual(preserved, localEdit)
-        XCTAssertEqual(
-            conflict,
-            CloudConfigurationConflict(
-                local: localEdit,
-                iCloud: makeSnapshot(
-                    previousCommandAction: .skipBackward,
-                    nextCommandAction: .skipForward
-                )
-            )
-        )
+        #expect(preserved == localEdit)
+        #expect(
+            conflict
+                == CloudConfigurationConflict(
+                    local: localEdit,
+                    iCloud: makeSnapshot(
+                        previousCommandAction: .skipBackward,
+                        nextCommandAction: .skipForward
+                    )
+                ))
     }
 
+    @Test
     func testMatchingServerConflictCachesServerRecordWithoutAnotherSave()
         async throws
     {
@@ -861,9 +842,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let clientRecord = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let clientRecord = try #require(
+            records.first { $0.recordType == "Configuration" })
         let serverRecord = CKRecord(
             recordType: clientRecord.recordType,
             recordID: clientRecord.recordID
@@ -888,10 +868,11 @@ final class PrivateCloudSyncTests: XCTestCase {
             )
         let cached = await fixture.store.record(for: clientRecord.recordID)
 
-        XCTAssertTrue(pending.isEmpty)
-        XCTAssertTrue(cached === serverRecord)
+        #expect(pending.isEmpty)
+        #expect(cached === serverRecord)
     }
 
+    @Test
     func testConfigurationConflictAfterNewLocalEditRebasesAndRetries()
         async throws
     {
@@ -904,9 +885,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let clientRecord = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let clientRecord = try #require(
+            records.first { $0.recordType == "Configuration" })
         let serverRecord = CKRecord(
             recordType: clientRecord.recordType,
             recordID: clientRecord.recordID
@@ -941,22 +921,20 @@ final class PrivateCloudSyncTests: XCTestCase {
         let cachedValue = await fixture.store.record(
             for: clientRecord.recordID
         )
-        let cached = try XCTUnwrap(cachedValue)
-        let cachedData = try XCTUnwrap(
-            cached[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        let cached = try #require(cachedValue)
+        let cachedData = try #require(
+            cached[PrivateCloudSyncStore.payloadKey] as? Data)
 
-        XCTAssertEqual(pending, [.saveRecord(clientRecord.recordID)])
-        XCTAssertTrue(cached === serverRecord)
-        XCTAssertEqual(
+        #expect(pending == [.saveRecord(clientRecord.recordID)])
+        #expect(cached === serverRecord)
+        #expect(
             try JSONDecoder().decode(
                 CloudConfigurationSnapshot.self,
                 from: cachedData
-            ),
-            localEdit
-        )
+            ) == localEdit)
     }
 
+    @Test
     func testStructurallyEquivalentSentConfigurationConflictWaitsForDecision()
         async throws
     {
@@ -969,18 +947,16 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let clientRecord = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
-        let clientData = try XCTUnwrap(
-            clientRecord[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        let clientRecord = try #require(
+            records.first { $0.recordType == "Configuration" })
+        let clientData = try #require(
+            clientRecord[PrivateCloudSyncStore.payloadKey] as? Data)
         let clientJSON = try JSONSerialization.jsonObject(with: clientData)
         let structurallyEquivalentClientData = try JSONSerialization.data(
             withJSONObject: clientJSON,
             options: [.prettyPrinted, .sortedKeys]
         )
-        XCTAssertNotEqual(clientData, structurallyEquivalentClientData)
+        #expect(clientData != structurallyEquivalentClientData)
         clientRecord[PrivateCloudSyncStore.payloadKey] =
             structurallyEquivalentClientData as CKRecordValue
         let serverRecord = CKRecord(
@@ -1011,19 +987,19 @@ final class PrivateCloudSyncTests: XCTestCase {
             )
         let conflict = await fixture.store.configurationConflict()
 
-        XCTAssertTrue(pending.isEmpty)
-        XCTAssertEqual(
-            conflict,
-            CloudConfigurationConflict(
-                local: makeSnapshot(
-                    previousCommandAction: .skipBackward,
-                    nextCommandAction: .skipForward
-                ),
-                iCloud: serverSnapshot
-            )
-        )
+        #expect(pending.isEmpty)
+        #expect(
+            conflict
+                == CloudConfigurationConflict(
+                    local: makeSnapshot(
+                        previousCommandAction: .skipBackward,
+                        nextCommandAction: .skipForward
+                    ),
+                    iCloud: serverSnapshot
+                ))
     }
 
+    @Test
     func testUsingICloudResolvesConfigurationConflict() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -1034,9 +1010,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let record = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let record = try #require(
+            records.first { $0.recordType == "Configuration" })
         let cloud = makeSnapshot(
             previousCommandAction: .nextChapter,
             nextCommandAction: .previousChapter
@@ -1052,11 +1027,12 @@ final class PrivateCloudSyncTests: XCTestCase {
         let remainingConflict = await fixture.store.configurationConflict()
         let applied = await fixture.configuration.snapshot()
 
-        XCTAssertNil(outgoing)
-        XCTAssertNil(remainingConflict)
-        XCTAssertEqual(applied, cloud)
+        #expect(outgoing == nil)
+        #expect(remainingConflict == nil)
+        #expect(applied == cloud)
     }
 
+    @Test
     func testKeepingThisDevicePreparesCurrentConfigurationForUpload()
         async throws
     {
@@ -1069,9 +1045,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let record = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let record = try #require(
+            records.first { $0.recordType == "Configuration" })
         let local = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -1082,24 +1057,20 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         let outgoingValue = try await fixture.store
             .resolveConfigurationConflict(.keepThisDevice)
-        let outgoing = try XCTUnwrap(
-            outgoingValue
-        )
-        let payload = try XCTUnwrap(
-            outgoing[PrivateCloudSyncStore.payloadKey] as? Data
-        )
+        let outgoing = try #require(outgoingValue)
+        let payload = try #require(
+            outgoing[PrivateCloudSyncStore.payloadKey] as? Data)
 
-        XCTAssertEqual(
+        #expect(
             try JSONDecoder().decode(
                 CloudConfigurationSnapshot.self,
                 from: payload
-            ),
-            local
-        )
+            ) == local)
         let remainingConflict = await fixture.store.configurationConflict()
-        XCTAssertNotNil(remainingConflict)
+        #expect(remainingConflict != nil)
     }
 
+    @Test
     func testExplicitFetchedRecordPersistenceSurvivesStoreRecreation()
         async throws
     {
@@ -1113,9 +1084,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let prepared = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let record = try XCTUnwrap(
-            prepared.first { $0.recordType == "Configuration" }
-        )
+        let record = try #require(
+            prepared.first { $0.recordType == "Configuration" })
 
         try await fixture.store.applyFetchedRecord(
             record,
@@ -1127,28 +1097,26 @@ final class PrivateCloudSyncTests: XCTestCase {
             credentialStore: nil,
             configuration: fixture.configuration,
             defaults: PrivateCloudDefaultsReference(
-                try XCTUnwrap(UserDefaults(suiteName: fixture.suite))
+                try #require(UserDefaults(suiteName: fixture.suite))
             )
         )
         let restoredValue = await restoredStore.record(for: record.recordID)
-        let restored = try XCTUnwrap(restoredValue)
-        XCTAssertEqual(restored.recordID, record.recordID)
-        XCTAssertEqual(restored.recordType, record.recordType)
-        XCTAssertEqual(
+        let restored = try #require(restoredValue)
+        #expect(restored.recordID == record.recordID)
+        #expect(restored.recordType == record.recordType)
+        #expect(
             try JSONDecoder().decode(
                 CloudConfigurationSnapshot.self,
-                from: XCTUnwrap(
-                    restored[PrivateCloudSyncStore.payloadKey] as? Data
-                )
-            ),
-            snapshot
-        )
+                from: #require(
+                    restored[PrivateCloudSyncStore.payloadKey] as? Data)
+            ) == snapshot)
         let pending = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(pending.isEmpty)
+        #expect(pending.isEmpty)
     }
 
+    @Test
     func testBatchedAccountConflictsPersistCompletedStateAfterRecreation()
         async throws
     {
@@ -1167,7 +1135,7 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
         let accounts = prepared.filter { $0.recordType == "ServerAccount" }
-        XCTAssertEqual(accounts.count, 2)
+        #expect(accounts.count == 2)
         let serverRecords = accounts.map { client in
             let server = CKRecord(
                 recordType: client.recordType,
@@ -1192,42 +1160,40 @@ final class PrivateCloudSyncTests: XCTestCase {
             },
             failedRecordDeletes: [:]
         )
-        XCTAssertTrue(pending.isEmpty)
+        #expect(pending.isEmpty)
         let restoredStore = PrivateCloudSyncStore(
             statistics: fixture.statistics,
             accounts: fixture.accounts,
             credentialStore: nil,
             configuration: fixture.configuration,
             defaults: PrivateCloudDefaultsReference(
-                try XCTUnwrap(UserDefaults(suiteName: fixture.suite))
+                try #require(UserDefaults(suiteName: fixture.suite))
             )
         )
         for server in serverRecords {
             let restoredValue = await restoredStore.record(for: server.recordID)
-            let restored = try XCTUnwrap(restoredValue)
-            XCTAssertEqual(restored.recordID, server.recordID)
-            XCTAssertEqual(restored.recordType, server.recordType)
-            XCTAssertEqual(
+            let restored = try #require(restoredValue)
+            #expect(restored.recordID == server.recordID)
+            #expect(restored.recordType == server.recordType)
+            #expect(
                 try JSONDecoder().decode(
                     CloudServerAccountRecordPayload.self,
-                    from: XCTUnwrap(
-                        restored[PrivateCloudSyncStore.payloadKey] as? Data
-                    )
-                ),
-                try JSONDecoder().decode(
-                    CloudServerAccountRecordPayload.self,
-                    from: XCTUnwrap(
-                        server[PrivateCloudSyncStore.payloadKey] as? Data
-                    )
+                    from: #require(
+                        restored[PrivateCloudSyncStore.payloadKey] as? Data)
                 )
-            )
+                    == (try JSONDecoder().decode(
+                        CloudServerAccountRecordPayload.self,
+                        from: #require(
+                            server[PrivateCloudSyncStore.payloadKey] as? Data)
+                    )))
         }
         let nextSync = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(nextSync.isEmpty)
+        #expect(nextSync.isEmpty)
     }
 
+    @Test
     func testSavedRecordSystemFieldsSurviveStoreRecreation() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -1259,10 +1225,11 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         let restored = await restoredStore.record(for: recordID)
 
-        XCTAssertEqual(restored?.recordID, recordID)
-        XCTAssertEqual(restored?.recordType, "Configuration")
+        #expect(restored?.recordID == recordID)
+        #expect(restored?.recordType == "Configuration")
     }
 
+    @Test
     func testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend()
         async throws
     {
@@ -1275,7 +1242,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         let initial = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertEqual(initial.map(\.recordType), ["Configuration"])
+        #expect(initial.map(\.recordType) == ["Configuration"])
 
         _ = try await fixture.store.reconcileSentRecordZoneChanges(
             savedRecords: initial,
@@ -1287,7 +1254,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         let unchanged = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(unchanged.isEmpty)
+        #expect(unchanged.isEmpty)
 
         let restoredStore = PrivateCloudSyncStore(
             statistics: fixture.statistics,
@@ -1299,9 +1266,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let unchangedAfterRelaunch = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(unchangedAfterRelaunch.isEmpty)
+        #expect(unchangedAfterRelaunch.isEmpty)
     }
 
+    @Test
     func testUnconfirmedRecordsRemainPreparedForRetry() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -1317,9 +1285,10 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertEqual(retry.map(\.recordID), initial.map(\.recordID))
+        #expect(retry.map(\.recordID) == initial.map(\.recordID))
     }
 
+    @Test
     func testOnlyChangedConfigurationIsPreparedAfterBaseline() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -1347,9 +1316,10 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertEqual(changed.map(\.recordType), ["Configuration"])
+        #expect(changed.map(\.recordType) == ["Configuration"])
     }
 
+    @Test
     func testSynchronizedStatisticsAreExcludedFromLaterPreparation()
         async throws
     {
@@ -1370,10 +1340,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let initial = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertEqual(
-            Set(initial.map(\.recordType)),
-            ["ListeningSlice", "Configuration"]
-        )
+        #expect(
+            Set(initial.map(\.recordType)) == [
+                "ListeningSlice", "Configuration",
+            ])
 
         _ = try await fixture.store.reconcileSentRecordZoneChanges(
             savedRecords: initial,
@@ -1385,9 +1355,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let unchanged = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(unchanged.isEmpty)
+        #expect(unchanged.isEmpty)
     }
 
+    @Test
     func testLegacyNilStatisticsSyncStateIsPreparedForReconciliation()
         async throws
     {
@@ -1408,11 +1379,10 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertTrue(
-            prepared.contains { $0.recordType == "ListeningSlice" }
-        )
+        #expect(prepared.contains { $0.recordType == "ListeningSlice" })
     }
 
+    @Test
     func testDirtyStatisticsSurviveRelaunchAndAreReconciledOnce()
         async throws
     {
@@ -1433,9 +1403,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let initial = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let sliceRecord = try XCTUnwrap(
-            initial.first { $0.recordType == "ListeningSlice" }
-        )
+        let sliceRecord = try #require(
+            initial.first { $0.recordType == "ListeningSlice" })
         let otherRecords = initial.filter {
             $0.recordType != "ListeningSlice"
         }
@@ -1461,10 +1430,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         let reconciliation = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertEqual(
-            reconciliation.map(\.recordType),
-            ["ListeningSlice"]
-        )
+        #expect(reconciliation.map(\.recordType) == ["ListeningSlice"])
 
         _ = try await restoredStore.reconcileSentRecordZoneChanges(
             savedRecords: reconciliation,
@@ -1475,9 +1441,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let nextSync = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(nextSync.isEmpty)
+        #expect(nextSync.isEmpty)
     }
 
+    @Test
     func testDeletedStatisticsRemainPendingUntilCloudKitConfirmsDeletion()
         async throws
     {
@@ -1509,8 +1476,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let retry = try await fixture.store.prepareDeletionChanges(
             zoneID: fixture.zoneID
         )
-        XCTAssertEqual(initial, [.deleteRecord(recordID)])
-        XCTAssertEqual(retry, initial)
+        #expect(initial == [.deleteRecord(recordID)])
+        #expect(retry == initial)
 
         _ = try await fixture.store.reconcileSentRecordZoneChanges(
             savedRecords: [],
@@ -1521,9 +1488,10 @@ final class PrivateCloudSyncTests: XCTestCase {
         let confirmed = try await fixture.store.prepareDeletionChanges(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(confirmed.isEmpty)
+        #expect(confirmed.isEmpty)
     }
 
+    @Test
     func testFetchedRecordDoesNotOverridePendingLocalDeletion()
         async throws
     {
@@ -1554,13 +1522,14 @@ final class PrivateCloudSyncTests: XCTestCase {
         _ = try await fixture.store.applyFetchedRecords([fetched])
 
         let archive = try await fixture.statistics.archive()
-        XCTAssertTrue(archive.slices.isEmpty)
+        #expect(archive.slices.isEmpty)
         let deletions = try await fixture.store.prepareDeletionChanges(
             zoneID: fixture.zoneID
         )
-        XCTAssertEqual(deletions.count, 1)
+        #expect(deletions.count == 1)
     }
 
+    @Test
     func testValidFetchedRecordsPersistWhenAnotherRecordIsInvalid()
         async throws
     {
@@ -1589,15 +1558,16 @@ final class PrivateCloudSyncTests: XCTestCase {
 
         do {
             _ = try await fixture.store.applyFetchedRecords([valid, invalid])
-            XCTFail("Expected the invalid fetched record to be reported")
+            Issue.record("Expected the invalid fetched record to be reported")
         } catch let error as PrivateCloudSyncError {
-            XCTAssertEqual(error, .invalidRecord)
+            #expect(error == .invalidRecord)
         }
 
         let archive = try await fixture.statistics.archive()
-        XCTAssertEqual(archive.slices, [slice])
+        #expect(archive.slices == [slice])
     }
 
+    @Test
     func testDeletingCloudZoneMakesLocalStatisticsUploadableAgain()
         async throws
     {
@@ -1627,18 +1597,18 @@ final class PrivateCloudSyncTests: XCTestCase {
         let unchanged = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(unchanged.isEmpty)
+        #expect(unchanged.isEmpty)
 
         try await fixture.store.removeAllRecords()
 
         let afterZoneDeletion = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(
-            afterZoneDeletion.contains { $0.recordType == "ListeningSlice" }
-        )
+        #expect(
+            afterZoneDeletion.contains { $0.recordType == "ListeningSlice" })
     }
 
+    @Test
     func testAccountDeletionFindsCleanStatisticsAfterStoreRecreation()
         async throws
     {
@@ -1679,14 +1649,14 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertTrue(
+        #expect(
             recordIDs.contains {
                 $0.recordName
                     == "slice.\(slice.id.uuidString.lowercased())"
-            }
-        )
+            })
     }
 
+    @Test
     func testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation()
         async throws
     {
@@ -1721,12 +1691,13 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertEqual(
-            recordIDs.map(\.recordName),
-            ["slice.\(slice.id.uuidString.lowercased())"]
-        )
+        #expect(
+            recordIDs.map(\.recordName) == [
+                "slice.\(slice.id.uuidString.lowercased())"
+            ])
     }
 
+    @Test
     func testNestedFailurePreservesSpecificOperation() {
         let stageFailure = PrivateCloudSyncFailure(
             operation: .fetchChanges,
@@ -1738,9 +1709,10 @@ final class PrivateCloudSyncTests: XCTestCase {
             error: stageFailure
         )
 
-        XCTAssertEqual(mapped, stageFailure)
+        #expect(mapped == stageFailure)
     }
 
+    @Test
     func testFetchedStatisticsBatchIsImportedIdempotently() async throws {
         let fixture = try makeSyncStoreFixture()
         defer {
@@ -1781,10 +1753,11 @@ final class PrivateCloudSyncTests: XCTestCase {
         _ = try await fixture.store.applyFetchedRecords(records)
         let archive = try await fixture.statistics.archive()
 
-        XCTAssertEqual(archive.slices.count, 100)
-        XCTAssertEqual(archive.completions.count, 100)
+        #expect(archive.slices.count == 100)
+        #expect(archive.completions.count == 100)
     }
 
+    @Test
     func testPendingConfigurationConflictSurvivesStoreRecreation()
         async throws
     {
@@ -1797,9 +1770,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let clientRecord = try XCTUnwrap(
-            records.first { $0.recordType == "Configuration" }
-        )
+        let clientRecord = try #require(
+            records.first { $0.recordType == "Configuration" })
         let serverRecord = CKRecord(
             recordType: clientRecord.recordType,
             recordID: clientRecord.recordID
@@ -1837,21 +1809,19 @@ final class PrivateCloudSyncTests: XCTestCase {
             zoneID: fixture.zoneID
         )
 
-        XCTAssertEqual(
-            restoredConflict,
-            CloudConfigurationConflict(
-                local: makeSnapshot(
-                    previousCommandAction: .skipBackward,
-                    nextCommandAction: .skipForward
-                ),
-                iCloud: cloud
-            )
-        )
-        XCTAssertFalse(
-            prepared.contains { $0.recordType == "Configuration" }
-        )
+        #expect(
+            restoredConflict
+                == CloudConfigurationConflict(
+                    local: makeSnapshot(
+                        previousCommandAction: .skipBackward,
+                        nextCommandAction: .skipForward
+                    ),
+                    iCloud: cloud
+                ))
+        #expect(!(prepared.contains { $0.recordType == "Configuration" }))
     }
 
+    @Test
     func testInvalidPersistedConfigurationConflictFailsClosed()
         async throws
     {
@@ -1877,12 +1847,13 @@ final class PrivateCloudSyncTests: XCTestCase {
             _ = try await restoredStore.prepareRecords(
                 zoneID: fixture.zoneID
             )
-            XCTFail("Expected invalid persisted conflict to stop uploads")
+            Issue.record("Expected invalid persisted conflict to stop uploads")
         } catch let error as PrivateCloudSyncError {
-            XCTAssertEqual(error, .invalidRecord)
+            #expect(error == .invalidRecord)
         }
     }
 
+    @Test
     func testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()
         async throws
     {
@@ -1907,22 +1878,21 @@ final class PrivateCloudSyncTests: XCTestCase {
             _ = try await restoredStore.prepareRecords(
                 zoneID: fixture.zoneID
             )
-            XCTFail("Expected invalid persisted conflict to stop uploads")
+            Issue.record("Expected invalid persisted conflict to stop uploads")
         } catch let error as PrivateCloudSyncError {
-            XCTAssertEqual(error, .invalidRecord)
+            #expect(error == .invalidRecord)
         }
 
         try await restoredStore.removeAllRecords()
 
-        XCTAssertNil(fixture.defaults.data(forKey: conflictKey))
+        #expect(fixture.defaults.data(forKey: conflictKey) == nil)
         let preparedAfterDeletion = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(
+        #expect(
             preparedAfterDeletion.contains {
                 $0.recordType == "Configuration"
-            }
-        )
+            })
         let relaunchedStore = PrivateCloudSyncStore(
             statistics: fixture.statistics,
             accounts: fixture.accounts,
@@ -1933,9 +1903,7 @@ final class PrivateCloudSyncTests: XCTestCase {
         let prepared = try await relaunchedStore.prepareRecords(
             zoneID: fixture.zoneID
         )
-        XCTAssertTrue(
-            prepared.contains { $0.recordType == "Configuration" }
-        )
+        #expect(prepared.contains { $0.recordType == "Configuration" })
     }
 
     private func makeSuite() -> String {
@@ -1945,7 +1913,7 @@ final class PrivateCloudSyncTests: XCTestCase {
     private func makeStore(
         suite: String
     ) throws -> CloudConfigurationStore {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try #require(UserDefaults(suiteName: suite))
         return CloudConfigurationStore(defaults: defaults)
     }
 
@@ -2069,10 +2037,8 @@ final class PrivateCloudSyncTests: XCTestCase {
         )
         let accounts = AccountStore(modelContainer: container)
         let suite = makeSuite()
-        let configurationDefaults = try XCTUnwrap(
-            UserDefaults(suiteName: suite)
-        )
-        let recordDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let configurationDefaults = try #require(UserDefaults(suiteName: suite))
+        let recordDefaults = try #require(UserDefaults(suiteName: suite))
         let configuration = CloudConfigurationStore(
             defaults: configurationDefaults
         )

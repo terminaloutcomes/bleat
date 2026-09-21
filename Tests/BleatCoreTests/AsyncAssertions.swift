@@ -1,14 +1,14 @@
-import XCTest
+import Testing
 
 func assertThrowsErrorAsync<T>(
     _ expression: @autoclosure () async throws -> T,
     _ errorHandler: (Error) -> Void,
-    file: StaticString = #filePath,
-    line: UInt = #line
+    sourceLocation: SourceLocation = #_sourceLocation
 ) async {
     do {
         _ = try await expression()
-        XCTFail("Expected expression to throw", file: file, line: line)
+        Issue.record(
+            "Expected expression to throw", sourceLocation: sourceLocation)
     } catch {
         errorHandler(error)
     }

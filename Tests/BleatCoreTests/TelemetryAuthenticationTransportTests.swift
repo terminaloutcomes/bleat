@@ -1,39 +1,47 @@
 import Foundation
 @preconcurrency import OpenTelemetryApi
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class TelemetryAuthenticationTransportTests: XCTestCase {
+@Suite(.serialized)
+final class TelemetryAuthenticationTransportTests {
+    @Test
     func testConfigurationRequiresHTTPSExceptExplicitLoopbackDevelopment()
         throws
     {
-        XCTAssertThrowsError(
-            try URLSessionTelemetryAuthenticationTransport(
-                baseURL: XCTUnwrap(URL(string: "http://auth.example")),
-                allowsInsecureLoopback: true
-            )
-        )
-        XCTAssertNoThrow(
-            try URLSessionTelemetryAuthenticationTransport(
-                baseURL: XCTUnwrap(URL(string: "http://127.0.0.1:8080")),
-                allowsInsecureLoopback: true
-            )
-        )
-        XCTAssertThrowsError(
-            try URLSessionTelemetryAuthenticationTransport(
-                baseURL: XCTUnwrap(URL(string: "http://127.0.0.1:8080"))
-            )
-        )
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try URLSessionTelemetryAuthenticationTransport(
+                    baseURL: #require(URL(string: "http://auth.example")),
+                    allowsInsecureLoopback: true
+                )
+            })
+        #expect(
+            throws: Never.self,
+            performing: {
+                try URLSessionTelemetryAuthenticationTransport(
+                    baseURL: #require(URL(string: "http://127.0.0.1:8080")),
+                    allowsInsecureLoopback: true
+                )
+            })
+        #expect(
+            throws: (any Error).self,
+            performing: {
+                try URLSessionTelemetryAuthenticationTransport(
+                    baseURL: #require(URL(string: "http://127.0.0.1:8080"))
+                )
+            })
     }
 
+    @Test
+
     func testVersionedContractsPreserveConfiguredPathPrefix() async throws {
-        let challengeID = try XCTUnwrap(
-            UUID(uuidString: "0cc304d7-9d60-45cf-84e0-5959d433daf0")
-        )
-        let installationID = try XCTUnwrap(
-            UUID(uuidString: "fc6f46f0-d92c-4d37-9137-851070df369d")
-        )
+        let challengeID = try #require(
+            UUID(uuidString: "0cc304d7-9d60-45cf-84e0-5959d433daf0"))
+        let installationID = try #require(
+            UUID(uuidString: "fc6f46f0-d92c-4d37-9137-851070df369d"))
         let httpTracer = HTTPTraceRecorder()
         let recorder = TelemetryURLProtocolRecorder()
         TelemetryURLProtocolStub.setHandler { request in
@@ -72,7 +80,7 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TelemetryURLProtocolStub.self]
         let transport = try URLSessionTelemetryAuthenticationTransport(
-            baseURL: XCTUnwrap(URL(string: "https://auth.example/auth")),
+            baseURL: #require(URL(string: "https://auth.example/auth")),
             installationID: installationID,
             configuration: configuration,
             tracer: httpTracer
@@ -110,65 +118,57 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
                 return (enrolledID, token)
             }
 
-        XCTAssertEqual(enrolledID, installationID)
-        XCTAssertEqual(token.value, "header.payload.signature")
+        #expect(enrolledID == installationID)
+        #expect(token.value == "header.payload.signature")
         let requests = recorder.requests
-        XCTAssertEqual(
-            requests.compactMap(\.url?.path),
-            [
+        #expect(
+            requests.compactMap(\.url?.path) == [
                 "/auth/v1/attestation/challenge",
                 "/auth/v1/attestation/enroll",
                 "/auth/v1/token/challenge",
                 "/auth/v1/token",
-            ]
-        )
-        XCTAssertTrue(
+            ])
+        #expect(
             requests.allSatisfy {
                 $0.value(forHTTPHeaderField: "baggage")
                     == "service.instance.id=\(installationID.uuidString.lowercased())"
-            }
-        )
-        XCTAssertTrue(
+            })
+        #expect(
             requests.allSatisfy {
                 $0.value(forHTTPHeaderField: "traceparent")
                     == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-            }
-        )
-        let enrollmentJSON = try XCTUnwrap(
+            })
+        let enrollmentJSON = try #require(
             requests[1].httpBody.flatMap {
                 try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
-            }
-        )
-        XCTAssertEqual(enrollmentJSON["key_id"] as? String, "opaque-key-id")
-        XCTAssertEqual(enrollmentJSON["attestation_object"] as? String, "AQID")
-        XCTAssertEqual(
-            enrollmentJSON["challenge_id"] as? String,
-            challengeID.uuidString.uppercased()
-        )
-        let tokenJSON = try XCTUnwrap(
+            })
+        #expect(enrollmentJSON["key_id"] as? String == "opaque-key-id")
+        #expect(enrollmentJSON["attestation_object"] as? String == "AQID")
+        #expect(
+            enrollmentJSON["challenge_id"] as? String
+                == challengeID.uuidString.uppercased())
+        let tokenJSON = try #require(
             requests[3].httpBody.flatMap {
                 try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
-            }
-        )
-        XCTAssertEqual(tokenJSON["assertion_object"] as? String, "BAUG")
-        XCTAssertEqual(
-            tokenJSON["installation_id"] as? String,
-            installationID.uuidString.uppercased()
-        )
-        XCTAssertEqual(
-            httpTracer.recordedCalls.map(\.endpoint),
-            [
+            })
+        #expect(tokenJSON["assertion_object"] as? String == "BAUG")
+        #expect(
+            tokenJSON["installation_id"] as? String
+                == installationID.uuidString.uppercased())
+        #expect(
+            httpTracer.recordedCalls.map(\.endpoint) == [
                 .attestationChallenge, .attestationEnroll, .tokenChallenge,
                 .token,
             ])
-        XCTAssertEqual(
-            httpTracer.recordedCalls.map(\.result),
-            [
+        #expect(
+            httpTracer.recordedCalls.map(\.result) == [
                 .response(statusCode: 201), .response(statusCode: 201),
                 .response(statusCode: 201), .response(statusCode: 200),
             ])
 
     }
+
+    @Test
 
     func testAuthenticationRejectionMapsWithoutResponseBodyDisclosure()
         async throws
@@ -191,18 +191,20 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TelemetryURLProtocolStub.self]
         let transport = try URLSessionTelemetryAuthenticationTransport(
-            baseURL: XCTUnwrap(URL(string: "https://auth.example")),
+            baseURL: #require(URL(string: "https://auth.example")),
             configuration: configuration
         )
 
         do {
             _ = try await transport.attestationChallenge()
-            XCTFail("rejected request unexpectedly succeeded")
+            Issue.record("rejected request unexpectedly succeeded")
         } catch let error {
-            XCTAssertEqual(error, .authenticationRejected)
-            XCTAssertFalse(String(describing: error).contains("sensitive"))
+            #expect(error == .authenticationRejected)
+            #expect(!(String(describing: error).contains("sensitive")))
         }
     }
+
+    @Test
 
     func testRateLimitAndCapacityResponsesMapToTransientTypedErrors()
         async throws
@@ -210,7 +212,7 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TelemetryURLProtocolStub.self]
         let transport = try URLSessionTelemetryAuthenticationTransport(
-            baseURL: XCTUnwrap(URL(string: "https://auth.example")),
+            baseURL: #require(URL(string: "https://auth.example")),
             configuration: configuration
         )
         defer { TelemetryURLProtocolStub.setHandler(nil) }
@@ -252,10 +254,10 @@ final class TelemetryAuthenticationTransportTests: XCTestCase {
             }
             do {
                 _ = try await transport.attestationChallenge()
-                XCTFail("rejected request unexpectedly succeeded")
+                Issue.record("rejected request unexpectedly succeeded")
             } catch let error {
-                XCTAssertEqual(error, expected)
-                XCTAssertFalse(String(describing: error).contains("sensitive"))
+                #expect(error == expected)
+                #expect(!(String(describing: error).contains("sensitive")))
             }
         }
     }

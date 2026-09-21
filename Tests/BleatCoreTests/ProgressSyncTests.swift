@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class ProgressSyncTests: XCTestCase {
+@Suite(.serialized)
+final class ProgressSyncTests {
+    @Test
     func testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts()
         async throws
     {
@@ -36,29 +38,24 @@ final class ProgressSyncTests: XCTestCase {
             server: NormalizedServerURL("https://books.example")
         )
 
-        XCTAssertEqual(
-            progress.map { $0.libraryItemID.rawValue },
-            ["item-one"]
-        )
-        XCTAssertEqual(progress.map { $0.isFinished }, [true])
-        XCTAssertEqual(rootProgress, progress)
+        #expect(progress.map { $0.libraryItemID.rawValue } == ["item-one"])
+        #expect(progress.map { $0.isFinished } == [true])
+        #expect(rootProgress == progress)
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(
-            requests.compactMap { $0.url?.path },
-            [
+        #expect(
+            requests.compactMap { $0.url?.path } == [
                 "/audiobookshelf/api/me/progress",
                 "/api/me/progress",
-            ]
-        )
-        XCTAssertTrue(
+            ])
+        #expect(
             requests.allSatisfy {
                 $0.httpMethod == "GET"
                     && $0.value(forHTTPHeaderField: "Authorization")
                         == "Bearer access"
-            }
-        )
+            })
     }
 
+    @Test
     func testAllProgressRejectsWrongUserAndMalformedBookProgress() async throws
     {
         let valid =
@@ -91,13 +88,14 @@ final class ProgressSyncTests: XCTestCase {
                     userID: UserID(rawValue: "user"),
                     server: server
                 )
-                XCTFail("Expected malformed response")
+                Issue.record("Expected malformed response")
             } catch let error {
-                XCTAssertEqual(error, .malformedResponse)
+                #expect(error == .malformedResponse)
             }
         }
     }
 
+    @Test
     func testAllProgressRejectsMismatchedAccountCredentials() async throws {
         let accountID = AccountID(rawValue: "account")
         let coordinator = try Self.coordinator(
@@ -111,14 +109,16 @@ final class ProgressSyncTests: XCTestCase {
                 userID: UserID(rawValue: "user"),
                 server: NormalizedServerURL("https://books.example")
             )
-            XCTFail("Expected authentication failure")
+            Issue.record("Expected authentication failure")
         } catch let error as BookProgressError {
             guard case .authenticationFailed = error else {
-                return XCTFail("Expected authentication failure, got \(error)")
+                Issue.record("Expected authentication failure, got \(error)")
+                return
             }
         }
     }
 
+    @Test
     func testFetchAndPatchUseExactAuthenticatedContract() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = ProgressTestTransport(
@@ -165,31 +165,29 @@ final class ProgressSyncTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(progress?.currentTime, 25)
-        XCTAssertEqual(progress?.lastUpdateMilliseconds, 12)
+        #expect(progress?.currentTime == 25)
+        #expect(progress?.lastUpdateMilliseconds == 12)
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "PATCH"])
-        XCTAssertEqual(
-            requests.map { $0.url?.path },
-            [
+        #expect(requests.map(\.httpMethod) == ["GET", "PATCH"])
+        #expect(
+            requests.map { $0.url?.path } == [
                 "/audiobookshelf/api/me/progress/item",
                 "/audiobookshelf/api/me/progress/item",
-            ]
-        )
-        XCTAssertTrue(
+            ])
+        #expect(
             requests.allSatisfy {
                 $0.value(forHTTPHeaderField: "Authorization") == "Bearer access"
             })
-        let body = try XCTUnwrap(requests[1].httpBody)
-        let object = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: body) as? [String: Any]
-        )
-        XCTAssertEqual(
-            Set(object.keys),
-            ["duration", "currentTime", "progress", "isFinished"]
-        )
+        let body = try #require(requests[1].httpBody)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(
+            Set(object.keys) == [
+                "duration", "currentTime", "progress", "isFinished",
+            ])
     }
 
+    @Test
     func testMissingProgressAndValidationRemainTyped() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = ProgressTestTransport(
@@ -213,7 +211,7 @@ final class ProgressSyncTests: XCTestCase {
             server: server,
             itemID: itemID
         )
-        XCTAssertNil(missing)
+        #expect(missing == nil)
         do {
             try await coordinator.updateBookProgress(
                 accountID: accountID,
@@ -221,9 +219,9 @@ final class ProgressSyncTests: XCTestCase {
                 itemID: itemID,
                 update: BookProgressUpdate(currentTime: .nan)
             )
-            XCTFail("Expected invalid time")
+            Issue.record("Expected invalid time")
         } catch {
-            XCTAssertEqual(error, .invalidCurrentTime)
+            #expect(error == .invalidCurrentTime)
         }
     }
 

@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LibraryCacheTests: XCTestCase {
+@Suite(.serialized)
+final class LibraryCacheTests {
+    @Test
     func testEmptyLibrarySnapshotPersistsAcrossCacheActors() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -18,10 +20,11 @@ final class LibraryCacheTests: XCTestCase {
 
         let relaunched = LibraryCache(modelContainer: fixture.container)
         let snapshot = try await relaunched.libraries(for: accountID)
-        XCTAssertEqual(snapshot?.libraries, [])
-        XCTAssertEqual(snapshot?.refreshedAt, refreshedAt)
+        #expect(snapshot?.libraries == [])
+        #expect(snapshot?.refreshedAt == refreshedAt)
     }
 
+    @Test
     func testLibraryReplacementPreservesOrderAndRemovesDeletedPages()
         async throws
     {
@@ -108,13 +111,14 @@ final class LibraryCacheTests: XCTestCase {
             userID: userID,
             accountID: accountID
         )
-        XCTAssertEqual(libraries?.libraries, [first])
-        XCTAssertNil(deletedPage)
-        XCTAssertNil(deletedSearch)
-        XCTAssertNil(deletedHome)
-        XCTAssertNil(deletedDetail)
+        #expect(libraries?.libraries == [first])
+        #expect(deletedPage == nil)
+        #expect(deletedSearch == nil)
+        #expect(deletedHome == nil)
+        #expect(deletedDetail == nil)
     }
 
+    @Test
     func testPageCacheIsAccountLibraryAndQueryScopedAcrossRelaunch()
         async throws
     {
@@ -196,15 +200,13 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryB,
             accountID: accountA
         )
-        XCTAssertEqual(aTitle?.page.items.first?.id.rawValue, "a-title")
-        XCTAssertEqual(aAdded?.page.items.first?.id.rawValue, "a-added")
-        XCTAssertEqual(bTitle?.page.items.first?.id.rawValue, "b-title")
-        XCTAssertEqual(
-            otherLibrary?.page.items.first?.id.rawValue,
-            "other-library"
-        )
+        #expect(aTitle?.page.items.first?.id.rawValue == "a-title")
+        #expect(aAdded?.page.items.first?.id.rawValue == "a-added")
+        #expect(bTitle?.page.items.first?.id.rawValue == "b-title")
+        #expect(otherLibrary?.page.items.first?.id.rawValue == "other-library")
     }
 
+    @Test
     func testPageCacheSeparatesMinifiedRequests() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -235,7 +237,7 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountID
         )
-        XCTAssertNil(minifiedBeforeSave)
+        #expect(minifiedBeforeSave == nil)
 
         try await fixture.cache.savePage(
             Self.page(
@@ -258,10 +260,11 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountID
         )
-        XCTAssertEqual(expanded?.page.items.first?.id.rawValue, "expanded")
-        XCTAssertEqual(minified?.page.items.first?.id.rawValue, "minified")
+        #expect(expanded?.page.items.first?.id.rawValue == "expanded")
+        #expect(minified?.page.items.first?.id.rawValue == "minified")
     }
 
+    @Test
     func testPageReplacementUpdatesPayloadAndRefreshTime() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -296,10 +299,11 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountID
         )
-        XCTAssertEqual(snapshot?.page.items.first?.id.rawValue, "new")
-        XCTAssertEqual(snapshot?.refreshedAt, newRefresh)
+        #expect(snapshot?.page.items.first?.id.rawValue == "new")
+        #expect(snapshot?.refreshedAt == newRefresh)
     }
 
+    @Test
     func testSearchCacheIsExactScopedAndPersistsEmptyResults()
         async throws
     {
@@ -394,16 +398,14 @@ final class LibraryCacheTests: XCTestCase {
             accountID: accountA
         )
 
-        XCTAssertEqual(aFirst?.items.first?.id.rawValue, "a-first")
-        XCTAssertEqual(aWide?.items.first?.id.rawValue, "a-wide")
-        XCTAssertEqual(bFirst?.items.first?.id.rawValue, "b-first")
-        XCTAssertEqual(
-            otherLibrary?.items.first?.id.rawValue,
-            "other-library"
-        )
-        XCTAssertEqual(empty?.items, [])
+        #expect(aFirst?.items.first?.id.rawValue == "a-first")
+        #expect(aWide?.items.first?.id.rawValue == "a-wide")
+        #expect(bFirst?.items.first?.id.rawValue == "b-first")
+        #expect(otherLibrary?.items.first?.id.rawValue == "other-library")
+        #expect(empty?.items == [])
     }
 
+    @Test
     func testLegacyBookOnlySearchCacheDecodesAsGroupedResults()
         async throws
     {
@@ -425,14 +427,12 @@ final class LibraryCacheTests: XCTestCase {
         )
 
         let context = ModelContext(fixture.container)
-        let record = try XCTUnwrap(
-            context.fetch(FetchDescriptor<CachedLibrarySearchRecord>()).first
-        )
+        let record = try #require(
+            context.fetch(FetchDescriptor<CachedLibrarySearchRecord>()).first)
         let currentPayload = try JSONEncoder().encode([book])
-        var legacyBooks = try XCTUnwrap(
+        var legacyBooks = try #require(
             JSONSerialization.jsonObject(with: currentPayload)
-                as? [[String: Any]]
-        )
+                as? [[String: Any]])
         legacyBooks[0].removeValue(forKey: "authors")
         legacyBooks[0].removeValue(forKey: "series")
         legacyBooks[0].removeValue(forKey: "collapsedSeries")
@@ -447,11 +447,12 @@ final class LibraryCacheTests: XCTestCase {
             accountID: accountID
         )
 
-        XCTAssertEqual(cached?.results.books, [book])
-        XCTAssertEqual(cached?.results.authors, [])
-        XCTAssertEqual(cached?.results.series, [])
+        #expect(cached?.results.books == [book])
+        #expect(cached?.results.authors == [])
+        #expect(cached?.results.series == [])
     }
 
+    @Test
     func testHomeShelvesAreExactScopedAndPersistEmptyResults()
         async throws
     {
@@ -564,19 +565,20 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryA,
             request: noProgressRequest
         )
-        XCTAssertEqual(a, "item-a")
-        XCTAssertEqual(b, "item-b")
-        XCTAssertEqual(otherLibrary, "item-library-b")
-        XCTAssertEqual(wide, "item-wide")
-        XCTAssertEqual(noProgress, "item-no-progress")
+        #expect(a == "item-a")
+        #expect(b == "item-b")
+        #expect(otherLibrary == "item-library-b")
+        #expect(wide == "item-wide")
+        #expect(noProgress == "item-no-progress")
         let empty = try await relaunched.homeShelves(
             request: request,
             libraryID: libraryA,
             accountID: accountEmpty
         )
-        XCTAssertEqual(empty?.shelves, [])
+        #expect(empty?.shelves == [])
     }
 
+    @Test
     func testInvalidInputsAndPagesRemainTyped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountID = AccountID(rawValue: "account")
@@ -591,14 +593,13 @@ final class LibraryCacheTests: XCTestCase {
                 ],
                 for: accountID
             )
-            XCTFail("Expected duplicate library rejection")
+            Issue.record("Expected duplicate library rejection")
         } catch {
-            XCTAssertEqual(
-                error,
-                .duplicateLibraryID(
-                    LibraryID(rawValue: "duplicate")
-                )
-            )
+            #expect(
+                error
+                    == .duplicateLibraryID(
+                        LibraryID(rawValue: "duplicate")
+                    ))
         }
 
         do {
@@ -612,9 +613,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: libraryID,
                 accountID: accountID
             )
-            XCTFail("Expected mismatched page rejection")
+            Issue.record("Expected mismatched page rejection")
         } catch {
-            XCTAssertEqual(error, .invalidPage)
+            #expect(error == .invalidPage)
         }
 
         let searchRequest = try LibrarySearchRequest(
@@ -632,9 +633,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: libraryID,
                 accountID: accountID
             )
-            XCTFail("Expected invalid search result rejection")
+            Issue.record("Expected invalid search result rejection")
         } catch {
-            XCTAssertEqual(error, .invalidSearchResults)
+            #expect(error == .invalidSearchResults)
         }
 
         let homeRequest = try LibraryHomeRequest(limit: 1)
@@ -656,9 +657,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: libraryID,
                 accountID: accountID
             )
-            XCTFail("Expected invalid home shelf rejection")
+            Issue.record("Expected invalid home shelf rejection")
         } catch {
-            XCTAssertEqual(error, .invalidHomeShelves)
+            #expect(error == .invalidHomeShelves)
         }
 
         do {
@@ -666,9 +667,9 @@ final class LibraryCacheTests: XCTestCase {
                 [Self.library(id: "invalid", name: " \n ")],
                 for: accountID
             )
-            XCTFail("Expected invalid library rejection")
+            Issue.record("Expected invalid library rejection")
         } catch {
-            XCTAssertEqual(error, .invalidLibrary)
+            #expect(error == .invalidLibrary)
         }
 
         do {
@@ -683,9 +684,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: libraryID,
                 accountID: accountID
             )
-            XCTFail("Expected invalid item rejection")
+            Issue.record("Expected invalid item rejection")
         } catch {
-            XCTAssertEqual(error, .invalidPage)
+            #expect(error == .invalidPage)
         }
 
         let detail = Self.detail(
@@ -699,9 +700,9 @@ final class LibraryCacheTests: XCTestCase {
                 userID: UserID(rawValue: "other-user"),
                 accountID: accountID
             )
-            XCTFail("Expected mismatched detail user rejection")
+            Issue.record("Expected mismatched detail user rejection")
         } catch {
-            XCTAssertEqual(error, .invalidBookDetail)
+            #expect(error == .invalidBookDetail)
         }
         do {
             _ = try await fixture.cache.bookDetail(
@@ -710,12 +711,13 @@ final class LibraryCacheTests: XCTestCase {
                 userID: UserID(rawValue: ""),
                 accountID: accountID
             )
-            XCTFail("Expected empty detail user rejection")
+            Issue.record("Expected empty detail user rejection")
         } catch {
-            XCTAssertEqual(error, .invalidUserID)
+            #expect(error == .invalidUserID)
         }
     }
 
+    @Test
     func testCorruptedStoredRecordsRemainTyped() async throws {
         let fixture = try LibraryCacheFixture()
         let context = ModelContext(fixture.container)
@@ -739,14 +741,13 @@ final class LibraryCacheTests: XCTestCase {
             _ = try await fixture.cache.libraries(
                 for: AccountID(rawValue: "account")
             )
-            XCTFail("Expected corrupt library payload")
+            Issue.record("Expected corrupt library payload")
         } catch {
-            XCTAssertEqual(
-                error,
-                .invalidStoredLibrary(
-                    LibraryID(rawValue: "library")
-                )
-            )
+            #expect(
+                error
+                    == .invalidStoredLibrary(
+                        LibraryID(rawValue: "library")
+                    ))
         }
 
         let request = try LibraryItemsPageRequest(page: 0, limit: 1)
@@ -764,7 +765,7 @@ final class LibraryCacheTests: XCTestCase {
         let records = try pageContext.fetch(
             FetchDescriptor<CachedLibraryPageRecord>()
         )
-        try XCTUnwrap(
+        try #require(
             records.first {
                 $0.accountID == "page-account"
             }
@@ -776,9 +777,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: LibraryID(rawValue: "library"),
                 accountID: AccountID(rawValue: "page-account")
             )
-            XCTFail("Expected corrupt page payload")
+            Issue.record("Expected corrupt page payload")
         } catch {
-            XCTAssertEqual(error, .invalidStoredPage)
+            #expect(error == .invalidStoredPage)
         }
 
         let searchRequest = try LibrarySearchRequest(
@@ -799,7 +800,7 @@ final class LibraryCacheTests: XCTestCase {
         let searchRecords = try searchContext.fetch(
             FetchDescriptor<CachedLibrarySearchRecord>()
         )
-        try XCTUnwrap(
+        try #require(
             searchRecords.first {
                 $0.accountID == "search-account"
             }
@@ -814,9 +815,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: LibraryID(rawValue: "library"),
                 accountID: AccountID(rawValue: "search-account")
             )
-            XCTFail("Expected corrupt search payload")
+            Issue.record("Expected corrupt search payload")
         } catch {
-            XCTAssertEqual(error, .invalidStoredSearchResults)
+            #expect(error == .invalidStoredSearchResults)
         }
 
         let homeRequest = try LibraryHomeRequest(limit: 1)
@@ -834,7 +835,7 @@ final class LibraryCacheTests: XCTestCase {
         let homeRecords = try homeContext.fetch(
             FetchDescriptor<CachedLibraryHomeRecord>()
         )
-        try XCTUnwrap(
+        try #require(
             homeRecords.first {
                 $0.accountID == "home-account"
             }
@@ -846,9 +847,9 @@ final class LibraryCacheTests: XCTestCase {
                 libraryID: LibraryID(rawValue: "library"),
                 accountID: AccountID(rawValue: "home-account")
             )
-            XCTFail("Expected corrupt home payload")
+            Issue.record("Expected corrupt home payload")
         } catch {
-            XCTAssertEqual(error, .invalidStoredHomeShelves)
+            #expect(error == .invalidStoredHomeShelves)
         }
 
         let detail = Self.detail(
@@ -865,7 +866,7 @@ final class LibraryCacheTests: XCTestCase {
         let detailRecords = try detailContext.fetch(
             FetchDescriptor<CachedLibraryBookDetailRecord>()
         )
-        try XCTUnwrap(
+        try #require(
             detailRecords.first {
                 $0.accountID == "detail-account"
             }
@@ -878,12 +879,13 @@ final class LibraryCacheTests: XCTestCase {
                 userID: UserID(rawValue: "user"),
                 accountID: AccountID(rawValue: "detail-account")
             )
-            XCTFail("Expected corrupt detail payload")
+            Issue.record("Expected corrupt detail payload")
         } catch {
-            XCTAssertEqual(error, .invalidStoredBookDetail)
+            #expect(error == .invalidStoredBookDetail)
         }
     }
 
+    @Test
     func testBookDetailCacheIsAccountUserLibraryAndItemScoped()
         async throws
     {
@@ -938,10 +940,10 @@ final class LibraryCacheTests: XCTestCase {
             userID: userA,
             accountID: accountA
         )
-        XCTAssertEqual(cachedA?.detail, detailA)
-        XCTAssertEqual(cachedA?.refreshedAt, refreshA)
-        XCTAssertNil(wrongUser)
-        XCTAssertNil(wrongLibrary)
+        #expect(cachedA?.detail == detailA)
+        #expect(cachedA?.refreshedAt == refreshA)
+        #expect(wrongUser == nil)
+        #expect(wrongLibrary == nil)
 
         try await relaunched.invalidateLibrary(
             libraryID,
@@ -959,8 +961,8 @@ final class LibraryCacheTests: XCTestCase {
             userID: userB,
             accountID: accountB
         )
-        XCTAssertNil(invalidatedA)
-        XCTAssertEqual(retainedB?.detail, detailB)
+        #expect(invalidatedA == nil)
+        #expect(retainedB?.detail == detailB)
         try await relaunched.removeAccount(accountB)
         let removedB = try await relaunched.bookDetail(
             for: itemID,
@@ -968,9 +970,10 @@ final class LibraryCacheTests: XCTestCase {
             userID: userB,
             accountID: accountB
         )
-        XCTAssertNil(removedB)
+        #expect(removedB == nil)
     }
 
+    @Test
     func testInvalidationAndAccountRemovalAreScoped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountA = AccountID(rawValue: "a")
@@ -1053,12 +1056,12 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountB
         )
-        XCTAssertNil(invalidatedPage)
-        XCTAssertNotNil(retainedPage)
-        XCTAssertNil(invalidatedSearch)
-        XCTAssertNotNil(retainedSearch)
-        XCTAssertNil(invalidatedHome)
-        XCTAssertNotNil(retainedHome)
+        #expect(invalidatedPage == nil)
+        #expect(retainedPage != nil)
+        #expect(invalidatedSearch == nil)
+        #expect(retainedSearch != nil)
+        #expect(invalidatedHome == nil)
+        #expect(retainedHome != nil)
 
         try await fixture.cache.saveSearchResults(
             Self.page(
@@ -1093,10 +1096,10 @@ final class LibraryCacheTests: XCTestCase {
             libraryID: libraryID,
             accountID: accountA
         )
-        XCTAssertNil(removedLibraries)
-        XCTAssertNotNil(retainedLibraries)
-        XCTAssertNil(removedSearch)
-        XCTAssertNil(removedHome)
+        #expect(removedLibraries == nil)
+        #expect(retainedLibraries != nil)
+        #expect(removedSearch == nil)
+        #expect(removedHome == nil)
     }
 
     private static func library(

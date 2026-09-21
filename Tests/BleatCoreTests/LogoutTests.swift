@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class LogoutTests: XCTestCase {
+@Suite(.serialized)
+final class LogoutTests {
+    @Test
     func testOnlineLogoutUsesRefreshHeaderAndClearsCredentials() async throws {
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com/prefix")
@@ -36,31 +38,26 @@ final class LogoutTests: XCTestCase {
             server: server
         )
         let recordedRequest = await transport.recordedRequests().first
-        let request = try XCTUnwrap(recordedRequest)
+        let request = try #require(recordedRequest)
         let storedCredentials = try await store.credentials(for: accountID)
         let deleteCount = await store.deleteCount()
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
-        XCTAssertEqual(result.remoteStatus, .completed)
-        XCTAssertEqual(
-            result.providerLogoutURL?.absoluteString,
-            "https://id.example/logout"
-        )
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/prefix/logout"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "x-refresh-token"),
-            "refresh"
-        )
-        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-        XCTAssertNil(request.url?.query)
-        XCTAssertNil(storedCredentials)
-        XCTAssertEqual(deleteCount, 1)
-        XCTAssertFalse(requiresReauthentication)
+        #expect(result.remoteStatus == .completed)
+        #expect(
+            result.providerLogoutURL?.absoluteString
+                == "https://id.example/logout")
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.url?.absoluteString == "https://example.com/prefix/logout")
+        #expect(
+            request.value(forHTTPHeaderField: "x-refresh-token") == "refresh")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+        #expect(request.url?.query == nil)
+        #expect(storedCredentials == nil)
+        #expect(deleteCount == 1)
+        #expect(!(requiresReauthentication))
 
         let secondResult = try await coordinator.logout(
             accountID: accountID,
@@ -68,12 +65,13 @@ final class LogoutTests: XCTestCase {
         )
         let requestCount = await transport.requestCount()
         let secondDeleteCount = await store.deleteCount()
-        XCTAssertEqual(secondResult.remoteStatus, .noCredentials)
-        XCTAssertNil(secondResult.providerLogoutURL)
-        XCTAssertEqual(requestCount, 1)
-        XCTAssertEqual(secondDeleteCount, 2)
+        #expect(secondResult.remoteStatus == .noCredentials)
+        #expect(secondResult.providerLogoutURL == nil)
+        #expect(requestCount == 1)
+        #expect(secondDeleteCount == 2)
     }
 
+    @Test
     func testLogoutRejectsUnsafeProviderRedirectWithoutBlockingCleanup()
         async throws
     {
@@ -95,14 +93,15 @@ final class LogoutTests: XCTestCase {
             server: fixture.server
         )
 
-        XCTAssertEqual(result.remoteStatus, .completed)
-        XCTAssertNil(result.providerLogoutURL)
+        #expect(result.remoteStatus == .completed)
+        #expect(result.providerLogoutURL == nil)
         let credentials = try await fixture.store.credentials(
             for: fixture.accountID
         )
-        XCTAssertNil(credentials)
+        #expect(credentials == nil)
     }
 
+    @Test
     func testRemoteFailuresStillDeleteLocalCredentials() async throws {
         let scenarios:
             [(
@@ -132,12 +131,13 @@ final class LogoutTests: XCTestCase {
             )
             let deleteCount = await fixture.store.deleteCount()
 
-            XCTAssertEqual(result.remoteStatus, expectedStatus)
-            XCTAssertNil(storedCredentials)
-            XCTAssertEqual(deleteCount, 1)
+            #expect(result.remoteStatus == expectedStatus)
+            #expect(storedCredentials == nil)
+            #expect(deleteCount == 1)
         }
     }
 
+    @Test
     func testMissingOrUnreadableCredentialsStillRunDeletion() async throws {
         let missingFixture = try LogoutFixture(
             responses: [],
@@ -150,9 +150,9 @@ final class LogoutTests: XCTestCase {
         let missingRequestCount =
             await missingFixture.transport.requestCount()
         let missingDeleteCount = await missingFixture.store.deleteCount()
-        XCTAssertEqual(missingResult.remoteStatus, .noCredentials)
-        XCTAssertEqual(missingRequestCount, 0)
-        XCTAssertEqual(missingDeleteCount, 1)
+        #expect(missingResult.remoteStatus == .noCredentials)
+        #expect(missingRequestCount == 0)
+        #expect(missingDeleteCount == 1)
 
         let unreadableFixture = try LogoutFixture(
             responses: [],
@@ -166,14 +166,12 @@ final class LogoutTests: XCTestCase {
             await unreadableFixture.transport.requestCount()
         let unreadableDeleteCount =
             await unreadableFixture.store.deleteCount()
-        XCTAssertEqual(
-            unreadableResult.remoteStatus,
-            .credentialsUnavailable
-        )
-        XCTAssertEqual(unreadableRequestCount, 0)
-        XCTAssertEqual(unreadableDeleteCount, 1)
+        #expect(unreadableResult.remoteStatus == .credentialsUnavailable)
+        #expect(unreadableRequestCount == 0)
+        #expect(unreadableDeleteCount == 1)
     }
 
+    @Test
     func testCredentialDeletionFailureIsTypedAndRequiresReauthentication()
         async throws
     {
@@ -190,10 +188,7 @@ final class LogoutTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LogoutError,
-                .credentialDeletionFailed
-            )
+            #expect(error as? LogoutError == .credentialDeletionFailed)
         }
         let storedCredentials = try await fixture.store.credentials(
             for: fixture.accountID
@@ -202,10 +197,11 @@ final class LogoutTests: XCTestCase {
             await fixture.coordinator.requiresReauthentication(
                 for: fixture.accountID
             )
-        XCTAssertNotNil(storedCredentials)
-        XCTAssertTrue(requiresReauthentication)
+        #expect(storedCredentials != nil)
+        #expect(requiresReauthentication)
     }
 
+    @Test
     func testInvalidAccountDoesNotReadDeleteOrSend() async throws {
         let fixture = try LogoutFixture(responses: [])
 
@@ -215,17 +211,18 @@ final class LogoutTests: XCTestCase {
                 server: fixture.server
             )
         ) { error in
-            XCTAssertEqual(error as? LogoutError, .invalidAccountID)
+            #expect(error as? LogoutError == .invalidAccountID)
         }
 
         let readCount = await fixture.store.readCount()
         let deleteCount = await fixture.store.deleteCount()
         let requestCount = await fixture.transport.requestCount()
-        XCTAssertEqual(readCount, 0)
-        XCTAssertEqual(deleteCount, 0)
-        XCTAssertEqual(requestCount, 0)
+        #expect(readCount == 0)
+        #expect(deleteCount == 0)
+        #expect(requestCount == 0)
     }
 
+    @Test
     func testConcurrentLogoutAndAuthenticatedRequestAreRejected() async throws {
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
@@ -256,10 +253,7 @@ final class LogoutTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LogoutError,
-                .accountOperationInProgress
-            )
+            #expect(error as? LogoutError == .accountOperationInProgress)
         }
 
         let librariesRequest = URLRequest(
@@ -274,17 +268,17 @@ final class LogoutTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .accountOperationInProgress
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .accountOperationInProgress)
         }
 
         await transport.completeLogout()
         let result = try await firstLogout.value
-        XCTAssertEqual(result.remoteStatus, .completed)
+        #expect(result.remoteStatus == .completed)
     }
 
+    @Test
     func testLogoutRejectsAnOverlappingLocalLogin() async throws {
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
@@ -310,10 +304,7 @@ final class LogoutTests: XCTestCase {
                 server: server
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LogoutError,
-                .accountOperationInProgress
-            )
+            #expect(error as? LogoutError == .accountOperationInProgress)
         }
         await assertThrowsErrorAsync(
             try await coordinator.login(
@@ -323,23 +314,20 @@ final class LogoutTests: XCTestCase {
                 password: "password"
             )
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .accountOperationInProgress
-            )
+            #expect(
+                error as? LocalAuthenticationError
+                    == .accountOperationInProgress)
         }
 
         await transport.rejectLogin()
         await assertThrowsErrorAsync(
             try await login.value
         ) { error in
-            XCTAssertEqual(
-                error as? LocalAuthenticationError,
-                .invalidCredentials
-            )
+            #expect(error as? LocalAuthenticationError == .invalidCredentials)
         }
     }
 
+    @Test
     func testLogoutSettlesRefreshAndInvalidatesTheRotatedToken() async throws {
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
@@ -385,29 +373,29 @@ final class LogoutTests: XCTestCase {
         let logoutStarted = await coordinator.isSigningOut(
             accountID: accountID
         )
-        XCTAssertTrue(logoutStarted)
+        #expect(logoutStarted)
         await transport.completeRefresh()
 
         let logoutResult = try await logout.value
         await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .accountOperationInProgress
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .accountOperationInProgress)
         }
         let storedCredentials = try await store.credentials(for: accountID)
         let counts = await transport.counts()
         let logoutRefreshToken = await transport.logoutRefreshToken()
 
-        XCTAssertEqual(logoutResult.remoteStatus, .completed)
-        XCTAssertNil(storedCredentials)
-        XCTAssertEqual(counts.refreshRequests, 1)
-        XCTAssertEqual(counts.logoutRequests, 1)
-        XCTAssertEqual(logoutRefreshToken, "rotated-refresh")
+        #expect(logoutResult.remoteStatus == .completed)
+        #expect(storedCredentials == nil)
+        #expect(counts.refreshRequests == 1)
+        #expect(counts.logoutRequests == 1)
+        #expect(logoutRefreshToken == "rotated-refresh")
     }
 
+    @Test
     func testRequestCannotStartRefreshAfterLogoutBegins() async throws {
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
@@ -449,19 +437,19 @@ final class LogoutTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .accountOperationInProgress
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .accountOperationInProgress)
         }
         await transport.completeLogout()
         let logoutResult = try await logout.value
         let refreshCount = await transport.refreshCount()
 
-        XCTAssertEqual(logoutResult.remoteStatus, .completed)
-        XCTAssertEqual(refreshCount, 0)
+        #expect(logoutResult.remoteStatus == .completed)
+        #expect(refreshCount == 0)
     }
 
+    @Test
     func testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated()
         async throws
     {
@@ -508,12 +496,11 @@ final class LogoutTests: XCTestCase {
         await assertThrowsErrorAsync(
             try await authenticatedRequest.value
         ) { error in
-            XCTAssertEqual(
-                error as? AuthenticatedRequestError,
-                .accountOperationInProgress
-            )
+            #expect(
+                error as? AuthenticatedRequestError
+                    == .accountOperationInProgress)
         }
-        XCTAssertEqual(logoutResult.remoteStatus, .completed)
+        #expect(logoutResult.remoteStatus == .completed)
     }
 
     fileprivate static func authenticationJSON(

@@ -89,10 +89,10 @@ python3 -m unittest Tests/ScriptTests/test_telemetry_artifacts.py
 for test_suite in \
   TelemetryAuthenticationTests \
   AuthenticatedOtlpSpanExporterTests \
-  RemoteTelemetryTests \
-  TelemetryLiveTestConfigurationTests; do
-  swift test --filter "${test_suite}"
+  RemoteTelemetryTests; do
+  swift test --disable-xctest --no-parallel --filter "${test_suite}"
 done
+swift test --filter TelemetryLiveTestConfigurationTests
 
 mise run "api:test"
 

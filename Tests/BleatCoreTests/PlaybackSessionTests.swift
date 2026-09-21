@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class PlaybackSessionTests: XCTestCase {
+@Suite(.serialized)
+final class PlaybackSessionTests {
+    @Test
     func testOpensDirectSessionWithExactNativeAccountContract() async throws {
         let fixture = try Fixture(
             responses: [
@@ -23,75 +25,68 @@ final class PlaybackSessionTests: XCTestCase {
             deviceInfo: Self.deviceInfo
         )
         let requests = await fixture.transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
-        let body = try XCTUnwrap(request.httpBody)
-        let payload = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: body) as? [String: Any]
-        )
-        let encodedDevice = try XCTUnwrap(
-            payload["deviceInfo"] as? [String: String]
-        )
+        let request = try #require(requests.first)
+        let body = try #require(request.httpBody)
+        let payload = try #require(
+            JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let encodedDevice = try #require(
+            payload["deviceInfo"] as? [String: String])
 
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/audiobookshelf/api/items/item/play"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Content-Type"),
-            "application/json"
-        )
-        XCTAssertEqual(payload["forceDirectPlay"] as? Bool, true)
-        XCTAssertEqual(payload["forceTranscode"] as? Bool, false)
-        XCTAssertEqual(payload["mediaPlayer"] as? String, "AVPlayer")
-        XCTAssertEqual(
-            payload["supportedMimeTypes"] as? [String],
-            ["audio/mp4", "audio/mpeg"]
-        )
-        XCTAssertEqual(
-            Set(encodedDevice.keys),
-            [
+        #expect(requests.count == 1)
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.url?.absoluteString
+                == "https://example.com/audiobookshelf/api/items/item/play")
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(
+            request.value(forHTTPHeaderField: "Content-Type")
+                == "application/json")
+        #expect(payload["forceDirectPlay"] as? Bool == true)
+        #expect(payload["forceTranscode"] as? Bool == false)
+        #expect(payload["mediaPlayer"] as? String == "AVPlayer")
+        #expect(
+            payload["supportedMimeTypes"] as? [String] == [
+                "audio/mp4", "audio/mpeg",
+            ])
+        #expect(
+            Set(encodedDevice.keys) == [
                 "deviceId",
                 "clientName",
                 "clientVersion",
                 "manufacturer",
                 "model",
-            ]
-        )
-        XCTAssertNil(encodedDevice["deviceName"])
-        XCTAssertEqual(session.id.rawValue, "session")
-        XCTAssertEqual(session.libraryID.rawValue, "library")
-        XCTAssertEqual(session.libraryItemID, fixture.itemID)
-        XCTAssertEqual(session.bookID?.rawValue, "book")
-        XCTAssertEqual(session.method, .directPlay)
-        XCTAssertEqual(session.duration, 30)
-        XCTAssertEqual(session.startTime, 4)
-        XCTAssertEqual(session.currentTime, 4)
-        XCTAssertEqual(session.chapters.map(\.title), ["One", "Two"])
-        XCTAssertEqual(session.libraryItem.media.metadata.title, "Fixture Book")
-        XCTAssertEqual(session.audioTracks.map(\.index), [2, 4])
-        XCTAssertEqual(session.audioTracks.map(\.startOffset), [0, 12])
+            ])
+        #expect(encodedDevice["deviceName"] == nil)
+        #expect(session.id.rawValue == "session")
+        #expect(session.libraryID.rawValue == "library")
+        #expect(session.libraryItemID == fixture.itemID)
+        #expect(session.bookID?.rawValue == "book")
+        #expect(session.method == .directPlay)
+        #expect(session.duration == 30)
+        #expect(session.startTime == 4)
+        #expect(session.currentTime == 4)
+        #expect(session.chapters.map(\.title) == ["One", "Two"])
+        #expect(session.libraryItem.media.metadata.title == "Fixture Book")
+        #expect(session.audioTracks.map(\.index) == [2, 4])
+        #expect(session.audioTracks.map(\.startOffset) == [0, 12])
 
         let source = try session.source(for: fixture.server)
         guard case .direct(let tracks) = source else {
-            return XCTFail("Expected direct playback tracks")
+            Issue.record("Expected direct playback tracks")
+            return
         }
-        XCTAssertEqual(tracks.map(\.track.index), [2, 4])
-        XCTAssertEqual(
-            tracks.map(\.url.absoluteString),
-            [
+        #expect(tracks.map(\.track.index) == [2, 4])
+        #expect(
+            tracks.map(\.url.absoluteString) == [
                 "https://example.com/audiobookshelf/public/session/session/track/2",
                 "https://example.com/audiobookshelf/public/session/session/track/4",
-            ]
-        )
-        XCTAssertTrue(tracks.allSatisfy { $0.url.query == nil })
+            ])
+        #expect(tracks.allSatisfy { $0.url.query == nil })
     }
 
+    @Test
     func testPlaybackPreferencesEncodeOnlyDocumentedForceFlags() async throws {
         let cases: [(PlaybackPreference, Bool, Bool)] = [
             (.automatic, false, false),
@@ -118,33 +113,25 @@ final class PlaybackSessionTests: XCTestCase {
                 deviceInfo: Self.deviceInfo
             )
             let requests = await fixture.transport.recordedRequests()
-            let request = try XCTUnwrap(requests.first)
-            let body = try XCTUnwrap(request.httpBody)
-            let payload = try XCTUnwrap(
-                JSONSerialization.jsonObject(with: body) as? [String: Any]
-            )
+            let request = try #require(requests.first)
+            let body = try #require(request.httpBody)
+            let payload = try #require(
+                JSONSerialization.jsonObject(with: body) as? [String: Any])
 
-            XCTAssertEqual(
-                payload["forceDirectPlay"] as? Bool,
-                forceDirectPlay
-            )
-            XCTAssertEqual(
-                payload["forceTranscode"] as? Bool,
-                forceTranscode
-            )
-            XCTAssertEqual(
-                Set(payload.keys),
-                [
+            #expect(payload["forceDirectPlay"] as? Bool == forceDirectPlay)
+            #expect(payload["forceTranscode"] as? Bool == forceTranscode)
+            #expect(
+                Set(payload.keys) == [
                     "forceDirectPlay",
                     "forceTranscode",
                     "mediaPlayer",
                     "supportedMimeTypes",
                     "deviceInfo",
-                ]
-            )
+                ])
         }
     }
 
+    @Test
     func testRejectsInvalidInputsBeforeReadingCredentials() async throws {
         let fixture = try Fixture(responses: [])
         let invalidDevices = [
@@ -173,10 +160,7 @@ final class PlaybackSessionTests: XCTestCase {
                 deviceInfo: Self.deviceInfo
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .invalidLibraryItemID
-            )
+            #expect(error as? PlaybackSessionError == .invalidLibraryItemID)
         }
 
         for device in invalidDevices {
@@ -189,10 +173,7 @@ final class PlaybackSessionTests: XCTestCase {
                     deviceInfo: device
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? PlaybackSessionError,
-                    .invalidDeviceInfo
-                )
+                #expect(error as? PlaybackSessionError == .invalidDeviceInfo)
             }
         }
 
@@ -206,17 +187,16 @@ final class PlaybackSessionTests: XCTestCase {
                     deviceInfo: Self.deviceInfo
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? PlaybackSessionError,
-                    .invalidSupportedMimeType
-                )
+                #expect(
+                    error as? PlaybackSessionError == .invalidSupportedMimeType)
             }
         }
 
         let requests = await fixture.transport.recordedRequests()
-        XCTAssertTrue(requests.isEmpty)
+        #expect(requests.isEmpty)
     }
 
+    @Test
     func testStartFailuresRemainTyped() async throws {
         let cases: [(HTTPResponse, PlaybackSessionError)] = [
             (
@@ -270,14 +250,12 @@ final class PlaybackSessionTests: XCTestCase {
                     deviceInfo: Self.deviceInfo
                 )
             ) { error in
-                XCTAssertEqual(
-                    error as? PlaybackSessionError,
-                    expectedError
-                )
+                #expect(error as? PlaybackSessionError == expectedError)
             }
         }
     }
 
+    @Test
     func testAuthenticationFailureRemainsDistinct() async throws {
         let fixture = try Fixture(
             responses: [],
@@ -293,13 +271,13 @@ final class PlaybackSessionTests: XCTestCase {
                 deviceInfo: Self.deviceInfo
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .authenticationFailed(.missingCredentials)
-            )
+            #expect(
+                error as? PlaybackSessionError
+                    == .authenticationFailed(.missingCredentials))
         }
     }
 
+    @Test
     func testResolvesPrefixedHLSAndRejectsUnsafeReturnedPaths() async throws {
         let server = try NormalizedServerURL(
             "https://example.com/audiobookshelf"
@@ -317,17 +295,15 @@ final class PlaybackSessionTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            try hlsSession.source(for: server),
-            .hls(
-                try XCTUnwrap(
-                    URL(
-                        string:
-                            "https://example.com/audiobookshelf/hls/session/output.m3u8"
-                    )
-                )
-            )
-        )
+        #expect(
+            try hlsSession.source(for: server)
+                == .hls(
+                    try #require(
+                        URL(
+                            string:
+                                "https://example.com/audiobookshelf/hls/session/output.m3u8"
+                        ))
+                ))
 
         for path in [
             "https://other.example/output.m3u8",
@@ -345,17 +321,22 @@ final class PlaybackSessionTests: XCTestCase {
                     ]
                 )
             )
-            XCTAssertThrowsError(try session.source(for: server)) { error in
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: { try session.source(for: server) })
+            {
                 guard
                     case .routeConstructionFailed =
                         error as? PlaybackSourceError
                 else {
-                    return XCTFail("Expected route construction failure")
+                    Issue.record("Expected route construction failure")
+                    return
                 }
             }
         }
     }
 
+    @Test
     func testUnsupportedAndMissingPlaybackSourcesAreTyped() async throws {
         let server = try NormalizedServerURL("https://example.com")
         let localSession = try await Self.decodeSession(
@@ -370,10 +351,7 @@ final class PlaybackSessionTests: XCTestCase {
                 Self.sessionJSON(method: 2, audioTracks: [])
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .invalidSessionResponse
-            )
+            #expect(error as? PlaybackSessionError == .invalidSessionResponse)
         }
 
         await assertThrowsErrorAsync(
@@ -387,26 +365,26 @@ final class PlaybackSessionTests: XCTestCase {
                 ])
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .invalidSessionResponse
-            )
+            #expect(error as? PlaybackSessionError == .invalidSessionResponse)
         }
 
-        XCTAssertThrowsError(try localSession.source(for: server)) { error in
-            XCTAssertEqual(
-                error as? PlaybackSourceError,
-                .unsupportedMethod(.local)
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try localSession.source(for: server) })
+        {
+            #expect(error as? PlaybackSourceError == .unsupportedMethod(.local))
         }
-        XCTAssertThrowsError(try unknownSession.source(for: server)) { error in
-            XCTAssertEqual(
-                error as? PlaybackSourceError,
-                .unsupportedMethod(.unknown(99))
-            )
+        if let error = #expect(
+            throws: (any Error).self,
+            performing: { try unknownSession.source(for: server) })
+        {
+            #expect(
+                error as? PlaybackSourceError
+                    == .unsupportedMethod(.unknown(99)))
         }
     }
 
+    @Test
     func testPlaybackMethodRoundTripsKnownAndUnknownValues() throws {
         for (value, expected) in [
             (0, PlaybackMethod.directPlay),
@@ -420,11 +398,12 @@ final class PlaybackSessionTests: XCTestCase {
             )
             let encoded = try JSONEncoder().encode(decoded)
 
-            XCTAssertEqual(decoded, expected)
-            XCTAssertEqual(String(decoding: encoded, as: UTF8.self), "\(value)")
+            #expect(decoded == expected)
+            #expect(String(decoding: encoded, as: UTF8.self) == "\(value)")
         }
     }
 
+    @Test
     func testClosePostsToAuthenticatedSessionRoute() async throws {
         let fixture = try Fixture(
             responses: [.init(data: Data(), statusCode: 200)]
@@ -436,21 +415,21 @@ final class PlaybackSessionTests: XCTestCase {
             sessionID: PlaybackSessionID(rawValue: "session")
         )
         let requests = await fixture.transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
+        let request = try #require(requests.first)
 
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertNil(request.httpBody)
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/audiobookshelf/api/session/session/close"
+        #expect(requests.count == 1)
+        #expect(request.httpMethod == "POST")
+        #expect(request.httpBody == nil)
+        #expect(
+            request.url?.absoluteString
+                == "https://example.com/audiobookshelf/api/session/session/close"
         )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
     }
 
+    @Test
     func testSyncPostsExactMVPPositionContract() async throws {
         let fixture = try Fixture(
             responses: [.init(data: Data(), statusCode: 200)]
@@ -464,36 +443,32 @@ final class PlaybackSessionTests: XCTestCase {
             duration: 30
         )
         let requests = await fixture.transport.recordedRequests()
-        let request = try XCTUnwrap(requests.first)
-        let body = try XCTUnwrap(request.httpBody)
-        let payload = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: body) as? [String: Double]
-        )
+        let request = try #require(requests.first)
+        let body = try #require(request.httpBody)
+        let payload = try #require(
+            JSONSerialization.jsonObject(with: body) as? [String: Double])
 
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(
-            request.url?.absoluteString,
-            "https://example.com/audiobookshelf/api/session/session/sync"
+        #expect(requests.count == 1)
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.url?.absoluteString
+                == "https://example.com/audiobookshelf/api/session/session/sync"
         )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Authorization"),
-            "Bearer access-token"
-        )
-        XCTAssertEqual(
-            request.value(forHTTPHeaderField: "Content-Type"),
-            "application/json"
-        )
-        XCTAssertEqual(
-            payload,
-            [
+        #expect(
+            request.value(forHTTPHeaderField: "Authorization")
+                == "Bearer access-token")
+        #expect(
+            request.value(forHTTPHeaderField: "Content-Type")
+                == "application/json")
+        #expect(
+            payload == [
                 "currentTime": 12.5,
                 "timeListened": 0,
                 "duration": 30,
-            ]
-        )
+            ])
     }
 
+    @Test
     func testSyncValidationAndFailuresRemainTyped() async throws {
         let invalidCases:
             [(
@@ -538,10 +513,10 @@ final class PlaybackSessionTests: XCTestCase {
                     duration: duration
                 )
             ) { error in
-                XCTAssertEqual(error as? PlaybackSyncError, expected)
+                #expect(error as? PlaybackSyncError == expected)
             }
             let requests = await fixture.transport.recordedRequests()
-            XCTAssertTrue(requests.isEmpty)
+            #expect(requests.isEmpty)
         }
 
         let rejectedFixture = try Fixture(
@@ -556,10 +531,7 @@ final class PlaybackSessionTests: XCTestCase {
                 duration: 30
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSyncError,
-                .unexpectedStatus(404)
-            )
+            #expect(error as? PlaybackSyncError == .unexpectedStatus(404))
         }
 
         let unauthenticatedFixture = try Fixture(
@@ -576,13 +548,13 @@ final class PlaybackSessionTests: XCTestCase {
                     duration: 30
                 )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSyncError,
-                .authenticationFailed(.missingCredentials)
-            )
+            #expect(
+                error as? PlaybackSyncError
+                    == .authenticationFailed(.missingCredentials))
         }
     }
 
+    @Test
     func testCloseFailuresRemainTyped() async throws {
         let invalidFixture = try Fixture(responses: [])
         await assertThrowsErrorAsync(
@@ -592,10 +564,7 @@ final class PlaybackSessionTests: XCTestCase {
                 sessionID: PlaybackSessionID(rawValue: "")
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .invalidSessionResponse
-            )
+            #expect(error as? PlaybackSessionError == .invalidSessionResponse)
         }
 
         let rejectedFixture = try Fixture(
@@ -608,10 +577,8 @@ final class PlaybackSessionTests: XCTestCase {
                 sessionID: PlaybackSessionID(rawValue: "missing")
             )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .unexpectedCloseStatus(404)
-            )
+            #expect(
+                error as? PlaybackSessionError == .unexpectedCloseStatus(404))
         }
 
         let unauthenticatedFixture = try Fixture(
@@ -626,10 +593,9 @@ final class PlaybackSessionTests: XCTestCase {
                     sessionID: PlaybackSessionID(rawValue: "session")
                 )
         ) { error in
-            XCTAssertEqual(
-                error as? PlaybackSessionError,
-                .authenticationFailed(.missingCredentials)
-            )
+            #expect(
+                error as? PlaybackSessionError
+                    == .authenticationFailed(.missingCredentials))
         }
     }
 

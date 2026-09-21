@@ -1,9 +1,11 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import BleatCore
 
-final class BookActionPolicyTests: XCTestCase {
+@Suite(.serialized)
+final class BookActionPolicyTests {
+    @Test
     func testSummaryAndDetailProduceIdenticalDecisions() {
         let details = [
             Self.detail(),
@@ -32,19 +34,18 @@ final class BookActionPolicyTests: XCTestCase {
 
         for detail in details {
             for user in users {
-                XCTAssertEqual(
-                    BookActionAvailability(user: user, summary: detail.summary),
-                    BookActionAvailability(user: user, detail: detail)
-                )
+                #expect(
+                    BookActionAvailability(user: user, summary: detail.summary)
+                        == BookActionAvailability(user: user, detail: detail))
             }
         }
     }
 
+    @Test
     func testOlderCachedSummaryDecodesMissingTagsAsEmpty() throws {
         let data = try JSONEncoder().encode(Self.detail().summary)
-        var object = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
+        var object = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any])
         object.removeValue(forKey: "tags")
 
         let decoded = try JSONDecoder().decode(
@@ -52,9 +53,10 @@ final class BookActionPolicyTests: XCTestCase {
             from: JSONSerialization.data(withJSONObject: object)
         )
 
-        XCTAssertEqual(decoded.tags, [])
+        #expect(decoded.tags == [])
     }
 
+    @Test
     func testAllowedActionsExactlyMatchServerPermissions() {
         for download in [false, true] {
             for update in [false, true] {
@@ -82,10 +84,9 @@ final class BookActionPolicyTests: XCTestCase {
                         if delete {
                             expected.insert(.deleteFromServer)
                         }
-                        XCTAssertEqual(availability.access, .allowed)
-                        XCTAssertEqual(
-                            availability.visibleActions,
-                            expected,
+                        #expect(availability.access == .allowed)
+                        #expect(
+                            availability.visibleActions == expected,
                             "download=\(download) update=\(update) delete=\(delete) upload=\(upload)"
                         )
                     }
@@ -94,6 +95,7 @@ final class BookActionPolicyTests: XCTestCase {
         }
     }
 
+    @Test
     func testLibraryAndExplicitDenialsHideEveryAction() {
         let allowedLibrary = BookActionAvailability(
             user: Self.user(
@@ -114,13 +116,14 @@ final class BookActionPolicyTests: XCTestCase {
             detail: Self.detail(isExplicit: true)
         )
 
-        XCTAssertEqual(allowedLibrary.access, .allowed)
-        XCTAssertEqual(deniedLibrary.access, .inaccessibleLibrary)
-        XCTAssertTrue(deniedLibrary.visibleActions.isEmpty)
-        XCTAssertEqual(deniedExplicit.access, .explicitContentDenied)
-        XCTAssertTrue(deniedExplicit.visibleActions.isEmpty)
+        #expect(allowedLibrary.access == .allowed)
+        #expect(deniedLibrary.access == .inaccessibleLibrary)
+        #expect(deniedLibrary.visibleActions.isEmpty)
+        #expect(deniedExplicit.access == .explicitContentDenied)
+        #expect(deniedExplicit.visibleActions.isEmpty)
     }
 
+    @Test
     func testTagAllowListRequiresAtLeastOneSelectedTag() {
         let user = Self.user(
             accessAllTags: false,
@@ -128,23 +131,22 @@ final class BookActionPolicyTests: XCTestCase {
             selectedItemTags: ["allowed", "also-allowed"]
         )
 
-        XCTAssertEqual(
+        #expect(
             BookActionAvailability(
                 user: user,
                 detail: Self.detail(tags: ["other", "allowed"])
-            ).access,
-            .allowed
-        )
+            ).access == .allowed)
         for tags in [[], ["other"]] {
             let availability = BookActionAvailability(
                 user: user,
                 detail: Self.detail(tags: tags)
             )
-            XCTAssertEqual(availability.access, .inaccessibleTags)
-            XCTAssertTrue(availability.visibleActions.isEmpty)
+            #expect(availability.access == .inaccessibleTags)
+            #expect(availability.visibleActions.isEmpty)
         }
     }
 
+    @Test
     func testTagDenyListAllowsUntaggedAndRejectsAnySelectedTag() {
         let user = Self.user(
             accessAllTags: false,
@@ -153,22 +155,21 @@ final class BookActionPolicyTests: XCTestCase {
         )
 
         for tags in [[], ["other"]] {
-            XCTAssertEqual(
+            #expect(
                 BookActionAvailability(
                     user: user,
                     detail: Self.detail(tags: tags)
-                ).access,
-                .allowed
-            )
+                ).access == .allowed)
         }
         let denied = BookActionAvailability(
             user: user,
             detail: Self.detail(tags: ["other", "blocked"])
         )
-        XCTAssertEqual(denied.access, .inaccessibleTags)
-        XCTAssertTrue(denied.visibleActions.isEmpty)
+        #expect(denied.access == .inaccessibleTags)
+        #expect(denied.visibleActions.isEmpty)
     }
 
+    @Test
     func testAccessAllTagsIgnoresSelectedTagMode() {
         for denySelected in [false, true] {
             let availability = BookActionAvailability(
@@ -179,7 +180,7 @@ final class BookActionPolicyTests: XCTestCase {
                 ),
                 detail: Self.detail(tags: ["blocked"])
             )
-            XCTAssertEqual(availability.access, .allowed)
+            #expect(availability.access == .allowed)
         }
     }
 
