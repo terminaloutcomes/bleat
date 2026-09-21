@@ -1593,7 +1593,7 @@ final class BleatUITests: XCTestCase {
         let account = app.buttons["statistics.account"]
         XCTAssertTrue(account.waitForExistence(timeout: 5))
         account.tap()
-        app.buttons["reader"].tap()
+        app.buttons["reader@books.example"].tap()
         let range = app.buttons["statistics.range"]
         range.tap()
         app.buttons["Last 7 Days"].tap()
@@ -1601,7 +1601,7 @@ final class BleatUITests: XCTestCase {
         for _ in 0..<12 where !reset.isHittable { app.swipeUp() }
         XCTAssertTrue(reset.exists)
         reset.tap()
-        let confirm = app.buttons["Delete reader Statistics"]
+        let confirm = app.buttons["Delete reader@books.example Statistics"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         XCTAssertTrue(
             app.staticTexts.matching(

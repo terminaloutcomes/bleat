@@ -180,3 +180,9 @@ zero skips, zero runtime warnings). Xcode emitted a debugger-version lookup
 diagnostic during launch; the completed result bundle confirms the requested
 UI test passed with no application runtime warnings. A fresh complete-diff
 review reported no findings (six review cycles overall).
+
+Statistics account selection, history rows, and reset scope now identify accounts
+as `username@servername`. The focused account-selection/reset UI journey passed
+(one test, zero skips/runtime warnings), as did Swift lint and diff checks. Xcode
+again emitted the launch-time debugger-version lookup diagnostic. A seventh
+complete-diff review reported no findings.

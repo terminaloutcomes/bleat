@@ -5124,7 +5124,7 @@ private struct StatisticsView: View {
                         Picker("Account", selection: $selectedAccountID) {
                             Text("All Accounts").tag(nil as AccountID?)
                             ForEach(model.accounts) { account in
-                                Text(account.user.username)
+                                Text(accountLabel(account))
                                     .tag(Optional(account.id))
                             }
                         }
@@ -5355,7 +5355,7 @@ private struct StatisticsView: View {
                             if selectedAccountID == nil
                                 || selectedAccountID == account.id
                             {
-                                LabeledContent(account.user.username) {
+                                LabeledContent(accountLabel(account)) {
                                     Text(
                                         historyLabel(
                                             model.statisticsHistoryState(
@@ -5473,7 +5473,7 @@ private struct StatisticsView: View {
     }
 
     private var scopeLabel: String {
-        selectedAccount?.user.username ?? "All Accounts"
+        selectedAccount.map(accountLabel) ?? "All Accounts"
     }
 
     private var liveRealSeconds: Double {
@@ -5517,6 +5517,10 @@ private struct StatisticsView: View {
 
     private func coverageLabel(_ summary: StatisticsSummary) -> String {
         coverageLabel(summary.realTimeCoverage)
+    }
+
+    private func accountLabel(_ account: ServerAccount) -> String {
+        "\(account.user.username)@\(account.server.url.host ?? account.server.url.absoluteString)"
     }
 
     private func boundsLabel(_ bounds: StatisticsTimeBounds) -> String {
