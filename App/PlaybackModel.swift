@@ -3258,6 +3258,9 @@ final class PlaybackModel {
     private func recordStatisticsSample(
         isAudibleAndAdvancing: Bool
     ) {
+        #if BLEAT_STATISTICS_RECORDING_DISABLED
+            return
+        #endif
         guard let accountID,
             let itemID,
             let sessionID = statisticsSessionID,

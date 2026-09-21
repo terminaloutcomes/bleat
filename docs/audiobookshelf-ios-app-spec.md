@@ -2103,7 +2103,7 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 The following targets apply to the statistics work tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
-- Statistics sampling adds no more than 1% sustained CPU overhead during local playback in a documented device or Simulator environment. Oldest-supported-device hardware is not required. The enabled/disabled comparison must state whether the percentage is relative overhead or CPU percentage points and report measurement variability; the remaining duration and CPU evidence is tracked in [GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245).
+- Statistics sampling adds no more than 1 absolute CPU percentage point during local playback in the documented Simulator environment. Oldest-supported-device hardware is not required. Three paired enabled/disabled five-minute profiles averaged 0.159 percentage points (0.141 sample standard deviation); the separately reported relative overhead averaged 2.60%. The protocol, exact measurements, and interpretation are recorded in `docs/statistics-validation.md` and [GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245).
 - Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
 - Statistics imports are resumable, deduplicated, and rate-limited so opening the Statistics screen does not repeatedly make the server scan all session history.
 
@@ -2125,7 +2125,6 @@ The following additional statistics evidence remains tracked under
 - wall-clock `timeListened` accounting at 0.5×, 1×, 2×, and during buffering;
 - audiobook-time integration at 0.5×, 1×, 2×, and 3×;
 - pause, stall, seek, backward replay, rate change, chapter boundary, track boundary, and midnight slice splitting;
-- one real hour at 2× produces one real hour and approximately two audiobook hours;
 - seeks add neither real time nor audiobook time, while replayed forward audio adds audiobook time again;
 - chapter-start and chapter-completion thresholds, including metadata edits and chapter splits;
 - distinct book/chapter counts across accounts with colliding remote IDs and identical titles;

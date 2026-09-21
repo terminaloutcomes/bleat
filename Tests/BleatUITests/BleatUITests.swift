@@ -3447,6 +3447,204 @@ final class BleatLiveUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    #if BLEAT_STATISTICS_VALIDATION
+        @MainActor
+        func testStatisticsValidationRun() async throws {
+            let environment = try await liveEnvironment()
+            let mode = try XCTUnwrap(
+                ProcessInfo.processInfo.environment[
+                    "BLEAT_STATISTICS_VALIDATION_MODE"
+                ]
+            )
+            executionTimeAllowance = mode == "duration" ? 4_200 : 900
+
+            var app = XCUIApplication()
+            app.launchArguments = [
+                "-bleat.downloads.automaticLookahead.v1", "0",
+                "--release-screenshot-disable-nearby-server-discovery",
+            ]
+            app.launch()
+
+            if app.textFields["login.server"].waitForExistence(timeout: 5) {
+                let server = app.textFields["login.server"]
+                server.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+                server.typeText(environment.server)
+                let username = app.textFields["login.username"]
+                username.tap()
+                username.typeText(environment.username)
+                let password = app.secureTextFields["login.password"]
+                password.tap()
+                password.typeText(environment.password)
+                app.buttons["login.submit"].tap()
+            }
+            XCTAssertTrue(
+                app.otherElements["app.signedIn"].waitForExistence(timeout: 30)
+            )
+            dismissSavePasswordPromptIfNeeded(app: app)
+
+            if mode == "prepare" {
+                try await prepareStatisticsValidationMedia(in: app)
+                return
+            }
+
+            try await startStatisticsValidationPlayback(in: app)
+            let configuredSeconds = try XCTUnwrap(
+                ProcessInfo.processInfo.environment[
+                    "BLEAT_STATISTICS_VALIDATION_SECONDS"
+                ].flatMap(Double.init)
+            )
+            let backgroundSeconds =
+                ProcessInfo.processInfo.environment[
+                    "BLEAT_STATISTICS_BACKGROUND_SECONDS"
+                ].flatMap(Double.init) ?? 0
+            let foregroundLead = min(600, configuredSeconds / 3)
+            let foregroundTail =
+                configuredSeconds - foregroundLead
+                - backgroundSeconds
+            XCTAssertGreaterThanOrEqual(foregroundTail, 0)
+
+            let start = ProcessInfo.processInfo.systemUptime
+            app.buttons["player.toggle"].tap()
+            try await Task.sleep(for: .seconds(foregroundLead))
+            if backgroundSeconds > 0 {
+                XCUIDevice.shared.press(.home)
+                try await Task.sleep(for: .seconds(backgroundSeconds))
+                app.activate()
+                XCTAssertTrue(
+                    app.otherElements["player.screen"].waitForExistence(
+                        timeout: 30)
+                )
+            }
+            try await Task.sleep(for: .seconds(foregroundTail))
+            app.buttons["player.toggle"].tap()
+            let end = ProcessInfo.processInfo.systemUptime
+            let elapsed = end - start
+            XCTAssertEqual(elapsed, configuredSeconds, accuracy: 5)
+
+            let evidence = """
+                mode=\(mode)
+                monotonic_start=\(start)
+                monotonic_end=\(end)
+                elapsed_seconds=\(elapsed)
+                background_seconds=\(backgroundSeconds)
+                rate=\(app.buttons["player.rate"].value ?? "missing")
+                """
+            let attachment = XCTAttachment(string: evidence)
+            attachment.name = "statistics-validation-timing"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+
+            app.terminate()
+            app = XCUIApplication()
+            app.launchArguments = [
+                "--release-screenshot-disable-nearby-server-discovery"
+            ]
+            app.launch()
+            XCTAssertTrue(
+                app.otherElements["app.signedIn"].waitForExistence(timeout: 30)
+            )
+            tabButton("Settings", in: app).tap()
+            let statistics = app.buttons["settings.statistics"]
+            scrollUntilHittable(statistics, in: app, direction: .up)
+            statistics.tap()
+            XCTAssertTrue(
+                app.navigationBars["Listening Statistics"].waitForExistence(
+                    timeout: 30)
+            )
+            app.swipeDown()
+            try await Task.sleep(for: .seconds(5))
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "statistics-after-relaunch-and-refresh"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+
+        @MainActor
+        private func prepareStatisticsValidationMedia(
+            in app: XCUIApplication
+        ) async throws {
+            let remotePlay = app.buttons.matching(
+                NSPredicate(
+                    format:
+                        "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                    "home.book.", ".play", "Play four-hour-silence"
+                )
+            ).firstMatch
+            XCTAssertTrue(remotePlay.waitForExistence(timeout: 60))
+            app.buttons.matching(
+                NSPredicate(
+                    format: "identifier == %@ AND label == %@",
+                    String(remotePlay.identifier.dropLast(".play".count)),
+                    "Open four-hour-silence"
+                )
+            ).firstMatch.tap()
+            XCTAssertTrue(
+                app.staticTexts["book.detail.title"].waitForExistence(
+                    timeout: 30)
+            )
+            XCTAssertEqual(
+                app.staticTexts["book.detail.title"].label,
+                "four-hour-silence"
+            )
+            let download = app.buttons["book.detail.download"]
+            XCTAssertTrue(download.waitForExistence(timeout: 30))
+            download.tap()
+            XCTAssertTrue(download.waitForNonExistence(timeout: 300))
+            app.navigationBars.buttons.firstMatch.tap()
+
+            let downloadedPlay = statisticsValidationDownloadedPlay(in: app)
+            XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 300))
+            downloadedPlay.tap()
+            let miniPlayer = app.buttons["player.mini.open"]
+            XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
+            miniPlayer.tap()
+            XCTAssertTrue(
+                app.otherElements["player.screen"].waitForExistence(timeout: 30)
+            )
+            app.buttons["player.toggle"].tap()
+            app.buttons["player.rate"].tap()
+            app.buttons["2×"].tap()
+            XCTAssertEqual(app.buttons["player.rate"].value as? String, "2×")
+            try await Task.sleep(for: .seconds(6))
+        }
+
+        @MainActor
+        private func startStatisticsValidationPlayback(
+            in app: XCUIApplication
+        ) async throws {
+            tabButton("Home", in: app).tap()
+            let downloadedPlay = statisticsValidationDownloadedPlay(in: app)
+            XCTAssertTrue(downloadedPlay.waitForExistence(timeout: 60))
+            downloadedPlay.tap()
+            let miniPlayer = app.buttons["player.mini.open"]
+            XCTAssertTrue(miniPlayer.waitForExistence(timeout: 30))
+            miniPlayer.tap()
+            XCTAssertTrue(
+                app.otherElements["player.screen"].waitForExistence(timeout: 30)
+            )
+            app.buttons["player.toggle"].tap()
+            if app.buttons["player.rate"].value as? String != "2×" {
+                app.buttons["player.rate"].tap()
+                app.buttons["2×"].tap()
+            }
+            XCTAssertEqual(app.buttons["player.rate"].value as? String, "2×")
+            try await Task.sleep(for: .seconds(6))
+        }
+
+        @MainActor
+        private func statisticsValidationDownloadedPlay(
+            in app: XCUIApplication
+        ) -> XCUIElement {
+            app.buttons.matching(
+                NSPredicate(
+                    format:
+                        "identifier BEGINSWITH %@ AND identifier ENDSWITH %@ AND label == %@",
+                    "home.downloaded.", ".play", "Play four-hour-silence"
+                )
+            ).firstMatch
+        }
+    #endif
+
     @MainActor
     func testLiveOnlineLoginPlaybackAndDownload() async throws {
         #if os(macOS)

@@ -192,11 +192,191 @@ as `username@servername`. The focused account-selection/reset UI journey passed
 again emitted the launch-time debugger-version lookup diagnostic. A seventh
 complete-diff review reported no findings.
 
-## Remaining duration and CPU evidence
+## Duration and CPU evidence
 
-[GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245), a
-sub-issue of #26, defines manual Docker backend and Simulator setup, generation
-and ingestion of a four-hour silent audiobook, a real one-hour playback run at
-2x, relaunch/reconciliation checks, and paired enabled/disabled CPU profiling.
-The user accepts a documented Simulator or device environment; oldest-supported
-hardware is not required. These measurements have not yet been performed.
+The manual evidence requested by
+[GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245) was
+collected on 2026-09-21 from commit `c03e31ee`. The host was an Apple M2 Max
+MacBook Pro with 64 GiB memory running macOS 26.6.2. The dedicated Simulator was
+an iPhone 17 Pro running iOS 26.5 (23F77). These are host/Simulator results, not
+physical-phone CPU, battery, lock-screen, or thermal evidence.
+
+### Reproducible environment
+
+The run reused the pinned Audiobookshelf 2.36.0 and Caddy services from
+`TestSupport/ServerHarness/compose.yaml`, controlled by
+`scripts/live-test-environment.sh`. It used a unique Compose project, media
+directory, port range, and disposable account. The setup sequence was:
+
+1. Generate stereo 44.1 kHz AAC in an M4A container from FFmpeg `anullsrc` with
+   an explicit 14,400-second duration. `ffprobe` reported exactly
+   `14400.000000` seconds and a complete FFmpeg decode succeeded.
+2. Start, wait for, and seed the run-owned backend with the existing live-test
+   environment script. Mount the generated book into its media root, scan it,
+   and verify the expanded pinned API item reports 14,400 seconds and
+   `audio/mp4`.
+3. Create and boot a dedicated Simulator using the device/runtime selection
+   approach in `scripts/test-app-live.sh`, install its Caddy CA, build and
+   install the Release app, sign in to the disposable prefixed HTTPS server,
+   download the book, and verify downloaded playback.
+4. Keep that backend and Simulator alive for the duration run. For CPU runs,
+   stop only the run-owned Docker services after the download so local playback
+   is identical and the backend cannot add periodic activity.
+5. Retain redacted trace-table exports, load snapshots, and the duration-run
+   timing/screenshot attachments below
+   `TestSupport/ServerHarness/artifacts/issue-245/`. This directory is ignored
+   and remains local. Raw `.trace` and `.xcresult` bundles were inspected and
+   then removed because they embed sensitive absolute host paths; the retained
+   XML exports replace those paths and the Simulator identifier with explicit
+   redaction markers. Cleanup deletes only the dedicated Simulator, Compose
+   project/volumes, generated media, and temporary build products.
+
+The reproducible duration and profiling driver is compile-gated XCUITest code
+in `Tests/BleatUITests/BleatUITests.swift`. A second Release build uses the
+compile condition at the start of
+`PlaybackModel.recordStatisticsSample` to omit only statistics recording. The
+ordinary player, downloaded media, 2x rate, UI state, account data, and all
+other build settings are unchanged. Neither gate is present in ordinary builds.
+Set the existing `BLEAT_LIVE_APP_URL`, `BLEAT_LIVE_USERNAME`, and
+`BLEAT_LIVE_PASSWORD` inputs from ignored local configuration, then build the
+two Release test products with these flag sets:
+
+```sh
+OTHER_SWIFT_FLAGS='$(inherited) -D BLEAT_STATISTICS_VALIDATION'
+OTHER_SWIFT_FLAGS='$(inherited) -D BLEAT_STATISTICS_VALIDATION -D BLEAT_STATISTICS_RECORDING_DISABLED'
+```
+
+Use `xcodebuild build-for-testing` with the `Bleat` scheme, Release
+configuration, dedicated Simulator destination, and separate derived-data
+directories. Locate the generated `.xctestrun`, then inject the test process
+environment exactly as the supported live-app script does; exporting shell
+variables alone is insufficient:
+
+```sh
+plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_LIVE_APP_URL' \
+  -string "$BLEAT_LIVE_APP_URL" "$BLEAT_STATS_XCTESTRUN"
+plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_LIVE_USERNAME' \
+  -string "$BLEAT_LIVE_USERNAME" "$BLEAT_STATS_XCTESTRUN"
+plutil -insert 'BleatUITests.EnvironmentVariables.BLEAT_LIVE_PASSWORD' \
+  -string "$BLEAT_LIVE_PASSWORD" "$BLEAT_STATS_XCTESTRUN"
+plutil -insert \
+  'BleatUITests.EnvironmentVariables.BLEAT_STATISTICS_VALIDATION_MODE' \
+  -string "$BLEAT_STATISTICS_VALIDATION_MODE" "$BLEAT_STATS_XCTESTRUN"
+plutil -insert \
+  'BleatUITests.EnvironmentVariables.BLEAT_STATISTICS_VALIDATION_SECONDS' \
+  -string "$BLEAT_STATISTICS_VALIDATION_SECONDS" "$BLEAT_STATS_XCTESTRUN"
+plutil -insert \
+  'BleatUITests.EnvironmentVariables.BLEAT_STATISTICS_BACKGROUND_SECONDS' \
+  -string "$BLEAT_STATISTICS_BACKGROUND_SECONDS" \
+  "$BLEAT_STATS_XCTESTRUN"
+```
+
+`prepare` downloads and configures the book and may use zero for both numeric
+inputs. `duration` uses 3,600 seconds and 900 background seconds. `profile` uses
+360 seconds and zero background seconds. Execute only
+`BleatUITests/BleatLiveUITests/testStatisticsValidationRun` with
+`xcodebuild test-without-building -xctestrun "$BLEAT_STATS_XCTESTRUN"`. For
+each profile, wait through the declared warm-up, attach Time Profiler to Bleat
+on the dedicated Simulator for five minutes, alternate enabled then disabled,
+and export the `time-profile` table with `xcrun xctrace export`. CPU time is the
+sum of its `weight` column; divide by the trace TOC duration for CPU percentage.
+
+### One real hour at 2x
+
+The downloaded four-hour book played at 2x for a monotonic elapsed
+`3602.723243` seconds. The app was foregrounded for the first and last portions
+and backgrounded in the Simulator for 900 seconds. No seek, pause, interruption,
+or buffering stall was observed inside the measured interval; the persisted
+advancing time stayed within the declared tolerance. The tolerances were at most
+five seconds from 3,600 real seconds and ten seconds from 7,200 audiobook
+seconds.
+
+The disposable account began with one 2.499901-second setup slice and position
+`0.500177` to `3.000138`. Reacquiring the already downloaded player immediately
+before starting the monotonic clock added one separately identifiable
+3.250677-real-second / 6.501590-audiobook-second slice. The redacted persistence
+query recorded these exact local-ledger stages:
+
+| Stage | Persisted real | Persisted audiobook | Position | Evidence |
+| --- | ---: | ---: | ---: | --- |
+| Before playback reacquisition | 2.499900625 s | 2.499960958 s | 3.000137596 s | Direct pre-run store query |
+| Monotonic timer start | 5.750577333 s | 9.001551208 s | 10.001911932 s | Setup plus the structurally identified pre-clock slice |
+| Paused flush | 3,607.706789917 s | 7,213.001798538 s | 7,214.500477376 s | Sum of the 700 persisted local slices in the final store |
+| After relaunch and history refresh | 3,607.706789917 s | 7,213.001798538 s | 7,214.500477376 s | Direct post-refresh store query; two sessions, zero uncertain seconds |
+
+The paused-flush row is reconstructed from the same final persisted slice rows,
+not a separate copy of the store taken before termination. Relaunch and history
+refresh do not rewrite those local slices; their exact sum and row count remained
+the post-refresh values shown above. Excluding the pre-clock slice, the measured
+interval persisted these exact values:
+
+| Measure | Expected | Recorded | Difference |
+| --- | ---: | ---: | ---: |
+| Real listening time | 3,600 s | 3,601.956213 s | +1.956213 s |
+| Audiobook time | 7,200 s | 7,204.000247 s | +4.000247 s |
+| Position advance | 7,200 s | 7,204.000247 s | +4.000247 s |
+
+The measured session contained zero uncertain seconds. After pausing, Bleat was
+terminated and relaunched. Its Statistics screen reported 1 hr 0 min real,
+2 hr 0 min audiobook time, and 2.00x average speed. Pull-to-refresh reconciled
+server history without changing or duplicating the exact local totals. The
+duration Xcode result executed one test, passed it, skipped none, and recorded
+no application runtime warnings. The retained timing and screenshot attachments
+record the monotonic endpoints and the post-relaunch display.
+
+### Paired Simulator CPU comparison
+
+For pass/fail, the ambiguous 1% target is interpreted as an absolute increase
+of at most 1.00 CPU percentage point: Instruments reports app
+CPU time divided by elapsed time, so this directly bounds the additional host
+CPU capacity consumed by sampling. Relative overhead against the disabled
+baseline is also reported, but is not the pass/fail threshold. Under a relative
+interpretation the mean result would be 2.60% and would not satisfy a 1%
+threshold.
+
+After discarded warm-up captures, three enabled/disabled pairs alternated in the
+order shown. Every counted interval used local downloaded playback at 2x with
+the player foregrounded and Docker stopped. Time Profiler assigned 1 ms to each
+sample row; CPU percentage is summed sample weight divided by trace duration.
+
+| Pair | Recording | Elapsed | CPU time | App CPU | 1-minute host load, before -> after |
+| ---: | --- | ---: | ---: | ---: | --- |
+| 1 | enabled | 300.587 s | 18.588 s | 6.184% | 4.73 -> 2.95 |
+| 1 | disabled | 300.593 s | 18.278 s | 6.081% | 2.95 -> 5.14 |
+| 2 | enabled | 300.642 s | 19.444 s | 6.467% | 5.14 -> 6.53 |
+| 2 | disabled | 300.703 s | 18.488 s | 6.148% | 6.53 -> 4.11 |
+| 3 | enabled | 300.643 s | 18.355 s | 6.105% | 6.43 -> 5.16 |
+| 3 | disabled | 300.600 s | 18.188 s | 6.051% | 5.12 -> 5.67 |
+
+| Pair | Absolute difference | Relative overhead |
+| ---: | ---: | ---: |
+| 1 | 0.103 percentage points | 1.70% |
+| 2 | 0.319 percentage points | 5.19% |
+| 3 | 0.055 percentage points | 0.90% |
+| Mean | 0.159 percentage points | 2.60% |
+| Sample standard deviation | 0.141 percentage points | 2.28% |
+| Range | 0.265 percentage points | 4.29% |
+
+The enabled mean was 6.252% CPU (sample standard deviation 0.191 percentage
+points); the disabled mean was 6.093% (standard deviation 0.050 percentage
+points). Every paired absolute result and the mean are below the declared
+1.00-percentage-point limit, so this Simulator measurement passes that
+interpretation. The relative result is reported separately and does not pass a
+1% relative threshold.
+
+Rows whose resolved backtrace contained either `recordStatisticsSample` or a
+`StatisticsRepository` method accounted for 282 ms, 262 ms, and 247 ms of the
+enabled traces. The dominant frames were
+`PlaybackModel.recordStatisticsSample`, `LiveAppService.recordStatisticsSample`,
+and `StatisticsRepository.record`/`saveMutation`. Disabled traces contained no
+Bleat statistics-recording stack; one or two unrelated UIKit/Foundation symbols
+with “Statistics” in their names were present. This confirms the comparison
+removed the intended work rather than inferring it from total CPU alone.
+
+All six counted Xcode result bundles executed one test and passed with zero
+failures, skips, expected failures, and application runtime warnings.
+Instruments emitted the same warning that one configured table lacked a known
+input source for each trace; the `time-profile` table, weights, stacks, start/end
+times, and 300-second durations were present and exported successfully. An
+earlier third enabled attachment attempt ended before five minutes and was
+discarded; its replacement above reached the specified five-minute limit.
