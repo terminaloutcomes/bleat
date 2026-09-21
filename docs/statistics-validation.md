@@ -172,7 +172,12 @@ On 2026-09-21 the user reported that Statistics loaded essentially instantly on
 an iPhone 16 Pro and accepted that loading performance. This is manual device
 loading evidence; the build, ledger size, cache state, and elapsed time were not
 recorded. It is not a timed 250,000-slice device benchmark or a sustained-playback
-performance measurement. The statistics-specific VoiceOver audit remains open.
+performance measurement.
+
+On 2026-09-21 the user also confirmed that VoiceOver is fine for Statistics.
+The statistics-specific manual VoiceOver check is accepted as passed. The exact
+build, OS version, and individual gestures were not recorded; this confirmation
+does not claim completion of the separate whole-application accessibility audit.
 
 The display follow-up passed all 11 focused `StatisticsTests`, strict Swift
 lint, and the largest-text statistics book/session UI journey (one passed,

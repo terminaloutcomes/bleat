@@ -231,7 +231,9 @@ The identifiers below are stable. `AC-12` through `AC-20` describe
 statistics scope; detailed regression and performance evidence is in
 `docs/statistics-validation.md`, and remaining evidence is tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). The
-other rows map section 22 release criteria.
+other rows map section 22 release criteria. The user accepted Statistics loading
+on an iPhone 16 Pro and confirmed the statistics-specific VoiceOver check passed
+on 2026-09-21; both manual results are recorded in `docs/statistics-validation.md`.
 
 | ID | Acceptance behavior | Primary evidence | Status |
 | --- | --- | --- | --- |
