@@ -169,7 +169,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
                 "The Complete Goat Audio Archive"
             )
         ).firstMatch
-        XCTAssertTrue(heroSeries.waitForExistence(timeout: 20))
+        scrollUntilHittable(
+            heroSeries,
+            in: app.collectionViews["books.list"],
+            app: app
+        )
         heroSeries.tap()
 
         let hero = app.buttons.matching(
@@ -412,8 +416,14 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         )
         for _ in 0..<20 {
             let elementExists = element.exists
+            let navigationBar = app.navigationBars.firstMatch
+            let clearsNavigationBar =
+                elementExists
+                && (!navigationBar.exists
+                    || element.frame.minY >= navigationBar.frame.maxY)
             if elementExists,
                 app.frame.contains(element.frame),
+                clearsNavigationBar,
                 element.isHittable
             {
                 return

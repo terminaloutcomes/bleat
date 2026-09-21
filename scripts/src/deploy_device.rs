@@ -1,48 +1,9 @@
-use std::error::Error;
-use std::fmt;
-use std::io;
 use std::path::PathBuf;
-use std::process::{Command, ExitStatus};
+use std::process::Command;
 
-#[derive(Debug)]
-pub enum DeployDeviceError {
-    MissingEnvironmentVariable(&'static str),
-    CommandStart {
-        stage: &'static str,
-        source: io::Error,
-    },
-    CommandFailed {
-        stage: &'static str,
-        status: ExitStatus,
-    },
-}
+use crate::error::BleatError;
 
-impl fmt::Display for DeployDeviceError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingEnvironmentVariable(name) => {
-                write!(formatter, "required environment variable {name} is not set")
-            }
-            Self::CommandStart { stage, source } => {
-                write!(formatter, "could not start {stage}: {source}")
-            }
-            Self::CommandFailed { stage, status } => {
-                write!(formatter, "{stage} exited with {status}")
-            }
-        }
-    }
-}
-
-impl Error for DeployDeviceError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::CommandStart { source, .. } => Some(source),
-            Self::MissingEnvironmentVariable(_) | Self::CommandFailed { .. } => None,
-        }
-    }
-}
-
-pub fn run() -> Result<(), DeployDeviceError> {
+pub fn run() -> Result<(), BleatError> {
     let bleat_device_id = required_environment_variable("BLEAT_DEVICE_ID")?;
 
     let bleat_device_build_directory = PathBuf::from(required_environment_variable(
@@ -89,19 +50,25 @@ pub fn run() -> Result<(), DeployDeviceError> {
     Ok(())
 }
 
-fn required_environment_variable(name: &'static str) -> Result<String, DeployDeviceError> {
-    std::env::var(name).map_err(|_| DeployDeviceError::MissingEnvironmentVariable(name))
+fn required_environment_variable(name: &str) -> Result<String, BleatError> {
+    std::env::var(name).map_err(|_| BleatError::MissingEnvironmentVariable(name.to_string()))
 }
 
-fn run_command(stage: &'static str, command: &mut Command) -> Result<(), DeployDeviceError> {
+fn run_command(stage: &str, command: &mut Command) -> Result<(), BleatError> {
     eprintln!("Running {stage}");
     let status = command
         .status()
-        .map_err(|source| DeployDeviceError::CommandStart { stage, source })?;
+        .map_err(|source| BleatError::CommandStart {
+            stage: stage.to_string(),
+            source,
+        })?;
 
     if status.success() {
         Ok(())
     } else {
-        Err(DeployDeviceError::CommandFailed { stage, status })
+        Err(BleatError::CommandFailed {
+            stage: stage.to_string(),
+            status,
+        })
     }
 }
