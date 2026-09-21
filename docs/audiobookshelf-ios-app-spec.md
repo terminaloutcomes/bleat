@@ -1382,8 +1382,15 @@ rules.
 
 The app implements the local ledger, completion milestones, lifetime summary,
 private CloudKit merge, paginated server-history import, selected-account JSON
-portability, date-range exploration, and confirmed local reset. Large-ledger
-performance and end-to-end evidence remain tracked in
+portability, date-range exploration including imported-session charts and book
+detail, and confirmed local reset. Summary and live-slice presentation use one
+actor-isolated snapshot. Daily buckets and date-range boundaries use UTC
+Gregorian days, and the chart labels that convention. A derived SwiftData cache survives relaunch and is
+updated incrementally with playback/session mutations. Live polling never
+rebuilds the ledger; bulk archive imports and resets invalidate the cache for
+an explicit reload. Large-ledger
+measurements and remaining end-to-end evidence are recorded in
+`docs/statistics-validation.md` and tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 ### 12.1 Metric definitions
@@ -1416,7 +1423,7 @@ For two consecutive samples in the same uninterrupted playback generation:
 2. Compute positive whole-book position advancement. Discard negative advancement.
 3. Record real time only when the position is advancing; this avoids counting a player that claims to be playing while stalled.
 4. Record audiobook time as the observed positive advancement, capped at `realDelta × actualPlayerRate + 0.5 seconds` to reject an unmarked jump.
-5. Split the resulting slice at chapter boundaries, local-midnight boundaries, and rate changes.
+5. Split the resulting slice at chapter boundaries, UTC-midnight boundaries, and rate changes.
 
 Every explicit or automatic seek increments a playback-generation counter and discards the interval spanning the seek. A seamless track transition keeps the generation because the whole-book timeline remains continuous. Replay through an already heard range creates new audiobook time but does not create another distinct chapter or book.
 
@@ -1460,6 +1467,11 @@ Remote snapshots are upserted when the same session ID has a newer `updatedAt`. 
 The All Accounts view aggregates account-scoped results only after each account has produced a valid result. An unavailable or reauthentication-required account appears as stale with its last successful import time. One server failure must not blank totals from other servers.
 
 ### 12.5 Chapter and completion identity
+
+Current implementation limitation accepted for issue #26: statistics grouping
+uses exact chapter index, title, and boundaries. Tolerance-preserving identity
+normalization below remains deferred; small metadata changes may split coverage.
+
 
 Chapter metadata is mutable and current server history does not retain it. Create a `ChapterKey` from the book key plus a stable local chapter UUID. On first encounter, map server chapters by ordered index, normalized title, and start/end times. On later metadata refresh:
 
@@ -2091,7 +2103,7 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 The following targets apply to the statistics work tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
-- Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
+- Statistics sampling adds no more than 1% sustained CPU overhead during local playback in a documented device or Simulator environment. Oldest-supported-device hardware is not required. The enabled/disabled comparison must state whether the percentage is relative overhead or CPU percentage points and report measurement variability; the remaining duration and CPU evidence is tracked in [GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245).
 - Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
 - Statistics imports are resumable, deduplicated, and rate-limited so opening the Statistics screen does not repeatedly make the server scan all session history.
 

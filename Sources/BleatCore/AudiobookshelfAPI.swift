@@ -115,7 +115,10 @@ public actor AudiobookshelfAPI<
             payload.numPages == payload.total / itemsPerPage
                 + (payload.total % itemsPerPage == 0 ? 0 : 1),
             page < payload.numPages || (page == 0 && payload.total == 0),
-            payload.sessions.count <= itemsPerPage
+            payload.sessions.count
+                == min(
+                    itemsPerPage, max(0, payload.total - page * itemsPerPage)),
+            Set(payload.sessions.map(\.id)).count == payload.sessions.count
         else {
             throw .invalidListeningSessions
         }
@@ -161,9 +164,8 @@ public actor AudiobookshelfAPI<
                 total: payload.total,
                 numPages: payload.numPages,
                 page: payload.page,
-                fingerprint: payload.sessions.map {
-                    $0.id + ":" + String($0.updatedAt ?? 0)
-                },
+                fingerprint: ListeningSessionsFingerprint(
+                    sessions: payload.sessions),
                 sessions: sessions
             ),
             correlationID: result.correlationID
@@ -478,8 +480,12 @@ public struct ListeningSessionsPage: Sendable {
     public let total: Int
     public let numPages: Int
     public let page: Int
-    public let fingerprint: [String]
+    public let fingerprint: ListeningSessionsFingerprint
     public let sessions: [RemoteListeningSession]
+}
+
+public struct ListeningSessionsFingerprint: Equatable, Sendable {
+    fileprivate let sessions: [ListeningSessionDTO]
 }
 
 // Pinned source: server/controllers/MeController.js and
@@ -492,7 +498,7 @@ private struct ListeningSessionsPageDTO: Decodable, Sendable {
     let sessions: [ListeningSessionDTO]
 }
 
-private struct ListeningSessionDTO: Decodable, Sendable {
+private struct ListeningSessionDTO: Decodable, Equatable, Sendable {
     let id: String
     let libraryItemID: String?
     let bookID: String?

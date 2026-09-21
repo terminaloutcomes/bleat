@@ -882,7 +882,17 @@ local books, metadata, and device progress. It separately asks whether to keep
 or delete listening history.
 
 Listening Statistics uses pull-to-refresh for an explicit server-history
-import. Automatic imports run at most daily per account. JSON archives contain
+import. Automatic imports run at most daily per account. Interrupted imports restart
+from the first page and reuse already saved session identities. Charts and book
+details include imported sessions, with explicit uncertainty bounds. Daily
+charts and date-range boundaries use UTC Gregorian days; playback
+rate and chapter coverage remain specific to this app. Summaries and live slices
+are read together so persisted playback does not disappear from the counters.
+A local derived cache makes repeated Lifetime reads independent of ledger size;
+playback and session updates maintain compact aggregates transactionally.
+Live polling only reads the cache. Bulk archive imports and resets invalidate it
+for rebuilding on the next explicit load.
+JSON archives contain
 book titles and listening times, which are personal behavioral data; choose a
 safe destination when exporting them.
 

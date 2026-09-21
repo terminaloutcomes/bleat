@@ -269,9 +269,13 @@ public enum StatisticsCoverage: String, Codable, Sendable {
     case stale
 }
 
-public struct StatisticsTimeBounds: Equatable, Sendable {
+public struct StatisticsTimeBounds: Codable, Equatable, Sendable {
     public let lower: Double
     public let upper: Double
+
+    public var shouldShowUncertainty: Bool {
+        upper - lower >= 15 * 60
+    }
 
     public init(lower: Double, upper: Double) {
         self.lower = lower
@@ -279,7 +283,7 @@ public struct StatisticsTimeBounds: Equatable, Sendable {
     }
 }
 
-public struct StatisticsSummary: Equatable, Sendable {
+public struct StatisticsSummary: Codable, Equatable, Sendable {
     public let realSeconds: Double
     public let localRealSeconds: Double
     public let audiobookSeconds: Double
@@ -357,7 +361,14 @@ public struct StatisticsSummary: Equatable, Sendable {
     }
 }
 
-public struct StatisticsQuery: Sendable {
+public struct StatisticsQuery: Codable, Hashable, Sendable {
+    /// Reporting uses UTC Gregorian days, independent of device settings.
+    public static let reportingCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        return calendar
+    }()
+
     public let accountID: AccountID?
     public let start: Date?
     public let end: Date?
@@ -388,29 +399,40 @@ public struct StatisticsQuery: Sendable {
     }
 }
 
-public struct StatisticsDay: Identifiable, Equatable, Sendable {
+public struct StatisticsDay: Codable, Identifiable, Equatable, Sendable {
     public let date: Date
     public let realSeconds: Double
+    public let upperSeconds: Double
     public var id: Date { date }
 }
 
-public struct StatisticsBook: Identifiable, Equatable, Sendable {
+public struct StatisticsBook: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
     public let author: String
     public let realSeconds: Double
     public let audiobookSeconds: Double
+    public let bounds: StatisticsTimeBounds
+    public let coverage: StatisticsCoverage
+    public let chaptersStarted: Int
+    public let chaptersCompleted: Int
+    public let completedAt: Date?
+    public let finishedRuntime: Double
 }
 
-public struct StatisticsRecentSession: Identifiable, Equatable, Sendable {
+public struct StatisticsRecentSession: Codable, Identifiable, Equatable,
+    Sendable
+{
     public let id: String
     public let title: String
     public let startedAt: Date
     public let realSeconds: Double
     public let coverage: StatisticsCoverage
+    public let bounds: StatisticsTimeBounds
+    public let audiobookSeconds: Double?
 }
 
-public struct StatisticsExploration: Equatable, Sendable {
+public struct StatisticsExploration: Codable, Equatable, Sendable {
     public let days: [StatisticsDay]
     public let books: [StatisticsBook]
     public let recentSessions: [StatisticsRecentSession]
@@ -880,7 +902,7 @@ public struct ListeningAccumulator: Sendable {
             && lhs.playbackRate == rhs.playbackRate
             && lhs.chapterID == rhs.chapterID
             && lhs.chapterTitle == rhs.chapterTitle
-            && Calendar.current.isDate(
+            && StatisticsQuery.reportingCalendar.isDate(
                 lhs.startedAt,
                 inSameDayAs: rhs.startedAt
             )
@@ -905,12 +927,21 @@ public struct ListeningAccumulator: Sendable {
     }
 }
 
+/// SwiftData exception approved for issue #26: ModelContext has synchronous
+/// fetch/save APIs. Only this actor performs statistics persistence/aggregation;
+/// callers await it without blocking MainActor. Remove this boundary when
+/// SwiftData provides native asynchronous fetch/save operations.
 public actor StatisticsRepository {
     private let modelContainer: ModelContainer
-    private var accumulators: [PlaybackSessionID: ListeningAccumulator] = [:]
+    private var accumulators:
+        [StatisticsAggregation.SessionKey: ListeningAccumulator] = [:]
 
     public init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
+    }
+
+    public func discardAfterPersistentReset() {
+        accumulators.removeAll()
     }
 
     public func uncommittedSlice(accountID: AccountID?) -> ListeningSlice? {
@@ -922,27 +953,24 @@ public actor StatisticsRepository {
     public func record(
         _ sample: StatisticsPlaybackSample
     ) throws(StatisticsRepositoryError) {
-        var accumulator =
-            accumulators[sample.sessionID]
-            ?? ListeningAccumulator()
+        let identity = StatisticsAggregation.SessionKey(
+            account: sample.accountID, session: sample.sessionID)
+        var accumulator = accumulators[identity] ?? ListeningAccumulator()
         let slices = try accumulator.ingest(sample)
-        accumulators[sample.sessionID] = accumulator
-        if !slices.isEmpty {
-            try save(slices)
-        }
+        if !slices.isEmpty { try save(slices) }
+        accumulators[identity] = accumulator
     }
 
     public func finish(
         sessionID: PlaybackSessionID
     ) throws(StatisticsRepositoryError) {
-        guard
-            var accumulator = accumulators.removeValue(
-                forKey: sessionID
-            )
-        else {
-            return
+        let matching = accumulators.filter { $0.key.session == sessionID }
+        let slices = matching.values.flatMap { value in
+            var accumulator = value
+            return accumulator.finish()
         }
-        try save(accumulator.finish())
+        if !slices.isEmpty { try save(slices) }
+        for identity in matching.keys { accumulators[identity] = nil }
     }
 
     public func recordCompletion(
@@ -956,6 +984,7 @@ public actor StatisticsRepository {
             throw .invalidCompletion
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let account = milestone.accountID.rawValue
         let item = milestone.itemID.rawValue
         let descriptor = FetchDescriptor<CompletionMilestoneRecord>(
@@ -968,7 +997,7 @@ public actor StatisticsRepository {
                 return
             }
             context.insert(CompletionMilestoneRecord(milestone))
-            try context.save()
+            try saveMutation(context) { $0.completions.append(milestone) }
         } catch {
             throw .persistenceFailed
         }
@@ -979,6 +1008,7 @@ public actor StatisticsRepository {
     ) throws(StatisticsRepositoryError) {
         guard !sessions.isEmpty else { return }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let keys = sessions.flatMap { session in
                 let raw = RemoteListeningSessionRecord.compositeID(
@@ -1002,6 +1032,7 @@ public actor StatisticsRepository {
                     ($0.compositeID, $0)
                 }
             )
+            var updated: [RemoteListeningSession] = []
             for session in sessions {
                 guard session.realSeconds.isFinite,
                     session.realSeconds >= 0,
@@ -1036,13 +1067,17 @@ public actor StatisticsRepository {
                     stored.title = session.title
                     stored.author = session.author
                     stored.privateCloudSynchronized = false
+                    updated.append(stored.domainValue)
                 } else {
                     let record = RemoteListeningSessionRecord(session)
                     context.insert(record)
                     byID[compositeID] = record
+                    updated.append(record.domainValue)
                 }
             }
-            try context.save()
+            try saveMutation(context) { state in
+                for value in updated { state.upsert(value) }
+            }
         } catch let error as StatisticsRepositoryError {
             throw error
         } catch {
@@ -1054,6 +1089,7 @@ public actor StatisticsRepository {
         throws(StatisticsRepositoryError) -> StatisticsHistoryProgress
     {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let rawID = accountID.rawValue
         do {
             let record = try context.fetch(
@@ -1085,6 +1121,7 @@ public actor StatisticsRepository {
             throw .invalidArchive
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let rawID = accountID.rawValue
         do {
             let record =
@@ -1113,241 +1150,115 @@ public actor StatisticsRepository {
     public func summary(
         query: StatisticsQuery = StatisticsQuery()
     ) throws(StatisticsRepositoryError) -> StatisticsSummary {
-        let context = ModelContext(modelContainer)
-        do {
-            let slices = try context.fetch(
-                FetchDescriptor<ListeningSliceRecord>()
-            )
-            .map(\.domainValue)
-            .filter {
-                query.contains(
-                    accountID: $0.accountID,
-                    date: $0.startedAt
-                )
-            }
-            let completions = try context.fetch(
-                FetchDescriptor<CompletionMilestoneRecord>()
-            )
-            .compactMap(\.domainValue)
-            .filter {
-                query.contains(
-                    accountID: $0.accountID,
-                    date: $0.completedAt
-                )
-            }
-            let remoteSessions = try context.fetch(
-                FetchDescriptor<RemoteListeningSessionRecord>()
-            )
-            .map(\.domainValue)
-            .filter {
-                query.contains(
-                    accountID: $0.accountID,
-                    date: $0.startedAt
-                )
-            }
-
-            let localReal = slices.reduce(0) { $0 + $1.realSeconds }
-            let audiobook = slices.reduce(0) {
-                $0 + $1.audiobookSeconds
-            }
-            let accounting = try context.fetch(
-                FetchDescriptor<StatisticsSessionAccountingRecord>()
-            )
-            let key: (String, String) -> String = {
-                $0 + "\u{1f}" + $1
-            }
-            let localBySession = Dictionary(grouping: slices) {
-                key($0.accountID.rawValue, $0.sessionID.rawValue)
-            }.mapValues { $0.reduce(0) { $0 + $1.realSeconds } }
-            let accountingBySession = Dictionary(
-                uniqueKeysWithValues: accounting.map {
-                    ($0.compositeID, $0)
-                }
-            )
-            var bounds = StatisticsTimeBounds(lower: 0, upper: 0)
-            var coveredSessions: Set<String> = []
-            for remote in remoteSessions {
-                let sessionKey = key(
-                    remote.accountID.rawValue, remote.id.rawValue)
-                coveredSessions.insert(sessionKey)
-                let local = localBySession[sessionKey] ?? 0
-                let record = accountingBySession[sessionKey]
-                let confirmed = min(local, record?.confirmedRealSeconds ?? 0)
-                let uncertain = min(
-                    max(0, local - confirmed),
-                    record?.uncertainRealSeconds ?? 0)
-                let pending = max(0, local - confirmed - uncertain)
-                let resolvedUncertain =
-                    record.map {
-                        remote.updatedAt > $0.updatedAt
-                            && remote.realSeconds >= confirmed + uncertain
-                    } ?? false
-                let lower = max(remote.realSeconds, confirmed) + pending
-                bounds = StatisticsTimeBounds(
-                    lower: bounds.lower + lower,
-                    upper: bounds.upper + lower
-                        + (resolvedUncertain ? 0 : uncertain)
-                )
-            }
-            for (sessionKey, local) in localBySession
-            where !coveredSessions.contains(sessionKey) {
-                let record = accountingBySession[sessionKey]
-                let uncertain = min(local, record?.uncertainRealSeconds ?? 0)
-                bounds = StatisticsTimeBounds(
-                    lower: bounds.lower + local - uncertain,
-                    upper: bounds.upper + local
-                )
-            }
-            let real = bounds.lower
-            let hasUncertainty = bounds.upper > bounds.lower
-
-            let bookReal = Dictionary(grouping: slices) {
-                "\($0.accountID.rawValue)\u{1f}\($0.itemID.rawValue)"
-            }.mapValues {
-                $0.reduce(0) { $0 + $1.realSeconds }
-            }
-            let chapterGroups = Dictionary(
-                grouping: slices.compactMap {
-                    slice -> (String, ListeningSlice)? in
-                    guard let chapterID = slice.chapterID else {
-                        return nil
-                    }
-                    return (
-                        "\(slice.accountID.rawValue)\u{1f}"
-                            + "\(slice.itemID.rawValue)\u{1f}\(chapterID)",
-                        slice
-                    )
-                }, by: \.0)
-            let chaptersStarted = chapterGroups.values.filter { values in
-                values.reduce(0) {
-                    $0 + $1.1.audiobookSeconds
-                } >= 10
-            }.count
-            let chaptersCompleted = chapterGroups.values.filter { values in
-                guard let first = values.first?.1,
-                    let start = first.chapterStart,
-                    let end = first.chapterEnd,
-                    end > start
-                else {
-                    return false
-                }
-                let heard = values.reduce(0) {
-                    $0 + $1.1.audiobookSeconds
-                }
-                let crossedEnd = values.contains {
-                    $0.1.endPosition >= end - 0.5
-                }
-                return heard >= (end - start) * 0.9 && crossedEnd
-            }.count
-
-            return StatisticsSummary(
-                realSeconds: real,
-                localRealSeconds: localReal,
-                audiobookSeconds: audiobook,
-                finishedRuntime: completions.reduce(0) {
-                    $0 + $1.duration
-                },
-                booksStarted: bookReal.values.filter { $0 >= 30 }.count,
-                booksCompleted: Set(
-                    completions.map {
-                        "\($0.accountID.rawValue)\u{1f}"
-                            + $0.itemID.rawValue
-                    }
-                ).count,
-                chaptersStarted: chaptersStarted,
-                chaptersCompleted: chaptersCompleted,
-                sessions: Set(
-                    remoteSessions.map {
-                        "\($0.accountID.rawValue)\u{1f}"
-                            + $0.id.rawValue
-                    }
-                        + slices.map {
-                            "\($0.accountID.rawValue)\u{1f}"
-                                + $0.sessionID.rawValue
-                        }
-                ).count,
-                effectiveAverageSpeed: localReal > 0
-                    ? audiobook / localReal : nil,
-                realTimeCoverage: hasUncertainty
-                    ? .approximate
-                    : (remoteSessions.isEmpty ? .thisApp : .allDevices),
-                allDeviceBounds: bounds
-            )
-        } catch {
-            throw .persistenceFailed
-        }
+        try snapshot(query: query).summary
     }
 
     public func exploration(query: StatisticsQuery = StatisticsQuery())
         throws(StatisticsRepositoryError) -> StatisticsExploration
     {
+        try snapshot(query: query).exploration
+    }
+
+    public func presentation(query: StatisticsQuery)
+        throws(StatisticsRepositoryError) -> StatisticsPresentation
+    {
+        StatisticsPresentation(
+            snapshot: try snapshot(query: query),
+            liveSlice: uncommittedSlice(accountID: query.accountID))
+    }
+
+    /// Polling never enters the ledger fetch/aggregation path. A missing cache
+    /// remains absent until an explicit load or refresh prepares it.
+    public func livePresentation(query: StatisticsQuery)
+        throws(StatisticsRepositoryError) -> StatisticsPresentation?
+    {
+        guard let value = try cachedSnapshot(query: query) else { return nil }
+        return StatisticsPresentation(
+            snapshot: value,
+            liveSlice: uncommittedSlice(accountID: query.accountID))
+    }
+
+    private func cachedSnapshot(query: StatisticsQuery)
+        throws(StatisticsRepositoryError) -> StatisticsSnapshot?
+    {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        let scope = query.accountID?.rawValue
+        let start = query.start
+        let end = query.end
+        do {
+            guard
+                let record = try context.fetch(
+                    FetchDescriptor<StatisticsSnapshotRecord>(
+                        predicate: #Predicate {
+                            $0.accountID == scope && $0.start == start
+                                && $0.end == end
+                        })
+                ).first,
+                let value = try? JSONDecoder().decode(
+                    StatisticsSnapshot.self, from: record.payload)
+            else { return nil }
+            return value
+        } catch { throw .persistenceFailed }
+    }
+
+    public func snapshot(query: StatisticsQuery = StatisticsQuery())
+        throws(StatisticsRepositoryError) -> StatisticsSnapshot
+    {
+        if let value = try cachedSnapshot(query: query) { return value }
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        let start = query.start
+        let end = query.end
+        let scope = query.accountID?.rawValue
         do {
             let slices = try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
-            ).map(\.domainValue).filter {
-                query.contains(accountID: $0.accountID, date: $0.startedAt)
-            }
+            )
+            .map(\.domainValue)
+            let completions = try context.fetch(
+                FetchDescriptor<CompletionMilestoneRecord>()
+            )
+            .compactMap(\.domainValue)
             let remote = try context.fetch(
                 FetchDescriptor<RemoteListeningSessionRecord>()
-            ).map(\.domainValue).filter {
-                query.contains(accountID: $0.accountID, date: $0.startedAt)
-            }
-            let days = Dictionary(grouping: slices) {
-                Calendar.current.startOfDay(for: $0.startedAt)
-            }.map { date, values in
-                StatisticsDay(
-                    date: date,
-                    realSeconds:
-                        values.reduce(0) { $0 + $1.realSeconds })
-            }.sorted { $0.date < $1.date }
-            let books = Dictionary(grouping: slices) {
-                $0.accountID.rawValue + "\u{1f}" + $0.itemID.rawValue
-            }.map { key, values in
-                StatisticsBook(
-                    id: key,
-                    title: values.first?.title ?? "Untitled",
-                    author: values.first?.author ?? "",
-                    realSeconds: values.reduce(0) { $0 + $1.realSeconds },
-                    audiobookSeconds: values.reduce(0) {
-                        $0 + $1.audiobookSeconds
-                    }
-                )
-            }.sorted { $0.realSeconds > $1.realSeconds }
-            let remoteIDs = Set(
-                remote.map {
-                    $0.accountID.rawValue + "\u{1f}" + $0.id.rawValue
-                })
-            let localSessions = Dictionary(grouping: slices) {
-                $0.accountID.rawValue + "\u{1f}" + $0.sessionID.rawValue
-            }.compactMap { key, values -> StatisticsRecentSession? in
-                guard !remoteIDs.contains(key),
-                    let first = values.min(by: { $0.startedAt < $1.startedAt })
-                else { return nil }
-                return StatisticsRecentSession(
-                    id: key, title: first.title,
-                    startedAt: first.startedAt,
-                    realSeconds: values.reduce(0) { $0 + $1.realSeconds },
-                    coverage: .thisApp
-                )
-            }
-            let remoteSessions = remote.map { session in
-                StatisticsRecentSession(
-                    id: session.accountID.rawValue + "\u{1f}"
-                        + session.id.rawValue,
-                    title: session.title,
-                    startedAt: session.startedAt,
-                    realSeconds: session.realSeconds,
-                    coverage: .allDevices
-                )
-            }
-            let recent = (remoteSessions + localSessions)
-                .sorted { $0.startedAt > $1.startedAt }
-            return StatisticsExploration(
-                days: Array(days.suffix(90)),
-                books: Array(books.prefix(30)),
-                recentSessions: Array(recent.prefix(30))
             )
+            .map(\.domainValue)
+            let accounting = try context.fetch(
+                FetchDescriptor<StatisticsSessionAccountingRecord>()
+            )
+            .map {
+                StatisticsAccounting(
+                    accountID: AccountID(rawValue: $0.accountID),
+                    sessionID: PlaybackSessionID(rawValue: $0.sessionID),
+                    confirmed: $0.confirmedRealSeconds,
+                    uncertain: $0.uncertainRealSeconds, updatedAt: $0.updatedAt)
+            }
+            var state = StatisticsAggregation.State(query: query)
+            state.append(slices)
+            state.completions = completions
+            for value in remote { state.upsert(value) }
+            for value in accounting { state.setAccounting(value) }
+            let value = state.snapshot()
+            do {
+                for old in try context.fetch(
+                    FetchDescriptor<StatisticsSnapshotRecord>(
+                        predicate: #Predicate {
+                            $0.accountID == scope
+                        }))
+                where (old.start == start && old.end == end)
+                    || ((start != nil || end != nil)
+                        && (old.start != nil || old.end != nil))
+                { context.delete(old) }
+                // Retain Lifetime and only the latest selected range per account.
+                let record = StatisticsSnapshotRecord(
+                    accountID: scope, start: start, end: end,
+                    payload: try JSONEncoder().encode(value))
+                record.incrementalPayload = try JSONEncoder().encode(state)
+                context.insert(record)
+                try context.save()
+            }
+            return value
         } catch {
             throw .persistenceFailed
         }
@@ -1357,6 +1268,7 @@ public actor StatisticsRepository {
         query: StatisticsQuery = StatisticsQuery()
     ) throws(StatisticsRepositoryError) -> StatisticsArchive {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             return StatisticsArchive(
                 slices: try context.fetch(
@@ -1393,6 +1305,7 @@ public actor StatisticsRepository {
         -> StatisticsArchive
     {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             return StatisticsArchive(
                 slices: try context.fetch(
@@ -1429,6 +1342,7 @@ public actor StatisticsRepository {
         _ archive: StatisticsArchive
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             for slice in archive.slices {
                 let id = slice.id
@@ -1479,6 +1393,7 @@ public actor StatisticsRepository {
         -> [PrivateCloudStatisticsDeletion]
     {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             return try context.fetch(
                 FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
@@ -1498,6 +1413,7 @@ public actor StatisticsRepository {
         accountID: AccountID
     ) throws(StatisticsRepositoryError) -> Set<String> {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let account = accountID.rawValue
         do {
             let sliceNames = try context.fetch(
@@ -1539,6 +1455,7 @@ public actor StatisticsRepository {
         throws(StatisticsRepositoryError)
     {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             for record in try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
@@ -1573,6 +1490,7 @@ public actor StatisticsRepository {
             return
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             for record in try context.fetch(
                 FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
@@ -1619,6 +1537,7 @@ public actor StatisticsRepository {
             throw .invalidArchive
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let existingSliceIDs = Set(
                 try context.fetch(FetchDescriptor<ListeningSliceRecord>())
@@ -1682,7 +1601,7 @@ public actor StatisticsRepository {
                     context.insert(RemoteListeningSessionRecord(session))
                 }
             }
-            try context.save()
+            try saveMutation(context)
         } catch let error as StatisticsRepositoryError {
             throw error
         } catch {
@@ -1694,6 +1613,7 @@ public actor StatisticsRepository {
         query: StatisticsQuery
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let existingDeletionNames = Set(
                 try context.fetch(
@@ -1811,7 +1731,20 @@ public actor StatisticsRepository {
                 record.completedPages = 0
                 record.totalPages = 0
             }
-            try context.save()
+            try saveMutation(context)
+            let removed = accumulators.filter { identity, accumulator in
+                guard
+                    query.accountID == nil
+                        || query.accountID == identity.account
+                else { return false }
+                if query.start == nil && query.end == nil { return true }
+                guard let pending = accumulator.uncommittedSlice else {
+                    return false
+                }
+                return query.contains(
+                    accountID: pending.accountID, date: pending.startedAt)
+            }.map(\.key)
+            for identity in removed { accumulators[identity] = nil }
         } catch let error as StatisticsRepositoryError {
             throw error
         } catch {
@@ -1823,13 +1756,14 @@ public actor StatisticsRepository {
         id: UUID
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let descriptor = FetchDescriptor<ListeningSliceRecord>(
                 predicate: #Predicate { $0.eventID == id }
             )
             if let record = try context.fetch(descriptor).first {
                 context.delete(record)
-                try context.save()
+                try saveMutation(context)
             }
         } catch {
             throw .persistenceFailed
@@ -1840,13 +1774,14 @@ public actor StatisticsRepository {
         id: UUID
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let descriptor = FetchDescriptor<CompletionMilestoneRecord>(
                 predicate: #Predicate { $0.eventID == id }
             )
             if let record = try context.fetch(descriptor).first {
                 context.delete(record)
-                try context.save()
+                try saveMutation(context)
             }
         } catch {
             throw .persistenceFailed
@@ -1858,6 +1793,7 @@ public actor StatisticsRepository {
         sessionID: PlaybackSessionID
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let compositeID = RemoteListeningSessionRecord.compositeID(
             accountID: accountID,
             sessionID: sessionID
@@ -1871,7 +1807,7 @@ public actor StatisticsRepository {
                 )
             if let record = try context.fetch(descriptor).first {
                 context.delete(record)
-                try context.save()
+                try saveMutation(context)
             }
         } catch {
             throw .persistenceFailed
@@ -1885,11 +1821,12 @@ public actor StatisticsRepository {
             throw .invalidSlice
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             for slice in slices {
                 context.insert(ListeningSliceRecord(slice))
             }
-            try context.save()
+            try saveMutation(context) { $0.append(slices) }
         } catch {
             throw .persistenceFailed
         }
@@ -1900,6 +1837,7 @@ public actor StatisticsRepository {
         sessionID: PlaybackSessionID
     ) throws(StatisticsRepositoryError) -> Double {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         do {
             let account = accountID.rawValue
             let session = sessionID.rawValue
@@ -1974,6 +1912,7 @@ public actor StatisticsRepository {
             throw .invalidSlice
         }
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         let compositeID = StatisticsSessionAccountingRecord.compositeID(
             accountID: accountID,
             sessionID: sessionID
@@ -1997,10 +1936,38 @@ public actor StatisticsRepository {
             record.confirmedRealSeconds += confirmedDelta
             record.uncertainRealSeconds += uncertainDelta
             record.updatedAt = Date()
-            try context.save()
+            let value = StatisticsAccounting(
+                accountID: accountID, sessionID: sessionID,
+                confirmed: record.confirmedRealSeconds,
+                uncertain: record.uncertainRealSeconds,
+                updatedAt: record.updatedAt)
+            try saveMutation(context) { $0.setAccounting(value) }
         } catch {
             throw .persistenceFailed
         }
+    }
+
+    private func saveMutation(
+        _ context: ModelContext,
+        update: ((inout StatisticsAggregation.State) -> Void)? = nil
+    ) throws {
+        guard context.hasChanges else { return }
+        for cache in try context.fetch(
+            FetchDescriptor<StatisticsSnapshotRecord>())
+        {
+            if let update, let payload = cache.incrementalPayload,
+                var state = try? JSONDecoder().decode(
+                    StatisticsAggregation.State.self, from: payload)
+            {
+                update(&state)
+                let value = state.snapshot()
+                cache.payload = try JSONEncoder().encode(value)
+                cache.incrementalPayload = try JSONEncoder().encode(state)
+            } else {
+                context.delete(cache)
+            }
+        }
+        try context.save()
     }
 
     private static func isValid(_ slice: ListeningSlice) -> Bool {

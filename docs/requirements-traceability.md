@@ -228,9 +228,12 @@ own signed wrong-claim matrix.
 ## Acceptance criteria
 
 The identifiers below are stable. `AC-12` through `AC-20` describe
-statistics scope; remaining evidence is tracked in
+statistics scope; detailed regression and performance evidence is in
+`docs/statistics-validation.md`, and remaining evidence is tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). The
-other rows map section 22 release criteria.
+other rows map section 22 release criteria. The user accepted Statistics loading
+on an iPhone 16 Pro and confirmed the statistics-specific VoiceOver check passed
+on 2026-09-21; both manual results are recorded in `docs/statistics-validation.md`.
 
 | ID | Acceptance behavior | Primary evidence | Status |
 | --- | --- | --- | --- |
@@ -246,7 +249,7 @@ other rows map section 22 release criteria.
 | AC-10 | Playback speed survives pause, track change, lock, interruption, and relaunch | Automated coverage exists; the physical-device matrix remains | implemented |
 | AC-11 | Lock Screen, Control Center, Bluetooth, and AirPlay controls report whole-book position | `APP-PLAYBACK-001`; CarPlay entitlement, Simulator, and maintainer-reported head-unit evidence are recorded in `docs/release-evidence/carplay.md` and closed [GitHub issue #24](https://github.com/terminaloutcomes/bleat/issues/24) | implemented |
 | AC-12 | Real listening time differs from media position | `StatisticsTests` | implemented |
-| AC-13 | One hour at 2× records one real hour and two audiobook hours while seeks record neither | `StatisticsTests` covers rate and seek accounting; long-duration coverage remains | implemented |
+| AC-13 | One hour at 2× records one real hour and two audiobook hours while seeks record neither | `StatisticsTests` covers rate and seek accounting; the long-duration Simulator check is tracked in [#245](https://github.com/terminaloutcomes/bleat/issues/245) | implemented |
 | AC-14 | Multi-account statistics do not merge identity collisions | `StatisticsRepository`, account-scoped record keys | implemented |
 | AC-15 | Required counts and finished runtime display correctly | `StatisticsRepository`, `StatisticsView`, `StatisticsTests` | implemented |
 | AC-16 | Remote and local sources deduplicate with coverage labels | `StatisticsRepository`, `AudiobookshelfAPI.listeningSessions`, `StatisticsView`; focused host tests cover bounded totals and account identity; live paging evidence remains in [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) | implemented |

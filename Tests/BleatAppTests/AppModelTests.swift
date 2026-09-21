@@ -10432,6 +10432,95 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(afterDrain.first?.enabled, false)
     }
 
+    func testStatisticsHistoryFailurePreservesOtherAccountTotals() async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            statisticsProvider: { _ in
+                StatisticsSummary.empty.withCoverage(.allDevices)
+            },
+            statisticsHistoryError: .statisticsHistory(
+                .remote(.authentication(.missingCredentials))))
+        let model = AppModel(service: service)
+        await model.start()
+        await model.refreshStatisticsHistory(force: true)
+        guard case .loaded(let summary) = model.statistics else {
+            return XCTFail(
+                "Cached statistics must remain available after history import fails"
+            )
+        }
+        XCTAssertEqual(summary.realTimeCoverage, .stale)
+        XCTAssertEqual(
+            model.statisticsHistoryState(for: account),
+            .reauthenticationRequired(lastImportedAt: nil))
+        XCTAssertEqual(
+            model.statisticsHistoryFailures[account.id]?.cause,
+            .authenticationRequired)
+        XCTAssertEqual(
+            model.statisticsHistoryFailures[account.id]?.operation,
+            .importStatisticsHistory)
+    }
+
+    func testStatisticsRangeChangeRejectsOlderSummary() async {
+        let gate = AsyncGate()
+        let firstAccount = AccountID(rawValue: "first")
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            statisticsProvider: { query in
+                if query.accountID == firstAccount {
+                    await gate.enterAndWait()
+                    return StatisticsSummary.empty.withCoverage(.allDevices)
+                }
+                return .empty
+            })
+        let model = AppModel(service: service)
+        let old = Task {
+            await model.loadStatistics(
+                query: StatisticsQuery(accountID: firstAccount))
+        }
+        await gate.waitUntilEntered()
+        await model.loadStatistics(query: StatisticsQuery())
+        await gate.release()
+        await old.value
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+    }
+
+    func testStatisticsLivePollDoesNotRebuildOrSupersedeExplicitLoad() async {
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil), statisticsSummaryGate: gate)
+        let model = AppModel(service: service)
+        let loading = Task {
+            await model.loadStatistics(query: StatisticsQuery())
+        }
+        await gate.waitUntilEntered()
+        await model.loadStatistics(cachedOnly: true)
+        await gate.release()
+        await loading.value
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        let requests = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(requests, 1)
+        await model.loadStatistics(cachedOnly: true)
+        let afterPoll = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(afterPoll, 1)
+    }
+
+    func testStatisticsArchiveFailuresKeepSpecificCausesAndOperations() {
+        for error: StatisticsRepositoryError in [
+            .invalidArchive, .invalidAccountMapping, .invalidSlice,
+            .persistenceFailed,
+        ] {
+            let failure = AppFailure(
+                operation: .importStatistics, serviceError: .statistics(error))
+            XCTAssertEqual(failure.cause, .statistics(error))
+            XCTAssertEqual(failure.operation, .importStatistics)
+            XCTAssertEqual(
+                failure.diagnosticFailureCode, error.diagnosticFailureCode)
+            XCTAssertEqual(failure.allowsRetry, error == .persistenceFailed)
+        }
+    }
+
     func testCloudSyncCanRestartWhileStatisticsSummaryReloadContinues()
         async
     {
@@ -18018,7 +18107,35 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.accounts.count, 2)
         XCTAssertEqual(model.downloads.records.count, 2)
 
+        let statisticsAccount = fixture.accounts[0]
+        for second in 0...6 {
+            try await service.recordStatisticsSample(
+                StatisticsPlaybackSample(
+                    accountID: statisticsAccount.id,
+                    itemID: LibraryItemID(rawValue: "reset-book"),
+                    sessionID: PlaybackSessionID(rawValue: "reset-session"),
+                    observedAt: Date().addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: Double(second), playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: true, chapter: nil,
+                    title: "Reset Book", author: "Author", duration: 100))
+        }
+        let beforeReset = try await service.statisticsPresentation(
+            query: StatisticsQuery())
+        XCTAssertGreaterThan(beforeReset.snapshot.summary.localRealSeconds, 0)
+        XCTAssertNotNil(beforeReset.liveSlice)
         await model.resetLocalData()
+        let resetSelection = try await service.accountSelection()
+        XCTAssertTrue(resetSelection.accounts.isEmpty)
+        XCTAssertNil(resetSelection.activeAccount)
+        let liveAfterReset = try await service.statisticsLivePresentation(
+            query: StatisticsQuery())
+        XCTAssertNil(liveAfterReset)
+        let afterReset = try await service.statisticsPresentation(
+            query: StatisticsQuery())
+        XCTAssertEqual(afterReset.snapshot.summary, .empty)
+        XCTAssertNil(afterReset.liveSlice)
 
         XCTAssertNil(model.localDataResetFailure)
         XCTAssertEqual(model.phase, .signedOut)
@@ -18036,6 +18153,10 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier("local-reset-relaunch")
         )
         await relaunchedModel.start()
+        let relaunchedStatistics =
+            try await relaunchedService.statisticsPresentation(
+                query: StatisticsQuery())
+        XCTAssertEqual(relaunchedStatistics.snapshot.summary, .empty)
 
         XCTAssertEqual(relaunchedModel.phase, .signedOut)
         XCTAssertTrue(relaunchedModel.accounts.isEmpty)
@@ -20654,6 +20775,9 @@ private actor TestAppService: AppServicing {
     private let playbackCloseGate: AsyncGate?
     private let statisticsFinishGate: AsyncGate?
     private let statisticsSummaryGate: AsyncGate?
+    private let statisticsProvider:
+        (@Sendable (StatisticsQuery) async -> StatisticsSummary)?
+    private let statisticsHistoryError: AppServiceError?
     private let browsePageGate: AsyncGate?
     private let browsePageGateFilter: LibraryItemFilter?
     private let refreshPageGate: AsyncGate?
@@ -20875,6 +20999,10 @@ private actor TestAppService: AppServicing {
         playbackCloseGate: AsyncGate? = nil,
         statisticsFinishGate: AsyncGate? = nil,
         statisticsSummaryGate: AsyncGate? = nil,
+        statisticsProvider: (
+            @Sendable (StatisticsQuery) async -> StatisticsSummary
+        )? = nil,
+        statisticsHistoryError: AppServiceError? = nil,
         browsePageGate: AsyncGate? = nil,
         browsePageGateFilter: LibraryItemFilter? = nil,
         refreshPageGate: AsyncGate? = nil,
@@ -20950,6 +21078,8 @@ private actor TestAppService: AppServicing {
         self.playbackCloseGate = playbackCloseGate
         self.statisticsFinishGate = statisticsFinishGate
         self.statisticsSummaryGate = statisticsSummaryGate
+        self.statisticsProvider = statisticsProvider
+        self.statisticsHistoryError = statisticsHistoryError
         self.browsePageGate = browsePageGate
         self.browsePageGateFilter = browsePageGateFilter
         self.refreshPageGate = refreshPageGate
@@ -21622,9 +21752,22 @@ private actor TestAppService: AppServicing {
         }
     }
 
+    func importStatisticsHistory(for account: ServerAccount, force: Bool)
+        async throws(AppServiceError) -> StatisticsHistoryProgress
+    {
+        if let statisticsHistoryError { throw statisticsHistoryError }
+        return StatisticsHistoryProgress(
+            startedAt: nil, lastCompletedAt: Date(), completedPages: 1,
+            totalPages: 1)
+    }
+
+    private(set) var statisticsSummaryRequestCount = 0
+
     func statisticsSummary(
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary {
+        statisticsSummaryRequestCount += 1
+        if let statisticsProvider { return await statisticsProvider(query) }
         if let statisticsSummaryGate {
             await statisticsSummaryGate.enterAndWait()
         }

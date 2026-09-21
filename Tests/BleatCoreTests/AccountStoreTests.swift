@@ -43,6 +43,14 @@ final class AccountStoreTests {
                 third.id,
             ])
         #expect(active?.id == third.id)
+        let selection = try await fixture.store.selection()
+        #expect(selection.accounts == accounts)
+        #expect(selection.activeAccount?.id == third.id)
+        try await fixture.store.removeAccount(id: third.id)
+        let removed = try await fixture.store.selection()
+        #expect(removed.accounts.count == 2)
+        #expect(removed.activeAccount?.id != third.id)
+        try await fixture.store.save(third, makeActive: true)
 
         let relaunched = AccountStore(modelContainer: fixture.container)
         let relaunchedActive = try await relaunched.activeAccount()

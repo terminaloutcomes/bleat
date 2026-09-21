@@ -1524,6 +1524,105 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testStatisticsShowsImportedBookAndSessionDetailsAtLargestTextSize() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-open-settings", "--ui-testing-statistics",
+                "-UIPreferredContentSizeCategoryName",
+                "UICTContentSizeCategoryAccessibilityXXXL",
+            ])
+        tabButton("Settings", in: app).tap()
+        let link = app.descendants(matching: .any)["settings.statistics"]
+            .firstMatch
+        for _ in 0..<12 where !link.isHittable { app.swipeUp() }
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+        link.tap()
+        XCTAssertTrue(
+            app.navigationBars["Listening Statistics"].waitForExistence(
+                timeout: 5))
+        let book = app.buttons["statistics.book"].firstMatch
+        for _ in 0..<16 where !book.isHittable { app.swipeUp() }
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        XCTAssertTrue(
+            app.navigationBars["Statistics Example"].waitForExistence(
+                timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "1 hr 0 min")
+            ).firstMatch.exists)
+        let coverage = app.staticTexts.matching(
+            NSPredicate(
+                format: "label CONTAINS %@", "All Devices (imported history)")
+        ).firstMatch
+        for _ in 0..<4 where !coverage.isHittable { app.swipeUp() }
+        let bookScreenshot = XCTAttachment(screenshot: app.screenshot())
+        bookScreenshot.lifetime = .keepAlways
+        add(bookScreenshot)
+        XCTAssertTrue(coverage.exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        let session = app.buttons["statistics.session"].firstMatch
+        for _ in 0..<8 where !session.isHittable { app.swipeUp() }
+        XCTAssertTrue(session.exists)
+        session.tap()
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "Started")
+            ).firstMatch.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !coverage.isHittable { app.swipeUp() }
+        let sessionScreenshot = XCTAttachment(screenshot: app.screenshot())
+        sessionScreenshot.lifetime = .keepAlways
+        add(sessionScreenshot)
+        XCTAssertTrue(coverage.exists)
+        XCTAssertFalse(app.staticTexts["Audiobook Time in This App"].exists)
+    }
+
+    @MainActor
+    func testStatisticsResetRequiresSelectedScopeAndDestructiveConfirmation() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-open-settings", "--ui-testing-statistics",
+            ])
+        tabButton("Settings", in: app).tap()
+        let link = app.buttons["settings.statistics"]
+        for _ in 0..<12 where !link.isHittable { app.swipeUp() }
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+        link.tap()
+        let account = app.buttons["statistics.account"]
+        XCTAssertTrue(account.waitForExistence(timeout: 5))
+        account.tap()
+        app.buttons["reader@books.example"].tap()
+        let range = app.buttons["statistics.range"]
+        range.tap()
+        app.buttons["Last 7 Days"].tap()
+        let reset = app.buttons["statistics.reset"]
+        for _ in 0..<12 where !reset.isHittable { app.swipeUp() }
+        XCTAssertTrue(reset.exists)
+        reset.tap()
+        let confirm = app.buttons["Delete reader@books.example Statistics"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "Last 7 Days")
+            ).firstMatch.exists)
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            app.otherElements["PopoverDismissRegion"].coordinate(
+                withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)
+            ).tap()
+        }
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(reset.exists)
+        reset.tap()
+        confirm.tap()
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["statistics.book"].exists)
+    }
+
+    @MainActor
     func testDownloadSettingsControlsReflectAndUpdatePreferences() {
         let app = launch(
             scenario: "--ui-testing-signed-in",

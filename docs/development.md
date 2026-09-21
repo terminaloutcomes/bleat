@@ -481,3 +481,28 @@ intended test executed and passed. Treat zero-test selections, unexpected test
 bundles, runtime warnings, crashes, hangs, and unexpected skips as failed or
 unresolved validation attempts. Distinguish host, Simulator, disposable-server,
 signed-host, and physical-device evidence when reporting results.
+
+
+## Statistics performance
+
+Run the opt-in durable 250,000-slice benchmark separately from the normal host
+inventory. It checks account/range reset, archive roundtrip and idempotence,
+main-actor responsiveness during persistence, and cached Lifetime loading after
+closing and reopening the store:
+
+```sh
+BLEAT_HOST_SIGNING=unsigned swift test -c release -Xswiftc -DBLEAT_STATISTICS_PERFORMANCE --disable-xctest --no-parallel --filter stored250000
+```
+
+The compiler condition keeps this expensive benchmark out of ordinary test
+builds without adding an unexplained skipped test. Record both uncached rebuild
+and cached launch timings; they prove different things. See
+`docs/statistics-validation.md` for the measured environment and results.
+
+The issue #26 implementation has an explicitly approved SwiftData boundary:
+statistics fetches and saves use synchronous `ModelContext` APIs on
+`StatisticsRepository`, never on `MainActor`. SwiftData has no equivalent native
+async fetch/save API. This exception is limited to statistics persistence and
+its derived-cache aggregation; it can be removed when native asynchronous
+SwiftData operations become available. The opt-in benchmark verifies that a
+main-actor heartbeat continues during the large import.
