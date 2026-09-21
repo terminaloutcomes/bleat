@@ -1382,8 +1382,13 @@ rules.
 
 The app implements the local ledger, completion milestones, lifetime summary,
 private CloudKit merge, paginated server-history import, selected-account JSON
-portability, date-range exploration, and confirmed local reset. Large-ledger
-performance and end-to-end evidence remain tracked in
+portability, date-range exploration including imported-session charts and book
+detail, and confirmed local reset. Summary and live-slice presentation use one
+actor-isolated snapshot. Daily buckets and date-range boundaries use UTC
+Gregorian days, and the chart labels that convention. A derived SwiftData cache survives relaunch and is
+invalidated in the same transaction as ledger mutations. Large-ledger
+measurements and remaining end-to-end evidence are recorded in
+`docs/statistics-validation.md` and tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
 
 ### 12.1 Metric definitions
@@ -1416,7 +1421,7 @@ For two consecutive samples in the same uninterrupted playback generation:
 2. Compute positive whole-book position advancement. Discard negative advancement.
 3. Record real time only when the position is advancing; this avoids counting a player that claims to be playing while stalled.
 4. Record audiobook time as the observed positive advancement, capped at `realDelta × actualPlayerRate + 0.5 seconds` to reject an unmarked jump.
-5. Split the resulting slice at chapter boundaries, local-midnight boundaries, and rate changes.
+5. Split the resulting slice at chapter boundaries, UTC-midnight boundaries, and rate changes.
 
 Every explicit or automatic seek increments a playback-generation counter and discards the interval spanning the seek. A seamless track transition keeps the generation because the whole-book timeline remains continuous. Replay through an already heard range creates new audiobook time but does not create another distinct chapter or book.
 

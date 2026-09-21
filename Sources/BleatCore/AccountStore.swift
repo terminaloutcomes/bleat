@@ -421,6 +421,11 @@ public actor AccountStore {
                         ))
                 }
             }
+            for cache in try modelContext.fetch(
+                FetchDescriptor<StatisticsSnapshotRecord>())
+            {
+                modelContext.delete(cache)
+            }
             for record in try modelContext.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
             ) {

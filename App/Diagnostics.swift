@@ -23,6 +23,10 @@ extension AppModel {
                 bookEditFailure,
                 bookDeletionFailure,
                 privateCloudState.failure,
+                statistics.failure,
+                statisticsExploration.failure,
+                statisticsHistoryFailure,
+                statisticsArchiveFailure,
             ].compactMap(\.self))
         return Array(Set(errors.flatMap(\.diagnosticsCodes))).sorted()
     }
@@ -263,6 +267,8 @@ extension AppFailure {
         case (_, .persistenceUnavailable): .persistenceUnavailable
         case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput
+        case (_, .statisticsHistoryChanged): .statisticsHistoryChanged
+        case (_, .statistics(let error)): error.diagnosticFailureCode
         case (_, .statisticsResetSplitSession):
             .statisticsResetSplitSession
         case (_, .serverRequiresHTTPS): .serverRequiresHTTPS

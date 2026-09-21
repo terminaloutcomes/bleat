@@ -300,6 +300,7 @@ public enum BleatPersistenceSchemaV0_1_4: VersionedSchema {
         BleatPersistenceModelCatalog.currentModelTypes.filter {
             $0 != CachedChapterTranscriptionJobRecord.self
                 && $0 != StatisticsHistoryImportRecord.self
+                && $0 != StatisticsSnapshotRecord.self
         }
     }
 }
@@ -309,12 +310,22 @@ public enum BleatPersistenceSchemaV0_1_5: VersionedSchema {
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes.filter {
             $0 != StatisticsHistoryImportRecord.self
+                && $0 != StatisticsSnapshotRecord.self
+        }
+    }
+}
+
+public enum BleatPersistenceSchemaV0_1_6: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 6) }
+    public static var models: [any PersistentModel.Type] {
+        BleatPersistenceModelCatalog.currentModelTypes.filter {
+            $0 != StatisticsSnapshotRecord.self
         }
     }
 }
 
 public enum BleatPersistenceSchemaCurrent: VersionedSchema {
-    public static var versionIdentifier: Schema.Version { .init(0, 1, 6) }
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 7) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -327,6 +338,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             BleatPersistenceSchemaV0_1_2.self,
             BleatPersistenceSchemaV0_1_4.self,
             BleatPersistenceSchemaV0_1_5.self,
+            BleatPersistenceSchemaV0_1_6.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -347,6 +359,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_5.self,
+                toVersion: BleatPersistenceSchemaV0_1_6.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_6.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]

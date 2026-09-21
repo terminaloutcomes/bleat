@@ -1,10 +1,127 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import BleatCore
 
 @Suite(.serialized)
 final class AudiobookshelfAPITests {
+    @Test
+    func historyImportRestartsAfterInterruptionAndRetainsDisappearedSessions()
+        async throws
+    {
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(
+                schema: schema, isStoredInMemoryOnly: true))
+        let repository = StatisticsRepository(modelContainer: container)
+        let account = AccountID(rawValue: "account")
+        let interrupted = try APIFixture(responses: [
+            Self.historyPage(page: 0, total: 2, id: "old"),
+            HTTPResponse(data: Data(), statusCode: 503),
+        ])
+        do {
+            _ = try await StatisticsHistoryImporter.run(
+                accountID: account, force: true, repository: repository
+            ) {
+                (page: Int) async throws(AudiobookshelfAPIError)
+                    -> ListeningSessionsPage in
+                try await interrupted.api.listeningSessions(
+                    page: page, itemsPerPage: 1
+                ).value
+            }
+            Issue.record("Expected interrupted history import")
+        } catch { #expect(error == .remote(.unexpectedStatus(503))) }
+        #expect(
+            try await repository.historyProgress(accountID: account)
+                .completedPages == 1)
+        #expect(
+            try await repository.historyProgress(accountID: account)
+                .lastCompletedAt == nil)
+        let resumed = try APIFixture(responses: [
+            Self.historyPage(page: 0, total: 2, id: "new"),
+            Self.historyPage(page: 1, total: 2, id: "old"),
+            Self.historyPage(page: 0, total: 2, id: "new"),
+            Self.historyPage(page: 1, total: 2, id: "old"),
+            Self.historyPage(page: 0, total: 1, id: "new"),
+            Self.historyPage(page: 0, total: 1, id: "new"),
+        ])
+        for _ in 0..<2 {
+            _ = try await StatisticsHistoryImporter.run(
+                accountID: account, force: true, repository: repository
+            ) {
+                (page: Int) async throws(AudiobookshelfAPIError)
+                    -> ListeningSessionsPage in
+                try await resumed.api.listeningSessions(
+                    page: page, itemsPerPage: 1
+                ).value
+            }
+        }
+        #expect(try await repository.archive().remoteSessions.count == 2)
+        #expect(try await repository.summary().realSeconds == 120)
+        #expect(
+            try await repository.historyProgress(accountID: account)
+                .lastCompletedAt != nil)
+        let before = await resumed.transport.recordedRequests().count
+        _ = try await StatisticsHistoryImporter.run(
+            accountID: account, force: false, repository: repository
+        ) {
+            (page: Int) async throws(AudiobookshelfAPIError)
+                -> ListeningSessionsPage in
+            try await resumed.api.listeningSessions(page: page, itemsPerPage: 1)
+                .value
+        }
+        #expect(await resumed.transport.recordedRequests().count == before)
+    }
+
+    @Test
+    func historyImportDetectsChangedPayloadEvenWhenUpdateTimestampIsUnchanged()
+        async throws
+    {
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        let repository = StatisticsRepository(
+            modelContainer: try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(
+                    schema: schema, isStoredInMemoryOnly: true)))
+        let fixture = try APIFixture(
+            responses: [60, 70, 70, 80].map {
+                Self.historyPage(page: 0, total: 1, id: "changing", seconds: $0)
+            })
+        do {
+            _ = try await StatisticsHistoryImporter.run(
+                accountID: AccountID(rawValue: "account"), force: true,
+                repository: repository
+            ) {
+                (page: Int) async throws(AudiobookshelfAPIError)
+                    -> ListeningSessionsPage in
+                try await fixture.api.listeningSessions(
+                    page: page, itemsPerPage: 1
+                ).value
+            }
+            Issue.record("Expected a typed changed-history failure")
+        } catch { #expect(error == .changedDuringImport) }
+        #expect(try await repository.summary().realSeconds == 60)
+        #expect(
+            try await repository.historyProgress(
+                accountID: AccountID(rawValue: "account")
+            ).lastCompletedAt == nil)
+    }
+
+    private static func historyPage(
+        page: Int, total: Int, id: String, seconds: Int = 60
+    ) -> HTTPResponse {
+        HTTPResponse(
+            data: Data(
+                """
+                {"total":\(total),"numPages":\(total),"page":\(page),"itemsPerPage":1,"sessions":[
+                  {"id":"\(id)","libraryItemId":"book","mediaType":"book","startedAt":1000,"updatedAt":2000,
+                   "timeListening":\(seconds),"currentTime":60,"duration":100,"displayTitle":"Example"}
+                ]}
+                """.utf8), statusCode: 200)
+    }
+
     @Test
     func testListeningSessionsUseZeroIndexedPrefixedRouteAndPinnedShape()
         async throws

@@ -446,6 +446,7 @@ final class StatisticsTests {
             PrivateCloudStatisticsDeletionRecord.self,
             StatisticsSessionAccountingRecord.self,
             StatisticsHistoryImportRecord.self,
+            StatisticsSnapshotRecord.self,
         ])
         let container = try ModelContainer(
             for: schema,

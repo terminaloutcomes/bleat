@@ -17,6 +17,38 @@ final class PersistenceMigrationTests {
         }
     }
 
+    @Test
+    func statisticsCacheMigrationPreservesReleasedLedger() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("statistics.store")
+        do {
+            let old = try container(
+                schema: Schema(
+                    versionedSchema: BleatPersistenceSchemaV0_1_6.self),
+                storeURL: url)
+            let context = ModelContext(old)
+            context.insert(
+                StatisticsHistoryImportRecord(
+                    accountID: AccountID(rawValue: "retained-account")))
+            try context.save()
+        }
+        let migrated = try container(
+            schema: Schema(versionedSchema: BleatPersistenceSchemaCurrent.self),
+            storeURL: url,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self)
+        let context = ModelContext(migrated)
+        #expect(
+            try context.fetch(FetchDescriptor<StatisticsHistoryImportRecord>())
+                .map(\.accountID) == ["retained-account"])
+        #expect(
+            try context.fetchCount(FetchDescriptor<StatisticsSnapshotRecord>())
+                == 0)
+    }
+
     private func assertReleasedStoreFixtureMigrates(
         version: BleatPersistenceSchemaVersion
     ) throws {

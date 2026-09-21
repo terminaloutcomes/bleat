@@ -19,6 +19,7 @@ public enum BleatPersistenceModelCatalog {
         PrivateCloudStatisticsDeletionRecord.self,
         StatisticsSessionAccountingRecord.self,
         StatisticsHistoryImportRecord.self,
+        StatisticsSnapshotRecord.self,
     ]
 
     public static let allModelTypes = currentModelTypes

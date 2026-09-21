@@ -376,6 +376,15 @@ enum AccountRemovalScope: Equatable, Sendable {
     case allDevices
 }
 
+enum StatisticsHistoryState: Equatable {
+    case notImported
+    case incomplete(StatisticsHistoryProgress)
+    case current(Date)
+    case stale(lastImportedAt: Date?)
+    case reauthenticationRequired(lastImportedAt: Date?)
+    case failed(AppFailure, lastImportedAt: Date?)
+}
+
 enum AccountStatisticsDisposition: Equatable, Sendable {
     case keep
     case delete
@@ -508,15 +517,17 @@ enum AppFailureOperation: String, Equatable, Sendable {
     case loadLibraries, loadLibraryPage, loadHome, search, loadBook
     case openPlayback, recoverPlayback, loadBookmarks, saveMetadata
     case replaceCover, deleteBook, updateProgress, download, localPlayback
-    case loadStatistics, privateCloudSync
+    case loadStatistics, importStatisticsHistory, exportStatistics,
+        importStatistics, resetStatistics, privateCloudSync
 
     var isSafeToRetry: Bool {
         switch self {
         case .loadLibraries, .loadLibraryPage, .loadHome, .search, .loadBook,
-            .loadBookmarks, .loadStatistics, .privateCloudSync:
+            .loadBookmarks, .loadStatistics, .importStatisticsHistory,
+            .exportStatistics, .importStatistics, .privateCloudSync:
             true
         case .appStart, .login, .reauthenticate, .switchAccount, .removeAccount,
-            .resetAppData,
+            .resetAppData, .resetStatistics,
             .openPlayback, .recoverPlayback, .saveMetadata, .replaceCover,
             .deleteBook, .updateProgress, .download, .localPlayback:
             false
@@ -542,6 +553,8 @@ enum AppFailureCause: Equatable, Sendable {
     case invalidPlaybackPosition, unknownPlaybackChapter
     case invalidPlaybackChapterOffset
     case statisticsResetSplitSession
+    case statistics(StatisticsRepositoryError)
+    case statisticsHistoryChanged
     case localDataReset(LocalDataResetFailure)
     case privateCloud(PrivateCloudSyncFailure)
 
@@ -574,6 +587,8 @@ struct AppFailure: Equatable, Sendable {
         case .unknownPlaybackChapter: "Chapter unavailable"
         case .invalidPlaybackChapterOffset: "Invalid chapter position"
         case .statisticsResetSplitSession: "Reset needs a wider range"
+        case .statisticsHistoryChanged: "History changed during import"
+        case .statistics(let error): error.presentationTitle
         case .itemNotFound: "Audiobook not found"
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
@@ -660,6 +675,9 @@ struct AppFailure: Equatable, Sendable {
             "The server returned incomplete or inconsistent data."
         case .localStorageUnavailable:
             "Bleat could not save or read the required data on this device."
+        case .statisticsHistoryChanged:
+            "The server history changed while it was being read. Saved sessions are retained. Pull to refresh to try again."
+        case .statistics(let error): error.presentationMessage
         case .statisticsResetSplitSession:
             "This range splits a playback session whose listening time was already synchronized. Select a range containing the whole session or reset the account."
         case .unavailableOffline:
@@ -705,6 +723,7 @@ struct AppFailure: Equatable, Sendable {
             .unknownPlaybackChapter, .invalidPlaybackChapterOffset:
             "exclamationmark.triangle"
         case .statisticsResetSplitSession: "calendar.badge.exclamationmark"
+        case .statistics, .statisticsHistoryChanged: "chart.bar.xaxis"
         case .inaccessibleLibrary, .inaccessibleTags,
             .explicitContentDenied:
             "lock"
@@ -736,8 +755,12 @@ struct AppFailure: Equatable, Sendable {
         if case .privateCloud(let failure) = cause {
             return operation.isSafeToRetry && failure.isRetryable
         }
+        if case .statistics(let error) = cause {
+            return operation.isSafeToRetry && error == .persistenceFailed
+        }
         return operation.isSafeToRetry
             && (cause == .invalidServerResponse
+                || cause == .statisticsHistoryChanged
                 || cause == .localStorageUnavailable
                 || cause == .unavailableOffline
                 || cause == .serverUnavailable || cause == .requestRejected
@@ -838,11 +861,18 @@ struct AppFailure: Equatable, Sendable {
             }
         case .statistics(.partialSessionResetRequiresFullSession):
             return .statisticsResetSplitSession
+        case .statistics(let error): return .statistics(error)
         case .accountStore, .credentialStore, .accountIdentityMigration,
             .libraryCache,
-            .transcriptCache, .statistics:
+            .transcriptCache:
             return .localStorageUnavailable
-        case .statisticsHistory(let error): return apiCause(error)
+        case .statisticsHistory(let error):
+            switch error {
+            case .remote(let error): return apiCause(error)
+            case .persistence(let error): return .statistics(error)
+            case .changedDuringImport: return .statisticsHistoryChanged
+            case .cancelled: return .requestCancelled
+            }
         case .localDataReset(let error):
             return .localDataReset(error)
         case .privateCloud(let error):
@@ -1128,14 +1158,14 @@ extension AppFailureCause {
         case .invalidServerResponse, .playbackIdentityMismatch:
             .invalidResponse
         case .persistenceUnavailable, .storedDataMigrationFailed,
-            .localStorageUnavailable, .localDataReset:
+            .localStorageUnavailable, .localDataReset, .statistics:
             .localStorage
         case .mediaUnavailable:
             .media
         case .serverUnsupported, .localLoginUnavailable:
             .unsupported
         case .invalidInput, .serverRequiresHTTPS,
-            .statisticsResetSplitSession,
+            .statisticsResetSplitSession, .statisticsHistoryChanged,
             .authenticationSessionInProgress, .accountUnavailable,
             .invalidPlaybackPosition, .unknownPlaybackChapter,
             .invalidPlaybackChapterOffset,
@@ -1488,8 +1518,10 @@ final class AppModel {
         [AccountID: StatisticsHistoryProgress] = [:]
     private(set) var statisticsHistoryFailure: AppFailure?
     private(set) var statisticsHistoryFailedAccounts: Set<AccountID> = []
+    private(set) var statisticsHistoryFailures: [AccountID: AppFailure] = [:]
     private(set) var statisticsArchiveFailure: AppFailure?
     private var statisticsQuery: StatisticsQuery?
+    private var statisticsLoadGeneration: UInt64 = 0
     private(set) var privateCloudState: PrivateCloudState = .idle
     private(set) var cloudAccountRestoreState: CloudAccountRestoreState = .idle
     private(set) var privateCloudSyncAvailable = true
@@ -5144,19 +5176,58 @@ final class AppModel {
         }
     }
 
+    func statisticsHistoryState(for account: ServerAccount)
+        -> StatisticsHistoryState
+    {
+        let progress = statisticsHistoryProgress[account.id]
+        if account.connectionState == .reauthenticationRequired {
+            return .reauthenticationRequired(
+                lastImportedAt: progress?.lastCompletedAt)
+        }
+        if let failure = statisticsHistoryFailures[account.id] {
+            if failure.cause == .authenticationRequired {
+                return .reauthenticationRequired(
+                    lastImportedAt: progress?.lastCompletedAt)
+            }
+            return .failed(failure, lastImportedAt: progress?.lastCompletedAt)
+        }
+        if account.connectionState != .connected {
+            return .stale(lastImportedAt: progress?.lastCompletedAt)
+        }
+        guard let progress else { return .notImported }
+        if let started = progress.startedAt,
+            started > (progress.lastCompletedAt ?? .distantPast)
+        {
+            return .incomplete(progress)
+        }
+        if let completed = progress.lastCompletedAt {
+            return Date().timeIntervalSince(completed) >= 86_400
+                ? .stale(lastImportedAt: completed) : .current(completed)
+        }
+        return .notImported
+    }
+
     func loadStatistics(query: StatisticsQuery? = nil) async {
         if let query {
             statisticsQuery = query
         }
-        statistics = .loading
-        statisticsExploration = .loading
+        statisticsLoadGeneration &+= 1
+        let generation = statisticsLoadGeneration
+        if query != nil || statistics == .idle {
+            statistics = .loading
+            statisticsExploration = .loading
+            statisticsLiveSlice = nil
+        }
         let effectiveQuery =
             statisticsQuery
             ?? StatisticsQuery(accountID: account?.id)
         do {
-            let summary = try await service.statisticsSummary(
-                query: effectiveQuery
-            )
+            let presentation = try await service.statisticsPresentation(
+                query: effectiveQuery)
+            guard generation == statisticsLoadGeneration else { return }
+            let summary = presentation.snapshot.summary
+            statisticsExploration = .loaded(presentation.snapshot.exploration)
+            statisticsLiveSlice = presentation.liveSlice
             let affectedAccounts = accounts.filter {
                 effectiveQuery.accountID == nil
                     || effectiveQuery.accountID == $0.id
@@ -5173,22 +5244,22 @@ final class AppModel {
                     ? summary.withCoverage(.stale)
                     : summary)
         } catch let error {
+            let diagnosticFailure = AppFailure(
+                operation: .loadStatistics, serviceError: error)
+            await diagnostics.record(
+                .failed(
+                    .loadStatistics, category: .sync,
+                    failureCode: diagnosticFailure.diagnosticFailureCode))
+            guard generation == statisticsLoadGeneration else { return }
+            statisticsLiveSlice = nil
+            statisticsExploration = .failed(
+                AppFailure(operation: .loadStatistics, serviceError: error))
             statistics = .failed(
                 AppFailure(
                     operation: .loadStatistics,
                     serviceError: error
                 )
             )
-        }
-        do {
-            statisticsExploration = .loaded(
-                try await service.statisticsExploration(query: effectiveQuery)
-            )
-        } catch let error {
-            statisticsExploration = .failed(
-                AppFailure(
-                    operation: .loadStatistics, serviceError: error
-                ))
         }
     }
 
@@ -5197,10 +5268,7 @@ final class AppModel {
         statisticsLiveTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.statisticsLiveSlice =
-                    await self.service.uncommittedStatisticsSlice(
-                        accountID: self.statisticsQuery?.accountID
-                    )
+                await self.loadStatistics()
                 for account in self.accounts {
                     if let progress = try? await self.service
                         .statisticsHistoryProgress(for: account.id)
@@ -5232,11 +5300,17 @@ final class AppModel {
                         for: target, force: force
                     )
                 statisticsHistoryFailedAccounts.remove(target.id)
+                statisticsHistoryFailures[target.id] = nil
             } catch let error {
                 statisticsHistoryFailedAccounts.insert(target.id)
-                statisticsHistoryFailure = AppFailure(
-                    operation: .loadStatistics, serviceError: error
-                )
+                let failure = AppFailure(
+                    operation: .importStatisticsHistory, serviceError: error)
+                statisticsHistoryFailure = failure
+                statisticsHistoryFailures[target.id] = failure
+                await diagnostics.record(
+                    .failed(
+                        .importStatisticsHistory, category: .sync,
+                        failureCode: failure.diagnosticFailureCode))
             }
         }
         await loadStatistics()
@@ -5252,8 +5326,14 @@ final class AppModel {
                 for: account, query: query
             )
         } catch let error {
+            let diagnosticFailure = AppFailure(
+                operation: .exportStatistics, serviceError: error)
+            await diagnostics.record(
+                .failed(
+                    .exportStatistics, category: .sync,
+                    failureCode: diagnosticFailure.diagnosticFailureCode))
             statisticsArchiveFailure = AppFailure(
-                operation: .loadStatistics, serviceError: error
+                operation: .exportStatistics, serviceError: error
             )
             return nil
         }
@@ -5277,8 +5357,14 @@ final class AppModel {
             await synchronizeStatisticsMutationToPrivateCloud()
             return true
         } catch let error {
+            let diagnosticFailure = AppFailure(
+                operation: .importStatistics, serviceError: error)
+            await diagnostics.record(
+                .failed(
+                    .importStatistics, category: .sync,
+                    failureCode: diagnosticFailure.diagnosticFailureCode))
             statisticsArchiveFailure = AppFailure(
-                operation: .loadStatistics, serviceError: error
+                operation: .importStatistics, serviceError: error
             )
             return false
         }
@@ -5293,8 +5379,14 @@ final class AppModel {
             await synchronizeStatisticsMutationToPrivateCloud()
             return true
         } catch let error {
+            let diagnosticFailure = AppFailure(
+                operation: .resetStatistics, serviceError: error)
+            await diagnostics.record(
+                .failed(
+                    .resetStatistics, category: .sync,
+                    failureCode: diagnosticFailure.diagnosticFailureCode))
             statisticsArchiveFailure = AppFailure(
-                operation: .loadStatistics, serviceError: error
+                operation: .resetStatistics, serviceError: error
             )
             return false
         }

@@ -2,6 +2,7 @@
     import BleatCore
     import Foundation
     import Observation
+    import SwiftData
 
     @MainActor
     @Observable
@@ -274,6 +275,64 @@
 
         private var isSignedInScenario: Bool {
             scenario.isSignedIn
+        }
+
+        private var statisticsFixture: StatisticsRepository?
+
+        func resetStatistics(query: StatisticsQuery)
+            async throws(AppServiceError)
+        {
+            guard let statisticsFixture else { return }
+            do { try await statisticsFixture.reset(query: query) } catch let
+                error
+            { throw .statistics(error) }
+        }
+
+        func statisticsPresentation(query: StatisticsQuery)
+            async throws(AppServiceError) -> StatisticsPresentation
+        {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-statistics")
+            else {
+                return StatisticsPresentation(
+                    snapshot: StatisticsSnapshot(
+                        summary: .empty, exploration: .empty), liveSlice: nil)
+            }
+            do {
+                if statisticsFixture == nil {
+                    let schema = Schema(
+                        BleatPersistenceModelCatalog.currentModelTypes)
+                    let container = try ModelContainer(
+                        for: schema,
+                        configurations: ModelConfiguration(
+                            schema: schema, isStoredInMemoryOnly: true,
+                            cloudKitDatabase: .none))
+                    let repository = StatisticsRepository(
+                        modelContainer: container)
+                    let account = try account()
+                    try await repository.upsertRemoteSessions([
+                        RemoteListeningSession(
+                            id: PlaybackSessionID(
+                                rawValue: "statistics-fixture"),
+                            accountID: account.id,
+                            itemID: LibraryItemID(rawValue: "ui-book"),
+                            startedAt: Date(), updatedAt: Date(),
+                            realSeconds: 3600, currentTime: 3600,
+                            duration: 7200, title: "Statistics Example",
+                            author: "Example Author")
+                    ])
+                    statisticsFixture = repository
+                }
+                guard let statisticsFixture else {
+                    throw AppServiceError.statistics(.persistenceFailed)
+                }
+                return try await statisticsFixture.presentation(query: query)
+            } catch let error as AppServiceError { throw error } catch let error
+                as StatisticsRepositoryError
+            { throw .statistics(error) } catch {
+                throw .statistics(.persistenceFailed)
+            }
         }
 
         func accounts()

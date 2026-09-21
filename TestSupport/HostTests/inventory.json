@@ -40,7 +40,9 @@
     "testLibrariesUsesNativeAccountAndMapsForwardCompatibleDTOs()",
     "testLibraryFailuresRemainTyped()",
     "testMissingCredentialsRemainTyped()",
-    "testCancellationRemainsTypedAndSendsNoRequest()"
+    "testCancellationRemainsTypedAndSendsNoRequest()",
+    "historyImportRestartsAfterInterruptionAndRetainsDisappearedSessions()",
+    "historyImportDetectsChangedPayloadEvenWhenUpdateTimestampIsUnchanged()"
   ],
   "BleatCoreTests.AudiobookshelfRouteTests": [
     "testBuildsEveryAuditedRouteUnderServerPrefix()",
@@ -344,7 +346,8 @@
     "testInvalidAccountDoesNotTouchAttemptOrCookies()"
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
-    "testReleasedStoreFixturesOpenWithCurrentCatalog()"
+    "testReleasedStoreFixturesOpenWithCurrentCatalog()",
+    "statisticsCacheMigrationPreservesReleasedLedger()"
   ],
   "BleatCoreTests.PersistenceModelCatalogTests": [
     "testCatalogListsEveryPersistentModelInCore()",
@@ -483,6 +486,16 @@
     "testRejectsNonHTTPSAndMissingScheme()",
     "testRejectsMissingHost()",
     "testRejectsEmbeddedCredentials()"
+  ],
+  "BleatCoreTests.StatisticsExplorationTests": [
+    "importedHistoryAppearsInChartBookAndSessionWithoutInventingRate()",
+    "portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime()",
+    "rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset()",
+    "repeatedChapterSegmentsDoNotCompleteUnheardTimeline()",
+    "duplicateCompletionEventsCountOneHistoricalRuntime()",
+    "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
+    "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
+    "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()"
   ],
   "BleatCoreTests.StatisticsTests": [
     "testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()",

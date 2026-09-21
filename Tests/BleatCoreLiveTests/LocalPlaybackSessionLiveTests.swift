@@ -123,6 +123,28 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         XCTAssertEqual(imported.count, 1)
         XCTAssertEqual(imported[0].currentTime, finalPosition, accuracy: 0.01)
         XCTAssertEqual(imported[0].timeListening ?? 0, 0)
+
+        // Exercise the production paginated adapter through both root and
+        // path-prefixed pinned servers, including a repeated page.
+        let firstPage = try await api.listeningSessions(
+            page: 0, itemsPerPage: 1
+        ).value
+        var paged: [RemoteListeningSession] = []
+        for index in 0..<firstPage.numPages {
+            let page = try await api.listeningSessions(
+                page: index, itemsPerPage: 1
+            ).value
+            XCTAssertEqual(page.page, index)
+            paged.append(contentsOf: page.sessions)
+        }
+        let repeatedPage = try await api.listeningSessions(
+            page: 0, itemsPerPage: 1
+        ).value
+        XCTAssertEqual(firstPage.fingerprint, repeatedPage.fingerprint)
+        XCTAssertEqual(paged.filter { $0.id == initial.id }.count, 1)
+        XCTAssertEqual(
+            paged.first { $0.id == initial.id }?.currentTime, finalPosition)
+
     }
 
     private func importedSessions<

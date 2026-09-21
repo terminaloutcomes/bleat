@@ -176,7 +176,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case libraryCache(LibraryCacheError)
     case transcriptCache(ChapterTranscriptCacheError)
     case statistics(StatisticsRepositoryError)
-    case statisticsHistory(AudiobookshelfAPIError)
+    case statisticsHistory(StatisticsHistoryImportError)
     case privateCloud(PrivateCloudSyncFailure)
     case localDataReset(LocalDataResetFailure)
 }
@@ -668,6 +668,9 @@ protocol AppServicing: Sendable {
         _ sessionID: PlaybackSessionID
     ) async throws(AppServiceError)
 
+    func statisticsPresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation
+
     func statisticsSummary(
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary
@@ -993,6 +996,18 @@ extension AppServicing {
     func finishStatisticsSession(
         _ sessionID: PlaybackSessionID
     ) async throws(AppServiceError) {}
+
+    func statisticsPresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation
+    {
+        let summary = try await statisticsSummary(query: query)
+        let exploration = try await statisticsExploration(query: query)
+        return StatisticsPresentation(
+            snapshot: StatisticsSnapshot(
+                summary: summary, exploration: exploration),
+            liveSlice: await uncommittedStatisticsSlice(
+                accountID: query.accountID))
+    }
 
     func statisticsSummary(
         query: StatisticsQuery
@@ -3253,6 +3268,16 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func statisticsPresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation
+    {
+        do {
+            return try await statisticsRepository.presentation(query: query)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
     func statisticsSummary(
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary {
@@ -3346,104 +3371,21 @@ actor LiveAppService: AppServicing {
     }
 
     private func performStatisticsHistoryImport(
-        for account: ServerAccount,
-        force: Bool
+        for account: ServerAccount, force: Bool
     ) async throws(AppServiceError) -> StatisticsHistoryProgress {
-        let previous: StatisticsHistoryProgress
-        do {
-            previous = try await statisticsRepository.historyProgress(
-                accountID: account.id
-            )
-        } catch let error {
-            throw .statistics(error)
-        }
-        if !force,
-            let last = [
-                previous.lastCompletedAt, previous.startedAt,
-            ].compactMap({ $0 }).max(),
-            Date().timeIntervalSince(last) < 86_400
-        {
-            return previous
-        }
         let api = AudiobookshelfAPI(
-            account: account,
-            authCoordinator: coordinator
-        )
+            account: account, authCoordinator: coordinator)
         do {
-            try await statisticsRepository.updateHistoryProgress(
-                accountID: account.id,
-                completedPages: 0,
-                totalPages: 0,
-                completed: false
-            )
-            for attempt in 0..<2 {
-                let first = try await api.listeningSessions(page: 0).value
-                try await statisticsRepository.updateHistoryProgress(
-                    accountID: account.id,
-                    completedPages: 0,
-                    totalPages: first.numPages,
-                    completed: false
-                )
-                var fingerprints: [[String]] = []
-                for page in 0..<first.numPages {
-                    try Task.checkCancellation()
-                    let batch =
-                        page == 0
-                        ? first
-                        : try await api.listeningSessions(page: page).value
-                    fingerprints.append(batch.fingerprint)
-                    try await statisticsRepository.upsertRemoteSessions(
-                        batch.sessions
-                    )
-                    try await statisticsRepository.updateHistoryProgress(
-                        accountID: account.id,
-                        completedPages: page + 1,
-                        totalPages: first.numPages,
-                        completed: false
-                    )
-                }
-                var stable = true
-                if first.numPages == 0 {
-                    let check = try await api.listeningSessions(page: 0).value
-                    stable = check.total == 0 && check.numPages == 0
-                }
-                for page in 0..<first.numPages {
-                    let check = try await api.listeningSessions(page: page)
-                        .value
-                    if check.total != first.total
-                        || check.numPages != first.numPages
-                        || check.fingerprint != fingerprints[page]
-                    {
-                        stable = false
-                        break
-                    }
-                }
-                if stable {
-                    try await statisticsRepository.updateHistoryProgress(
-                        accountID: account.id,
-                        completedPages: first.numPages,
-                        totalPages: first.numPages,
-                        completed: true
-                    )
-                    return try await statisticsRepository.historyProgress(
-                        accountID: account.id
-                    )
-                }
-                if attempt == 1 {
-                    throw AppServiceError.statisticsHistory(
-                        .invalidListeningSessions
-                    )
-                }
+            return try await StatisticsHistoryImporter.run(
+                accountID: account.id, force: force,
+                repository: statisticsRepository
+            ) {
+                (page: Int) async throws(AudiobookshelfAPIError)
+                    -> ListeningSessionsPage in
+                try await api.listeningSessions(page: page).value
             }
-            throw AppServiceError.statisticsHistory(.invalidListeningSessions)
-        } catch let error as AppServiceError {
-            throw error
-        } catch let error as AudiobookshelfAPIError {
+        } catch let error {
             throw .statisticsHistory(error)
-        } catch let error as StatisticsRepositoryError {
-            throw .statistics(error)
-        } catch {
-            throw .statisticsHistory(.cancelled)
         }
     }
 

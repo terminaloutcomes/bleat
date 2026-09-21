@@ -228,7 +228,8 @@ own signed wrong-claim matrix.
 ## Acceptance criteria
 
 The identifiers below are stable. `AC-12` through `AC-20` describe
-statistics scope; remaining evidence is tracked in
+statistics scope; detailed regression and performance evidence is in
+`docs/statistics-validation.md`, and remaining evidence is tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). The
 other rows map section 22 release criteria.
 
