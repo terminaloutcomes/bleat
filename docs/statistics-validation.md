@@ -191,3 +191,12 @@ as `username@servername`. The focused account-selection/reset UI journey passed
 (one test, zero skips/runtime warnings), as did Swift lint and diff checks. Xcode
 again emitted the launch-time debugger-version lookup diagnostic. A seventh
 complete-diff review reported no findings.
+
+## Remaining duration and CPU evidence
+
+[GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245), a
+sub-issue of #26, defines manual Docker backend and Simulator setup, generation
+and ingestion of a four-hour silent audiobook, a real one-hour playback run at
+2x, relaunch/reconciliation checks, and paired enabled/disabled CPU profiling.
+The user accepts a documented Simulator or device environment; oldest-supported
+hardware is not required. These measurements have not yet been performed.

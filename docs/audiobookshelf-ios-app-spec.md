@@ -2103,7 +2103,7 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 The following targets apply to the statistics work tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26):
 
-- Statistics sampling adds no more than 1% sustained CPU overhead during local playback on the oldest supported device.
+- Statistics sampling adds no more than 1% sustained CPU overhead during local playback in a documented device or Simulator environment. Oldest-supported-device hardware is not required. The enabled/disabled comparison must state whether the percentage is relative overhead or CPU percentage points and report measurement variability; the remaining duration and CPU evidence is tracked in [GitHub issue #245](https://github.com/terminaloutcomes/bleat/issues/245).
 - Aggregation over 250,000 listening slices completes off the main actor and publishes a cached Lifetime summary within 500 ms after launch.
 - Statistics imports are resumable, deduplicated, and rate-limited so opening the Statistics screen does not repeatedly make the server scan all session history.
 
