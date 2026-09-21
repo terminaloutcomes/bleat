@@ -7,6 +7,21 @@ import Testing
 @Suite(.serialized)
 final class StatisticsTests {
     @Test
+    func testUncertaintyDisplayRequiresAtLeastFifteenMinutes() {
+        let lower = 197.0 * 3600 + 27 * 60
+        for gap in [0.0, 1, 59, 899.999] {
+            #expect(
+                !StatisticsTimeBounds(lower: lower, upper: lower + gap)
+                    .shouldShowUncertainty)
+        }
+        for gap in [900.0, 901, 3600] {
+            #expect(
+                StatisticsTimeBounds(lower: lower, upper: lower + gap)
+                    .shouldShowUncertainty)
+        }
+    }
+
+    @Test
     func testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()
         throws
     {

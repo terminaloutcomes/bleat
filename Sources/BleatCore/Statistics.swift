@@ -273,6 +273,10 @@ public struct StatisticsTimeBounds: Codable, Equatable, Sendable {
     public let lower: Double
     public let upper: Double
 
+    public var shouldShowUncertainty: Bool {
+        upper - lower >= 15 * 60
+    }
+
     public init(lower: Double, upper: Double) {
         self.lower = lower
         self.upper = upper

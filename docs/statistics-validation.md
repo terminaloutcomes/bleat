@@ -159,3 +159,24 @@ paid-capability build-mode checks passed. The final six-test simulator rerun
 covered real-storage reset/relaunch, both warning-producing account-removal
 cases, poll/load ordering, and both statistics UI journeys: six passed, zero
 skips, zero runtime warnings.
+
+## Uncertainty display and user device check
+
+Uncertainty warnings and book/session ranges are hidden when the upper and lower
+bounds differ by less than 15 minutes. Exactly 15 minutes remains visible. Raw
+accounting bounds are unchanged; visible warnings explain the possible overlap
+between this app's listening and imported server history. A boundary regression
+covers zero, sub-minute, just-under-15-minute, exact-threshold, and larger gaps.
+
+On 2026-09-21 the user reported that Statistics loaded essentially instantly on
+an iPhone 16 Pro and accepted that loading performance. This is manual device
+loading evidence; the build, ledger size, cache state, and elapsed time were not
+recorded. It is not a timed 250,000-slice device benchmark or a sustained-playback
+performance measurement. The statistics-specific VoiceOver audit remains open.
+
+The display follow-up passed all 11 focused `StatisticsTests`, strict Swift
+lint, and the largest-text statistics book/session UI journey (one passed,
+zero skips, zero runtime warnings). Xcode emitted a debugger-version lookup
+diagnostic during launch; the completed result bundle confirms the requested
+UI test passed with no application runtime warnings. A fresh complete-diff
+review reported no findings (six review cycles overall).

@@ -501,6 +501,7 @@
     "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"
   ],
   "BleatCoreTests.StatisticsTests": [
+    "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
     "testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()",
     "testRepositorySummarizesAndAccountsForDeliveredTime()",
     "testSessionIdentityIncludesAccount()",

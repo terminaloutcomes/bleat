@@ -5208,12 +5208,10 @@ private struct StatisticsView: View {
                             value: summary.sessions.formatted()
                         )
                     }
-                    if summary.allDeviceBounds.upper
-                        > summary.allDeviceBounds.lower
-                    {
+                    if summary.allDeviceBounds.shouldShowUncertainty {
                         Section {
                             Label(
-                                "All-device time is between \(duration(summary.allDeviceBounds.lower + liveRealSeconds)) and \(duration(summary.allDeviceBounds.upper + liveRealSeconds)) while a server update remains uncertain.",
+                                "All-device time is between \(duration(summary.allDeviceBounds.lower + liveRealSeconds)) and \(duration(summary.allDeviceBounds.upper + liveRealSeconds)) because Bleat cannot confirm how much of this app’s listening is already included in the server history.",
                                 systemImage: "exclamationmark.triangle"
                             )
                         }
@@ -5273,8 +5271,7 @@ private struct StatisticsView: View {
                                                     value: duration(
                                                         book.finishedRuntime))
                                             }
-                                            if book.bounds.lower
-                                                != book.bounds.upper
+                                            if book.bounds.shouldShowUncertainty
                                             {
                                                 LabeledContent(
                                                     "All-device Range",
@@ -5320,8 +5317,8 @@ private struct StatisticsView: View {
                                                     "Audiobook Time in This App",
                                                     value: duration(heard))
                                             }
-                                            if session.bounds.lower
-                                                != session.bounds.upper
+                                            if session.bounds
+                                                .shouldShowUncertainty
                                             {
                                                 LabeledContent(
                                                     "All-device Range",
