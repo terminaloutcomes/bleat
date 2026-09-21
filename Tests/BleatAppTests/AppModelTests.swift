@@ -10486,6 +10486,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.statistics, .loaded(.empty))
     }
 
+    func testStatisticsLivePollDoesNotRebuildOrSupersedeExplicitLoad() async {
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil), statisticsSummaryGate: gate)
+        let model = AppModel(service: service)
+        let loading = Task {
+            await model.loadStatistics(query: StatisticsQuery())
+        }
+        await gate.waitUntilEntered()
+        await model.loadStatistics(cachedOnly: true)
+        await gate.release()
+        await loading.value
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        let requests = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(requests, 1)
+        await model.loadStatistics(cachedOnly: true)
+        let afterPoll = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(afterPoll, 1)
+    }
+
     func testStatisticsArchiveFailuresKeepSpecificCausesAndOperations() {
         for error: StatisticsRepositoryError in [
             .invalidArchive, .invalidAccountMapping, .invalidSlice,
@@ -18087,7 +18107,35 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.accounts.count, 2)
         XCTAssertEqual(model.downloads.records.count, 2)
 
+        let statisticsAccount = fixture.accounts[0]
+        for second in 0...6 {
+            try await service.recordStatisticsSample(
+                StatisticsPlaybackSample(
+                    accountID: statisticsAccount.id,
+                    itemID: LibraryItemID(rawValue: "reset-book"),
+                    sessionID: PlaybackSessionID(rawValue: "reset-session"),
+                    observedAt: Date().addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: Double(second), playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: true, chapter: nil,
+                    title: "Reset Book", author: "Author", duration: 100))
+        }
+        let beforeReset = try await service.statisticsPresentation(
+            query: StatisticsQuery())
+        XCTAssertGreaterThan(beforeReset.snapshot.summary.localRealSeconds, 0)
+        XCTAssertNotNil(beforeReset.liveSlice)
         await model.resetLocalData()
+        let resetSelection = try await service.accountSelection()
+        XCTAssertTrue(resetSelection.accounts.isEmpty)
+        XCTAssertNil(resetSelection.activeAccount)
+        let liveAfterReset = try await service.statisticsLivePresentation(
+            query: StatisticsQuery())
+        XCTAssertNil(liveAfterReset)
+        let afterReset = try await service.statisticsPresentation(
+            query: StatisticsQuery())
+        XCTAssertEqual(afterReset.snapshot.summary, .empty)
+        XCTAssertNil(afterReset.liveSlice)
 
         XCTAssertNil(model.localDataResetFailure)
         XCTAssertEqual(model.phase, .signedOut)
@@ -18105,6 +18153,10 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier("local-reset-relaunch")
         )
         await relaunchedModel.start()
+        let relaunchedStatistics =
+            try await relaunchedService.statisticsPresentation(
+                query: StatisticsQuery())
+        XCTAssertEqual(relaunchedStatistics.snapshot.summary, .empty)
 
         XCTAssertEqual(relaunchedModel.phase, .signedOut)
         XCTAssertTrue(relaunchedModel.accounts.isEmpty)
@@ -21709,9 +21761,12 @@ private actor TestAppService: AppServicing {
             totalPages: 1)
     }
 
+    private(set) var statisticsSummaryRequestCount = 0
+
     func statisticsSummary(
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary {
+        statisticsSummaryRequestCount += 1
         if let statisticsProvider { return await statisticsProvider(query) }
         if let statisticsSummaryGate {
             await statisticsSummaryGate.enterAndWait()

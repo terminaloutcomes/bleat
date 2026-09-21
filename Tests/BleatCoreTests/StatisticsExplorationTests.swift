@@ -116,7 +116,8 @@ struct StatisticsExplorationTests {
         async throws
     {
         let repository = try repository()
-        for second in 0...6 {
+        _ = try await repository.snapshot()
+        for second in 0...12 {
             try await repository.record(
                 StatisticsPlaybackSample(
                     accountID: account, itemID: item,
@@ -127,8 +128,9 @@ struct StatisticsExplorationTests {
                     playbackGeneration: 1,
                     isAudibleAndAdvancing: true, chapter: nil, title: "Book",
                     author: "Author", duration: 100))
-            let result = try await repository.presentation(
-                query: StatisticsQuery())
+            let result = try #require(
+                try await repository.livePresentation(
+                    query: StatisticsQuery()))
             #expect(
                 result.snapshot.summary.localRealSeconds
                     + (result.liveSlice?.realSeconds ?? 0) == Double(second))
@@ -209,6 +211,105 @@ struct StatisticsExplorationTests {
             StatisticsQuery.reportingCalendar.timeZone.secondsFromGMT() == 0)
     }
 
+    @Test
+    func cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot() async throws
+    {
+        let repository = try repository()
+        #expect(
+            try await repository.livePresentation(query: StatisticsQuery())
+                == nil)
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: [slice(index: 0)], completions: [], remoteSessions: []))
+        #expect(
+            try await repository.livePresentation(query: StatisticsQuery())
+                == nil)
+        _ = try await repository.snapshot()
+        #expect(
+            try await repository.livePresentation(query: StatisticsQuery())?
+                .snapshot.summary.realSeconds == 5)
+        try await repository.reset(query: StatisticsQuery())
+        #expect(
+            try await repository.livePresentation(query: StatisticsQuery())
+                == nil)
+    }
+
+    @Test
+    func incrementalSnapshotsMatchRebuildAfterPlaybackAndSync() async throws {
+        let repository = try repository()
+        let queries = [
+            StatisticsQuery(), StatisticsQuery(accountID: account),
+            StatisticsQuery(
+                accountID: account, start: date.addingTimeInterval(5),
+                end: date.addingTimeInterval(15)),
+            StatisticsQuery(accountID: AccountID(rawValue: "another")),
+        ]
+        for query in queries { _ = try await repository.snapshot(query: query) }
+        for second in 0...20 {
+            try await repository.record(
+                StatisticsPlaybackSample(
+                    accountID: account, itemID: item,
+                    sessionID: PlaybackSessionID(rawValue: "session"),
+                    observedAt: date.addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: Double(second), playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: true, chapter: nil, title: "Book",
+                    author: "Author", duration: 100))
+        }
+        try await repository.finish(
+            sessionID: PlaybackSessionID(rawValue: "session"))
+        try await repository.markSyncUncertain(
+            accountID: account,
+            sessionID: PlaybackSessionID(rawValue: "session"), realSeconds: 5)
+        try await repository.confirmSync(
+            accountID: account,
+            sessionID: PlaybackSessionID(rawValue: "session"), realSeconds: 10)
+        try await repository.upsertRemoteSessions([session(realSeconds: 20)])
+        let archive = try await repository.archive()
+        for query in queries {
+            let cached = try #require(
+                try await repository.livePresentation(query: query))
+            let accounting = StatisticsAccounting(
+                accountID: account,
+                sessionID: PlaybackSessionID(rawValue: "session"),
+                confirmed: 10, uncertain: 5, updatedAt: Date())
+            let rebuilt = StatisticsAggregation.snapshot(
+                slices: archive.slices, completions: archive.completions,
+                remote: archive.remoteSessions, accounting: [accounting],
+                query: query)
+            #expect(cached.snapshot == rebuilt)
+        }
+    }
+
+    @Test
+    func repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()
+        async throws
+    {
+        let container = try container()
+        let repository = StatisticsRepository(modelContainer: container)
+        let lifetime = try await repository.snapshot()
+        for offset in 0..<25 {
+            _ = try await repository.snapshot(
+                query: StatisticsQuery(
+                    start: date.addingTimeInterval(Double(offset))))
+        }
+        let context = ModelContext(container)
+        #expect(
+            try context.fetchCount(FetchDescriptor<StatisticsSnapshotRecord>())
+                == 2)
+        #expect(
+            try await repository.livePresentation(query: StatisticsQuery())?
+                .snapshot == lifetime)
+        #expect(
+            try await repository.livePresentation(
+                query: StatisticsQuery(start: date)) == nil)
+        #expect(
+            try await repository.livePresentation(
+                query: StatisticsQuery(start: date.addingTimeInterval(24)))
+                != nil)
+    }
+
     #if BLEAT_STATISTICS_PERFORMANCE
         @Test
         func stored250000SlicesArchiveResetAndCachedRelaunch() async throws {
@@ -285,6 +386,41 @@ struct StatisticsExplorationTests {
             print("statistics_performance cached_relaunch_250000=\(elapsed)")
             #expect(cached.localRealSeconds == 1_250_000)
             #expect(elapsed < .milliseconds(500))
+            var maximumRecord = Duration.zero
+            var maximumPoll = Duration.zero
+            for second in 0...15 {
+                let recordingAt = clock.now
+                try await reader.record(
+                    StatisticsPlaybackSample(
+                        accountID: account, itemID: item,
+                        sessionID: PlaybackSessionID(
+                            rawValue: "live-large-ledger"),
+                        observedAt: date.addingTimeInterval(
+                            2_000_000 + Double(second)),
+                        monotonicTime: Double(second),
+                        wholeBookPosition: Double(second), playbackRate: 1,
+                        playbackGeneration: 1,
+                        isAudibleAndAdvancing: true, chapter: nil,
+                        title: "Book", author: "Author", duration: 100))
+                maximumRecord = max(
+                    maximumRecord, recordingAt.duration(to: clock.now))
+                let pollingAt = clock.now
+                let live = try #require(
+                    try await reader.livePresentation(query: StatisticsQuery()))
+                maximumPoll = max(
+                    maximumPoll, pollingAt.duration(to: clock.now))
+                #expect(
+                    live.snapshot.summary.localRealSeconds
+                        + (live.liveSlice?.realSeconds ?? 0) == 1_250_000
+                        + Double(second))
+            }
+            try await reader.finish(
+                sessionID: PlaybackSessionID(rawValue: "live-large-ledger"))
+            print(
+                "statistics_performance live_record_max=\(maximumRecord), live_poll_max=\(maximumPoll)"
+            )
+            #expect(maximumRecord < .milliseconds(500))
+            #expect(maximumPoll < .milliseconds(500))
             let resetAt = clock.now
             try await reader.reset(
                 query: StatisticsQuery(
@@ -292,7 +428,7 @@ struct StatisticsExplorationTests {
             print(
                 "statistics_performance reset_100_of_250000=\(resetAt.duration(to: clock.now))"
             )
-            #expect(try await reader.summary().localRealSeconds == 1_249_500)
+            #expect(try await reader.summary().localRealSeconds == 1_249_515)
         }
 
     #endif

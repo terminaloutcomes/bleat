@@ -889,7 +889,9 @@ charts and date-range boundaries use UTC Gregorian days; playback
 rate and chapter coverage remain specific to this app. Summaries and live slices
 are read together so persisted playback does not disappear from the counters.
 A local derived cache makes repeated Lifetime reads independent of ledger size;
-imports, resets, and other statistics changes invalidate it transactionally.
+playback and session updates maintain compact aggregates transactionally.
+Live polling only reads the cache. Bulk archive imports and resets invalidate it
+for rebuilding on the next explicit load.
 JSON archives contain
 book titles and listening times, which are personal behavioral data; choose a
 safe destination when exporting them.

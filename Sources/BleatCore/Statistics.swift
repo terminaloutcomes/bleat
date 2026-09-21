@@ -357,7 +357,7 @@ public struct StatisticsSummary: Codable, Equatable, Sendable {
     }
 }
 
-public struct StatisticsQuery: Equatable, Sendable {
+public struct StatisticsQuery: Codable, Hashable, Sendable {
     /// Reporting uses UTC Gregorian days, independent of device settings.
     public static let reportingCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -936,6 +936,10 @@ public actor StatisticsRepository {
         self.modelContainer = modelContainer
     }
 
+    public func discardAfterPersistentReset() {
+        accumulators.removeAll()
+    }
+
     public func uncommittedSlice(accountID: AccountID?) -> ListeningSlice? {
         accumulators.values.compactMap(\.uncommittedSlice).first {
             accountID == nil || $0.accountID == accountID
@@ -989,7 +993,7 @@ public actor StatisticsRepository {
                 return
             }
             context.insert(CompletionMilestoneRecord(milestone))
-            try saveMutation(context)
+            try saveMutation(context) { $0.completions.append(milestone) }
         } catch {
             throw .persistenceFailed
         }
@@ -1024,6 +1028,7 @@ public actor StatisticsRepository {
                     ($0.compositeID, $0)
                 }
             )
+            var updated: [RemoteListeningSession] = []
             for session in sessions {
                 guard session.realSeconds.isFinite,
                     session.realSeconds >= 0,
@@ -1058,13 +1063,17 @@ public actor StatisticsRepository {
                     stored.title = session.title
                     stored.author = session.author
                     stored.privateCloudSynchronized = false
+                    updated.append(stored.domainValue)
                 } else {
                     let record = RemoteListeningSessionRecord(session)
                     context.insert(record)
                     byID[compositeID] = record
+                    updated.append(record.domainValue)
                 }
             }
-            try saveMutation(context)
+            try saveMutation(context) { state in
+                for value in updated { state.upsert(value) }
+            }
         } catch let error as StatisticsRepositoryError {
             throw error
         } catch {
@@ -1154,28 +1163,51 @@ public actor StatisticsRepository {
             liveSlice: uncommittedSlice(accountID: query.accountID))
     }
 
-    public func snapshot(query: StatisticsQuery = StatisticsQuery())
-        throws(StatisticsRepositoryError) -> StatisticsSnapshot
+    /// Polling never enters the ledger fetch/aggregation path. A missing cache
+    /// remains absent until an explicit load or refresh prepares it.
+    public func livePresentation(query: StatisticsQuery)
+        throws(StatisticsRepositoryError) -> StatisticsPresentation?
+    {
+        guard let value = try cachedSnapshot(query: query) else { return nil }
+        return StatisticsPresentation(
+            snapshot: value,
+            liveSlice: uncommittedSlice(accountID: query.accountID))
+    }
+
+    private func cachedSnapshot(query: StatisticsQuery)
+        throws(StatisticsRepositoryError) -> StatisticsSnapshot?
     {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
+        let scope = query.accountID?.rawValue
+        let start = query.start
+        let end = query.end
         do {
-            let start = query.start
-            let end = query.end
-            let scope = query.accountID?.rawValue
-            if let cached = try context.fetch(
-                FetchDescriptor<StatisticsSnapshotRecord>(
-                    predicate: #Predicate {
-                        $0.accountID == scope && $0.start == start
-                            && $0.end == end
-                    }
-                )
-            ).first,
+            guard
+                let record = try context.fetch(
+                    FetchDescriptor<StatisticsSnapshotRecord>(
+                        predicate: #Predicate {
+                            $0.accountID == scope && $0.start == start
+                                && $0.end == end
+                        })
+                ).first,
                 let value = try? JSONDecoder().decode(
-                    StatisticsSnapshot.self, from: cached.payload)
-            {
-                return value
-            }
+                    StatisticsSnapshot.self, from: record.payload)
+            else { return nil }
+            return value
+        } catch { throw .persistenceFailed }
+    }
+
+    public func snapshot(query: StatisticsQuery = StatisticsQuery())
+        throws(StatisticsRepositoryError) -> StatisticsSnapshot
+    {
+        if let value = try cachedSnapshot(query: query) { return value }
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        let start = query.start
+        let end = query.end
+        let scope = query.accountID?.rawValue
+        do {
             let slices = try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
             )
@@ -1198,21 +1230,28 @@ public actor StatisticsRepository {
                     confirmed: $0.confirmedRealSeconds,
                     uncertain: $0.uncertainRealSeconds, updatedAt: $0.updatedAt)
             }
-            let value = StatisticsAggregation.snapshot(
-                slices: slices, completions: completions, remote: remote,
-                accounting: accounting, query: query)
+            var state = StatisticsAggregation.State(query: query)
+            state.append(slices)
+            state.completions = completions
+            for value in remote { state.upsert(value) }
+            for value in accounting { state.setAccounting(value) }
+            let value = state.snapshot()
             do {
                 for old in try context.fetch(
                     FetchDescriptor<StatisticsSnapshotRecord>(
                         predicate: #Predicate {
-                            $0.accountID == scope && $0.start == start
-                                && $0.end == end
+                            $0.accountID == scope
                         }))
+                where (old.start == start && old.end == end)
+                    || ((start != nil || end != nil)
+                        && (old.start != nil || old.end != nil))
                 { context.delete(old) }
-                context.insert(
-                    StatisticsSnapshotRecord(
-                        accountID: scope, start: start, end: end,
-                        payload: try JSONEncoder().encode(value)))
+                // Retain Lifetime and only the latest selected range per account.
+                let record = StatisticsSnapshotRecord(
+                    accountID: scope, start: start, end: end,
+                    payload: try JSONEncoder().encode(value))
+                record.incrementalPayload = try JSONEncoder().encode(state)
+                context.insert(record)
                 try context.save()
             }
             return value
@@ -1783,7 +1822,7 @@ public actor StatisticsRepository {
             for slice in slices {
                 context.insert(ListeningSliceRecord(slice))
             }
-            try saveMutation(context)
+            try saveMutation(context) { $0.append(slices) }
         } catch {
             throw .persistenceFailed
         }
@@ -1893,18 +1932,36 @@ public actor StatisticsRepository {
             record.confirmedRealSeconds += confirmedDelta
             record.uncertainRealSeconds += uncertainDelta
             record.updatedAt = Date()
-            try saveMutation(context)
+            let value = StatisticsAccounting(
+                accountID: accountID, sessionID: sessionID,
+                confirmed: record.confirmedRealSeconds,
+                uncertain: record.uncertainRealSeconds,
+                updatedAt: record.updatedAt)
+            try saveMutation(context) { $0.setAccounting(value) }
         } catch {
             throw .persistenceFailed
         }
     }
 
-    private func saveMutation(_ context: ModelContext) throws {
+    private func saveMutation(
+        _ context: ModelContext,
+        update: ((inout StatisticsAggregation.State) -> Void)? = nil
+    ) throws {
         guard context.hasChanges else { return }
         for cache in try context.fetch(
             FetchDescriptor<StatisticsSnapshotRecord>())
         {
-            context.delete(cache)
+            if let update, let payload = cache.incrementalPayload,
+                var state = try? JSONDecoder().decode(
+                    StatisticsAggregation.State.self, from: payload)
+            {
+                update(&state)
+                let value = state.snapshot()
+                cache.payload = try JSONEncoder().encode(value)
+                cache.incrementalPayload = try JSONEncoder().encode(state)
+            } else {
+                context.delete(cache)
+            }
         }
         try context.save()
     }

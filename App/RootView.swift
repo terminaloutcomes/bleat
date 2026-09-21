@@ -5084,11 +5084,13 @@ private struct StatisticsView: View {
         case .lifetime: start = nil
         case .week:
             start = StatisticsQuery.reportingCalendar.date(
-                byAdding: .day, value: -7, to: Date()
+                byAdding: .day, value: -7,
+                to: StatisticsQuery.reportingCalendar.startOfDay(for: Date())
             )
         case .month:
             start = StatisticsQuery.reportingCalendar.date(
-                byAdding: .day, value: -30, to: Date()
+                byAdding: .day, value: -30,
+                to: StatisticsQuery.reportingCalendar.startOfDay(for: Date())
             )
         case .custom:
             start = StatisticsQuery.reportingCalendar.startOfDay(

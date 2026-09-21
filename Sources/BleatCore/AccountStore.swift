@@ -306,8 +306,30 @@ public enum AccountLifecycleError: Error, Equatable, Sendable {
     case accountStoreFailed(AccountStoreError)
 }
 
+/// Accounts and active selection from one persistence read.
+public struct StoredAccountSelection: Sendable {
+    public let accounts: [ServerAccount]
+    public let activeAccount: ServerAccount?
+
+    public init(accounts: [ServerAccount], activeAccount: ServerAccount?) {
+        self.accounts = accounts
+        self.activeAccount = activeAccount
+    }
+}
+
 @ModelActor
 public actor AccountStore {
+    // This actor owns account mutations for its service lifecycle. Reuse the
+    // registered records for repeated startup/network reads instead of repeatedly
+    // checking out a CoreData SQL connection while other repositories restore.
+    private var accountRecords: [ServerAccountRecord]?
+
+    /// Called after the owning service commits a whole-store reset.
+    public func discardAfterPersistentReset() {
+        modelContext.rollback()
+        accountRecords = nil
+    }
+
     public func legacyIdentityMigrations() throws(AccountStoreError)
         -> [AccountIdentityMigration]
     {
@@ -370,9 +392,7 @@ public actor AccountStore {
         replacements: [String: ServerAccount]
     ) throws(AccountStoreError) -> AccountIdentityMigrationReport {
         do {
-            let accountRecords = try modelContext.fetch(
-                FetchDescriptor<ServerAccountRecord>()
-            )
+            let accountRecords = try fetchRecords()
             for (legacy, canonical) in mapping
             where accountRecords.contains(where: {
                 $0.accountID == canonical && $0.accountID != legacy
@@ -488,13 +508,15 @@ public actor AccountStore {
                 }
             }
             let residuals = try migrateLegacyCaches(mapping: mapping)
-            try modelContext.save()
+            try saveContext()
             return AccountIdentityMigrationReport(residuals: residuals)
         } catch let error as AccountStoreError {
             modelContext.rollback()
+            accountRecords = nil
             throw error
         } catch {
             modelContext.rollback()
+            accountRecords = nil
             throw .persistenceFailed
         }
     }
@@ -865,8 +887,13 @@ public actor AccountStore {
     }
 
     public func accounts() throws(AccountStoreError) -> [ServerAccount] {
-        try fetchRecords()
-            .map(decode)
+        try selection().accounts
+    }
+
+    public func selection() throws(AccountStoreError) -> StoredAccountSelection
+    {
+        let records = try fetchRecords()
+        let accounts = try records.map(decode)
             .sorted {
                 let usernameOrder = $0.user.username.localizedStandardCompare(
                     $1.user.username
@@ -877,6 +904,11 @@ public actor AccountStore {
                 }
                 return usernameOrder == .orderedAscending
             }
+        let activeID = records.first(where: \.isActiveBrowsingAccount)?
+            .accountID
+        return StoredAccountSelection(
+            accounts: accounts,
+            activeAccount: accounts.first { $0.id.rawValue == activeID })
     }
 
     public func account(
@@ -1038,6 +1070,7 @@ public actor AccountStore {
             }
         } catch {
             modelContext.rollback()
+            accountRecords = nil
             throw .persistenceFailed
         }
         if removedActiveAccount,
@@ -1056,10 +1089,12 @@ public actor AccountStore {
     private func fetchRecords() throws(AccountStoreError)
         -> [ServerAccountRecord]
     {
+        if let accountRecords { return accountRecords }
         do {
-            return try modelContext.fetch(
-                FetchDescriptor<ServerAccountRecord>()
-            )
+            let records = try modelContext.fetch(
+                FetchDescriptor<ServerAccountRecord>())
+            accountRecords = records
+            return records
         } catch {
             throw .persistenceFailed
         }
@@ -1081,9 +1116,22 @@ public actor AccountStore {
     }
 
     private func saveContext() throws(AccountStoreError) {
+        let inserted = modelContext.insertedModelsArray.compactMap {
+            $0 as? ServerAccountRecord
+        }
+        let deleted = Set(
+            modelContext.deletedModelsArray.compactMap {
+                ($0 as? ServerAccountRecord).map(ObjectIdentifier.init)
+            })
+        let retained = accountRecords?.filter {
+            !deleted.contains(ObjectIdentifier($0))
+        }
         do {
             try modelContext.save()
+            if let retained { accountRecords = retained + inserted }
         } catch {
+            modelContext.rollback()
+            accountRecords = nil
             throw .persistenceFailed
         }
     }

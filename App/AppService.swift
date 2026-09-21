@@ -402,6 +402,9 @@ protocol AppServicing: Sendable {
         for failedRequest: URLRequest
     ) async -> URLRequest?
 
+    func accountSelection() async throws(AppServiceError)
+        -> StoredAccountSelection
+
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
 
@@ -668,6 +671,9 @@ protocol AppServicing: Sendable {
         _ sessionID: PlaybackSessionID
     ) async throws(AppServiceError)
 
+    func statisticsLivePresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation?
+
     func statisticsPresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation
 
@@ -775,6 +781,14 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func accountSelection() async throws(AppServiceError)
+        -> StoredAccountSelection
+    {
+        let values = try await accounts()
+        let active = try await activeAccount()
+        return StoredAccountSelection(accounts: values, activeAccount: active)
+    }
+
     func authenticateRestoredAccountUsingSynchronizedCredential(
         _ account: ServerAccount
     ) async throws(AppServiceError) -> ServerAccount? {
@@ -996,6 +1010,10 @@ extension AppServicing {
     func finishStatisticsSession(
         _ sessionID: PlaybackSessionID
     ) async throws(AppServiceError) {}
+
+    func statisticsLivePresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation?
+    { nil }
 
     func statisticsPresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation
@@ -1900,13 +1918,18 @@ actor LiveAppService: AppServicing {
         }
     }
 
-    func accounts()
-        async throws(AppServiceError) -> [ServerAccount]
+    func accounts() async throws(AppServiceError) -> [ServerAccount] {
+        try await accountSelection().accounts
+    }
+
+    func accountSelection()
+        async throws(AppServiceError) -> StoredAccountSelection
     {
         try await migrateAccountIdentitiesIfNeeded()
         startNetworkPathMonitoring()
         do {
-            let accounts = try await accountStore.accounts()
+            let selection = try await accountStore.selection()
+            let accounts = selection.accounts
             for account in accounts {
                 await endpointRouter.configure(
                     primary: account.server,
@@ -1916,7 +1939,7 @@ actor LiveAppService: AppServicing {
                         : nil
                 )
             }
-            return accounts
+            return selection
         } catch let error {
             throw .accountStore(error)
         }
@@ -3154,6 +3177,7 @@ actor LiveAppService: AppServicing {
 
         do {
             let context = ModelContext(modelContainer)
+            context.autosaveEnabled = false
             try context.delete(model: ServerAccountRecord.self)
             try context.delete(model: AccountIdentityAliasRecord.self)
             try context.delete(model: CachedLibraryCollectionRecord.self)
@@ -3165,6 +3189,7 @@ actor LiveAppService: AppServicing {
             try context.delete(model: CachedChapterTranscriptRecord.self)
             try context.delete(model: CachedChapterTranscriptionTaskRecord.self)
             try context.delete(model: CachedChapterTranscriptionJobRecord.self)
+            try context.delete(model: StatisticsSnapshotRecord.self)
             try context.delete(model: ListeningSliceRecord.self)
             try context.delete(model: CompletionMilestoneRecord.self)
             try context.delete(model: RemoteListeningSessionRecord.self)
@@ -3176,6 +3201,8 @@ actor LiveAppService: AppServicing {
             throw .localDataReset(.persistentStore)
         }
 
+        await accountStore.discardAfterPersistentReset()
+        await statisticsRepository.discardAfterPersistentReset()
         do {
             try await credentialStore.deleteAllCredentials()
         } catch let error {
@@ -3266,6 +3293,14 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .statistics(error)
         }
+    }
+
+    func statisticsLivePresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation?
+    {
+        do {
+            return try await statisticsRepository.livePresentation(query: query)
+        } catch let error { throw .statistics(error) }
     }
 
     func statisticsPresentation(query: StatisticsQuery)

@@ -1947,7 +1947,8 @@ final class AppModel {
             await diagnostics.record(
                 .started(.restoreAccounts, category: .auth)
             )
-            accounts = try await service.accounts()
+            let selection = try await service.accountSelection()
+            accounts = selection.accounts
             if let pending = accounts.first(where: {
                 $0.connectionState == .reauthenticationRequired
             }) {
@@ -1960,7 +1961,7 @@ final class AppModel {
                     count: accounts.count
                 )
             )
-            let restoredAccount = try await service.activeAccount()
+            let restoredAccount = selection.activeAccount
             if let restoredAccount,
                 !accounts.contains(where: { $0.id == restoredAccount.id })
             {
@@ -5207,13 +5208,15 @@ final class AppModel {
         return .notImported
     }
 
-    func loadStatistics(query: StatisticsQuery? = nil) async {
+    func loadStatistics(query: StatisticsQuery? = nil, cachedOnly: Bool = false)
+        async
+    {
         if let query {
             statisticsQuery = query
         }
-        statisticsLoadGeneration &+= 1
+        if !cachedOnly { statisticsLoadGeneration &+= 1 }
         let generation = statisticsLoadGeneration
-        if query != nil || statistics == .idle {
+        if !cachedOnly && (query != nil || statistics == .idle) {
             statistics = .loading
             statisticsExploration = .loading
             statisticsLiveSlice = nil
@@ -5222,8 +5225,11 @@ final class AppModel {
             statisticsQuery
             ?? StatisticsQuery(accountID: account?.id)
         do {
-            let presentation = try await service.statisticsPresentation(
-                query: effectiveQuery)
+            let available =
+                try await cachedOnly
+                ? service.statisticsLivePresentation(query: effectiveQuery)
+                : service.statisticsPresentation(query: effectiveQuery)
+            guard let presentation = available else { return }
             guard generation == statisticsLoadGeneration else { return }
             let summary = presentation.snapshot.summary
             statisticsExploration = .loaded(presentation.snapshot.exploration)
@@ -5268,7 +5274,7 @@ final class AppModel {
         statisticsLiveTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                await self.loadStatistics()
+                await self.loadStatistics(cachedOnly: true)
                 for account in self.accounts {
                     if let progress = try? await self.service
                         .statisticsHistoryProgress(for: account.id)
@@ -5489,8 +5495,9 @@ final class AppModel {
             else {
                 return false
             }
-            let synchronizedAccounts = try await service.accounts()
-            let active = try await service.activeAccount()
+            let selection = try await service.accountSelection()
+            let synchronizedAccounts = selection.accounts
+            let active = selection.activeAccount
             guard privateCloudSyncGeneration == generation,
                 !Task.isCancelled
             else {

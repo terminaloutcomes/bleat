@@ -72,12 +72,19 @@ maximum gap of 80.064 ms. No physical-device performance claim is made.
 - The 250,000-slice Release benchmark executed and passed one test. Its command
   and the approved synchronous SwiftData boundary are in `docs/development.md`.
 
-The Simulator app run reported priority-inversion runtime warnings in
+The initial Simulator app run reported priority-inversion runtime warnings in
 `AppModelTests.testAccountRemovalDeletesDownloads` and
 `testRemovingOneOfTwoRealAccountsSurvivesRelaunch`; the offline live journey
-reported the same warning category. Their assertions passed, but the cause is
-unresolved and these are not warning-free results. No physical-device or
-VoiceOver audit was performed.
+reported the same warning category. Retained call stacks were symbolicated to
+`AccountStore.fetchRecords` / `activeAccount` and CoreData's
+`NSSQLDefaultConnectionManager._checkoutConnectionOfType`, triggered by repeated
+account fetches during startup. Combining account/selection reads exposed one
+remaining identical wait during network-change refresh. AccountStore now retains
+its actor-owned account records, maintains them after successful writes, and
+invalidates them on rollback or whole-store reset. Priorities and the runtime
+checker remain unchanged. The follow-up 430-test Simulator run and both live
+app journeys passed with zero runtime warnings. No physical-device performance
+or statistics-specific VoiceOver audit was performed.
 
 Earlier focused attempts exposed a missing inventory update, test compilation
 errors, and an incorrect same-timestamp history expectation, all corrected.
@@ -93,17 +100,62 @@ collector was interrupted, preserving the completed test result bundle.
 
 ## Known limitations from independent review
 
-- Live polling can rebuild an invalidated large-ledger snapshot after each
-  five-second playback flush. The rebuild shares the statistics actor with
-  recording, so the cached-launch measurement does not prove live-playback
-  durability or smooth counters with this ledger size (P2).
+- The initial live-polling P2 triggered full-ledger rebuilds after five-second
+  playback flushes. Polling now uses a cache-only API. Durable playback writes,
+  session accounting, completion milestones, and remote upserts update compact
+  persisted session/day/book/chapter aggregates transactionally. Bulk archive
+  import and destructive reset invalidate the cache; only explicit loading can
+  rebuild it. Follow-up playback measurements are recorded below.
 - The initial review found device-calendar-dependent cached buckets (P2). At
   the user's request, daily buckets, date-range boundaries, and chart display
   now use UTC Gregorian days. A timezone-change regression covers cached
   reopening and range queries; this finding is resolved.
 - Chapter grouping distinguishes exact metadata values; insignificant title or
-  boundary changes can split the same chapter's coverage (P2).
+  boundary changes can split the same chapter's coverage (P2). The user explicitly
+  accepted this limitation for now; normalization is not part of this change.
 
-The live-polling and chapter-identity findings remain open under the requested
-review-and-ship workflow. Three independent reviews found no P0/P1 findings;
-the timezone finding is resolved.
+The original three independent reviews found no P0/P1 findings. The timezone
+finding is resolved; chapter identity is an accepted limitation. Follow-up
+review and validation cover the requested live-polling and runtime-warning fixes.
+
+## Requested follow-up
+
+The user requested both cache-only polling and incremental updates, remediation
+of the runtime warnings, and acceptance of exact chapter identity for now.
+
+The expanded 250,000-slice Release benchmark passed with these measurements:
+
+| Operation | Time |
+| --- | ---: |
+| Initial import | 56.523 s |
+| Uncached aggregation | 11.377 s |
+| Archive roundtrip | 13.463 s |
+| Idempotent reimport | 7.099 s |
+| Cached Lifetime after reopening | 3.163 ms |
+| Worst playback record/flush across 15 seconds | 75.597 ms |
+| Worst cache-only live poll | 1.533 ms |
+| Reset 100 of 250,000 slices | 15.203 s |
+
+The import heartbeat's maximum main-actor gap was 105.746 ms across 4,250 ticks.
+The live loop asserts exact durable-plus-uncommitted totals through repeated
+five-second flushes and a 500 ms upper bound on recording and polling calls.
+Compact aggregates retain session totals, per-day contributions, per-book time,
+and merged chapter coverage intervals rather than replaying ledger slices.
+Lifetime and the most recently selected bounded range are retained per account;
+a regression loads 25 different ranges and verifies that only two caches remain.
+
+Two fresh full-diff review cycles were completed for this follow-up. The first
+identified two P1 reset-coherence defects and one P2 unbounded-cache defect;
+all were fixed and the final review reported no findings. Whole-app reset now
+deletes derived snapshots in its persistence transaction and clears in-memory
+account records and live statistics only after successful persistence. A real
+storage regression checks the same service and a relaunched service.
+
+Follow-up validation: the signed host gate verified 493 passed and zero skipped;
+all 428 application-unit tests and both statistics UI tests passed without
+warnings. Both disposable-server app journeys passed separately without warnings.
+Strict Swift lint and diff checks passed. The host gate's Release build and
+paid-capability build-mode checks passed. The final six-test simulator rerun
+covered real-storage reset/relaunch, both warning-producing account-removal
+cases, poll/load ordering, and both statistics UI journeys: six passed, zero
+skips, zero runtime warnings.

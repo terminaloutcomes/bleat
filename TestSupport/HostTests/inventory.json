@@ -495,7 +495,10 @@
     "duplicateCompletionEventsCountOneHistoricalRuntime()",
     "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
     "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
-    "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()"
+    "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()",
+    "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
+    "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
+    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"
   ],
   "BleatCoreTests.StatisticsTests": [
     "testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()",

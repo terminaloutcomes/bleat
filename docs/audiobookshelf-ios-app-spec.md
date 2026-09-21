@@ -1386,7 +1386,9 @@ portability, date-range exploration including imported-session charts and book
 detail, and confirmed local reset. Summary and live-slice presentation use one
 actor-isolated snapshot. Daily buckets and date-range boundaries use UTC
 Gregorian days, and the chart labels that convention. A derived SwiftData cache survives relaunch and is
-invalidated in the same transaction as ledger mutations. Large-ledger
+updated incrementally with playback/session mutations. Live polling never
+rebuilds the ledger; bulk archive imports and resets invalidate the cache for
+an explicit reload. Large-ledger
 measurements and remaining end-to-end evidence are recorded in
 `docs/statistics-validation.md` and tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
@@ -1465,6 +1467,11 @@ Remote snapshots are upserted when the same session ID has a newer `updatedAt`. 
 The All Accounts view aggregates account-scoped results only after each account has produced a valid result. An unavailable or reauthentication-required account appears as stale with its last successful import time. One server failure must not blank totals from other servers.
 
 ### 12.5 Chapter and completion identity
+
+Current implementation limitation accepted for issue #26: statistics grouping
+uses exact chapter index, title, and boundaries. Tolerance-preserving identity
+normalization below remains deferred; small metadata changes may split coverage.
+
 
 Chapter metadata is mutable and current server history does not retain it. Create a `ChapterKey` from the book key plus a stable local chapter UUID. On first encounter, map server chapters by ordered index, normalized title, and start/end times. On later metadata refresh:
 
