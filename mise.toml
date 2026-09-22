@@ -12,7 +12,7 @@ ripgrep = "latest"
 swiftlint = "latest"
 shellcheck = "latest"
 uv = "latest"
-"cargo:openapi-to-rust" = "latest"
+"cargo:openapi-to-rust" = "0.17.0"
 
 [tasks."api:fmt"]
 description = "Fix bleat-api Rust formatting"
