@@ -1,0 +1,35 @@
+[generator]
+# All paths above are relative to this TOML file, not the shell's working directory.
+spec_path = "appstore.json"
+output_dir = "src/appstore"
+module_name = "appstore"
+
+[generator.builders]
+# Add `*_builder()` when an operation has more than three optional values.
+enabled = true
+threshold = 3
+
+[features]
+enable_async_client = true
+
+[http_client]
+# base_url = "https://api.example.com"
+max_response_body_bytes = 268435456
+timeout_seconds = 60
+
+[http_client.retry]
+max_retries = 3
+
+# [http_client.auth]
+# type = "Bearer"
+# header_name = "Authorization"
+
+[client]
+operations = [
+    #   "createResponse",
+    # "GET /v1/apps",
+    "GET /v1/apps",
+    "tag:AppStoreVersions",
+    "tag:Apps",
+]
+prune_models = true
