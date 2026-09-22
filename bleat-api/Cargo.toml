@@ -68,7 +68,7 @@ tower = { version = "0.5.3", features = ["limit", "load-shed"] }
 tracing = "0.1.44"
 tracing-opentelemetry = { version = "0.33.0", default-features = false }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
-url = "2.5.8"
+url = { version = "2.5.8", features = ["serde"] }
 uuid = { version = "1.24.1", features = ["v4", "serde"] }
 x509-parser = "0.18.1"
 zeroize = "1.8.2"
@@ -86,8 +86,8 @@ testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 tower = { version = "0.5.3", features = ["util"] }
 
 
-[profile.release]
-lto = true          # default is false, we want it to try harder
-codegen-units = 4
-panic = "unwind"    # default
-incremental = false # default
+# [profile.release]
+# lto = true          # default is false, we want it to try harder
+# codegen-units = 4
+# panic = "unwind"    # default
+# incremental = false # default

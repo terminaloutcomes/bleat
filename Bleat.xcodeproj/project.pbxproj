@@ -380,7 +380,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
 			buildPhases = (
-				CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */,
 				A478EF5EDBF8264EFEDEBD5B /* Sources */,
 				59425BEF486F1F479E902607 /* Resources */,
 				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
@@ -478,26 +477,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif ! build_commit=\"$(/usr/bin/git -C \"${SRCROOT}\" rev-parse --short=8 --verify HEAD 2>/dev/null)\"; then\n  echo \"error: Could not determine the Git commit for this build.\" >&2\n  exit 1\nfi\n\nif [ \"${#build_commit}\" -lt 8 ]; then\n  echo \"error: Git returned an invalid short commit for this build.\" >&2\n  exit 1\nfi\n\ncase \"${build_commit}\" in\n  *[!0-9a-fA-F]*)\n    echo \"error: Git returned an invalid short commit for this build.\" >&2\n    exit 1\n    ;;\nesac\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n/usr/libexec/PlistBuddy -c \"Set :BleatGitCommit ${build_commit}\" \"${info_plist}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Validate Paid Developer Build Settings";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\nif ! command -v cargo >/dev/null 2>&1; then\n    echo \"Cargo is not installed. Please install Rust and Cargo.\" >&2\n    exit 1\nfi\n\nreadonly repository_root=\"${SRCROOT:-$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)}\"\ncargo run \\\n    --quiet \\\n    --manifest-path \"${repository_root}/scripts/Cargo.toml\" \\\n    --bin validate-paid-developer-build-settings\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
