@@ -497,7 +497,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\nif ! command -v cargo >/dev/null 2>&1; then\n    echo \"Cargo is not installed. Please install Rust and Cargo.\" >&2\n    exit 1\nfi\n\nreadonly repository_root=\"${SRCROOT:-$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)}\"\ncargo run \\\n    --quiet \\\n    --manifest-path \"${repository_root}/scripts/Cargo.toml\" \\\n    --bin validate-paid-developer-build-settings\n";
+			shellScript = "#!/usr/bin/env bash\n\nset -euo pipefail\n\nif ! command -v cargo >/dev/null 2>&1; then\n    echo \"Cargo is not installed. Please install Rust and Cargo.\" >&2\n    exit 1\nfi\n\nreadonly repository_root=\"${SRCROOT:-$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)}\"\n# env -u works around weirdness with the SDKROOT environment variable in the build env\nenv -u SDKROOT \\\n    cargo run \\\n    --quiet \\\n    --manifest-path \"${repository_root}/scripts/Cargo.toml\" \\\n    --bin validate-paid-developer-build-settings\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
