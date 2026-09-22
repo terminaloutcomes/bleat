@@ -82,10 +82,11 @@ targets:
         Release:
           BLEAT_APP_ATTEST_ENVIRONMENT: production
     preBuildScripts:
-      - path: scripts/validate-paid-developer-build-settings.sh
-        name: Validate Paid Developer Build Settings
-        basedOnDependencyAnalysis: false
-        showEnvVars: false
+      name: Validate Paid Developer Build Settings
+      script: |
+        "${SRCROOT}/scripts/validate-paid-developer-build-settings.sh"
+      basedOnDependencyAnalysis: false
+      showEnvVars: false
     postBuildScripts:
       - path: scripts/write-build-metadata.sh
         name: Write Build Metadata
