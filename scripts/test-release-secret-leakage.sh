@@ -437,8 +437,8 @@ bleat_stage="evidence report"
 jq --slurp 'add' "${bleat_result_root}"/*.tests.json \
     >"${bleat_report_root}/tests.json"
 bleat_version="$(
-    awk '$1 == "MARKETING_VERSION:" {gsub(/"/, "", $2); print $2; exit}' \
-        "${bleat_repository_root}/project.yml"
+    plutil -extract CFBundleShortVersionString raw \
+        "${bleat_archive_path}/Products/Applications/Bleat.app/Info.plist"
 )"
 bleat_build="$(
     plutil -extract CFBundleVersion raw \

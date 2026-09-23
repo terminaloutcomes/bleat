@@ -325,8 +325,10 @@ Pushing `main` with a changed `MARKETING_VERSION` in `project.yml` validates an
 unsigned Release archive and publishes `v<version>` as a GitHub Release. The
 release notes come from the matching `## <version> - YYYY-MM-DD` section in
 `CHANGELOG.md`. The workflow generates one UTC `YYYYMMDD.HHmm.SS` build number
-and uses it throughout archive validation while leaving the user-facing
-marketing version unchanged. Configure GitHub repository variables named
+and explicitly uses the committed marketing version throughout archive
+validation. Other supported release archives derive their `YYYY.MM.DD`
+marketing version from the UTC build date unless `BLEAT_MARKETING_VERSION` is
+supplied. Configure GitHub repository variables named
 `BLEAT_TELEMETRY_AUTH_BASE_URL` and `BLEAT_TELEMETRY_OTLP_ENDPOINT` before a
 version-changing push. This GitHub release does not upload to App Store Connect.
 

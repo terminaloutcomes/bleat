@@ -6,20 +6,10 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_archive_path="${BLEAT_ARCHIVE_PATH:-${bleat_repository_root}/.build/Bleat.xcarchive}"
-readonly bleat_project_configuration="${bleat_repository_root}/project.yml"
 readonly bleat_expected_build="$("${bleat_script_dir}/resolve-build-number.sh")"
-
 readonly bleat_expected_version="$(
-    awk '$1 == "MARKETING_VERSION:" {
-        gsub(/"/, "", $2)
-        print $2
-        exit
-    }' "${bleat_project_configuration}"
+    "${bleat_script_dir}/resolve-marketing-version.sh" "${bleat_expected_build}"
 )"
-if [[ -z "${bleat_expected_version}" ]]; then
-    print -u2 "Could not read MARKETING_VERSION from project.yml"
-    exit 1
-fi
 
 typeset -a bleat_cloudkit_schema_arguments
 if [[ "${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" == "YES" \
@@ -81,6 +71,7 @@ xcodebuild \
     BLEAT_TELEMETRY_AUTH_BASE_URL="${bleat_telemetry_auth_base_url}" \
     BLEAT_TELEMETRY_OTLP_ENDPOINT="${bleat_telemetry_otlp_endpoint}" \
     CURRENT_PROJECT_VERSION="${bleat_expected_build}" \
+    MARKETING_VERSION="${bleat_expected_version}" \
     "${bleat_signing_arguments[@]}" \
     archive
 

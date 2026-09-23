@@ -42,6 +42,9 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_BUILD_NUMBER")]
     build_number: Option<String>,
 
+    #[arg(long, env = "BLEAT_MARKETING_VERSION")]
+    marketing_version: Option<String>,
+
     #[arg(
         long,
         env = "BLEAT_CARPLAY_MODE",
@@ -75,11 +78,14 @@ pub enum UploadError {
     #[error("build number must contain one to three dot-separated integers")]
     InvalidBuildNumber,
 
-    #[error("could not read MARKETING_VERSION from project.yml")]
-    MissingMarketingVersion,
+    #[error("BLEAT_MARKETING_VERSION is required when BLEAT_BUILD_NUMBER is not a UTC timestamp")]
+    MissingMarketingVersionForCustomBuild,
 
-    #[error("marketing version contains unsupported path characters: {0}")]
-    InvalidMarketingVersion(String),
+    #[error("BLEAT_MARKETING_VERSION must use YYYY.MM.DD")]
+    InvalidMarketingVersionFormat,
+
+    #[error("BLEAT_MARKETING_VERSION must contain a valid calendar date")]
+    InvalidMarketingVersionDate,
 
     #[error("App Store Connect evidence already exists at {0}")]
     EvidenceAlreadyExists(PathBuf),
@@ -217,14 +223,16 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     )?;
 
     let repository_root = canonicalize(&arguments.repository_root)?;
-    let project_configuration = repository_root.join("project.yml");
-    let version = marketing_version(&project_configuration)?;
-    validate_marketing_version(&version)?;
     let build = match arguments.build_number {
         Some(build) => build,
         None => resolve_build_number(&repository_root)?,
     };
     validate_build_number(&build)?;
+    let version = resolve_marketing_version(
+        &repository_root,
+        &build,
+        arguments.marketing_version.as_deref(),
+    )?;
 
     let relative_evidence_directory =
         PathBuf::from(".build/app-store-connect").join(format!("{version}-{build}"));
@@ -258,6 +266,7 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
             .env("BLEAT_ALLOW_PROVISIONING_UPDATES", "1")
             .env("BLEAT_ARCHIVE_PATH", &archive_path)
             .env("BLEAT_BUILD_NUMBER", &build)
+            .env("BLEAT_MARKETING_VERSION", &version)
             .env("BLEAT_DEVELOPMENT_TEAM", &arguments.development_team)
             .env("BUILD_WITHOUT_PAID_DEVELOPER", "NO")
             .env("BLEAT_APP_ATTEST_MODE", "enabled")
@@ -423,39 +432,11 @@ fn validate_build_number(value: &str) -> Result<(), UploadError> {
     }
 }
 
-fn validate_marketing_version(value: &str) -> Result<(), UploadError> {
-    if !value.is_empty()
-        && value
-            .bytes()
-            .all(|character| character.is_ascii_digit() || character == b'.')
-    {
-        Ok(())
-    } else {
-        Err(UploadError::InvalidMarketingVersion(value.to_string()))
-    }
-}
-
 fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
     path.canonicalize().map_err(|source| UploadError::Io {
         operation: "resolving repository root",
         path: path.to_path_buf(),
         source,
-    })
-}
-
-fn marketing_version(project_configuration: &Path) -> Result<String, UploadError> {
-    let contents = fs::read_to_string(project_configuration).map_err(|source| UploadError::Io {
-        operation: "reading project configuration",
-        path: project_configuration.to_path_buf(),
-        source,
-    })?;
-    parse_marketing_version(&contents).ok_or(UploadError::MissingMarketingVersion)
-}
-
-fn parse_marketing_version(contents: &str) -> Option<String> {
-    contents.lines().find_map(|line| {
-        let (key, value) = line.trim().split_once(':')?;
-        (key == "MARKETING_VERSION").then(|| value.trim().trim_matches('"').to_string())
     })
 }
 
@@ -469,6 +450,43 @@ fn resolve_build_number(repository_root: &Path) -> Result<String, UploadError> {
         .map(|value| value.trim().to_string())
         .map_err(|_| UploadError::InvalidCommandOutput {
             stage: "build-number resolution",
+        })
+}
+
+fn resolve_marketing_version(
+    repository_root: &Path,
+    build: &str,
+    override_value: Option<&str>,
+) -> Result<String, UploadError> {
+    let mut command = Command::new(repository_root.join("scripts/resolve-marketing-version.sh"));
+    command
+        .current_dir(repository_root)
+        .arg(build)
+        .env_remove("BLEAT_MARKETING_VERSION");
+    if let Some(value) = override_value {
+        command.env("BLEAT_MARKETING_VERSION", value);
+    }
+    let output = command
+        .output()
+        .map_err(|source| UploadError::CommandStart {
+            stage: "marketing-version resolution",
+            source,
+        })?;
+    if !output.status.success() {
+        return match output.status.code() {
+            Some(65) => Err(UploadError::MissingMarketingVersionForCustomBuild),
+            Some(66) => Err(UploadError::InvalidMarketingVersionFormat),
+            Some(67) => Err(UploadError::InvalidMarketingVersionDate),
+            _ => Err(UploadError::CommandFailedWithoutLog {
+                stage: "marketing-version resolution",
+                status: output.status,
+            }),
+        };
+    }
+    String::from_utf8(output.stdout)
+        .map(|value| value.trim().to_string())
+        .map_err(|_| UploadError::InvalidCommandOutput {
+            stage: "marketing-version resolution",
         })
 }
 
@@ -632,18 +650,7 @@ fn run_logged_command(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_marketing_version_from_project_configuration() {
-        let version = parse_marketing_version(
-            r#"
-settings:
-  base:
-    MARKETING_VERSION: "2026.09.18"
-"#,
-        );
-        assert_eq!(version.as_deref(), Some("2026.09.18"));
-    }
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn validates_release_identifiers() {
@@ -653,6 +660,52 @@ settings:
         assert!(validate_bundle_identifier("com.example.$(id)").is_err());
         assert!(validate_build_number("20260921.1146.56").is_ok());
         assert!(validate_build_number("2026.09.21.1").is_err());
+    }
+
+    #[test]
+    fn resolves_public_upload_marketing_version_through_shared_script() {
+        let repository = tempfile::tempdir().expect("temporary repository should be created");
+        let script_directory = repository.path().join("scripts");
+        fs::create_dir(&script_directory).expect("script directory should be created");
+        let resolver = script_directory.join("resolve-marketing-version.sh");
+        fs::write(
+            &resolver,
+            b"#!/bin/zsh\nprint -r -- \"${BLEAT_MARKETING_VERSION:-derived-$1}\"\n",
+        )
+        .expect("resolver fixture should be written");
+        let mut permissions = fs::metadata(&resolver)
+            .expect("resolver metadata should be readable")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&resolver, permissions).expect("resolver fixture should be executable");
+
+        let derived = resolve_marketing_version(repository.path(), "20260923.0642.54", None)
+            .expect("marketing version should be derived");
+        assert_eq!(derived, "derived-20260923.0642.54");
+
+        let overridden = resolve_marketing_version(repository.path(), "7", Some("2026.09.23"))
+            .expect("marketing-version override should be forwarded");
+        assert_eq!(overridden, "2026.09.23");
+    }
+
+    #[test]
+    fn preserves_typed_marketing_version_failures() {
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("scripts package should have a repository parent");
+
+        assert!(matches!(
+            resolve_marketing_version(repository, "7", None),
+            Err(UploadError::MissingMarketingVersionForCustomBuild)
+        ));
+        assert!(matches!(
+            resolve_marketing_version(repository, "7", Some("2026.9.23")),
+            Err(UploadError::InvalidMarketingVersionFormat)
+        ));
+        assert!(matches!(
+            resolve_marketing_version(repository, "7", Some("2026.02.30")),
+            Err(UploadError::InvalidMarketingVersionDate)
+        ));
     }
 
     #[test]

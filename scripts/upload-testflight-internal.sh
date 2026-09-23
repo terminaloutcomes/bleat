@@ -4,23 +4,13 @@ set -euo pipefail
 
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
-readonly bleat_project_configuration="${bleat_repository_root}/project.yml"
 
 readonly bleat_development_team="${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the App Store Connect bundle identifier}"
 readonly bleat_build_number="$("${bleat_script_dir}/resolve-build-number.sh")"
 readonly bleat_version="$(
-    awk '$1 == "MARKETING_VERSION:" {
-        gsub(/"/, "", $2)
-        print $2
-        exit
-    }' "${bleat_project_configuration}"
+    "${bleat_script_dir}/resolve-marketing-version.sh" "${bleat_build_number}"
 )"
-
-if [[ -z "${bleat_version}" ]]; then
-    print -u2 "Could not read MARKETING_VERSION from project.yml"
-    exit 1
-fi
 readonly bleat_relative_output_directory=".build/testflight-internal/${bleat_version}-${bleat_build_number}"
 readonly bleat_output_directory="${bleat_repository_root}/${bleat_relative_output_directory}"
 readonly bleat_archive_path="${bleat_output_directory}/Bleat.xcarchive"
@@ -59,6 +49,7 @@ fi
 BLEAT_ALLOW_PROVISIONING_UPDATES=1 \
 BLEAT_ARCHIVE_PATH="${bleat_archive_path}" \
 BLEAT_BUILD_NUMBER="${bleat_build_number}" \
+BLEAT_MARKETING_VERSION="${bleat_version}" \
 BUILD_WITHOUT_PAID_DEVELOPER=NO \
 BLEAT_APP_ATTEST_MODE=enabled \
 BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-enabled}" \
