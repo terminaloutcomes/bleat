@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+
+<svg
+   fill="#000000"
+   width="780"
+   height="635"
+   viewBox="0 0 23.4 19.05"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="email-outline-svgrepo-com.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.0925"
+     inkscape:cx="390.84668"
+     inkscape:cy="308.00915"
+     inkscape:window-width="2946"
+     inkscape:window-height="1606"
+     inkscape:window-x="62"
+     inkscape:window-y="30"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g2" />
+  <g
+     data-name="Layer 2"
+     id="g2"
+     transform="translate(-0.270023,-2.7478263)">
+    <g
+       data-name="email"
+       id="g1"
+       transform="matrix(1.1565218,0,0,1.1565218,-1.9331807,-1.5212815)"
+       style="fill:#ffffff">
+      <path
+         d="M 19,4 H 5 A 3,3 0 0 0 2,7 v 10 a 3,3 0 0 0 3,3 h 14 a 3,3 0 0 0 3,-3 V 7 A 3,3 0 0 0 19,4 Z M 18.33,6 12,10.75 5.67,6 Z M 19,18 H 5 A 1,1 0 0 1 4,17 V 7.25 l 7.4,5.55 A 1,1 0 0 0 12,13 1,1 0 0 0 12.6,12.8 L 20,7.25 V 17 a 1,1 0 0 1 -1,1 z"
+         id="path1"
+         style="fill:#ffffff" />
+    </g>
+  </g>
+</svg>

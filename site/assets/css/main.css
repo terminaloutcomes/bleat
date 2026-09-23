@@ -76,6 +76,10 @@
   .footer-link {
     @apply rounded-sm transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lilac;
   }
+
+  .footer-link img {
+    @apply size-4;
+  }
   .admin-guide {
     @apply text-sm font-semibold uppercase tracking-[0.18em] text-lilac;
   }
