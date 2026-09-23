@@ -316,10 +316,20 @@ BLEAT_DEVELOPMENT_TEAM=YOURTEAMID \
   mise run archive
 ```
 
-Open `.build/Bleat.xcarchive` in Xcode Organizer, choose **Distribute App**,
-then **TestFlight & App Store** to upload the archive. Upload requires a paid
-Apple Developer team, a matching App Store Connect application, and an account
-permitted to distribute it.
+Upload a signed, App Store-eligible build with:
+
+```sh
+mise run app-store:upload
+```
+
+The task archives and validates the app, exports and inspects the
+distribution-signed IPA, records its checksum and redacted delivery evidence,
+then uploads it to App Store Connect. It deliberately omits the internal-only
+TestFlight restriction so the processed build remains eligible for external
+testing and App Store submission. Upload requires a paid Apple Developer team,
+a matching App Store Connect application, and an account permitted to
+distribute it. App Store processing and review submission remain separate
+gates.
 
 Pushing `main` with a changed `MARKETING_VERSION` in `project.yml` validates an
 unsigned Release archive and publishes `v<version>` as a GitHub Release. The
